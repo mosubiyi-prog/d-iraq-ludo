@@ -77,7 +77,13 @@ class HomePage extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('تم تسجيل الدخول بنجاح'),
+    ),
+  );
+},
                   icon: const Icon(Icons.login),
                   label: const Text(
                     'تسجيل الدخول',
