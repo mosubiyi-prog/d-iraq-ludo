@@ -17,7 +17,7 @@ jobs:
           channel: stable
 
       - name: Create Flutter project
-        run: flutter create . --org com.diraq.ludo
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
 
       - name: Build APK
         run: flutter build apk --release
