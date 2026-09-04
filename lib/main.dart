@@ -200,7 +200,7 @@ class HomePage extends StatelessWidget {
                   crossAxisCount: 2,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  children: const [
+                  children:  [
                     DedaCategory(
                       icon: Icons.restaurant,
                       title: 'مطاعم',
@@ -239,20 +239,20 @@ class HomePage extends StatelessWidget {
 class DedaCategory extends StatelessWidget {
   final IconData icon;
   final String title;
-
+final VoidCallback ؟ onTap;
   const DedaCategory({
     super.key,
     required this.icon,
     required this.title,
-  });
-
+ this.onTap,
+});
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 3,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {},
+     onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
