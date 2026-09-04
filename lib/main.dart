@@ -239,7 +239,7 @@ class HomePage extends StatelessWidget {
 class DedaCategory extends StatelessWidget {
   final IconData icon;
   final String title;
-final VoidCallback ؟ onTap;
+final VoidCallback? onTap;
   const DedaCategory({
     super.key,
     required this.icon,
