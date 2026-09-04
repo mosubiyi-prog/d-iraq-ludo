@@ -16,8 +16,14 @@ jobs:
         with:
           channel: stable
 
+      - name: Save DEDA main.dart
+        run: cp lib/main.dart /tmp/main.dart
+
       - name: Create Flutter project
         run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA main.dart
+        run: cp /tmp/main.dart lib/main.dart
 
       - name: Build APK
         run: flutter build apk --release
