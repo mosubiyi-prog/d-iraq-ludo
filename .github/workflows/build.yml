@@ -16,14 +16,40 @@ jobs:
         with:
           channel: stable
 
-      - name: Save DEDA main.dart
-        run: cp lib/main.dart /tmp/main.dart
+      - name: Save DEDA files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
 
       - name: Create Flutter project
         run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
 
-      - name: Restore DEDA main.dart
-        run: cp /tmp/main.dart lib/main.dart
+      - name: Restore DEDA files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+
+      - name: Add Android location permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          text = path.read_text()
+
+          permissions = """    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+          """
+
+          if "android.permission.ACCESS_COARSE_LOCATION" not in text:
+              pos = text.find(">")
+              text = text[:pos + 1] + "\n" + permissions + text[pos + 1:]
+
+          path.write_text(text)
+          PY
+
+      - name: Get dependencies
+        run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
