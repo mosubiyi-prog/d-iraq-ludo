@@ -14,7 +14,7 @@ class DedaApp extends StatelessWidget {
       title: 'DEDA',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
+          seedColor: const Color(0xFF39733D),
         ),
         useMaterial3: true,
       ),
@@ -35,8 +35,10 @@ class _LoginPageState extends State<LoginPage> {
   final phoneController = TextEditingController();
 
   void login() {
-    if (nameController.text.trim().isEmpty ||
-        phoneController.text.trim().isEmpty) {
+    final name = nameController.text.trim();
+    final phone = phoneController.text.trim();
+
+    if (name.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -48,12 +50,10 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    Navigator.push(
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(
-          userName: nameController.text.trim(),
-        ),
+        builder: (context) => HomePage(userName: name),
       ),
     );
   }
@@ -79,69 +79,64 @@ class _LoginPageState extends State<LoginPage> {
                 'DEDA',
                 style: TextStyle(
                   fontSize: 38,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 100),
+              const SizedBox(height: 70),
               const Icon(
                 Icons.location_on,
                 size: 100,
                 color: Colors.red,
               ),
-              const SizedBox(height: 45),
+              const SizedBox(height: 35),
               const Text(
                 'هلا بك في تطبيق DEDA\nالدليل الدقيق',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 31,
+                  fontSize: 29,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 45),
+              const SizedBox(height: 35),
               TextField(
                 controller: nameController,
                 textDirection: TextDirection.rtl,
                 decoration: const InputDecoration(
                   labelText: 'الاسم',
-                  hintText: 'الاسم',
                   prefixIcon: Icon(Icons.person),
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 textDirection: TextDirection.rtl,
                 decoration: const InputDecoration(
                   labelText: 'رقم الهاتف',
-                  hintText: 'رقم الهاتف',
+                  hintText: 'مثال: 07XXXXXXXXX',
                   prefixIcon: Icon(Icons.phone),
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                height: 62,
-                child: ElevatedButton.icon(
+                height: 58,
+                child: FilledButton.icon(
                   onPressed: login,
                   icon: const Icon(Icons.login),
                   label: const Text(
                     'تسجيل الدخول',
-                    style: TextStyle(fontSize: 25),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF39733D),
-                    foregroundColor: Colors.white,
+                    style: TextStyle(fontSize: 22),
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 28),
               const Text(
-                'مطاعم  •  فنادق  •  مولات  •  محطات وقود',
+                'مطاعم  •  فنادق  •  مولات  •  محطات وقود  •  صيدليات',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 19),
+                style: TextStyle(fontSize: 17),
               ),
             ],
           ),
@@ -151,7 +146,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   final String userName;
 
   const HomePage({
@@ -160,73 +155,126 @@ class HomePage extends StatelessWidget {
   });
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final searchController = TextEditingController();
+
+  final List<DedaCategoryData> allCategories = const [
+    DedaCategoryData(Icons.restaurant, 'مطاعم'),
+    DedaCategoryData(Icons.hotel, 'فنادق'),
+    DedaCategoryData(Icons.local_mall, 'مولات'),
+    DedaCategoryData(Icons.local_gas_station, 'محطات وقود'),
+    DedaCategoryData(Icons.local_pharmacy, 'صيدليات'),
+    DedaCategoryData(Icons.local_parking, 'مواقف'),
+    DedaCategoryData(Icons.park, 'حدائق'),
+    DedaCategoryData(Icons.map, 'الخريطة'),
+  ];
+
+  List<DedaCategoryData> get filteredCategories {
+    final q = searchController.text.trim();
+    if (q.isEmpty) return allCategories;
+    return allCategories.where((item) => item.title.contains(q)).toList();
+  }
+
+  void openCategory(DedaCategoryData category) {
+    if (category.title == 'الخريطة') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MapReadyPage(),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CategoryPage(category: category),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final categories = filteredCategories;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
         title: const Text('DEDA - الدليل الدقيق'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF39733D),
-        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'هلا بك $userName',
+                'هلا بك ${widget.userName}',
                 textAlign: TextAlign.right,
                 style: const TextStyle(
-                  fontSize: 26,
+                  fontSize: 25,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               TextField(
+                controller: searchController,
                 textDirection: TextDirection.rtl,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'ابحث عن مكان...',
+                  hintText: 'ابحث عن نوع مكان...',
                   prefixIcon: const Icon(Icons.search),
+                  suffixIcon: searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.clear),
+                        ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 18),
               Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  children:  [
-                    DedaCategory(
-                      icon: Icons.restaurant,
-                      title: 'مطاعم',
-                    ),
-                    DedaCategory(
-                      icon: Icons.hotel,
-                      title: 'فنادق',
-                    ),
-                    DedaCategory(
-                      icon: Icons.local_mall,
-                      title: 'مولات',
-                    ),
-                    DedaCategory(
-                      icon: Icons.local_gas_station,
-                      title: 'محطات وقود',
-                    ),
-                    DedaCategory(
-                      icon: Icons.local_parking,
-                      title: 'مواقف',
-                    ),
-                    DedaCategory(
-                      icon: Icons.map,
-                      title: 'الخريطة',
-                    ),
-                  ],
-                ),
+                child: categories.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'لا توجد نتيجة مطابقة',
+                          style: TextStyle(fontSize: 20),
+                        ),
+                      )
+                    : GridView.builder(
+                        itemCount: categories.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemBuilder: (context, index) {
+                          final category = categories[index];
+                          return DedaCategory(
+                            icon: category.icon,
+                            title: category.title,
+                            onTap: () => openCategory(category),
+                          );
+                        },
+                      ),
               ),
             ],
           ),
@@ -236,40 +284,152 @@ class HomePage extends StatelessWidget {
   }
 }
 
+class DedaCategoryData {
+  final IconData icon;
+  final String title;
+
+  const DedaCategoryData(this.icon, this.title);
+}
+
 class DedaCategory extends StatelessWidget {
   final IconData icon;
   final String title;
-final VoidCallback? onTap;
+  final VoidCallback onTap;
+
   const DedaCategory({
     super.key,
     required this.icon,
     required this.title,
- this.onTap,
-});
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 3,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-     onTap: onTap,
+        onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
-              size: 52,
+              size: 50,
               color: const Color(0xFF39733D),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               title,
+              textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 21,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class CategoryPage extends StatelessWidget {
+  final DedaCategoryData category;
+
+  const CategoryPage({
+    super.key,
+    required this.category,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(category.title),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                category.icon,
+                size: 90,
+                color: const Color(0xFF39733D),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                category.title,
+                style: const TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'الزر يعمل بنجاح.\nسنربط نتائج الأماكن الحقيقية بهذه الصفحة في المرحلة التالية.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('رجوع'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MapReadyPage extends StatelessWidget {
+  const MapReadyPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('الخريطة'),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.map,
+                size: 100,
+                color: Color(0xFF39733D),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'زر الخريطة يعمل بنجاح',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'بعد نجاح اختبار هذه النسخة سنربط Google Maps وGPS بصورة صحيحة.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('رجوع'),
+              ),
+            ],
+          ),
         ),
       ),
     );
