@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() {
   runApp(const DedaApp());
@@ -387,46 +388,212 @@ class CategoryPage extends StatelessWidget {
   }
 }
 
-class MapReadyPage extends StatelessWidget {
+class MapReadyPage extends StatefulWidget {
   const MapReadyPage({super.key});
+
+  @override
+  State<MapReadyPage> createState() => _MapReadyPageState();
+}
+
+class _MapReadyPageState extends State<MapReadyPage> {
+  Position? currentPosition;
+  bool isLoading = false;
+  String statusMessage = 'اضغط على الزر لتحديد موقعك الحالي';
+
+  Future<void> determinePosition() async {
+    if (isLoading) return;
+
+    setState(() {
+      isLoading = true;
+      statusMessage = 'جاري تحديد موقعك...';
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          statusMessage =
+              'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.';
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        setState(() {
+          statusMessage =
+              'تم رفض إذن الموقع. نحتاج الإذن حتى يستطيع DEDA تحديد موقعك.';
+        });
+        return;
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          statusMessage =
+              'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالوصول إلى الموقع.';
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        currentPosition = position;
+        statusMessage = 'تم تحديد موقعك بنجاح';
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        statusMessage =
+            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS ثم حاول مرة أخرى.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> openSettings() async {
+    await Geolocator.openAppSettings();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('الخريطة'),
+        title: const Text('GPS - موقعي'),
+        centerTitle: true,
       ),
-      body: Center(
-        child: Padding(
+      body: SafeArea(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const SizedBox(height: 25),
               const Icon(
-                Icons.map,
+                Icons.my_location,
                 size: 100,
                 color: Color(0xFF39733D),
               ),
               const SizedBox(height: 20),
               const Text(
-                'زر الخريطة يعمل بنجاح',
+                'تحديد موقعي الحالي',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'بعد نجاح اختبار هذه النسخة سنربط Google Maps وGPS بصورة صحيحة.',
+              const SizedBox(height: 18),
+              Text(
+                statusMessage,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18),
+                style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
+              const SizedBox(height: 28),
+              if (isLoading)
+                const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              if (currentPosition != null) ...[
+                Card(
+                  elevation: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'موقعك الحالي',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'خط العرض:\n${currentPosition!.latitude.toStringAsFixed(6)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 19),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'خط الطول:\n${currentPosition!.longitude.toStringAsFixed(6)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 19),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'الدقة التقريبية: ${currentPosition!.accuracy.toStringAsFixed(1)} متر',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 17),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+              ],
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: isLoading ? null : determinePosition,
+                  icon: Icon(
+                    currentPosition == null
+                        ? Icons.gps_fixed
+                        : Icons.refresh,
+                  ),
+                  label: Text(
+                    currentPosition == null
+                        ? 'تحديد موقعي'
+                        : 'تحديث الموقع',
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: openSettings,
+                icon: const Icon(Icons.settings),
+                label: const Text(
+                  'إعدادات إذن الموقع',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.arrow_back),
-                label: const Text('رجوع'),
+                label: const Text(
+                  'رجوع',
+                  style: TextStyle(fontSize: 18),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'بعد نجاح اختبار GPS سنضيف الخريطة واختيار المكان وتحديد مسار الوصول إليه.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
               ),
             ],
           ),
