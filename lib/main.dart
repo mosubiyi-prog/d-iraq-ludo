@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 void main() {
   runApp(const DedaApp());
@@ -413,6 +415,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       if (!serviceEnabled) {
         if (!mounted) return;
+
         setState(() {
           statusMessage =
               'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.';
@@ -428,6 +431,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
+
         setState(() {
           statusMessage =
               'تم رفض إذن الموقع. نحتاج الإذن حتى يستطيع DEDA تحديد موقعك.';
@@ -437,6 +441,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
+
         setState(() {
           statusMessage =
               'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالوصول إلى الموقع.';
@@ -461,7 +466,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       setState(() {
         statusMessage =
-            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS ثم حاول مرة أخرى.';
+            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS والإنترنت ثم حاول مرة أخرى.';
       });
     } finally {
       if (mounted) {
@@ -476,83 +481,138 @@ class _MapReadyPageState extends State<MapReadyPage> {
     await Geolocator.openAppSettings();
   }
 
+  Widget buildMap(Position position) {
+    final point = LatLng(
+      position.latitude,
+      position.longitude,
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 380,
+        child: FlutterMap(
+          key: ValueKey(
+            '${position.latitude}-${position.longitude}',
+          ),
+          options: MapOptions(
+            initialCenter: point,
+            initialZoom: 16,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate:
+                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.diraq.ludo',
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: point,
+                  width: 60,
+                  height: 60,
+                  child: const Icon(
+                    Icons.location_pin,
+                    size: 55,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            const RichAttributionWidget(
+              attributions: [
+                TextSourceAttribution(
+                  'OpenStreetMap contributors',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('GPS - موقعي'),
+        title: const Text('الخريطة - موقعي'),
         centerTitle: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 25),
               const Icon(
-                Icons.my_location,
-                size: 100,
+                Icons.map,
+                size: 75,
                 color: Color(0xFF39733D),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               const Text(
-                'تحديد موقعي الحالي',
+                'موقعي على الخريطة',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               Text(
                 statusMessage,
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               if (isLoading)
                 const Center(
-                  child: CircularProgressIndicator(),
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
               if (currentPosition != null) ...[
+                buildMap(currentPosition!),
+                const SizedBox(height: 18),
                 Card(
                   elevation: 3,
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
                         const Text(
                           'موقعك الحالي',
                           style: TextStyle(
-                            fontSize: 22,
+                            fontSize: 21,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
                         Text(
-                          'خط العرض:\n${currentPosition!.latitude.toStringAsFixed(6)}',
+                          'خط العرض: ${currentPosition!.latitude.toStringAsFixed(6)}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 19),
+                          style: const TextStyle(fontSize: 17),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         Text(
-                          'خط الطول:\n${currentPosition!.longitude.toStringAsFixed(6)}',
+                          'خط الطول: ${currentPosition!.longitude.toStringAsFixed(6)}',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 19),
+                          style: const TextStyle(fontSize: 17),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         Text(
                           'الدقة التقريبية: ${currentPosition!.accuracy.toStringAsFixed(1)} متر',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 17),
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 18),
               ],
               SizedBox(
                 height: 56,
@@ -565,9 +625,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
                   ),
                   label: Text(
                     currentPosition == null
-                        ? 'تحديد موقعي'
-                        : 'تحديث الموقع',
-                    style: const TextStyle(fontSize: 20),
+                        ? 'تحديد موقعي على الخريطة'
+                        : 'تحديث موقعي',
+                    style: const TextStyle(fontSize: 19),
                   ),
                 ),
               ),
@@ -589,9 +649,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
                   style: TextStyle(fontSize: 18),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               const Text(
-                'بعد نجاح اختبار GPS سنضيف الخريطة واختيار المكان وتحديد مسار الوصول إليه.',
+                'بعد نجاح اختبار الخريطة سنضيف الأماكن الحقيقية، ثم اختيار الوجهة وتحديد مسار الوصول إليها.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16),
               ),
