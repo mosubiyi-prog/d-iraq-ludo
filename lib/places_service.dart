@@ -89,7 +89,7 @@ out center tags;
         HttpHeaders.contentTypeHeader,
         'application/x-www-form-urlencoded; charset=UTF-8',
       );
-
+request.headers.set(HttpHeaders.userAgentHeader, 'DEDA/1.0 (Android; contact: app-owner)');
       request.write(
         'data=${Uri.encodeQueryComponent(query)}',
       );
