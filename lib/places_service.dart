@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,7 +20,10 @@ class PlacesService {
   static const List<String> _overpassUrls = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
   ];
+
+  static const Duration _requestTimeout = Duration(seconds: 12);
 
   String _filterForType(String type) {
     switch (type) {
@@ -71,149 +75,174 @@ class PlacesService {
     final longitude = center.longitude;
 
     final query = '''
-[out:json][timeout:25];
-(
-  node(around:$radiusMeters,$latitude,$longitude)$filter;
-  way(around:$radiusMeters,$latitude,$longitude)$filter;
-  relation(around:$radiusMeters,$latitude,$longitude)$filter;
-);
+[out:json][timeout:12];
+nwr(around:$radiusMeters,$latitude,$longitude)$filter;
 out center tags;
 ''';
 
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 20);
-
     Object? lastError;
 
+    for (final endpoint in _overpassUrls) {
+      try {
+        return await _fetchFromEndpoint(
+          endpoint: endpoint,
+          query: query,
+          type: type,
+        ).timeout(_requestTimeout);
+      } on TimeoutException catch (_) {
+        lastError = HttpException(
+          'Overpass timeout after ${_requestTimeout.inSeconds}s ($endpoint)',
+        );
+      } on SocketException catch (error) {
+        lastError = SocketException(
+          '${error.message} ($endpoint)',
+          osError: error.osError,
+          address: error.address,
+          port: error.port,
+        );
+      } on HttpException catch (error) {
+        lastError = error;
+      } on FormatException catch (error) {
+        lastError = error;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError != null) {
+      throw lastError;
+    }
+
+    return [];
+  }
+
+  Future<List<PlaceInfo>> _fetchFromEndpoint({
+    required String endpoint,
+    required String query,
+    required String type,
+  }) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8);
+
     try {
-      for (final endpoint in _overpassUrls) {
-        try {
-          final uri = Uri.parse(endpoint).replace(
-            queryParameters: <String, String>{
-              'data': query,
-            },
-          );
+      final uri = Uri.parse(endpoint).replace(
+        queryParameters: <String, String>{
+          'data': query,
+        },
+      );
 
-          final request = await client.getUrl(uri);
+      final request = await client.getUrl(uri);
 
-          request.headers.set(
-            HttpHeaders.acceptHeader,
-            'application/json',
-          );
+      request.headers.set(
+        HttpHeaders.acceptHeader,
+        'application/json',
+      );
 
-          request.headers.set(
-            HttpHeaders.userAgentHeader,
-            'DEDA/1.0 (Android)',
-          );
+      request.headers.set(
+        HttpHeaders.userAgentHeader,
+        'DEDA/1.0 (Android)',
+      );
 
-          final response = await request.close();
+      final response = await request.close();
 
-          final body = await response
-              .transform(utf8.decoder)
-              .join();
+      final body = await response
+          .transform(utf8.decoder)
+          .join();
 
-          if (response.statusCode < 200 ||
-              response.statusCode >= 300) {
-            throw HttpException(
-              'Overpass error: ${response.statusCode} ($endpoint)',
-            );
-          }
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        throw HttpException(
+          'Overpass error: ${response.statusCode} ($endpoint)',
+        );
+      }
 
-          final decoded = jsonDecode(body);
+      final decoded = jsonDecode(body);
 
-          if (decoded is! Map<String, dynamic>) {
-            return [];
-          }
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException(
+          'Overpass response is not a JSON object',
+        );
+      }
 
-          final elements = decoded['elements'];
+      final elements = decoded['elements'];
 
-          if (elements is! List) {
-            return [];
-          }
+      if (elements is! List) {
+        return [];
+      }
 
-          final places = <PlaceInfo>[];
+      final places = <PlaceInfo>[];
 
-          for (final element in elements) {
-            if (element is! Map) {
-              continue;
-            }
+      for (final element in elements) {
+        if (element is! Map) {
+          continue;
+        }
 
-            final item =
-                Map<String, dynamic>.from(element);
+        final item = Map<String, dynamic>.from(element);
 
-            final rawTags = item['tags'];
+        final rawTags = item['tags'];
 
-            final tags = rawTags is Map
-                ? Map<String, dynamic>.from(rawTags)
-                : <String, dynamic>{};
+        final tags = rawTags is Map
+            ? Map<String, dynamic>.from(rawTags)
+            : <String, dynamic>{};
 
-            final rawName =
-                tags['name:ar'] ??
-                tags['name'] ??
-                type;
+        final rawName =
+            tags['name:ar'] ??
+            tags['name'] ??
+            type;
 
-            final name = rawName.toString().trim();
+        final name = rawName.toString().trim();
 
-            double? placeLatitude;
-            double? placeLongitude;
+        double? placeLatitude;
+        double? placeLongitude;
 
-            if (item['lat'] is num &&
-                item['lon'] is num) {
+        if (item['lat'] is num &&
+            item['lon'] is num) {
+          placeLatitude =
+              (item['lat'] as num).toDouble();
+
+          placeLongitude =
+              (item['lon'] as num).toDouble();
+        } else {
+          final rawCenter = item['center'];
+
+          if (rawCenter is Map) {
+            final placeCenter =
+                Map<String, dynamic>.from(rawCenter);
+
+            if (placeCenter['lat'] is num &&
+                placeCenter['lon'] is num) {
               placeLatitude =
-                  (item['lat'] as num).toDouble();
+                  (placeCenter['lat'] as num).toDouble();
 
               placeLongitude =
-                  (item['lon'] as num).toDouble();
-            } else {
-              final rawCenter = item['center'];
-
-              if (rawCenter is Map) {
-                final placeCenter =
-                    Map<String, dynamic>.from(rawCenter);
-
-                if (placeCenter['lat'] is num &&
-                    placeCenter['lon'] is num) {
-                  placeLatitude =
-                      (placeCenter['lat'] as num)
-                          .toDouble();
-
-                  placeLongitude =
-                      (placeCenter['lon'] as num)
-                          .toDouble();
-                }
-              }
+                  (placeCenter['lon'] as num).toDouble();
             }
-
-            if (placeLatitude == null ||
-                placeLongitude == null) {
-              continue;
-            }
-
-            places.add(
-              PlaceInfo(
-                name: name.isEmpty ? type : name,
-                type: type,
-                location: LatLng(
-                  placeLatitude,
-                  placeLongitude,
-                ),
-              ),
-            );
           }
-
-          return places;
-        } catch (error) {
-          lastError = error;
         }
+
+        if (placeLatitude == null ||
+            placeLongitude == null) {
+          continue;
+        }
+
+        places.add(
+          PlaceInfo(
+            name: name.isEmpty ? type : name,
+            type: type,
+            location: LatLng(
+              placeLatitude,
+              placeLongitude,
+            ),
+          ),
+        );
       }
 
-      if (lastError != null) {
-        throw lastError;
-      }
-
-      return [];
+      return places;
     } finally {
       client.close(force: true);
-    }
-  }
+    }     
+  }  
+
 }
+  
+
