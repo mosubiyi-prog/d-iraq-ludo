@@ -16,8 +16,10 @@ class PlaceInfo {
 }
 
 class PlacesService {
-  static const String _overpassUrl =
-      'https://overpass-api.de/api/interpreter';
+  static const List<String> _overpassUrls = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
 
   String _filterForType(String type) {
     switch (type) {
@@ -81,116 +83,137 @@ out center tags;
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 20);
 
+    Object? lastError;
+
     try {
-      final request =
-          await client.postUrl(Uri.parse(_overpassUrl));
+      for (final endpoint in _overpassUrls) {
+        try {
+          final uri = Uri.parse(endpoint).replace(
+            queryParameters: <String, String>{
+              'data': query,
+            },
+          );
 
-      request.headers.set(
-        HttpHeaders.contentTypeHeader,
-        'application/x-www-form-urlencoded; charset=UTF-8',
-      );
-request.headers.set(HttpHeaders.userAgentHeader, 'DEDA/1.0 (Android; contact: app-owner)');
-      request.write(
-        'data=${Uri.encodeQueryComponent(query)}',
-      );
+          final request = await client.getUrl(uri);
 
-      final response = await request.close();
+          request.headers.set(
+            HttpHeaders.acceptHeader,
+            'application/json',
+          );
 
-      final body = await response
-          .transform(utf8.decoder)
-          .join();
+          request.headers.set(
+            HttpHeaders.userAgentHeader,
+            'DEDA/1.0 (Android)',
+          );
 
-      if (response.statusCode < 200 ||
-          response.statusCode >= 300) {
-        throw HttpException(
-          'Overpass error: ${response.statusCode}',
-        );
-      }
+          final response = await request.close();
 
-      final decoded = jsonDecode(body);
+          final body = await response
+              .transform(utf8.decoder)
+              .join();
 
-      if (decoded is! Map<String, dynamic>) {
-        return [];
-      }
+          if (response.statusCode < 200 ||
+              response.statusCode >= 300) {
+            throw HttpException(
+              'Overpass error: ${response.statusCode} ($endpoint)',
+            );
+          }
 
-      final elements = decoded['elements'];
+          final decoded = jsonDecode(body);
 
-      if (elements is! List) {
-        return [];
-      }
+          if (decoded is! Map<String, dynamic>) {
+            return [];
+          }
 
-      final places = <PlaceInfo>[];
+          final elements = decoded['elements'];
 
-      for (final element in elements) {
-        if (element is! Map) {
-          continue;
-        }
+          if (elements is! List) {
+            return [];
+          }
 
-        final item =
-            Map<String, dynamic>.from(element);
+          final places = <PlaceInfo>[];
 
-        final rawTags = item['tags'];
+          for (final element in elements) {
+            if (element is! Map) {
+              continue;
+            }
 
-        final tags = rawTags is Map
-            ? Map<String, dynamic>.from(rawTags)
-            : <String, dynamic>{};
+            final item =
+                Map<String, dynamic>.from(element);
 
-        final rawName =
-            tags['name:ar'] ??
-            tags['name'] ??
-            type;
+            final rawTags = item['tags'];
 
-        final name = rawName.toString().trim();
+            final tags = rawTags is Map
+                ? Map<String, dynamic>.from(rawTags)
+                : <String, dynamic>{};
 
-        double? placeLatitude;
-        double? placeLongitude;
+            final rawName =
+                tags['name:ar'] ??
+                tags['name'] ??
+                type;
 
-        if (item['lat'] is num &&
-            item['lon'] is num) {
-          placeLatitude =
-              (item['lat'] as num).toDouble();
+            final name = rawName.toString().trim();
 
-          placeLongitude =
-              (item['lon'] as num).toDouble();
-        } else {
-          final rawCenter = item['center'];
+            double? placeLatitude;
+            double? placeLongitude;
 
-          if (rawCenter is Map) {
-            final placeCenter =
-                Map<String, dynamic>.from(rawCenter);
-
-            if (placeCenter['lat'] is num &&
-                placeCenter['lon'] is num) {
+            if (item['lat'] is num &&
+                item['lon'] is num) {
               placeLatitude =
-                  (placeCenter['lat'] as num).toDouble();
+                  (item['lat'] as num).toDouble();
 
               placeLongitude =
-                  (placeCenter['lon'] as num).toDouble();
+                  (item['lon'] as num).toDouble();
+            } else {
+              final rawCenter = item['center'];
+
+              if (rawCenter is Map) {
+                final placeCenter =
+                    Map<String, dynamic>.from(rawCenter);
+
+                if (placeCenter['lat'] is num &&
+                    placeCenter['lon'] is num) {
+                  placeLatitude =
+                      (placeCenter['lat'] as num)
+                          .toDouble();
+
+                  placeLongitude =
+                      (placeCenter['lon'] as num)
+                          .toDouble();
+                }
+              }
             }
+
+            if (placeLatitude == null ||
+                placeLongitude == null) {
+              continue;
+            }
+
+            places.add(
+              PlaceInfo(
+                name: name.isEmpty ? type : name,
+                type: type,
+                location: LatLng(
+                  placeLatitude,
+                  placeLongitude,
+                ),
+              ),
+            );
           }
-        }
 
-        if (placeLatitude == null ||
-            placeLongitude == null) {
-          continue;
+          return places;
+        } catch (error) {
+          lastError = error;
         }
-
-        places.add(
-          PlaceInfo(
-            name: name.isEmpty ? type : name,
-            type: type,
-            location: LatLng(
-              placeLatitude,
-              placeLongitude,
-            ),
-          ),
-        );
       }
 
-      return places;
+      if (lastError != null) {
+        throw lastError;
+      }
+
+      return [];
     } finally {
       client.close(force: true);
     }
   }
-  }
-
+}
