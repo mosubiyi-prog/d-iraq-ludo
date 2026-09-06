@@ -58,9 +58,7 @@ class _LoginPageState extends State<LoginPage> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(
-          userName: name,
-        ),
+        builder: (context) => HomePage(userName: name),
       ),
     );
   }
@@ -169,38 +167,14 @@ class _HomePageState extends State<HomePage> {
   final searchController = TextEditingController();
 
   final List<DedaCategoryData> allCategories = const [
-    DedaCategoryData(
-      Icons.restaurant,
-      'مطاعم',
-    ),
-    DedaCategoryData(
-      Icons.hotel,
-      'فنادق',
-    ),
-    DedaCategoryData(
-      Icons.local_mall,
-      'مولات',
-    ),
-    DedaCategoryData(
-      Icons.local_gas_station,
-      'محطات وقود',
-    ),
-    DedaCategoryData(
-      Icons.local_pharmacy,
-      'صيدليات',
-    ),
-    DedaCategoryData(
-      Icons.local_parking,
-      'مواقف',
-    ),
-    DedaCategoryData(
-      Icons.park,
-      'حدائق',
-    ),
-    DedaCategoryData(
-      Icons.map,
-      'الخريطة',
-    ),
+    DedaCategoryData(Icons.restaurant, 'مطاعم'),
+    DedaCategoryData(Icons.hotel, 'فنادق'),
+    DedaCategoryData(Icons.local_mall, 'مولات'),
+    DedaCategoryData(Icons.local_gas_station, 'محطات وقود'),
+    DedaCategoryData(Icons.local_pharmacy, 'صيدليات'),
+    DedaCategoryData(Icons.local_parking, 'مواقف'),
+    DedaCategoryData(Icons.park, 'حدائق'),
+    DedaCategoryData(Icons.map, 'الخريطة'),
   ];
 
   List<DedaCategoryData> get filteredCategories {
@@ -210,16 +184,10 @@ class _HomePageState extends State<HomePage> {
       return allCategories;
     }
 
-    return allCategories
-        .where(
-          (item) => item.title.contains(q),
-        )
-        .toList();
+    return allCategories.where((item) => item.title.contains(q)).toList();
   }
 
-  void openCategory(
-    DedaCategoryData category,
-  ) {
+  void openCategory(DedaCategoryData category) {
     if (category.title == 'الخريطة') {
       Navigator.push(
         context,
@@ -233,9 +201,7 @@ class _HomePageState extends State<HomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => NearbyPlacesPage(
-          category: category,
-        ),
+        builder: (_) => NearbyPlacesPage(category: category),
       ),
     );
   }
@@ -253,17 +219,14 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text(
-          'DEDA - الدليل الدقيق',
-        ),
+        title: const Text('DEDA - الدليل الدقيق'),
         centerTitle: true,
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'هلا بك ${widget.userName}',
@@ -282,24 +245,18 @@ class _HomePageState extends State<HomePage> {
                 },
                 decoration: InputDecoration(
                   hintText: 'ابحث عن نوع مكان...',
-                  prefixIcon:
-                      const Icon(Icons.search),
-                  suffixIcon:
-                      searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                searchController
-                                    .clear();
-                                setState(() {});
-                              },
-                              icon: const Icon(
-                                Icons.clear,
-                              ),
-                            ),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.clear),
+                        ),
                   border: OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
               ),
@@ -309,33 +266,25 @@ class _HomePageState extends State<HomePage> {
                     ? const Center(
                         child: Text(
                           'لا توجد نتيجة مطابقة',
-                          style: TextStyle(
-                            fontSize: 20,
-                          ),
+                          style: TextStyle(fontSize: 20),
                         ),
                       )
                     : GridView.builder(
-                        itemCount:
-                            categories.length,
+                        itemCount: categories.length,
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
-                        itemBuilder:
-                            (context, index) {
-                          final category =
-                              categories[index];
+                        itemBuilder: (context, index) {
+                          final category = categories[index];
 
                           return DedaCategory(
                             icon: category.icon,
-                            title:
-                                category.title,
+                            title: category.title,
                             onTap: () {
-                              openCategory(
-                                category,
-                              );
+                              openCategory(category);
                             },
                           );
                         },
@@ -353,10 +302,7 @@ class DedaCategoryData {
   final IconData icon;
   final String title;
 
-  const DedaCategoryData(
-    this.icon,
-    this.title,
-  );
+  const DedaCategoryData(this.icon, this.title);
 }
 
 class DedaCategory extends StatelessWidget {
@@ -376,18 +322,15 @@ class DedaCategory extends StatelessWidget {
     return Card(
       elevation: 3,
       child: InkWell(
-        borderRadius:
-            BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
               size: 50,
-              color:
-                  const Color(0xFF39733D),
+              color: const Color(0xFF39733D),
             ),
             const SizedBox(height: 10),
             Text(
@@ -395,8 +338,7 @@ class DedaCategory extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 20,
-                fontWeight:
-                    FontWeight.bold,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -406,8 +348,7 @@ class DedaCategory extends StatelessWidget {
   }
 }
 
-class NearbyPlacesPage
-    extends StatefulWidget {
+class NearbyPlacesPage extends StatefulWidget {
   final DedaCategoryData category;
 
   const NearbyPlacesPage({
@@ -416,148 +357,187 @@ class NearbyPlacesPage
   });
 
   @override
-  State<NearbyPlacesPage> createState() =>
-      _NearbyPlacesPageState();
+  State<NearbyPlacesPage> createState() => _NearbyPlacesPageState();
 }
 
-class _NearbyPlacesPageState
-    extends State<NearbyPlacesPage> {
-  final PlacesService placesService =
-      PlacesService();
+class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
+  final PlacesService placesService = PlacesService();
+
+  static const List<int> searchRadiiMeters = [
+    3000,
+    10000,
+    25000,
+  ];
 
   Position? currentPosition;
   List<PlaceInfo> places = [];
-
   bool isLoading = false;
+  int searchedRadiusMeters = 3000;
 
   String statusMessage =
       'اضغط على الزر للبحث عن الأماكن القريبة منك';
 
-  Future<Position?> determinePosition()
-      async {
-    final serviceEnabled =
-        await Geolocator
-            .isLocationServiceEnabled();
+  String radiusLabel(int meters) {
+    if (meters < 1000) {
+      return '$meters متر';
+    }
+
+    final km = meters / 1000;
+
+    if (km == km.roundToDouble()) {
+      return '${km.toInt()} كم';
+    }
+
+    return '${km.toStringAsFixed(1)} كم';
+  }
+
+  Future<Position?> determinePosition() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
     if (!serviceEnabled) {
-      if (!mounted) {
-        return null;
-      }
+      if (!mounted) return null;
 
       setState(() {
         statusMessage =
             'خدمة الموقع GPS غير مفعلة. شغّل الموقع ثم حاول مرة أخرى.';
       });
-
       return null;
     }
 
-    LocationPermission permission =
-        await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
 
-    if (permission ==
-        LocationPermission.denied) {
-      permission =
-          await Geolocator
-              .requestPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
 
-    if (permission ==
-        LocationPermission.denied) {
-      if (!mounted) {
-        return null;
-      }
+    if (permission == LocationPermission.denied) {
+      if (!mounted) return null;
 
       setState(() {
         statusMessage =
             'تم رفض إذن الموقع. نحتاج الإذن لمعرفة الأماكن القريبة.';
       });
-
       return null;
     }
 
-    if (permission ==
-        LocationPermission
-            .deniedForever) {
-      if (!mounted) {
-        return null;
-      }
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return null;
 
       setState(() {
         statusMessage =
             'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.';
       });
-
       return null;
     }
 
     return Geolocator.getCurrentPosition(
-      locationSettings:
-          const LocationSettings(
+      locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
       ),
     );
   }
 
-  Future<void> loadNearbyPlaces()
-      async {
-    if (isLoading) {
-      return;
+  String friendlyPlacesError(Object error) {
+    final raw = error.toString();
+    final text = raw.toLowerCase();
+
+    String message;
+
+    if (text.contains('timeout')) {
+      message =
+          'انتهت مهلة الاتصال بخدمة الأماكن. قد يكون الإنترنت بطيئًا أو الخادم مزدحمًا.';
+    } else if (text.contains('429')) {
+      message =
+          'خدمة الأماكن مشغولة مؤقتًا بسبب كثرة الطلبات. حاول مرة أخرى بعد قليل.';
+    } else if (text.contains('502') ||
+        text.contains('503') ||
+        text.contains('504')) {
+      message =
+          'خادم الأماكن غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.';
+    } else if (text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('network is unreachable')) {
+      message =
+          'تعذر الوصول إلى خادم الأماكن. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.';
+    } else if (text.contains('httpexception')) {
+      message =
+          'خدمة الأماكن أعادت خطأ اتصال. سنحتاج إلى فحص رمز الخطأ الظاهر أدناه.';
+    } else {
+      message =
+          'حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.';
     }
+
+    return '$message\n\nالتفاصيل التقنية:\n$raw';
+  }
+
+  Future<void> loadNearbyPlaces() async {
+    if (isLoading) return;
 
     setState(() {
       isLoading = true;
+      places = [];
+      searchedRadiusMeters = searchRadiiMeters.first;
       statusMessage =
           'جاري تحديد موقعك والبحث عن ${widget.category.title} قريبة...';
     });
 
     try {
-      final position =
-          await determinePosition();
+      final position = await determinePosition();
 
-      if (position == null) {
-        return;
-      }
+      if (position == null) return;
 
       final center = LatLng(
         position.latitude,
         position.longitude,
       );
 
-      final results =
-          await placesService
-              .getNearbyPlaces(
-        center: center,
-        type: widget.category.title,
-        radiusMeters: 3000,
-      );
+      if (!mounted) return;
 
-      results.sort(
-        (a, b) {
-          final distanceA =
-              Geolocator.distanceBetween(
-            position.latitude,
-            position.longitude,
-            a.location.latitude,
-            a.location.longitude,
-          );
+      setState(() {
+        currentPosition = position;
+      });
 
-          final distanceB =
-              Geolocator.distanceBetween(
-            position.latitude,
-            position.longitude,
-            b.location.latitude,
-            b.location.longitude,
-          );
+      List<PlaceInfo> results = [];
 
-          return distanceA
-              .compareTo(distanceB);
-        },
-      );
+      for (final radius in searchRadiiMeters) {
+        if (!mounted) return;
 
-      if (!mounted) {
-        return;
+        setState(() {
+          searchedRadiusMeters = radius;
+          statusMessage =
+              'جاري البحث عن ${widget.category.title} ضمن ${radiusLabel(radius)}...';
+        });
+
+        results = await placesService.getNearbyPlaces(
+          center: center,
+          type: widget.category.title,
+          radiusMeters: radius,
+        );
+
+        if (results.isNotEmpty) {
+          break;
+        }
       }
+
+      results.sort((a, b) {
+        final distanceA = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          a.location.latitude,
+          a.location.longitude,
+        );
+
+        final distanceB = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          b.location.latitude,
+          b.location.longitude,
+        );
+
+        return distanceA.compareTo(distanceB);
+      });
+
+      if (!mounted) return;
 
       setState(() {
         currentPosition = position;
@@ -565,20 +545,17 @@ class _NearbyPlacesPageState
 
         if (results.isEmpty) {
           statusMessage =
-              'لم نعثر على ${widget.category.title} مسجلة ضمن 3 كم من موقعك.';
+              'لم نعثر على ${widget.category.title} مسجلة حتى مسافة ${radiusLabel(searchedRadiusMeters)} من موقعك.';
         } else {
           statusMessage =
-              'تم العثور على ${results.length} مكان قريب';
+              'تم العثور على ${results.length} مكان ضمن ${radiusLabel(searchedRadiusMeters)}.';
         }
       });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
-        statusMessage =
-            'تعذر جلب الأماكن حاليًا. تأكد من الإنترنت وGPS ثم حاول مرة أخرى.';
+        statusMessage = friendlyPlacesError(e);
       });
     } finally {
       if (mounted) {
@@ -589,14 +566,10 @@ class _NearbyPlacesPageState
     }
   }
 
-  double distanceToPlace(
-    PlaceInfo place,
-  ) {
+  double distanceToPlace(PlaceInfo place) {
     final position = currentPosition;
 
-    if (position == null) {
-      return 0;
-    }
+    if (position == null) return 0;
 
     return Geolocator.distanceBetween(
       position.latitude,
@@ -606,55 +579,37 @@ class _NearbyPlacesPageState
     );
   }
 
-  void showPlaceInfo(
-    PlaceInfo place,
-  ) {
-    final distance =
-        distanceToPlace(place);
+  void showPlaceInfo(PlaceInfo place) {
+    final distance = distanceToPlace(place);
 
     showModalBottomSheet(
       context: context,
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding:
-                const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   widget.category.icon,
                   size: 52,
-                  color: const Color(
-                    0xFF39733D,
-                  ),
+                  color: const Color(0xFF39733D),
                 ),
-                const SizedBox(
-                  height: 12,
-                ),
+                const SizedBox(height: 12),
                 Text(
                   place.name,
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      const TextStyle(
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
                     fontSize: 22,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(
-                  height: 8,
-                ),
+                const SizedBox(height: 8),
                 Text(
                   'يبعد تقريبًا ${formatDistance(distance)}',
-                  textAlign:
-                      TextAlign.center,
-                  style:
-                      const TextStyle(
-                    fontSize: 17,
-                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 17),
                 ),
               ],
             ),
@@ -664,9 +619,7 @@ class _NearbyPlacesPageState
     );
   }
 
-  String formatDistance(
-    double meters,
-  ) {
+  String formatDistance(double meters) {
     if (meters < 1000) {
       return '${meters.toStringAsFixed(0)} متر';
     }
@@ -674,9 +627,13 @@ class _NearbyPlacesPageState
     return '${(meters / 1000).toStringAsFixed(1)} كم';
   }
 
-  Widget buildMap(
-    Position position,
-  ) {
+  double mapZoomForRadius() {
+    if (searchedRadiusMeters <= 3000) return 14.0;
+    if (searchedRadiusMeters <= 10000) return 12.0;
+    return 10.5;
+  }
+
+  Widget buildMap(Position position) {
     final userPoint = LatLng(
       position.latitude,
       position.longitude,
@@ -704,25 +661,20 @@ class _NearbyPlacesPageState
                 showPlaceInfo(place);
               },
               child: Container(
-                decoration:
-                    BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Colors.white,
-                  shape:
-                      BoxShape.circle,
-                  boxShadow: const [
+                  shape: BoxShape.circle,
+                  boxShadow: [
                     BoxShadow(
                       blurRadius: 4,
-                      color:
-                          Colors.black26,
+                      color: Colors.black26,
                     ),
                   ],
                 ),
                 child: Icon(
                   widget.category.icon,
                   size: 30,
-                  color: const Color(
-                    0xFF39733D,
-                  ),
+                  color: const Color(0xFF39733D),
                 ),
               ),
             ),
@@ -732,33 +684,27 @@ class _NearbyPlacesPageState
     ];
 
     return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: 390,
         child: FlutterMap(
           key: ValueKey(
-            '${position.latitude}-${position.longitude}-${places.length}',
+            '${position.latitude}-${position.longitude}-${places.length}-$searchedRadiusMeters',
           ),
           options: MapOptions(
             initialCenter: userPoint,
-            initialZoom: 15,
+            initialZoom: mapZoomForRadius(),
           ),
           children: [
             TileLayer(
               urlTemplate:
                   'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName:
-                  'com.diraq.ludo',
+              userAgentPackageName: 'com.diraq.ludo',
             ),
-            MarkerLayer(
-              markers: markers,
-            ),
+            MarkerLayer(markers: markers),
             const RichAttributionWidget(
               attributions: [
-                TextSourceAttribution(
-                  'OpenStreetMap contributors',
-                ),
+                TextSourceAttribution('OpenStreetMap contributors'),
               ],
             ),
           ],
@@ -767,40 +713,27 @@ class _NearbyPlacesPageState
     );
   }
 
-  Widget buildPlaceCard(
-    PlaceInfo place,
-  ) {
-    final distance =
-        distanceToPlace(place);
+  Widget buildPlaceCard(PlaceInfo place) {
+    final distance = distanceToPlace(place);
 
     return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         onTap: () {
           showPlaceInfo(place);
         },
         leading: CircleAvatar(
-          child: Icon(
-            widget.category.icon,
-          ),
+          child: Icon(widget.category.icon),
         ),
         title: Text(
           place.name,
-          textDirection:
-              TextDirection.rtl,
+          textDirection: TextDirection.rtl,
         ),
         subtitle: Text(
           'المسافة التقريبية: ${formatDistance(distance)}',
-          textDirection:
-              TextDirection.rtl,
+          textDirection: TextDirection.rtl,
         ),
-        trailing:
-            const Icon(
-          Icons.location_on,
-        ),
+        trailing: const Icon(Icons.location_on),
       ),
     );
   }
@@ -808,168 +741,117 @@ class _NearbyPlacesPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF8FAF2),
+      backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(
-          widget.category.title,
-        ),
+        title: Text(widget.category.title),
         centerTitle: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(18),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
                 widget.category.icon,
                 size: 70,
-                color:
-                    const Color(
-                  0xFF39733D,
-                ),
+                color: const Color(0xFF39733D),
               ),
-              const SizedBox(
-                height: 12,
-              ),
+              const SizedBox(height: 12),
               Text(
                 widget.category.title,
-                textAlign:
-                    TextAlign.center,
-                style:
-                    const TextStyle(
+                textAlign: TextAlign.center,
+                style: const TextStyle(
                   fontSize: 28,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(
-                height: 8,
-              ),
+              const SizedBox(height: 8),
               const Text(
-                'البحث ضمن دائرة 3 كم حول موقعك الحالي',
-                textAlign:
-                    TextAlign.center,
-                style:
-                    TextStyle(
-                  fontSize: 16,
-                ),
+                'يبدأ البحث ضمن 3 كم، وإذا لم توجد نتائج يتوسع تلقائيًا إلى 10 كم ثم 25 كم',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
               ),
-              const SizedBox(
-                height: 12,
-              ),
+              const SizedBox(height: 12),
               Text(
                 statusMessage,
-                textAlign:
-                    TextAlign.center,
-                style:
-                    const TextStyle(
-                  fontSize: 17,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 17),
+              ),
+              const SizedBox(height: 12),
+              if (currentPosition != null)
+                Card(
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      'نطاق البحث الحالي: ${radiusLabel(searchedRadiusMeters)}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(
-                height: 18,
-              ),
+              const SizedBox(height: 10),
               if (isLoading)
                 const Center(
                   child: Padding(
-                    padding:
-                        EdgeInsets.all(
-                      20,
-                    ),
-                    child:
-                        CircularProgressIndicator(),
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(),
                   ),
                 ),
-              if (currentPosition !=
-                  null) ...[
-                buildMap(
-                  currentPosition!,
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
+              if (currentPosition != null) ...[
+                buildMap(currentPosition!),
+                const SizedBox(height: 18),
               ],
               SizedBox(
                 height: 56,
-                child:
-                    FilledButton.icon(
-                  onPressed:
-                      isLoading
-                          ? null
-                          : loadNearbyPlaces,
+                child: FilledButton.icon(
+                  onPressed: isLoading ? null : loadNearbyPlaces,
                   icon: Icon(
-                    places.isEmpty
-                        ? Icons.search
-                        : Icons.refresh,
+                    places.isEmpty ? Icons.search : Icons.refresh,
                   ),
                   label: Text(
                     places.isEmpty
                         ? 'ابحث عن ${widget.category.title} قريبة'
                         : 'تحديث النتائج',
-                    style:
-                        const TextStyle(
-                      fontSize: 18,
-                    ),
+                    style: const TextStyle(fontSize: 18),
                   ),
                 ),
               ),
-              const SizedBox(
-                height: 18,
-              ),
+              const SizedBox(height: 18),
               if (places.isNotEmpty) ...[
                 Text(
                   'الأماكن القريبة (${places.length})',
-                  textAlign:
-                      TextAlign.right,
-                  style:
-                      const TextStyle(
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
                     fontSize: 21,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(
-                  height: 10,
-                ),
-                ...places
-                    .take(20)
-                    .map(buildPlaceCard),
+                const SizedBox(height: 10),
+                ...places.take(20).map(buildPlaceCard),
               ],
-              const SizedBox(
-                height: 10,
-              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () {
-                  Geolocator
-                      .openAppSettings();
+                  Geolocator.openAppSettings();
                 },
-                icon: const Icon(
-                  Icons.settings,
-                ),
-                label: const Text(
-                  'إعدادات إذن الموقع',
-                ),
+                icon: const Icon(Icons.settings),
+                label: const Text('إعدادات إذن الموقع'),
               ),
-              const SizedBox(
-                height: 10,
-              ),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () {
-                  Navigator.pop(
-                    context,
-                  );
+                  Navigator.pop(context);
                 },
-                icon: const Icon(
-                  Icons.arrow_back,
-                ),
-                label:
-                    const Text(
-                  'رجوع',
-                ),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('رجوع'),
               ),
             ],
           ),
@@ -979,123 +861,85 @@ class _NearbyPlacesPageState
   }
 }
 
-class MapReadyPage
-    extends StatefulWidget {
-  const MapReadyPage({
-    super.key,
-  });
+class MapReadyPage extends StatefulWidget {
+  const MapReadyPage({super.key});
 
   @override
-  State<MapReadyPage> createState() =>
-      _MapReadyPageState();
+  State<MapReadyPage> createState() => _MapReadyPageState();
 }
 
-class _MapReadyPageState
-    extends State<MapReadyPage> {
+class _MapReadyPageState extends State<MapReadyPage> {
   Position? currentPosition;
   bool isLoading = false;
 
   String statusMessage =
       'اضغط على الزر لتحديد موقعك الحالي';
 
-  Future<void> determinePosition()
-      async {
-    if (isLoading) {
-      return;
-    }
+  Future<void> determinePosition() async {
+    if (isLoading) return;
 
     setState(() {
       isLoading = true;
-      statusMessage =
-          'جاري تحديد موقعك...';
+      statusMessage = 'جاري تحديد موقعك...';
     });
 
     try {
-      final serviceEnabled =
-          await Geolocator
-              .isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
       if (!serviceEnabled) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         setState(() {
           statusMessage =
               'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.';
         });
-
         return;
       }
 
-      LocationPermission permission =
-          await Geolocator
-              .checkPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
 
-      if (permission ==
-          LocationPermission.denied) {
-        permission =
-            await Geolocator
-                .requestPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
 
-      if (permission ==
-          LocationPermission.denied) {
-        if (!mounted) {
-          return;
-        }
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
 
         setState(() {
           statusMessage =
               'تم رفض إذن الموقع. نحتاج الإذن حتى يستطيع DEDA تحديد موقعك.';
         });
-
         return;
       }
 
-      if (permission ==
-          LocationPermission
-              .deniedForever) {
-        if (!mounted) {
-          return;
-        }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
 
         setState(() {
           statusMessage =
               'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالوصول إلى الموقع.';
         });
-
         return;
       }
 
-      final position =
-          await Geolocator
-              .getCurrentPosition(
-        locationSettings:
-            const LocationSettings(
-          accuracy:
-              LocationAccuracy.high,
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
         ),
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
-        currentPosition =
-            position;
-        statusMessage =
-            'تم تحديد موقعك بنجاح';
+        currentPosition = position;
+        statusMessage = 'تم تحديد موقعك بنجاح';
       });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
+    } catch (e) {
+      if (!mounted) return;
 
       setState(() {
         statusMessage =
-            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS والإنترنت ثم حاول مرة أخرى.';
+            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS والإنترنت ثم حاول مرة أخرى.\n\nالتفاصيل التقنية:\n$e';
       });
     } finally {
       if (mounted) {
@@ -1106,23 +950,18 @@ class _MapReadyPageState
     }
   }
 
-  Future<void> openSettings()
-      async {
-    await Geolocator
-        .openAppSettings();
+  Future<void> openSettings() async {
+    await Geolocator.openAppSettings();
   }
 
-  Widget buildMap(
-    Position position,
-  ) {
+  Widget buildMap(Position position) {
     final point = LatLng(
       position.latitude,
       position.longitude,
     );
 
     return ClipRRect(
-      borderRadius:
-          BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: 380,
         child: FlutterMap(
@@ -1137,8 +976,7 @@ class _MapReadyPageState
             TileLayer(
               urlTemplate:
                   'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName:
-                  'com.diraq.ludo',
+              userAgentPackageName: 'com.diraq.ludo',
             ),
             MarkerLayer(
               markers: [
@@ -1146,21 +984,17 @@ class _MapReadyPageState
                   point: point,
                   width: 60,
                   height: 60,
-                  child:
-                      const Icon(
+                  child: const Icon(
                     Icons.location_pin,
                     size: 55,
-                    color:
-                        Colors.red,
+                    color: Colors.red,
                   ),
                 ),
               ],
             ),
             const RichAttributionWidget(
               attributions: [
-                TextSourceAttribution(
-                  'OpenStreetMap contributors',
-                ),
+                TextSourceAttribution('OpenStreetMap contributors'),
               ],
             ),
           ],
@@ -1170,232 +1004,129 @@ class _MapReadyPageState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          const Color(0xFFF8FAF2),
+      backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title:
-            const Text(
-          'الخريطة - موقعي',
-        ),
+        title: const Text('الخريطة - موقعي'),
         centerTitle: true,
       ),
       body: SafeArea(
-        child:
-            SingleChildScrollView(
-          padding:
-              const EdgeInsets.all(
-            20,
-          ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment
-                    .stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Icon(
                 Icons.map,
                 size: 75,
-                color:
-                    Color(
-                  0xFF39733D,
-                ),
+                color: Color(0xFF39733D),
               ),
-              const SizedBox(
-                height: 12,
-              ),
+              const SizedBox(height: 12),
               const Text(
                 'موقعي على الخريطة',
-                textAlign:
-                    TextAlign.center,
-                style:
-                    TextStyle(
+                textAlign: TextAlign.center,
+                style: TextStyle(
                   fontSize: 28,
-                  fontWeight:
-                      FontWeight.bold,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(
-                height: 12,
-              ),
+              const SizedBox(height: 12),
               Text(
                 statusMessage,
-                textAlign:
-                    TextAlign.center,
-                style:
-                    const TextStyle(
-                  fontSize: 18,
-                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18),
               ),
-              const SizedBox(
-                height: 20,
-              ),
+              const SizedBox(height: 20),
               if (isLoading)
                 const Center(
                   child: Padding(
-                    padding:
-                        EdgeInsets.all(
-                      20,
-                    ),
-                    child:
-                        CircularProgressIndicator(),
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(),
                   ),
                 ),
-              if (currentPosition !=
-                  null) ...[
-                buildMap(
-                  currentPosition!,
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
+              if (currentPosition != null) ...[
+                buildMap(currentPosition!),
+                const SizedBox(height: 18),
                 Card(
                   elevation: 3,
                   child: Padding(
-                    padding:
-                        const EdgeInsets
-                            .all(18),
+                    padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
                         const Text(
                           'موقعك الحالي',
-                          style:
-                              TextStyle(
-                            fontSize:
-                                21,
-                            fontWeight:
-                                FontWeight
-                                    .bold,
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(
-                          height: 12,
-                        ),
+                        const SizedBox(height: 12),
                         Text(
                           'خط العرض: ${currentPosition!.latitude.toStringAsFixed(6)}',
-                          textAlign:
-                              TextAlign
-                                  .center,
-                          style:
-                              const TextStyle(
-                            fontSize:
-                                17,
-                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 17),
                         ),
-                        const SizedBox(
-                          height: 8,
-                        ),
+                        const SizedBox(height: 8),
                         Text(
                           'خط الطول: ${currentPosition!.longitude.toStringAsFixed(6)}',
-                          textAlign:
-                              TextAlign
-                                  .center,
-                          style:
-                              const TextStyle(
-                            fontSize:
-                                17,
-                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 17),
                         ),
-                        const SizedBox(
-                          height: 8,
-                        ),
+                        const SizedBox(height: 8),
                         Text(
                           'الدقة التقريبية: ${currentPosition!.accuracy.toStringAsFixed(1)} متر',
-                          textAlign:
-                              TextAlign
-                                  .center,
-                          style:
-                              const TextStyle(
-                            fontSize:
-                                16,
-                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(
-                  height: 18,
-                ),
+                const SizedBox(height: 18),
               ],
               SizedBox(
                 height: 56,
-                child:
-                    FilledButton.icon(
-                  onPressed:
-                      isLoading
-                          ? null
-                          : determinePosition,
+                child: FilledButton.icon(
+                  onPressed: isLoading ? null : determinePosition,
                   icon: Icon(
-                    currentPosition ==
-                            null
+                    currentPosition == null
                         ? Icons.gps_fixed
                         : Icons.refresh,
                   ),
                   label: Text(
-                    currentPosition ==
-                            null
+                    currentPosition == null
                         ? 'تحديد موقعي على الخريطة'
                         : 'تحديث موقعي',
-                    style:
-                        const TextStyle(
-                      fontSize: 19,
-                    ),
+                    style: const TextStyle(fontSize: 19),
                   ),
                 ),
               ),
-              const SizedBox(
-                height: 14,
-              ),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
-                onPressed:
-                    openSettings,
-                icon: const Icon(
-                  Icons.settings,
-                ),
-                label:
-                    const Text(
+                onPressed: openSettings,
+                icon: const Icon(Icons.settings),
+                label: const Text(
                   'إعدادات إذن الموقع',
-                  style:
-                      TextStyle(
-                    fontSize: 18,
-                  ),
+                  style: TextStyle(fontSize: 18),
                 ),
               ),
-              const SizedBox(
-                height: 14,
-              ),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
                 onPressed: () {
-                  Navigator.pop(
-                    context,
-                  );
+                  Navigator.pop(context);
                 },
-                icon: const Icon(
-                  Icons.arrow_back,
-                ),
-                label:
-                    const Text(
+                icon: const Icon(Icons.arrow_back),
+                label: const Text(
                   'رجوع',
-                  style:
-                      TextStyle(
-                    fontSize: 18,
-                  ),
+                  style: TextStyle(fontSize: 18),
                 ),
               ),
-              const SizedBox(
-                height: 18,
-              ),
+              const SizedBox(height: 18),
               const Text(
-                'الآن أصبح DEDA قادرًا على تحديد موقعك وعرض الأماكن الحقيقية القريبة حسب الفئة.',
-                textAlign:
-                    TextAlign.center,
-                style:
-                    TextStyle(
-                  fontSize: 16,
-                ),
+                'DEDA يحدد موقعك ويعرض الأماكن الحقيقية القريبة حسب الفئة.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
               ),
             ],
           ),
