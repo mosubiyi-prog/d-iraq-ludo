@@ -87,6 +87,10 @@ class _LoginPageState extends State<LoginPage> {
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
 
+  static const Color _dedaGreen = Color(0xFF2E6E39);
+  static const Color _dedaDark = Color(0xFF173D22);
+  static const Color _dedaCream = Color(0xFFF8FAF2);
+
   void login() {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim();
@@ -118,78 +122,343 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  InputDecoration _fieldDecoration({
+    required String hint,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        color: Color(0xFF5E655E),
+        fontSize: 19,
+      ),
+      suffixIcon: Icon(
+        icon,
+        color: const Color(0xFF414A42),
+      ),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.86),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 20,
+        vertical: 19,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(
+          color: Color(0xFF8B948A),
+          width: 1.2,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(
+          color: _dedaGreen,
+          width: 2,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAF2),
+      backgroundColor: _dedaCream,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            children: [
-              const SizedBox(height: 30),
-              const Text(
-                'DEDA',
-                style: TextStyle(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 70),
-              const Icon(
-                Icons.location_on,
-                size: 100,
-                color: Colors.red,
-              ),
-              const SizedBox(height: 35),
-              const Text(
-                'هلا بك في تطبيق DEDA\nالدليل الدقيق',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 29,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 35),
-              TextField(
-                controller: nameController,
-                textDirection: TextDirection.rtl,
-                decoration: const InputDecoration(
-                  labelText: 'الاسم',
-                  prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                textDirection: TextDirection.rtl,
-                decoration: const InputDecoration(
-                  labelText: 'رقم الهاتف',
-                  hintText: 'مثال: 07XXXXXXXXX',
-                  prefixIcon: Icon(Icons.phone),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: FilledButton.icon(
-                  onPressed: login,
-                  icon: const Icon(Icons.login),
-                  label: const Text(
-                    'تسجيل الدخول',
-                    style: TextStyle(fontSize: 22),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 4),
+                      const Text(
+                        'DEDA',
+                        style: TextStyle(
+                          fontSize: 44,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: _dedaDark,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'هلا بك في تطبيق DEDA',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 27,
+                          height: 1.25,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF172019),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'الدليل الدقيق',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.w700,
+                          color: _dedaGreen,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const _DedaIraqiHero(),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(14, 18, 14, 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.72),
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x16000000),
+                              blurRadius: 24,
+                              offset: Offset(0, 9),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: nameController,
+                              textDirection: TextDirection.rtl,
+                              decoration: _fieldDecoration(
+                                hint: 'الاسم',
+                                icon: Icons.person,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            TextField(
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              textDirection: TextDirection.rtl,
+                              decoration: _fieldDecoration(
+                                hint: 'رقم الهاتف',
+                                icon: Icons.phone,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 62,
+                              child: FilledButton.icon(
+                                onPressed: login,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _dedaGreen,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(31),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                icon: const Icon(
+                                  Icons.login,
+                                  size: 27,
+                                ),
+                                label: const Text(
+                                  'تسجيل الدخول',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Row(
+                        children: [
+                          Expanded(
+                            child: Divider(
+                              color: Color(0xFF8CA28F),
+                              thickness: 1,
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'اكتشف ما يحيط بك',
+                              style: TextStyle(
+                                color: Color(0xFF475149),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Divider(
+                              color: Color(0xFF8CA28F),
+                              thickness: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const _DedaCategoryPreviewStrip(),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
-              const Text(
-                'مطاعم  •  فنادق  •  مولات  •  محطات وقود  •  صيدليات',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 17),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaIraqiHero extends StatelessWidget {
+  const _DedaIraqiHero();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 265,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x00E9F1E8),
+                    Color(0x55DCEBDD),
+                    Color(0x88EEF4EC),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            top: 0,
+            child: _IraqMapSignature(),
+          ),
+          const Positioned(
+            right: 4,
+            top: 22,
+            child: _IraqiFlagBadge(),
+          ),
+          Positioned(
+            left: 22,
+            right: 22,
+            bottom: 4,
+            child: SizedBox(
+              height: 96,
+              child: CustomPaint(
+                painter: _IraqLandscapePainter(),
+              ),
+            ),
+          ),
+          const Align(
+            alignment: Alignment(0, 0.38),
+            child: _DedaLocationMarker(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IraqMapSignature extends StatelessWidget {
+  const _IraqMapSignature();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 150,
+      height: 182,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _IraqOutlinePainter(),
+            ),
+          ),
+          const Positioned(
+            left: 57,
+            top: 45,
+            child: Icon(
+              Icons.location_on,
+              size: 25,
+              color: Color(0xFF6F9273),
+            ),
+          ),
+          const Positioned(
+            left: 30,
+            top: 88,
+            child: Text(
+              'كل مكان\nأقرب إليك',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF56785B),
+                fontSize: 15,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 61,
+            top: 143,
+            child: Text(
+              'ريناد',
+              style: TextStyle(
+                color: Color(0xFF708B72),
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IraqiFlagBadge extends StatelessWidget {
+  const _IraqiFlagBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: -0.05,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 84,
+          height: 50,
+          child: Column(
+            children: [
+              Expanded(
+                child: Container(color: const Color(0xFFCE303A)),
+              ),
+              Expanded(
+                child: Container(
+                  color: Colors.white,
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'الله أكبر',
+                    style: TextStyle(
+                      color: Color(0xFF1C8A4A),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Container(color: const Color(0xFF1E1E1E)),
               ),
             ],
           ),
@@ -197,6 +466,309 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+}
+
+class _DedaLocationMarker extends StatelessWidget {
+  const _DedaLocationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 94,
+          height: 94,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2E6E39),
+            borderRadius: BorderRadius.circular(47),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 16,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.location_on,
+            size: 74,
+            color: Color(0xFFF5F8F2),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Container(
+          width: 95,
+          height: 14,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(
+              color: const Color(0x557DA180),
+              width: 2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DedaCategoryPreviewStrip extends StatelessWidget {
+  const _DedaCategoryPreviewStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      (Icons.restaurant, 'مطاعم'),
+      (Icons.hotel, 'فنادق'),
+      (Icons.local_mall, 'مولات'),
+      (Icons.local_gas_station, 'محطات وقود'),
+      (Icons.more_horiz, 'المزيد'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF5EC),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final item in items)
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'سجّل الدخول أولاً لاستخدام الأقسام',
+                        textAlign: TextAlign.center,
+                      ),
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF9FBF5),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          item.$1,
+                          color: _LoginPageState._dedaGreen,
+                          size: 27,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item.$2,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.2,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF263127),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IraqOutlinePainter extends CustomPainter {
+  const _IraqOutlinePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.53, size.height * 0.03)
+      ..lineTo(size.width * 0.66, size.height * 0.09)
+      ..lineTo(size.width * 0.70, size.height * 0.18)
+      ..lineTo(size.width * 0.84, size.height * 0.25)
+      ..lineTo(size.width * 0.79, size.height * 0.37)
+      ..lineTo(size.width * 0.88, size.height * 0.48)
+      ..lineTo(size.width * 0.79, size.height * 0.62)
+      ..lineTo(size.width * 0.70, size.height * 0.74)
+      ..lineTo(size.width * 0.59, size.height * 0.92)
+      ..lineTo(size.width * 0.45, size.height * 0.88)
+      ..lineTo(size.width * 0.36, size.height * 0.78)
+      ..lineTo(size.width * 0.23, size.height * 0.72)
+      ..lineTo(size.width * 0.18, size.height * 0.59)
+      ..lineTo(size.width * 0.10, size.height * 0.52)
+      ..lineTo(size.width * 0.18, size.height * 0.41)
+      ..lineTo(size.width * 0.16, size.height * 0.30)
+      ..lineTo(size.width * 0.27, size.height * 0.23)
+      ..lineTo(size.width * 0.30, size.height * 0.12)
+      ..lineTo(size.width * 0.42, size.height * 0.10)
+      ..close();
+
+    final fill = Paint()
+      ..color = const Color(0x0F638167)
+      ..style = PaintingStyle.fill;
+
+    final stroke = Paint()
+      ..color = const Color(0x8878917B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.1
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawPath(path, fill);
+    canvas.drawPath(path, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _IraqLandscapePainter extends CustomPainter {
+  const _IraqLandscapePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final riverPaint = Paint()
+      ..color = const Color(0x334B8B62)
+      ..style = PaintingStyle.fill;
+
+    final bridgePaint = Paint()
+      ..color = const Color(0x55748D76)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    final skylinePaint = Paint()
+      ..color = const Color(0x36586F5B)
+      ..style = PaintingStyle.fill;
+
+    final river = Path()
+      ..moveTo(0, size.height * 0.76)
+      ..quadraticBezierTo(
+        size.width * 0.34,
+        size.height * 0.58,
+        size.width * 0.58,
+        size.height * 0.72,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.82,
+        size.height * 0.90,
+        size.width,
+        size.height * 0.68,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(river, riverPaint);
+
+    for (int i = 0; i < 12; i++) {
+      final x = size.width * (0.06 + i * 0.075);
+      final h = size.height * (0.10 + (i % 4) * 0.035);
+      canvas.drawRect(
+        Rect.fromLTWH(
+          x,
+          size.height * 0.54 - h,
+          size.width * 0.03,
+          h,
+        ),
+        skylinePaint,
+      );
+    }
+
+    final bridgeY = size.height * 0.58;
+    canvas.drawLine(
+      Offset(size.width * 0.07, bridgeY),
+      Offset(size.width * 0.72, bridgeY),
+      bridgePaint,
+    );
+    for (int i = 0; i < 5; i++) {
+      final left = size.width * (0.10 + i * 0.11);
+      final rect = Rect.fromLTWH(
+        left,
+        bridgeY - 2,
+        size.width * 0.09,
+        size.height * 0.24,
+      );
+      canvas.drawArc(
+        rect,
+        3.14,
+        3.14,
+        false,
+        bridgePaint,
+      );
+    }
+
+    final monumentStroke = Paint()
+      ..color = const Color(0x55758B77)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    final rightX = size.width * 0.86;
+    final topY = size.height * 0.20;
+    final bottomY = size.height * 0.58;
+
+    final leftPetal = Path()
+      ..moveTo(rightX - 24, bottomY)
+      ..quadraticBezierTo(
+        rightX - 34,
+        size.height * 0.36,
+        rightX - 9,
+        topY,
+      );
+    final rightPetal = Path()
+      ..moveTo(rightX + 24, bottomY)
+      ..quadraticBezierTo(
+        rightX + 34,
+        size.height * 0.36,
+        rightX + 9,
+        topY,
+      );
+
+    canvas.drawPath(leftPetal, monumentStroke);
+    canvas.drawPath(rightPetal, monumentStroke);
+    canvas.drawCircle(
+      Offset(rightX, topY + 2),
+      5,
+      Paint()..color = const Color(0x66758B77),
+    );
+
+    final palmPaint = Paint()
+      ..color = const Color(0x43607C63)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    for (final px in [size.width * 0.02, size.width * 0.96]) {
+      final base = Offset(px, size.height * 0.62);
+      final top = Offset(px, size.height * 0.35);
+      canvas.drawLine(base, top, palmPaint);
+      for (final dx in [-10.0, -6, 6, 10]) {
+        canvas.drawLine(
+          top,
+          Offset(px + dx, size.height * 0.30 + dx.abs() * 0.5),
+          palmPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class HomePage extends StatefulWidget {
