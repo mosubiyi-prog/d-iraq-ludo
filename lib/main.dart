@@ -2361,125 +2361,6 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
             ),
             Positioned(
               top: 12,
-              left: 12,
-              child: Column(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: const Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(
-                          Icons.navigation,
-                          size: 33,
-                          color: Color(0xFF17652F),
-                        ),
-                        Positioned(
-                          top: 2,
-                          child: Text(
-                            'N',
-                            style: TextStyle(
-                              color: Color(0xFF173D22),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Material(
-                    color: Colors.white.withOpacity(0.95),
-                    elevation: 2,
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      tooltip: 'شرح الخريطة',
-                      onPressed: showMapLegend,
-                      icon: const Icon(
-                        Icons.info_outline,
-                        color: Color(0xFF17652F),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!isLoading &&
-                errorMessage == null &&
-                firstUsefulStep != null)
-              Positioned(
-                top: 80,
-                left: 76,
-                right: 76,
-                child: Material(
-                  color: Colors.white.withOpacity(0.96),
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    child: Row(
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEAF3E9),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            directionIcon(firstUsefulStep!),
-                            color: const Color(0xFF17652F),
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                firstUsefulStep!.instruction,
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF5B665D),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              top: 12,
               right: 12,
               child: Material(
                 color: Colors.white.withOpacity(0.92),
@@ -3537,6 +3418,125 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 ],
               ),
             ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Column(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                    child: const Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.navigation,
+                          size: 33,
+                          color: Color(0xFF17652F),
+                        ),
+                        Positioned(
+                          top: 2,
+                          child: Text(
+                            'N',
+                            style: TextStyle(
+                              color: Color(0xFF173D22),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Material(
+                    color: Colors.white.withOpacity(0.95),
+                    elevation: 2,
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'شرح الخريطة',
+                      onPressed: showMapLegend,
+                      icon: const Icon(
+                        Icons.info_outline,
+                        color: Color(0xFF17652F),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isLoading &&
+                errorMessage == null &&
+                firstUsefulStep != null)
+              Positioned(
+                top: 80,
+                left: 76,
+                right: 76,
+                child: Material(
+                  color: Colors.white.withOpacity(0.96),
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    child: Row(
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEAF3E9),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            directionIcon(firstUsefulStep!),
+                            color: const Color(0xFF17652F),
+                            size: 30,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                firstUsefulStep!.instruction,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF5B665D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               top: 12,
               right: 12,
