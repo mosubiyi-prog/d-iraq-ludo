@@ -5,6 +5,54 @@ import 'package:latlong2/latlong.dart';
 
 import 'places_service.dart';
 
+enum DedaMapStyle {
+  normal,
+  satellite,
+  hybrid,
+}
+
+String dedaMapStyleLabel(DedaMapStyle style) {
+  switch (style) {
+    case DedaMapStyle.normal:
+      return 'عادي';
+    case DedaMapStyle.satellite:
+      return 'فضائي';
+    case DedaMapStyle.hybrid:
+      return 'هجين';
+  }
+}
+
+List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
+  if (style == DedaMapStyle.normal) {
+    return const [
+      TileLayer(
+        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        userAgentPackageName: 'com.diraq.ludo',
+      ),
+    ];
+  }
+
+  return [
+    const TileLayer(
+      urlTemplate:
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      userAgentPackageName: 'com.diraq.ludo',
+    ),
+    if (style == DedaMapStyle.hybrid)
+      const TileLayer(
+        urlTemplate:
+            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        userAgentPackageName: 'com.diraq.ludo',
+      ),
+  ];
+}
+
+String dedaMapAttribution(DedaMapStyle style) {
+  return style == DedaMapStyle.normal
+      ? 'OpenStreetMap contributors'
+      : 'Tiles © Esri';
+}
+
 void main() {
   runApp(const DedaApp());
 }
@@ -373,6 +421,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   List<PlaceInfo> places = [];
   bool isLoading = false;
   int searchedRadiusMeters = 3000;
+  DedaMapStyle mapStyle = DedaMapStyle.normal;
 
   String statusMessage =
       'اضغط على الزر للبحث عن الأماكن القريبة منك';
@@ -633,6 +682,28 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     return 10.5;
   }
 
+  Future<void> openFullScreenMap(Position position) async {
+    final selectedStyle = await Navigator.push<DedaMapStyle>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaFullScreenMapPage(
+          position: position,
+          places: places,
+          categoryIcon: widget.category.icon,
+          categoryTitle: widget.category.title,
+          initialZoom: mapZoomForRadius(),
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+
+    if (!mounted || selectedStyle == null) return;
+
+    setState(() {
+      mapStyle = selectedStyle;
+    });
+  }
+
   Widget buildMap(Position position) {
     final userPoint = LatLng(
       position.latitude,
@@ -687,25 +758,100 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: 390,
-        child: FlutterMap(
-          key: ValueKey(
-            '${position.latitude}-${position.longitude}-${places.length}-$searchedRadiusMeters',
-          ),
-          options: MapOptions(
-            initialCenter: userPoint,
-            initialZoom: mapZoomForRadius(),
-          ),
+        child: Stack(
           children: [
-            TileLayer(
-              urlTemplate:
-                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.diraq.ludo',
+            Positioned.fill(
+              child: FlutterMap(
+                key: ValueKey(
+                  '${position.latitude}-${position.longitude}-${places.length}-$searchedRadiusMeters-${mapStyle.name}',
+                ),
+                options: MapOptions(
+                  initialCenter: userPoint,
+                  initialZoom: mapZoomForRadius(),
+                ),
+                children: [
+                  ...dedaBaseMapLayers(mapStyle),
+                  MarkerLayer(markers: markers),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        dedaMapAttribution(mapStyle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            MarkerLayer(markers: markers),
-            const RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('OpenStreetMap contributors'),
-              ],
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(14),
+                child: PopupMenuButton<DedaMapStyle>(
+                  tooltip: 'نوع الخريطة',
+                  onSelected: (style) {
+                    setState(() {
+                      mapStyle = style;
+                    });
+                  },
+                  itemBuilder: (context) => DedaMapStyle.values
+                      .map(
+                        (style) => PopupMenuItem<DedaMapStyle>(
+                          value: style,
+                          child: Row(
+                            children: [
+                              Icon(
+                                style == mapStyle
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(dedaMapStyleLabel(style)),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined),
+                        const SizedBox(width: 6),
+                        Text(
+                          dedaMapStyleLabel(mapStyle),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 66,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'تكبير الخريطة',
+                  onPressed: () {
+                    openFullScreenMap(position);
+                  },
+                  icon: const Icon(Icons.fullscreen),
+                ),
+              ),
             ),
           ],
         ),
@@ -855,6 +1001,281 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DedaFullScreenMapPage extends StatefulWidget {
+  final Position position;
+  final List<PlaceInfo> places;
+  final IconData categoryIcon;
+  final String categoryTitle;
+  final double initialZoom;
+  final DedaMapStyle initialStyle;
+
+  const DedaFullScreenMapPage({
+    super.key,
+    required this.position,
+    required this.places,
+    required this.categoryIcon,
+    required this.categoryTitle,
+    required this.initialZoom,
+    required this.initialStyle,
+  });
+
+  @override
+  State<DedaFullScreenMapPage> createState() =>
+      _DedaFullScreenMapPageState();
+}
+
+class _DedaFullScreenMapPageState
+    extends State<DedaFullScreenMapPage> {
+  late DedaMapStyle mapStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    mapStyle = widget.initialStyle;
+  }
+
+  String formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.toStringAsFixed(0)} متر';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  double distanceToPlace(PlaceInfo place) {
+    return Geolocator.distanceBetween(
+      widget.position.latitude,
+      widget.position.longitude,
+      place.location.latitude,
+      place.location.longitude,
+    );
+  }
+
+  void showPlaceInfo(PlaceInfo place) {
+    final distance = distanceToPlace(place);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  widget.categoryIcon,
+                  size: 52,
+                  color: const Color(0xFF39733D),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  place.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'يبعد تقريبًا ${formatDistance(distance)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 17),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void closeFullScreen() {
+    Navigator.pop(context, mapStyle);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userPoint = LatLng(
+      widget.position.latitude,
+      widget.position.longitude,
+    );
+
+    final markers = <Marker>[
+      Marker(
+        point: userPoint,
+        width: 60,
+        height: 60,
+        child: const Icon(
+          Icons.location_pin,
+          size: 55,
+          color: Colors.red,
+        ),
+      ),
+      ...widget.places.map(
+        (place) => Marker(
+          point: place.location,
+          width: 50,
+          height: 50,
+          child: GestureDetector(
+            onTap: () {
+              showPlaceInfo(place);
+            },
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 4,
+                    color: Colors.black26,
+                  ),
+                ],
+              ),
+              child: Icon(
+                widget.categoryIcon,
+                size: 30,
+                color: const Color(0xFF39733D),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FlutterMap(
+                key: ValueKey('full-${mapStyle.name}'),
+                options: MapOptions(
+                  initialCenter: userPoint,
+                  initialZoom: widget.initialZoom,
+                ),
+                children: [
+                  ...dedaBaseMapLayers(mapStyle),
+                  MarkerLayer(markers: markers),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        dedaMapAttribution(mapStyle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'تصغير الخريطة',
+                  onPressed: closeFullScreen,
+                  icon: const Icon(Icons.fullscreen_exit),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(14),
+                child: PopupMenuButton<DedaMapStyle>(
+                  tooltip: 'نوع الخريطة',
+                  onSelected: (style) {
+                    setState(() {
+                      mapStyle = style;
+                    });
+                  },
+                  itemBuilder: (context) => DedaMapStyle.values
+                      .map(
+                        (style) => PopupMenuItem<DedaMapStyle>(
+                          value: style,
+                          child: Row(
+                            children: [
+                              Icon(
+                                style == mapStyle
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(dedaMapStyleLabel(style)),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined),
+                        const SizedBox(width: 6),
+                        Text(
+                          dedaMapStyleLabel(mapStyle),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 18,
+              child: IgnorePointer(
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 6,
+                          color: Colors.black26,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '${widget.categoryTitle} • ${widget.places.length} نتيجة',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
