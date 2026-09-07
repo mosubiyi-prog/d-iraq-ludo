@@ -24,7 +24,7 @@ String dedaMapStyleLabel(DedaMapStyle style) {
 
 List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
   if (style == DedaMapStyle.normal) {
-    return const [
+    return [
       TileLayer(
         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         userAgentPackageName: 'com.diraq.ludo',
@@ -33,13 +33,13 @@ List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
   }
 
   return [
-    const TileLayer(
+    TileLayer(
       urlTemplate:
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       userAgentPackageName: 'com.diraq.ludo',
     ),
     if (style == DedaMapStyle.hybrid)
-      const TileLayer(
+      TileLayer(
         urlTemplate:
             'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
         userAgentPackageName: 'com.diraq.ludo',
