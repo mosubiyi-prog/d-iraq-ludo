@@ -41,12 +41,18 @@ List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       userAgentPackageName: 'com.diraq.ludo',
     ),
-    if (style == DedaMapStyle.hybrid)
+    if (style == DedaMapStyle.hybrid) ...[
+      TileLayer(
+        urlTemplate:
+            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+        userAgentPackageName: 'com.diraq.ludo',
+      ),
       TileLayer(
         urlTemplate:
             'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
         userAgentPackageName: 'com.diraq.ludo',
       ),
+    ],
   ];
 }
 
@@ -3788,6 +3794,7 @@ class MapReadyPage extends StatefulWidget {
 class _MapReadyPageState extends State<MapReadyPage> {
   Position? currentPosition;
   bool isLoading = false;
+  DedaMapStyle mapStyle = DedaMapStyle.normal;
 
   String statusMessage =
       'اضغط على الزر لتحديد موقعك الحالي';
@@ -3881,38 +3888,97 @@ class _MapReadyPageState extends State<MapReadyPage> {
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
         height: 380,
-        child: FlutterMap(
-          key: ValueKey(
-            '${position.latitude}-${position.longitude}',
-          ),
-          options: MapOptions(
-            initialCenter: point,
-            initialZoom: 16,
-          ),
+        child: Stack(
           children: [
-            TileLayer(
-              urlTemplate:
-                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.diraq.ludo',
+            Positioned.fill(
+              child: FlutterMap(
+                key: ValueKey(
+                  '${position.latitude}-${position.longitude}-${mapStyle.name}',
+                ),
+                options: MapOptions(
+                  initialCenter: point,
+                  initialZoom: 16,
+                ),
+                children: [
+                  ...dedaBaseMapLayers(mapStyle),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: point,
+                        width: 60,
+                        height: 60,
+                        child: const Icon(
+                          Icons.location_pin,
+                          size: 55,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        dedaMapAttribution(mapStyle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            MarkerLayer(
-              markers: [
-                Marker(
-                  point: point,
-                  width: 60,
-                  height: 60,
-                  child: const Icon(
-                    Icons.location_pin,
-                    size: 55,
-                    color: Colors.red,
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(14),
+                child: PopupMenuButton<DedaMapStyle>(
+                  tooltip: 'نوع الخريطة',
+                  onSelected: (style) {
+                    setState(() {
+                      mapStyle = style;
+                    });
+                  },
+                  itemBuilder: (context) => DedaMapStyle.values
+                      .map(
+                        (style) => PopupMenuItem<DedaMapStyle>(
+                          value: style,
+                          child: Row(
+                            children: [
+                              Icon(
+                                style == mapStyle
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(dedaMapStyleLabel(style)),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined),
+                        const SizedBox(width: 6),
+                        Text(
+                          dedaMapStyleLabel(mapStyle),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-            const RichAttributionWidget(
-              attributions: [
-                TextSourceAttribution('OpenStreetMap contributors'),
-              ],
+              ),
             ),
           ],
         ),
