@@ -763,11 +763,21 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
             Positioned.fill(
               child: FlutterMap(
                 key: ValueKey(
-                  '${position.latitude}-${position.longitude}-${places.length}-$searchedRadiusMeters-${mapStyle.name}',
+                  '${position.latitude}-${position.longitude}-${places.hashCode}-$searchedRadiusMeters-${mapStyle.name}',
                 ),
                 options: MapOptions(
                   initialCenter: userPoint,
                   initialZoom: mapZoomForRadius(),
+                  initialCameraFit: places.isEmpty
+                      ? null
+                      : CameraFit.coordinates(
+                          coordinates: [
+                            userPoint,
+                            ...places.map((place) => place.location),
+                          ],
+                          padding: const EdgeInsets.all(55),
+                          maxZoom: 16,
+                        ),
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
@@ -1161,6 +1171,16 @@ class _DedaFullScreenMapPageState
                 options: MapOptions(
                   initialCenter: userPoint,
                   initialZoom: widget.initialZoom,
+                  initialCameraFit: widget.places.isEmpty
+                      ? null
+                      : CameraFit.coordinates(
+                          coordinates: [
+                            userPoint,
+                            ...widget.places.map((place) => place.location),
+                          ],
+                          padding: const EdgeInsets.all(70),
+                          maxZoom: 16,
+                        ),
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
