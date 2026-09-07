@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -2158,12 +2159,29 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     );
   }
 
+  void openRouteToPlace(PlaceInfo place) {
+    final position = currentPosition;
+    if (position == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaRoutePage(
+          startPosition: position,
+          destination: place,
+          categoryIcon: widget.category.icon,
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+  }
+
   void showPlaceInfo(PlaceInfo place) {
     final distance = distanceToPlace(place);
 
     showModalBottomSheet(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -2189,6 +2207,25 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   'يبعد تقريبًا ${formatDistance(distance)}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 17),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      openRouteToPlace(place);
+                    },
+                    icon: const Icon(Icons.navigation),
+                    label: const Text(
+                      'اختيار كوجهة',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2322,6 +2359,125 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 ],
               ),
             ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Column(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                    child: const Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.navigation,
+                          size: 33,
+                          color: Color(0xFF17652F),
+                        ),
+                        Positioned(
+                          top: 2,
+                          child: Text(
+                            'N',
+                            style: TextStyle(
+                              color: Color(0xFF173D22),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Material(
+                    color: Colors.white.withOpacity(0.95),
+                    elevation: 2,
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'شرح الخريطة',
+                      onPressed: showMapLegend,
+                      icon: const Icon(
+                        Icons.info_outline,
+                        color: Color(0xFF17652F),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isLoading &&
+                errorMessage == null &&
+                firstUsefulStep != null)
+              Positioned(
+                top: 80,
+                left: 76,
+                right: 76,
+                child: Material(
+                  color: Colors.white.withOpacity(0.96),
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    child: Row(
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEAF3E9),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            directionIcon(firstUsefulStep!),
+                            color: const Color(0xFF17652F),
+                            size: 30,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                firstUsefulStep!.instruction,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF5B665D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               top: 12,
               right: 12,
@@ -2598,12 +2754,26 @@ class _DedaFullScreenMapPageState
     );
   }
 
+  void openRouteToPlace(PlaceInfo place) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaRoutePage(
+          startPosition: widget.position,
+          destination: place,
+          categoryIcon: widget.categoryIcon,
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+  }
+
   void showPlaceInfo(PlaceInfo place) {
     final distance = distanceToPlace(place);
 
     showModalBottomSheet(
       context: context,
-      builder: (context) {
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -2629,6 +2799,25 @@ class _DedaFullScreenMapPageState
                   'يبعد تقريبًا ${formatDistance(distance)}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 17),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      openRouteToPlace(place);
+                    },
+                    icon: const Icon(Icons.navigation),
+                    label: const Text(
+                      'اختيار كوجهة',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2827,6 +3016,763 @@ class _DedaFullScreenMapPageState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class DedaRouteStep {
+  final String instruction;
+  final double distanceMeters;
+  final String maneuverType;
+  final String? maneuverModifier;
+
+  const DedaRouteStep({
+    required this.instruction,
+    required this.distanceMeters,
+    required this.maneuverType,
+    required this.maneuverModifier,
+  });
+}
+
+class DedaRouteResult {
+  final List<LatLng> points;
+  final double distanceMeters;
+  final double durationSeconds;
+  final List<DedaRouteStep> steps;
+
+  const DedaRouteResult({
+    required this.points,
+    required this.distanceMeters,
+    required this.durationSeconds,
+    required this.steps,
+  });
+}
+
+class DedaRouteService {
+  static const Duration _timeout = Duration(seconds: 18);
+
+  Future<DedaRouteResult> getDrivingRoute({
+    required LatLng start,
+    required LatLng destination,
+  }) async {
+    final uri = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/'
+      '${start.longitude},${start.latitude};'
+      '${destination.longitude},${destination.latitude}'
+      '?overview=full&geometries=geojson&steps=true',
+    );
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 12);
+
+    try {
+      final request = await client.getUrl(uri).timeout(_timeout);
+      request.headers.set(
+        HttpHeaders.userAgentHeader,
+        'DEDA-Iraq/1.0',
+      );
+
+      final response = await request.close().timeout(_timeout);
+      final body = await utf8.decoder.bind(response).join().timeout(_timeout);
+
+      if (response.statusCode != HttpStatus.ok) {
+        throw HttpException(
+          'Routing error: HTTP ${response.statusCode}',
+          uri: uri,
+        );
+      }
+
+      final data = jsonDecode(body);
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Routing response is not valid JSON.');
+      }
+
+      if (data['code'] != 'Ok') {
+        throw HttpException(
+          'Routing error: ${data['code'] ?? 'Unknown'}',
+          uri: uri,
+        );
+      }
+
+      final routes = data['routes'];
+      if (routes is! List || routes.isEmpty) {
+        throw const FormatException('No route returned.');
+      }
+
+      final route = routes.first;
+      if (route is! Map<String, dynamic>) {
+        throw const FormatException('Invalid route data.');
+      }
+
+      final geometry = route['geometry'];
+      if (geometry is! Map<String, dynamic>) {
+        throw const FormatException('Route geometry is missing.');
+      }
+
+      final coordinates = geometry['coordinates'];
+      if (coordinates is! List || coordinates.length < 2) {
+        throw const FormatException('Route coordinates are missing.');
+      }
+
+      final points = <LatLng>[];
+      for (final coordinate in coordinates) {
+        if (coordinate is List && coordinate.length >= 2) {
+          final longitude = coordinate[0];
+          final latitude = coordinate[1];
+
+          if (longitude is num && latitude is num) {
+            points.add(
+              LatLng(
+                latitude.toDouble(),
+                longitude.toDouble(),
+              ),
+            );
+          }
+        }
+      }
+
+      if (points.length < 2) {
+        throw const FormatException('Route coordinates are invalid.');
+      }
+
+      final distance = route['distance'];
+      final duration = route['duration'];
+
+      if (distance is! num || duration is! num) {
+        throw const FormatException(
+          'Route distance or duration is missing.',
+        );
+      }
+
+      final parsedSteps = <DedaRouteStep>[];
+      final legs = route['legs'];
+
+      if (legs is List) {
+        for (final leg in legs) {
+          if (leg is! Map<String, dynamic>) continue;
+
+          final rawSteps = leg['steps'];
+          if (rawSteps is! List) continue;
+
+          for (final rawStep in rawSteps) {
+            if (rawStep is! Map<String, dynamic>) continue;
+
+            final maneuver = rawStep['maneuver'];
+            if (maneuver is! Map<String, dynamic>) continue;
+
+            final type = (maneuver['type'] ?? '').toString();
+            final modifier = maneuver['modifier']?.toString();
+            final stepDistance = rawStep['distance'];
+
+            parsedSteps.add(
+              DedaRouteStep(
+                instruction: _arabicManeuverInstruction(
+                  type: type,
+                  modifier: modifier,
+                ),
+                distanceMeters:
+                    stepDistance is num ? stepDistance.toDouble() : 0,
+                maneuverType: type,
+                maneuverModifier: modifier,
+              ),
+            );
+          }
+        }
+      }
+
+      return DedaRouteResult(
+        points: points,
+        distanceMeters: distance.toDouble(),
+        durationSeconds: duration.toDouble(),
+        steps: parsedSteps,
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  String _arabicManeuverInstruction({
+    required String type,
+    required String? modifier,
+  }) {
+    if (type == 'arrive') {
+      return 'وصلت إلى الوجهة';
+    }
+
+    if (type == 'depart') {
+      return 'ابدأ المسير';
+    }
+
+    if (type == 'roundabout' || type == 'rotary') {
+      return 'ادخل الدوار واتبع المخرج المناسب';
+    }
+
+    switch (modifier) {
+      case 'right':
+        return 'انعطف يمينًا';
+      case 'slight right':
+        return 'اتجه قليلًا إلى اليمين';
+      case 'sharp right':
+        return 'انعطف يمينًا بشكل حاد';
+      case 'left':
+        return 'انعطف يسارًا';
+      case 'slight left':
+        return 'اتجه قليلًا إلى اليسار';
+      case 'sharp left':
+        return 'انعطف يسارًا بشكل حاد';
+      case 'straight':
+        return 'استمر مستقيمًا';
+      case 'uturn':
+        return 'قم بالاستدارة للخلف';
+      default:
+        if (type == 'continue') return 'استمر في الطريق';
+        if (type == 'merge') return 'اندمج مع الطريق';
+        if (type == 'fork') return 'اتبع التفرع المناسب';
+        if (type == 'end of road') return 'عند نهاية الطريق اتبع الاتجاه';
+        return 'تابع المسار';
+    }
+  }
+}
+
+class DedaRoutePage extends StatefulWidget {
+  final Position startPosition;
+  final PlaceInfo destination;
+  final IconData categoryIcon;
+  final DedaMapStyle initialStyle;
+
+  const DedaRoutePage({
+    super.key,
+    required this.startPosition,
+    required this.destination,
+    required this.categoryIcon,
+    required this.initialStyle,
+  });
+
+  @override
+  State<DedaRoutePage> createState() => _DedaRoutePageState();
+}
+
+class _DedaRoutePageState extends State<DedaRoutePage> {
+  final DedaRouteService routeService = DedaRouteService();
+
+  late DedaMapStyle mapStyle;
+  DedaRouteResult? route;
+  bool isLoading = true;
+  String? errorMessage;
+
+  LatLng get startPoint => LatLng(
+        widget.startPosition.latitude,
+        widget.startPosition.longitude,
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    mapStyle = widget.initialStyle;
+    loadRoute();
+  }
+
+  Future<void> loadRoute() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final result = await routeService.getDrivingRoute(
+        start: startPoint,
+        destination: widget.destination.location,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        route = result;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = _friendlyRouteError(e);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  String _friendlyRouteError(Object error) {
+    final raw = error.toString().toLowerCase();
+
+    if (raw.contains('timeout')) {
+      return 'انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.';
+    }
+
+    if (raw.contains('socketexception') ||
+        raw.contains('failed host lookup') ||
+        raw.contains('network')) {
+      return 'تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.';
+    }
+
+    if (raw.contains('noroute')) {
+      return 'لم تتمكن خدمة الطريق من إيجاد مسار قيادة إلى هذه الوجهة.';
+    }
+
+    return 'تعذر حساب الطريق الآن. حاول مرة أخرى.';
+  }
+
+  String formatRouteDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.toStringAsFixed(0)} متر';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  String formatRouteDuration(double seconds) {
+    final totalMinutes = (seconds / 60).round();
+
+    if (totalMinutes < 60) {
+      return '$totalMinutes دقيقة';
+    }
+
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+
+    if (minutes == 0) {
+      return '$hours ساعة';
+    }
+
+    return '$hours ساعة و $minutes دقيقة';
+  }
+
+  DedaRouteStep? get firstUsefulStep {
+    final steps = route?.steps;
+    if (steps == null || steps.isEmpty) return null;
+
+    for (final step in steps) {
+      if (step.maneuverType != 'depart' &&
+          step.maneuverType != 'arrive') {
+        return step;
+      }
+    }
+
+    return steps.first;
+  }
+
+  IconData directionIcon(DedaRouteStep step) {
+    final modifier = step.maneuverModifier;
+
+    if (step.maneuverType == 'roundabout' ||
+        step.maneuverType == 'rotary') {
+      return Icons.rotate_left;
+    }
+
+    switch (modifier) {
+      case 'right':
+      case 'slight right':
+      case 'sharp right':
+        return Icons.arrow_forward;
+      case 'left':
+      case 'slight left':
+      case 'sharp left':
+        return Icons.arrow_back;
+      case 'uturn':
+        return Icons.rotate_left;
+      case 'straight':
+      default:
+        return Icons.arrow_upward;
+    }
+  }
+
+  void showMapLegend() {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: const [
+                Text(
+                  'شرح الخريطة',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 18),
+                _DedaLegendRow(
+                  icon: Icons.location_pin,
+                  iconColor: Colors.red,
+                  text: 'العلامة الحمراء: موقعك الحالي',
+                ),
+                _DedaLegendRow(
+                  icon: Icons.place,
+                  iconColor: Color(0xFF17652F),
+                  text: 'العلامة الخضراء: الوجهة المختارة',
+                ),
+                _DedaLegendRow(
+                  icon: Icons.route,
+                  iconColor: Color(0xFF17652F),
+                  text: 'الخط الأخضر: طريق القيادة إلى الوجهة',
+                ),
+                _DedaLegendRow(
+                  icon: Icons.explore,
+                  iconColor: Color(0xFF163A21),
+                  text: 'N: اتجاه الشمال — الخريطة تبقى شمالها للأعلى',
+                ),
+                _DedaLegendRow(
+                  icon: Icons.navigation,
+                  iconColor: Color(0xFF17652F),
+                  text: 'سهم التوجيه: أول انعطاف أو اتجاه قادم على الطريق',
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final destinationPoint = widget.destination.location;
+    final routePoints = route?.points ?? const <LatLng>[];
+    final fitCoordinates = routePoints.isNotEmpty
+        ? routePoints
+        : <LatLng>[
+            startPoint,
+            destinationPoint,
+          ];
+
+    final markers = <Marker>[
+      Marker(
+        point: startPoint,
+        width: 64,
+        height: 64,
+        child: const Icon(
+          Icons.location_pin,
+          size: 58,
+          color: Colors.red,
+        ),
+      ),
+      Marker(
+        point: destinationPoint,
+        width: 58,
+        height: 58,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 5,
+                color: Colors.black26,
+              ),
+            ],
+          ),
+          child: Icon(
+            widget.categoryIcon,
+            size: 34,
+            color: const Color(0xFF17652F),
+          ),
+        ),
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: const Text('الطريق إلى الوجهة'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FlutterMap(
+                key: ValueKey(
+                  'route-${mapStyle.name}-${routePoints.length}-${widget.destination.name}',
+                ),
+                options: MapOptions(
+                  initialCenter: startPoint,
+                  initialZoom: 13,
+                  initialCameraFit: CameraFit.coordinates(
+                    coordinates: fitCoordinates,
+                    padding: const EdgeInsets.fromLTRB(44, 70, 44, 235),
+                    maxZoom: 17,
+                  ),
+                ),
+                children: [
+                  ...dedaBaseMapLayers(mapStyle),
+                  if (routePoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routePoints,
+                          strokeWidth: 6,
+                          color: const Color(0xFF17652F),
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(markers: markers),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        dedaMapAttribution(mapStyle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.94),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(14),
+                child: PopupMenuButton<DedaMapStyle>(
+                  tooltip: 'نوع الخريطة',
+                  onSelected: (style) {
+                    setState(() {
+                      mapStyle = style;
+                    });
+                  },
+                  itemBuilder: (context) => DedaMapStyle.values
+                      .map(
+                        (style) => PopupMenuItem<DedaMapStyle>(
+                          value: style,
+                          child: Row(
+                            children: [
+                              Icon(
+                                style == mapStyle
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(dedaMapStyleLabel(style)),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined),
+                        const SizedBox(width: 6),
+                        Text(
+                          dedaMapStyleLabel(mapStyle),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 14,
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.destination.name,
+                        textAlign: TextAlign.center,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (isLoading) ...[
+                        const LinearProgressIndicator(),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'جاري حساب أفضل طريق...',
+                          textAlign: TextAlign.center,
+                        ),
+                      ] else if (errorMessage != null) ...[
+                        Text(
+                          errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: loadRoute,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('إعادة المحاولة'),
+                          ),
+                        ),
+                      ] else if (route != null) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DedaRouteStat(
+                                icon: Icons.route,
+                                label: 'المسافة',
+                                value: formatRouteDistance(
+                                  route!.distanceMeters,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DedaRouteStat(
+                                icon: Icons.schedule,
+                                label: 'الوقت التقريبي',
+                                value: formatRouteDuration(
+                                  route!.durationSeconds,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'الوقت تقديري ويعتمد على مسار القيادة المحسوب، وليس على حركة المرور المباشرة.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF59645B),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaRouteStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _DedaRouteStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF3E9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFF17652F),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF4D5C50),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DedaLegendRow extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+
+  const _DedaLegendRow({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        children: [
+          Icon(
+            icon,
+            color: iconColor,
+            size: 27,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
