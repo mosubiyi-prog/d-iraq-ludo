@@ -1,0 +1,594 @@
+name: Apply DEDA transport modes and route fit
+
+on:
+  push:
+    branches:
+      - places-v1
+    paths:
+      - '.github/workflows/apply-deda-navigation-modes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout places-v1
+        uses: actions/checkout@v4
+        with:
+          ref: places-v1
+          fetch-depth: 0
+
+      - name: Add transport selector and route camera fit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          
+          path = Path('lib/main.dart')
+          text = path.read_text()
+          
+          
+          def replace_once(old: str, new: str, label: str):
+              global text
+              if new in text:
+                  return
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+          
+          
+          def replace_in_section(start_marker: str, end_marker: str, old: str, new: str, label: str):
+              global text
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              section = text[start:end]
+              if new in section:
+                  return
+              count = section.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match in section, found {count}')
+              section = section.replace(old, new, 1)
+              text = text[:start] + section + text[end:]
+          
+          
+          def regex_in_section(start_marker: str, end_marker: str, pattern: str, repl: str, label: str):
+              global text
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              section = text[start:end]
+              new_section, count = re.subn(pattern, repl, section, count=1, flags=re.MULTILINE)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one regex match in section, found {count}')
+              text = text[:start] + new_section + text[end:]
+          
+          
+          # 1) Global travel-mode model and labels/icons.
+          map_enum = """enum DedaMapStyle {
+            normal,
+            satellite,
+            hybrid,
+          }
+          
+          """
+          travel_block = """enum DedaMapStyle {
+            normal,
+            satellite,
+            hybrid,
+          }
+          
+          enum DedaTravelMode {
+            walking,
+            motorcycle,
+            car,
+            truck,
+          }
+          
+          String dedaTravelModeLabel(DedaTravelMode mode) {
+            switch (mode) {
+              case DedaTravelMode.walking:
+                return 'مشي';
+              case DedaTravelMode.motorcycle:
+                return 'دراجة نارية';
+              case DedaTravelMode.car:
+                return 'سيارة';
+              case DedaTravelMode.truck:
+                return 'شاحنة';
+            }
+          }
+          
+          IconData dedaTravelModeIcon(DedaTravelMode mode) {
+            switch (mode) {
+              case DedaTravelMode.walking:
+                return Icons.directions_walk;
+              case DedaTravelMode.motorcycle:
+                return Icons.two_wheeler;
+              case DedaTravelMode.car:
+                return Icons.directions_car;
+              case DedaTravelMode.truck:
+                return Icons.local_shipping;
+            }
+          }
+          
+          """
+          if 'enum DedaTravelMode' not in text:
+              replace_once(map_enum, travel_block, 'travel mode enum')
+          
+          # 2) Place details: choose the transport mode before opening the route.
+          place_start = 'class PlaceDetailsPage extends StatefulWidget {'
+          place_end = 'class SavedPlacesPage extends StatefulWidget {'
+          place_section = text[text.index(place_start):text.index(place_end)]
+          
+          if 'DedaTravelMode _travelMode = DedaTravelMode.car;' not in place_section:
+              replace_in_section(
+                  place_start,
+                  place_end,
+                  "class _PlaceDetailsPageState extends State<PlaceDetailsPage> {\n  bool _favorite = false;",
+                  "class _PlaceDetailsPageState extends State<PlaceDetailsPage> {\n  DedaTravelMode _travelMode = DedaTravelMode.car;\n  bool _favorite = false;",
+                  'place travel mode state',
+              )
+          
+          place_section = text[text.index(place_start):text.index(place_end)]
+          if 'travelMode: _travelMode,' not in place_section:
+              regex_in_section(
+                  place_start,
+                  place_end,
+                  r"(builder: \(_\) => DedaRoutePage\(\n\s+startPosition: position,\n\s+destination: widget\.place,\n\s+categoryIcon: widget\.categoryIcon,\n\s+initialStyle: widget\.initialStyle,\n)(\s+\),)",
+                  r"\1          travelMode: _travelMode,\n\2",
+                  'pass selected travel mode',
+              )
+          
+          replace_in_section(
+              place_start,
+              place_end,
+              "_detailRow(Icons.route, 'المسافة التقريبية', _distanceLabel),",
+              "_detailRow(Icons.route, 'المسافة المباشرة تقريبًا', _distanceLabel),",
+              'clarify straight-line distance',
+          )
+          
+          selector_method = """  Widget _travelModeSelector() {
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'اختر وسيلة التنقل',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: DedaTravelMode.values.map((mode) {
+                          return ChoiceChip(
+                            selected: _travelMode == mode,
+                            onSelected: (_) {
+                              setState(() => _travelMode = mode);
+                            },
+                            avatar: Icon(
+                              dedaTravelModeIcon(mode),
+                              size: 20,
+                            ),
+                            label: Text(dedaTravelModeLabel(mode)),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.35,
+                          color: Color(0xFF5B665D),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          
+          """
+          place_section = text[text.index(place_start):text.index(place_end)]
+          if 'Widget _travelModeSelector()' not in place_section:
+              replace_in_section(
+                  place_start,
+                  place_end,
+                  '  Widget _detailRow(IconData icon, String label, String? value) {',
+                  selector_method + '  Widget _detailRow(IconData icon, String label, String? value) {',
+                  'travel mode selector method',
+              )
+          
+          place_section = text[text.index(place_start):text.index(place_end)]
+          if '_travelModeSelector(),' not in place_section:
+              # This SizedBox is the one immediately after the details card and before the green route button.
+              anchor = """              const SizedBox(height: 14),
+                        SizedBox(
+                          height: 56,
+                          child: FilledButton.icon(
+          """
+              replacement = """              const SizedBox(height: 14),
+                        _travelModeSelector(),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: 56,
+                          child: FilledButton.icon(
+          """
+              replace_in_section(place_start, place_end, anchor, replacement, 'travel mode selector placement')
+          
+          # 3) Route page: carry the selected mode and show mode-aware ETA.
+          route_start = 'class DedaRoutePage extends StatefulWidget {'
+          route_end = 'class _DedaRouteStat extends StatelessWidget {'
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if 'final DedaTravelMode travelMode;' not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  """  final IconData categoryIcon;
+            final DedaMapStyle initialStyle;
+          
+            const DedaRoutePage({
+              super.key,
+              required this.startPosition,
+              required this.destination,
+              required this.categoryIcon,
+              required this.initialStyle,
+            });
+          """,
+                  """  final IconData categoryIcon;
+            final DedaMapStyle initialStyle;
+            final DedaTravelMode travelMode;
+          
+            const DedaRoutePage({
+              super.key,
+              required this.startPosition,
+              required this.destination,
+              required this.categoryIcon,
+              required this.initialStyle,
+              this.travelMode = DedaTravelMode.car,
+            });
+          """,
+                  'route travel mode field',
+              )
+          
+          route_helpers = """  double _estimatedDurationSeconds(DedaRouteResult result) {
+              switch (widget.travelMode) {
+                case DedaTravelMode.walking:
+                  return result.distanceMeters / 1.35;
+                case DedaTravelMode.motorcycle:
+                  return result.durationSeconds;
+                case DedaTravelMode.car:
+                  return result.durationSeconds;
+                case DedaTravelMode.truck:
+                  return result.durationSeconds * 1.20;
+              }
+            }
+          
+            String get _travelEstimateNote {
+              switch (widget.travelMode) {
+                case DedaTravelMode.walking:
+                  return 'وقت المشي تقديري ويُحسب على مسافة الطريق الظاهرة.';
+                case DedaTravelMode.motorcycle:
+                  return 'وقت الدراجة النارية تقديري وقد يتغير حسب الطريق وحركة المرور.';
+                case DedaTravelMode.car:
+                  return 'وقت السيارة تقريبي وقد يتغير حسب الطريق وحركة المرور.';
+                case DedaTravelMode.truck:
+                  return 'وقت الشاحنة تقريبي، وقد يتغير حسب قيود الطريق والحمولة وحركة المرور.';
+              }
+            }
+          
+            void _fitRouteOnMap({bool navigation = false}) {
+              final currentRoute = route;
+              final coordinates = <LatLng>[
+                startPoint,
+                if (currentRoute != null && currentRoute.points.isNotEmpty)
+                  ...currentRoute.points,
+                widget.destination.location,
+              ];
+          
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || coordinates.length < 2) return;
+                try {
+                  _mapController.fitCamera(
+                    CameraFit.coordinates(
+                      coordinates: coordinates,
+                      padding: navigation
+                          ? const EdgeInsets.fromLTRB(34, 125, 34, 305)
+                          : const EdgeInsets.fromLTRB(44, 80, 44, 285),
+                      maxZoom: navigation ? 16 : 17,
+                    ),
+                  );
+                } catch (_) {
+                  // The map may still be attaching during the first frame.
+                }
+              });
+            }
+          
+          """
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if '_estimatedDurationSeconds' not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  '  DedaRouteStep? get firstUsefulStep {',
+                  route_helpers + '  DedaRouteStep? get firstUsefulStep {',
+                  'route mode helpers',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if '_fitRouteOnMap(navigation: tripStarted);' not in route_section:
+              regex_in_section(
+                  route_start,
+                  route_end,
+                  r"(setState\(\(\) \{\n\s+route = result;\n\s+_lastRouteOrigin = origin;\n\s+errorMessage = null;\n\s+if \(tripStarted\) \{\n\s+navigationStatus = 'الملاحة نشطة — يتم تحديث الطريق حسب موقعك\.';\n\s+\}\n\s+\}\);)(\n\s+\} catch \(e\) \{)",
+                  r"\1\n      _fitRouteOnMap(navigation: tripStarted);\2",
+                  'fit map after route load',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if '_fitRouteOnMap(navigation: true);' not in route_section:
+              regex_in_section(
+                  route_start,
+                  route_end,
+                  r"(setState\(\(\) \{\n\s+tripStarted = true;\n\s+navigationStatus =\n\s+'بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات\.';\n\s+\}\);)(\n\n\s+const settings = LocationSettings\()",
+                  r"\1\n    _fitRouteOnMap(navigation: true);\2",
+                  'fit map on trip start',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if '_mapController.move(current, 16);' in route_section:
+              regex_in_section(
+                  route_start,
+                  route_end,
+                  r"(\s+final current = LatLng\(position\.latitude, position\.longitude\);)\n\s+try \{\n\s+_mapController\.move\(current, 16\);\n\s+\} catch \(_\) \{\n\s+// The map may still be attaching during the first GPS event\.\n\s+\}",
+                  r"\1",
+                  'remove forced navigation zoom',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "لم تتمكن خدمة الطريق من إيجاد مسار قيادة إلى هذه الوجهة." in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  "return 'لم تتمكن خدمة الطريق من إيجاد مسار قيادة إلى هذه الوجهة.';",
+                  "return 'لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.';",
+                  'generic route error',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "text: 'الخط الأخضر: طريق القيادة'," in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  "text: 'الخط الأخضر: طريق القيادة',",
+                  "text: 'الخط الأخضر: المسار إلى الوجهة',",
+                  'generic route legend',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "'الملاحة • ${dedaTravelModeLabel(widget.travelMode)}'" not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  "title: Text(tripStarted ? 'الملاحة إلى الوجهة' : 'الطريق إلى الوجهة'),",
+                  """title: Text(
+                    tripStarted
+                        ? 'الملاحة • ${dedaTravelModeLabel(widget.travelMode)}'
+                        : 'الطريق • ${dedaTravelModeLabel(widget.travelMode)}',
+                  ),""",
+                  'route title mode',
+              )
+          
+          recenter_button = """            Positioned(
+                        top: 62,
+                        left: 12,
+                        child: Material(
+                          color: Colors.white.withOpacity(0.94),
+                          elevation: 2,
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            tooltip: 'عرض المسار كاملًا',
+                            onPressed: () =>
+                                _fitRouteOnMap(navigation: tripStarted),
+                            icon: const Icon(Icons.fit_screen),
+                          ),
+                        ),
+                      ),
+          """
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "tooltip: 'عرض المسار كاملًا'" not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  "            if (!isLoading && errorMessage == null && firstUsefulStep != null)\n",
+                  recenter_button + "            if (!isLoading && errorMessage == null && firstUsefulStep != null)\n",
+                  'full route button',
+              )
+          
+          mode_banner = """                        Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF0F6EF),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          dedaTravelModeIcon(widget.travelMode),
+                                          color: const Color(0xFF17652F),
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Text(
+                                          'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+          """
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}'" not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  """                      ] else if (route != null) ...[
+                                  Row(
+          """,
+                  """                      ] else if (route != null) ...[
+          """ + mode_banner + """                        Row(
+          """,
+                  'route mode banner',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if "label: 'مسافة الطريق'," not in route_section:
+              replace_in_section(route_start, route_end, "label: 'المسافة',", "label: 'مسافة الطريق',", 'route distance label')
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if 'value: formatRouteDuration(_estimatedDurationSeconds(route!)),' not in route_section:
+              replace_in_section(
+                  route_start,
+                  route_end,
+                  'value: formatRouteDuration(route!.durationSeconds),',
+                  'value: formatRouteDuration(_estimatedDurationSeconds(route!)),',
+                  'mode adjusted eta',
+              )
+          
+          route_section = text[text.index(route_start):text.index(route_end)]
+          if '_travelEstimateNote,' not in route_section:
+              anchor = """                        ),
+                                  if (isRerouting) ...[
+          """
+              replacement = """                        ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _travelEstimateNote,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF5B665D),
+                                    ),
+                                  ),
+                                  if (isRerouting) ...[
+          """
+              replace_in_section(route_start, route_end, anchor, replacement, 'travel estimate note')
+          
+          path.write_text(text)
+          print('DEDA navigation patch applied successfully.')
+          PY
+
+      - name: Verify navigation changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('lib/main.dart').read_text()
+          required = [
+              'enum DedaTravelMode',
+              'اختر وسيلة التنقل',
+              'المسافة المباشرة تقريبًا',
+              'travelMode: _travelMode',
+              'وسيلة التنقل:',
+              'مسافة الطريق',
+              '_estimatedDurationSeconds',
+              '_fitRouteOnMap',
+              'عرض المسار كاملًا',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit('Missing navigation markers: ' + ', '.join(missing))
+          if '_mapController.move(current, 16);' in text:
+              raise SystemExit('Forced zoom still present')
+          print('Navigation feature markers verified.')
+          PY
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA source files
+        shell: bash
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp lib/places_service.dart /tmp/places_service.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+
+      - name: Create Flutter project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA source files
+        shell: bash
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/places_service.dart lib/places_service.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+
+      - name: Add Android permissions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+          ]
+          missing = [p for p in permissions if p not in text]
+          if missing:
+              pos = text.find('>')
+              text = text[:pos + 1] + '\n    ' + '\n    '.join(missing) + text[pos + 1:]
+              path.write_text(text)
+          PY
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Commit tested main.dart
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/main.dart
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+          else
+            git commit -m 'Add travel modes and improve route camera fit'
+            git push origin HEAD:places-v1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: d-iraq-ludo-transport-route-fit-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
