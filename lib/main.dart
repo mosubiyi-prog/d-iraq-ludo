@@ -16,6 +16,39 @@ enum DedaMapStyle {
   hybrid,
 }
 
+enum DedaTravelMode {
+  walking,
+  motorcycle,
+  car,
+  truck,
+}
+
+String dedaTravelModeLabel(DedaTravelMode mode) {
+  switch (mode) {
+    case DedaTravelMode.walking:
+      return 'مشي';
+    case DedaTravelMode.motorcycle:
+      return 'دراجة نارية';
+    case DedaTravelMode.car:
+      return 'سيارة';
+    case DedaTravelMode.truck:
+      return 'شاحنة';
+  }
+}
+
+IconData dedaTravelModeIcon(DedaTravelMode mode) {
+  switch (mode) {
+    case DedaTravelMode.walking:
+      return Icons.directions_walk;
+    case DedaTravelMode.motorcycle:
+      return Icons.two_wheeler;
+    case DedaTravelMode.car:
+      return Icons.directions_car;
+    case DedaTravelMode.truck:
+      return Icons.local_shipping;
+  }
+}
+
 String dedaMapStyleLabel(DedaMapStyle style) {
   switch (style) {
     case DedaMapStyle.normal:
@@ -3232,6 +3265,7 @@ class PlaceDetailsPage extends StatefulWidget {
 }
 
 class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
+  DedaTravelMode _travelMode = DedaTravelMode.car;
   bool _favorite = false;
   bool _favoriteLoading = true;
   bool _locating = false;
@@ -3307,6 +3341,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
           destination: widget.place,
           categoryIcon: widget.categoryIcon,
           initialStyle: widget.initialStyle,
+          travelMode: _travelMode,
         ),
       ),
     );
@@ -3324,6 +3359,55 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
     return meters < 1000
         ? '${meters.toStringAsFixed(0)} متر'
         : '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  Widget _travelModeSelector() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const Text(
+              'اختر وسيلة التنقل',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: DedaTravelMode.values.map((mode) {
+                return ChoiceChip(
+                  selected: _travelMode == mode,
+                  onSelected: (_) {
+                    setState(() => _travelMode = mode);
+                  },
+                  avatar: Icon(
+                    dedaTravelModeIcon(mode),
+                    size: 20,
+                  ),
+                  label: Text(dedaTravelModeLabel(mode)),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.35,
+                color: Color(0xFF5B665D),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _detailRow(IconData icon, String label, String? value) {
@@ -3398,7 +3482,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _detailRow(Icons.route, 'المسافة التقريبية', _distanceLabel),
+                      _detailRow(Icons.route, 'المسافة المباشرة تقريبًا', _distanceLabel),
                       _detailRow(Icons.location_on, 'العنوان', place.address),
                       _detailRow(Icons.schedule, 'ساعات العمل', place.openingHours),
                       _detailRow(Icons.phone, 'الهاتف', place.phone),
@@ -3413,6 +3497,8 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 14),
+              _travelModeSelector(),
               const SizedBox(height: 14),
               SizedBox(
                 height: 56,
@@ -3759,6 +3845,7 @@ class DedaRoutePage extends StatefulWidget {
   final PlaceInfo destination;
   final IconData categoryIcon;
   final DedaMapStyle initialStyle;
+  final DedaTravelMode travelMode;
 
   const DedaRoutePage({
     super.key,
@@ -3766,6 +3853,7 @@ class DedaRoutePage extends StatefulWidget {
     required this.destination,
     required this.categoryIcon,
     required this.initialStyle,
+    this.travelMode = DedaTravelMode.car,
   });
 
   @override
@@ -3834,6 +3922,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           navigationStatus = 'الملاحة نشطة — يتم تحديث الطريق حسب موقعك.';
         }
       });
+      _fitRouteOnMap(navigation: tripStarted);
     } catch (e) {
       if (!mounted) return;
       if (background) {
@@ -3870,7 +3959,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       return 'تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.';
     }
     if (raw.contains('noroute')) {
-      return 'لم تتمكن خدمة الطريق من إيجاد مسار قيادة إلى هذه الوجهة.';
+      return 'لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.';
     }
     return 'تعذر حساب الطريق الآن. حاول مرة أخرى.';
   }
@@ -3888,6 +3977,59 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return minutes == 0
         ? '$hours ساعة'
         : '$hours ساعة و $minutes دقيقة';
+  }
+
+  double _estimatedDurationSeconds(DedaRouteResult result) {
+    switch (widget.travelMode) {
+      case DedaTravelMode.walking:
+        return result.distanceMeters / 1.35;
+      case DedaTravelMode.motorcycle:
+        return result.durationSeconds;
+      case DedaTravelMode.car:
+        return result.durationSeconds;
+      case DedaTravelMode.truck:
+        return result.durationSeconds * 1.20;
+    }
+  }
+
+  String get _travelEstimateNote {
+    switch (widget.travelMode) {
+      case DedaTravelMode.walking:
+        return 'وقت المشي تقديري ويُحسب على مسافة الطريق الظاهرة.';
+      case DedaTravelMode.motorcycle:
+        return 'وقت الدراجة النارية تقديري وقد يتغير حسب الطريق وحركة المرور.';
+      case DedaTravelMode.car:
+        return 'وقت السيارة تقريبي وقد يتغير حسب الطريق وحركة المرور.';
+      case DedaTravelMode.truck:
+        return 'وقت الشاحنة تقريبي، وقد يتغير حسب قيود الطريق والحمولة وحركة المرور.';
+    }
+  }
+
+  void _fitRouteOnMap({bool navigation = false}) {
+    final currentRoute = route;
+    final coordinates = <LatLng>[
+      startPoint,
+      if (currentRoute != null && currentRoute.points.isNotEmpty)
+        ...currentRoute.points,
+      widget.destination.location,
+    ];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || coordinates.length < 2) return;
+      try {
+        _mapController.fitCamera(
+          CameraFit.coordinates(
+            coordinates: coordinates,
+            padding: navigation
+                ? const EdgeInsets.fromLTRB(34, 125, 34, 305)
+                : const EdgeInsets.fromLTRB(44, 80, 44, 285),
+            maxZoom: navigation ? 16 : 17,
+          ),
+        );
+      } catch (_) {
+        // The map may still be attaching during the first frame.
+      }
+    });
   }
 
   DedaRouteStep? get firstUsefulStep {
@@ -3932,6 +4074,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       navigationStatus =
           'بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.';
     });
+    _fitRouteOnMap(navigation: true);
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -3948,11 +4091,6 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         });
 
         final current = LatLng(position.latitude, position.longitude);
-        try {
-          _mapController.move(current, 16);
-        } catch (_) {
-          // The map may still be attaching during the first GPS event.
-        }
 
         final toDestination = Geolocator.distanceBetween(
           position.latitude,
@@ -4028,7 +4166,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 _DedaLegendRow(
                   icon: Icons.route,
                   iconColor: Color(0xFF17652F),
-                  text: 'الخط الأخضر: طريق القيادة',
+                  text: 'الخط الأخضر: المسار إلى الوجهة',
                 ),
                 _DedaLegendRow(
                   icon: Icons.navigation,
@@ -4084,7 +4222,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(tripStarted ? 'الملاحة إلى الوجهة' : 'الطريق إلى الوجهة'),
+        title: Text(
+          tripStarted
+              ? 'الملاحة • ${dedaTravelModeLabel(widget.travelMode)}'
+              : 'الطريق • ${dedaTravelModeLabel(widget.travelMode)}',
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -4185,6 +4327,21 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 ),
               ),
             ),
+            Positioned(
+              top: 62,
+              left: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.94),
+                elevation: 2,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'عرض المسار كاملًا',
+                  onPressed: () =>
+                      _fitRouteOnMap(navigation: tripStarted),
+                  icon: const Icon(Icons.fit_screen),
+                ),
+              ),
+            ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
                 top: 74,
@@ -4277,12 +4434,41 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           label: const Text('إعادة المحاولة'),
                         ),
                       ] else if (route != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F6EF),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                dedaTravelModeIcon(widget.travelMode),
+                                color: const Color(0xFF17652F),
+                                size: 22,
+                              ),
+                              const SizedBox(width: 7),
+                              Text(
+                                'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               child: _DedaRouteStat(
                                 icon: Icons.route,
-                                label: 'المسافة',
+                                label: 'مسافة الطريق',
                                 value: formatRouteDistance(route!.distanceMeters),
                               ),
                             ),
@@ -4291,10 +4477,19 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               child: _DedaRouteStat(
                                 icon: Icons.schedule,
                                 label: 'الوقت التقريبي',
-                                value: formatRouteDuration(route!.durationSeconds),
+                                value: formatRouteDuration(_estimatedDurationSeconds(route!)),
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _travelEstimateNote,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF5B665D),
+                          ),
                         ),
                         if (isRerouting) ...[
                           const SizedBox(height: 8),
