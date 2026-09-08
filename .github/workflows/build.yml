@@ -59,14 +59,134 @@ jobs:
           path.write_text(text)
           PY
 
+      - name: Restore permanent signing key
+        env:
+          DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import base64
+          from pathlib import Path
+
+          raw = os.environ["DEDA_KEYSTORE_BASE64"].strip()
+
+          if raw.startswith("DEDA_KEYSTORE_BASE64="):
+              raw = raw.split("=", 1)[1].strip()
+
+          raw = "".join(raw.split())
+          data = base64.b64decode(raw, validate=True)
+
+          output = Path("android/app/deda-release.jks")
+          output.write_bytes(data)
+
+          if output.stat().st_size == 0:
+              raise SystemExit("Signing key is empty")
+          PY
+
+      - name: Validate permanent signing key
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+        run: |
+          keytool -list \
+            -keystore android/app/deda-release.jks \
+            -storepass "$DEDA_STORE_PASSWORD" \
+            -alias "$DEDA_KEY_ALIAS" > /dev/null
+
+      - name: Configure permanent release signing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
+
+          if kts.exists():
+              text = kts.read_text()
+
+              marker = "    buildTypes {"
+
+              signing = """    signingConfigs {
+                  create("release") {
+                      keyAlias = System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword = System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile = file("deda-release.jks")
+                      storePassword = System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
+
+          """
+
+              if marker not in text:
+                  raise SystemExit("buildTypes not found in build.gradle.kts")
+
+              text = text.replace(marker, signing + marker, 1)
+
+              old = 'signingConfig = signingConfigs.getByName("debug")'
+              new = 'signingConfig = signingConfigs.getByName("release")'
+
+              if old not in text:
+                  raise SystemExit("Debug signing configuration not found")
+
+              text = text.replace(old, new, 1)
+              kts.write_text(text)
+
+          elif groovy.exists():
+              text = groovy.read_text()
+
+              marker = "    buildTypes {"
+
+              signing = """    signingConfigs {
+                  release {
+                      keyAlias System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile file("deda-release.jks")
+                      storePassword System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
+
+          """
+
+              if marker not in text:
+                  raise SystemExit("buildTypes not found in build.gradle")
+
+              text = text.replace(marker, signing + marker, 1)
+
+              if "signingConfig signingConfigs.debug" in text:
+                  text = text.replace(
+                      "signingConfig signingConfigs.debug",
+                      "signingConfig signingConfigs.release",
+                      1,
+                  )
+              elif "signingConfig = signingConfigs.debug" in text:
+                  text = text.replace(
+                      "signingConfig = signingConfigs.debug",
+                      "signingConfig = signingConfigs.release",
+                      1,
+                  )
+              else:
+                  raise SystemExit("Debug signing configuration not found")
+
+              groovy.write_text(text)
+
+          else:
+              raise SystemExit("Android Gradle file not found")
+          PY
+
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
-        run: flutter build apk --release
+      - name: Build permanently signed APK
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+          DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+        run: |
+          BUILD_NUMBER=$((100000 + GITHUB_RUN_NUMBER))
+          flutter build apk --release --build-number="$BUILD_NUMBER"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: d-iraq-ludo-apk
+          name: d-iraq-ludo-permanently-signed-apk
           path: build/app/outputs/flutter-apk/app-release.apk
