@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'places_service.dart';
 
@@ -41,18 +43,12 @@ List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
           'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       userAgentPackageName: 'com.diraq.ludo',
     ),
-    if (style == DedaMapStyle.hybrid) ...[
-      TileLayer(
-        urlTemplate:
-            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-        userAgentPackageName: 'com.diraq.ludo',
-      ),
+    if (style == DedaMapStyle.hybrid)
       TileLayer(
         urlTemplate:
             'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
         userAgentPackageName: 'com.diraq.ludo',
       ),
-    ],
   ];
 }
 
@@ -1764,11 +1760,7 @@ class _HomePageState extends State<HomePage> {
 
   List<DedaCategoryData> get filteredCategories {
     final q = searchController.text.trim();
-
-    if (q.isEmpty) {
-      return allCategories;
-    }
-
+    if (q.isEmpty) return allCategories;
     return allCategories.where((item) => item.title.contains(q)).toList();
   }
 
@@ -1776,9 +1768,7 @@ class _HomePageState extends State<HomePage> {
     if (category.title == 'الخريطة') {
       Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => const MapReadyPage(),
-        ),
+        MaterialPageRoute(builder: (_) => const MapReadyPage()),
       );
       return;
     }
@@ -1787,6 +1777,37 @@ class _HomePageState extends State<HomePage> {
       context,
       MaterialPageRoute(
         builder: (_) => NearbyPlacesPage(category: category),
+      ),
+    );
+  }
+
+  void openPlaceSearch() {
+    final query = searchController.text.trim();
+    if (query.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'اكتب حرفين على الأقل من اسم المكان',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaPlaceSearchPage(initialQuery: query),
+      ),
+    );
+  }
+
+  void openSavedPlaces({required bool favorites}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SavedPlacesPage(showFavorites: favorites),
       ),
     );
   }
@@ -1825,12 +1846,16 @@ class _HomePageState extends State<HomePage> {
               TextField(
                 controller: searchController,
                 textDirection: TextDirection.rtl,
-                onChanged: (_) {
-                  setState(() {});
-                },
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => openPlaceSearch(),
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'ابحث عن نوع مكان...',
-                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'ابحث عن مكان بالاسم أو عن نوع مكان...',
+                  prefixIcon: IconButton(
+                    tooltip: 'بحث بالاسم',
+                    onPressed: openPlaceSearch,
+                    icon: const Icon(Icons.search),
+                  ),
                   suffixIcon: searchController.text.isEmpty
                       ? null
                       : IconButton(
@@ -1845,13 +1870,46 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: openPlaceSearch,
+                  icon: const Icon(Icons.travel_explore),
+                  label: const Text(
+                    'بحث حقيقي عن المكان بالاسم',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => openSavedPlaces(favorites: true),
+                      icon: const Icon(Icons.favorite),
+                      label: const Text('المفضلة'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => openSavedPlaces(favorites: false),
+                      icon: const Icon(Icons.history),
+                      label: const Text('الأماكن الأخيرة'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               Expanded(
                 child: categories.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
-                          'لا توجد نتيجة مطابقة',
-                          style: TextStyle(fontSize: 20),
+                          'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 18),
                         ),
                       )
                     : GridView.builder(
@@ -1864,13 +1922,10 @@ class _HomePageState extends State<HomePage> {
                         ),
                         itemBuilder: (context, index) {
                           final category = categories[index];
-
                           return DedaCategory(
                             icon: category.icon,
                             title: category.title,
-                            onTap: () {
-                              openCategory(category);
-                            },
+                            onTap: () => openCategory(category),
                           );
                         },
                       ),
@@ -2183,534 +2238,16 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   }
 
   void showPlaceInfo(PlaceInfo place) {
-    final distance = distanceToPlace(place);
-
-    showModalBottomSheet(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  widget.category.icon,
-                  size: 52,
-                  color: const Color(0xFF39733D),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  place.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'يبعد تقريبًا ${formatDistance(distance)}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 17),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      openRouteToPlace(place);
-                    },
-                    icon: const Icon(Icons.navigation),
-                    label: const Text(
-                      'اختيار كوجهة',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} متر';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(1)} كم';
-  }
-
-  double mapZoomForRadius() {
-    if (searchedRadiusMeters <= 3000) return 14.0;
-    if (searchedRadiusMeters <= 10000) return 12.0;
-    return 10.5;
-  }
-
-  Future<void> openFullScreenMap(Position position) async {
-    final selectedStyle = await Navigator.push<DedaMapStyle>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DedaFullScreenMapPage(
-          position: position,
-          places: places,
-          categoryIcon: widget.category.icon,
-          categoryTitle: widget.category.title,
-          initialZoom: mapZoomForRadius(),
-          initialStyle: mapStyle,
-        ),
-      ),
-    );
-
-    if (!mounted || selectedStyle == null) return;
-
-    setState(() {
-      mapStyle = selectedStyle;
-    });
-  }
-
-  Widget buildMap(Position position) {
-    final userPoint = LatLng(
-      position.latitude,
-      position.longitude,
-    );
-
-    final markers = <Marker>[
-      Marker(
-        point: userPoint,
-        width: 60,
-        height: 60,
-        child: const Icon(
-          Icons.location_pin,
-          size: 55,
-          color: Colors.red,
-        ),
-      ),
-      ...places.map(
-        (place) {
-          return Marker(
-            point: place.location,
-            width: 50,
-            height: 50,
-            child: GestureDetector(
-              onTap: () {
-                showPlaceInfo(place);
-              },
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 4,
-                      color: Colors.black26,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  widget.category.icon,
-                  size: 30,
-                  color: const Color(0xFF39733D),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    ];
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: SizedBox(
-        height: 390,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: FlutterMap(
-                key: ValueKey(
-                  '${position.latitude}-${position.longitude}-${places.hashCode}-$searchedRadiusMeters-${mapStyle.name}',
-                ),
-                options: MapOptions(
-                  initialCenter: userPoint,
-                  initialZoom: mapZoomForRadius(),
-                  initialCameraFit: places.isEmpty
-                      ? null
-                      : CameraFit.coordinates(
-                          coordinates: [
-                            userPoint,
-                            ...places.map((place) => place.location),
-                          ],
-                          padding: const EdgeInsets.all(55),
-                          maxZoom: 16,
-                        ),
-                ),
-                children: [
-                  ...dedaBaseMapLayers(mapStyle),
-                  MarkerLayer(markers: markers),
-                  RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution(
-                        dedaMapAttribution(mapStyle),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.92),
-                elevation: 3,
-                borderRadius: BorderRadius.circular(14),
-                child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: 'نوع الخريطة',
-                  onSelected: (style) {
-                    setState(() {
-                      mapStyle = style;
-                    });
-                  },
-                  itemBuilder: (context) => DedaMapStyle.values
-                      .map(
-                        (style) => PopupMenuItem<DedaMapStyle>(
-                          value: style,
-                          child: Row(
-                            children: [
-                              Icon(
-                                style == mapStyle
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_off,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(dedaMapStyleLabel(style)),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.layers_outlined),
-                        const SizedBox(width: 6),
-                        Text(
-                          dedaMapStyleLabel(mapStyle),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 66,
-              right: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.92),
-                elevation: 3,
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: 'تكبير الخريطة',
-                  onPressed: () {
-                    openFullScreenMap(position);
-                  },
-                  icon: const Icon(Icons.fullscreen),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildPlaceCard(PlaceInfo place) {
-    final distance = distanceToPlace(place);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        onTap: () {
-          showPlaceInfo(place);
-        },
-        leading: CircleAvatar(
-          child: Icon(widget.category.icon),
-        ),
-        title: Text(
-          place.name,
-          textDirection: TextDirection.rtl,
-        ),
-        subtitle: Text(
-          'المسافة التقريبية: ${formatDistance(distance)}',
-          textDirection: TextDirection.rtl,
-        ),
-        trailing: const Icon(Icons.location_on),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAF2),
-      appBar: AppBar(
-        title: Text(widget.category.title),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Icon(
-                widget.category.icon,
-                size: 70,
-                color: const Color(0xFF39733D),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.category.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'يبدأ البحث ضمن 3 كم، وإذا لم توجد نتائج يتوسع تلقائيًا إلى 10 كم ثم 25 كم',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                statusMessage,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 17),
-              ),
-              const SizedBox(height: 12),
-              if (currentPosition != null)
-                Card(
-                  elevation: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      'نطاق البحث الحالي: ${radiusLabel(searchedRadiusMeters)}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              if (isLoading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-              if (currentPosition != null) ...[
-                buildMap(currentPosition!),
-                const SizedBox(height: 18),
-              ],
-              SizedBox(
-                height: 56,
-                child: FilledButton.icon(
-                  onPressed: isLoading ? null : loadNearbyPlaces,
-                  icon: Icon(
-                    places.isEmpty ? Icons.search : Icons.refresh,
-                  ),
-                  label: Text(
-                    places.isEmpty
-                        ? 'ابحث عن ${widget.category.title} قريبة'
-                        : 'تحديث النتائج',
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (places.isNotEmpty) ...[
-                Text(
-                  'الأماكن القريبة (${places.length})',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ...places.take(20).map(buildPlaceCard),
-              ],
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Geolocator.openAppSettings();
-                },
-                icon: const Icon(Icons.settings),
-                label: const Text('إعدادات إذن الموقع'),
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('رجوع'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-class DedaFullScreenMapPage extends StatefulWidget {
-  final Position position;
-  final List<PlaceInfo> places;
-  final IconData categoryIcon;
-  final String categoryTitle;
-  final double initialZoom;
-  final DedaMapStyle initialStyle;
-
-  const DedaFullScreenMapPage({
-    super.key,
-    required this.position,
-    required this.places,
-    required this.categoryIcon,
-    required this.categoryTitle,
-    required this.initialZoom,
-    required this.initialStyle,
-  });
-
-  @override
-  State<DedaFullScreenMapPage> createState() =>
-      _DedaFullScreenMapPageState();
-}
-
-class _DedaFullScreenMapPageState
-    extends State<DedaFullScreenMapPage> {
-  late DedaMapStyle mapStyle;
-
-  @override
-  void initState() {
-    super.initState();
-    mapStyle = widget.initialStyle;
-  }
-
-  String formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} متر';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(1)} كم';
-  }
-
-  double distanceToPlace(PlaceInfo place) {
-    return Geolocator.distanceBetween(
-      widget.position.latitude,
-      widget.position.longitude,
-      place.location.latitude,
-      place.location.longitude,
-    );
-  }
-
-  void openRouteToPlace(PlaceInfo place) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DedaRoutePage(
-          startPosition: widget.position,
-          destination: place,
+        builder: (_) => PlaceDetailsPage(
+          place: place,
+          currentPosition: widget.position,
           categoryIcon: widget.categoryIcon,
           initialStyle: mapStyle,
         ),
       ),
-    );
-  }
-
-  void showPlaceInfo(PlaceInfo place) {
-    final distance = distanceToPlace(place);
-
-    showModalBottomSheet(
-      context: context,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  widget.categoryIcon,
-                  size: 52,
-                  color: const Color(0xFF39733D),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  place.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'يبعد تقريبًا ${formatDistance(distance)}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 17),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      openRouteToPlace(place);
-                    },
-                    icon: const Icon(Icons.navigation),
-                    label: const Text(
-                      'اختيار كوجهة',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -2908,6 +2445,670 @@ class _DedaFullScreenMapPageState
   }
 }
 
+
+
+IconData dedaIconForPlaceType(String type) {
+  switch (type) {
+    case 'مطعم':
+    case 'مطاعم':
+      return Icons.restaurant;
+    case 'فندق':
+    case 'فنادق':
+      return Icons.hotel;
+    case 'مول':
+    case 'مولات':
+      return Icons.local_mall;
+    case 'محطة وقود':
+    case 'محطات وقود':
+      return Icons.local_gas_station;
+    case 'صيدلية':
+    case 'صيدليات':
+      return Icons.local_pharmacy;
+    case 'موقف':
+    case 'مواقف':
+      return Icons.local_parking;
+    case 'حديقة':
+    case 'حدائق':
+      return Icons.park;
+    case 'مقهى':
+      return Icons.local_cafe;
+    case 'مستشفى':
+      return Icons.local_hospital;
+    default:
+      return Icons.place;
+  }
+}
+
+class DedaPlacesStore {
+  static const String _favoritesKey = 'deda_favorites_v1';
+  static const String _recentKey = 'deda_recent_v1';
+
+  static String placeId(PlaceInfo place) {
+    return '${place.name}|${place.location.latitude.toStringAsFixed(5)}|'
+        '${place.location.longitude.toStringAsFixed(5)}';
+  }
+
+  static Future<List<PlaceInfo>> favorites() => _read(_favoritesKey);
+  static Future<List<PlaceInfo>> recent() => _read(_recentKey);
+
+  static Future<bool> isFavorite(PlaceInfo place) async {
+    final items = await favorites();
+    final id = placeId(place);
+    return items.any((item) => placeId(item) == id);
+  }
+
+  static Future<bool> toggleFavorite(PlaceInfo place) async {
+    final items = await favorites();
+    final id = placeId(place);
+    final index = items.indexWhere((item) => placeId(item) == id);
+    bool isNowFavorite;
+    if (index >= 0) {
+      items.removeAt(index);
+      isNowFavorite = false;
+    } else {
+      items.insert(0, place);
+      isNowFavorite = true;
+    }
+    await _write(_favoritesKey, items.take(100).toList());
+    return isNowFavorite;
+  }
+
+  static Future<void> addRecent(PlaceInfo place) async {
+    final items = await recent();
+    final id = placeId(place);
+    items.removeWhere((item) => placeId(item) == id);
+    items.insert(0, place);
+    await _write(_recentKey, items.take(30).toList());
+  }
+
+  static Future<List<PlaceInfo>> _read(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawItems = prefs.getStringList(key) ?? const <String>[];
+    final result = <PlaceInfo>[];
+    for (final raw in rawItems) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          result.add(PlaceInfo.fromJson(decoded));
+        } else if (decoded is Map) {
+          result.add(PlaceInfo.fromJson(Map<String, dynamic>.from(decoded)));
+        }
+      } catch (_) {
+        // Ignore an old or damaged saved item instead of breaking the page.
+      }
+    }
+    return result;
+  }
+
+  static Future<void> _write(String key, List<PlaceInfo> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = items.map((item) => jsonEncode(item.toJson())).toList();
+    await prefs.setStringList(key, encoded);
+  }
+}
+
+class DedaPlaceSearchPage extends StatefulWidget {
+  final String initialQuery;
+
+  const DedaPlaceSearchPage({
+    super.key,
+    required this.initialQuery,
+  });
+
+  @override
+  State<DedaPlaceSearchPage> createState() => _DedaPlaceSearchPageState();
+}
+
+class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
+  final PlacesService _placesService = PlacesService();
+  late final TextEditingController _controller;
+  Position? _position;
+  List<PlaceInfo> _results = [];
+  bool _loading = false;
+  String _status = 'اكتب اسم المكان ثم اضغط بحث';
+  int _radiusMeters = 25000;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _search());
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<Position?> _determinePosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      if (mounted) {
+        setState(() => _status = 'شغّل GPS ثم أعد البحث.');
+      }
+      return null;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        setState(() => _status = 'يحتاج البحث إلى إذن الموقع.');
+      }
+      return null;
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
+    );
+  }
+
+  String _radiusLabel(int meters) => meters >= 100000 ? '100 كم' : '25 كم';
+
+  String _distance(PlaceInfo place) {
+    final position = _position;
+    if (position == null) return '';
+    final meters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      place.location.latitude,
+      place.location.longitude,
+    );
+    return meters < 1000
+        ? '${meters.toStringAsFixed(0)} متر'
+        : '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  Future<void> _search() async {
+    final query = _controller.text.trim();
+    if (query.length < 2 || _loading) return;
+
+    setState(() {
+      _loading = true;
+      _results = [];
+      _status = 'جاري تحديد موقعك والبحث عن "$query"...';
+    });
+
+    try {
+      final position = _position ?? await _determinePosition();
+      if (position == null) return;
+      _position = position;
+      final center = LatLng(position.latitude, position.longitude);
+
+      List<PlaceInfo> found = [];
+      for (final radius in const [25000, 100000]) {
+        _radiusMeters = radius;
+        if (mounted) {
+          setState(() {
+            _status = 'جاري البحث عن "$query" ضمن ${_radiusLabel(radius)}...';
+          });
+        }
+        found = await _placesService.searchPlacesByName(
+          center: center,
+          queryText: query,
+          radiusMeters: radius,
+        );
+        if (found.isNotEmpty) break;
+      }
+
+      found.sort((a, b) {
+        final da = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          a.location.latitude,
+          a.location.longitude,
+        );
+        final db = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          b.location.latitude,
+          b.location.longitude,
+        );
+        return da.compareTo(db);
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _results = found;
+        _status = found.isEmpty
+            ? 'لم نعثر على مكان بهذا الاسم ضمن ${_radiusLabel(_radiusMeters)}.'
+            : 'تم العثور على ${found.length} نتيجة.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'تعذر البحث الآن. تحقق من الإنترنت ثم حاول مرة أخرى.\n$e';
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _openDetails(PlaceInfo place) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlaceDetailsPage(
+          place: place,
+          currentPosition: _position,
+          categoryIcon: dedaIconForPlaceType(place.type),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: const Text('البحث عن مكان بالاسم'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: TextField(
+                controller: _controller,
+                textDirection: TextDirection.rtl,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _search(),
+                decoration: InputDecoration(
+                  hintText: 'مثال: مستشفى اليرموك',
+                  prefixIcon: IconButton(
+                    onPressed: _loading ? null : _search,
+                    icon: const Icon(Icons.search),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Text(
+                _status,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15.5),
+              ),
+            ),
+            if (_loading) const LinearProgressIndicator(),
+            Expanded(
+              child: _results.isEmpty
+                  ? const Center(
+                      child: Icon(
+                        Icons.travel_explore,
+                        size: 72,
+                        color: Color(0xFF8AA18D),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _results.length > 50 ? 50 : _results.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final place = _results[index];
+                        return Card(
+                          child: ListTile(
+                            onTap: () => _openDetails(place),
+                            leading: CircleAvatar(
+                              child: Icon(dedaIconForPlaceType(place.type)),
+                            ),
+                            title: Text(
+                              place.name,
+                              textDirection: TextDirection.rtl,
+                            ),
+                            subtitle: Text(
+                              '${place.type} • ${_distance(place)}',
+                              textDirection: TextDirection.rtl,
+                            ),
+                            trailing: const Icon(Icons.chevron_left),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class PlaceDetailsPage extends StatefulWidget {
+  final PlaceInfo place;
+  final Position? currentPosition;
+  final IconData categoryIcon;
+  final DedaMapStyle initialStyle;
+
+  const PlaceDetailsPage({
+    super.key,
+    required this.place,
+    this.currentPosition,
+    this.categoryIcon = Icons.place,
+    this.initialStyle = DedaMapStyle.normal,
+  });
+
+  @override
+  State<PlaceDetailsPage> createState() => _PlaceDetailsPageState();
+}
+
+class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
+  bool _favorite = false;
+  bool _favoriteLoading = true;
+  bool _locating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    DedaPlacesStore.addRecent(widget.place);
+    _loadFavorite();
+  }
+
+  Future<void> _loadFavorite() async {
+    final value = await DedaPlacesStore.isFavorite(widget.place);
+    if (!mounted) return;
+    setState(() {
+      _favorite = value;
+      _favoriteLoading = false;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_favoriteLoading) return;
+    setState(() => _favoriteLoading = true);
+    final value = await DedaPlacesStore.toggleFavorite(widget.place);
+    if (!mounted) return;
+    setState(() {
+      _favorite = value;
+      _favoriteLoading = false;
+    });
+  }
+
+  Future<Position?> _currentPosition() async {
+    if (widget.currentPosition != null) return widget.currentPosition;
+    if (!await Geolocator.isLocationServiceEnabled()) return null;
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+  }
+
+  Future<void> _openRoute() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    final position = await _currentPosition();
+    if (!mounted) return;
+    setState(() => _locating = false);
+    if (position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'شغّل GPS واسمح بإذن الموقع لبدء الطريق.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+      return;
+    }
+
+    await DedaPlacesStore.addRecent(widget.place);
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaRoutePage(
+          startPosition: position,
+          destination: widget.place,
+          categoryIcon: widget.categoryIcon,
+          initialStyle: widget.initialStyle,
+        ),
+      ),
+    );
+  }
+
+  String? get _distanceLabel {
+    final position = widget.currentPosition;
+    if (position == null) return null;
+    final meters = Geolocator.distanceBetween(
+      position.latitude,
+      position.longitude,
+      widget.place.location.latitude,
+      widget.place.location.longitude,
+    );
+    return meters < 1000
+        ? '${meters.toStringAsFixed(0)} متر'
+        : '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  Widget _detailRow(IconData icon, String label, String? value) {
+    if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        textDirection: TextDirection.rtl,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFF17652F)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$label: $value',
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 16.5, height: 1.35),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final place = widget.place;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: const Text('معلومات المكان'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: _favorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة',
+            onPressed: _favoriteLoading ? null : _toggleFavorite,
+            icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CircleAvatar(
+                radius: 42,
+                backgroundColor: const Color(0xFFE6F0E6),
+                child: Icon(
+                  widget.categoryIcon,
+                  size: 44,
+                  color: const Color(0xFF17652F),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                place.name,
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                place.type,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 17, color: Color(0xFF5B665D)),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _detailRow(Icons.route, 'المسافة التقريبية', _distanceLabel),
+                      _detailRow(Icons.location_on, 'العنوان', place.address),
+                      _detailRow(Icons.schedule, 'ساعات العمل', place.openingHours),
+                      _detailRow(Icons.phone, 'الهاتف', place.phone),
+                      _detailRow(Icons.language, 'الموقع الإلكتروني', place.website),
+                      _detailRow(
+                        Icons.pin_drop,
+                        'الإحداثيات',
+                        '${place.location.latitude.toStringAsFixed(6)}, '
+                            '${place.location.longitude.toStringAsFixed(6)}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: _locating ? null : _openRoute,
+                  icon: _locating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.navigation),
+                  label: Text(
+                    _locating ? 'جاري تحديد موقعك...' : 'اختيار كوجهة وعرض الطريق',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _favoriteLoading ? null : _toggleFavorite,
+                icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
+                label: Text(_favorite ? 'محفوظ في المفضلة' : 'إضافة إلى المفضلة'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SavedPlacesPage extends StatefulWidget {
+  final bool showFavorites;
+
+  const SavedPlacesPage({
+    super.key,
+    required this.showFavorites,
+  });
+
+  @override
+  State<SavedPlacesPage> createState() => _SavedPlacesPageState();
+}
+
+class _SavedPlacesPageState extends State<SavedPlacesPage> {
+  bool _loading = true;
+  List<PlaceInfo> _places = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final items = widget.showFavorites
+        ? await DedaPlacesStore.favorites()
+        : await DedaPlacesStore.recent();
+    if (!mounted) return;
+    setState(() {
+      _places = items;
+      _loading = false;
+    });
+  }
+
+  Future<void> _removeFavorite(PlaceInfo place) async {
+    await DedaPlacesStore.toggleFavorite(place);
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.showFavorites ? 'المفضلة' : 'الأماكن الأخيرة';
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(title: Text(title), centerTitle: true),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _places.isEmpty
+              ? Center(
+                  child: Text(
+                    widget.showFavorites
+                        ? 'لم تحفظ أي مكان في المفضلة بعد.'
+                        : 'لا توجد أماكن أخيرة بعد.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _places.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                  itemBuilder: (context, index) {
+                    final place = _places[index];
+                    return Card(
+                      child: ListTile(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PlaceDetailsPage(
+                                place: place,
+                                categoryIcon: dedaIconForPlaceType(place.type),
+                              ),
+                            ),
+                          );
+                          if (mounted) _load();
+                        },
+                        leading: CircleAvatar(
+                          child: Icon(dedaIconForPlaceType(place.type)),
+                        ),
+                        title: Text(place.name, textDirection: TextDirection.rtl),
+                        subtitle: Text(place.type, textDirection: TextDirection.rtl),
+                        trailing: widget.showFavorites
+                            ? IconButton(
+                                onPressed: () => _removeFavorite(place),
+                                icon: const Icon(Icons.favorite),
+                              )
+                            : const Icon(Icons.chevron_left),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
 
 class DedaRouteStep {
   final String instruction;
@@ -3143,53 +3344,86 @@ class DedaRoutePage extends StatefulWidget {
 
 class _DedaRoutePageState extends State<DedaRoutePage> {
   final DedaRouteService routeService = DedaRouteService();
+  final MapController _mapController = MapController();
 
+  StreamSubscription<Position>? _positionSubscription;
   late DedaMapStyle mapStyle;
   DedaRouteResult? route;
+  Position? livePosition;
+  LatLng? _lastRouteOrigin;
   bool isLoading = true;
+  bool isRerouting = false;
+  bool tripStarted = false;
   String? errorMessage;
+  String navigationStatus = '';
 
-  LatLng get startPoint => LatLng(
-        widget.startPosition.latitude,
-        widget.startPosition.longitude,
-      );
+  LatLng get startPoint {
+    final position = livePosition ?? widget.startPosition;
+    return LatLng(position.latitude, position.longitude);
+  }
 
   @override
   void initState() {
     super.initState();
     mapStyle = widget.initialStyle;
+    livePosition = widget.startPosition;
     loadRoute();
   }
 
-  Future<void> loadRoute() async {
-    if (!mounted) return;
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    super.dispose();
+  }
 
+  Future<void> loadRoute({bool background = false}) async {
+    if (!mounted) return;
+    if (background && isRerouting) return;
+
+    final origin = startPoint;
     setState(() {
-      isLoading = true;
-      errorMessage = null;
+      if (background) {
+        isRerouting = true;
+      } else {
+        isLoading = true;
+        errorMessage = null;
+      }
     });
 
     try {
       final result = await routeService.getDrivingRoute(
-        start: startPoint,
+        start: origin,
         destination: widget.destination.location,
       );
-
       if (!mounted) return;
-
       setState(() {
         route = result;
+        _lastRouteOrigin = origin;
+        errorMessage = null;
+        if (tripStarted) {
+          navigationStatus = 'الملاحة نشطة — يتم تحديث الطريق حسب موقعك.';
+        }
       });
     } catch (e) {
       if (!mounted) return;
-
-      setState(() {
-        errorMessage = _friendlyRouteError(e);
-      });
+      if (background) {
+        setState(() {
+          navigationStatus =
+              'تعذر تحديث الطريق لحظيًا، وسيُعاد المحاولة مع حركة الموقع.';
+        });
+      } else {
+        setState(() {
+          errorMessage = _friendlyRouteError(e);
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
-          isLoading = false;
+          if (background) {
+            isRerouting = false;
+          } else {
+            isLoading = false;
+          }
         });
       }
     }
@@ -3197,72 +3431,52 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   String _friendlyRouteError(Object error) {
     final raw = error.toString().toLowerCase();
-
     if (raw.contains('timeout')) {
       return 'انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.';
     }
-
     if (raw.contains('socketexception') ||
         raw.contains('failed host lookup') ||
         raw.contains('network')) {
       return 'تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.';
     }
-
     if (raw.contains('noroute')) {
       return 'لم تتمكن خدمة الطريق من إيجاد مسار قيادة إلى هذه الوجهة.';
     }
-
     return 'تعذر حساب الطريق الآن. حاول مرة أخرى.';
   }
 
   String formatRouteDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} متر';
-    }
-
+    if (meters < 1000) return '${meters.toStringAsFixed(0)} متر';
     return '${(meters / 1000).toStringAsFixed(1)} كم';
   }
 
   String formatRouteDuration(double seconds) {
     final totalMinutes = (seconds / 60).round();
-
-    if (totalMinutes < 60) {
-      return '$totalMinutes دقيقة';
-    }
-
+    if (totalMinutes < 60) return '$totalMinutes دقيقة';
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
-
-    if (minutes == 0) {
-      return '$hours ساعة';
-    }
-
-    return '$hours ساعة و $minutes دقيقة';
+    return minutes == 0
+        ? '$hours ساعة'
+        : '$hours ساعة و $minutes دقيقة';
   }
 
   DedaRouteStep? get firstUsefulStep {
     final steps = route?.steps;
     if (steps == null || steps.isEmpty) return null;
-
     for (final step in steps) {
-      if (step.maneuverType != 'depart' &&
-          step.maneuverType != 'arrive') {
+      if (step.maneuverType != 'depart' && step.maneuverType != 'arrive') {
         return step;
       }
     }
-
     return steps.first;
   }
 
   IconData directionIcon(DedaRouteStep step) {
-    final modifier = step.maneuverModifier;
-
     if (step.maneuverType == 'roundabout' ||
         step.maneuverType == 'rotary') {
       return Icons.rotate_left;
     }
-
-    switch (modifier) {
+    switch (step.maneuverModifier) {
       case 'right':
       case 'slight right':
       case 'sharp right':
@@ -3273,32 +3487,104 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         return Icons.arrow_back;
       case 'uturn':
         return Icons.rotate_left;
-      case 'straight':
       default:
         return Icons.arrow_upward;
     }
+  }
+
+  Future<void> startTrip() async {
+    if (tripStarted || route == null) return;
+    await DedaPlacesStore.addRecent(widget.destination);
+    if (!mounted) return;
+
+    setState(() {
+      tripStarted = true;
+      navigationStatus =
+          'بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.';
+    });
+
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 10,
+    );
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: settings,
+    ).listen(
+      (position) {
+        if (!mounted) return;
+        setState(() {
+          livePosition = position;
+        });
+
+        final current = LatLng(position.latitude, position.longitude);
+        try {
+          _mapController.move(current, 16);
+        } catch (_) {
+          // The map may still be attaching during the first GPS event.
+        }
+
+        final toDestination = Geolocator.distanceBetween(
+          position.latitude,
+          position.longitude,
+          widget.destination.location.latitude,
+          widget.destination.location.longitude,
+        );
+        if (toDestination <= 35) {
+          stopTrip(reached: true);
+          return;
+        }
+
+        final origin = _lastRouteOrigin;
+        if (origin != null) {
+          final moved = Geolocator.distanceBetween(
+            origin.latitude,
+            origin.longitude,
+            current.latitude,
+            current.longitude,
+          );
+          if (moved >= 40 && !isRerouting) {
+            loadRoute(background: true);
+          }
+        }
+      },
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          navigationStatus =
+              'تعذر تحديث GPS مؤقتًا. أبقِ الموقع مفعّلًا وسيستمر DEDA بالمحاولة.';
+        });
+      },
+    );
+  }
+
+  Future<void> stopTrip({bool reached = false}) async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
+    if (!mounted) return;
+    setState(() {
+      tripStarted = false;
+      navigationStatus = reached
+          ? 'وصلت إلى الوجهة.'
+          : 'تم إيقاف متابعة الرحلة.';
+    });
   }
 
   void showMapLegend() {
     showModalBottomSheet(
       context: context,
       builder: (sheetContext) {
-        return SafeArea(
+        return const SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: const [
+              children: [
                 Text(
                   'شرح الخريطة',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 18),
+                SizedBox(height: 14),
                 _DedaLegendRow(
                   icon: Icons.location_pin,
                   iconColor: Colors.red,
@@ -3307,22 +3593,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 _DedaLegendRow(
                   icon: Icons.place,
                   iconColor: Color(0xFF17652F),
-                  text: 'العلامة الخضراء: الوجهة المختارة',
+                  text: 'العلامة الخضراء: الوجهة',
                 ),
                 _DedaLegendRow(
                   icon: Icons.route,
                   iconColor: Color(0xFF17652F),
-                  text: 'الخط الأخضر: طريق القيادة إلى الوجهة',
-                ),
-                _DedaLegendRow(
-                  icon: Icons.explore,
-                  iconColor: Color(0xFF163A21),
-                  text: 'N: اتجاه الشمال — الخريطة تبقى شمالها للأعلى',
+                  text: 'الخط الأخضر: طريق القيادة',
                 ),
                 _DedaLegendRow(
                   icon: Icons.navigation,
                   iconColor: Color(0xFF17652F),
-                  text: 'سهم التوجيه: أول انعطاف أو اتجاه قادم على الطريق',
+                  text: 'بعد بدء الرحلة يتحدث موقعك والمسار والتعليمات تلقائيًا',
                 ),
               ],
             ),
@@ -3338,10 +3619,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final routePoints = route?.points ?? const <LatLng>[];
     final fitCoordinates = routePoints.isNotEmpty
         ? routePoints
-        : <LatLng>[
-            startPoint,
-            destinationPoint,
-          ];
+        : <LatLng>[startPoint, destinationPoint];
 
     final markers = <Marker>[
       Marker(
@@ -3362,12 +3640,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           decoration: const BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 5,
-                color: Colors.black26,
-              ),
-            ],
+            boxShadow: [BoxShadow(blurRadius: 5, color: Colors.black26)],
           ),
           child: Icon(
             widget.categoryIcon,
@@ -3381,7 +3654,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('الطريق إلى الوجهة'),
+        title: Text(tripStarted ? 'الملاحة إلى الوجهة' : 'الطريق إلى الوجهة'),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -3389,17 +3662,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           children: [
             Positioned.fill(
               child: FlutterMap(
-                key: ValueKey(
-                  'route-${mapStyle.name}-${routePoints.length}-${widget.destination.name}',
-                ),
+                mapController: _mapController,
                 options: MapOptions(
                   initialCenter: startPoint,
-                  initialZoom: 13,
-                  initialCameraFit: CameraFit.coordinates(
-                    coordinates: fitCoordinates,
-                    padding: const EdgeInsets.fromLTRB(44, 70, 44, 235),
-                    maxZoom: 17,
-                  ),
+                  initialZoom: tripStarted ? 16 : 13,
+                  initialCameraFit: tripStarted
+                      ? null
+                      : CameraFit.coordinates(
+                          coordinates: fitCoordinates,
+                          padding: const EdgeInsets.fromLTRB(44, 70, 44, 265),
+                          maxZoom: 17,
+                        ),
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
@@ -3416,133 +3689,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   MarkerLayer(markers: markers),
                   RichAttributionWidget(
                     attributions: [
-                      TextSourceAttribution(
-                        dedaMapAttribution(mapStyle),
-                      ),
+                      TextSourceAttribution(dedaMapAttribution(mapStyle)),
                     ],
                   ),
                 ],
               ),
             ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Column(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      shape: BoxShape.circle,
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: const Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(
-                          Icons.navigation,
-                          size: 33,
-                          color: Color(0xFF17652F),
-                        ),
-                        Positioned(
-                          top: 2,
-                          child: Text(
-                            'N',
-                            style: TextStyle(
-                              color: Color(0xFF173D22),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Material(
-                    color: Colors.white.withOpacity(0.95),
-                    elevation: 2,
-                    shape: const CircleBorder(),
-                    child: IconButton(
-                      tooltip: 'شرح الخريطة',
-                      onPressed: showMapLegend,
-                      icon: const Icon(
-                        Icons.info_outline,
-                        color: Color(0xFF17652F),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!isLoading &&
-                errorMessage == null &&
-                firstUsefulStep != null)
-              Positioned(
-                top: 80,
-                left: 76,
-                right: 76,
-                child: Material(
-                  color: Colors.white.withOpacity(0.96),
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    child: Row(
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEAF3E9),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            directionIcon(firstUsefulStep!),
-                            color: const Color(0xFF17652F),
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                firstUsefulStep!.instruction,
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF5B665D),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
             Positioned(
               top: 12,
               right: 12,
@@ -3552,11 +3704,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
                   tooltip: 'نوع الخريطة',
-                  onSelected: (style) {
-                    setState(() {
-                      mapStyle = style;
-                    });
-                  },
+                  onSelected: (style) => setState(() => mapStyle = style),
                   itemBuilder: (context) => DedaMapStyle.values
                       .map(
                         (style) => PopupMenuItem<DedaMapStyle>(
@@ -3586,12 +3734,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                       children: [
                         const Icon(Icons.layers_outlined),
                         const SizedBox(width: 6),
-                        Text(
-                          dedaMapStyleLabel(mapStyle),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        Text(dedaMapStyleLabel(mapStyle)),
                       ],
                     ),
                   ),
@@ -3599,16 +3742,83 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             ),
             Positioned(
-              left: 14,
-              right: 14,
-              bottom: 14,
+              top: 12,
+              left: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.94),
+                elevation: 2,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'شرح الخريطة',
+                  onPressed: showMapLegend,
+                  icon: const Icon(Icons.info_outline),
+                ),
+              ),
+            ),
+            if (!isLoading && errorMessage == null && firstUsefulStep != null)
+              Positioned(
+                top: 74,
+                left: 28,
+                right: 28,
+                child: Material(
+                  color: Colors.white.withOpacity(0.96),
+                  elevation: 4,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    child: Row(
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: const Color(0xFFEAF3E9),
+                          child: Icon(
+                            directionIcon(firstUsefulStep!),
+                            color: const Color(0xFF17652F),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                firstUsefulStep!.instruction,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF5B665D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
               child: Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -3616,35 +3826,25 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                         widget.destination.name,
                         textAlign: TextAlign.center,
                         textDirection: TextDirection.rtl,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 21,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       if (isLoading) ...[
                         const LinearProgressIndicator(),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'جاري حساب أفضل طريق...',
-                          textAlign: TextAlign.center,
-                        ),
+                        const SizedBox(height: 8),
+                        const Text('جاري حساب أفضل طريق...'),
                       ] else if (errorMessage != null) ...[
-                        Text(
-                          errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: loadRoute,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('إعادة المحاولة'),
-                          ),
+                        Text(errorMessage!, textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed: () => loadRoute(),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة المحاولة'),
                         ),
                       ] else if (route != null) ...[
                         Row(
@@ -3653,31 +3853,66 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               child: _DedaRouteStat(
                                 icon: Icons.route,
                                 label: 'المسافة',
-                                value: formatRouteDistance(
-                                  route!.distanceMeters,
-                                ),
+                                value: formatRouteDistance(route!.distanceMeters),
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: _DedaRouteStat(
                                 icon: Icons.schedule,
                                 label: 'الوقت التقريبي',
-                                value: formatRouteDuration(
-                                  route!.durationSeconds,
-                                ),
+                                value: formatRouteDuration(route!.durationSeconds),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'الوقت تقديري ويعتمد على مسار القيادة المحسوب، وليس على حركة المرور المباشرة.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: Color(0xFF59645B),
+                        if (isRerouting) ...[
+                          const SizedBox(height: 8),
+                          const LinearProgressIndicator(),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'جاري تحديث المسار من موقعك الحالي...',
+                            style: TextStyle(fontSize: 12.5),
                           ),
+                        ],
+                        if (navigationStatus.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            navigationStatus,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: navigationStatus == 'وصلت إلى الوجهة.'
+                                  ? const Color(0xFF17652F)
+                                  : const Color(0xFF4D5C50),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: tripStarted
+                              ? OutlinedButton.icon(
+                                  onPressed: () => stopTrip(),
+                                  icon: const Icon(Icons.stop_circle_outlined),
+                                  label: const Text(
+                                    'إيقاف الرحلة',
+                                    style: TextStyle(fontSize: 17),
+                                  ),
+                                )
+                              : FilledButton.icon(
+                                  onPressed: startTrip,
+                                  icon: const Icon(Icons.navigation),
+                                  label: const Text(
+                                    'ابدأ الرحلة',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
                         ),
                       ],
                     ],
@@ -3793,15 +4028,14 @@ class MapReadyPage extends StatefulWidget {
 
 class _MapReadyPageState extends State<MapReadyPage> {
   Position? currentPosition;
+  LatLng? selectedDestination;
   bool isLoading = false;
   DedaMapStyle mapStyle = DedaMapStyle.normal;
 
-  String statusMessage =
-      'اضغط على الزر لتحديد موقعك الحالي';
+  String statusMessage = 'اضغط على الزر لتحديد موقعك الحالي';
 
   Future<void> determinePosition() async {
     if (isLoading) return;
-
     setState(() {
       isLoading = true;
       statusMessage = 'جاري تحديد موقعك...';
@@ -3809,10 +4043,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-
       if (!serviceEnabled) {
         if (!mounted) return;
-
         setState(() {
           statusMessage =
               'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.';
@@ -3820,28 +4052,22 @@ class _MapReadyPageState extends State<MapReadyPage> {
         return;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
-
         setState(() {
-          statusMessage =
-              'تم رفض إذن الموقع. نحتاج الإذن حتى يستطيع DEDA تحديد موقعك.';
+          statusMessage = 'تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.';
         });
         return;
       }
-
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
-
         setState(() {
           statusMessage =
-              'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالوصول إلى الموقع.';
+              'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.';
         });
         return;
       }
@@ -3851,26 +4077,20 @@ class _MapReadyPageState extends State<MapReadyPage> {
           accuracy: LocationAccuracy.high,
         ),
       );
-
       if (!mounted) return;
-
       setState(() {
         currentPosition = position;
-        statusMessage = 'تم تحديد موقعك بنجاح';
+        statusMessage =
+            'تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.';
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         statusMessage =
-            'تعذر تحديد الموقع حاليًا. تأكد من تشغيل GPS والإنترنت ثم حاول مرة أخرى.\n\nالتفاصيل التقنية:\n$e';
+            'تعذر تحديد الموقع حاليًا. تأكد من GPS والإنترنت ثم حاول مرة أخرى.\n\n$e';
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -3878,16 +4098,36 @@ class _MapReadyPageState extends State<MapReadyPage> {
     await Geolocator.openAppSettings();
   }
 
-  Widget buildMap(Position position) {
-    final point = LatLng(
-      position.latitude,
-      position.longitude,
-    );
+  void openSelectedDestination() {
+    final position = currentPosition;
+    final destination = selectedDestination;
+    if (position == null || destination == null) return;
 
+    final place = PlaceInfo(
+      name: 'وجهة محددة على الخريطة',
+      type: 'وجهة',
+      location: destination,
+    );
+    DedaPlacesStore.addRecent(place);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaRoutePage(
+          startPosition: position,
+          destination: place,
+          categoryIcon: Icons.flag,
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+  }
+
+  Widget buildMap(Position position) {
+    final point = LatLng(position.latitude, position.longitude);
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
-        height: 380,
+        height: 500,
         child: Stack(
           children: [
             Positioned.fill(
@@ -3898,6 +4138,13 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 options: MapOptions(
                   initialCenter: point,
                   initialZoom: 16,
+                  onLongPress: (_, destination) {
+                    setState(() {
+                      selectedDestination = destination;
+                      statusMessage =
+                          'تم اختيار الوجهة. اضغط الزر أسفل الخريطة لعرض الطريق.';
+                    });
+                  },
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
@@ -3913,13 +4160,22 @@ class _MapReadyPageState extends State<MapReadyPage> {
                           color: Colors.red,
                         ),
                       ),
+                      if (selectedDestination != null)
+                        Marker(
+                          point: selectedDestination!,
+                          width: 62,
+                          height: 62,
+                          child: const Icon(
+                            Icons.flag,
+                            size: 52,
+                            color: Color(0xFF17652F),
+                          ),
+                        ),
                     ],
                   ),
                   RichAttributionWidget(
                     attributions: [
-                      TextSourceAttribution(
-                        dedaMapAttribution(mapStyle),
-                      ),
+                      TextSourceAttribution(dedaMapAttribution(mapStyle)),
                     ],
                   ),
                 ],
@@ -3929,16 +4185,12 @@ class _MapReadyPageState extends State<MapReadyPage> {
               top: 12,
               right: 12,
               child: Material(
-                color: Colors.white.withOpacity(0.92),
+                color: Colors.white.withOpacity(0.94),
                 elevation: 3,
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
                   tooltip: 'نوع الخريطة',
-                  onSelected: (style) {
-                    setState(() {
-                      mapStyle = style;
-                    });
-                  },
+                  onSelected: (style) => setState(() => mapStyle = style),
                   itemBuilder: (context) => DedaMapStyle.values
                       .map(
                         (style) => PopupMenuItem<DedaMapStyle>(
@@ -3970,12 +4222,32 @@ class _MapReadyPageState extends State<MapReadyPage> {
                         const SizedBox(width: 6),
                         Text(
                           dedaMapStyleLabel(mapStyle),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 12,
+              child: IgnorePointer(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Text(
+                    'اضغط مطولًا على الخريطة لاختيار وجهة مباشرة',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -3991,36 +4263,21 @@ class _MapReadyPageState extends State<MapReadyPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('الخريطة - موقعي'),
+        title: const Text('الخريطة - موقعي والوجهة'),
         centerTitle: true,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(
-                Icons.map,
-                size: 75,
-                color: Color(0xFF39733D),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'موقعي على الخريطة',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
               Text(
                 statusMessage,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
+                style: const TextStyle(fontSize: 17),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
               if (isLoading)
                 const Center(
                   child: Padding(
@@ -4030,86 +4287,39 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 ),
               if (currentPosition != null) ...[
                 buildMap(currentPosition!),
-                const SizedBox(height: 18),
-                Card(
-                  elevation: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'موقعك الحالي',
-                          style: TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'خط العرض: ${currentPosition!.latitude.toStringAsFixed(6)}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 17),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'خط الطول: ${currentPosition!.longitude.toStringAsFixed(6)}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 17),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'الدقة التقريبية: ${currentPosition!.accuracy.toStringAsFixed(1)} متر',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
+                const SizedBox(height: 12),
+                if (selectedDestination != null)
+                  SizedBox(
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: openSelectedDestination,
+                      icon: const Icon(Icons.navigation),
+                      label: const Text(
+                        'عرض الطريق إلى الوجهة المحددة',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
               ],
               SizedBox(
-                height: 56,
+                height: 54,
                 child: FilledButton.icon(
                   onPressed: isLoading ? null : determinePosition,
                   icon: Icon(
-                    currentPosition == null
-                        ? Icons.gps_fixed
-                        : Icons.refresh,
+                    currentPosition == null ? Icons.gps_fixed : Icons.refresh,
                   ),
                   label: Text(
-                    currentPosition == null
-                        ? 'تحديد موقعي على الخريطة'
-                        : 'تحديث موقعي',
-                    style: const TextStyle(fontSize: 19),
+                    currentPosition == null ? 'تحديد موقعي' : 'تحديث موقعي',
+                    style: const TextStyle(fontSize: 18),
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: openSettings,
                 icon: const Icon(Icons.settings),
-                label: const Text(
-                  'إعدادات إذن الموقع',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                icon: const Icon(Icons.arrow_back),
-                label: const Text(
-                  'رجوع',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'DEDA يحدد موقعك ويعرض الأماكن الحقيقية القريبة حسب الفئة.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
+                label: const Text('إعدادات إذن الموقع'),
               ),
             ],
           ),
