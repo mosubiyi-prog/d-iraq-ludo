@@ -2238,6 +2238,435 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   }
 
   void showPlaceInfo(PlaceInfo place) {
+    final position = currentPosition;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PlaceDetailsPage(
+          place: place,
+          currentPosition: position,
+          categoryIcon: widget.category.icon,
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+  }
+
+  String formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.toStringAsFixed(0)} متر';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  double mapZoomForRadius() {
+    if (searchedRadiusMeters <= 3000) return 14.0;
+    if (searchedRadiusMeters <= 10000) return 12.0;
+    return 10.5;
+  }
+
+  Future<void> openFullScreenMap(Position position) async {
+    final selectedStyle = await Navigator.push<DedaMapStyle>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaFullScreenMapPage(
+          position: position,
+          places: places,
+          categoryIcon: widget.category.icon,
+          categoryTitle: widget.category.title,
+          initialZoom: mapZoomForRadius(),
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+
+    if (!mounted || selectedStyle == null) return;
+
+    setState(() {
+      mapStyle = selectedStyle;
+    });
+  }
+
+  Widget buildMap(Position position) {
+    final userPoint = LatLng(
+      position.latitude,
+      position.longitude,
+    );
+
+    final markers = <Marker>[
+      Marker(
+        point: userPoint,
+        width: 60,
+        height: 60,
+        child: const Icon(
+          Icons.location_pin,
+          size: 55,
+          color: Colors.red,
+        ),
+      ),
+      ...places.map(
+        (place) {
+          return Marker(
+            point: place.location,
+            width: 50,
+            height: 50,
+            child: GestureDetector(
+              onTap: () {
+                showPlaceInfo(place);
+              },
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      blurRadius: 4,
+                      color: Colors.black26,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  widget.category.icon,
+                  size: 30,
+                  color: const Color(0xFF39733D),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    ];
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 390,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FlutterMap(
+                key: ValueKey(
+                  '${position.latitude}-${position.longitude}-${places.hashCode}-$searchedRadiusMeters-${mapStyle.name}',
+                ),
+                options: MapOptions(
+                  initialCenter: userPoint,
+                  initialZoom: mapZoomForRadius(),
+                  initialCameraFit: places.isEmpty
+                      ? null
+                      : CameraFit.coordinates(
+                          coordinates: [
+                            userPoint,
+                            ...places.map((place) => place.location),
+                          ],
+                          padding: const EdgeInsets.all(55),
+                          maxZoom: 16,
+                        ),
+                ),
+                children: [
+                  ...dedaBaseMapLayers(mapStyle),
+                  MarkerLayer(markers: markers),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        dedaMapAttribution(mapStyle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                borderRadius: BorderRadius.circular(14),
+                child: PopupMenuButton<DedaMapStyle>(
+                  tooltip: 'نوع الخريطة',
+                  onSelected: (style) {
+                    setState(() {
+                      mapStyle = style;
+                    });
+                  },
+                  itemBuilder: (context) => DedaMapStyle.values
+                      .map(
+                        (style) => PopupMenuItem<DedaMapStyle>(
+                          value: style,
+                          child: Row(
+                            children: [
+                              Icon(
+                                style == mapStyle
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_off,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(dedaMapStyleLabel(style)),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.layers_outlined),
+                        const SizedBox(width: 6),
+                        Text(
+                          dedaMapStyleLabel(mapStyle),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 66,
+              right: 12,
+              child: Material(
+                color: Colors.white.withOpacity(0.92),
+                elevation: 3,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: 'تكبير الخريطة',
+                  onPressed: () {
+                    openFullScreenMap(position);
+                  },
+                  icon: const Icon(Icons.fullscreen),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildPlaceCard(PlaceInfo place) {
+    final distance = distanceToPlace(place);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: ListTile(
+        onTap: () {
+          showPlaceInfo(place);
+        },
+        leading: CircleAvatar(
+          child: Icon(widget.category.icon),
+        ),
+        title: Text(
+          place.name,
+          textDirection: TextDirection.rtl,
+        ),
+        subtitle: Text(
+          'المسافة التقريبية: ${formatDistance(distance)}',
+          textDirection: TextDirection.rtl,
+        ),
+        trailing: const Icon(Icons.location_on),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(widget.category.title),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(
+                widget.category.icon,
+                size: 70,
+                color: const Color(0xFF39733D),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.category.title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'يبدأ البحث ضمن 3 كم، وإذا لم توجد نتائج يتوسع تلقائيًا إلى 10 كم ثم 25 كم',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                statusMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 17),
+              ),
+              const SizedBox(height: 12),
+              if (currentPosition != null)
+                Card(
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      'نطاق البحث الحالي: ${radiusLabel(searchedRadiusMeters)}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              if (isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              if (currentPosition != null) ...[
+                buildMap(currentPosition!),
+                const SizedBox(height: 18),
+              ],
+              SizedBox(
+                height: 56,
+                child: FilledButton.icon(
+                  onPressed: isLoading ? null : loadNearbyPlaces,
+                  icon: Icon(
+                    places.isEmpty ? Icons.search : Icons.refresh,
+                  ),
+                  label: Text(
+                    places.isEmpty
+                        ? 'ابحث عن ${widget.category.title} قريبة'
+                        : 'تحديث النتائج',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (places.isNotEmpty) ...[
+                Text(
+                  'الأماكن القريبة (${places.length})',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...places.take(20).map(buildPlaceCard),
+              ],
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Geolocator.openAppSettings();
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('إعدادات إذن الموقع'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('رجوع'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DedaFullScreenMapPage extends StatefulWidget {
+  final Position position;
+  final List<PlaceInfo> places;
+  final IconData categoryIcon;
+  final String categoryTitle;
+  final double initialZoom;
+  final DedaMapStyle initialStyle;
+
+  const DedaFullScreenMapPage({
+    super.key,
+    required this.position,
+    required this.places,
+    required this.categoryIcon,
+    required this.categoryTitle,
+    required this.initialZoom,
+    required this.initialStyle,
+  });
+
+  @override
+  State<DedaFullScreenMapPage> createState() =>
+      _DedaFullScreenMapPageState();
+}
+
+class _DedaFullScreenMapPageState
+    extends State<DedaFullScreenMapPage> {
+  late DedaMapStyle mapStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    mapStyle = widget.initialStyle;
+  }
+
+  String formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.toStringAsFixed(0)} متر';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} كم';
+  }
+
+  double distanceToPlace(PlaceInfo place) {
+    return Geolocator.distanceBetween(
+      widget.position.latitude,
+      widget.position.longitude,
+      place.location.latitude,
+      place.location.longitude,
+    );
+  }
+
+  void openRouteToPlace(PlaceInfo place) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaRoutePage(
+          startPosition: widget.position,
+          destination: place,
+          categoryIcon: widget.categoryIcon,
+          initialStyle: mapStyle,
+        ),
+      ),
+    );
+  }
+
+  void showPlaceInfo(PlaceInfo place) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -2444,6 +2873,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     );
   }
 }
+
 
 
 
