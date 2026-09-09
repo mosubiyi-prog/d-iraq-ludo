@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import 'places_service.dart';
 
@@ -23,16 +24,55 @@ enum DedaTravelMode {
   truck,
 }
 
+enum DedaLanguage { ar, en }
+
+class DedaLanguageState {
+  static const String prefsKey = 'deda_language_v1';
+  static DedaLanguage current = DedaLanguage.ar;
+
+  static bool get isArabic => current == DedaLanguage.ar;
+  static TextDirection get direction =>
+      isArabic ? TextDirection.rtl : TextDirection.ltr;
+  static String get ttsLocale => isArabic ? 'ar-IQ' : 'en-US';
+}
+
+String dedaText(String ar, String en) =>
+    DedaLanguageState.isArabic ? ar : en;
+
+String dedaCategoryLabel(String ar) {
+  if (DedaLanguageState.isArabic) return ar;
+  switch (ar) {
+    case 'مطاعم':
+      return 'Restaurants';
+    case 'فنادق':
+      return 'Hotels';
+    case 'مولات':
+      return 'Malls';
+    case 'محطات وقود':
+      return 'Fuel stations';
+    case 'صيدليات':
+      return 'Pharmacies';
+    case 'مواقف':
+      return 'Parking';
+    case 'حدائق':
+      return 'Parks';
+    case 'الخريطة':
+      return 'Map';
+    default:
+      return ar;
+  }
+}
+
 String dedaTravelModeLabel(DedaTravelMode mode) {
   switch (mode) {
     case DedaTravelMode.walking:
-      return 'مشي';
+      return dedaText('مشي', 'Walking');
     case DedaTravelMode.motorcycle:
-      return 'دراجة نارية';
+      return dedaText('دراجة نارية', 'Motorcycle');
     case DedaTravelMode.car:
-      return 'سيارة';
+      return dedaText('سيارة', 'Car');
     case DedaTravelMode.truck:
-      return 'شاحنة';
+      return dedaText('شاحنة', 'Truck');
   }
 }
 
@@ -52,11 +92,11 @@ IconData dedaTravelModeIcon(DedaTravelMode mode) {
 String dedaMapStyleLabel(DedaMapStyle style) {
   switch (style) {
     case DedaMapStyle.normal:
-      return 'عادي';
+      return dedaText('عادي', 'Normal');
     case DedaMapStyle.satellite:
-      return 'فضائي';
+      return dedaText('فضائي', 'Satellite');
     case DedaMapStyle.hybrid:
-      return 'هجين';
+      return dedaText('هجين', 'Hybrid');
   }
 }
 
@@ -124,6 +164,31 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
+  DedaLanguage _language = DedaLanguageState.current;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(DedaLanguageState.prefsKey);
+    final language = saved == 'en' ? DedaLanguage.en : DedaLanguage.ar;
+    DedaLanguageState.current = language;
+    if (mounted) setState(() => _language = language);
+  }
+
+  Future<void> _setLanguage(DedaLanguage language) async {
+    DedaLanguageState.current = language;
+    setState(() => _language = language);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      DedaLanguageState.prefsKey,
+      language == DedaLanguage.en ? 'en' : 'ar',
+    );
+  }
 
   static const Color _dedaGreen = Color(0xFF17652F);
   static const Color _dedaCream = Color(0xFFF8FAF2);
@@ -1468,9 +1533,9 @@ class _LoginPageState extends State<LoginPage> {
 
     if (name.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'يرجى إدخال الاسم ورقم الهاتف',
+            dedaText('يرجى إدخال الاسم ورقم الهاتف', 'Please enter your name and phone number'),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1549,6 +1614,31 @@ class _LoginPageState extends State<LoginPage> {
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
                     children: [
+                      Align(
+                        alignment: Alignment.center,
+                        child: SegmentedButton<DedaLanguage>(
+                          segments: const [
+                            ButtonSegment(
+                              value: DedaLanguage.ar,
+                              label: Text('العربية'),
+                              icon: Icon(Icons.language),
+                            ),
+                            ButtonSegment(
+                              value: DedaLanguage.en,
+                              label: Text('English'),
+                              icon: Icon(Icons.language),
+                            ),
+                          ],
+                          selected: {_language},
+                          showSelectedIcon: true,
+                          onSelectionChanged: (selection) {
+                            if (selection.isNotEmpty) {
+                              _setLanguage(selection.first);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(24),
                         child: Image.memory(
@@ -1576,10 +1666,10 @@ class _LoginPageState extends State<LoginPage> {
                           children: [
                             TextField(
                               controller: nameController,
-                              textDirection: TextDirection.rtl,
-                              textAlign: TextAlign.right,
+                              textDirection: DedaLanguageState.direction,
+                              textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
                               decoration: _fieldDecoration(
-                                hint: 'الاسم',
+                                hint: dedaText('الاسم', 'Name'),
                                 icon: Icons.person,
                               ),
                             ),
@@ -1587,10 +1677,10 @@ class _LoginPageState extends State<LoginPage> {
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
-                              textDirection: TextDirection.rtl,
-                              textAlign: TextAlign.right,
+                              textDirection: DedaLanguageState.direction,
+                              textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
                               decoration: _fieldDecoration(
-                                hint: 'رقم الهاتف',
+                                hint: dedaText('رقم الهاتف', 'Phone number'),
                                 icon: Icons.phone,
                               ),
                             ),
@@ -1612,9 +1702,9 @@ class _LoginPageState extends State<LoginPage> {
                                   Icons.login,
                                   size: 27,
                                 ),
-                                label: const Text(
-                                  'تسجيل الدخول',
-                                  style: TextStyle(
+                                label: Text(
+                                  dedaText('تسجيل الدخول', 'Sign in'),
+                                  style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -1683,12 +1773,12 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      (Icons.restaurant, 'مطاعم'),
-      (Icons.hotel, 'فنادق'),
-      (Icons.local_mall, 'مولات'),
-      (Icons.local_gas_station, 'محطات وقود'),
-      (Icons.more_horiz, 'المزيد'),
+    final items = [
+      (Icons.restaurant, dedaText('مطاعم', 'Restaurants')),
+      (Icons.hotel, dedaText('فنادق', 'Hotels')),
+      (Icons.local_mall, dedaText('مولات', 'Malls')),
+      (Icons.local_gas_station, dedaText('محطات وقود', 'Fuel')),
+      (Icons.more_horiz, dedaText('المزيد', 'More')),
     ];
 
     return Container(
@@ -1714,9 +1804,9 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text(
-                        'سجّل الدخول أولاً لاستخدام الأقسام',
+                        dedaText('سجّل الدخول أولاً لاستخدام الأقسام', 'Sign in first to use categories'),
                         textAlign: TextAlign.center,
                       ),
                       duration: Duration(seconds: 1),
@@ -1858,7 +1948,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('DEDA - الدليل الدقيق'),
+        title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -1868,7 +1958,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'هلا بك ${widget.userName}',
+                dedaText('هلا بك ${widget.userName}', 'Welcome ${widget.userName}'),
                 textAlign: TextAlign.right,
                 style: const TextStyle(
                   fontSize: 25,
@@ -1883,7 +1973,7 @@ class _HomePageState extends State<HomePage> {
                 onSubmitted: (_) => openPlaceSearch(),
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
-                  hintText: 'ابحث عن مكان بالاسم أو عن نوع مكان...',
+                  hintText: dedaText('ابحث عن مكان بالاسم أو عن نوع مكان...', 'Search by place name or category...'),
                   prefixIcon: IconButton(
                     tooltip: 'بحث بالاسم',
                     onPressed: openPlaceSearch,
@@ -1909,8 +1999,8 @@ class _HomePageState extends State<HomePage> {
                 child: FilledButton.icon(
                   onPressed: openPlaceSearch,
                   icon: const Icon(Icons.travel_explore),
-                  label: const Text(
-                    'بحث حقيقي عن المكان بالاسم',
+                  label: Text(
+                    dedaText('بحث حقيقي عن المكان بالاسم', 'Search by exact place name'),
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -1922,7 +2012,7 @@ class _HomePageState extends State<HomePage> {
                     child: OutlinedButton.icon(
                       onPressed: () => openSavedPlaces(favorites: true),
                       icon: const Icon(Icons.favorite),
-                      label: const Text('المفضلة'),
+                      label: Text(dedaText('المفضلة', 'Favorites')),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1930,7 +2020,7 @@ class _HomePageState extends State<HomePage> {
                     child: OutlinedButton.icon(
                       onPressed: () => openSavedPlaces(favorites: false),
                       icon: const Icon(Icons.history),
-                      label: const Text('الأماكن الأخيرة'),
+                      label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
                     ),
                   ),
                 ],
@@ -1957,7 +2047,7 @@ class _HomePageState extends State<HomePage> {
                           final category = categories[index];
                           return DedaCategory(
                             icon: category.icon,
-                            title: category.title,
+                            title: dedaCategoryLabel(category.title),
                             onTap: () => openCategory(category),
                           );
                         },
@@ -3668,195 +3758,323 @@ class DedaRouteResult {
 }
 
 class DedaRouteService {
-  static const Duration _timeout = Duration(seconds: 18);
+  static const Duration _timeout = Duration(seconds: 20);
 
   Future<DedaRouteResult> getDrivingRoute({
     required LatLng start,
-    required LatLng destination,DedaTravelMode travelMode = DedaTravelMode.car,
+    required LatLng destination,
+    DedaTravelMode travelMode = DedaTravelMode.car,
   }) async {
+    try {
+      return await _getValhallaRoute(
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+    } catch (_) {
+      return _getOsrmFallback(
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+    }
+  }
+
+  String _costingForMode(DedaTravelMode mode) {
+    switch (mode) {
+      case DedaTravelMode.walking:
+        return 'pedestrian';
+      case DedaTravelMode.motorcycle:
+        return 'motorcycle';
+      case DedaTravelMode.car:
+        return 'auto';
+      case DedaTravelMode.truck:
+        return 'truck';
+    }
+  }
+
+  Future<DedaRouteResult> _getValhallaRoute({
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) async {
+    final language = DedaLanguageState.isArabic ? 'ar' : 'en-US';
+    final payload = <String, dynamic>{
+      'locations': [
+        {'lat': start.latitude, 'lon': start.longitude},
+        {'lat': destination.latitude, 'lon': destination.longitude},
+      ],
+      'costing': _costingForMode(travelMode),
+      'units': 'kilometers',
+      'directions_options': {
+        'units': 'kilometers',
+        'language': language,
+      },
+    };
     final uri = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/'
-      '${start.longitude},${start.latitude};'
+      'https://valhalla1.openstreetmap.de/route?json='
+      '${Uri.encodeComponent(jsonEncode(payload))}',
+    );
+    final data = await _getJson(uri);
+    final trip = data['trip'];
+    if (trip is! Map) throw const FormatException('Valhalla trip missing.');
+    final legs = trip['legs'];
+    if (legs is! List || legs.isEmpty) {
+      throw const FormatException('Valhalla route missing.');
+    }
+
+    final points = <LatLng>[];
+    final steps = <DedaRouteStep>[];
+    double distanceMeters = 0;
+    double durationSeconds = 0;
+
+    for (final rawLeg in legs) {
+      if (rawLeg is! Map) continue;
+      final leg = Map<String, dynamic>.from(rawLeg);
+      final shape = leg['shape']?.toString() ?? '';
+      final decoded = _decodePolyline6(shape);
+      if (decoded.isNotEmpty) {
+        if (points.isNotEmpty && decoded.first == points.last) {
+          points.addAll(decoded.skip(1));
+        } else {
+          points.addAll(decoded);
+        }
+      }
+
+      final summary = leg['summary'];
+      if (summary is Map) {
+        final length = summary['length'];
+        final time = summary['time'];
+        if (length is num) distanceMeters += length.toDouble() * 1000;
+        if (time is num) durationSeconds += time.toDouble();
+      }
+
+      final maneuvers = leg['maneuvers'];
+      if (maneuvers is List) {
+        for (final raw in maneuvers) {
+          if (raw is! Map) continue;
+          final m = Map<String, dynamic>.from(raw);
+          final type = m['type'] is num ? (m['type'] as num).toInt() : 8;
+          final length = m['length'];
+          final instruction = (m['instruction'] ?? '').toString().trim();
+          steps.add(
+            DedaRouteStep(
+              instruction: instruction.isEmpty
+                  ? _fallbackValhallaInstruction(type)
+                  : instruction,
+              distanceMeters: length is num ? length.toDouble() * 1000 : 0,
+              maneuverType: _maneuverType(type),
+              maneuverModifier: _maneuverModifier(type),
+            ),
+          );
+        }
+      }
+    }
+
+    final tripSummary = trip['summary'];
+    if (tripSummary is Map) {
+      final length = tripSummary['length'];
+      final time = tripSummary['time'];
+      if (length is num) distanceMeters = length.toDouble() * 1000;
+      if (time is num) durationSeconds = time.toDouble();
+    }
+    if (points.length < 2 || distanceMeters <= 0) {
+      throw const FormatException('Valhalla geometry invalid.');
+    }
+    return DedaRouteResult(
+      points: points,
+      distanceMeters: distanceMeters,
+      durationSeconds: durationSeconds,
+      steps: steps,
+    );
+  }
+
+  Future<DedaRouteResult> _getOsrmFallback({
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) async {
+    final base = travelMode == DedaTravelMode.walking
+        ? 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/'
+        : 'https://routing.openstreetmap.de/routed-car/route/v1/driving/';
+    final uri = Uri.parse(
+      '$base${start.longitude},${start.latitude};'
       '${destination.longitude},${destination.latitude}'
       '?overview=full&geometries=geojson&steps=true',
     );
+    final data = await _getJson(uri);
+    if (data['code'] != 'Ok') {
+      throw HttpException('Routing error: ${data['code'] ?? 'Unknown'}', uri: uri);
+    }
+    final routes = data['routes'];
+    if (routes is! List || routes.isEmpty) {
+      throw const FormatException('No route returned.');
+    }
+    final route = routes.first;
+    if (route is! Map) throw const FormatException('Invalid route data.');
+    final geometry = route['geometry'];
+    if (geometry is! Map || geometry['coordinates'] is! List) {
+      throw const FormatException('Route geometry missing.');
+    }
+    final points = <LatLng>[];
+    for (final coordinate in geometry['coordinates'] as List) {
+      if (coordinate is List && coordinate.length >= 2 &&
+          coordinate[0] is num && coordinate[1] is num) {
+        points.add(LatLng(
+          (coordinate[1] as num).toDouble(),
+          (coordinate[0] as num).toDouble(),
+        ));
+      }
+    }
+    final distance = route['distance'];
+    final duration = route['duration'];
+    if (distance is! num || duration is! num || points.length < 2) {
+      throw const FormatException('Route summary invalid.');
+    }
+    final steps = <DedaRouteStep>[];
+    final legs = route['legs'];
+    if (legs is List) {
+      for (final leg in legs) {
+        if (leg is! Map || leg['steps'] is! List) continue;
+        for (final rawStep in leg['steps'] as List) {
+          if (rawStep is! Map || rawStep['maneuver'] is! Map) continue;
+          final maneuver = rawStep['maneuver'] as Map;
+          final type = (maneuver['type'] ?? '').toString();
+          final modifier = maneuver['modifier']?.toString();
+          final stepDistance = rawStep['distance'];
+          steps.add(DedaRouteStep(
+            instruction: _osrmInstruction(type: type, modifier: modifier),
+            distanceMeters: stepDistance is num ? stepDistance.toDouble() : 0,
+            maneuverType: type,
+            maneuverModifier: modifier,
+          ));
+        }
+      }
+    }
+    return DedaRouteResult(
+      points: points,
+      distanceMeters: distance.toDouble(),
+      durationSeconds: duration.toDouble(),
+      steps: steps,
+    );
+  }
 
+  Future<Map<String, dynamic>> _getJson(Uri uri) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 12);
-
     try {
       final request = await client.getUrl(uri).timeout(_timeout);
-      request.headers.set(
-        HttpHeaders.userAgentHeader,
-        'DEDA-Iraq/1.0',
-      );
-
+      request.headers.set(HttpHeaders.userAgentHeader, 'DEDA-Iraq/1.1');
       final response = await request.close().timeout(_timeout);
       final body = await utf8.decoder.bind(response).join().timeout(_timeout);
-
       if (response.statusCode != HttpStatus.ok) {
-        throw HttpException(
-          'Routing error: HTTP ${response.statusCode}',
-          uri: uri,
-        );
+        throw HttpException('Routing error: HTTP ${response.statusCode}', uri: uri);
       }
-
-      final data = jsonDecode(body);
-      if (data is! Map<String, dynamic>) {
-        throw const FormatException('Routing response is not valid JSON.');
-      }
-
-      if (data['code'] != 'Ok') {
-        throw HttpException(
-          'Routing error: ${data['code'] ?? 'Unknown'}',
-          uri: uri,
-        );
-      }
-
-      final routes = data['routes'];
-      if (routes is! List || routes.isEmpty) {
-        throw const FormatException('No route returned.');
-      }
-
-      final route = routes.first;
-      if (route is! Map<String, dynamic>) {
-        throw const FormatException('Invalid route data.');
-      }
-
-      final geometry = route['geometry'];
-      if (geometry is! Map<String, dynamic>) {
-        throw const FormatException('Route geometry is missing.');
-      }
-
-      final coordinates = geometry['coordinates'];
-      if (coordinates is! List || coordinates.length < 2) {
-        throw const FormatException('Route coordinates are missing.');
-      }
-
-      final points = <LatLng>[];
-      for (final coordinate in coordinates) {
-        if (coordinate is List && coordinate.length >= 2) {
-          final longitude = coordinate[0];
-          final latitude = coordinate[1];
-
-          if (longitude is num && latitude is num) {
-            points.add(
-              LatLng(
-                latitude.toDouble(),
-                longitude.toDouble(),
-              ),
-            );
-          }
-        }
-      }
-
-      if (points.length < 2) {
-        throw const FormatException('Route coordinates are invalid.');
-      }
-
-      final distance = route['distance'];
-      final duration = route['duration'];
-
-      if (distance is! num || duration is! num) {
-        throw const FormatException(
-          'Route distance or duration is missing.',
-        );
-      }
-
-      final routeDistance = distance.toDouble();
-      final routeDuration = duration.toDouble();
-      final straightDistance = Geolocator.distanceBetween(
-        start.latitude,
-        start.longitude,
-        destination.latitude,
-        destination.longitude,
-      );
-
-      final suspiciousZeroRoute = straightDistance > 40 &&
-          (routeDistance < 10 ||
-              routeDuration <= 0 ||
-              routeDistance < straightDistance * 0.50);
-
-      if (suspiciousZeroRoute) {
-        return DedaRouteResult(
-          points: [start, destination],
-          distanceMeters: straightDistance,
-          durationSeconds: straightDistance / 8.33,
-          steps: [
-            DedaRouteStep(
-              instruction: 'اتجه نحو الوجهة المحددة',
-              distanceMeters: straightDistance,
-              maneuverType: 'continue',
-              maneuverModifier: 'straight',
-            ),
-          ],
-          isDirectFallback: true,
-        );
-      }
-
-      final parsedSteps = <DedaRouteStep>[];
-      final legs = route['legs'];
-
-      if (legs is List) {
-        for (final leg in legs) {
-          if (leg is! Map<String, dynamic>) continue;
-
-          final rawSteps = leg['steps'];
-          if (rawSteps is! List) continue;
-
-          for (final rawStep in rawSteps) {
-            if (rawStep is! Map<String, dynamic>) continue;
-
-            final maneuver = rawStep['maneuver'];
-            if (maneuver is! Map<String, dynamic>) continue;
-
-            final type = (maneuver['type'] ?? '').toString();
-            final modifier = maneuver['modifier']?.toString();
-            final stepDistance = rawStep['distance'];
-
-            parsedSteps.add(
-              DedaRouteStep(
-                instruction: _arabicManeuverInstruction(
-                  type: type,
-                  modifier: modifier,
-                ),
-                distanceMeters:
-                    stepDistance is num ? stepDistance.toDouble() : 0,
-                maneuverType: type,
-                maneuverModifier: modifier,
-              ),
-            );
-          }
-        }
-      }
-
-      return DedaRouteResult(
-        points: points,
-        distanceMeters: distance.toDouble(),
-        durationSeconds: duration.toDouble(),
-        steps: parsedSteps,
-      );
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) throw const FormatException('Routing JSON invalid.');
+      return Map<String, dynamic>.from(decoded);
     } finally {
       client.close(force: true);
     }
   }
 
-  String _arabicManeuverInstruction({
+  List<LatLng> _decodePolyline6(String encoded) {
+    if (encoded.isEmpty) return const [];
+    final result = <LatLng>[];
+    int index = 0;
+    int lat = 0;
+    int lon = 0;
+    while (index < encoded.length) {
+      int shift = 0;
+      int value = 0;
+      int byte;
+      do {
+        if (index >= encoded.length) return result;
+        byte = encoded.codeUnitAt(index++) - 63;
+        value |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      lat += (value & 1) != 0 ? ~(value >> 1) : (value >> 1);
+
+      shift = 0;
+      value = 0;
+      do {
+        if (index >= encoded.length) return result;
+        byte = encoded.codeUnitAt(index++) - 63;
+        value |= (byte & 0x1f) << shift;
+        shift += 5;
+      } while (byte >= 0x20);
+      lon += (value & 1) != 0 ? ~(value >> 1) : (value >> 1);
+      result.add(LatLng(lat / 1e6, lon / 1e6));
+    }
+    return result;
+  }
+
+  String _maneuverType(int type) {
+    if (type >= 1 && type <= 3) return 'depart';
+    if (type >= 4 && type <= 6) return 'arrive';
+    if (type == 26 || type == 27) return 'roundabout';
+    return 'continue';
+  }
+
+  String? _maneuverModifier(int type) {
+    if ([2, 9, 10, 11, 12, 18, 20, 23].contains(type)) return 'right';
+    if ([3, 13, 14, 15, 16, 19, 21, 24].contains(type)) return 'left';
+    if ([8, 17, 22, 25].contains(type)) return 'straight';
+    return null;
+  }
+
+  String _fallbackValhallaInstruction(int type) {
+    if (DedaLanguageState.isArabic) {
+      if (type >= 4 && type <= 6) return 'وصلت إلى الوجهة';
+      if ([2, 9, 10, 11, 12, 18, 20, 23].contains(type)) return 'انعطف يمينًا';
+      if ([3, 13, 14, 15, 16, 19, 21, 24].contains(type)) return 'انعطف يسارًا';
+      if (type == 26 || type == 27) return 'اتبع الدوار';
+      return 'استمر في الطريق';
+    }
+    if (type >= 4 && type <= 6) return 'You have arrived';
+    if ([2, 9, 10, 11, 12, 18, 20, 23].contains(type)) return 'Turn right';
+    if ([3, 13, 14, 15, 16, 19, 21, 24].contains(type)) return 'Turn left';
+    if (type == 26 || type == 27) return 'Follow the roundabout';
+    return 'Continue on the route';
+  }
+
+  String _osrmInstruction({
     required String type,
     required String? modifier,
   }) {
-    if (type == 'arrive') {
-      return 'وصلت إلى الوجهة';
+    if (!DedaLanguageState.isArabic) {
+      if (type == 'arrive') return 'You have arrived';
+      if (type == 'depart') return 'Start your trip';
+      if (type == 'roundabout' || type == 'rotary') {
+        return 'Enter the roundabout and take the appropriate exit';
+      }
+      switch (modifier) {
+        case 'right':
+          return 'Turn right';
+        case 'slight right':
+          return 'Keep slightly right';
+        case 'sharp right':
+          return 'Make a sharp right';
+        case 'left':
+          return 'Turn left';
+        case 'slight left':
+          return 'Keep slightly left';
+        case 'sharp left':
+          return 'Make a sharp left';
+        case 'straight':
+          return 'Continue straight';
+        case 'uturn':
+          return 'Make a U-turn';
+        default:
+          return 'Continue on the route';
+      }
     }
-
-    if (type == 'depart') {
-      return 'ابدأ المسير';
-    }
-
+    if (type == 'arrive') return 'وصلت إلى الوجهة';
+    if (type == 'depart') return 'ابدأ المسير';
     if (type == 'roundabout' || type == 'rotary') {
       return 'ادخل الدوار واتبع المخرج المناسب';
     }
-
     switch (modifier) {
       case 'right':
         return 'انعطف يمينًا';
@@ -3875,10 +4093,6 @@ class DedaRouteService {
       case 'uturn':
         return 'قم بالاستدارة للخلف';
       default:
-        if (type == 'continue') return 'استمر في الطريق';
-        if (type == 'merge') return 'اندمج مع الطريق';
-        if (type == 'fork') return 'اتبع التفرع المناسب';
-        if (type == 'end of road') return 'عند نهاية الطريق اتبع الاتجاه';
         return 'تابع المسار';
     }
   }
@@ -3907,6 +4121,9 @@ class DedaRoutePage extends StatefulWidget {
 class _DedaRoutePageState extends State<DedaRoutePage> {
   final DedaRouteService routeService = DedaRouteService();
   final MapController _mapController = MapController();
+  final FlutterTts _tts = FlutterTts();
+  bool voiceEnabled = true;
+  String? _lastSpokenInstruction;
 
   StreamSubscription<Position>? _positionSubscription;
   late DedaMapStyle mapStyle;
@@ -3919,6 +4136,81 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   String? errorMessage;
   String navigationStatus = '';
 
+  Future<void> _initTts() async {
+    try {
+      var locale = DedaLanguageState.ttsLocale;
+      final available = await _tts.isLanguageAvailable(locale);
+      if (available != true && DedaLanguageState.isArabic) {
+        locale = 'ar-SA';
+      }
+      await _tts.setLanguage(locale);
+      await _tts.setSpeechRate(0.45);
+      await _tts.setPitch(1.05);
+      await _tts.setVolume(1.0);
+
+      final voices = await _tts.getVoices;
+      if (voices is List) {
+        Map<dynamic, dynamic>? female;
+        final wantedPrefix = DedaLanguageState.isArabic ? 'ar' : 'en';
+        for (final raw in voices) {
+          if (raw is! Map) continue;
+          final voiceLocale = (raw['locale'] ?? '').toString();
+          if (!voiceLocale.toLowerCase().startsWith(wantedPrefix)) continue;
+          final name = (raw['name'] ?? '').toString().toLowerCase();
+          final gender = (raw['gender'] ?? '').toString().toLowerCase();
+          if (gender == 'female' ||
+              name.contains('female') ||
+              name.contains('woman') ||
+              name.contains('zira') ||
+              name.contains('samantha') ||
+              name.contains('siri')) {
+            female = raw;
+            break;
+          }
+        }
+        if (female != null) {
+          await _tts.setVoice({
+            'name': (female['name'] ?? '').toString(),
+            'locale': (female['locale'] ?? locale).toString(),
+          });
+        }
+      }
+    } catch (_) {
+      // Keep navigation working even if this device has limited TTS voices.
+    }
+  }
+
+  Future<void> _speakText(String textToSpeak) async {
+    if (!voiceEnabled || textToSpeak.trim().isEmpty) return;
+    try {
+      await _tts.stop();
+      await _tts.speak(textToSpeak);
+    } catch (_) {}
+  }
+
+  Future<void> _speakCurrentInstruction({bool force = false}) async {
+    final step = firstUsefulStep;
+    if (!tripStarted || step == null || !voiceEnabled) return;
+    final key = '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}';
+    if (!force && key == _lastSpokenInstruction) return;
+    _lastSpokenInstruction = key;
+    final distance = formatRouteDistance(step.distanceMeters);
+    await _speakText(
+      DedaLanguageState.isArabic
+          ? '${step.instruction}. بعد $distance.'
+          : '${step.instruction}. In $distance.',
+    );
+  }
+
+  Future<void> _toggleVoice() async {
+    setState(() => voiceEnabled = !voiceEnabled);
+    if (!voiceEnabled) {
+      await _tts.stop();
+    } else {
+      await _speakCurrentInstruction(force: true);
+    }
+  }
+
   LatLng get startPoint {
     final position = livePosition ?? widget.startPosition;
     return LatLng(position.latitude, position.longitude);
@@ -3929,12 +4221,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     super.initState();
     mapStyle = widget.initialStyle;
     livePosition = widget.startPosition;
+    _initTts();
     loadRoute();
   }
 
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _tts.stop();
     super.dispose();
   }
 
@@ -3968,6 +4262,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         }
       });
       _fitRouteOnMap(navigation: tripStarted);
+      if (tripStarted) _speakCurrentInstruction();
     } catch (e) {
       if (!mounted) return;
       if (background) {
@@ -4010,16 +4305,29 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   String formatRouteDistance(double meters) {
-    if (meters < 1000) return '${meters.toStringAsFixed(0)} متر';
-    return '${(meters / 1000).toStringAsFixed(1)} كم';
+    if (meters < 1000) {
+      return DedaLanguageState.isArabic
+          ? '${meters.toStringAsFixed(0)} متر'
+          : '${meters.toStringAsFixed(0)} m';
+    }
+    return DedaLanguageState.isArabic
+        ? '${(meters / 1000).toStringAsFixed(1)} كم'
+        : '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   String formatRouteDuration(double seconds) {
-    if (seconds <= 0) return 'غير متاح';
+    if (seconds <= 0) return dedaText('غير متاح', 'Unavailable');
     final totalMinutes = (seconds / 60).ceil();
-    if (totalMinutes < 60) return '$totalMinutes دقيقة';
+    if (totalMinutes < 60) {
+      return DedaLanguageState.isArabic
+          ? '$totalMinutes دقيقة'
+          : '$totalMinutes min';
+    }
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
+    if (!DedaLanguageState.isArabic) {
+      return minutes == 0 ? '$hours h' : '$hours h $minutes min';
+    }
     return minutes == 0
         ? '$hours ساعة'
         : '$hours ساعة و $minutes دقيقة';
@@ -4039,15 +4347,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   double _estimatedDurationSeconds(DedaRouteResult result) {
-    // Car keeps the road service ETA when a valid routed result exists.
-    // Other modes use the routed road distance with an explicit approximate
-    // average speed so every selected mode has a distinct, explainable ETA.
-    if (widget.travelMode == DedaTravelMode.car &&
-        !result.isDirectFallback &&
-        result.durationSeconds > 0) {
+    if (!result.isDirectFallback && result.durationSeconds > 0) {
       return result.durationSeconds;
     }
-
     final speedMetersPerSecond = _averageSpeedKmhForMode() / 3.6;
     if (speedMetersPerSecond <= 0) return 0;
     return result.distanceMeters / speedMetersPerSecond;
@@ -4055,17 +4357,20 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   String get _travelEstimateNote {
     if (route?.isDirectFallback == true) {
-      return 'تعذر ربط الوجهة بطريق مسجل بدقة؛ يعرض DEDA المسافة المباشرة فقط كحل احتياطي، لذلك الزمن هنا تقريبي.';
+      return dedaText(
+        'تعذر ربط الوجهة بطريق مسجل بدقة؛ يعرض DEDA المسافة المباشرة كحل احتياطي.',
+        'DEDA could not match the destination to a mapped road, so it is showing a direct fallback distance.',
+      );
     }
     switch (widget.travelMode) {
       case DedaTravelMode.walking:
-        return 'وقت المشي تقديري على مسافة الطريق، بمتوسط تقريبي 4.8 كم/س.';
+        return dedaText('المسار والوقت محسوبان لوضع المشي.', 'Route and ETA are calculated for walking.');
       case DedaTravelMode.motorcycle:
-        return 'وقت الدراجة النارية تقديري على مسافة الطريق، بمتوسط تقريبي 55 كم/س.';
+        return dedaText('المسار والوقت محسوبان للدراجة النارية.', 'Route and ETA are calculated for motorcycle travel.');
       case DedaTravelMode.car:
-        return 'وقت السيارة يعتمد على تقدير خدمة الطريق للمسار الحالي، وقد يتغير حسب الطريق وحركة المرور.';
+        return dedaText('المسار والوقت محسوبان للسيارة.', 'Route and ETA are calculated for car travel.');
       case DedaTravelMode.truck:
-        return 'وقت الشاحنة تقديري على مسافة الطريق، بمتوسط تقريبي 40 كم/س، وقد تزيد المدة مع قيود الطريق والحمولة.';
+        return dedaText('المسار والوقت محسوبان للشاحنة مع مراعاة قيود الطرق المتاحة لدى مزود المسار.', 'Route and ETA are calculated for truck travel using the routing provider\'s available road restrictions.');
     }
   }
 
@@ -4085,7 +4390,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           CameraFit.coordinates(
             coordinates: coordinates,
             padding: navigation
-                ? const EdgeInsets.fromLTRB(34, 125, 34, 305)
+                ? const EdgeInsets.fromLTRB(34, 105, 34, 150)
                 : const EdgeInsets.fromLTRB(44, 80, 44, 285),
             maxZoom: navigation ? 16 : 17,
           ),
@@ -4150,6 +4455,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           'بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.';
     });
     _fitRouteOnMap(navigation: true);
+    _speakCurrentInstruction(force: true);
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -4205,6 +4511,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
     if (!mounted) return;
+    if (reached) {
+      await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
+    }
     setState(() {
       tripStarted = false;
       navigationStatus = reached
@@ -4213,40 +4522,104 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     });
   }
 
+  Widget _buildCompactNavigationBar() {
+    final currentRoute = route;
+    final distance = currentRoute == null
+        ? '—'
+        : formatRouteDistance(currentRoute.distanceMeters);
+    final duration = currentRoute == null
+        ? '—'
+        : formatRouteDuration(_estimatedDurationSeconds(currentRoute));
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          textDirection: DedaLanguageState.direction,
+          children: [
+            IconButton(
+              tooltip: dedaText('تشغيل أو كتم الصوت', 'Mute or enable voice'),
+              onPressed: _toggleVoice,
+              icon: Icon(
+                voiceEnabled ? Icons.volume_up : Icons.volume_off,
+                color: const Color(0xFF17652F),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              dedaTravelModeIcon(widget.travelMode),
+              color: const Color(0xFF17652F),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: DedaLanguageState.isArabic
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dedaTravelModeLabel(widget.travelMode),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    '$distance  •  $duration',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13.5),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+              tooltip: dedaText('إيقاف الرحلة', 'Stop trip'),
+              onPressed: () => stopTrip(),
+              icon: const Icon(Icons.stop_circle_outlined),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void showMapLegend() {
     showModalBottomSheet(
       context: context,
       builder: (sheetContext) {
-        return const SafeArea(
+        return SafeArea(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 18, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'شرح الخريطة',
-                  style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
+                  dedaText('شرح الخريطة', 'Map guide'),
+                  style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 14),
+                const SizedBox(height: 14),
                 _DedaLegendRow(
                   icon: Icons.location_pin,
                   iconColor: Colors.red,
-                  text: 'العلامة الحمراء: موقعك الحالي',
+                  text: dedaText('العلامة الحمراء: موقعك الحالي', 'Red marker: your current location'),
                 ),
                 _DedaLegendRow(
                   icon: Icons.gps_fixed,
-                  iconColor: Color(0xFF0B57D0),
-                  text: 'العلامة الزرقاء: الوجهة',
+                  iconColor: const Color(0xFF0B57D0),
+                  text: dedaText('العلامة الزرقاء: الوجهة', 'Blue marker: destination'),
                 ),
                 _DedaLegendRow(
                   icon: Icons.route,
-                  iconColor: Color(0xFF17652F),
-                  text: 'الخط الأخضر: المسار إلى الوجهة',
+                  iconColor: const Color(0xFF17652F),
+                  text: dedaText('الخط الأخضر: المسار إلى الوجهة', 'Green line: route to destination'),
                 ),
                 _DedaLegendRow(
                   icon: Icons.navigation,
-                  iconColor: Color(0xFF17652F),
-                  text: 'بعد بدء الرحلة يتحدث موقعك والمسار والتعليمات تلقائيًا',
+                  iconColor: const Color(0xFF17652F),
+                  text: dedaText('بعد بدء الرحلة يتحدث موقعك والمسار والتعليمات تلقائيًا', 'After the trip starts, your position, route and instructions update automatically'),
                 ),
               ],
             ),
@@ -4299,8 +4672,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       appBar: AppBar(
         title: Text(
           tripStarted
-              ? 'الملاحة • ${dedaTravelModeLabel(widget.travelMode)}'
-              : 'الطريق • ${dedaTravelModeLabel(widget.travelMode)}',
+              ? dedaText('الملاحة • ${dedaTravelModeLabel(widget.travelMode)}', 'Navigation • ${dedaTravelModeLabel(widget.travelMode)}')
+              : dedaText('الطريق • ${dedaTravelModeLabel(widget.travelMode)}', 'Route • ${dedaTravelModeLabel(widget.travelMode)}'),
         ),
         centerTitle: true,
       ),
@@ -4419,9 +4792,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: 74,
-                left: 28,
-                right: 28,
+                top: tripStarted ? 52 : 74,
+                left: tripStarted ? 44 : 28,
+                right: tripStarted ? 44 : 28,
                 child: Material(
                   color: Colors.white.withOpacity(0.96),
                   elevation: 4,
@@ -4455,7 +4828,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                 ),
                               ),
                               Text(
-                                'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                dedaText('بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}', 'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}'),
                                 textAlign: TextAlign.right,
                                 style: const TextStyle(
                                   fontSize: 13,
@@ -4470,7 +4843,15 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   ),
                 ),
               ),
-            Positioned(
+            if (tripStarted)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 10,
+                child: _buildCompactNavigationBar(),
+              ),
+            if (!tripStarted)
+              Positioned(
               left: 12,
               right: 12,
               bottom: 12,
@@ -4599,16 +4980,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               ? OutlinedButton.icon(
                                   onPressed: () => stopTrip(),
                                   icon: const Icon(Icons.stop_circle_outlined),
-                                  label: const Text(
-                                    'إيقاف الرحلة',
+                                  label: Text(
+                                    dedaText('إيقاف الرحلة', 'Stop trip'),
                                     style: TextStyle(fontSize: 17),
                                   ),
                                 )
                               : FilledButton.icon(
                                   onPressed: startTrip,
                                   icon: const Icon(Icons.navigation),
-                                  label: const Text(
-                                    'ابدأ الرحلة',
+                                  label: Text(
+                                    dedaText('ابدأ الرحلة', 'Start trip'),
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w800,
