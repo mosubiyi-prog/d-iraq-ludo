@@ -42,22 +42,42 @@ String dedaText(String ar, String en) =>
 String dedaCategoryLabel(String ar) {
   if (DedaLanguageState.isArabic) return ar;
   switch (ar) {
+    case 'مطعم':
+      return 'Restaurant';
     case 'مطاعم':
       return 'Restaurants';
+    case 'فندق':
+      return 'Hotel';
     case 'فنادق':
       return 'Hotels';
+    case 'مول':
+      return 'Mall';
     case 'مولات':
       return 'Malls';
+    case 'محطة وقود':
+      return 'Fuel station';
     case 'محطات وقود':
       return 'Fuel stations';
+    case 'صيدلية':
+      return 'Pharmacy';
     case 'صيدليات':
       return 'Pharmacies';
+    case 'موقف':
+      return 'Parking';
     case 'مواقف':
       return 'Parking';
+    case 'حديقة':
+      return 'Park';
     case 'حدائق':
       return 'Parks';
+    case 'مقهى':
+      return 'Cafe';
+    case 'مستشفى':
+      return 'Hospital';
     case 'الخريطة':
       return 'Map';
+    case 'وجهة':
+      return 'Destination';
     default:
       return ar;
   }
@@ -1715,7 +1735,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const Row(
+                      Row(
                         children: [
                           Expanded(
                             child: Divider(
@@ -1726,7 +1746,7 @@ class _LoginPageState extends State<LoginPage> {
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
-                              'اكتشف ما يحيط بك',
+                              dedaText('اكتشف ما يحيط بك', 'Discover what is around you'),
                               style: TextStyle(
                                 color: Color(0xFF294D34),
                                 fontSize: 17,
@@ -1745,10 +1765,10 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 10),
                       const _DedaCategoryPreviewStrip(),
                       const SizedBox(height: 8),
-                      const Align(
+                      Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'بغداد',
+                          dedaText('بغداد', 'Baghdad'),
                           style: TextStyle(
                             color: Color(0xFF78967D),
                             fontSize: 16,
@@ -1884,7 +1904,12 @@ class _HomePageState extends State<HomePage> {
   List<DedaCategoryData> get filteredCategories {
     final q = searchController.text.trim();
     if (q.isEmpty) return allCategories;
-    return allCategories.where((item) => item.title.contains(q)).toList();
+    final needle = q.toLowerCase();
+    return allCategories
+        .where((item) =>
+            item.title.contains(q) ||
+            dedaCategoryLabel(item.title).toLowerCase().contains(needle))
+        .toList();
   }
 
   void openCategory(DedaCategoryData category) {
@@ -1908,9 +1933,9 @@ class _HomePageState extends State<HomePage> {
     final query = searchController.text.trim();
     if (query.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'اكتب حرفين على الأقل من اسم المكان',
+            dedaText('اكتب حرفين على الأقل من اسم المكان', 'Type at least two letters of the place name'),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1975,7 +2000,7 @@ class _HomePageState extends State<HomePage> {
                 decoration: InputDecoration(
                   hintText: dedaText('ابحث عن مكان بالاسم أو عن نوع مكان...', 'Search by place name or category...'),
                   prefixIcon: IconButton(
-                    tooltip: 'بحث بالاسم',
+                    tooltip: dedaText('بحث بالاسم', 'Search by name'),
                     onPressed: openPlaceSearch,
                     icon: const Icon(Icons.search),
                   ),
@@ -2030,7 +2055,10 @@ class _HomePageState extends State<HomePage> {
                 child: categories.isEmpty
                     ? Center(
                         child: Text(
-                          'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
+                          dedaText(
+                            'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
+                            'No matching category. Tap "Search by exact place name" to search for ${searchController.text.trim()}.',
+                          ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 18),
                         ),
@@ -2139,20 +2167,18 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   DedaMapStyle mapStyle = DedaMapStyle.normal;
 
   String statusMessage =
-      'اضغط على الزر للبحث عن الأماكن القريبة منك';
+      dedaText('اضغط على الزر للبحث عن الأماكن القريبة منك', 'Tap the button to search for nearby places');
 
   String radiusLabel(int meters) {
     if (meters < 1000) {
-      return '$meters متر';
+      return DedaLanguageState.isArabic ? '$meters متر' : '$meters m';
     }
 
     final km = meters / 1000;
-
-    if (km == km.roundToDouble()) {
-      return '${km.toInt()} كم';
-    }
-
-    return '${km.toStringAsFixed(1)} كم';
+    final value = km == km.roundToDouble()
+        ? km.toInt().toString()
+        : km.toStringAsFixed(1);
+    return DedaLanguageState.isArabic ? '$value كم' : '$value km';
   }
 
   Future<Position?> determinePosition() async {
@@ -2163,7 +2189,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
       setState(() {
         statusMessage =
-            'خدمة الموقع GPS غير مفعلة. شغّل الموقع ثم حاول مرة أخرى.';
+            dedaText('خدمة الموقع GPS غير مفعلة. شغّل الموقع ثم حاول مرة أخرى.', 'GPS is turned off. Enable location and try again.');
       });
       return null;
     }
@@ -2179,7 +2205,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
       setState(() {
         statusMessage =
-            'تم رفض إذن الموقع. نحتاج الإذن لمعرفة الأماكن القريبة.';
+            dedaText('تم رفض إذن الموقع. نحتاج الإذن لمعرفة الأماكن القريبة.', 'Location permission was denied. DEDA needs it to find nearby places.');
       });
       return null;
     }
@@ -2189,7 +2215,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
       setState(() {
         statusMessage =
-            'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.';
+            dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
       });
       return null;
     }
@@ -2209,29 +2235,29 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
     if (text.contains('timeout')) {
       message =
-          'انتهت مهلة الاتصال بخدمة الأماكن. قد يكون الإنترنت بطيئًا أو الخادم مزدحمًا.';
+          dedaText('انتهت مهلة الاتصال بخدمة الأماكن. قد يكون الإنترنت بطيئًا أو الخادم مزدحمًا.', 'The places service timed out. Your connection may be slow or the server may be busy.');
     } else if (text.contains('429')) {
       message =
-          'خدمة الأماكن مشغولة مؤقتًا بسبب كثرة الطلبات. حاول مرة أخرى بعد قليل.';
+          dedaText('خدمة الأماكن مشغولة مؤقتًا بسبب كثرة الطلبات. حاول مرة أخرى بعد قليل.', 'The places service is temporarily busy. Try again shortly.');
     } else if (text.contains('502') ||
         text.contains('503') ||
         text.contains('504')) {
       message =
-          'خادم الأماكن غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.';
+          dedaText('خادم الأماكن غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.', 'The places server is temporarily unavailable. Try again shortly.');
     } else if (text.contains('socketexception') ||
         text.contains('failed host lookup') ||
         text.contains('network is unreachable')) {
       message =
-          'تعذر الوصول إلى خادم الأماكن. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.';
+          dedaText('تعذر الوصول إلى خادم الأماكن. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.', 'Could not reach the places server. Check your internet connection and try again.');
     } else if (text.contains('httpexception')) {
       message =
-          'خدمة الأماكن أعادت خطأ اتصال. سنحتاج إلى فحص رمز الخطأ الظاهر أدناه.';
+          dedaText('خدمة الأماكن أعادت خطأ اتصال. سنحتاج إلى فحص رمز الخطأ الظاهر أدناه.', 'The places service returned a connection error. The technical details are shown below.');
     } else {
       message =
-          'حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.';
+          dedaText('حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.', 'An error occurred while loading places. Technical details are shown below.');
     }
 
-    return '$message\n\nالتفاصيل التقنية:\n$raw';
+    return '$message\n\n${dedaText('التفاصيل التقنية:', 'Technical details:')}\n$raw';
   }
 
   Future<void> loadNearbyPlaces() async {
@@ -2308,11 +2334,15 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
         places = results;
 
         if (results.isEmpty) {
-          statusMessage =
-              'لم نعثر على ${widget.category.title} مسجلة حتى مسافة ${radiusLabel(searchedRadiusMeters)} من موقعك.';
+          statusMessage = dedaText(
+            'لم نعثر على ${widget.category.title} مسجلة حتى مسافة ${radiusLabel(searchedRadiusMeters)} من موقعك.',
+            'No ${dedaCategoryLabel(widget.category.title).toLowerCase()} were found within ${radiusLabel(searchedRadiusMeters)} of your location.',
+          );
         } else {
-          statusMessage =
-              'تم العثور على ${results.length} مكان ضمن ${radiusLabel(searchedRadiusMeters)}.';
+          statusMessage = dedaText(
+            'تم العثور على ${results.length} مكان ضمن ${radiusLabel(searchedRadiusMeters)}.',
+            '${results.length} places found within ${radiusLabel(searchedRadiusMeters)}.',
+          );
         }
       });
     } catch (e) {
@@ -2377,10 +2407,13 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
   String formatDistance(double meters) {
     if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} متر';
+      return DedaLanguageState.isArabic
+          ? '${meters.toStringAsFixed(0)} متر'
+          : '${meters.toStringAsFixed(0)} m';
     }
-
-    return '${(meters / 1000).toStringAsFixed(1)} كم';
+    return DedaLanguageState.isArabic
+        ? '${(meters / 1000).toStringAsFixed(1)} كم'
+        : '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   double mapZoomForRadius() {
@@ -2507,7 +2540,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 elevation: 3,
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: 'نوع الخريطة',
+                  tooltip: dedaText('نوع الخريطة', 'Map type'),
                   onSelected: (style) {
                     setState(() {
                       mapStyle = style;
@@ -2562,7 +2595,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 elevation: 3,
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: 'تكبير الخريطة',
+                  tooltip: dedaText('تكبير الخريطة', 'Open full-screen map'),
                   onPressed: () {
                     openFullScreenMap(position);
                   },
@@ -2593,7 +2626,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           textDirection: TextDirection.rtl,
         ),
         subtitle: Text(
-          'المسافة التقريبية: ${formatDistance(distance)}',
+          dedaText(
+            'المسافة التقريبية: ${formatDistance(distance)}',
+            'Approx. distance: ${formatDistance(distance)}',
+          ),
           textDirection: TextDirection.rtl,
         ),
         trailing: const Icon(Icons.location_on),
@@ -2606,7 +2642,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(widget.category.title),
+        title: Text(dedaCategoryLabel(widget.category.title)),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -2622,7 +2658,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                widget.category.title,
+                dedaCategoryLabel(widget.category.title),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 28,
@@ -2630,8 +2666,11 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'يبدأ البحث ضمن 3 كم، وإذا لم توجد نتائج يتوسع تلقائيًا إلى 10 كم ثم 25 كم',
+              Text(
+                dedaText(
+                  'يبدأ البحث ضمن 3 كم، وإذا لم توجد نتائج يتوسع تلقائيًا إلى 10 كم ثم 25 كم',
+                  'Search starts within 3 km and automatically expands to 10 km, then 25 km if needed.',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16),
               ),
@@ -2651,7 +2690,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                       vertical: 10,
                     ),
                     child: Text(
-                      'نطاق البحث الحالي: ${radiusLabel(searchedRadiusMeters)}',
+                      dedaText(
+                        'نطاق البحث الحالي: ${radiusLabel(searchedRadiusMeters)}',
+                        'Current search radius: ${radiusLabel(searchedRadiusMeters)}',
+                      ),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 16,
@@ -2681,8 +2723,11 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   ),
                   label: Text(
                     places.isEmpty
-                        ? 'ابحث عن ${widget.category.title} قريبة'
-                        : 'تحديث النتائج',
+                        ? dedaText(
+                            'ابحث عن ${widget.category.title} قريبة',
+                            'Search nearby ${dedaCategoryLabel(widget.category.title).toLowerCase()}',
+                          )
+                        : dedaText('تحديث النتائج', 'Refresh results'),
                     style: const TextStyle(fontSize: 18),
                   ),
                 ),
@@ -2690,7 +2735,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
               const SizedBox(height: 18),
               if (places.isNotEmpty) ...[
                 Text(
-                  'الأماكن القريبة (${places.length})',
+                  dedaText(
+                    'الأماكن القريبة (${places.length})',
+                    'Nearby places (${places.length})',
+                  ),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     fontSize: 21,
@@ -2706,7 +2754,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   Geolocator.openAppSettings();
                 },
                 icon: const Icon(Icons.settings),
-                label: const Text('إعدادات إذن الموقع'),
+                label: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -2714,7 +2762,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   Navigator.pop(context);
                 },
                 icon: const Icon(Icons.arrow_back),
-                label: const Text('رجوع'),
+                label: Text(dedaText('رجوع', 'Back')),
               ),
             ],
           ),
@@ -2760,10 +2808,13 @@ class _DedaFullScreenMapPageState
 
   String formatDistance(double meters) {
     if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} متر';
+      return DedaLanguageState.isArabic
+          ? '${meters.toStringAsFixed(0)} متر'
+          : '${meters.toStringAsFixed(0)} m';
     }
-
-    return '${(meters / 1000).toStringAsFixed(1)} كم';
+    return DedaLanguageState.isArabic
+        ? '${(meters / 1000).toStringAsFixed(1)} كم'
+        : '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   double distanceToPlace(PlaceInfo place) {
@@ -2898,7 +2949,7 @@ class _DedaFullScreenMapPageState
                 elevation: 3,
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: 'تصغير الخريطة',
+                  tooltip: dedaText('تصغير الخريطة', 'Exit full-screen map'),
                   onPressed: closeFullScreen,
                   icon: const Icon(Icons.fullscreen_exit),
                 ),
@@ -2912,7 +2963,7 @@ class _DedaFullScreenMapPageState
                 elevation: 3,
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: 'نوع الخريطة',
+                  tooltip: dedaText('نوع الخريطة', 'Map type'),
                   onSelected: (style) {
                     setState(() {
                       mapStyle = style;
@@ -2981,7 +3032,9 @@ class _DedaFullScreenMapPageState
                       ],
                     ),
                     child: Text(
-                      '${widget.categoryTitle} • ${widget.places.length} نتيجة',
+                      DedaLanguageState.isArabic
+                          ? '${widget.categoryTitle} • ${widget.places.length} نتيجة'
+                          : '${dedaCategoryLabel(widget.categoryTitle)} • ${widget.places.length} results',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                       ),
@@ -3118,7 +3171,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
   Position? _position;
   List<PlaceInfo> _results = [];
   bool _loading = false;
-  String _status = 'اكتب اسم المكان ثم اضغط بحث';
+  String _status = dedaText('اكتب اسم المكان ثم اضغط بحث', 'Type a place name, then tap Search');
   int _radiusMeters = 25000;
 
   @override
@@ -3137,7 +3190,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
   Future<Position?> _determinePosition() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       if (mounted) {
-        setState(() => _status = 'شغّل GPS ثم أعد البحث.');
+        setState(() => _status = dedaText('شغّل GPS ثم أعد البحث.', 'Enable GPS and search again.'));
       }
       return null;
     }
@@ -3149,7 +3202,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       if (mounted) {
-        setState(() => _status = 'يحتاج البحث إلى إذن الموقع.');
+        setState(() => _status = dedaText('يحتاج البحث إلى إذن الموقع.', 'Search requires location permission.'));
       }
       return null;
     }
@@ -3161,7 +3214,10 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     );
   }
 
-  String _radiusLabel(int meters) => meters >= 100000 ? '100 كم' : '25 كم';
+  String _radiusLabel(int meters) {
+    final value = meters >= 100000 ? '100' : '25';
+    return DedaLanguageState.isArabic ? '$value كم' : '$value km';
+  }
 
   String _distance(PlaceInfo place) {
     final position = _position;
@@ -3173,8 +3229,12 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
       place.location.longitude,
     );
     return meters < 1000
-        ? '${meters.toStringAsFixed(0)} متر'
-        : '${(meters / 1000).toStringAsFixed(1)} كم';
+        ? (DedaLanguageState.isArabic
+            ? '${meters.toStringAsFixed(0)} متر'
+            : '${meters.toStringAsFixed(0)} m')
+        : (DedaLanguageState.isArabic
+            ? '${(meters / 1000).toStringAsFixed(1)} كم'
+            : '${(meters / 1000).toStringAsFixed(1)} km');
   }
 
   Future<void> _search() async {
@@ -3184,7 +3244,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     setState(() {
       _loading = true;
       _results = [];
-      _status = 'جاري تحديد موقعك والبحث عن "$query"...';
+      _status = dedaText('جاري تحديد موقعك والبحث عن "$query"...', 'Locating you and searching for "$query"...');
     });
 
     try {
@@ -3198,7 +3258,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
         _radiusMeters = radius;
         if (mounted) {
           setState(() {
-            _status = 'جاري البحث عن "$query" ضمن ${_radiusLabel(radius)}...';
+            _status = dedaText('جاري البحث عن "$query" ضمن ${_radiusLabel(radius)}...', 'Searching for "$query" within ${_radiusLabel(radius)}...');
           });
         }
         found = await _placesService.searchPlacesByName(
@@ -3229,13 +3289,19 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
       setState(() {
         _results = found;
         _status = found.isEmpty
-            ? 'لم نعثر على مكان بهذا الاسم ضمن ${_radiusLabel(_radiusMeters)}.'
-            : 'تم العثور على ${found.length} نتيجة.';
+            ? dedaText(
+                'لم نعثر على مكان بهذا الاسم ضمن ${_radiusLabel(_radiusMeters)}.',
+                'No place with this name was found within ${_radiusLabel(_radiusMeters)}.',
+              )
+            : dedaText(
+                'تم العثور على ${found.length} نتيجة.',
+                '${found.length} results found.',
+              );
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _status = 'تعذر البحث الآن. تحقق من الإنترنت ثم حاول مرة أخرى.\n$e';
+        _status = dedaText('تعذر البحث الآن. تحقق من الإنترنت ثم حاول مرة أخرى.\n$e', 'Search failed. Check your internet connection and try again.\n$e');
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -3260,7 +3326,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('البحث عن مكان بالاسم'),
+        title: Text(dedaText('البحث عن مكان بالاسم', 'Search for a place by name')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -3274,7 +3340,7 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
-                  hintText: 'مثال: مستشفى اليرموك',
+                  hintText: dedaText('مثال: مستشفى اليرموك', 'Example: Yarmouk Hospital'),
                   prefixIcon: IconButton(
                     onPressed: _loading ? null : _search,
                     icon: const Icon(Icons.search),
@@ -3422,9 +3488,9 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
     setState(() => _locating = false);
     if (position == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'شغّل GPS واسمح بإذن الموقع لبدء الطريق.',
+            dedaText('شغّل GPS واسمح بإذن الموقع لبدء الطريق.', 'Enable GPS and allow location permission to start routing.'),
             textAlign: TextAlign.center,
           ),
         ),
@@ -3458,8 +3524,12 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
       widget.place.location.longitude,
     );
     return meters < 1000
-        ? '${meters.toStringAsFixed(0)} متر'
-        : '${(meters / 1000).toStringAsFixed(1)} كم';
+        ? (DedaLanguageState.isArabic
+            ? '${meters.toStringAsFixed(0)} متر'
+            : '${meters.toStringAsFixed(0)} m')
+        : (DedaLanguageState.isArabic
+            ? '${(meters / 1000).toStringAsFixed(1)} كم'
+            : '${(meters / 1000).toStringAsFixed(1)} km');
   }
 
   Widget _travelModeSelector() {
@@ -3468,8 +3538,8 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text(
-              'اختر وسيلة التنقل',
+            Text(
+              dedaText('اختر وسيلة التنقل', 'Choose travel mode'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
@@ -3496,8 +3566,8 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
               }).toList(),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.',
+            Text(
+              dedaText('الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.', 'The number above is straight-line distance only. After choosing a travel mode, DEDA will show route distance and estimated travel time.'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
@@ -3539,11 +3609,11 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('معلومات المكان'),
+        title: Text(dedaText('معلومات المكان', 'Place information')),
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: _favorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة',
+            tooltip: _favorite ? dedaText('إزالة من المفضلة', 'Remove from favorites') : dedaText('إضافة إلى المفضلة', 'Add to favorites'),
             onPressed: _favoriteLoading ? null : _toggleFavorite,
             icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
           ),
@@ -3573,7 +3643,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                place.type,
+                dedaCategoryLabel(place.type),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 17, color: Color(0xFF5B665D)),
               ),
@@ -3583,14 +3653,14 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _detailRow(Icons.route, 'المسافة المباشرة تقريبًا', _distanceLabel),
-                      _detailRow(Icons.location_on, 'العنوان', place.address),
-                      _detailRow(Icons.schedule, 'ساعات العمل', place.openingHours),
-                      _detailRow(Icons.phone, 'الهاتف', place.phone),
-                      _detailRow(Icons.language, 'الموقع الإلكتروني', place.website),
+                      _detailRow(Icons.route, dedaText('المسافة المباشرة تقريبًا', 'Approx. straight-line distance'), _distanceLabel),
+                      _detailRow(Icons.location_on, dedaText('العنوان', 'Address'), place.address),
+                      _detailRow(Icons.schedule, dedaText('ساعات العمل', 'Opening hours'), place.openingHours),
+                      _detailRow(Icons.phone, dedaText('الهاتف', 'Phone'), place.phone),
+                      _detailRow(Icons.language, dedaText('الموقع الإلكتروني', 'Website'), place.website),
                       _detailRow(
                         Icons.pin_drop,
-                        'الإحداثيات',
+                        dedaText('الإحداثيات', 'Coordinates'),
                         '${place.location.latitude.toStringAsFixed(6)}, '
                             '${place.location.longitude.toStringAsFixed(6)}',
                       ),
@@ -3613,7 +3683,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                         )
                       : const Icon(Icons.navigation),
                   label: Text(
-                    _locating ? 'جاري تحديد موقعك...' : 'اختيار كوجهة وعرض الطريق',
+                    _locating ? dedaText('جاري تحديد موقعك...', 'Locating you...') : dedaText('اختيار كوجهة وعرض الطريق', 'Choose as destination and show route'),
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -3622,7 +3692,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
               OutlinedButton.icon(
                 onPressed: _favoriteLoading ? null : _toggleFavorite,
                 icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
-                label: Text(_favorite ? 'محفوظ في المفضلة' : 'إضافة إلى المفضلة'),
+                label: Text(_favorite ? dedaText('محفوظ في المفضلة', 'Saved in favorites') : dedaText('إضافة إلى المفضلة', 'Add to favorites')),
               ),
             ],
           ),
@@ -3672,7 +3742,7 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.showFavorites ? 'المفضلة' : 'الأماكن الأخيرة';
+    final title = widget.showFavorites ? dedaText('المفضلة', 'Favorites') : dedaText('الأماكن الأخيرة', 'Recent places');
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(title: Text(title), centerTitle: true),
@@ -3682,8 +3752,8 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
               ? Center(
                   child: Text(
                     widget.showFavorites
-                        ? 'لم تحفظ أي مكان في المفضلة بعد.'
-                        : 'لا توجد أماكن أخيرة بعد.',
+                        ? dedaText('لم تحفظ أي مكان في المفضلة بعد.', 'You have not saved any favorite places yet.')
+                        : dedaText('لا توجد أماكن أخيرة بعد.', 'There are no recent places yet.'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 18),
                   ),
@@ -3765,6 +3835,19 @@ class DedaRouteService {
     required LatLng destination,
     DedaTravelMode travelMode = DedaTravelMode.car,
   }) async {
+    // Motorcycle and truck routes must remain mode-specific. If Valhalla
+    // cannot calculate one of those profiles, do not silently replace it
+    // with a normal car route because that would give the user a false route.
+    if (travelMode == DedaTravelMode.motorcycle ||
+        travelMode == DedaTravelMode.truck) {
+      return _getValhallaRoute(
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+    }
+
+    // Walking and car have matching public OSRM fallbacks.
     try {
       return await _getValhallaRoute(
         start: start,
@@ -3856,12 +3939,9 @@ class DedaRouteService {
           final m = Map<String, dynamic>.from(raw);
           final type = m['type'] is num ? (m['type'] as num).toInt() : 8;
           final length = m['length'];
-          final instruction = (m['instruction'] ?? '').toString().trim();
           steps.add(
             DedaRouteStep(
-              instruction: instruction.isEmpty
-                  ? _fallbackValhallaInstruction(type)
-                  : instruction,
+              instruction: _fallbackValhallaInstruction(type),
               distanceMeters: length is num ? length.toDouble() * 1000 : 0,
               maneuverType: _maneuverType(type),
               maneuverModifier: _maneuverModifier(type),
@@ -4258,7 +4338,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         _lastRouteOrigin = origin;
         errorMessage = null;
         if (tripStarted) {
-          navigationStatus = 'الملاحة نشطة — يتم تحديث الطريق حسب موقعك.';
+          navigationStatus = dedaText('الملاحة نشطة — يتم تحديث الطريق حسب موقعك.', 'Navigation is active — the route is updating with your location.');
         }
       });
       _fitRouteOnMap(navigation: tripStarted);
@@ -4268,7 +4348,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       if (background) {
         setState(() {
           navigationStatus =
-              'تعذر تحديث الطريق لحظيًا، وسيُعاد المحاولة مع حركة الموقع.';
+              dedaText('تعذر تحديث الطريق لحظيًا، وسيُعاد المحاولة مع حركة الموقع.', 'Could not refresh the route right now. DEDA will try again as your location changes.');
         });
       } else {
         setState(() {
@@ -4291,17 +4371,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   String _friendlyRouteError(Object error) {
     final raw = error.toString().toLowerCase();
     if (raw.contains('timeout')) {
-      return 'انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.';
+      return dedaText('انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.', 'Route calculation timed out. Check your internet connection and try again.');
     }
     if (raw.contains('socketexception') ||
         raw.contains('failed host lookup') ||
         raw.contains('network')) {
-      return 'تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.';
+      return dedaText('تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.', 'Could not connect to the routing service. Check your internet connection.');
     }
     if (raw.contains('noroute')) {
-      return 'لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.';
+      return dedaText('لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.', 'The routing service could not find a route to this destination.');
     }
-    return 'تعذر حساب الطريق الآن. حاول مرة أخرى.';
+    return dedaText('تعذر حساب الطريق الآن. حاول مرة أخرى.', 'Could not calculate the route right now. Try again.');
   }
 
   String formatRouteDistance(double meters) {
@@ -4413,8 +4493,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (currentRoute != null && currentRoute.distanceMeters > 0) {
       return DedaRouteStep(
         instruction: currentRoute.isDirectFallback
-            ? 'اتجه نحو الوجهة المحددة'
-            : 'تابع المسار إلى الوجهة',
+            ? dedaText('اتجه نحو الوجهة المحددة', 'Head toward the selected destination')
+            : dedaText('تابع المسار إلى الوجهة', 'Continue on the route to the destination'),
         distanceMeters: currentRoute.distanceMeters,
         maneuverType: 'continue',
         maneuverModifier: 'straight',
@@ -4452,7 +4532,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     setState(() {
       tripStarted = true;
       navigationStatus =
-          'بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.';
+          dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
     _fitRouteOnMap(navigation: true);
     _speakCurrentInstruction(force: true);
@@ -4501,7 +4581,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         if (!mounted) return;
         setState(() {
           navigationStatus =
-              'تعذر تحديث GPS مؤقتًا. أبقِ الموقع مفعّلًا وسيستمر DEDA بالمحاولة.';
+              dedaText('تعذر تحديث GPS مؤقتًا. أبقِ الموقع مفعّلًا وسيستمر DEDA بالمحاولة.', 'GPS could not update temporarily. Keep location enabled and DEDA will keep trying.');
         });
       },
     );
@@ -4517,8 +4597,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     setState(() {
       tripStarted = false;
       navigationStatus = reached
-          ? 'وصلت إلى الوجهة.'
-          : 'تم إيقاف متابعة الرحلة.';
+          ? dedaText('وصلت إلى الوجهة.', 'You have arrived.')
+          : dedaText('تم إيقاف متابعة الرحلة.', 'Trip tracking stopped.');
     });
   }
 
@@ -4723,7 +4803,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 elevation: 3,
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: 'نوع الخريطة',
+                  tooltip: dedaText('نوع الخريطة', 'Map type'),
                   onSelected: (style) => setState(() => mapStyle = style),
                   itemBuilder: (context) => DedaMapStyle.values
                       .map(
@@ -4769,7 +4849,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 elevation: 2,
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: 'شرح الخريطة',
+                  tooltip: dedaText('شرح الخريطة', 'Map guide'),
                   onPressed: showMapLegend,
                   icon: const Icon(Icons.info_outline),
                 ),
@@ -4783,7 +4863,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 elevation: 2,
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: 'عرض المسار كاملًا',
+                  tooltip: dedaText('عرض المسار كاملًا', 'Show full route'),
                   onPressed: () =>
                       _fitRouteOnMap(navigation: tripStarted),
                   icon: const Icon(Icons.fit_screen),
@@ -4880,14 +4960,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                       if (isLoading) ...[
                         const LinearProgressIndicator(),
                         const SizedBox(height: 8),
-                        const Text('جاري حساب أفضل طريق...'),
+                        Text(dedaText('جاري حساب أفضل طريق...', 'Calculating the best route...')),
                       ] else if (errorMessage != null) ...[
                         Text(errorMessage!, textAlign: TextAlign.center),
                         const SizedBox(height: 8),
                         FilledButton.icon(
                           onPressed: () => loadRoute(),
                           icon: const Icon(Icons.refresh),
-                          label: const Text('إعادة المحاولة'),
+                          label: Text(dedaText('إعادة المحاولة', 'Try again')),
                         ),
                       ] else if (route != null) ...[
                         Container(
@@ -4910,7 +4990,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               ),
                               const SizedBox(width: 7),
                               Text(
-                                'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
+                                dedaText(
+                                  'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
+                                  'Travel mode: ${dedaTravelModeLabel(widget.travelMode)}',
+                                ),
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -4925,8 +5008,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               child: _DedaRouteStat(
                                 icon: Icons.route,
                                 label: route!.isDirectFallback
-                                    ? 'المسافة المباشرة'
-                                    : 'مسافة الطريق',
+                                    ? dedaText('المسافة المباشرة', 'Straight-line distance')
+                                    : dedaText('مسافة الطريق', 'Route distance'),
                                 value: formatRouteDistance(route!.distanceMeters),
                               ),
                             ),
@@ -4934,7 +5017,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                             Expanded(
                               child: _DedaRouteStat(
                                 icon: Icons.schedule,
-                                label: 'الوقت التقريبي',
+                                label: dedaText('الوقت التقريبي', 'Estimated time'),
                                 value: formatRouteDuration(_estimatedDurationSeconds(route!)),
                               ),
                             ),
@@ -4953,8 +5036,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           const SizedBox(height: 8),
                           const LinearProgressIndicator(),
                           const SizedBox(height: 4),
-                          const Text(
-                            'جاري تحديث المسار من موقعك الحالي...',
+                          Text(
+              dedaText('جاري تحديث المسار من موقعك الحالي...', 'Updating the route from your current location...'),
                             style: TextStyle(fontSize: 12.5),
                           ),
                         ],
@@ -4966,7 +5049,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                             style: TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
-                              color: navigationStatus == 'وصلت إلى الوجهة.'
+                              color: navigationStatus == dedaText('وصلت إلى الوجهة.', 'You have arrived.')
                                   ? const Color(0xFF17652F)
                                   : const Color(0xFF4D5C50),
                             ),
@@ -5115,13 +5198,13 @@ class _MapReadyPageState extends State<MapReadyPage> {
   bool isLoading = false;
   DedaMapStyle mapStyle = DedaMapStyle.normal;
 
-  String statusMessage = 'اضغط على الزر لتحديد موقعك الحالي';
+  String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
 
   Future<void> determinePosition() async {
     if (isLoading) return;
     setState(() {
       isLoading = true;
-      statusMessage = 'جاري تحديد موقعك...';
+      statusMessage = dedaText('جاري تحديد موقعك...', 'Locating you...');
     });
 
     try {
@@ -5129,8 +5212,10 @@ class _MapReadyPageState extends State<MapReadyPage> {
       if (!serviceEnabled) {
         if (!mounted) return;
         setState(() {
-          statusMessage =
-              'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.';
+          statusMessage = dedaText(
+            'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.',
+            'GPS is turned off. Enable location and try again.',
+          );
         });
         return;
       }
@@ -5142,7 +5227,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
         setState(() {
-          statusMessage = 'تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.';
+          statusMessage = dedaText('تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.', 'Location permission was denied. DEDA needs it to locate you.');
         });
         return;
       }
@@ -5150,7 +5235,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
         if (!mounted) return;
         setState(() {
           statusMessage =
-              'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.';
+              dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
         });
         return;
       }
@@ -5164,13 +5249,15 @@ class _MapReadyPageState extends State<MapReadyPage> {
       setState(() {
         currentPosition = position;
         statusMessage =
-            'تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.';
+            dedaText('تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.', 'Location found. Long-press anywhere on the map to choose a destination.');
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        statusMessage =
-            'تعذر تحديد الموقع حاليًا. تأكد من GPS والإنترنت ثم حاول مرة أخرى.\n\n$e';
+        statusMessage = dedaText(
+          'تعذر تحديد الموقع حاليًا. تأكد من GPS والإنترنت ثم حاول مرة أخرى.\n\n$e',
+          'Could not determine your location. Check GPS and internet, then try again.\n\n$e',
+        );
       });
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -5187,8 +5274,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
     if (position == null || destination == null) return;
 
     final place = PlaceInfo(
-      name: 'وجهة محددة على الخريطة',
-      type: 'وجهة',
+      name: dedaText('وجهة محددة على الخريطة', 'Selected map destination'),
+      type: dedaText('وجهة', 'Destination'),
       location: destination,
     );
     DedaPlacesStore.addRecent(place);
@@ -5225,7 +5312,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     setState(() {
                       selectedDestination = destination;
                       statusMessage =
-                          'تم اختيار الوجهة. اضغط الزر أسفل الخريطة لعرض الطريق.';
+                          dedaText('تم اختيار الوجهة. اضغط الزر أسفل الخريطة لعرض الطريق.', 'Destination selected. Tap the button below the map to show the route.');
                     });
                   },
                 ),
@@ -5289,7 +5376,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 elevation: 3,
                 borderRadius: BorderRadius.circular(14),
                 child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: 'نوع الخريطة',
+                  tooltip: dedaText('نوع الخريطة', 'Map type'),
                   onSelected: (style) => setState(() => mapStyle = style),
                   itemBuilder: (context) => DedaMapStyle.values
                       .map(
@@ -5344,8 +5431,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     color: Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Text(
-                    'اضغط مطولًا على الخريطة لاختيار وجهة مباشرة',
+                  child: Text(
+              dedaText('اضغط مطولًا على الخريطة لاختيار وجهة مباشرة', 'Long-press the map to choose a destination'),
                     textAlign: TextAlign.center,
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
@@ -5363,7 +5450,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: const Text('الخريطة - موقعي والوجهة'),
+        title: Text(dedaText('الخريطة - موقعي والوجهة', 'Map - My location and destination')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -5394,8 +5481,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     child: FilledButton.icon(
                       onPressed: openSelectedDestination,
                       icon: const Icon(Icons.navigation),
-                      label: const Text(
-                        'عرض الطريق إلى الوجهة المحددة',
+                      label: Text(
+              dedaText('عرض الطريق إلى الوجهة المحددة', 'Show route to selected destination'),
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -5410,7 +5497,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     currentPosition == null ? Icons.gps_fixed : Icons.refresh,
                   ),
                   label: Text(
-                    currentPosition == null ? 'تحديد موقعي' : 'تحديث موقعي',
+                    currentPosition == null ? dedaText('تحديد موقعي', 'Locate me') : dedaText('تحديث موقعي', 'Update my location'),
                     style: const TextStyle(fontSize: 18),
                   ),
                 ),
@@ -5419,7 +5506,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
               OutlinedButton.icon(
                 onPressed: openSettings,
                 icon: const Icon(Icons.settings),
-                label: const Text('إعدادات إذن الموقع'),
+                label: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
               ),
             ],
           ),
