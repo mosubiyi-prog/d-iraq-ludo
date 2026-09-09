@@ -1763,7 +1763,7 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      const _DedaCategoryPreviewStrip(),
+                      _DedaCategoryPreviewStrip(),
                       const SizedBox(height: 8),
                       Align(
                         alignment: Alignment.centerRight,
@@ -2267,8 +2267,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       isLoading = true;
       places = [];
       searchedRadiusMeters = searchRadiiMeters.first;
-      statusMessage =
-          'جاري تحديد موقعك والبحث عن ${widget.category.title} قريبة...';
+      statusMessage = dedaText(
+          'جاري تحديد موقعك والبحث عن ${widget.category.title} قريبة...',
+          'Locating you and searching for nearby ${dedaCategoryLabel(widget.category.title).toLowerCase()}...',
+        );
     });
 
     try {
@@ -2294,8 +2296,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
 
         setState(() {
           searchedRadiusMeters = radius;
-          statusMessage =
-              'جاري البحث عن ${widget.category.title} ضمن ${radiusLabel(radius)}...';
+          statusMessage = dedaText(
+              'جاري البحث عن ${widget.category.title} ضمن ${radiusLabel(radius)}...',
+              'Searching for ${dedaCategoryLabel(widget.category.title).toLowerCase()} within ${radiusLabel(radius)}...',
+            );
         });
 
         results = await placesService.getNearbyPlaces(
