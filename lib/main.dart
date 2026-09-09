@@ -26,6 +26,8 @@ enum DedaTravelMode {
 
 enum DedaLanguage { ar, en }
 
+enum DedaAccountType { user, placeOwner }
+
 class DedaLanguageState {
   static const String prefsKey = 'deda_language_v1';
   static DedaLanguage current = DedaLanguage.ar;
@@ -38,6 +40,142 @@ class DedaLanguageState {
 
 String dedaText(String ar, String en) =>
     DedaLanguageState.isArabic ? ar : en;
+
+String dedaAccountTypeLabel(DedaAccountType type) {
+  switch (type) {
+    case DedaAccountType.user:
+      return dedaText('مستخدم', 'User');
+    case DedaAccountType.placeOwner:
+      return dedaText('صاحب مكان', 'Place owner');
+  }
+}
+
+class DedaPreferences {
+  static const String _loggedInKey = 'deda_logged_in_v1';
+  static const String _userNameKey = 'deda_user_name_v1';
+  static const String _phoneKey = 'deda_phone_v1';
+  static const String _accountTypeKey = 'deda_account_type_v1';
+  static const String _accountPhoneKey = 'deda_account_phone_v1';
+  static const String _voiceEnabledKey = 'deda_voice_enabled_v1';
+  static const String _speechRateKey = 'deda_speech_rate_v1';
+  static const String _travelModeKey = 'deda_default_travel_mode_v1';
+  static const String _mapStyleKey = 'deda_default_map_style_v1';
+
+  static bool isLoggedIn = false;
+  static String userName = '';
+  static String phone = '';
+  static String accountPhone = '';
+  static DedaAccountType? accountType;
+  static bool navigationVoiceEnabled = true;
+  static double speechRate = 0.45;
+  static DedaTravelMode defaultTravelMode = DedaTravelMode.car;
+  static DedaMapStyle defaultMapStyle = DedaMapStyle.normal;
+
+  static Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final savedLanguage = prefs.getString(DedaLanguageState.prefsKey);
+    DedaLanguageState.current =
+        savedLanguage == 'en' ? DedaLanguage.en : DedaLanguage.ar;
+
+    isLoggedIn = prefs.getBool(_loggedInKey) ?? false;
+    userName = prefs.getString(_userNameKey) ?? '';
+    phone = prefs.getString(_phoneKey) ?? '';
+    accountPhone = prefs.getString(_accountPhoneKey) ?? '';
+
+    final role = prefs.getString(_accountTypeKey);
+    accountType = switch (role) {
+      'placeOwner' => DedaAccountType.placeOwner,
+      'user' => DedaAccountType.user,
+      _ => null,
+    };
+
+    navigationVoiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
+    speechRate = prefs.getDouble(_speechRateKey) ?? 0.45;
+
+    final travelModeName = prefs.getString(_travelModeKey);
+    defaultTravelMode = DedaTravelMode.values.firstWhere(
+      (mode) => mode.name == travelModeName,
+      orElse: () => DedaTravelMode.car,
+    );
+
+    final mapStyleName = prefs.getString(_mapStyleKey);
+    defaultMapStyle = DedaMapStyle.values.firstWhere(
+      (style) => style.name == mapStyleName,
+      orElse: () => DedaMapStyle.normal,
+    );
+
+    if (userName.trim().isEmpty || phone.trim().isEmpty || accountType == null) {
+      isLoggedIn = false;
+    }
+  }
+
+  static Future<void> setLanguage(DedaLanguage language) async {
+    DedaLanguageState.current = language;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      DedaLanguageState.prefsKey,
+      language == DedaLanguage.en ? 'en' : 'ar',
+    );
+  }
+
+  static Future<void> saveLogin({
+    required String name,
+    required String normalizedPhone,
+    required DedaAccountType type,
+  }) async {
+    userName = name;
+    phone = normalizedPhone;
+    accountPhone = normalizedPhone;
+    accountType = type;
+    isLoggedIn = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userNameKey, name);
+    await prefs.setString(_phoneKey, normalizedPhone);
+    await prefs.setString(_accountPhoneKey, normalizedPhone);
+    await prefs.setString(_accountTypeKey, type.name);
+    await prefs.setBool(_loggedInKey, true);
+  }
+
+  static Future<void> setAccountType(DedaAccountType type) async {
+    accountType = type;
+    accountPhone = phone;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_accountTypeKey, type.name);
+    await prefs.setString(_accountPhoneKey, phone);
+  }
+
+  static Future<void> setVoiceEnabled(bool enabled) async {
+    navigationVoiceEnabled = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_voiceEnabledKey, enabled);
+  }
+
+  static Future<void> setSpeechRate(double rate) async {
+    speechRate = rate;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_speechRateKey, rate);
+  }
+
+  static Future<void> setDefaultTravelMode(DedaTravelMode mode) async {
+    defaultTravelMode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_travelModeKey, mode.name);
+  }
+
+  static Future<void> setDefaultMapStyle(DedaMapStyle style) async {
+    defaultMapStyle = style;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_mapStyleKey, style.name);
+  }
+
+  static Future<void> logout() async {
+    isLoggedIn = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_loggedInKey, false);
+  }
+}
 
 String dedaCategoryLabel(String ar) {
   if (DedaLanguageState.isArabic) return ar;
@@ -78,6 +216,8 @@ String dedaCategoryLabel(String ar) {
       return 'Map';
     case 'وجهة':
       return 'Destination';
+    case 'إدارة مكاني':
+      return 'Manage my place';
     default:
       return ar;
   }
@@ -151,7 +291,9 @@ String dedaMapAttribution(DedaMapStyle style) {
       : 'Tiles © Esri';
 }
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DedaPreferences.load();
   runApp(const DedaApp());
 }
 
@@ -169,7 +311,9 @@ class DedaApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const LoginPage(),
+      home: DedaPreferences.isLoggedIn
+          ? HomePage(userName: DedaPreferences.userName)
+          : const LoginPage(),
     );
   }
 }
@@ -201,13 +345,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _setLanguage(DedaLanguage language) async {
-    DedaLanguageState.current = language;
-    setState(() => _language = language);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      DedaLanguageState.prefsKey,
-      language == DedaLanguage.en ? 'en' : 'ar',
-    );
+    await DedaPreferences.setLanguage(language);
+    if (mounted) setState(() => _language = language);
   }
 
   static const Color _dedaGreen = Color(0xFF17652F);
@@ -1547,15 +1686,34 @@ class _LoginPageState extends State<LoginPage> {
       'VGA0p4lZKryyqHhxcFHdMgHnpLLR+BD2besAJiXiKFDHH/EYJzvN2VzzmIA4iPW071HE2vMrqa8f9idDwJVCBcUp8zLqlQhK/FLUE1r5MNKgcmCqzbaHMNQe'
       'h/sQ2PlMswPNH1GJMAgHuOYmMdQcQGrFhOPlf1P/2Q==';
 
-  void login() {
-    final name = nameController.text.trim();
-    final phone = phoneController.text.trim();
+  String? _normalizeIraqiPhone(String raw) {
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('00964')) {
+      digits = digits.substring(5);
+    } else if (digits.startsWith('964')) {
+      digits = digits.substring(3);
+    }
+    if (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+    if (!RegExp(r'^7\d{9}$').hasMatch(digits)) {
+      return null;
+    }
+    return '+964$digits';
+  }
 
-    if (name.isEmpty || phone.isEmpty) {
+  Future<void> login() async {
+    final name = nameController.text.trim();
+    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
+
+    if (name.length < 2 || normalizedPhone == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText('يرجى إدخال الاسم ورقم الهاتف', 'Please enter your name and phone number'),
+            dedaText(
+              'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
+              'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
+            ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1563,10 +1721,32 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    Navigator.pushReplacement(
+    final savedType = DedaPreferences.accountType;
+    final isSameKnownAccount = savedType != null &&
+        DedaPreferences.accountPhone == normalizedPhone;
+
+    if (isSameKnownAccount) {
+      await DedaPreferences.saveLogin(
+        name: name,
+        normalizedPhone: normalizedPhone,
+        type: savedType,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomePage(userName: name)),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => HomePage(userName: name),
+        builder: (_) => AccountTypePage(
+          userName: name,
+          phone: normalizedPhone,
+        ),
       ),
     );
   }
@@ -1689,7 +1869,7 @@ class _LoginPageState extends State<LoginPage> {
                               textDirection: DedaLanguageState.direction,
                               textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
                               decoration: _fieldDecoration(
-                                hint: dedaText('الاسم', 'Name'),
+                                hint: dedaText('الاسم الكامل', 'Full name'),
                                 icon: Icons.person,
                               ),
                             ),
@@ -1697,11 +1877,18 @@ class _LoginPageState extends State<LoginPage> {
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
-                              textDirection: DedaLanguageState.direction,
-                              textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
+                              textDirection: TextDirection.ltr,
+                              textAlign: TextAlign.left,
                               decoration: _fieldDecoration(
-                                hint: dedaText('رقم الهاتف', 'Phone number'),
+                                hint: '07XXXXXXXXX',
                                 icon: Icons.phone,
+                              ).copyWith(
+                                prefixText: '+964  ',
+                                prefixStyle: const TextStyle(
+                                  color: Color(0xFF1F2D23),
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 15),
@@ -1875,6 +2062,538 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
   }
 }
 
+
+class AccountTypePage extends StatefulWidget {
+  final String userName;
+  final String phone;
+
+  const AccountTypePage({
+    super.key,
+    required this.userName,
+    required this.phone,
+  });
+
+  @override
+  State<AccountTypePage> createState() => _AccountTypePageState();
+}
+
+class _AccountTypePageState extends State<AccountTypePage> {
+  DedaAccountType? selectedType;
+  bool saving = false;
+
+  Future<void> _continue() async {
+    final type = selectedType;
+    if (type == null || saving) return;
+    setState(() => saving = true);
+    await DedaPreferences.saveLogin(
+      name: widget.userName,
+      normalizedPhone: widget.phone,
+      type: type,
+    );
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(userName: widget.userName)),
+      (_) => false,
+    );
+  }
+
+  Widget _typeCard({
+    required DedaAccountType type,
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    final selected = selectedType == type;
+    return Card(
+      elevation: selected ? 3 : 1,
+      color: selected ? const Color(0xFFE2F0DE) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: selected ? const Color(0xFF17652F) : const Color(0xFFB8C4BA),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => setState(() => selectedType = type),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: const Color(0xFF17652F),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(icon, color: const Color(0xFF17652F), size: 32),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        height: 1.4,
+                        color: Color(0xFF5A655D),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('نوع الحساب', 'Account type')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.account_circle_outlined,
+                    size: 76,
+                    color: Color(0xFF17652F),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    dedaText('اختر نوع حسابك', 'Choose your account type'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 27,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    dedaText(
+                      'هذا الاختيار يظهر في أول تسجيل فقط، ويمكن تغييره لاحقًا من الإعدادات.',
+                      'This appears only on first sign-in and can be changed later in Settings.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 15.5, color: Color(0xFF667069)),
+                  ),
+                  const SizedBox(height: 20),
+                  _typeCard(
+                    type: DedaAccountType.user,
+                    icon: Icons.person,
+                    title: dedaText('مستخدم', 'User'),
+                    description: dedaText(
+                      'للبحث عن الأماكن واستخدام الخرائط والمفضلة والملاحة وجميع خدمات DEDA.',
+                      'Search places and use maps, favorites, navigation, and all regular DEDA services.',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _typeCard(
+                    type: DedaAccountType.placeOwner,
+                    icon: Icons.storefront,
+                    title: dedaText('صاحب مكان', 'Place owner'),
+                    description: dedaText(
+                      'نفس خدمات المستخدم، مع قسم إضافي لإدارة مكانك. النشر والتعديلات تخضع للمراجعة.',
+                      'All user services plus a place-management section. Publishing and edits are reviewed.',
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: selectedType == null || saving ? null : _continue,
+                      icon: saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.arrow_forward),
+                      label: Text(
+                        dedaText('متابعة', 'Continue'),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DedaSettingsPage extends StatefulWidget {
+  const DedaSettingsPage({super.key});
+
+  @override
+  State<DedaSettingsPage> createState() => _DedaSettingsPageState();
+}
+
+class _DedaSettingsPageState extends State<DedaSettingsPage> {
+  Future<void> _setLanguage(DedaLanguage language) async {
+    await DedaPreferences.setLanguage(language);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(dedaText('تسجيل الخروج', 'Sign out')),
+        content: Text(
+          dedaText(
+            'هل تريد تسجيل الخروج؟ إغلاق التطبيق أو زر الرجوع لا يسجل خروجك.',
+            'Do you want to sign out? Closing the app or pressing Back does not sign you out.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(dedaText('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(dedaText('تسجيل الخروج', 'Sign out')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await DedaPreferences.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF294D34),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final language = DedaLanguageState.current;
+    final accountType = DedaPreferences.accountType ?? DedaAccountType.user;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('الإعدادات', 'Settings')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _sectionTitle(dedaText('الحساب', 'Account')),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.person, color: Color(0xFF17652F)),
+                            title: Text(DedaPreferences.userName),
+                            subtitle: Text(DedaPreferences.phone),
+                          ),
+                          const Divider(),
+                          Text(
+                            dedaText('نوع الحساب', 'Account type'),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          SegmentedButton<DedaAccountType>(
+                            segments: [
+                              ButtonSegment(
+                                value: DedaAccountType.user,
+                                icon: const Icon(Icons.person),
+                                label: Text(dedaText('مستخدم', 'User')),
+                              ),
+                              ButtonSegment(
+                                value: DedaAccountType.placeOwner,
+                                icon: const Icon(Icons.storefront),
+                                label: Text(dedaText('صاحب مكان', 'Place owner')),
+                              ),
+                            ],
+                            selected: {accountType},
+                            onSelectionChanged: (selection) async {
+                              if (selection.isEmpty) return;
+                              await DedaPreferences.setAccountType(selection.first);
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  _sectionTitle(dedaText('اللغة', 'Language')),
+                  SegmentedButton<DedaLanguage>(
+                    segments: const [
+                      ButtonSegment(
+                        value: DedaLanguage.ar,
+                        icon: Icon(Icons.language),
+                        label: Text('العربية'),
+                      ),
+                      ButtonSegment(
+                        value: DedaLanguage.en,
+                        icon: Icon(Icons.language),
+                        label: Text('English'),
+                      ),
+                    ],
+                    selected: {language},
+                    onSelectionChanged: (selection) {
+                      if (selection.isNotEmpty) _setLanguage(selection.first);
+                    },
+                  ),
+
+                  _sectionTitle(dedaText('الصوت والملاحة', 'Voice & navigation')),
+                  Card(
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          value: DedaPreferences.navigationVoiceEnabled,
+                          onChanged: (value) async {
+                            await DedaPreferences.setVoiceEnabled(value);
+                            if (mounted) setState(() {});
+                          },
+                          secondary: const Icon(Icons.record_voice_over, color: Color(0xFF17652F)),
+                          title: Text(dedaText('النطق الصوتي للملاحة', 'Navigation voice')),
+                          subtitle: Text(
+                            dedaText(
+                              'يفضل DEDA صوت امرأة تلقائيًا إذا كان متوفرًا على الهاتف.',
+                              'DEDA prefers a female voice automatically when one is available on the phone.',
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.speed, color: Color(0xFF17652F)),
+                          title: Text(dedaText('سرعة النطق', 'Speech rate')),
+                          subtitle: Slider(
+                            value: DedaPreferences.speechRate.clamp(0.35, 0.65).toDouble(),
+                            min: 0.35,
+                            max: 0.65,
+                            divisions: 6,
+                            label: DedaPreferences.speechRate.toStringAsFixed(2),
+                            onChanged: (value) {
+                              setState(() => DedaPreferences.speechRate = value);
+                            },
+                            onChangeEnd: (value) {
+                              DedaPreferences.setSpeechRate(value);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  _sectionTitle(dedaText('وسيلة التنقل الافتراضية', 'Default travel mode')),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: DedaTravelMode.values.map((mode) {
+                          return ChoiceChip(
+                            selected: DedaPreferences.defaultTravelMode == mode,
+                            avatar: Icon(dedaTravelModeIcon(mode), size: 19),
+                            label: Text(dedaTravelModeLabel(mode)),
+                            onSelected: (_) async {
+                              await DedaPreferences.setDefaultTravelMode(mode);
+                              if (mounted) setState(() {});
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  _sectionTitle(dedaText('نوع الخريطة الافتراضي', 'Default map style')),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: DedaMapStyle.values.map((style) {
+                          return ChoiceChip(
+                            selected: DedaPreferences.defaultMapStyle == style,
+                            avatar: const Icon(Icons.layers, size: 19),
+                            label: Text(dedaMapStyleLabel(style)),
+                            onSelected: (_) async {
+                              await DedaPreferences.setDefaultMapStyle(style);
+                              if (mounted) setState(() {});
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  _sectionTitle(dedaText('الموقع', 'Location')),
+                  Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.location_on, color: Color(0xFF17652F)),
+                      title: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
+                      subtitle: Text(
+                        dedaText(
+                          'افتح إعدادات الهاتف إذا احتجت تغيير إذن GPS للتطبيق.',
+                          'Open phone settings if you need to change DEDA GPS permission.',
+                        ),
+                      ),
+                      trailing: const Icon(Icons.open_in_new),
+                      onTap: () {
+                        Geolocator.openAppSettings();
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+                  const Divider(),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _logout,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFB3261E),
+                      side: const BorderSide(color: Color(0xFFB3261E)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    icon: const Icon(Icons.logout),
+                    label: Text(
+                      dedaText('تسجيل الخروج', 'Sign out'),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class OwnerPlacePage extends StatelessWidget {
+  const OwnerPlacePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('إدارة مكاني', 'Manage my place')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Column(
+                children: [
+                  const CircleAvatar(
+                    radius: 46,
+                    backgroundColor: Color(0xFFE2F0DE),
+                    child: Icon(Icons.storefront, size: 50, color: Color(0xFF17652F)),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    dedaText('إدارة مكاني', 'Manage my place'),
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        children: [
+                          Text(
+                            dedaText(
+                              'هذا القسم يظهر فقط لحساب صاحب مكان.',
+                              'This section appears only for place-owner accounts.',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            dedaText(
+                              'أي إضافة أو تعديل لبيانات المكان يجب أن يمر بالمراجعة قبل النشر حتى نحافظ على دقة دليل DEDA. سنربط نموذج الإضافة ونظام المراجعة في المرحلة التالية.',
+                              'Any new place or data change must be reviewed before publishing so DEDA stays accurate. The submission and review workflow will be connected in the next stage.',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 16, height: 1.5, color: Color(0xFF5A655D)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   final String userName;
 
@@ -1890,7 +2609,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final searchController = TextEditingController();
 
-  final List<DedaCategoryData> allCategories = const [
+  final List<DedaCategoryData> _baseCategories = const [
     DedaCategoryData(Icons.restaurant, 'مطاعم'),
     DedaCategoryData(Icons.hotel, 'فنادق'),
     DedaCategoryData(Icons.local_mall, 'مولات'),
@@ -1900,6 +2619,12 @@ class _HomePageState extends State<HomePage> {
     DedaCategoryData(Icons.park, 'حدائق'),
     DedaCategoryData(Icons.map, 'الخريطة'),
   ];
+
+  List<DedaCategoryData> get allCategories => [
+        ..._baseCategories,
+        if (DedaPreferences.accountType == DedaAccountType.placeOwner)
+          const DedaCategoryData(Icons.storefront, 'إدارة مكاني'),
+      ];
 
   List<DedaCategoryData> get filteredCategories {
     final q = searchController.text.trim();
@@ -1913,6 +2638,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   void openCategory(DedaCategoryData category) {
+    if (category.title == 'إدارة مكاني') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const OwnerPlacePage()),
+      );
+      return;
+    }
+
     if (category.title == 'الخريطة') {
       Navigator.push(
         context,
@@ -1969,124 +2702,159 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final categories = filteredCategories;
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final crossAxisCount = isLandscape ? 4 : 2;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
         title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: dedaText('الإعدادات', 'Settings'),
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
+              );
+              if (mounted) setState(() {});
+            },
+          ),
+        ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                dedaText('هلا بك ${widget.userName}', 'Welcome ${widget.userName}'),
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: searchController,
-                textDirection: TextDirection.rtl,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => openPlaceSearch(),
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: dedaText('ابحث عن مكان بالاسم أو عن نوع مكان...', 'Search by place name or category...'),
-                  prefixIcon: IconButton(
-                    tooltip: dedaText('بحث بالاسم', 'Search by name'),
-                    onPressed: openPlaceSearch,
-                    icon: const Icon(Icons.search),
-                  ),
-                  suffixIcon: searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            searchController.clear();
-                            setState(() {});
-                          },
-                          icon: const Icon(Icons.clear),
-                        ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: openPlaceSearch,
-                  icon: const Icon(Icons.travel_explore),
-                  label: Text(
-                    dedaText('بحث حقيقي عن المكان بالاسم', 'Search by exact place name'),
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            isLandscape ? 24 : 18,
+            14,
+            isLandscape ? 24 : 18,
+            28,
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => openSavedPlaces(favorites: true),
-                      icon: const Icon(Icons.favorite),
-                      label: Text(dedaText('المفضلة', 'Favorites')),
+                  Text(
+                    dedaText('هلا بك ${widget.userName}', 'Welcome ${widget.userName}'),
+                    textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
+                    style: TextStyle(
+                      fontSize: isLandscape ? 23 : 25,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => openSavedPlaces(favorites: false),
-                      icon: const Icon(Icons.history),
-                      label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: searchController,
+                    textDirection: DedaLanguageState.direction,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => openPlaceSearch(),
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: dedaText(
+                        'ابحث عن مكان بالاسم أو عن نوع مكان...',
+                        'Search by place name or category...',
+                      ),
+                      prefixIcon: IconButton(
+                        tooltip: dedaText('بحث بالاسم', 'Search by name'),
+                        onPressed: openPlaceSearch,
+                        icon: const Icon(Icons.search),
+                      ),
+                      suffixIcon: searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                searchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.clear),
+                            ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 48,
+                    child: FilledButton.icon(
+                      onPressed: openPlaceSearch,
+                      icon: const Icon(Icons.travel_explore),
+                      label: Text(
+                        dedaText(
+                          'بحث حقيقي عن المكان بالاسم',
+                          'Search by exact place name',
+                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => openSavedPlaces(favorites: true),
+                          icon: const Icon(Icons.favorite),
+                          label: Text(dedaText('المفضلة', 'Favorites')),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => openSavedPlaces(favorites: false),
+                          icon: const Icon(Icons.history),
+                          label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (categories.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 36),
+                      child: Text(
+                        dedaText(
+                          'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
+                          'No matching category. Tap "Search by exact place name" to search for ${searchController.text.trim()}.',
+                        ),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: categories.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: isLandscape ? 1.18 : 1.0,
+                      ),
+                      itemBuilder: (context, index) {
+                        final category = categories[index];
+                        return DedaCategory(
+                          icon: category.icon,
+                          title: dedaCategoryLabel(category.title),
+                          onTap: () => openCategory(category),
+                        );
+                      },
+                    ),
                 ],
               ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: categories.isEmpty
-                    ? Center(
-                        child: Text(
-                          dedaText(
-                            'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
-                            'No matching category. Tap "Search by exact place name" to search for ${searchController.text.trim()}.',
-                          ),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                      )
-                    : GridView.builder(
-                        itemCount: categories.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemBuilder: (context, index) {
-                          final category = categories[index];
-                          return DedaCategory(
-                            icon: category.icon,
-                            title: dedaCategoryLabel(category.title),
-                            onTap: () => openCategory(category),
-                          );
-                        },
-                      ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
 }
 
 class DedaCategoryData {
@@ -2164,7 +2932,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   List<PlaceInfo> places = [];
   bool isLoading = false;
   int searchedRadiusMeters = 3000;
-  DedaMapStyle mapStyle = DedaMapStyle.normal;
+  DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
   String statusMessage =
       dedaText('اضغط على الزر للبحث عن الأماكن القريبة منك', 'Tap the button to search for nearby places');
@@ -2389,6 +3157,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           destination: place,
           categoryIcon: widget.category.icon,
           initialStyle: mapStyle,
+          travelMode: DedaPreferences.defaultTravelMode,
         ),
       ),
     );
@@ -2839,6 +3608,7 @@ class _DedaFullScreenMapPageState
           destination: place,
           categoryIcon: widget.categoryIcon,
           initialStyle: mapStyle,
+          travelMode: DedaPreferences.defaultTravelMode,
         ),
       ),
     );
@@ -3410,14 +4180,14 @@ class PlaceDetailsPage extends StatefulWidget {
   final PlaceInfo place;
   final Position? currentPosition;
   final IconData categoryIcon;
-  final DedaMapStyle initialStyle;
+  final DedaMapStyle? initialStyle;
 
   const PlaceDetailsPage({
     super.key,
     required this.place,
     this.currentPosition,
     this.categoryIcon = Icons.place,
-    this.initialStyle = DedaMapStyle.normal,
+    this.initialStyle,
   });
 
   @override
@@ -3425,7 +4195,7 @@ class PlaceDetailsPage extends StatefulWidget {
 }
 
 class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
-  DedaTravelMode _travelMode = DedaTravelMode.car;
+  DedaTravelMode _travelMode = DedaPreferences.defaultTravelMode;
   bool _favorite = false;
   bool _favoriteLoading = true;
   bool _locating = false;
@@ -3511,7 +4281,7 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
           startPosition: position,
           destination: widget.place,
           categoryIcon: widget.categoryIcon,
-          initialStyle: widget.initialStyle,
+          initialStyle: widget.initialStyle ?? DedaPreferences.defaultMapStyle,
           travelMode: _travelMode,
         ),
       ),
@@ -4206,7 +4976,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   final DedaRouteService routeService = DedaRouteService();
   final MapController _mapController = MapController();
   final FlutterTts _tts = FlutterTts();
-  bool voiceEnabled = true;
+  bool voiceEnabled = DedaPreferences.navigationVoiceEnabled;
   String? _lastSpokenInstruction;
 
   StreamSubscription<Position>? _positionSubscription;
@@ -4228,7 +4998,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         locale = 'ar-SA';
       }
       await _tts.setLanguage(locale);
-      await _tts.setSpeechRate(0.45);
+      await _tts.setSpeechRate(DedaPreferences.speechRate);
       await _tts.setPitch(1.05);
       await _tts.setVolume(1.0);
 
@@ -4288,6 +5058,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   Future<void> _toggleVoice() async {
     setState(() => voiceEnabled = !voiceEnabled);
+    await DedaPreferences.setVoiceEnabled(voiceEnabled);
     if (!voiceEnabled) {
       await _tts.stop();
     } else {
@@ -5200,7 +5971,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
   Position? currentPosition;
   LatLng? selectedDestination;
   bool isLoading = false;
-  DedaMapStyle mapStyle = DedaMapStyle.normal;
+  DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
   String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
 
@@ -5291,6 +6062,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
           destination: place,
           categoryIcon: Icons.gps_fixed,
           initialStyle: mapStyle,
+          travelMode: DedaPreferences.defaultTravelMode,
         ),
       ),
     );
