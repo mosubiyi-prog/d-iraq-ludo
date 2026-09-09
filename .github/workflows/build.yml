@@ -20,6 +20,7 @@ jobs:
         run: |
           cp lib/main.dart /tmp/main.dart
           cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
 
       - name: Create Flutter project
         run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
@@ -28,8 +29,9 @@ jobs:
         run: |
           cp /tmp/main.dart lib/main.dart
           cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
 
-      - name: Add Android permissions
+      - name: Add Android permissions and DEDA app name
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -56,8 +58,26 @@ jobs:
               ) + "\n"
               text = text[:pos + 1] + inserted + text[pos + 1:]
 
+          text = text.replace(
+              'android:label="d_iraq_ludo"',
+              'android:label="DEDA"',
+          )
+
           path.write_text(text)
           PY
+
+      - name: Configure DEDA launcher icon
+        run: |
+          flutter pub add --dev flutter_launcher_icons
+          cat >> pubspec.yaml <<'YAML'
+
+          flutter_launcher_icons:
+            android: "ic_launcher"
+            ios: false
+            image_path: "deda_app_icon.png"
+            min_sdk_android: 21
+          YAML
+          dart run flutter_launcher_icons
 
       - name: Restore permanent signing key
         env:
@@ -103,9 +123,7 @@ jobs:
 
           if kts.exists():
               text = kts.read_text()
-
               marker = "    buildTypes {"
-
               signing = """    signingConfigs {
                   create("release") {
                       keyAlias = System.getenv("DEDA_KEY_ALIAS")
@@ -133,9 +151,7 @@ jobs:
 
           elif groovy.exists():
               text = groovy.read_text()
-
               marker = "    buildTypes {"
-
               signing = """    signingConfigs {
                   release {
                       keyAlias System.getenv("DEDA_KEY_ALIAS")
