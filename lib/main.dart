@@ -3298,19 +3298,30 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
   }
 
   Future<Position?> _currentPosition() async {
-    if (widget.currentPosition != null) return widget.currentPosition;
-    if (!await Geolocator.isLocationServiceEnabled()) return null;
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      return widget.currentPosition;
+    }
+
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      return null;
+      return widget.currentPosition;
     }
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(const Duration(seconds: 12));
+    } catch (_) {
+      // If a fresh GPS fix is temporarily unavailable, keep the last known
+      // position that opened this place instead of blocking route creation.
+      return widget.currentPosition;
+    }
   }
 
   Future<void> _openRoute() async {
@@ -3645,12 +3656,14 @@ class DedaRouteResult {
   final double distanceMeters;
   final double durationSeconds;
   final List<DedaRouteStep> steps;
+  final bool isDirectFallback;
 
   const DedaRouteResult({
     required this.points,
     required this.distanceMeters,
     required this.durationSeconds,
     required this.steps,
+    this.isDirectFallback = false,
   });
 }
 
@@ -3659,7 +3672,7 @@ class DedaRouteService {
 
   Future<DedaRouteResult> getDrivingRoute({
     required LatLng start,
-    required LatLng destination,
+    required LatLng destination,DedaTravelMode travelMode = DedaTravelMode.car,
   }) async {
     final uri = Uri.parse(
       'https://router.project-osrm.org/route/v1/driving/'
@@ -3747,6 +3760,37 @@ class DedaRouteService {
       if (distance is! num || duration is! num) {
         throw const FormatException(
           'Route distance or duration is missing.',
+        );
+      }
+
+      final routeDistance = distance.toDouble();
+      final routeDuration = duration.toDouble();
+      final straightDistance = Geolocator.distanceBetween(
+        start.latitude,
+        start.longitude,
+        destination.latitude,
+        destination.longitude,
+      );
+
+      final suspiciousZeroRoute = straightDistance > 40 &&
+          (routeDistance < 10 ||
+              routeDuration <= 0 ||
+              routeDistance < straightDistance * 0.50);
+
+      if (suspiciousZeroRoute) {
+        return DedaRouteResult(
+          points: [start, destination],
+          distanceMeters: straightDistance,
+          durationSeconds: straightDistance / 8.33,
+          steps: [
+            DedaRouteStep(
+              instruction: 'اتجه نحو الوجهة المحددة',
+              distanceMeters: straightDistance,
+              maneuverType: 'continue',
+              maneuverModifier: 'straight',
+            ),
+          ],
+          isDirectFallback: true,
         );
       }
 
@@ -3911,6 +3955,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     try {
       final result = await routeService.getDrivingRoute(
         start: origin,
+ travelMode: widget.travelMode,
         destination: widget.destination.location,
       );
       if (!mounted) return;
@@ -3970,7 +4015,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   String formatRouteDuration(double seconds) {
-    final totalMinutes = (seconds / 60).round();
+    if (seconds <= 0) return 'غير متاح';
+    final totalMinutes = (seconds / 60).ceil();
     if (totalMinutes < 60) return '$totalMinutes دقيقة';
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
@@ -3979,29 +4025,47 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         : '$hours ساعة و $minutes دقيقة';
   }
 
-  double _estimatedDurationSeconds(DedaRouteResult result) {
+  double _averageSpeedKmhForMode() {
     switch (widget.travelMode) {
       case DedaTravelMode.walking:
-        return result.distanceMeters / 1.35;
+        return 4.8;
       case DedaTravelMode.motorcycle:
-        return result.durationSeconds;
+        return 55.0;
       case DedaTravelMode.car:
-        return result.durationSeconds;
+        return 50.0;
       case DedaTravelMode.truck:
-        return result.durationSeconds * 1.20;
+        return 40.0;
     }
   }
 
+  double _estimatedDurationSeconds(DedaRouteResult result) {
+    // Car keeps the road service ETA when a valid routed result exists.
+    // Other modes use the routed road distance with an explicit approximate
+    // average speed so every selected mode has a distinct, explainable ETA.
+    if (widget.travelMode == DedaTravelMode.car &&
+        !result.isDirectFallback &&
+        result.durationSeconds > 0) {
+      return result.durationSeconds;
+    }
+
+    final speedMetersPerSecond = _averageSpeedKmhForMode() / 3.6;
+    if (speedMetersPerSecond <= 0) return 0;
+    return result.distanceMeters / speedMetersPerSecond;
+  }
+
   String get _travelEstimateNote {
+    if (route?.isDirectFallback == true) {
+      return 'تعذر ربط الوجهة بطريق مسجل بدقة؛ يعرض DEDA المسافة المباشرة فقط كحل احتياطي، لذلك الزمن هنا تقريبي.';
+    }
     switch (widget.travelMode) {
       case DedaTravelMode.walking:
-        return 'وقت المشي تقديري ويُحسب على مسافة الطريق الظاهرة.';
+        return 'وقت المشي تقديري على مسافة الطريق، بمتوسط تقريبي 4.8 كم/س.';
       case DedaTravelMode.motorcycle:
-        return 'وقت الدراجة النارية تقديري وقد يتغير حسب الطريق وحركة المرور.';
+        return 'وقت الدراجة النارية تقديري على مسافة الطريق، بمتوسط تقريبي 55 كم/س.';
       case DedaTravelMode.car:
-        return 'وقت السيارة تقريبي وقد يتغير حسب الطريق وحركة المرور.';
+        return 'وقت السيارة يعتمد على تقدير خدمة الطريق للمسار الحالي، وقد يتغير حسب الطريق وحركة المرور.';
       case DedaTravelMode.truck:
-        return 'وقت الشاحنة تقريبي، وقد يتغير حسب قيود الطريق والحمولة وحركة المرور.';
+        return 'وقت الشاحنة تقديري على مسافة الطريق، بمتوسط تقريبي 40 كم/س، وقد تزيد المدة مع قيود الطريق والحمولة.';
     }
   }
 
@@ -4039,6 +4103,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       if (step.maneuverType != 'depart' && step.maneuverType != 'arrive') {
         return step;
       }
+    }
+    final currentRoute = route;
+    if (currentRoute != null && currentRoute.distanceMeters > 0) {
+      return DedaRouteStep(
+        instruction: currentRoute.isDirectFallback
+            ? 'اتجه نحو الوجهة المحددة'
+            : 'تابع المسار إلى الوجهة',
+        distanceMeters: currentRoute.distanceMeters,
+        maneuverType: 'continue',
+        maneuverModifier: 'straight',
+      );
     }
     return steps.first;
   }
@@ -4159,9 +4234,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   text: 'العلامة الحمراء: موقعك الحالي',
                 ),
                 _DedaLegendRow(
-                  icon: Icons.place,
-                  iconColor: Color(0xFF17652F),
-                  text: 'العلامة الخضراء: الوجهة',
+                  icon: Icons.gps_fixed,
+                  iconColor: Color(0xFF0B57D0),
+                  text: 'العلامة الزرقاء: الوجهة',
                 ),
                 _DedaLegendRow(
                   icon: Icons.route,
@@ -4213,7 +4288,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           child: Icon(
             widget.categoryIcon,
             size: 34,
-            color: const Color(0xFF17652F),
+            color: const Color(0xFF0B57D0),
           ),
         ),
       ),
@@ -4468,7 +4543,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                             Expanded(
                               child: _DedaRouteStat(
                                 icon: Icons.route,
-                                label: 'مسافة الطريق',
+                                label: route!.isDirectFallback
+                                    ? 'المسافة المباشرة'
+                                    : 'مسافة الطريق',
                                 value: formatRouteDistance(route!.distanceMeters),
                               ),
                             ),
@@ -4740,7 +4817,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
         builder: (_) => DedaRoutePage(
           startPosition: position,
           destination: place,
-          categoryIcon: Icons.flag,
+          categoryIcon: Icons.gps_fixed,
           initialStyle: mapStyle,
         ),
       ),
@@ -4788,12 +4865,29 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       if (selectedDestination != null)
                         Marker(
                           point: selectedDestination!,
-                          width: 62,
-                          height: 62,
-                          child: const Icon(
-                            Icons.flag,
-                            size: 52,
-                            color: Color(0xFF17652F),
+                          width: 70,
+                          height: 70,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: const Color(0xFF0B57D0),
+                                width: 3,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  blurRadius: 7,
+                                  spreadRadius: 1,
+                                  color: Colors.black38,
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.gps_fixed,
+                              size: 40,
+                              color: Color(0xFF0B57D0),
+                            ),
                           ),
                         ),
                     ],
