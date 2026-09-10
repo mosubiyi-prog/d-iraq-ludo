@@ -1751,6 +1751,18 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  void _openContact() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaContactPage(
+          initialName: nameController.text.trim(),
+          initialPhone: phoneController.text.trim(),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     nameController.dispose();
@@ -1921,6 +1933,32 @@ class _LoginPageState extends State<LoginPage> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _openContact,
+                          icon: const Icon(Icons.support_agent),
+                          label: Text(
+                            dedaText('تواصل معنا', 'Contact us'),
+                            style: const TextStyle(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _dedaGreen,
+                            side: const BorderSide(
+                              color: Color(0xFF7C9A81),
+                              width: 1.2,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 14),
                       Row(
                         children: [
@@ -2057,6 +2095,338 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+
+class DedaContactPage extends StatefulWidget {
+  final String initialName;
+  final String initialPhone;
+
+  const DedaContactPage({
+    super.key,
+    this.initialName = '',
+    this.initialPhone = '',
+  });
+
+  @override
+  State<DedaContactPage> createState() => _DedaContactPageState();
+}
+
+class _DedaContactPageState extends State<DedaContactPage> {
+  static const String _draftKey = 'deda_contact_draft_v1';
+
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  final _messageController = TextEditingController();
+
+  String _contactType = 'company';
+  bool _saving = false;
+  DateTime? _savedAt;
+
+  static const List<Map<String, String>> _types = [
+    {'code': 'company', 'ar': 'مراسلة الشركة', 'en': 'Message the company'},
+    {'code': 'complaint', 'ar': 'شكوى أو بلاغ', 'en': 'Complaint or report'},
+    {'code': 'suggestion', 'ar': 'اقتراح', 'en': 'Suggestion'},
+    {'code': 'technical', 'ar': 'مساعدة / مشكلة فنية', 'en': 'Help / technical issue'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    _loadDraft();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  String _typeLabel(Map<String, String> item) =>
+      DedaLanguageState.isArabic ? item['ar']! : item['en']!;
+
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final savedType = (data['type'] ?? 'company').toString();
+      if (_types.any((item) => item['code'] == savedType)) {
+        _contactType = savedType;
+      }
+      if (_nameController.text.trim().isEmpty) {
+        _nameController.text = (data['name'] ?? '').toString();
+      }
+      if (_phoneController.text.trim().isEmpty) {
+        _phoneController.text = (data['phone'] ?? '').toString();
+      }
+      _messageController.text = (data['message'] ?? '').toString();
+      final savedAt = data['savedAt']?.toString();
+      if (savedAt != null && savedAt.isNotEmpty) {
+        _savedAt = DateTime.tryParse(savedAt);
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Keep the page usable if an old local draft cannot be decoded.
+    }
+  }
+
+  Future<void> _saveDraft() async {
+    setState(() => _saving = true);
+    try {
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _draftKey,
+        jsonEncode({
+          'type': _contactType,
+          'name': _nameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'message': _messageController.text.trim(),
+          'savedAt': now.toIso8601String(),
+        }),
+      );
+      if (!mounted) return;
+      setState(() => _savedAt = now);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تم حفظ رسالة التواصل كمسودة على هذا الهاتف.',
+              'Contact message draft saved on this phone.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _prepareMessage() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dedaText('الرسالة جاهزة', 'Message ready')),
+        content: Text(
+          dedaText(
+            'تم تجهيز رسالتك. الإرسال المباشر إلى الشركة لم يُربط بعد في هذه النسخة. يمكن حفظها كمسودة الآن إلى أن نعتمد قناة التواصل الرسمية.',
+            'Your message is ready. Direct sending to the company is not connected in this version yet. You can save it as a draft until the official contact channel is connected.',
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dedaText('حسناً', 'OK')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, color: const Color(0xFF17652F)),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFAAB5AB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFF17652F), width: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('تواصل معنا', 'Contact us')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const CircleAvatar(
+                      radius: 38,
+                      backgroundColor: Color(0xFFE2F0DE),
+                      child: Icon(
+                        Icons.support_agent,
+                        size: 42,
+                        color: Color(0xFF17652F),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      dedaText('كيف نقدر نساعدك؟', 'How can we help?'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      dedaText(
+                        'اختر نوع التواصل ثم اكتب رسالتك. هذا القسم متاح حتى قبل تسجيل الدخول.',
+                        'Choose a contact type and write your message. This section is available even before sign-in.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF5A655D),
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    DropdownButtonFormField<String>(
+                      value: _contactType,
+                      decoration: _decoration(
+                        label: dedaText('نوع التواصل', 'Contact type'),
+                        icon: Icons.forum_outlined,
+                      ),
+                      items: _types
+                          .map(
+                            (item) => DropdownMenuItem<String>(
+                              value: item['code'],
+                              child: Text(_typeLabel(item)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) setState(() => _contactType = value);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: _decoration(
+                        label: dedaText('الاسم', 'Name'),
+                        icon: Icons.person_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      textDirection: TextDirection.ltr,
+                      decoration: _decoration(
+                        label: dedaText('رقم الهاتف', 'Phone number'),
+                        icon: Icons.phone_outlined,
+                        hint: '07XXXXXXXXX',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _messageController,
+                      minLines: 5,
+                      maxLines: 8,
+                      decoration: _decoration(
+                        label: dedaText('اكتب رسالتك', 'Write your message'),
+                        icon: Icons.edit_note_outlined,
+                        hint: dedaText(
+                          'اكتب التفاصيل التي تساعدنا على فهم طلبك',
+                          'Add the details that help us understand your request',
+                        ),
+                      ),
+                      validator: (value) => value == null || value.trim().length < 5
+                          ? dedaText(
+                              'اكتب تفاصيل الرسالة أولاً.',
+                              'Please enter your message details first.',
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    if (_savedAt != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          dedaText(
+                            'لديك رسالة تواصل محفوظة كمسودة على هذا الهاتف.',
+                            'You have a contact-message draft saved on this phone.',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF4E6252),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: _saving ? null : _saveDraft,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(dedaText('حفظ الرسالة كمسودة', 'Save message draft')),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(54),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _prepareMessage,
+                      icon: const Icon(Icons.email_outlined),
+                      label: Text(dedaText('تجهيز الرسالة', 'Prepare message')),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(58),
+                        backgroundColor: const Color(0xFF17652F),
+                        textStyle: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      dedaText(
+                        'ملاحظة: الإرسال المباشر للشركة لم يُربط بعد. لن تغادر أي رسالة هاتفك في هذه المرحلة.',
+                        'Note: direct sending to the company is not connected yet. No message leaves your phone at this stage.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        color: Color(0xFF6A746C),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2545,8 +2915,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   final _addressController = TextEditingController();
   final _hoursController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _otherCategoryTextController = TextEditingController();
 
   String _categoryCode = 'restaurant';
+  String? _otherCategoryCode;
   double? _latitude;
   double? _longitude;
   bool _loadingDraft = true;
@@ -2563,6 +2935,35 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     {'code': 'parking', 'ar': 'موقف', 'en': 'Parking'},
     {'code': 'park', 'ar': 'حديقة', 'en': 'Park'},
     {'code': 'other', 'ar': 'أخرى', 'en': 'Other'},
+  ];
+
+  static const List<Map<String, String>> _otherCategories = [
+    {'code': 'company_office', 'ar': 'شركة أو مكتب', 'en': 'Company or office'},
+    {
+      'code': 'civil_organization',
+      'ar': 'مؤسسة أو منظمة أهلية',
+      'en': 'Civil organization or institution'
+    },
+    {'code': 'clinic_doctor', 'ar': 'عيادة أو طبيب', 'en': 'Clinic or doctor'},
+    {'code': 'school_institute', 'ar': 'مدرسة أو معهد', 'en': 'School or institute'},
+    {
+      'code': 'workshop_services',
+      'ar': 'ورشة أو محل خدمات',
+      'en': 'Workshop or service shop'
+    },
+    {
+      'code': 'consulting_office',
+      'ar': 'مكتب استشارات',
+      'en': 'Consulting office'
+    },
+    {
+      'code': 'health_lab',
+      'ar': 'مركز صحي أو مختبر',
+      'en': 'Health center or laboratory'
+    },
+    {'code': 'religious_place', 'ar': 'مكان ديني', 'en': 'Religious place'},
+    {'code': 'tourist_place', 'ar': 'مكان سياحي', 'en': 'Tourist place'},
+    {'code': 'other_custom', 'ar': 'أخرى', 'en': 'Other'},
   ];
 
   @override
@@ -2582,10 +2983,14 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     _addressController.dispose();
     _hoursController.dispose();
     _descriptionController.dispose();
+    _otherCategoryTextController.dispose();
     super.dispose();
   }
 
   String _categoryLabel(Map<String, String> item) =>
+      DedaLanguageState.isArabic ? item['ar']! : item['en']!;
+
+  String _otherCategoryLabel(Map<String, String> item) =>
       DedaLanguageState.isArabic ? item['ar']! : item['en']!;
 
   Future<void> _loadDraft() async {
@@ -2604,6 +3009,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         if (_categories.any((item) => item['code'] == savedCategory)) {
           _categoryCode = savedCategory;
         }
+        final savedOtherCategory = data['otherCategory']?.toString();
+        if (savedOtherCategory != null &&
+            _otherCategories.any((item) => item['code'] == savedOtherCategory)) {
+          _otherCategoryCode = savedOtherCategory;
+        }
+        _otherCategoryTextController.text =
+            (data['otherCategoryText'] ?? '').toString();
         _latitude = (data['latitude'] as num?)?.toDouble();
         _longitude = (data['longitude'] as num?)?.toDouble();
         final savedAt = data['savedAt']?.toString();
@@ -2628,6 +3040,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       final data = <String, dynamic>{
         'name': _nameController.text.trim(),
         'category': _categoryCode,
+        'otherCategory': _categoryCode == 'other' ? _otherCategoryCode : null,
+        'otherCategoryText':
+            _categoryCode == 'other' && _otherCategoryCode == 'other_custom'
+                ? _otherCategoryTextController.text.trim()
+                : null,
         'phone': _phoneController.text.trim(),
         'governorate': _governorateController.text.trim(),
         'address': _addressController.text.trim(),
@@ -2901,6 +3318,62 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               }
                             },
                           ),
+                          if (_categoryCode == 'other') ...[
+                            const SizedBox(height: 14),
+                            DropdownButtonFormField<String>(
+                              value: _otherCategoryCode,
+                              decoration: _fieldDecoration(
+                                label: dedaText(
+                                  'حدد نوع المكان',
+                                  'Specify place type',
+                                ),
+                                icon: Icons.category_outlined,
+                              ),
+                              items: _otherCategories
+                                  .map(
+                                    (item) => DropdownMenuItem<String>(
+                                      value: item['code'],
+                                      child: Text(_otherCategoryLabel(item)),
+                                    ),
+                                  )
+                                  .toList(),
+                              validator: (value) => value == null
+                                  ? dedaText(
+                                      'اختر نوع المكان بالتفصيل.',
+                                      'Select the detailed place type.',
+                                    )
+                                  : null,
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() => _otherCategoryCode = value);
+                                }
+                              },
+                            ),
+                            if (_otherCategoryCode == 'other_custom') ...[
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _otherCategoryTextController,
+                                decoration: _fieldDecoration(
+                                  label: dedaText(
+                                    'اكتب نوع المكان',
+                                    'Enter place type',
+                                  ),
+                                  icon: Icons.edit_outlined,
+                                  hint: dedaText(
+                                    'مثال: استوديو، نادي، مركز تدريب...',
+                                    'Example: studio, club, training center...',
+                                  ),
+                                ),
+                                validator: (value) =>
+                                    value == null || value.trim().isEmpty
+                                        ? dedaText(
+                                            'اكتب نوع المكان.',
+                                            'Enter the place type.',
+                                          )
+                                        : null,
+                              ),
+                            ],
+                          ],
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _phoneController,
