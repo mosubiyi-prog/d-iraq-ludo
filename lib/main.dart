@@ -3,11 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'places_service.dart';
 
@@ -218,6 +221,8 @@ String dedaCategoryLabel(String ar) {
       return 'Destination';
     case 'إدارة مكاني':
       return 'Manage my place';
+    case 'أماكني الشخصية':
+      return 'My personal places';
     default:
       return ar;
   }
@@ -2174,6 +2179,10 @@ class _DedaContactPageState extends State<DedaContactPage> {
       if (savedAt != null && savedAt.isNotEmpty) {
         _savedAt = DateTime.tryParse(savedAt);
       }
+      for (final controller in [_nameController, _messageController]) {
+        controller.selection =
+            TextSelection.collapsed(offset: controller.text.length);
+      }
       if (mounted) setState(() {});
     } catch (_) {
       // Keep the page usable if an old local draft cannot be decoded.
@@ -2328,6 +2337,10 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _nameController,
+                      textDirection: DedaLanguageState.direction,
+                      textAlign: DedaLanguageState.isArabic
+                          ? TextAlign.right
+                          : TextAlign.left,
                       decoration: _decoration(
                         label: dedaText('الاسم', 'Name'),
                         icon: Icons.person_outline,
@@ -2347,6 +2360,10 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _messageController,
+                      textDirection: DedaLanguageState.direction,
+                      textAlign: DedaLanguageState.isArabic
+                          ? TextAlign.right
+                          : TextAlign.left,
                       minLines: 5,
                       maxLines: 8,
                       decoration: _decoration(
@@ -2916,6 +2933,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   final _hoursController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _otherCategoryTextController = TextEditingController();
+  final _otherCategoryTextFocus = FocusNode();
 
   String _categoryCode = 'restaurant';
   String? _otherCategoryCode;
@@ -2984,6 +3002,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     _hoursController.dispose();
     _descriptionController.dispose();
     _otherCategoryTextController.dispose();
+    _otherCategoryTextFocus.dispose();
     super.dispose();
   }
 
@@ -3025,6 +3044,18 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       }
     } catch (_) {
       // Keep the form usable even if an old draft cannot be decoded.
+    }
+
+    for (final controller in [
+      _nameController,
+      _governorateController,
+      _addressController,
+      _hoursController,
+      _descriptionController,
+      _otherCategoryTextController,
+    ]) {
+      controller.selection =
+          TextSelection.collapsed(offset: controller.text.length);
     }
 
     if (mounted) {
@@ -3289,6 +3320,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 22),
                           TextFormField(
                             controller: _nameController,
+                            textDirection: DedaLanguageState.direction,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             decoration: _fieldDecoration(
                               label: dedaText('اسم المكان', 'Place name'),
                               icon: Icons.storefront_outlined,
@@ -3346,6 +3381,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               onChanged: (value) {
                                 if (value != null) {
                                   setState(() => _otherCategoryCode = value);
+                                  if (value == 'other_custom') {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (mounted) {
+                                        _otherCategoryTextFocus.requestFocus();
+                                      }
+                                    });
+                                  }
                                 }
                               },
                             ),
@@ -3353,6 +3395,14 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               const SizedBox(height: 14),
                               TextFormField(
                                 controller: _otherCategoryTextController,
+                                focusNode: _otherCategoryTextFocus,
+                                enabled: true,
+                                readOnly: false,
+                                keyboardType: TextInputType.text,
+                                textDirection: DedaLanguageState.direction,
+                                textAlign: DedaLanguageState.isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
                                 decoration: _fieldDecoration(
                                   label: dedaText(
                                     'اكتب نوع المكان',
@@ -3377,6 +3427,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _phoneController,
+                            textDirection: TextDirection.ltr,
+                            textAlign: TextAlign.left,
                             keyboardType: TextInputType.phone,
                             decoration: _fieldDecoration(
                               label: dedaText('رقم هاتف المكان', 'Place phone number'),
@@ -3390,6 +3442,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _governorateController,
+                            textDirection: DedaLanguageState.direction,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             decoration: _fieldDecoration(
                               label: dedaText('المحافظة', 'Governorate'),
                               icon: Icons.location_city_outlined,
@@ -3401,6 +3457,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _addressController,
+                            textDirection: DedaLanguageState.direction,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             minLines: 2,
                             maxLines: 3,
                             decoration: _fieldDecoration(
@@ -3485,6 +3545,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _hoursController,
+                            textDirection: DedaLanguageState.direction,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             decoration: _fieldDecoration(
                               label: dedaText('أوقات العمل', 'Opening hours'),
                               icon: Icons.schedule_outlined,
@@ -3494,6 +3558,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _descriptionController,
+                            textDirection: DedaLanguageState.direction,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             minLines: 3,
                             maxLines: 5,
                             decoration: _fieldDecoration(
@@ -3575,6 +3643,1071 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   }
 }
 
+
+class DedaPersonalPlace {
+  final String id;
+  final String name;
+  final String note;
+  final double latitude;
+  final double longitude;
+
+  const DedaPersonalPlace({
+    required this.id,
+    required this.name,
+    required this.note,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'note': note,
+        'latitude': latitude,
+        'longitude': longitude,
+      };
+
+  factory DedaPersonalPlace.fromJson(Map<String, dynamic> json) {
+    return DedaPersonalPlace(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      note: (json['note'] ?? '').toString(),
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+    );
+  }
+}
+
+class PersonalPlaceEditorPage extends StatefulWidget {
+  final DedaPersonalPlace? existing;
+
+  const PersonalPlaceEditorPage({super.key, this.existing});
+
+  @override
+  State<PersonalPlaceEditorPage> createState() =>
+      _PersonalPlaceEditorPageState();
+}
+
+class _PersonalPlaceEditorPageState extends State<PersonalPlaceEditorPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _noteController = TextEditingController();
+
+  double? _latitude;
+  double? _longitude;
+  bool _gettingLocation = false;
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing != null) {
+      _nameController.text = existing.name;
+      _noteController.text = existing.note;
+      _latitude = existing.latitude;
+      _longitude = existing.longitude;
+      _nameController.selection =
+          TextSelection.collapsed(offset: _nameController.text.length);
+      _noteController.selection =
+          TextSelection.collapsed(offset: _noteController.text.length);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _captureLocation() async {
+    if (_gettingLocation) return;
+    setState(() => _gettingLocation = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'فعّل GPS أولاً ثم حاول مرة أخرى.',
+                'Enable GPS first, then try again.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'لم يتم منح إذن الموقع.',
+                'Location permission was not granted.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(dedaText('إذن الموقع', 'Location permission')),
+            content: Text(
+              dedaText(
+                'إذن الموقع مرفوض نهائياً. افتح إعدادات التطبيق واسمح لـ DEDA باستخدام الموقع.',
+                'Location permission is permanently denied. Open app settings and allow DEDA to use location.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(dedaText('إلغاء', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  Geolocator.openAppSettings();
+                },
+                child: Text(dedaText('فتح الإعدادات', 'Open settings')),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تم تثبيت موقعك الحالي لهذا المكان الشخصي.',
+              'Your current location was saved for this personal place.',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تحديد الموقع حالياً. حاول مرة أخرى.',
+              'Could not determine the location. Try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _gettingLocation = false);
+    }
+  }
+
+  void _save() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_latitude == null || _longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'ثبّت موقع المكان أولاً.',
+              'Capture the place location first.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final result = DedaPersonalPlace(
+      id: widget.existing?.id ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
+      name: _nameController.text.trim(),
+      note: _noteController.text.trim(),
+      latitude: _latitude!,
+      longitude: _longitude!,
+    );
+    Navigator.pop(context, result);
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required IconData icon,
+    String? hint,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, color: const Color(0xFF17652F)),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFAAB5AB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFF17652F), width: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          _isEditing
+              ? dedaText('تعديل مكان شخصي', 'Edit personal place')
+              : dedaText('إضافة مكان شخصي', 'Add personal place'),
+        ),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Color(0xFFE2F0DE),
+                      child: Icon(
+                        Icons.person_pin_circle_outlined,
+                        size: 40,
+                        color: Color(0xFF17652F),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      dedaText(
+                        'هذا المكان خاص بك ولا يظهر في البحث العام.',
+                        'This place is private and never appears in public search.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF5A655D),
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: _nameController,
+                      textDirection: DedaLanguageState.direction,
+                      textAlign: DedaLanguageState.isArabic
+                          ? TextAlign.right
+                          : TextAlign.left,
+                      decoration: _decoration(
+                        label: dedaText('اسم المكان الشخصي', 'Personal place name'),
+                        icon: Icons.bookmark_outline,
+                        hint: dedaText(
+                          'مثال: المنزل، العمل، المزرعة، بيت الأهل',
+                          'Example: Home, Work, Farm, Family home',
+                        ),
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                              ? dedaText(
+                                  'اكتب اسم المكان.',
+                                  'Enter a place name.',
+                                )
+                              : null,
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _noteController,
+                      textDirection: DedaLanguageState.direction,
+                      textAlign: DedaLanguageState.isArabic
+                          ? TextAlign.right
+                          : TextAlign.left,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: _decoration(
+                        label: dedaText('ملاحظة اختيارية', 'Optional note'),
+                        icon: Icons.notes_outlined,
+                        hint: dedaText(
+                          'مثال: الباب الخلفي أو علامة قريبة',
+                          'Example: back entrance or nearby landmark',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Card(
+                      elevation: 0,
+                      color: const Color(0xFFEAF4E7),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: const BorderSide(color: Color(0xFFB9CEB7)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              dedaText(
+                                'موقع المكان الشخصي',
+                                'Personal place location',
+                              ),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _latitude == null || _longitude == null
+                                  ? dedaText(
+                                      'لم يتم تثبيت الموقع بعد.',
+                                      'Location has not been captured yet.',
+                                    )
+                                  : '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
+                              style: const TextStyle(
+                                color: Color(0xFF536158),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _gettingLocation ? null : _captureLocation,
+                              icon: _gettingLocation
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.gps_fixed),
+                              label: Text(
+                                _gettingLocation
+                                    ? dedaText(
+                                        'جاري تحديد الموقع...',
+                                        'Locating...',
+                                      )
+                                    : dedaText(
+                                        'استخدام موقعي الحالي',
+                                        'Use my current location',
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _save,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(
+                        _isEditing
+                            ? dedaText('حفظ التعديل', 'Save changes')
+                            : dedaText('حفظ المكان الشخصي', 'Save personal place'),
+                      ),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(56),
+                        backgroundColor: const Color(0xFF17652F),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PersonalPlacesPage extends StatefulWidget {
+  const PersonalPlacesPage({super.key});
+
+  @override
+  State<PersonalPlacesPage> createState() => _PersonalPlacesPageState();
+}
+
+class _PersonalPlacesPageState extends State<PersonalPlacesPage> {
+  static const String _placesKey = 'deda_personal_places_v1';
+
+  final List<DedaPersonalPlace> _places = [];
+  bool _loading = true;
+  bool _locating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_placesKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          _places
+            ..clear()
+            ..addAll(
+              decoded
+                  .whereType<Map>()
+                  .map(
+                    (item) => DedaPersonalPlace.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
+                  )
+                  .where((item) => item.id.isNotEmpty && item.name.isNotEmpty),
+            );
+        }
+      }
+    } catch (_) {
+      // Keep the page available even if an old local item is malformed.
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _placesKey,
+      jsonEncode(_places.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  Future<void> _addPlace() async {
+    final result = await Navigator.push<DedaPersonalPlace>(
+      context,
+      MaterialPageRoute(builder: (_) => const PersonalPlaceEditorPage()),
+    );
+    if (result == null) return;
+    setState(() => _places.add(result));
+    await _persist();
+  }
+
+  Future<void> _editPlace(DedaPersonalPlace place) async {
+    final result = await Navigator.push<DedaPersonalPlace>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PersonalPlaceEditorPage(existing: place),
+      ),
+    );
+    if (result == null) return;
+    final index = _places.indexWhere((item) => item.id == place.id);
+    if (index < 0) return;
+    setState(() => _places[index] = result);
+    await _persist();
+  }
+
+  Future<void> _deletePlace(DedaPersonalPlace place) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dedaText('حذف المكان', 'Delete place')),
+        content: Text(
+          dedaText(
+            'هل تريد حذف "${place.name}" من أماكنك الشخصية؟',
+            'Delete "${place.name}" from your personal places?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(dedaText('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB3261E),
+            ),
+            child: Text(dedaText('حذف', 'Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _places.removeWhere((item) => item.id == place.id));
+    await _persist();
+  }
+
+  String _locationLink(DedaPersonalPlace place) {
+    return Uri.https(
+      'www.google.com',
+      '/maps/search/',
+      {
+        'api': '1',
+        'query': '${place.latitude},${place.longitude}',
+      },
+    ).toString();
+  }
+
+  Future<void> _openWhatsApp(DedaPersonalPlace place) async {
+    final link = _locationLink(place);
+    final note = place.note.trim().isEmpty ? '' : '\n${place.note.trim()}';
+    final message = dedaText(
+      'موقع ${place.name} على DEDA:$note\n$link',
+      '${place.name} location from DEDA:$note\n$link',
+    );
+    final uri = Uri.parse(
+      'https://wa.me/?text=${Uri.encodeComponent(message)}',
+    );
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر فتح واتساب على هذا الهاتف.',
+              'Could not open WhatsApp on this phone.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copyLink(DedaPersonalPlace place) async {
+    await Clipboard.setData(
+      ClipboardData(text: _locationLink(place)),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dedaText(
+            'تم نسخ رابط الموقع.',
+            'Location link copied.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showQr(DedaPersonalPlace place) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dedaText(
+            'QR لموقع ${place.name}',
+            'QR for ${place.name}',
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: QrImageView(
+                data: _locationLink(place),
+                version: QrVersions.auto,
+                size: 220,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              dedaText(
+                'امسح الرمز لفتح موقع المكان.',
+                'Scan the code to open the place location.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dedaText('إغلاق', 'Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showShareOptions(DedaPersonalPlace place) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                dedaText(
+                  'مشاركة ${place.name}',
+                  'Share ${place.name}',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  _openWhatsApp(place);
+                },
+                icon: const Icon(Icons.chat_outlined),
+                label: Text(
+                  dedaText(
+                    'مشاركة على واتساب',
+                    'Share on WhatsApp',
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: const Color(0xFF17652F),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  _showQr(place);
+                },
+                icon: const Icon(Icons.qr_code_2),
+                label: Text(dedaText('عرض QR Code', 'Show QR Code')),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  _copyLink(place);
+                },
+                icon: const Icon(Icons.link),
+                label: Text(
+                  dedaText('نسخ رابط الموقع', 'Copy location link'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                dedaText(
+                  'المشاركة داخل DEDA بواسطة المعرّف أو رمز المشاركة المؤقت ستُفعّل عند ربط الحسابات بالخادم. لا توجد محادثات ضمن هذه الميزة.',
+                  'In-app DEDA sharing by user ID or temporary share code will be enabled when accounts are connected to the server. This feature does not include chat.',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF687269),
+                  height: 1.4,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<Position?> _currentPosition() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'فعّل GPS أولاً.',
+                'Enable GPS first.',
+              ),
+            ),
+          ),
+        );
+      }
+      return null;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'نحتاج إذن الموقع لإكمال هذه العملية.',
+                'Location permission is required for this action.',
+              ),
+            ),
+          ),
+        );
+      }
+      return null;
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
+    );
+  }
+
+  Future<void> _navigateTo(DedaPersonalPlace place) async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      final position = await _currentPosition();
+      if (!mounted || position == null) return;
+      final destination = PlaceInfo(
+        name: place.name,
+        type: dedaText('مكان شخصي', 'Personal place'),
+        location: LatLng(place.latitude, place.longitude),
+      );
+      DedaPlacesStore.addRecent(destination);
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DedaRoutePage(
+            startPosition: position,
+            destination: destination,
+            categoryIcon: Icons.person_pin_circle_outlined,
+            initialStyle: DedaPreferences.defaultMapStyle,
+            travelMode: DedaPreferences.defaultTravelMode,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر بدء الملاحة الآن.',
+              'Could not start navigation now.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _shareCurrentLocation() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      final position = await _currentPosition();
+      if (!mounted || position == null) return;
+      final current = DedaPersonalPlace(
+        id: 'current',
+        name: dedaText('موقعي الحالي', 'My current location'),
+        note: '',
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      await _showShareOptions(current);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تحديد موقعك الحالي للمشاركة.',
+              'Could not determine your current location for sharing.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('أماكني الشخصية', 'My personal places')),
+        centerTitle: true,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addPlace,
+        backgroundColor: const Color(0xFF17652F),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: Text(dedaText('إضافة مكان', 'Add place')),
+      ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Card(
+                          elevation: 0,
+                          color: const Color(0xFFEAF4E7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: [
+                                const Icon(
+                                  Icons.lock_outline,
+                                  color: Color(0xFF17652F),
+                                  size: 30,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  dedaText(
+                                    'أماكنك الشخصية خاصة بك ولا تُنشر في الدليل العام.',
+                                    'Your personal places are private and are not published in the public guide.',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    height: 1.45,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed:
+                                      _locating ? null : _shareCurrentLocation,
+                                  icon: const Icon(Icons.my_location),
+                                  label: Text(
+                                    dedaText(
+                                      'مشاركة موقعي الحالي',
+                                      'Share my current location',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (_places.isEmpty)
+                          Card(
+                            elevation: 0,
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                children: [
+                                  const Icon(
+                                    Icons.bookmark_add_outlined,
+                                    size: 42,
+                                    color: Color(0xFF657167),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    dedaText(
+                                      'ما عندك أماكن شخصية محفوظة بعد.',
+                                      'You do not have saved personal places yet.',
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    dedaText(
+                                      'احفظ المنزل أو العمل أو المزرعة أو أي موقع تريد الرجوع إليه بسرعة.',
+                                      'Save home, work, a farm, or any location you want to return to quickly.',
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFF667067),
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          ..._places.map(
+                            (place) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Card(
+                                elevation: 1,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const CircleAvatar(
+                                            backgroundColor:
+                                                Color(0xFFE2F0DE),
+                                            child: Icon(
+                                              Icons.person_pin_circle_outlined,
+                                              color: Color(0xFF17652F),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  place.name,
+                                                  textDirection:
+                                                      DedaLanguageState.direction,
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                if (place.note
+                                                    .trim()
+                                                    .isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    place.note,
+                                                    textDirection:
+                                                        DedaLanguageState.direction,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF667067),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuButton<String>(
+                                            onSelected: (value) {
+                                              if (value == 'edit') {
+                                                _editPlace(place);
+                                              } else if (value == 'delete') {
+                                                _deletePlace(place);
+                                              }
+                                            },
+                                            itemBuilder: (_) => [
+                                              PopupMenuItem(
+                                                value: 'edit',
+                                                child: Text(
+                                                  dedaText(
+                                                    'تعديل',
+                                                    'Edit',
+                                                  ),
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                child: Text(
+                                                  dedaText(
+                                                    'حذف',
+                                                    'Delete',
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: FilledButton.icon(
+                                              onPressed: _locating
+                                                  ? null
+                                                  : () => _navigateTo(place),
+                                              icon: const Icon(
+                                                Icons.navigation_outlined,
+                                              ),
+                                              label: Text(
+                                                dedaText(
+                                                  'الذهاب إليه',
+                                                  'Navigate',
+                                                ),
+                                              ),
+                                              style: FilledButton.styleFrom(
+                                                backgroundColor:
+                                                    const Color(0xFF17652F),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              onPressed: () =>
+                                                  _showShareOptions(place),
+                                              icon: const Icon(
+                                                Icons.share_outlined,
+                                              ),
+                                              label: Text(
+                                                dedaText(
+                                                  'مشاركة',
+                                                  'Share',
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   final String userName;
 
@@ -3598,6 +4731,7 @@ class _HomePageState extends State<HomePage> {
     DedaCategoryData(Icons.local_pharmacy, 'صيدليات'),
     DedaCategoryData(Icons.local_parking, 'مواقف'),
     DedaCategoryData(Icons.park, 'حدائق'),
+    DedaCategoryData(Icons.person_pin_circle_outlined, 'أماكني الشخصية'),
     DedaCategoryData(Icons.map, 'الخريطة'),
   ];
 
@@ -3619,6 +4753,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   void openCategory(DedaCategoryData category) {
+    if (category.title == 'أماكني الشخصية') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PersonalPlacesPage()),
+      );
+      return;
+    }
+
     if (category.title == 'إدارة مكاني') {
       Navigator.push(
         context,
