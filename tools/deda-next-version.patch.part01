@@ -1,0 +1,190 @@
++        codeAutoRetrievalTimeout: (verificationId) {
++          if (!mounted) return;
++          setState(() {
++            _verificationId = verificationId;
++            _sendingCode = false;
++          });
++        },
++        timeout: const Duration(seconds: 60),
++      );
++    } catch (_) {
++      if (mounted) setState(() => _sendingCode = false);
++      _showLoginMessage(
++        'تعذر بدء التحقق الآن. تأكد من ربط Firebase للهاتف ثم حاول مرة أخرى.',
++        'Could not start verification. Make sure Firebase phone authentication is connected and try again.',
++      );
++    }
++  }
++
++  Future<void> _verifyEnteredCode() async {
++    if (_verifyingCode) return;
++    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
++    final code = verificationController.text.replaceAll(RegExp(r'\D'), '');
++    if (normalizedPhone == null) {
++      _showLoginMessage(
++        'أدخل رقم هاتف عراقي صحيح أولاً.',
++        'Enter a valid Iraqi mobile number first.',
++      );
++      return;
++    }
++    if (_verificationPhone != normalizedPhone || _verificationId == null) {
++      _showLoginMessage(
++        'اضغط إرسال الرمز لهذا الرقم أولاً.',
++        'Send a verification code to this number first.',
++      );
++      return;
++    }
++    if (code.length != 6) {
++      _showLoginMessage(
++        'أدخل رمز التحقق المكوّن من 6 أرقام.',
++        'Enter the 6-digit verification code.',
++      );
++      return;
++    }
++
++    final credential = PhoneAuthProvider.credential(
++      verificationId: _verificationId!,
++      smsCode: code,
+     );
++    await _finishWithCredential(credential, normalizedPhone);
++  }
++
++  Future<void> login() async {
++    final name = nameController.text.trim();
++    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
++    if (name.length < 2 || normalizedPhone == null) {
++      _showLoginMessage(
++        'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
++        'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
++      );
++      return;
++    }
++
++    if (_phoneVerified && _verificationPhone == normalizedPhone) {
++      await _completeVerifiedLogin(normalizedPhone);
++      return;
++    }
++
++    if (_verificationId == null || _verificationPhone != normalizedPhone) {
++      await _sendVerificationCode();
++      return;
++    }
++
++    await _verifyEnteredCode();
+   }
+ 
+   void _openContact() {
+@@ -1771,6 +1949,7 @@
+   @override
+   void dispose() {
+     nameController.dispose();
++    verificationController.dispose();
+     phoneController.dispose();
+     super.dispose();
+   }
+@@ -1783,7 +1962,7 @@
+       hintText: hint,
+       hintStyle: const TextStyle(
+         color: Color(0xFF5B625D),
+-        fontSize: 20,
++        fontSize: 18,
+         fontWeight: FontWeight.w500,
+       ),
+       suffixIcon: Padding(
+@@ -1797,8 +1976,8 @@
+       filled: true,
+       fillColor: Colors.white.withOpacity(0.94),
+       contentPadding: const EdgeInsets.symmetric(
+-        horizontal: 22,
+-        vertical: 21,
++        horizontal: 18,
++        vertical: 16,
+       ),
+       enabledBorder: OutlineInputBorder(
+         borderRadius: BorderRadius.circular(22),
+@@ -1831,29 +2010,75 @@
+                   constraints: const BoxConstraints(maxWidth: 520),
+                   child: Column(
+                     children: [
+-                      Align(
+-                        alignment: Alignment.center,
+-                        child: SegmentedButton<DedaLanguage>(
+-                          segments: const [
+-                            ButtonSegment(
+-                              value: DedaLanguage.ar,
+-                              label: Text('العربية'),
+-                              icon: Icon(Icons.language),
++                      Row(
++                        textDirection: TextDirection.ltr,
++                        children: [
++                          Expanded(
++                            child: Align(
++                              alignment: Alignment.centerLeft,
++                              child: Container(
++                                padding: const EdgeInsets.symmetric(horizontal: 10),
++                                decoration: BoxDecoration(
++                                  color: Colors.white.withOpacity(0.92),
++                                  borderRadius: BorderRadius.circular(18),
++                                  border: Border.all(
++                                    color: const Color(0xFF9CAF9F),
++                                  ),
++                                ),
++                                child: DropdownButtonHideUnderline(
++                                  child: DropdownButton<DedaLanguage>(
++                                    value: _language,
++                                    icon: const Icon(Icons.language),
++                                    items: const [
++                                      DropdownMenuItem(
++                                        value: DedaLanguage.ar,
++                                        child: Text('العربية'),
++                                      ),
++                                      DropdownMenuItem(
++                                        value: DedaLanguage.en,
++                                        child: Text('English'),
++                                      ),
++                                    ],
++                                    onChanged: (language) {
++                                      if (language != null) {
++                                        _setLanguage(language);
++                                      }
++                                    },
++                                  ),
++                                ),
++                              ),
+                             ),
+-                            ButtonSegment(
+-                              value: DedaLanguage.en,
+-                              label: Text('English'),
+-                              icon: Icon(Icons.language),
++                          ),
++                          const SizedBox(width: 8),
++                          Flexible(
++                            child: Align(
++                              alignment: Alignment.centerRight,
++                              child: TextButton.icon(
++                                onPressed: _openContact,
++                                icon: const Icon(Icons.support_agent, size: 21),
++                                label: Text(
++                                  dedaText(
++                                    'التواصل مع الشركة',
++                                    'Contact company',
++                                  ),
++                                  maxLines: 2,
++                                  textAlign: TextAlign.center,
++                                  style: const TextStyle(
++                                    fontSize: 12.5,
++                                    fontWeight: FontWeight.w700,
++                                  ),
++                                ),
++                                style: TextButton.styleFrom(
++                                  foregroundColor: _dedaGreen,
++                                  padding: const EdgeInsets.symmetric(
++                                    horizontal: 5,
++                                    vertical: 8,
++                                  ),
++                                ),
++                              ),
+                             ),
+-                          ],
+-                          selected: {_language},
+-                          showSelectedIcon: true,
