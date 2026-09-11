@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "917966867517",
+    "project_id": "deda-25b88",
+    "storage_bucket": "deda-25b88.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:917966867517:android:ec6a34ceed989d1132ae54",
+        "android_client_info": {
+          "package_name": "com.diraq.ludo.d_iraq_ludo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0DHnE2fd2Nlqv9_gAIGTxCYLs5A3G7zk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
