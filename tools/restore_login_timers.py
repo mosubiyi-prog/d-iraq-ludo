@@ -26,14 +26,20 @@ replace_once(
 
 replace_once(
     """  Future<void> _sendVerificationCode() async {\n    if (_sendingCode) return;\n""",
-    """  void _startVerificationCountdowns() {\n    _resendCountdownTimer?.cancel();\n    _verificationCountdownTimer?.cancel();\n    if (!mounted) return;\n\n    setState(() {\n      _resendSeconds = 90;\n      _verificationSeconds = 60;\n    });\n\n    _resendCountdownTimer = Timer.periodic(\n      const Duration(seconds: 1),\n      (timer) {\n        if (!mounted) {\n          timer.cancel();\n          return;\n        }\n        setState(() {\n          if (_resendSeconds > 0) _resendSeconds--;\n          if (_resendSeconds <= 0) timer.cancel();\n        });\n      },\n    );\n\n    _verificationCountdownTimer = Timer.periodic(\n      const Duration(seconds: 1),\n      (timer) {\n        if (!mounted) {\n          timer.cancel();\n          return;\n        }\n        setState(() {\n          if (_verificationSeconds > 0) _verificationSeconds--;\n          if (_verificationSeconds <= 0) timer.cancel();\n        });\n      },\n    );\n  }\n\n  Future<void> _sendVerificationCode() async {\n    if (_sendingCode || _resendSeconds > 0) return;\n""",
+    """  void _startResendCountdown() {\n    _resendCountdownTimer?.cancel();\n    if (!mounted) return;\n\n    setState(() => _resendSeconds = 90);\n    _resendCountdownTimer = Timer.periodic(\n      const Duration(seconds: 1),\n      (timer) {\n        if (!mounted) {\n          timer.cancel();\n          return;\n        }\n        setState(() {\n          if (_resendSeconds > 0) _resendSeconds--;\n          if (_resendSeconds <= 0) timer.cancel();\n        });\n      },\n    );\n  }\n\n  void _startVerificationCountdown() {\n    _verificationCountdownTimer?.cancel();\n    if (!mounted) return;\n\n    setState(() => _verificationSeconds = 60);\n    _verificationCountdownTimer = Timer.periodic(\n      const Duration(seconds: 1),\n      (timer) {\n        if (!mounted) {\n          timer.cancel();\n          return;\n        }\n        setState(() {\n          if (_verificationSeconds > 0) _verificationSeconds--;\n          if (_verificationSeconds <= 0) timer.cancel();\n        });\n      },\n    );\n  }\n\n  Future<void> _sendVerificationCode() async {\n    if (_sendingCode || _resendSeconds > 0) return;\n""",
     "send verification entry",
 )
 
 replace_once(
+    """    setState(() {\n      _sendingCode = true;\n      _phoneVerified = false;\n      _verificationPhone = normalizedPhone;\n      verificationController.clear();\n    });\n""",
+    """    _startResendCountdown();\n    setState(() {\n      _sendingCode = true;\n      _phoneVerified = false;\n      _verificationPhone = normalizedPhone;\n      verificationController.clear();\n    });\n""",
+    "start resend cooldown before Firebase SMS request",
+)
+
+replace_once(
     """            _resendToken = resendToken;\n            _sendingCode = false;\n          });\n          _showLoginMessage(\n""",
-    """            _resendToken = resendToken;\n            _sendingCode = false;\n          });\n          _startVerificationCountdowns();\n          _showLoginMessage(\n""",
-    "code sent countdown start",
+    """            _resendToken = resendToken;\n            _sendingCode = false;\n          });\n          _startVerificationCountdown();\n          _showLoginMessage(\n""",
+    "code sent verification countdown start",
 )
 
 replace_once(
@@ -55,4 +61,4 @@ replace_once(
 )
 
 path.write_text(text, encoding="utf-8")
-print("DEDA login timers restored: resend=90s, verification/auto-detect=60s")
+print("DEDA login timers restored: resend cooldown starts immediately at 90s; manual-code timer starts at 60s after codeSent")
