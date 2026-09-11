@@ -60,5 +60,17 @@ replace_once(
     "verification helper text",
 )
 
+replace_once(
+    "_ => 'تعذر إرسال رمز التحقق. تحقق من الإنترنت وإعدادات Firebase ثم حاول مرة أخرى.',",
+    "_ => 'تعذر إرسال رمز التحقق. رمز الخطأ: ${e.code}',",
+    "Arabic Firebase error diagnostic",
+)
+
+replace_once(
+    "_ => 'Could not send the verification code. Check internet and Firebase configuration, then try again.',",
+    "_ => 'Could not send the verification code. Firebase error: ${e.code}',",
+    "English Firebase error diagnostic",
+)
+
 path.write_text(text, encoding="utf-8")
-print("DEDA login timers restored: resend cooldown starts immediately at 90s; manual-code timer starts at 60s after codeSent")
+print("DEDA login timers restored and Firebase phone-auth error diagnostics enabled")
