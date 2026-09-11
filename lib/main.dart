@@ -11,6 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'places_service.dart';
 
@@ -298,6 +301,11 @@ String dedaMapAttribution(DedaMapStyle style) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Keep DEDA usable while Firebase platform configuration is being connected.
+  }
   await DedaPreferences.load();
   runApp(const DedaApp());
 }
@@ -332,8 +340,16 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final nameController = TextEditingController();
+  final verificationController = TextEditingController();
   final phoneController = TextEditingController();
   DedaLanguage _language = DedaLanguageState.current;
+
+  String? _verificationId;
+  int? _resendToken;
+  String? _verificationPhone;
+  bool _sendingCode = false;
+  bool _verifyingCode = false;
+  bool _phoneVerified = false;
 
   @override
   void initState() {
@@ -1707,53 +1723,215 @@ class _LoginPageState extends State<LoginPage> {
     return '+964$digits';
   }
 
-  Future<void> login() async {
-    final name = nameController.text.trim();
-    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
-
-    if (name.length < 2 || normalizedPhone == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
-              'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
-            ),
-            textAlign: TextAlign.center,
-          ),
+  void _showLoginMessage(String ar, String en) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dedaText(ar, en),
+          textAlign: TextAlign.center,
         ),
+      ),
+    );
+  }
+
+  Future<void> _completeVerifiedLogin(String normalizedPhone) async {
+    if (!mounted) return;
+    final name = nameController.text.trim();
+    if (name.length < 2) {
+      _showLoginMessage(
+        'أدخل الاسم الكامل أولاً.',
+        'Enter your full name first.',
       );
       return;
     }
 
     final savedType = DedaPreferences.accountType;
-    final isSameKnownAccount = savedType != null &&
-        DedaPreferences.accountPhone == normalizedPhone;
+    final type = savedType != null &&
+            DedaPreferences.accountPhone == normalizedPhone
+        ? savedType
+        : (savedType ?? DedaAccountType.user);
 
-    if (isSameKnownAccount) {
-      await DedaPreferences.saveLogin(
-        name: name,
-        normalizedPhone: normalizedPhone,
-        type: savedType,
-      );
+    await DedaPreferences.saveLogin(
+      name: name,
+      normalizedPhone: normalizedPhone,
+      type: type,
+    );
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => HomePage(userName: name)),
+      (_) => false,
+    );
+  }
+
+  Future<void> _finishWithCredential(
+    PhoneAuthCredential credential,
+    String normalizedPhone,
+  ) async {
+    if (_verifyingCode) return;
+    setState(() => _verifyingCode = true);
+    try {
+      await FirebaseAuth.instance.signInWithCredential(credential);
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HomePage(userName: name)),
+      setState(() {
+        _phoneVerified = true;
+        _verificationPhone = normalizedPhone;
+      });
+      await _completeVerifiedLogin(normalizedPhone);
+    } on FirebaseAuthException catch (e) {
+      final invalidCode = e.code == 'invalid-verification-code' ||
+          e.code == 'session-expired';
+      _showLoginMessage(
+        invalidCode
+            ? 'رمز التحقق غير صحيح أو انتهت صلاحيته. أعد المحاولة.'
+            : 'تعذر التحقق من الرمز الآن. حاول مرة أخرى.',
+        invalidCode
+            ? 'The verification code is invalid or expired. Try again.'
+            : 'Could not verify the code right now. Try again.',
+      );
+    } catch (_) {
+      _showLoginMessage(
+        'تعذر التحقق من الرمز الآن. حاول مرة أخرى.',
+        'Could not verify the code right now. Try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _verifyingCode = false);
+    }
+  }
+
+  Future<void> _sendVerificationCode() async {
+    if (_sendingCode) return;
+    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
+    if (normalizedPhone == null) {
+      _showLoginMessage(
+        'أدخل رقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
+        'Enter a valid Iraqi mobile number such as 07XXXXXXXXX',
+      );
+      return;
+    }
+    if (Firebase.apps.isEmpty) {
+      _showLoginMessage(
+        'خدمة رمز التحقق جاهزة داخل الواجهة، لكن يلزم إكمال ربط إعدادات Firebase للهاتف قبل إرسال SMS حقيقي.',
+        'The verification flow is ready, but Firebase phone configuration must be connected before a real SMS can be sent.',
       );
       return;
     }
 
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AccountTypePage(
-          userName: name,
-          phone: normalizedPhone,
-        ),
-      ),
+    setState(() {
+      _sendingCode = true;
+      _phoneVerified = false;
+      _verificationPhone = normalizedPhone;
+      verificationController.clear();
+    });
+
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: normalizedPhone,
+        forceResendingToken: _resendToken,
+        verificationCompleted: (credential) async {
+          await _finishWithCredential(credential, normalizedPhone);
+        },
+        verificationFailed: (e) {
+          if (!mounted) return;
+          setState(() => _sendingCode = false);
+          final messageAr = switch (e.code) {
+            'invalid-phone-number' => 'رقم الهاتف غير صالح لخدمة التحقق.',
+            'too-many-requests' => 'تمت محاولات كثيرة. انتظر قليلاً ثم أعد الإرسال.',
+            _ => 'تعذر إرسال رمز التحقق. تحقق من الإنترنت وإعدادات Firebase ثم حاول مرة أخرى.',
+          };
+          final messageEn = switch (e.code) {
+            'invalid-phone-number' => 'The phone number is not valid for verification.',
+            'too-many-requests' => 'Too many attempts. Wait a little and try again.',
+            _ => 'Could not send the verification code. Check internet and Firebase configuration, then try again.',
+          };
+          _showLoginMessage(messageAr, messageEn);
+        },
+        codeSent: (verificationId, resendToken) {
+          if (!mounted) return;
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _sendingCode = false;
+          });
+          _showLoginMessage(
+            'تم إرسال رمز من 6 أرقام. إذا التقطه الهاتف تلقائياً ستفتح الواجهة مباشرة.',
+            'A 6-digit code was sent. If Android verifies it automatically, DEDA will open immediately.',
+          );
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          if (!mounted) return;
+          setState(() {
+            _verificationId = verificationId;
+            _sendingCode = false;
+          });
+        },
+        timeout: const Duration(seconds: 60),
+      );
+    } catch (_) {
+      if (mounted) setState(() => _sendingCode = false);
+      _showLoginMessage(
+        'تعذر بدء التحقق الآن. تأكد من ربط Firebase للهاتف ثم حاول مرة أخرى.',
+        'Could not start verification. Make sure Firebase phone authentication is connected and try again.',
+      );
+    }
+  }
+
+  Future<void> _verifyEnteredCode() async {
+    if (_verifyingCode) return;
+    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
+    final code = verificationController.text.replaceAll(RegExp(r'\D'), '');
+    if (normalizedPhone == null) {
+      _showLoginMessage(
+        'أدخل رقم هاتف عراقي صحيح أولاً.',
+        'Enter a valid Iraqi mobile number first.',
+      );
+      return;
+    }
+    if (_verificationPhone != normalizedPhone || _verificationId == null) {
+      _showLoginMessage(
+        'اضغط إرسال الرمز لهذا الرقم أولاً.',
+        'Send a verification code to this number first.',
+      );
+      return;
+    }
+    if (code.length != 6) {
+      _showLoginMessage(
+        'أدخل رمز التحقق المكوّن من 6 أرقام.',
+        'Enter the 6-digit verification code.',
+      );
+      return;
+    }
+
+    final credential = PhoneAuthProvider.credential(
+      verificationId: _verificationId!,
+      smsCode: code,
     );
+    await _finishWithCredential(credential, normalizedPhone);
+  }
+
+  Future<void> login() async {
+    final name = nameController.text.trim();
+    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
+    if (name.length < 2 || normalizedPhone == null) {
+      _showLoginMessage(
+        'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
+        'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
+      );
+      return;
+    }
+
+    if (_phoneVerified && _verificationPhone == normalizedPhone) {
+      await _completeVerifiedLogin(normalizedPhone);
+      return;
+    }
+
+    if (_verificationId == null || _verificationPhone != normalizedPhone) {
+      await _sendVerificationCode();
+      return;
+    }
+
+    await _verifyEnteredCode();
   }
 
   void _openContact() {
@@ -1771,6 +1949,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     nameController.dispose();
+    verificationController.dispose();
     phoneController.dispose();
     super.dispose();
   }
@@ -1783,7 +1962,7 @@ class _LoginPageState extends State<LoginPage> {
       hintText: hint,
       hintStyle: const TextStyle(
         color: Color(0xFF5B625D),
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: FontWeight.w500,
       ),
       suffixIcon: Padding(
@@ -1797,8 +1976,8 @@ class _LoginPageState extends State<LoginPage> {
       filled: true,
       fillColor: Colors.white.withOpacity(0.94),
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: 22,
-        vertical: 21,
+        horizontal: 18,
+        vertical: 16,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(22),
@@ -1831,29 +2010,75 @@ class _LoginPageState extends State<LoginPage> {
                   constraints: const BoxConstraints(maxWidth: 520),
                   child: Column(
                     children: [
-                      Align(
-                        alignment: Alignment.center,
-                        child: SegmentedButton<DedaLanguage>(
-                          segments: const [
-                            ButtonSegment(
-                              value: DedaLanguage.ar,
-                              label: Text('العربية'),
-                              icon: Icon(Icons.language),
+                      Row(
+                        textDirection: TextDirection.ltr,
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.92),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: const Color(0xFF9CAF9F),
+                                  ),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<DedaLanguage>(
+                                    value: _language,
+                                    icon: const Icon(Icons.language),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: DedaLanguage.ar,
+                                        child: Text('العربية'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: DedaLanguage.en,
+                                        child: Text('English'),
+                                      ),
+                                    ],
+                                    onChanged: (language) {
+                                      if (language != null) {
+                                        _setLanguage(language);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
                             ),
-                            ButtonSegment(
-                              value: DedaLanguage.en,
-                              label: Text('English'),
-                              icon: Icon(Icons.language),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _openContact,
+                                icon: const Icon(Icons.support_agent, size: 21),
+                                label: Text(
+                                  dedaText(
+                                    'التواصل مع الشركة',
+                                    'Contact company',
+                                  ),
+                                  maxLines: 2,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: _dedaGreen,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 8,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ],
-                          selected: {_language},
-                          showSelectedIcon: true,
-                          onSelectionChanged: (selection) {
-                            if (selection.isNotEmpty) {
-                              _setLanguage(selection.first);
-                            }
-                          },
-                        ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       ClipRRect(
@@ -1890,7 +2115,83 @@ class _LoginPageState extends State<LoginPage> {
                                 icon: Icons.person,
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
+                            Row(
+                              textDirection: TextDirection.ltr,
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: verificationController,
+                                    keyboardType: TextInputType.number,
+                                    textDirection: TextDirection.ltr,
+                                    textAlign: TextAlign.center,
+                                    maxLength: 6,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    decoration: _fieldDecoration(
+                                      hint: dedaText(
+                                        'رمز التحقق (6 أرقام)',
+                                        '6-digit code',
+                                      ),
+                                      icon: Icons.verified_user_outlined,
+                                    ).copyWith(counterText: ''),
+                                    onChanged: (value) {
+                                      if (value.length == 6 &&
+                                          _verificationId != null &&
+                                          !_verifyingCode) {
+                                        _verifyEnteredCode();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  height: 54,
+                                  child: FilledButton.icon(
+                                    onPressed: _sendingCode
+                                        ? null
+                                        : _sendVerificationCode,
+                                    icon: _sendingCode
+                                        ? const SizedBox(
+                                            width: 17,
+                                            height: 17,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.send_outlined),
+                                    label: Text(
+                                      dedaText('إرسال الرمز', 'Send code'),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: _dedaGreen,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              dedaText(
+                                'سيتم إرسال رمز التحقق إلى رقم هاتفك، وقد يتم التحقق تلقائياً على Android.',
+                                'A verification code will be sent to your phone; Android may verify it automatically.',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFF677169),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                            const SizedBox(height: 9),
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
@@ -1903,15 +2204,25 @@ class _LoginPageState extends State<LoginPage> {
                                 prefixText: '+964  ',
                                 prefixStyle: const TextStyle(
                                   color: Color(0xFF1F2D23),
-                                  fontSize: 19,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
+                              onChanged: (_) {
+                                if (_phoneVerified || _verificationId != null) {
+                                  setState(() {
+                                    _phoneVerified = false;
+                                    _verificationId = null;
+                                    _verificationPhone = null;
+                                    verificationController.clear();
+                                  });
+                                }
+                              },
                             ),
-                            const SizedBox(height: 15),
+                            const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
-                              height: 62,
+                              height: 56,
                               child: FilledButton.icon(
                                 onPressed: login,
                                 style: FilledButton.styleFrom(
@@ -1936,32 +2247,6 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _openContact,
-                          icon: const Icon(Icons.support_agent),
-                          label: Text(
-                            dedaText('تواصل معنا', 'Contact us'),
-                            style: const TextStyle(
-                              fontSize: 16.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _dedaGreen,
-                            side: const BorderSide(
-                              color: Color(0xFF7C9A81),
-                              width: 1.2,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -1994,7 +2279,12 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 10),
                       _DedaCategoryPreviewStrip(),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: _DedaRinadSignature(),
+                      ),
+                      const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerRight,
                         child: Text(
@@ -2028,11 +2318,14 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
       (Icons.hotel, dedaText('فنادق', 'Hotels')),
       (Icons.local_mall, dedaText('مولات', 'Malls')),
       (Icons.local_gas_station, dedaText('محطات وقود', 'Fuel')),
-      (Icons.more_horiz, dedaText('المزيد', 'More')),
+      (Icons.local_pharmacy, dedaText('صيدليات', 'Pharmacies')),
+      (Icons.local_parking, dedaText('مواقف', 'Parking')),
+      (Icons.park, dedaText('حدائق', 'Parks')),
+      (Icons.map_outlined, dedaText('الخريطة', 'Map')),
     ];
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF2E7).withOpacity(0.92),
         borderRadius: BorderRadius.circular(28),
@@ -2044,63 +2337,112 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        textDirection: TextDirection.rtl,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final item in items)
-            Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        dedaText('سجّل الدخول أولاً لاستخدام الأقسام', 'Sign in first to use categories'),
-                        textAlign: TextAlign.center,
-                      ),
-                      duration: Duration(seconds: 1),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 10,
+          childAspectRatio: 0.98,
+        ),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    dedaText(
+                      'سجّل الدخول أولاً لاستخدام الأقسام',
+                      'Sign in first to use categories',
                     ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 1),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 49,
-                        height: 49,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF8FBF4),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Icon(
-                          item.$1,
-                          color: _LoginPageState._dedaGreen,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Text(
-                        item.$2,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF18271C),
-                          fontSize: 12.5,
-                          height: 1.18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                    textAlign: TextAlign.center,
                   ),
+                  duration: const Duration(seconds: 1),
                 ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8FBF4),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      item.$1,
+                      color: _LoginPageState._dedaGreen,
+                      size: 25,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.$2,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF18271C),
+                      fontSize: 11.8,
+                      height: 1.15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
+          );
+        },
       ),
+    );
+  }
+}
+
+class _DedaRinadSignature extends StatelessWidget {
+  const _DedaRinadSignature();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.local_florist,
+          color: Color(0xFFB9344E),
+          size: 24,
+        ),
+        const SizedBox(width: 7),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              dedaText('مع تحيات', 'With regards'),
+              style: const TextStyle(
+                color: Color(0xFF526D56),
+                fontSize: 11.5,
+              ),
+            ),
+            const Text(
+              'ريناد  Rinad',
+              style: TextStyle(
+                color: Color(0xFF66375A),
+                fontSize: 18,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -2131,12 +2473,17 @@ class _DedaContactPageState extends State<DedaContactPage> {
   String _contactType = 'company';
   bool _saving = false;
   DateTime? _savedAt;
+  String? _attachedImagePath;
 
   static const List<Map<String, String>> _types = [
-    {'code': 'company', 'ar': 'مراسلة الشركة', 'en': 'Message the company'},
-    {'code': 'complaint', 'ar': 'شكوى أو بلاغ', 'en': 'Complaint or report'},
-    {'code': 'suggestion', 'ar': 'اقتراح', 'en': 'Suggestion'},
-    {'code': 'technical', 'ar': 'مساعدة / مشكلة فنية', 'en': 'Help / technical issue'},
+    {
+      'code': 'company',
+      'ar': 'التواصل مع الشركة مباشرة',
+      'en': 'Contact the company directly',
+    },
+    {'code': 'problem', 'ar': 'تبليغ عن مشكلة', 'en': 'Report a problem'},
+    {'code': 'case', 'ar': 'شرح عن حالة', 'en': 'Explain a case'},
+    {'code': 'photo', 'ar': 'إرسال صورة', 'en': 'Send a photo'},
   ];
 
   @override
@@ -2175,6 +2522,12 @@ class _DedaContactPageState extends State<DedaContactPage> {
         _phoneController.text = (data['phone'] ?? '').toString();
       }
       _messageController.text = (data['message'] ?? '').toString();
+      final savedImagePath = data['imagePath']?.toString();
+      if (savedImagePath != null &&
+          savedImagePath.isNotEmpty &&
+          File(savedImagePath).existsSync()) {
+        _attachedImagePath = savedImagePath;
+      }
       final savedAt = data['savedAt']?.toString();
       if (savedAt != null && savedAt.isNotEmpty) {
         _savedAt = DateTime.tryParse(savedAt);
@@ -2201,6 +2554,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
           'name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
           'message': _messageController.text.trim(),
+          'imagePath': _attachedImagePath,
           'savedAt': now.toIso8601String(),
         }),
       );
@@ -2221,16 +2575,60 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
+  Future<void> _pickContactImage() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+      if (image == null || !mounted) return;
+      setState(() {
+        _attachedImagePath = image.path;
+        _contactType = 'photo';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر فتح الصور على هذا الجهاز.',
+              'Could not open photos on this device.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   void _prepareMessage() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_contactType == 'photo' && _attachedImagePath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'اختر صورة أولاً حتى تُرفق مع البلاغ.',
+              'Choose a photo first so it can be attached.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(dedaText('الرسالة جاهزة', 'Message ready')),
         content: Text(
           dedaText(
-            'تم تجهيز رسالتك. الإرسال المباشر إلى الشركة لم يُربط بعد في هذه النسخة. يمكن حفظها كمسودة الآن إلى أن نعتمد قناة التواصل الرسمية.',
-            'Your message is ready. Direct sending to the company is not connected in this version yet. You can save it as a draft until the official contact channel is connected.',
+            _attachedImagePath == null
+                ? 'تم تجهيز رسالتك. قناة الإرسال المباشر للشركة تحتاج اعتماد وسيلة التواصل الرسمية قبل أن تغادر الرسالة الهاتف.'
+                : 'تم تجهيز رسالتك والصورة المرفقة. قناة الإرسال المباشر للشركة تحتاج اعتماد وسيلة التواصل الرسمية قبل أن تغادر البيانات الهاتف.',
+            _attachedImagePath == null
+                ? 'Your message is ready. The official company delivery channel must be connected before the message can leave the phone.'
+                : 'Your message and attached photo are ready. The official company delivery channel must be connected before any data leaves the phone.',
           ),
         ),
         actions: [
@@ -2271,7 +2669,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(dedaText('تواصل معنا', 'Contact us')),
+        title: Text(dedaText('التواصل مع الشركة', 'Contact company')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -2306,8 +2704,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 8),
                     Text(
                       dedaText(
-                        'اختر نوع التواصل ثم اكتب رسالتك. هذا القسم متاح حتى قبل تسجيل الدخول.',
-                        'Choose a contact type and write your message. This section is available even before sign-in.',
+                        'اختر: تواصل مباشر، تبليغ عن مشكلة، شرح حالة، أو إرسال صورة. هذا القسم متاح حتى قبل تسجيل الدخول.',
+                        'Choose direct contact, report a problem, explain a case, or send a photo. This section is available even before sign-in.',
                       ),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -2335,6 +2733,44 @@ class _DedaContactPageState extends State<DedaContactPage> {
                       },
                     ),
                     const SizedBox(height: 14),
+                    if (_contactType == 'photo') ...[
+                      OutlinedButton.icon(
+                        onPressed: _pickContactImage,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                        label: Text(
+                          _attachedImagePath == null
+                              ? dedaText('اختيار صورة', 'Choose photo')
+                              : dedaText('تغيير الصورة', 'Change photo'),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                        ),
+                      ),
+                      if (_attachedImagePath != null) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.file(
+                            File(_attachedImagePath!),
+                            height: 170,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 80,
+                              alignment: Alignment.center,
+                              color: const Color(0xFFEAF4E7),
+                              child: Text(
+                                dedaText(
+                                  'تم اختيار الصورة',
+                                  'Photo selected',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                    ],
                     TextFormField(
                       controller: _nameController,
                       textDirection: DedaLanguageState.direction,
@@ -2367,7 +2803,9 @@ class _DedaContactPageState extends State<DedaContactPage> {
                       minLines: 5,
                       maxLines: 8,
                       decoration: _decoration(
-                        label: dedaText('اكتب رسالتك', 'Write your message'),
+                        label: _contactType == 'case'
+                            ? dedaText('اشرح الحالة', 'Explain the case')
+                            : dedaText('اكتب رسالتك', 'Write your message'),
                         icon: Icons.edit_note_outlined,
                         hint: dedaText(
                           'اكتب التفاصيل التي تساعدنا على فهم طلبك',
@@ -2428,8 +2866,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 12),
                     Text(
                       dedaText(
-                        'ملاحظة: الإرسال المباشر للشركة لم يُربط بعد. لن تغادر أي رسالة هاتفك في هذه المرحلة.',
-                        'Note: direct sending to the company is not connected yet. No message leaves your phone at this stage.',
+                        'ملاحظة: الواجهة تجهز الرسالة والصورة، لكن الإرسال للشركة لن يغادر الهاتف حتى نعتمد قناة التواصل الرسمية الآمنة.',
+                        'Note: the interface prepares the message and photo, but nothing leaves the phone until the official secure company channel is connected.',
                       ),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
