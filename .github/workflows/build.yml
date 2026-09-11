@@ -16,6 +16,9 @@ jobs:
         with:
           channel: stable
 
+      - name: Restore DEDA login timers
+        run: python3 tools/restore_login_timers.py
+
       - name: Save DEDA files
         run: |
           cp lib/main.dart /tmp/main.dart
