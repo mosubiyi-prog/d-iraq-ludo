@@ -1,0 +1,21 @@
+                       minLines: 5,
+                       maxLines: 8,
+                       decoration: _decoration(
+-                        label: dedaText('اكتب رسالتك', 'Write your message'),
++                        label: _contactType == 'case'
++                            ? dedaText('اشرح الحالة', 'Explain the case')
++                            : dedaText('اكتب رسالتك', 'Write your message'),
+                         icon: Icons.edit_note_outlined,
+                         hint: dedaText(
+                           'اكتب التفاصيل التي تساعدنا على فهم طلبك',
+@@ -2428,8 +2866,8 @@
+                     const SizedBox(height: 12),
+                     Text(
+                       dedaText(
+-                        'ملاحظة: الإرسال المباشر للشركة لم يُربط بعد. لن تغادر أي رسالة هاتفك في هذه المرحلة.',
+-                        'Note: direct sending to the company is not connected yet. No message leaves your phone at this stage.',
++                        'ملاحظة: الواجهة تجهز الرسالة والصورة، لكن الإرسال للشركة لن يغادر الهاتف حتى نعتمد قناة التواصل الرسمية الآمنة.',
++                        'Note: the interface prepares the message and photo, but nothing leaves the phone until the official secure company channel is connected.',
+                       ),
+                       textAlign: TextAlign.center,
+                       style: const TextStyle(
