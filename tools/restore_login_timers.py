@@ -62,15 +62,15 @@ replace_once(
 
 replace_once(
     "_ => 'تعذر إرسال رمز التحقق. تحقق من الإنترنت وإعدادات Firebase ثم حاول مرة أخرى.',",
-    "_ => 'تعذر إرسال رمز التحقق. رمز الخطأ: ${e.code}',",
+    "_ => 'تعذر إرسال رمز التحقق. رمز الخطأ: ${e.code}\\nالتفاصيل: ${e.message ?? 'لا توجد تفاصيل إضافية'}',",
     "Arabic Firebase error diagnostic",
 )
 
 replace_once(
     "_ => 'Could not send the verification code. Check internet and Firebase configuration, then try again.',",
-    "_ => 'Could not send the verification code. Firebase error: ${e.code}',",
+    "_ => 'Could not send the verification code. Firebase error: ${e.code}\\nDetails: ${e.message ?? 'No additional details'}',",
     "English Firebase error diagnostic",
 )
 
 path.write_text(text, encoding="utf-8")
-print("DEDA login timers restored and Firebase phone-auth error diagnostics enabled")
+print("DEDA login timers restored and full Firebase phone-auth diagnostics enabled")
