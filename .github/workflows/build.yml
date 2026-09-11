@@ -21,6 +21,7 @@ jobs:
           cp lib/main.dart /tmp/main.dart
           cp pubspec.yaml /tmp/pubspec.yaml
           cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
 
       - name: Create Flutter project
         run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
@@ -30,6 +31,60 @@ jobs:
           cp /tmp/main.dart lib/main.dart
           cp /tmp/pubspec.yaml pubspec.yaml
           cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Configure Firebase Android
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          settings_kts = Path("android/settings.gradle.kts")
+          settings_groovy = Path("android/settings.gradle")
+          app_kts = Path("android/app/build.gradle.kts")
+          app_groovy = Path("android/app/build.gradle")
+
+          if settings_kts.exists():
+              text = settings_kts.read_text()
+              plugin_line = '    id("com.google.gms.google-services") version "4.4.2" apply false\n'
+              if 'com.google.gms.google-services' not in text:
+                  marker = 'plugins {\n'
+                  if marker not in text:
+                      raise SystemExit("plugins block not found in settings.gradle.kts")
+                  text = text.replace(marker, marker + plugin_line, 1)
+                  settings_kts.write_text(text)
+          elif settings_groovy.exists():
+              text = settings_groovy.read_text()
+              plugin_line = "    id 'com.google.gms.google-services' version '4.4.2' apply false\n"
+              if 'com.google.gms.google-services' not in text:
+                  marker = 'plugins {\n'
+                  if marker not in text:
+                      raise SystemExit("plugins block not found in settings.gradle")
+                  text = text.replace(marker, marker + plugin_line, 1)
+                  settings_groovy.write_text(text)
+          else:
+              raise SystemExit("Android settings Gradle file not found")
+
+          if app_kts.exists():
+              text = app_kts.read_text()
+              plugin_line = '    id("com.google.gms.google-services")\n'
+              if 'com.google.gms.google-services' not in text:
+                  marker = 'plugins {\n'
+                  if marker not in text:
+                      raise SystemExit("plugins block not found in app build.gradle.kts")
+                  text = text.replace(marker, marker + plugin_line, 1)
+                  app_kts.write_text(text)
+          elif app_groovy.exists():
+              text = app_groovy.read_text()
+              plugin_line = "    id 'com.google.gms.google-services'\n"
+              if 'com.google.gms.google-services' not in text:
+                  marker = 'plugins {\n'
+                  if marker not in text:
+                      raise SystemExit("plugins block not found in app build.gradle")
+                  text = text.replace(marker, marker + plugin_line, 1)
+                  app_groovy.write_text(text)
+          else:
+              raise SystemExit("Android app Gradle file not found")
+          PY
 
       - name: Add Android permissions and DEDA app name
         run: |
