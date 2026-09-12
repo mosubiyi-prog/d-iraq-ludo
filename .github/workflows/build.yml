@@ -22,9 +22,13 @@ jobs:
       - name: Restore DEDA login timers
         run: python3 tools/restore_login_timers.py
 
+      - name: Apply approved DEDA login reference
+        run: python3 tools/apply_deda_reference_login.py
+
       - name: Save DEDA files
         run: |
           cp lib/main.dart /tmp/main.dart
+          cp lib/deda_reference_image.dart /tmp/deda_reference_image.dart
           cp pubspec.yaml /tmp/pubspec.yaml
           cp deda_app_icon.png /tmp/deda_app_icon.png
           cp google-services.json /tmp/google-services.json
@@ -35,6 +39,7 @@ jobs:
       - name: Restore DEDA files
         run: |
           cp /tmp/main.dart lib/main.dart
+          cp /tmp/deda_reference_image.dart lib/deda_reference_image.dart
           cp /tmp/pubspec.yaml pubspec.yaml
           cp /tmp/deda_app_icon.png deda_app_icon.png
           cp /tmp/google-services.json android/app/google-services.json
