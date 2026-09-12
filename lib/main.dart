@@ -12,7 +12,6 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'places_service.dart';
@@ -340,16 +339,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final nameController = TextEditingController();
-  final verificationController = TextEditingController();
   final phoneController = TextEditingController();
   DedaLanguage _language = DedaLanguageState.current;
-
-  String? _verificationId;
-  int? _resendToken;
-  String? _verificationPhone;
-  bool _sendingCode = false;
-  bool _verifyingCode = false;
-  bool _phoneVerified = false;
 
   @override
   void initState() {
@@ -572,151 +563,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> _finishWithCredential(
-    PhoneAuthCredential credential,
-    String normalizedPhone,
-  ) async {
-    if (_verifyingCode) return;
-    setState(() => _verifyingCode = true);
-    try {
-      await FirebaseAuth.instance.signInWithCredential(credential);
-      if (!mounted) return;
-      setState(() {
-        _phoneVerified = true;
-        _verificationPhone = normalizedPhone;
-      });
-      await _completeVerifiedLogin(normalizedPhone);
-    } on FirebaseAuthException catch (e) {
-      final invalidCode = e.code == 'invalid-verification-code' ||
-          e.code == 'session-expired';
-      _showLoginMessage(
-        invalidCode
-            ? 'رمز التحقق غير صحيح أو انتهت صلاحيته. أعد المحاولة.'
-            : 'تعذر التحقق من الرمز الآن. حاول مرة أخرى.',
-        invalidCode
-            ? 'The verification code is invalid or expired. Try again.'
-            : 'Could not verify the code right now. Try again.',
-      );
-    } catch (_) {
-      _showLoginMessage(
-        'تعذر التحقق من الرمز الآن. حاول مرة أخرى.',
-        'Could not verify the code right now. Try again.',
-      );
-    } finally {
-      if (mounted) setState(() => _verifyingCode = false);
-    }
-  }
-
-  Future<void> _sendVerificationCode() async {
-    if (_sendingCode) return;
-    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
-    if (normalizedPhone == null) {
-      _showLoginMessage(
-        'أدخل رقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
-        'Enter a valid Iraqi mobile number such as 07XXXXXXXXX',
-      );
-      return;
-    }
-    if (Firebase.apps.isEmpty) {
-      _showLoginMessage(
-        'خدمة رمز التحقق جاهزة داخل الواجهة، لكن يلزم إكمال ربط إعدادات Firebase للهاتف قبل إرسال SMS حقيقي.',
-        'The verification flow is ready, but Firebase phone configuration must be connected before a real SMS can be sent.',
-      );
-      return;
-    }
-
-    setState(() {
-      _sendingCode = true;
-      _phoneVerified = false;
-      _verificationPhone = normalizedPhone;
-      verificationController.clear();
-    });
-
-    try {
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: normalizedPhone,
-        forceResendingToken: _resendToken,
-        verificationCompleted: (credential) async {
-          await _finishWithCredential(credential, normalizedPhone);
-        },
-        verificationFailed: (e) {
-          if (!mounted) return;
-          setState(() => _sendingCode = false);
-          final messageAr = switch (e.code) {
-            'invalid-phone-number' => 'رقم الهاتف غير صالح لخدمة التحقق.',
-            'too-many-requests' => 'تمت محاولات كثيرة. انتظر قليلاً ثم أعد الإرسال.',
-            _ => 'تعذر إرسال رمز التحقق. تحقق من الإنترنت وإعدادات Firebase ثم حاول مرة أخرى.',
-          };
-          final messageEn = switch (e.code) {
-            'invalid-phone-number' => 'The phone number is not valid for verification.',
-            'too-many-requests' => 'Too many attempts. Wait a little and try again.',
-            _ => 'Could not send the verification code. Check internet and Firebase configuration, then try again.',
-          };
-          _showLoginMessage(messageAr, messageEn);
-        },
-        codeSent: (verificationId, resendToken) {
-          if (!mounted) return;
-          setState(() {
-            _verificationId = verificationId;
-            _resendToken = resendToken;
-            _sendingCode = false;
-          });
-          _showLoginMessage(
-            'تم إرسال رمز من 6 أرقام. إذا التقطه الهاتف تلقائياً ستفتح الواجهة مباشرة.',
-            'A 6-digit code was sent. If Android verifies it automatically, DEDA will open immediately.',
-          );
-        },
-        codeAutoRetrievalTimeout: (verificationId) {
-          if (!mounted) return;
-          setState(() {
-            _verificationId = verificationId;
-            _sendingCode = false;
-          });
-        },
-        timeout: const Duration(seconds: 60),
-      );
-    } catch (_) {
-      if (mounted) setState(() => _sendingCode = false);
-      _showLoginMessage(
-        'تعذر بدء التحقق الآن. تأكد من ربط Firebase للهاتف ثم حاول مرة أخرى.',
-        'Could not start verification. Make sure Firebase phone authentication is connected and try again.',
-      );
-    }
-  }
-
-  Future<void> _verifyEnteredCode() async {
-    if (_verifyingCode) return;
-    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
-    final code = verificationController.text.replaceAll(RegExp(r'\D'), '');
-    if (normalizedPhone == null) {
-      _showLoginMessage(
-        'أدخل رقم هاتف عراقي صحيح أولاً.',
-        'Enter a valid Iraqi mobile number first.',
-      );
-      return;
-    }
-    if (_verificationPhone != normalizedPhone || _verificationId == null) {
-      _showLoginMessage(
-        'اضغط إرسال الرمز لهذا الرقم أولاً.',
-        'Send a verification code to this number first.',
-      );
-      return;
-    }
-    if (code.length != 6) {
-      _showLoginMessage(
-        'أدخل رمز التحقق المكوّن من 6 أرقام.',
-        'Enter the 6-digit verification code.',
-      );
-      return;
-    }
-
-    final credential = PhoneAuthProvider.credential(
-      verificationId: _verificationId!,
-      smsCode: code,
-    );
-    await _finishWithCredential(credential, normalizedPhone);
-  }
-
   Future<void> login() async {
     final name = nameController.text.trim();
     final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
@@ -746,7 +592,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     nameController.dispose();
-    verificationController.dispose();
     phoneController.dispose();
     super.dispose();
   }
@@ -797,7 +642,14 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _dedaCream,
-      body: SafeArea(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/deda_login_bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -808,7 +660,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     children: [
                       Row(
-                        textDirection: TextDirection.ltr,
+                        textDirection: TextDirection.rtl,
                         children: [
                           Expanded(
                             child: Align(
@@ -878,25 +730,81 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 300,
-                          child: Image.memory(
-                            base64Decode(_dedaHeroBase64),
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
-                            gaplessPlayback: true,
-                          ),
+                      SizedBox(
+                        height: 310,
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            const Icon(
+                              Icons.location_on,
+                              color: Color(0xFFD51628),
+                              size: 74,
+                            ),
+                            const Text(
+                              'DEDA',
+                              style: TextStyle(
+                                color: Color(0xFF075B31),
+                                fontSize: 52,
+                                height: 0.95,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                shadows: [
+                                  Shadow(color: Colors.white, blurRadius: 8),
+                                ],
+                              ),
+                            ),
+                            const Text(
+                              'الدليل الدقيق',
+                              style: TextStyle(
+                                color: Color(0xFFC91525),
+                                fontSize: 25,
+                                fontWeight: FontWeight.w900,
+                                shadows: [
+                                  Shadow(color: Colors.white, blurRadius: 7),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                dedaText('معًا… لعراق أجمل', 'Together… for a more beautiful Iraq'),
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Color(0xFF073F25),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(color: Colors.white, blurRadius: 8),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              dedaText(
+                                'هلا بك في تطبيق DEDA\nالدليل الدقيق',
+                                'Welcome to DEDA\nAccurate Guide',
+                              ),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFF073F25),
+                                fontSize: 21,
+                                height: 1.25,
+                                fontWeight: FontWeight.w900,
+                                shadows: [
+                                  Shadow(color: Colors.white, blurRadius: 9),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.54),
+                          color: Colors.white.withOpacity(0.72),
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: const [
                             BoxShadow(
@@ -1000,17 +908,23 @@ class _LoginPageState extends State<LoginPage> {
                         alignment: Alignment.centerLeft,
                         child: _DedaRinadSignature(),
                       ),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          dedaText('بغداد', 'Baghdad'),
-                          style: TextStyle(
-                            color: Color(0xFF78967D),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider(color: Color(0xFF315B3B))),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              dedaText('معك في كل مكان', 'With you everywhere'),
+                              style: const TextStyle(
+                                color: Color(0xFF173C27),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                           ),
-                        ),
+                          const Expanded(child: Divider(color: Color(0xFF315B3B))),
+                        ],
                       ),
                     ],
                   ),
@@ -1019,6 +933,7 @@ class _LoginPageState extends State<LoginPage> {
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -1030,20 +945,20 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      (Icons.restaurant, dedaText('مطاعم', 'Restaurants')),
-      (Icons.hotel, dedaText('فنادق', 'Hotels')),
-      (Icons.local_mall, dedaText('مولات', 'Malls')),
-      (Icons.local_gas_station, dedaText('محطات وقود', 'Fuel')),
-      (Icons.local_pharmacy, dedaText('صيدليات', 'Pharmacies')),
-      (Icons.local_parking, dedaText('مواقف', 'Parking')),
-      (Icons.park, dedaText('حدائق', 'Parks')),
-      (Icons.map_outlined, dedaText('الخريطة', 'Map')),
+      (Icons.restaurant, dedaText('مطاعم', 'Restaurants'), const Color(0xFFF59E0B)),
+      (Icons.hotel, dedaText('فنادق', 'Hotels'), const Color(0xFF2563EB)),
+      (Icons.local_mall, dedaText('مولات', 'Malls'), const Color(0xFF8B3FD6)),
+      (Icons.local_gas_station, dedaText('محطات وقود', 'Fuel'), const Color(0xFF16834A)),
+      (Icons.local_pharmacy, dedaText('صيدليات', 'Pharmacies'), const Color(0xFFE2343F)),
+      (Icons.local_parking, dedaText('مواقف', 'Parking'), const Color(0xFF2596E8)),
+      (Icons.park, dedaText('حدائق', 'Parks'), const Color(0xFF42A93B)),
+      (Icons.map_outlined, dedaText('الخريطة', 'Map'), const Color(0xFF08A1B9)),
     ];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2E7).withOpacity(0.92),
+        color: Colors.white.withOpacity(0.38),
         borderRadius: BorderRadius.circular(28),
         boxShadow: const [
           BoxShadow(
@@ -1081,7 +996,19 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
                 ),
               );
             },
-            child: Padding(
+            child: Container(
+              decoration: BoxDecoration(
+                color: item.$3.withOpacity(0.84),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(0.78)),
+                boxShadow: [
+                  BoxShadow(
+                    color: item.$3.withOpacity(0.30),
+                    blurRadius: 9,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 1),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1089,14 +1016,14 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
                   Container(
                     width: 46,
                     height: 46,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF8FBF4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.22),
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
                     child: Icon(
                       item.$1,
-                      color: _LoginPageState._dedaGreen,
+                      color: Colors.white,
                       size: 25,
                     ),
                   ),
@@ -1107,7 +1034,7 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF18271C),
+                    color: Colors.white,
                       fontSize: 11.8,
                       height: 1.15,
                       fontWeight: FontWeight.w700,
@@ -3986,6 +3913,9 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
+        backgroundColor: Colors.white.withOpacity(0.72),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
         actions: [
@@ -4002,7 +3932,14 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/deda_home_bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             isLandscape ? 24 : 18,
@@ -4025,13 +3962,18 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  TextField(
-                    controller: searchController,
-                    textDirection: DedaLanguageState.direction,
-                    textInputAction: TextInputAction.search,
-                    onSubmitted: (_) => openPlaceSearch(),
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.72),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: TextField(
+                      controller: searchController,
+                      textDirection: DedaLanguageState.direction,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => openPlaceSearch(),
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
                       hintText: dedaText(
                         'ابحث عن مكان بالاسم أو عن نوع مكان...',
                         'Search by place name or category...',
@@ -4050,8 +3992,9 @@ class _HomePageState extends State<HomePage> {
                               },
                               icon: const Icon(Icons.clear),
                             ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
                       ),
                     ),
                   ),
@@ -4129,6 +4072,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -4155,10 +4099,17 @@ class DedaCategory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = _accentForTitle(title);
     return Card(
-      elevation: 3,
+      elevation: 5,
+      color: accent.withOpacity(0.78),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: Colors.white.withOpacity(0.75)),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -4166,21 +4117,36 @@ class DedaCategory extends StatelessWidget {
             Icon(
               icon,
               size: 50,
-              color: const Color(0xFF39733D),
+              color: Colors.white,
             ),
             const SizedBox(height: 10),
             Text(
               title,
               textAlign: TextAlign.center,
               style: const TextStyle(
+                color: Colors.white,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
+                shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Color _accentForTitle(String value) {
+    if (value.contains('مطاعم') || value.contains('Restaurant')) return const Color(0xFFF59E0B);
+    if (value.contains('فنادق') || value.contains('Hotel')) return const Color(0xFF2563EB);
+    if (value.contains('مول') || value.contains('Mall')) return const Color(0xFF8B3FD6);
+    if (value.contains('وقود') || value.contains('Fuel')) return const Color(0xFF16834A);
+    if (value.contains('صيدل') || value.contains('Pharmac')) return const Color(0xFFE2343F);
+    if (value.contains('مواقف') || value.contains('Parking')) return const Color(0xFF2596E8);
+    if (value.contains('حدائق') || value.contains('Park')) return const Color(0xFF42A93B);
+    if (value.contains('الخريطة') || value.contains('Map')) return const Color(0xFF08A1B9);
+    if (value.contains('الشخصية') || value.contains('personal')) return const Color(0xFF149E91);
+    return const Color(0xFFB98918);
   }
 }
 

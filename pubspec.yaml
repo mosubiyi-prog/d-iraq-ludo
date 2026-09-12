@@ -19,7 +19,6 @@ dependencies:
   qr_flutter: ^4.1.0
   url_launcher: ^6.3.1
   firebase_core: ^3.8.0
-  firebase_auth: ^5.3.3
   image_picker: ^1.1.2
 
 dev_dependencies:
@@ -29,3 +28,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/deda_login_bg.jpg
+    - assets/deda_home_bg.jpg
