@@ -22,6 +22,20 @@ jobs:
       - name: Restore DEDA login timers
         run: python3 tools/restore_login_timers.py
 
+      - name: Restore exact approved DEDA artwork
+        run: |
+          cat assets/deda_ref_part00.txt assets/deda_ref_part01.txt assets/deda_ref_part02.txt assets/deda_ref_part03.txt \
+            | tr -d '\r\n\t ' \
+            | base64 --decode > assets/deda_login_reference.jpg
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('assets/deda_login_reference.jpg')
+          data = p.read_bytes()
+          if not (data.startswith(b'\xff\xd8') and data.endswith(b'\xff\xd9')):
+              raise SystemExit('Reconstructed approved artwork is not a valid JPEG')
+          print(f'Approved DEDA artwork restored: {len(data)} bytes')
+          PY
+
       - name: Apply approved DEDA login reference
         run: python3 tools/apply_deda_reference_login.py
 
@@ -111,24 +125,14 @@ jobs:
               '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
           ]
 
-          missing = [
-              permission
-              for permission in permissions
-              if permission not in text
-          ]
+          missing = [permission for permission in permissions if permission not in text]
 
           if missing:
               pos = text.find(">")
-              inserted = "\n" + "\n".join(
-                  f"    {permission}" for permission in missing
-              ) + "\n"
+              inserted = "\n" + "\n".join(f"    {permission}" for permission in missing) + "\n"
               text = text[:pos + 1] + inserted + text[pos + 1:]
 
-          text = text.replace(
-              'android:label="d_iraq_ludo"',
-              'android:label="DEDA"',
-          )
-
+          text = text.replace('android:label="d_iraq_ludo"', 'android:label="DEDA"')
           path.write_text(text)
           PY
 
@@ -155,16 +159,12 @@ jobs:
           from pathlib import Path
 
           raw = os.environ["DEDA_KEYSTORE_BASE64"].strip()
-
           if raw.startswith("DEDA_KEYSTORE_BASE64="):
               raw = raw.split("=", 1)[1].strip()
-
           raw = "".join(raw.split())
           data = base64.b64decode(raw, validate=True)
-
           output = Path("android/app/deda-release.jks")
           output.write_bytes(data)
-
           if output.stat().st_size == 0:
               raise SystemExit("Signing key is empty")
           PY
@@ -200,18 +200,13 @@ jobs:
               }
 
           """
-
               if marker not in text:
                   raise SystemExit("buildTypes not found in build.gradle.kts")
-
               text = text.replace(marker, signing + marker, 1)
-
               old = 'signingConfig = signingConfigs.getByName("debug")'
               new = 'signingConfig = signingConfigs.getByName("release")'
-
               if old not in text:
                   raise SystemExit("Debug signing configuration not found")
-
               text = text.replace(old, new, 1)
               kts.write_text(text)
 
@@ -228,29 +223,16 @@ jobs:
               }
 
           """
-
               if marker not in text:
                   raise SystemExit("buildTypes not found in build.gradle")
-
               text = text.replace(marker, signing + marker, 1)
-
               if "signingConfig signingConfigs.debug" in text:
-                  text = text.replace(
-                      "signingConfig signingConfigs.debug",
-                      "signingConfig signingConfigs.release",
-                      1,
-                  )
+                  text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release", 1)
               elif "signingConfig = signingConfigs.debug" in text:
-                  text = text.replace(
-                      "signingConfig = signingConfigs.debug",
-                      "signingConfig = signingConfigs.release",
-                      1,
-                  )
+                  text = text.replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release", 1)
               else:
                   raise SystemExit("Debug signing configuration not found")
-
               groovy.write_text(text)
-
           else:
               raise SystemExit("Android Gradle file not found")
           PY
