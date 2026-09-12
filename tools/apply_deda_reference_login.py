@@ -31,14 +31,10 @@ if "import 'deda_reference_image.dart';" not in text:
     marker = "import 'places_service.dart';"
     if marker not in text:
         raise SystemExit('places_service import marker not found')
-    text = text.replace(
-        marker,
-        marker + "\nimport 'deda_reference_image.dart';",
-        1,
-    )
+    text = text.replace(marker, marker + "\nimport 'deda_reference_image.dart';", 1)
 
-# Add a proportional crop helper so we can preserve the exact approved artwork
-# while keeping the middle login fields truly interactive.
+# A proportional crop helper lets us preserve the exact approved artwork while
+# keeping the real language/admin/login controls interactive.
 if 'Widget _referenceCrop(double fromY, double toY)' not in text:
     marker = '  InputDecoration _fieldDecoration({'
     helper = r'''  Widget _referenceCrop(double fromY, double toY) {
@@ -77,8 +73,7 @@ if 'Widget _referenceCrop(double fromY, double toY)' not in text:
         raise SystemExit('field decoration marker not found')
     text = text.replace(marker, helper + marker, 1)
 
-# Use the approved artwork as the scenic top section. Start below the mock
-# language/status area in the reference so our real language/admin controls stay functional.
+# Approved scenic header: Iraqi flag/map/landmarks, DEDA logo and welcome text.
 old_hero = '''                      ClipRRect(
                         borderRadius: BorderRadius.circular(24),
                         child: Image.memory(
@@ -88,26 +83,27 @@ old_hero = '''                      ClipRRect(
                           gaplessPlayback: true,
                         ),
                       ),'''
-new_hero = '''                      _referenceCrop(58, 345),'''
+new_hero = '''                      _referenceCrop(58, 350),'''
 if old_hero in text:
     text = text.replace(old_hero, new_hero, 1)
 elif new_hero not in text:
     raise SystemExit('hero block marker not found')
 
-# Remove the OTP code field, SMS send button, and SMS helper text from the login card.
+# Remove the OTP field, SMS send button and SMS explanatory text. The approved
+# form now has only full name + Iraqi phone + sign in.
 name_marker = '                              controller: nameController,'
 phone_marker = '''                            TextField(
                               controller: phoneController,'''
 name_pos = text.find(name_marker)
 if name_pos == -1:
     raise SystemExit('name field marker not found')
-start = text.find('                            const SizedBox(height: 10),', name_pos)
-phone_pos = text.find(phone_marker, start)
-if start == -1 or phone_pos == -1:
+otp_start = text.find('                            const SizedBox(height: 10),', name_pos)
+phone_pos = text.find(phone_marker, otp_start)
+if otp_start == -1 or phone_pos == -1:
     raise SystemExit('OTP block boundaries not found')
-text = text[:start] + '                            const SizedBox(height: 10),\n' + text[phone_pos:]
+text = text[:otp_start] + '                            const SizedBox(height: 10),\n' + text[phone_pos:]
 
-# Direct login: validate the Iraqi number, then save name + phone and open DEDA.
+# Direct sign-in: validate the Iraqi number, then save name + phone and open DEDA.
 login_start = text.find('  Future<void> login() async {')
 login_end = text.find('  void _openContact() {', login_start)
 if login_start == -1 or login_end == -1:
@@ -128,12 +124,12 @@ new_login = '''  Future<void> login() async {
 '''
 text = text[:login_start] + new_login + text[login_end:]
 
-# Replace the generic preview/signature area with the exact lower section of the
-# approved reference artwork, preserving the eight category tiles plus Rinad/signature.
-bottom_start_marker = '''                      const SizedBox(height: 14),
-                      Row(
-                        children: ['''
-bottom_start = text.find(bottom_start_marker, phone_pos)
+# Replace the generic lower preview with the exact lower section of the approved
+# artwork: Iraq-wide slogan, eight category tiles, Rinad name/signature, and Iraq footer.
+discover_idx = text.find("dedaText('اكتشف ما يحيط بك', 'Discover what is around you')")
+if discover_idx == -1:
+    raise SystemExit('discover heading marker not found')
+bottom_start = text.rfind('                      const SizedBox(height: 14),', 0, discover_idx)
 if bottom_start == -1:
     raise SystemExit('bottom preview start marker not found')
 end_marker = '''                      Align(
@@ -147,16 +143,14 @@ end_marker = '''                      Align(
                           ),
                         ),
                       ),'''
-bottom_end_start = text.find(end_marker, bottom_start)
+bottom_end_start = text.find(end_marker, discover_idx)
 if bottom_end_start == -1:
     raise SystemExit('bottom preview end marker not found')
 bottom_end = bottom_end_start + len(end_marker)
-replacement = '''                      const SizedBox(height: 14),
-                      _referenceCrop(500, 768),'''
-text = text[:bottom_start] + replacement + text[bottom_end:]
+text = text[:bottom_start] + '''                      const SizedBox(height: 14),
+                      _referenceCrop(530, 768),''' + text[bottom_end:]
 
-# Make the administration wording explicit while preserving the existing contact page
-# with direct contact / report problem / explain case / send photo options.
+# Administration contact wording; existing contact page retains the four agreed options.
 text = text.replace(
     "'التواصل مع الشركة',\n                                    'Contact company',",
     "'التواصل مع الإدارة',\n                                    'Contact administration',",
@@ -167,4 +161,4 @@ if text == original:
     raise SystemExit('No changes were applied')
 
 main_path.write_text(text, encoding='utf-8')
-print('Applied DEDA approved reference login: direct name+phone login, exact artwork crops, administration contact.')
+print('Applied approved DEDA reference login: exact artwork details + direct name/phone sign-in + administration contact.')
