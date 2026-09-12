@@ -33,8 +33,10 @@ if "import 'deda_reference_image.dart';" not in text:
         raise SystemExit('places_service import marker not found')
     text = text.replace(marker, marker + "\nimport 'deda_reference_image.dart';", 1)
 
-# A proportional crop helper lets us preserve the exact approved artwork while
-# keeping the real language/admin/login controls interactive.
+# A proportional crop helper preserves the approved artwork exactly while
+# keeping the real language/admin/login controls interactive. The Stack keeps
+# the full source image laid out at its real scaled height before clipping;
+# this avoids the blank crop produced by Transform under tight constraints.
 if 'Widget _referenceCrop(double fromY, double toY)' not in text:
     marker = '  InputDecoration _fieldDecoration({'
     helper = r'''  Widget _referenceCrop(double fromY, double toY) {
@@ -47,20 +49,31 @@ if 'Widget _referenceCrop(double fromY, double toY)' not in text:
         builder: (context, constraints) {
           final width = constraints.maxWidth;
           final scale = width / sourceWidth;
+          final cropHeight = (toY - fromY) * scale;
+          final imageHeight = sourceHeight * scale;
+
           return SizedBox(
-            height: (toY - fromY) * scale,
-            child: ClipRect(
-              child: Transform.translate(
-                offset: Offset(0, -fromY * scale),
-                child: Image.memory(
-                  base64Decode(dedaLoginReferenceBase64),
+            width: width,
+            height: cropHeight,
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned(
+                  left: 0,
+                  top: -fromY * scale,
                   width: width,
-                  height: sourceHeight * scale,
-                  fit: BoxFit.fill,
-                  alignment: Alignment.topCenter,
-                  gaplessPlayback: true,
+                  height: imageHeight,
+                  child: Image.memory(
+                    base64Decode(dedaLoginReferenceBase64),
+                    width: width,
+                    height: imageHeight,
+                    fit: BoxFit.fill,
+                    alignment: Alignment.topCenter,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.high,
+                  ),
                 ),
-              ),
+              ],
             ),
           );
         },
