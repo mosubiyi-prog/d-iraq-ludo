@@ -12,6 +12,8 @@ class PlaceInfo {
   final String? phone;
   final String? website;
   final String? openingHours;
+  final bool isDedaRegistered;
+  final bool isAvailableNow;
 
   const PlaceInfo({
     required this.name,
@@ -21,6 +23,8 @@ class PlaceInfo {
     this.phone,
     this.website,
     this.openingHours,
+    this.isDedaRegistered = false,
+    this.isAvailableNow = false,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -32,6 +36,8 @@ class PlaceInfo {
         'phone': phone,
         'website': website,
         'openingHours': openingHours,
+        'isDedaRegistered': isDedaRegistered,
+        'isAvailableNow': isAvailableNow,
       };
 
   factory PlaceInfo.fromJson(Map<String, dynamic> json) {
@@ -46,6 +52,8 @@ class PlaceInfo {
       phone: json['phone']?.toString(),
       website: json['website']?.toString(),
       openingHours: json['openingHours']?.toString(),
+      isDedaRegistered: json['isDedaRegistered'] == true,
+      isAvailableNow: json['isAvailableNow'] == true,
     );
   }
 }
@@ -112,12 +120,20 @@ out center tags;
     final text = queryText.trim();
     if (text.length < 2) return [];
 
+    try {
+      final nominatimResults = await _searchIraqWithNominatim(text);
+      if (nominatimResults.isNotEmpty) return nominatimResults;
+    } catch (_) {
+      // Fall back to Overpass below when the name-search service is busy.
+    }
+
     final escaped = _escapeOverpassRegex(text);
     final query = '''
 [out:json][timeout:14];
+area["ISO3166-1"="IQ"][admin_level=2]->.iraq;
 (
-  nwr(around:$radiusMeters,${center.latitude},${center.longitude})["name"~"$escaped",i];
-  nwr(around:$radiusMeters,${center.latitude},${center.longitude})["name:ar"~"$escaped",i];
+  nwr(area.iraq)["name"~"$escaped",i];
+  nwr(area.iraq)["name:ar"~"$escaped",i];
 );
 out center tags;
 ''';
@@ -136,6 +152,87 @@ out center tags;
       if (seen.add(key)) unique.add(place);
     }
     return unique;
+  }
+
+  Future<List<PlaceInfo>> _searchIraqWithNominatim(String text) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    try {
+      final uri = Uri.https(
+        'nominatim.openstreetmap.org',
+        '/search',
+        <String, String>{
+          'format': 'jsonv2',
+          'q': text,
+          'countrycodes': 'iq',
+          'limit': '50',
+          'addressdetails': '1',
+          'accept-language': 'ar',
+        },
+      );
+      final request = await client.getUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.userAgentHeader, 'DEDA/1.0 (Android)');
+      final response = await request.close().timeout(_requestTimeout);
+      final body = await response.transform(utf8.decoder).join();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('Nominatim error: ${response.statusCode}');
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! List) return [];
+
+      final places = <PlaceInfo>[];
+      final seen = <String>{};
+      for (final raw in decoded) {
+        if (raw is! Map) continue;
+        final item = Map<String, dynamic>.from(raw);
+        final latitude = double.tryParse((item['lat'] ?? '').toString());
+        final longitude = double.tryParse((item['lon'] ?? '').toString());
+        if (latitude == null || longitude == null) continue;
+        final displayName = (item['display_name'] ?? '').toString().trim();
+        final shortName = (item['name'] ?? '').toString().trim();
+        final name = shortName.isNotEmpty
+            ? shortName
+            : (displayName.split(',').first.trim());
+        final key = '${name.toLowerCase()}|${latitude.toStringAsFixed(5)}|'
+            '${longitude.toStringAsFixed(5)}';
+        if (!seen.add(key)) continue;
+        places.add(
+          PlaceInfo(
+            name: name.isEmpty ? text : name,
+            type: _typeFromNominatim(item),
+            location: LatLng(latitude, longitude),
+            address: displayName,
+          ),
+        );
+      }
+      return places;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  String _typeFromNominatim(Map<String, dynamic> item) {
+    final type = (item['type'] ?? '').toString();
+    switch (type) {
+      case 'restaurant':
+        return 'مطعم';
+      case 'hotel':
+        return 'فندق';
+      case 'mall':
+        return 'مول';
+      case 'fuel':
+        return 'محطة وقود';
+      case 'pharmacy':
+        return 'صيدلية';
+      case 'parking':
+        return 'موقف';
+      case 'park':
+        return 'حديقة';
+      case 'hospital':
+        return 'مستشفى';
+      default:
+        return 'مكان';
+    }
   }
 
   String _escapeOverpassRegex(String value) {

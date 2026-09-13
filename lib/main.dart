@@ -2023,11 +2023,16 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   bool _loadingDraft = true;
   bool _gettingLocation = false;
   bool _saving = false;
+  bool _isAvailableNow = false;
   DateTime? _savedAt;
 
   static const List<Map<String, String>> _categories = [
     {'code': 'restaurant', 'ar': 'مطعم', 'en': 'Restaurant'},
     {'code': 'hotel', 'ar': 'فندق', 'en': 'Hotel'},
+    {'code': 'garage', 'ar': 'كراج', 'en': 'Garage'},
+    {'code': 'shop', 'ar': 'متجر', 'en': 'Shop'},
+    {'code': 'hospital', 'ar': 'مستشفى', 'en': 'Hospital'},
+    {'code': 'tourism', 'ar': 'مكان سياحي', 'en': 'Tourist place'},
     {'code': 'mall', 'ar': 'مول', 'en': 'Mall'},
     {'code': 'fuel', 'ar': 'محطة وقود', 'en': 'Fuel station'},
     {'code': 'pharmacy', 'ar': 'صيدلية', 'en': 'Pharmacy'},
@@ -2118,6 +2123,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
             (data['otherCategoryText'] ?? '').toString();
         _latitude = (data['latitude'] as num?)?.toDouble();
         _longitude = (data['longitude'] as num?)?.toDouble();
+        _isAvailableNow = data['isAvailableNow'] == true;
         final savedAt = data['savedAt']?.toString();
         if (savedAt != null && savedAt.isNotEmpty) {
           _savedAt = DateTime.tryParse(savedAt);
@@ -2164,6 +2170,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         'description': _descriptionController.text.trim(),
         'latitude': _latitude,
         'longitude': _longitude,
+        'isAvailableNow': _isAvailableNow,
         'savedAt': now.toIso8601String(),
       };
       await prefs.setString(_draftKey, jsonEncode(data));
@@ -2417,7 +2424,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           DropdownButtonFormField<String>(
                             value: _categoryCode,
                             decoration: _fieldDecoration(
-                              label: dedaText('نوع المكان', 'Place category'),
+                              label: dedaText('الفئة الرئيسية', 'Main category'),
                               icon: Icons.category_outlined,
                             ),
                             items: _categories
@@ -2440,8 +2447,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               value: _otherCategoryCode,
                               decoration: _fieldDecoration(
                                 label: dedaText(
-                                  'حدد نوع المكان',
-                                  'Specify place type',
+                                  'التصنيف التفصيلي',
+                                  'Detailed category',
                                 ),
                                 icon: Icons.category_outlined,
                               ),
@@ -2618,6 +2625,74 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                               'Use my current location',
                                             ),
                                     ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Card(
+                            elevation: 0,
+                            color: const Color(0xFFF0F5EE),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    dedaText(
+                                      'حالة التواجد الآن',
+                                      'Current availability',
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ChoiceChip(
+                                          selected: _isAvailableNow,
+                                          selectedColor: const Color(0xFFBFE8C8),
+                                          avatar: const Icon(
+                                            Icons.circle,
+                                            color: Color(0xFF159447),
+                                            size: 14,
+                                          ),
+                                          label: Text(
+                                            dedaText('متواجد الآن', 'Available now'),
+                                          ),
+                                          onSelected: (_) => setState(
+                                            () => _isAvailableNow = true,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ChoiceChip(
+                                          selected: !_isAvailableNow,
+                                          selectedColor: const Color(0xFFE0E3E0),
+                                          avatar: const Icon(
+                                            Icons.circle,
+                                            color: Color(0xFF777D78),
+                                            size: 14,
+                                          ),
+                                          label: Text(
+                                            dedaText(
+                                              'غير متواجد حاليًا',
+                                              'Not available',
+                                            ),
+                                          ),
+                                          onSelected: (_) => setState(
+                                            () => _isAvailableNow = false,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -3916,6 +3991,21 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.white.withOpacity(0.72),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: dedaText('مركز المساعدة', 'Help center'),
+          icon: const Icon(Icons.support_agent),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DedaContactPage(
+                  initialName: DedaPreferences.userName,
+                  initialPhone: DedaPreferences.phone,
+                ),
+              ),
+            );
+          },
+        ),
         title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
         actions: [
@@ -4174,11 +4264,29 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   Position? currentPosition;
   List<PlaceInfo> places = [];
   bool isLoading = false;
+  bool showAvailableOnly = false;
   int searchedRadiusMeters = 3000;
   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
   String statusMessage =
       dedaText('اضغط على الزر للبحث عن الأماكن القريبة منك', 'Tap the button to search for nearby places');
+
+  List<PlaceInfo> get visiblePlaces => showAvailableOnly
+      ? places.where((place) => place.isDedaRegistered && place.isAvailableNow).toList()
+      : places;
+
+  bool _matchesCategory(PlaceInfo place) {
+    const singular = <String, String>{
+      'مطاعم': 'مطعم',
+      'فنادق': 'فندق',
+      'مولات': 'مول',
+      'محطات وقود': 'محطة وقود',
+      'صيدليات': 'صيدلية',
+      'مواقف': 'موقف',
+      'حدائق': 'حديقة',
+    };
+    return place.type == (singular[widget.category.title] ?? widget.category.title);
+  }
 
   String radiusLabel(int meters) {
     if (meters < 1000) {
@@ -4301,6 +4409,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       });
 
       List<PlaceInfo> results = [];
+      final registeredPlaces = await DedaRegisteredPlacesStore.readAll();
 
       for (final radius in searchRadiiMeters) {
         if (!mounted) return;
@@ -4318,6 +4427,21 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           type: widget.category.title,
           radiusMeters: radius,
         );
+
+        for (final place in registeredPlaces) {
+          final distance = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            place.location.latitude,
+            place.location.longitude,
+          );
+          if (_matchesCategory(place) && distance <= radius) {
+            results.removeWhere(
+              (item) => DedaPlacesStore.placeId(item) == DedaPlacesStore.placeId(place),
+            );
+            results.add(place);
+          }
+        }
 
         if (results.isNotEmpty) {
           break;
@@ -4477,7 +4601,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           color: Colors.red,
         ),
       ),
-      ...places.map(
+      ...visiblePlaces.map(
         (place) {
           return Marker(
             point: place.location,
@@ -4487,22 +4611,10 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
               onTap: () {
                 showPlaceInfo(place);
               },
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 4,
-                      color: Colors.black26,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  widget.category.icon,
-                  size: 30,
-                  color: const Color(0xFF39733D),
-                ),
+              child: DedaMapPlaceMarker(
+                place: place,
+                icon: widget.category.icon,
+                onTap: () => showPlaceInfo(place),
               ),
             ),
           );
@@ -4529,7 +4641,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                       : CameraFit.coordinates(
                           coordinates: [
                             userPoint,
-                            ...places.map((place) => place.location),
+                            ...visiblePlaces.map((place) => place.location),
                           ],
                           padding: const EdgeInsets.all(55),
                           maxZoom: 16,
@@ -4727,6 +4839,25 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   ),
                 ),
               if (currentPosition != null) ...[
+                Card(
+                  elevation: 0,
+                  child: SwitchListTile(
+                    value: showAvailableOnly,
+                    activeColor: const Color(0xFF159447),
+                    secondary: const Icon(Icons.online_prediction),
+                    title: Text(
+                      dedaText(
+                        'إظهار المتواجدين الآن فقط',
+                        'Show available now only',
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    onChanged: (value) => setState(
+                      () => showAvailableOnly = value,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 buildMap(currentPosition!),
                 const SizedBox(height: 18),
               ],
@@ -4749,11 +4880,11 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 ),
               ),
               const SizedBox(height: 18),
-              if (places.isNotEmpty) ...[
+              if (visiblePlaces.isNotEmpty) ...[
                 Text(
                   dedaText(
-                    'الأماكن القريبة (${places.length})',
-                    'Nearby places (${places.length})',
+                    'الأماكن القريبة (${visiblePlaces.length})',
+                    'Nearby places (${visiblePlaces.length})',
                   ),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
@@ -4762,7 +4893,18 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...places.take(20).map(buildPlaceCard),
+                ...visiblePlaces.take(20).map(buildPlaceCard),
+              ] else if (showAvailableOnly && places.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Text(
+                    dedaText(
+                      'لا يوجد صاحب مكان مسجل في DEDA ومتواجد الآن ضمن النتائج.',
+                      'No DEDA-registered place owner is currently available in these results.',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               ],
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -4815,6 +4957,13 @@ class DedaFullScreenMapPage extends StatefulWidget {
 class _DedaFullScreenMapPageState
     extends State<DedaFullScreenMapPage> {
   late DedaMapStyle mapStyle;
+  bool showAvailableOnly = false;
+
+  List<PlaceInfo> get visiblePlaces => showAvailableOnly
+      ? widget.places
+          .where((place) => place.isDedaRegistered && place.isAvailableNow)
+          .toList()
+      : widget.places;
 
   @override
   void initState() {
@@ -4893,7 +5042,7 @@ class _DedaFullScreenMapPageState
           color: Colors.red,
         ),
       ),
-      ...widget.places.map(
+      ...visiblePlaces.map(
         (place) => Marker(
           point: place.location,
           width: 50,
@@ -4902,22 +5051,10 @@ class _DedaFullScreenMapPageState
             onTap: () {
               showPlaceInfo(place);
             },
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 4,
-                    color: Colors.black26,
-                  ),
-                ],
-              ),
-              child: Icon(
-                widget.categoryIcon,
-                size: 30,
-                color: const Color(0xFF39733D),
-              ),
+            child: DedaMapPlaceMarker(
+              place: place,
+              icon: widget.categoryIcon,
+              onTap: () => showPlaceInfo(place),
             ),
           ),
         ),
@@ -4934,12 +5071,12 @@ class _DedaFullScreenMapPageState
                 options: MapOptions(
                   initialCenter: userPoint,
                   initialZoom: widget.initialZoom,
-                  initialCameraFit: widget.places.isEmpty
+                  initialCameraFit: visiblePlaces.isEmpty
                       ? null
                       : CameraFit.coordinates(
                           coordinates: [
                             userPoint,
-                            ...widget.places.map((place) => place.location),
+                            ...visiblePlaces.map((place) => place.location),
                           ],
                           padding: const EdgeInsets.all(70),
                           maxZoom: 16,
@@ -5028,6 +5165,31 @@ class _DedaFullScreenMapPageState
               ),
             ),
             Positioned(
+              top: 64,
+              left: 12,
+              right: 12,
+              child: Center(
+                child: FilterChip(
+                  selected: showAvailableOnly,
+                  selectedColor: const Color(0xFFBFE8C8),
+                  avatar: const Icon(
+                    Icons.online_prediction,
+                    color: Color(0xFF159447),
+                  ),
+                  label: Text(
+                    dedaText(
+                      'إظهار المتواجدين الآن فقط',
+                      'Show available now only',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  onSelected: (value) => setState(
+                    () => showAvailableOnly = value,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
               left: 16,
               right: 16,
               bottom: 18,
@@ -5050,8 +5212,8 @@ class _DedaFullScreenMapPageState
                     ),
                     child: Text(
                       DedaLanguageState.isArabic
-                          ? '${widget.categoryTitle} • ${widget.places.length} نتيجة'
-                          : '${dedaCategoryLabel(widget.categoryTitle)} • ${widget.places.length} results',
+                          ? '${widget.categoryTitle} • ${visiblePlaces.length} نتيجة'
+                          : '${dedaCategoryLabel(widget.categoryTitle)} • ${visiblePlaces.length} results',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                       ),
@@ -5097,6 +5259,12 @@ IconData dedaIconForPlaceType(String type) {
       return Icons.local_cafe;
     case 'مستشفى':
       return Icons.local_hospital;
+    case 'كراج':
+      return Icons.garage;
+    case 'متجر':
+      return Icons.store;
+    case 'مكان سياحي':
+      return Icons.tour;
     default:
       return Icons.place;
   }
@@ -5170,6 +5338,143 @@ class DedaPlacesStore {
   }
 }
 
+class DedaRegisteredPlacesStore {
+  static const String _ownerDraftKey = 'deda_owner_place_draft_v1';
+
+  static Future<List<PlaceInfo>> readAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_ownerDraftKey);
+    if (raw == null || raw.isEmpty) return const <PlaceInfo>[];
+
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final name = (data['name'] ?? '').toString().trim();
+      final latitude = (data['latitude'] as num?)?.toDouble();
+      final longitude = (data['longitude'] as num?)?.toDouble();
+      if (name.isEmpty || latitude == null || longitude == null) {
+        return const <PlaceInfo>[];
+      }
+
+      final governorate = (data['governorate'] ?? '').toString().trim();
+      final address = (data['address'] ?? '').toString().trim();
+      return <PlaceInfo>[
+        PlaceInfo(
+          name: name,
+          type: _arabicType(data),
+          location: LatLng(latitude, longitude),
+          address: <String>[
+            if (governorate.isNotEmpty) governorate,
+            if (address.isNotEmpty) address,
+          ].join('، '),
+          phone: (data['phone'] ?? '').toString(),
+          openingHours: (data['hours'] ?? '').toString(),
+          isDedaRegistered: true,
+          isAvailableNow: data['isAvailableNow'] == true,
+        ),
+      ];
+    } catch (_) {
+      return const <PlaceInfo>[];
+    }
+  }
+
+  static String _arabicType(Map<String, dynamic> data) {
+    final code = (data['category'] ?? 'other').toString();
+    const labels = <String, String>{
+      'restaurant': 'مطعم',
+      'hotel': 'فندق',
+      'garage': 'كراج',
+      'shop': 'متجر',
+      'hospital': 'مستشفى',
+      'tourism': 'مكان سياحي',
+      'mall': 'مول',
+      'fuel': 'محطة وقود',
+      'pharmacy': 'صيدلية',
+      'parking': 'موقف',
+      'park': 'حديقة',
+    };
+    if (code != 'other') return labels[code] ?? 'مكان';
+    final custom = (data['otherCategoryText'] ?? '').toString().trim();
+    return custom.isEmpty ? 'مكان' : custom;
+  }
+}
+
+class DedaMapPlaceMarker extends StatelessWidget {
+  final PlaceInfo place;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const DedaMapPlaceMarker({
+    super.key,
+    required this.place,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!place.isDedaRegistered) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(blurRadius: 4, color: Colors.black26)],
+          ),
+          child: Icon(icon, size: 30, color: const Color(0xFF39733D)),
+        ),
+      );
+    }
+
+    final active = place.isAvailableNow;
+    final pinColor = active ? const Color(0xFF159447) : const Color(0xFF707873);
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: pinColor, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: active ? 13 : 5,
+                  spreadRadius: active ? 4 : 1,
+                  color: pinColor.withOpacity(active ? 0.72 : 0.3),
+                ),
+              ],
+            ),
+            child: Icon(icon, size: 29, color: pinColor),
+          ),
+          Positioned(
+            right: -6,
+            bottom: -5,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF17652F),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: const Text(
+                'DEDA',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 7,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class DedaPlaceSearchPage extends StatefulWidget {
   final String initialQuery;
 
@@ -5189,7 +5494,6 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
   List<PlaceInfo> _results = [];
   bool _loading = false;
   String _status = dedaText('اكتب اسم المكان ثم اضغط بحث', 'Type a place name, then tap Search');
-  int _radiusMeters = 25000;
 
   @override
   void initState() {
@@ -5231,11 +5535,6 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     );
   }
 
-  String _radiusLabel(int meters) {
-    final value = meters >= 100000 ? '100' : '25';
-    return DedaLanguageState.isArabic ? '$value كم' : '$value km';
-  }
-
   String _distance(PlaceInfo place) {
     final position = _position;
     if (position == null) return '';
@@ -5270,20 +5569,22 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
       _position = position;
       final center = LatLng(position.latitude, position.longitude);
 
-      List<PlaceInfo> found = [];
-      for (final radius in const [25000, 100000]) {
-        _radiusMeters = radius;
-        if (mounted) {
-          setState(() {
-            _status = dedaText('جاري البحث عن "$query" ضمن ${_radiusLabel(radius)}...', 'Searching for "$query" within ${_radiusLabel(radius)}...');
-          });
-        }
-        found = await _placesService.searchPlacesByName(
-          center: center,
-          queryText: query,
-          radiusMeters: radius,
-        );
-        if (found.isNotEmpty) break;
+      if (mounted) {
+        setState(() {
+          _status = dedaText(
+            'جاري البحث عن "$query" في جميع أنحاء العراق...',
+            'Searching for "$query" across Iraq...',
+          );
+        });
+      }
+      final found = await _placesService.searchPlacesByName(
+        center: center,
+        queryText: query,
+      );
+      final registered = await DedaRegisteredPlacesStore.readAll();
+      final needle = query.toLowerCase();
+      for (final place in registered) {
+        if (place.name.toLowerCase().contains(needle)) found.add(place);
       }
 
       found.sort((a, b) {
@@ -5307,8 +5608,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
         _results = found;
         _status = found.isEmpty
             ? dedaText(
-                'لم نعثر على مكان بهذا الاسم ضمن ${_radiusLabel(_radiusMeters)}.',
-                'No place with this name was found within ${_radiusLabel(_radiusMeters)}.',
+                'لم نعثر على مكان بهذا الاسم داخل العراق.',
+                'No place with this name was found in Iraq.',
               )
             : dedaText(
                 'تم العثور على ${found.length} نتيجة.',
@@ -5664,6 +5965,50 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 17, color: Color(0xFF5B665D)),
               ),
+              if (place.isDedaRegistered) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: place.isAvailableNow
+                          ? const Color(0xFFD9F2DF)
+                          : const Color(0xFFE8EAE8),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          size: 13,
+                          color: place.isAvailableNow
+                              ? const Color(0xFF159447)
+                              : const Color(0xFF777D78),
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          place.isAvailableNow
+                              ? dedaText('صاحب المكان متواجد الآن', 'Place owner is available now')
+                              : dedaText('صاحب المكان غير متواجد حاليًا', 'Place owner is not currently available'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 7),
+                        const Text(
+                          'DEDA',
+                          style: TextStyle(
+                            color: Color(0xFF17652F),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Card(
                 child: Padding(
@@ -7211,12 +7556,28 @@ class MapReadyPage extends StatefulWidget {
 }
 
 class _MapReadyPageState extends State<MapReadyPage> {
+  final PlacesService _placesService = PlacesService();
+  final TextEditingController _mapSearchController = TextEditingController();
   Position? currentPosition;
   LatLng? selectedDestination;
+  List<PlaceInfo> mapSearchResults = <PlaceInfo>[];
+  List<PlaceInfo> registeredPlaces = <PlaceInfo>[];
   bool isLoading = false;
+  bool isMapSearching = false;
+  bool showAvailableOnly = false;
   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
   String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
+
+  List<PlaceInfo> get visibleRegisteredPlaces => showAvailableOnly
+      ? registeredPlaces.where((place) => place.isAvailableNow).toList()
+      : registeredPlaces;
+
+  @override
+  void dispose() {
+    _mapSearchController.dispose();
+    super.dispose();
+  }
 
   Future<void> determinePosition() async {
     if (isLoading) return;
@@ -7264,8 +7625,10 @@ class _MapReadyPageState extends State<MapReadyPage> {
         ),
       );
       if (!mounted) return;
+      final dedaPlaces = await DedaRegisteredPlacesStore.readAll();
       setState(() {
         currentPosition = position;
+        registeredPlaces = dedaPlaces;
         statusMessage =
             dedaText('تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.', 'Location found. Long-press anywhere on the map to choose a destination.');
       });
@@ -7284,6 +7647,80 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
   Future<void> openSettings() async {
     await Geolocator.openAppSettings();
+  }
+
+  Future<void> searchInsideMap() async {
+    final query = _mapSearchController.text.trim();
+    final position = currentPosition;
+    if (query.length < 2) {
+      setState(() {
+        statusMessage = dedaText(
+          'اكتب حرفين على الأقل للبحث داخل الخريطة.',
+          'Type at least two letters to search inside the map.',
+        );
+      });
+      return;
+    }
+    if (position == null) {
+      await determinePosition();
+      if (currentPosition == null) return;
+    }
+
+    setState(() {
+      isMapSearching = true;
+      statusMessage = dedaText(
+        'جاري البحث عن "$query" في جميع أنحاء العراق...',
+        'Searching for "$query" across Iraq...',
+      );
+    });
+    try {
+      final activePosition = currentPosition!;
+      final results = await _placesService.searchPlacesByName(
+        center: LatLng(activePosition.latitude, activePosition.longitude),
+        queryText: query,
+      );
+      final registered = await DedaRegisteredPlacesStore.readAll();
+      final needle = query.toLowerCase();
+      for (final place in registered) {
+        if (place.name.toLowerCase().contains(needle)) results.add(place);
+      }
+      if (!mounted) return;
+      setState(() {
+        mapSearchResults = results;
+        if (results.isNotEmpty) {
+          selectedDestination = results.first.location;
+        }
+        statusMessage = results.isEmpty
+            ? dedaText(
+                'لم نعثر على مكان بهذا الاسم داخل العراق.',
+                'No place with this name was found in Iraq.',
+              )
+            : dedaText(
+                'ظهرت ${results.length} نتيجة على الخريطة. اضغط على الدبوس لاختيار الوجهة.',
+                '${results.length} results are shown on the map. Tap a pin to choose it.',
+              );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        statusMessage = dedaText(
+          'تعذر البحث الآن. تحقق من الإنترنت وحاول مرة أخرى.',
+          'Search failed. Check your internet connection and try again.',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => isMapSearching = false);
+    }
+  }
+
+  void selectMapPlace(PlaceInfo place) {
+    setState(() {
+      selectedDestination = place.location;
+      statusMessage = dedaText(
+        'تم اختيار ${place.name}. اضغط عرض الطريق للانطلاق.',
+        '${place.name} selected. Tap Show route to start.',
+      );
+    });
   }
 
   void openSelectedDestination() {
@@ -7322,11 +7759,21 @@ class _MapReadyPageState extends State<MapReadyPage> {
             Positioned.fill(
               child: FlutterMap(
                 key: ValueKey(
-                  '${position.latitude}-${position.longitude}-${mapStyle.name}',
+                  '${position.latitude}-${position.longitude}-${mapStyle.name}-${mapSearchResults.length}-${selectedDestination?.latitude}-${selectedDestination?.longitude}-$showAvailableOnly',
                 ),
                 options: MapOptions(
                   initialCenter: point,
                   initialZoom: 16,
+                  initialCameraFit: mapSearchResults.isEmpty
+                      ? null
+                      : CameraFit.coordinates(
+                          coordinates: <LatLng>[
+                            point,
+                            ...mapSearchResults.map((place) => place.location),
+                          ],
+                          padding: const EdgeInsets.all(55),
+                          maxZoom: 15,
+                        ),
                   onLongPress: (_, destination) {
                     setState(() {
                       selectedDestination = destination;
@@ -7349,6 +7796,44 @@ class _MapReadyPageState extends State<MapReadyPage> {
                           color: Colors.red,
                         ),
                       ),
+                      ...visibleRegisteredPlaces.map(
+                        (place) => Marker(
+                          point: place.location,
+                          width: 58,
+                          height: 58,
+                          child: DedaMapPlaceMarker(
+                            place: place,
+                            icon: dedaIconForPlaceType(place.type),
+                            onTap: () => selectMapPlace(place),
+                          ),
+                        ),
+                      ),
+                      ...mapSearchResults
+                          .where((place) => !place.isDedaRegistered)
+                          .map(
+                            (place) => Marker(
+                              point: place.location,
+                              width: 52,
+                              height: 52,
+                              child: GestureDetector(
+                                onTap: () => selectMapPlace(place),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFF0B57D0),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    dedaIconForPlaceType(place.type),
+                                    color: const Color(0xFF0B57D0),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                       if (selectedDestination != null)
                         Marker(
                           point: selectedDestination!,
@@ -7492,6 +7977,53 @@ class _MapReadyPageState extends State<MapReadyPage> {
                   ),
                 ),
               if (currentPosition != null) ...[
+                TextField(
+                  controller: _mapSearchController,
+                  textDirection: DedaLanguageState.direction,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => searchInsideMap(),
+                  decoration: InputDecoration(
+                    hintText: dedaText(
+                      'ابحث داخل الخريطة باسم المكان...',
+                      'Search the map by place name...',
+                    ),
+                    prefixIcon: IconButton(
+                      onPressed: isMapSearching ? null : searchInsideMap,
+                      icon: isMapSearching
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.search),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  elevation: 0,
+                  child: SwitchListTile(
+                    value: showAvailableOnly,
+                    activeColor: const Color(0xFF159447),
+                    secondary: const Icon(Icons.online_prediction),
+                    title: Text(
+                      dedaText(
+                        'إظهار المتواجدين الآن فقط',
+                        'Show available now only',
+                      ),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    onChanged: (value) => setState(
+                      () => showAvailableOnly = value,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 buildMap(currentPosition!),
                 const SizedBox(height: 12),
                 if (selectedDestination != null)
