@@ -7573,6 +7573,12 @@ class _MapReadyPageState extends State<MapReadyPage> {
       ? registeredPlaces.where((place) => place.isAvailableNow).toList()
       : registeredPlaces;
 
+  List<PlaceInfo> get visibleMapSearchResults => showAvailableOnly
+      ? mapSearchResults
+          .where((place) => place.isDedaRegistered && place.isAvailableNow)
+          .toList()
+      : mapSearchResults;
+
   @override
   void dispose() {
     _mapSearchController.dispose();
@@ -7764,12 +7770,14 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 options: MapOptions(
                   initialCenter: point,
                   initialZoom: 16,
-                  initialCameraFit: mapSearchResults.isEmpty
+                  initialCameraFit: visibleMapSearchResults.isEmpty
                       ? null
                       : CameraFit.coordinates(
                           coordinates: <LatLng>[
                             point,
-                            ...mapSearchResults.map((place) => place.location),
+                            ...visibleMapSearchResults.map(
+                              (place) => place.location,
+                            ),
                           ],
                           padding: const EdgeInsets.all(55),
                           maxZoom: 15,
@@ -7808,7 +7816,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                           ),
                         ),
                       ),
-                      ...mapSearchResults
+                      ...visibleMapSearchResults
                           .where((place) => !place.isDedaRegistered)
                           .map(
                             (place) => Marker(
@@ -8018,9 +8026,21 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       ),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    onChanged: (value) => setState(
-                      () => showAvailableOnly = value,
-                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        showAvailableOnly = value;
+                        if (value) selectedDestination = null;
+                        statusMessage = value
+                            ? dedaText(
+                                'تظهر الآن أماكن DEDA التي أعلن أصحابها أنهم متواجدون فقط.',
+                                'Only DEDA places whose owners are available now are shown.',
+                              )
+                            : dedaText(
+                                'عادت جميع الأماكن ونتائج البحث للظهور.',
+                                'All places and search results are visible again.',
+                              );
+                      });
+                    },
                   ),
                 ),
                 const SizedBox(height: 8),
