@@ -13,10 +13,12 @@ class DedaBackend {
     if (!isReady) throw StateError('firebase-not-ready');
     final auth = FirebaseAuth.instance;
     final currentUser = auth.currentUser;
-    if (currentUser != null && currentUser.isAnonymous) return currentUser;
-    if (currentUser != null) {
-      await auth.signOut();
-    }
+
+    // Preserve an already authenticated session (including the DEDA admin
+    // account). Public actions must never sign the administrator out behind
+    // the scenes. If nobody is signed in, use anonymous authentication.
+    if (currentUser != null) return currentUser;
+
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
