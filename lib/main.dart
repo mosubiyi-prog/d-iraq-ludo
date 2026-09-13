@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
@@ -37,7 +38,16 @@ enum DedaAccountType { user, placeOwner }
 
 class DedaLanguageState {
   static const String prefsKey = 'deda_language_v1';
-  static DedaLanguage current = DedaLanguage.ar;
+  static DedaLanguage _current = DedaLanguage.ar;
+  static final ValueNotifier<DedaLanguage> notifier =
+      ValueNotifier<DedaLanguage>(_current);
+
+  static DedaLanguage get current => _current;
+
+  static set current(DedaLanguage value) {
+    _current = value;
+    if (notifier.value != value) notifier.value = value;
+  }
 
   static bool get isArabic => current == DedaLanguage.ar;
   static TextDirection get direction =>
@@ -316,18 +326,26 @@ class DedaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'DEDA',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF39733D),
-        ),
-        useMaterial3: true,
-      ),
-      home: DedaPreferences.isLoggedIn
-          ? HomePage(userName: DedaPreferences.userName)
-          : const LoginPage(),
+    return ValueListenableBuilder<DedaLanguage>(
+      valueListenable: DedaLanguageState.notifier,
+      builder: (context, language, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'DEDA',
+          locale: Locale(language == DedaLanguage.ar ? 'ar' : 'en'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF39733D),
+            ),
+            useMaterial3: true,
+          ),
+          home: DedaPreferences.isLoggedIn
+              ? HomePage(userName: DedaPreferences.userName)
+              : const LoginPage(),
+        );
+      },
     );
   }
 }
@@ -2042,13 +2060,19 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
 
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
+                      final isAdmin = await DedaBackend.currentUserIsAdmin();
+                      if (!context.mounted) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => DedaAdminLoginPage(
-                            isArabic: DedaLanguageState.isArabic,
-                          ),
+                          builder: (_) => isAdmin
+                              ? DedaAdminInboxPage(
+                                  isArabic: DedaLanguageState.isArabic,
+                                )
+                              : DedaAdminLoginPage(
+                                  isArabic: DedaLanguageState.isArabic,
+                                ),
                         ),
                       );
                     },
@@ -4540,7 +4564,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           dedaText('حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.', 'An error occurred while loading places. Technical details are shown below.');
     }
 
-    return '$message\n\n${dedaText('التفاصيل التقنية:', 'Technical details:')}\n$raw';
+    return message;
   }
 
   Future<void> loadNearbyPlaces() async {
@@ -4586,12 +4610,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
             );
         });
 
-        results = await placesService.getNearbyPlaces(
-          center: center,
-          type: widget.category.title,
-          radiusMeters: radius,
-        );
-
+        results = <PlaceInfo>[];
         for (final place in registeredPlaces) {
           final distance = Geolocator.distanceBetween(
             position.latitude,
@@ -4604,6 +4623,22 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
               (item) => DedaPlacesStore.placeId(item) == DedaPlacesStore.placeId(place),
             );
             results.add(place);
+          }
+        }
+
+        // A DEDA-approved place should appear immediately without waiting for
+        // a public provider. Public results are only a bounded fallback.
+        if (results.isEmpty) {
+          try {
+            results = await placesService
+                .getNearbyPlaces(
+                  center: center,
+                  type: widget.category.title,
+                  radiusMeters: radius,
+                )
+                .timeout(const Duration(seconds: 5));
+          } catch (_) {
+            results = <PlaceInfo>[];
           }
         }
 
@@ -5736,14 +5771,25 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
           );
         });
       }
-      final found = await _placesService.searchPlacesByName(
-        center: center,
-        queryText: query,
-      );
       final registered = await DedaRegisteredPlacesStore.readAll();
       final needle = query.toLowerCase();
+      final found = <PlaceInfo>[];
       for (final place in registered) {
         if (place.name.toLowerCase().contains(needle)) found.add(place);
+      }
+
+      // DEDA-approved places are authoritative and must never wait for an
+      // external map provider. Only use the public search as a fallback.
+      if (found.isEmpty) {
+        try {
+          found.addAll(
+            await _placesService
+                .searchPlacesByName(center: center, queryText: query)
+                .timeout(const Duration(seconds: 12)),
+          );
+        } catch (_) {
+          // Keep the UI responsive and show the friendly empty state below.
+        }
       }
 
       found.sort((a, b) {
@@ -5775,10 +5821,13 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
                 '${found.length} results found.',
               );
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _status = dedaText('تعذر البحث الآن. تحقق من الإنترنت ثم حاول مرة أخرى.\n$e', 'Search failed. Check your internet connection and try again.\n$e');
+        _status = dedaText(
+          'تعذر إكمال البحث الخارجي حاليًا. حاول مرة أخرى بعد قليل.',
+          'The external search could not be completed. Try again shortly.',
+        );
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -7840,14 +7889,25 @@ class _MapReadyPageState extends State<MapReadyPage> {
     });
     try {
       final activePosition = currentPosition!;
-      final results = await _placesService.searchPlacesByName(
-        center: LatLng(activePosition.latitude, activePosition.longitude),
-        queryText: query,
-      );
       final registered = await DedaRegisteredPlacesStore.readAll();
       final needle = query.toLowerCase();
+      final results = <PlaceInfo>[];
       for (final place in registered) {
         if (place.name.toLowerCase().contains(needle)) results.add(place);
+      }
+      if (results.isEmpty) {
+        try {
+          results.addAll(
+            await _placesService
+                .searchPlacesByName(
+                  center: LatLng(activePosition.latitude, activePosition.longitude),
+                  queryText: query,
+                )
+                .timeout(const Duration(seconds: 12)),
+          );
+        } catch (_) {
+          // DEDA results remain usable even when public providers are busy.
+        }
       }
       if (!mounted) return;
       setState(() {

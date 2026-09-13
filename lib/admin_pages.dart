@@ -153,6 +153,23 @@ class _RequestList extends StatelessWidget {
 
   String t(String ar, String en) => isArabic ? ar : en;
 
+  String statusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return t('قيد الانتظار', 'Pending');
+      case 'reviewing':
+        return t('قيد المراجعة', 'Under review');
+      case 'approved':
+        return t('معتمد', 'Approved');
+      case 'rejected':
+        return t('مرفوض', 'Rejected');
+      case 'new':
+        return t('جديد', 'New');
+      default:
+        return status;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -171,6 +188,7 @@ class _RequestList extends StatelessWidget {
             final data = doc.data();
             final title = (data['name'] ?? data['placeName'] ?? t('طلب جديد', 'New request')).toString();
             final status = (data['status'] ?? 'new').toString();
+            final isFinal = status == 'approved' || status == 'rejected';
             final details = collection == 'support_requests'
                 ? (data['message'] ?? '').toString()
                 : '${data[isArabic ? 'categoryLabelAr' : 'categoryLabelEn'] ?? data['category'] ?? ''}\n${data['governorate'] ?? ''} — ${data['address'] ?? ''}';
@@ -178,7 +196,7 @@ class _RequestList extends StatelessWidget {
               child: ExpansionTile(
                 leading: Icon(collection == 'support_requests' ? Icons.support_agent : Icons.storefront, color: const Color(0xFF17652F)),
                 title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${t('الحالة', 'Status')}: $status'),
+                subtitle: Text('${t('الحالة', 'Status')}: ${statusLabel(status)}'),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 children: [
                   Align(alignment: AlignmentDirectional.centerStart, child: SelectableText(details)),
@@ -186,9 +204,9 @@ class _RequestList extends StatelessWidget {
                   Wrap(
                     spacing: 8,
                     children: [
-                      OutlinedButton(onPressed: () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'reviewing'), child: Text(t('قيد المراجعة', 'Reviewing'))),
-                      FilledButton(onPressed: () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'approved'), child: Text(t('اعتماد', 'Approve'))),
-                      TextButton(onPressed: () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'rejected'), child: Text(t('رفض', 'Reject'))),
+                      OutlinedButton(onPressed: isFinal ? null : () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'reviewing'), child: Text(t('قيد المراجعة', 'Reviewing'))),
+                      FilledButton(onPressed: isFinal ? null : () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'approved'), child: Text(t('اعتماد', 'Approve'))),
+                      TextButton(onPressed: isFinal ? null : () => DedaBackend.updateRequestStatus(collection: collection, id: doc.id, status: 'rejected'), child: Text(t('رفض', 'Reject'))),
                     ],
                   ),
                 ],
