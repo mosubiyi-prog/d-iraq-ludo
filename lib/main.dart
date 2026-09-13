@@ -14,6 +14,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'admin_pages.dart';
+import 'deda_backend.dart';
 import 'places_service.dart';
 
 enum DedaMapStyle {
@@ -699,22 +701,24 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Flexible(
+                          Expanded(
                             child: Align(
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
                                 onPressed: _openContact,
                                 icon: const Icon(Icons.support_agent, size: 21),
-                                label: Text(
-                                  dedaText(
-                                    'التواصل مع الشركة',
-                                    'Contact company',
-                                  ),
-                                  maxLines: 2,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
+                                label: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    dedaText(
+                                      'التواصل مع الشركة',
+                                      'Contact company',
+                                    ),
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                                 style: TextButton.styleFrom(
@@ -1115,6 +1119,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
 
   String _contactType = 'company';
   bool _saving = false;
+  bool _submitting = false;
   DateTime? _savedAt;
   String? _attachedImagePath;
 
@@ -1245,7 +1250,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
-  void _prepareMessage() {
+  Future<void> _prepareMessage() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_contactType == 'photo' && _attachedImagePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1260,28 +1265,46 @@ class _DedaContactPageState extends State<DedaContactPage> {
       );
       return;
     }
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(dedaText('الرسالة جاهزة', 'Message ready')),
-        content: Text(
-          dedaText(
-            _attachedImagePath == null
-                ? 'تم تجهيز رسالتك. قناة الإرسال المباشر للشركة تحتاج اعتماد وسيلة التواصل الرسمية قبل أن تغادر الرسالة الهاتف.'
-                : 'تم تجهيز رسالتك والصورة المرفقة. قناة الإرسال المباشر للشركة تحتاج اعتماد وسيلة التواصل الرسمية قبل أن تغادر البيانات الهاتف.',
-            _attachedImagePath == null
-                ? 'Your message is ready. The official company delivery channel must be connected before the message can leave the phone.'
-                : 'Your message and attached photo are ready. The official company delivery channel must be connected before any data leaves the phone.',
+    setState(() => _submitting = true);
+    try {
+      final requestId = await DedaBackend.submitSupport(
+        type: _contactType,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        message: _messageController.text.trim(),
+        imagePath: _attachedImagePath,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+      if (!mounted) return;
+      setState(() {
+        _messageController.clear();
+        _attachedImagePath = null;
+        _savedAt = null;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(dedaText('تم إرسال الرسالة', 'Message sent')),
+          content: Text(
+            dedaText(
+              'وصلت رسالتك إلى صندوق إدارة DEDA بأمان. رقم المتابعة: $requestId',
+              'Your message reached the DEDA admin inbox securely. Reference: $requestId',
+            ),
           ),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(dedaText('حسناً', 'OK'))),
+          ],
         ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(dedaText('حسناً', 'OK')),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaText('تعذر الإرسال الآن. بقيت بياناتك على الهاتف ويمكنك المحاولة مجددًا.', 'Could not send now. Your data remains on this phone; please try again.'))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   InputDecoration _decoration({
@@ -1494,9 +1517,15 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     ),
                     const SizedBox(height: 12),
                     FilledButton.icon(
-                      onPressed: _prepareMessage,
-                      icon: const Icon(Icons.email_outlined),
-                      label: Text(dedaText('تجهيز الرسالة', 'Prepare message')),
+                      onPressed: _submitting ? null : _prepareMessage,
+                      icon: _submitting
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.send_outlined),
+                      label: Text(
+                        _submitting
+                            ? dedaText('جاري الإرسال...', 'Sending...')
+                            : dedaText('إرسال إلى إدارة DEDA', 'Send to DEDA'),
+                      ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(58),
                         backgroundColor: const Color(0xFF17652F),
@@ -1509,8 +1538,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 12),
                     Text(
                       dedaText(
-                        'ملاحظة: الواجهة تجهز الرسالة والصورة، لكن الإرسال للشركة لن يغادر الهاتف حتى نعتمد قناة التواصل الرسمية الآمنة.',
-                        'Note: the interface prepares the message and photo, but nothing leaves the phone until the official secure company channel is connected.',
+                        'ترسل الرسالة والصورة ـ إن وجدت ـ إلى صندوق الإدارة الآمن للمراجعة.',
+                        'The message and optional photo are sent to the secure admin inbox for review.',
                       ),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -1869,19 +1898,39 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                   Card(
                     child: Column(
                       children: [
-                        SwitchListTile(
-                          value: DedaPreferences.navigationVoiceEnabled,
-                          onChanged: (value) async {
-                            await DedaPreferences.setVoiceEnabled(value);
-                            if (mounted) setState(() {});
-                          },
-                          secondary: const Icon(Icons.record_voice_over, color: Color(0xFF17652F)),
-                          title: Text(dedaText('النطق الصوتي للملاحة', 'Navigation voice')),
-                          subtitle: Text(
-                            dedaText(
-                              'يفضل DEDA صوت امرأة تلقائيًا إذا كان متوفرًا على الهاتف.',
-                              'DEDA prefers a female voice automatically when one is available on the phone.',
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.record_voice_over, color: Color(0xFF17652F)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      dedaText('النطق الصوتي للملاحة', 'Navigation voice'),
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: DedaPreferences.navigationVoiceEnabled,
+                                    onChanged: (value) async {
+                                      await DedaPreferences.setVoiceEnabled(value);
+                                      if (mounted) setState(() {});
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                dedaText(
+                                  'يفضّل تطبيق DEDA صوتًا نسائيًا تلقائيًا إذا كان متوفرًا على الهاتف.',
+                                  'DEDA automatically prefers a female voice when one is available on the phone.',
+                                ),
+                                style: const TextStyle(color: Color(0xFF5A655D), height: 1.35),
+                              ),
+                            ],
                           ),
                         ),
                         const Divider(height: 1),
@@ -1954,19 +2003,59 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
 
                   _sectionTitle(dedaText('الموقع', 'Location')),
                   Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.location_on, color: Color(0xFF17652F)),
-                      title: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
-                      subtitle: Text(
-                        dedaText(
-                          'افتح إعدادات الهاتف إذا احتجت تغيير إذن GPS للتطبيق.',
-                          'Open phone settings if you need to change DEDA GPS permission.',
-                        ),
-                      ),
-                      trailing: const Icon(Icons.open_in_new),
+                    child: InkWell(
                       onTap: () {
                         Geolocator.openAppSettings();
                       },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.location_on, color: Color(0xFF17652F)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    dedaText('إعدادات إذن الموقع', 'Location permission settings'),
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const Icon(Icons.open_in_new),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              dedaText(
+                                'افتح إعدادات الهاتف إذا احتجت تغيير إذن GPS للتطبيق.',
+                                'Open phone settings if you need to change DEDA GPS permission.',
+                              ),
+                              style: const TextStyle(color: Color(0xFF5A655D), height: 1.35),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DedaAdminLoginPage(
+                            isArabic: DedaLanguageState.isArabic,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.admin_panel_settings_outlined),
+                    label: Text(dedaText('دخول إدارة DEDA', 'DEDA admin sign-in')),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
                     ),
                   ),
 
@@ -2023,6 +2112,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   bool _loadingDraft = true;
   bool _gettingLocation = false;
   bool _saving = false;
+  bool _submitting = false;
   bool _isAvailableNow = false;
   DateTime? _savedAt;
 
@@ -2294,7 +2384,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     }
   }
 
-  void _prepareForReview() {
+  Future<void> _prepareForReview() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_latitude == null || _longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2310,24 +2400,61 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       return;
     }
 
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(dedaText('الطلب جاهز للمراجعة', 'Ready for review')),
-        content: Text(
-          dedaText(
-            'بيانات المكان مكتملة. في هذه المرحلة تحفظ DEDA الطلب كمسودة على الهاتف فقط. ربط الإرسال المركزي للمراجعة سيكون الخطوة التالية حتى لا ننشر أي مكان قبل التحقق منه.',
-            'The place details are complete. At this stage DEDA stores the request as a local draft only. Central review submission will be connected next so no place is published before verification.',
+    setState(() => _submitting = true);
+    try {
+      final category = _categories.firstWhere((item) => item['code'] == _categoryCode);
+      Map<String, String>? otherCategory;
+      if (_categoryCode == 'other' && _otherCategoryCode != null) {
+        otherCategory = _otherCategories.firstWhere((item) => item['code'] == _otherCategoryCode);
+      }
+      final requestId = await DedaBackend.submitPlace({
+        'placeName': _nameController.text.trim(),
+        'category': _categoryCode,
+        'categoryLabelAr': category['ar'],
+        'categoryLabelEn': category['en'],
+        'otherCategory': _categoryCode == 'other' ? _otherCategoryCode : null,
+        'otherCategoryLabelAr': otherCategory?['ar'],
+        'otherCategoryLabelEn': otherCategory?['en'],
+        'otherCategoryText': _categoryCode == 'other' && _otherCategoryCode == 'other_custom'
+            ? _otherCategoryTextController.text.trim()
+            : null,
+        'phone': _phoneController.text.trim(),
+        'governorate': _governorateController.text.trim(),
+        'address': _addressController.text.trim(),
+        'openingHours': _hoursController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'latitude': _latitude,
+        'longitude': _longitude,
+        'isAvailableNow': _isAvailableNow,
+        'submittedByName': DedaPreferences.userName,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+      if (!mounted) return;
+      setState(() => _savedAt = null);
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(dedaText('تم إرسال الطلب للمراجعة', 'Request submitted')),
+          content: Text(
+            dedaText(
+              'وصل طلب المكان إلى إدارة DEDA. لن يظهر للعامة قبل مراجعته واعتماده. رقم المتابعة: $requestId',
+              'The place request reached DEDA administration. It will not be public until reviewed and approved. Reference: $requestId',
+            ),
           ),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(dedaText('حسناً', 'OK'))),
+          ],
         ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(dedaText('حسناً', 'OK')),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaText('تعذر إرسال الطلب الآن. المسودة باقية على هذا الهاتف ويمكنك المحاولة مجددًا.', 'Could not submit now. The draft remains on this phone; please try again.'))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   InputDecoration _fieldDecoration({
@@ -2655,40 +2782,73 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: ChoiceChip(
-                                          selected: _isAvailableNow,
-                                          selectedColor: const Color(0xFFBFE8C8),
-                                          avatar: const Icon(
-                                            Icons.circle,
-                                            color: Color(0xFF159447),
-                                            size: 14,
-                                          ),
-                                          label: Text(
-                                            dedaText('متواجد الآن', 'Available now'),
-                                          ),
-                                          onSelected: (_) => setState(
-                                            () => _isAvailableNow = true,
+                                        child: InkWell(
+                                          onTap: () => setState(() => _isAvailableNow = true),
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 180),
+                                            height: 92,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: _isAvailableNow ? const Color(0xFFBFE8C8) : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(16),
+                                              border: Border.all(color: _isAvailableNow ? const Color(0xFF75C58A) : const Color(0xFFB8C1B9)),
+                                            ),
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  dedaText('متواجد الآن', 'Available now'),
+                                                  maxLines: 2,
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Stack(
+                                                  alignment: Alignment.center,
+                                                  children: [
+                                                    const Icon(Icons.circle, color: Color(0xFF159447), size: 22),
+                                                    if (_isAvailableNow) const Icon(Icons.check, color: Colors.white, size: 15),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
                                       Expanded(
-                                        child: ChoiceChip(
-                                          selected: !_isAvailableNow,
-                                          selectedColor: const Color(0xFFE0E3E0),
-                                          avatar: const Icon(
-                                            Icons.circle,
-                                            color: Color(0xFF777D78),
-                                            size: 14,
-                                          ),
-                                          label: Text(
-                                            dedaText(
-                                              'غير متواجد حاليًا',
-                                              'Not available',
+                                        child: InkWell(
+                                          onTap: () => setState(() => _isAvailableNow = false),
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 180),
+                                            height: 92,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: !_isAvailableNow ? const Color(0xFFE0E3E0) : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(16),
+                                              border: Border.all(color: !_isAvailableNow ? const Color(0xFF949B95) : const Color(0xFFB8C1B9)),
                                             ),
-                                          ),
-                                          onSelected: (_) => setState(
-                                            () => _isAvailableNow = false,
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  dedaText('غير متواجد حاليًا', 'Not available now'),
+                                                  maxLines: 2,
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Stack(
+                                                  alignment: Alignment.center,
+                                                  children: [
+                                                    const Icon(Icons.circle, color: Color(0xFF777D78), size: 22),
+                                                    if (!_isAvailableNow) const Icon(Icons.check, color: Colors.white, size: 15),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -2761,10 +2921,14 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           ),
                           const SizedBox(height: 12),
                           FilledButton.icon(
-                            onPressed: _prepareForReview,
-                            icon: const Icon(Icons.fact_check_outlined),
+                            onPressed: _submitting ? null : _prepareForReview,
+                            icon: _submitting
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.fact_check_outlined),
                             label: Text(
-                              dedaText('تجهيز الطلب للمراجعة', 'Prepare request for review'),
+                              _submitting
+                                  ? dedaText('جاري الإرسال...', 'Submitting...')
+                                  : dedaText('إرسال الطلب للمراجعة', 'Submit for review'),
                             ),
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(58),
@@ -2778,8 +2942,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 12),
                           Text(
                             dedaText(
-                              'ملاحظة: الإرسال المركزي للمراجعة لم يُربط بعد. هذه المرحلة تحفظ البيانات محلياً وتتحقق من اكتمالها قبل ربط نظام المراجعة.',
-                              'Note: central review submission is not connected yet. This stage saves the data locally and validates it before the review system is connected.',
+                              'لا يُنشر أي مكان للعامة قبل أن تراجعه إدارة DEDA وتعتمده.',
+                              'No place is published publicly before DEDA administration reviews and approves it.',
                             ),
                             textAlign: TextAlign.center,
                             style: const TextStyle(
@@ -5339,39 +5503,34 @@ class DedaPlacesStore {
 }
 
 class DedaRegisteredPlacesStore {
-  static const String _ownerDraftKey = 'deda_owner_place_draft_v1';
-
   static Future<List<PlaceInfo>> readAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_ownerDraftKey);
-    if (raw == null || raw.isEmpty) return const <PlaceInfo>[];
-
     try {
-      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      final name = (data['name'] ?? '').toString().trim();
-      final latitude = (data['latitude'] as num?)?.toDouble();
-      final longitude = (data['longitude'] as num?)?.toDouble();
-      if (name.isEmpty || latitude == null || longitude == null) {
-        return const <PlaceInfo>[];
+      final published = await DedaBackend.publishedPlaces();
+      final result = <PlaceInfo>[];
+      for (final data in published) {
+        final name = (data['placeName'] ?? '').toString().trim();
+        final latitude = (data['latitude'] as num?)?.toDouble();
+        final longitude = (data['longitude'] as num?)?.toDouble();
+        if (name.isEmpty || latitude == null || longitude == null) continue;
+        final governorate = (data['governorate'] ?? '').toString().trim();
+        final address = (data['address'] ?? '').toString().trim();
+        result.add(
+          PlaceInfo(
+            name: name,
+            type: _arabicType(data),
+            location: LatLng(latitude, longitude),
+            address: <String>[
+              if (governorate.isNotEmpty) governorate,
+              if (address.isNotEmpty) address,
+            ].join('، '),
+            phone: (data['phone'] ?? '').toString(),
+            openingHours: (data['openingHours'] ?? '').toString(),
+            isDedaRegistered: true,
+            isAvailableNow: data['isAvailableNow'] == true,
+          ),
+        );
       }
-
-      final governorate = (data['governorate'] ?? '').toString().trim();
-      final address = (data['address'] ?? '').toString().trim();
-      return <PlaceInfo>[
-        PlaceInfo(
-          name: name,
-          type: _arabicType(data),
-          location: LatLng(latitude, longitude),
-          address: <String>[
-            if (governorate.isNotEmpty) governorate,
-            if (address.isNotEmpty) address,
-          ].join('، '),
-          phone: (data['phone'] ?? '').toString(),
-          openingHours: (data['hours'] ?? '').toString(),
-          isDedaRegistered: true,
-          isAvailableNow: data['isAvailableNow'] == true,
-        ),
-      ];
+      return result;
     } catch (_) {
       return const <PlaceInfo>[];
     }
