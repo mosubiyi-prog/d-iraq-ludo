@@ -89,6 +89,40 @@ jobs:
               raise SystemExit("Android app Gradle file not found")
           PY
 
+      - name: Target Android 16 for Google Play
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
+
+          if kts.exists():
+              text = kts.read_text()
+              text = text.replace(
+                  "compileSdk = flutter.compileSdkVersion",
+                  "compileSdk = 36",
+              )
+              text = text.replace(
+                  "targetSdk = flutter.targetSdkVersion",
+                  "targetSdk = 36",
+              )
+              kts.write_text(text)
+          elif groovy.exists():
+              text = groovy.read_text()
+              text = text.replace(
+                  "compileSdkVersion flutter.compileSdkVersion",
+                  "compileSdkVersion 36",
+              )
+              text = text.replace(
+                  "targetSdkVersion flutter.targetSdkVersion",
+                  "targetSdkVersion 36",
+              )
+              groovy.write_text(text)
+          else:
+              raise SystemExit("Android app Gradle file not found")
+          PY
+
       - name: Add Android permissions and DEDA app name
         run: |
           python3 - <<'PY'
@@ -218,7 +252,7 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build permanently signed APK
+      - name: Build permanently signed APK and AAB
         env:
           DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
           DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
@@ -226,9 +260,12 @@ jobs:
         run: |
           BUILD_NUMBER=$((100000 + GITHUB_RUN_NUMBER))
           flutter build apk --release --build-number="$BUILD_NUMBER"
+          flutter build appbundle --release --build-number="$BUILD_NUMBER"
 
-      - name: Upload APK
+      - name: Upload APK and Play Store AAB
         uses: actions/upload-artifact@v4
         with:
-          name: d-iraq-ludo-permanently-signed-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: DEDA-Android-builds
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
