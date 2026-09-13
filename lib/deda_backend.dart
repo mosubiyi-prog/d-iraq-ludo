@@ -142,7 +142,7 @@ class DedaBackend {
     required String collection,
     required String id,
     required String status,
-  }) {
+  }) async {
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection(collection).doc(id);
     if (collection == 'place_requests') {
