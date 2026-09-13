@@ -18,7 +18,10 @@ service cloud.firestore {
     match /support_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'new';
+        && request.resource.data.status == 'new'
+        && request.resource.data.type in ['company', 'problem', 'case', 'photo']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 5;
       allow read, update: if isAdmin();
       allow delete: if false;
     }
@@ -26,7 +29,24 @@ service cloud.firestore {
     match /place_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && request.resource.data.placeName is string
+        && request.resource.data.placeName.size() > 0
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 0
+        && request.resource.data.governorate is string
+        && request.resource.data.governorate.size() > 0
+        && request.resource.data.address is string
+        && request.resource.data.address.size() > 0
+        && request.resource.data.openingHours is string
+        && request.resource.data.openingHours.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && (request.resource.data.category != 'other'
+          || (request.resource.data.otherCategoryText is string
+            && request.resource.data.otherCategoryText.size() > 0));
       allow read, update: if isAdmin();
       allow delete: if false;
     }

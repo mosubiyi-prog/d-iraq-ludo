@@ -1138,6 +1138,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
   String _contactType = 'company';
   bool _saving = false;
   bool _submitting = false;
+  bool _showMessageValidation = false;
   DateTime? _savedAt;
   String? _attachedImagePath;
 
@@ -1269,6 +1270,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
   }
 
   Future<void> _prepareMessage() async {
+    setState(() => _showMessageValidation = true);
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_contactType == 'photo' && _attachedImagePath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1298,6 +1300,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
       setState(() {
         _messageController.clear();
         _attachedImagePath = null;
+        _showMessageValidation = false;
         _savedAt = null;
       });
       await showDialog<void>(
@@ -1413,7 +1416,15 @@ class _DedaContactPageState extends State<DedaContactPage> {
                           )
                           .toList(),
                       onChanged: (value) {
-                        if (value != null) setState(() => _contactType = value);
+                        if (value != null) {
+                          setState(() {
+                            _contactType = value;
+                            _showMessageValidation = false;
+                          });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) _formKey.currentState?.validate();
+                          });
+                        }
                       },
                     ),
                     const SizedBox(height: 14),
@@ -1496,7 +1507,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                           'Add the details that help us understand your request',
                         ),
                       ),
-                      validator: (value) => value == null || value.trim().length < 5
+                      validator: (value) => _showMessageValidation &&
+                              (value == null || value.trim().length < 5)
                           ? dedaText(
                               'اكتب تفاصيل الرسالة أولاً.',
                               'Please enter your message details first.',
@@ -1859,7 +1871,13 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                             contentPadding: EdgeInsets.zero,
                             leading: const Icon(Icons.person, color: Color(0xFF17652F)),
                             title: Text(DedaPreferences.userName),
-                            subtitle: Text(DedaPreferences.phone),
+                            subtitle: Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                DedaPreferences.phone,
+                                textAlign: TextAlign.left,
+                              ),
+                            ),
                           ),
                           const Divider(),
                           Text(
@@ -2130,7 +2148,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   final _otherCategoryTextFocus = FocusNode();
 
   String _categoryCode = 'restaurant';
-  String? _otherCategoryCode;
   double? _latitude;
   double? _longitude;
   bool _loadingDraft = true;
@@ -2153,35 +2170,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     {'code': 'parking', 'ar': 'موقف', 'en': 'Parking'},
     {'code': 'park', 'ar': 'حديقة', 'en': 'Park'},
     {'code': 'other', 'ar': 'أخرى', 'en': 'Other'},
-  ];
-
-  static const List<Map<String, String>> _otherCategories = [
-    {'code': 'company_office', 'ar': 'شركة أو مكتب', 'en': 'Company or office'},
-    {
-      'code': 'civil_organization',
-      'ar': 'مؤسسة أو منظمة أهلية',
-      'en': 'Civil organization or institution'
-    },
-    {'code': 'clinic_doctor', 'ar': 'عيادة أو طبيب', 'en': 'Clinic or doctor'},
-    {'code': 'school_institute', 'ar': 'مدرسة أو معهد', 'en': 'School or institute'},
-    {
-      'code': 'workshop_services',
-      'ar': 'ورشة أو محل خدمات',
-      'en': 'Workshop or service shop'
-    },
-    {
-      'code': 'consulting_office',
-      'ar': 'مكتب استشارات',
-      'en': 'Consulting office'
-    },
-    {
-      'code': 'health_lab',
-      'ar': 'مركز صحي أو مختبر',
-      'en': 'Health center or laboratory'
-    },
-    {'code': 'religious_place', 'ar': 'مكان ديني', 'en': 'Religious place'},
-    {'code': 'tourist_place', 'ar': 'مكان سياحي', 'en': 'Tourist place'},
-    {'code': 'other_custom', 'ar': 'أخرى', 'en': 'Other'},
   ];
 
   @override
@@ -2209,9 +2197,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   String _categoryLabel(Map<String, String> item) =>
       DedaLanguageState.isArabic ? item['ar']! : item['en']!;
 
-  String _otherCategoryLabel(Map<String, String> item) =>
-      DedaLanguageState.isArabic ? item['ar']! : item['en']!;
-
   Future<void> _loadDraft() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -2227,11 +2212,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         final savedCategory = (data['category'] ?? 'restaurant').toString();
         if (_categories.any((item) => item['code'] == savedCategory)) {
           _categoryCode = savedCategory;
-        }
-        final savedOtherCategory = data['otherCategory']?.toString();
-        if (savedOtherCategory != null &&
-            _otherCategories.any((item) => item['code'] == savedOtherCategory)) {
-          _otherCategoryCode = savedOtherCategory;
         }
         _otherCategoryTextController.text =
             (data['otherCategoryText'] ?? '').toString();
@@ -2272,11 +2252,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       final data = <String, dynamic>{
         'name': _nameController.text.trim(),
         'category': _categoryCode,
-        'otherCategory': _categoryCode == 'other' ? _otherCategoryCode : null,
-        'otherCategoryText':
-            _categoryCode == 'other' && _otherCategoryCode == 'other_custom'
-                ? _otherCategoryTextController.text.trim()
-                : null,
+        'otherCategory': _categoryCode == 'other' ? 'other_custom' : null,
+        'otherCategoryText': _categoryCode == 'other'
+            ? _otherCategoryTextController.text.trim()
+            : null,
         'phone': _phoneController.text.trim(),
         'governorate': _governorateController.text.trim(),
         'address': _addressController.text.trim(),
@@ -2427,19 +2406,15 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     setState(() => _submitting = true);
     try {
       final category = _categories.firstWhere((item) => item['code'] == _categoryCode);
-      Map<String, String>? otherCategory;
-      if (_categoryCode == 'other' && _otherCategoryCode != null) {
-        otherCategory = _otherCategories.firstWhere((item) => item['code'] == _otherCategoryCode);
-      }
       final requestId = await DedaBackend.submitPlace({
         'placeName': _nameController.text.trim(),
         'category': _categoryCode,
         'categoryLabelAr': category['ar'],
         'categoryLabelEn': category['en'],
-        'otherCategory': _categoryCode == 'other' ? _otherCategoryCode : null,
-        'otherCategoryLabelAr': otherCategory?['ar'],
-        'otherCategoryLabelEn': otherCategory?['en'],
-        'otherCategoryText': _categoryCode == 'other' && _otherCategoryCode == 'other_custom'
+        'otherCategory': _categoryCode == 'other' ? 'other_custom' : null,
+        'otherCategoryLabelAr': null,
+        'otherCategoryLabelEn': null,
+        'otherCategoryText': _categoryCode == 'other'
             ? _otherCategoryTextController.text.trim()
             : null,
         'phone': _phoneController.text.trim(),
@@ -2588,80 +2563,41 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 .toList(),
                             onChanged: (value) {
                               if (value != null) {
-                                setState(() => _categoryCode = value);
+                                setState(() {
+                                  _categoryCode = value;
+                                });
                               }
                             },
                           ),
                           if (_categoryCode == 'other') ...[
                             const SizedBox(height: 14),
-                            DropdownButtonFormField<String>(
-                              value: _otherCategoryCode,
+                            TextFormField(
+                              controller: _otherCategoryTextController,
+                              focusNode: _otherCategoryTextFocus,
+                              keyboardType: TextInputType.text,
+                              textDirection: DedaLanguageState.direction,
+                              textAlign: DedaLanguageState.isArabic
+                                  ? TextAlign.right
+                                  : TextAlign.left,
                               decoration: _fieldDecoration(
                                 label: dedaText(
-                                  'التصنيف التفصيلي',
-                                  'Detailed category',
+                                  'اكتب نوع المكان',
+                                  'Enter place type',
                                 ),
-                                icon: Icons.category_outlined,
+                                icon: Icons.edit_outlined,
+                                hint: dedaText(
+                                  'مثال: استوديو، نادي، مركز تدريب...',
+                                  'Example: studio, club, training center...',
+                                ),
                               ),
-                              items: _otherCategories
-                                  .map(
-                                    (item) => DropdownMenuItem<String>(
-                                      value: item['code'],
-                                      child: Text(_otherCategoryLabel(item)),
-                                    ),
-                                  )
-                                  .toList(),
-                              validator: (value) => value == null
-                                  ? dedaText(
-                                      'اختر نوع المكان بالتفصيل.',
-                                      'Select the detailed place type.',
-                                    )
-                                  : null,
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() => _otherCategoryCode = value);
-                                  if (value == 'other_custom') {
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      if (mounted) {
-                                        _otherCategoryTextFocus.requestFocus();
-                                      }
-                                    });
-                                  }
-                                }
-                              },
+                              validator: (value) =>
+                                  value == null || value.trim().isEmpty
+                                      ? dedaText(
+                                          'اكتب نوع المكان.',
+                                          'Enter the place type.',
+                                        )
+                                      : null,
                             ),
-                            if (_otherCategoryCode == 'other_custom') ...[
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _otherCategoryTextController,
-                                focusNode: _otherCategoryTextFocus,
-                                enabled: true,
-                                readOnly: false,
-                                keyboardType: TextInputType.text,
-                                textDirection: DedaLanguageState.direction,
-                                textAlign: DedaLanguageState.isArabic
-                                    ? TextAlign.right
-                                    : TextAlign.left,
-                                decoration: _fieldDecoration(
-                                  label: dedaText(
-                                    'اكتب نوع المكان',
-                                    'Enter place type',
-                                  ),
-                                  icon: Icons.edit_outlined,
-                                  hint: dedaText(
-                                    'مثال: استوديو، نادي، مركز تدريب...',
-                                    'Example: studio, club, training center...',
-                                  ),
-                                ),
-                                validator: (value) =>
-                                    value == null || value.trim().isEmpty
-                                        ? dedaText(
-                                            'اكتب نوع المكان.',
-                                            'Enter the place type.',
-                                          )
-                                        : null,
-                              ),
-                            ],
                           ],
                           const SizedBox(height: 14),
                           TextFormField(
@@ -2811,7 +2747,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                           borderRadius: BorderRadius.circular(16),
                                           child: AnimatedContainer(
                                             duration: const Duration(milliseconds: 180),
-                                            height: 92,
+                                            height: 108,
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                             decoration: BoxDecoration(
                                               color: _isAvailableNow ? const Color(0xFFBFE8C8) : Colors.transparent,
@@ -2847,7 +2783,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                           borderRadius: BorderRadius.circular(16),
                                           child: AnimatedContainer(
                                             duration: const Duration(milliseconds: 180),
-                                            height: 92,
+                                            height: 108,
                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                             decoration: BoxDecoration(
                                               color: !_isAvailableNow ? const Color(0xFFE0E3E0) : Colors.transparent,
@@ -2894,6 +2830,12 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               icon: Icons.schedule_outlined,
                               hint: dedaText('مثال: 8 صباحاً - 11 مساءً', 'Example: 8 AM - 11 PM'),
                             ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? dedaText(
+                                    'اكتب أوقات العمل.',
+                                    'Enter the opening hours.',
+                                  )
+                                : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -2912,6 +2854,12 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 'Important services or features for users',
                               ),
                             ),
+                            validator: (value) => value == null || value.trim().isEmpty
+                                ? dedaText(
+                                    'اكتب وصفًا مختصرًا للمكان.',
+                                    'Enter a short place description.',
+                                  )
+                                : null,
                           ),
                           const SizedBox(height: 18),
                           if (_savedAt != null)
