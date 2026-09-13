@@ -119,52 +119,44 @@ class DedaAdminInboxPage extends StatefulWidget {
 class _DedaAdminInboxPageState extends State<DedaAdminInboxPage> {
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
-  Future<bool> _leaveAdmin() async {
-    await DedaBackend.signOutAdmin();
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _leaveAdmin,
-      child: DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFF8FAF2),
-          appBar: AppBar(
-            title: Text(t('صندوق إدارة DEDA', 'DEDA admin inbox')),
-            actions: [
-              IconButton(
-                tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
-                onPressed: () async {
-                  await DedaBackend.signOutAdmin();
-                  if (context.mounted) Navigator.pop(context);
-                },
-                icon: const Icon(Icons.logout),
-              ),
-            ],
-            bottom: TabBar(
-              tabs: [
-                Tab(text: t('الدعم', 'Support')),
-                Tab(text: t('طلبات الأماكن', 'Places')),
-              ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAF2),
+        appBar: AppBar(
+          title: Text(t('صندوق إدارة DEDA', 'DEDA admin inbox')),
+          actions: [
+            IconButton(
+              tooltip: t('تسجيل خروج الإدارة', 'Admin sign out'),
+              onPressed: () async {
+                await DedaBackend.signOutAdmin();
+                if (context.mounted) Navigator.pop(context);
+              },
+              icon: const Icon(Icons.logout),
             ),
-          ),
-          body: TabBarView(
-            children: [
-              _RequestList(
-                isArabic: widget.isArabic,
-                collection: 'support_requests',
-                stream: DedaBackend.supportRequests(),
-              ),
-              _RequestList(
-                isArabic: widget.isArabic,
-                collection: 'place_requests',
-                stream: DedaBackend.placeRequests(),
-              ),
+          ],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: t('الدعم', 'Support')),
+              Tab(text: t('طلبات الأماكن', 'Places')),
             ],
           ),
+        ),
+        body: TabBarView(
+          children: [
+            _RequestList(
+              isArabic: widget.isArabic,
+              collection: 'support_requests',
+              stream: DedaBackend.supportRequests(),
+            ),
+            _RequestList(
+              isArabic: widget.isArabic,
+              collection: 'place_requests',
+              stream: DedaBackend.placeRequests(),
+            ),
+          ],
         ),
       ),
     );
@@ -395,18 +387,54 @@ class _RequestListState extends State<_RequestList> {
                         onPressed: isFinal || status == 'reviewing'
                             ? null
                             : () => _changeStatus(id: doc.id, status: 'reviewing'),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: status == 'reviewing'
+                              ? const Color(0xFF17652F)
+                              : null,
+                          foregroundColor:
+                              status == 'reviewing' ? Colors.white : null,
+                          disabledBackgroundColor: status == 'reviewing'
+                              ? const Color(0xFF17652F)
+                              : null,
+                          disabledForegroundColor:
+                              status == 'reviewing' ? Colors.white : null,
+                        ),
                         child: Text(t('قيد المراجعة', 'Under review')),
                       ),
-                      FilledButton(
+                      OutlinedButton(
                         onPressed: isFinal
                             ? null
                             : () => _changeStatus(id: doc.id, status: 'approved'),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: status == 'approved'
+                              ? const Color(0xFF17652F)
+                              : null,
+                          foregroundColor:
+                              status == 'approved' ? Colors.white : null,
+                          disabledBackgroundColor: status == 'approved'
+                              ? const Color(0xFF17652F)
+                              : null,
+                          disabledForegroundColor:
+                              status == 'approved' ? Colors.white : null,
+                        ),
                         child: Text(t('اعتماد', 'Approve')),
                       ),
-                      TextButton(
+                      OutlinedButton(
                         onPressed: isFinal
                             ? null
                             : () => _changeStatus(id: doc.id, status: 'rejected'),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: status == 'rejected'
+                              ? const Color(0xFFB3261E)
+                              : null,
+                          foregroundColor:
+                              status == 'rejected' ? Colors.white : null,
+                          disabledBackgroundColor: status == 'rejected'
+                              ? const Color(0xFFB3261E)
+                              : null,
+                          disabledForegroundColor:
+                              status == 'rejected' ? Colors.white : null,
+                        ),
                         child: Text(t('رفض', 'Reject')),
                       ),
                     ],
