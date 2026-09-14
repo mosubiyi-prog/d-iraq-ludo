@@ -39,6 +39,9 @@ jobs:
       - name: Apply final DEDA phone prefix fix
         run: python3 tools/final_release_fix.py
 
+      - name: Apply map destination auto-fit
+        run: python3 tools/map_zoom_fix.py
+
       - name: Configure Firebase Android
         run: |
           python3 - <<'PY'
