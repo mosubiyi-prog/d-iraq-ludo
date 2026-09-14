@@ -222,6 +222,7 @@ class _RequestList extends StatefulWidget {
 
 class _RequestListState extends State<_RequestList> {
   String? _expandedId;
+  String _section = 'current';
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -273,6 +274,39 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 
+  String _roleLabel(dynamic value) {
+    final raw = _text(value);
+    switch (raw.toLowerCase()) {
+      case 'manager':
+      case 'director':
+      case 'admin':
+        return t('المدير', 'Manager');
+      case 'assistant':
+      case 'assistant_manager':
+      case 'assistant-manager':
+      case 'deputy_manager':
+        return t('مساعد المدير', 'Assistant manager');
+      default:
+        return raw.isEmpty ? t('الإدارة', 'Administration') : raw;
+    }
+  }
+
+  String _formatTimestamp(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) {
+      date = value.toDate();
+    } else if (value is DateTime) {
+      date = value;
+    } else if (value != null) {
+      date = DateTime.tryParse(value.toString());
+    }
+    if (date == null) return '';
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
   Widget _detailRow(String label, dynamic value, {bool ltr = false}) {
     final text = _text(value);
     return Padding(
@@ -280,7 +314,10 @@ class _RequestListState extends State<_RequestList> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
           Expanded(
             child: Directionality(
               textDirection:
@@ -291,6 +328,87 @@ class _RequestListState extends State<_RequestList> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _auditDetails(Map<String, dynamic> data) {
+    final firstViewedAt = _formatTimestamp(data['firstViewedAt']);
+    final firstViewedByName = _text(data['firstViewedByName']);
+    final firstViewedByRole = _roleLabel(data['firstViewedByRole']);
+    final status = _text(data['status']);
+    final hasDecision = status == 'approved' || status == 'rejected';
+    final decisionAt = _formatTimestamp(data['decisionAt']);
+    final decisionByName = _text(data['decisionByName']);
+    final decisionByRole = _roleLabel(data['decisionByRole']);
+    final decisionNote = _text(data['decisionNote']);
+
+    if (firstViewedAt.isEmpty && !hasDecision) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5EF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFC9D5C7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_user_outlined,
+                color: Color(0xFF17652F),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t('السجل الإداري', 'Administrative record'),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (firstViewedAt.isNotEmpty) ...[
+            _detailRow(
+              t('أول مشاهدة بواسطة', 'First viewed by'),
+              firstViewedByName.isEmpty
+                  ? firstViewedByRole
+                  : '$firstViewedByRole • $firstViewedByName',
+            ),
+            _detailRow(
+              t('وقت أول مشاهدة', 'First viewed at'),
+              firstViewedAt,
+              ltr: true,
+            ),
+          ],
+          if (hasDecision) ...[
+            _detailRow(
+              status == 'approved'
+                  ? t('الاعتماد الإلكتروني', 'Electronic approval')
+                  : t('قرار الرفض', 'Rejection decision'),
+              decisionByName.isEmpty
+                  ? decisionByRole
+                  : '$decisionByRole • $decisionByName',
+            ),
+            if (decisionAt.isNotEmpty)
+              _detailRow(
+                t('وقت القرار', 'Decision time'),
+                decisionAt,
+                ltr: true,
+              ),
+            if (decisionNote.isNotEmpty)
+              _detailRow(
+                t('ملاحظة الإدارة', 'Admin note'),
+                decisionNote,
+              ),
+          ],
         ],
       ),
     );
@@ -313,16 +431,96 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 
+  Future<String?> _askDecisionNote(String status) async {
+    final controller = TextEditingController();
+    final isReject = status == 'rejected';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          isReject
+              ? t('تأكيد رفض الطلب', 'Confirm rejection')
+              : t('تأكيد اعتماد الطلب', 'Confirm approval'),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isReject
+                  ? t(
+                      'سيُنقل الطلب إلى قسم المرفوضات. يمكنك كتابة سبب الرفض أو ملاحظة إدارية.',
+                      'The request will move to Rejected. You may add a rejection reason or admin note.',
+                    )
+                  : t(
+                      'سيُنقل الطلب إلى قسم المعتمدات ويُحفظ اسم الموظف وصفته ووقت القرار.',
+                      'The request will move to Approved and the staff name, role, and decision time will be recorded.',
+                    ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              minLines: 2,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: isReject
+                    ? t(
+                        'سبب الرفض / ملاحظة إدارية',
+                        'Rejection reason / admin note',
+                      )
+                    : t(
+                        'ملاحظة الاعتماد (اختياري)',
+                        'Approval note (optional)',
+                      ),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            style: isReject
+                ? FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  )
+                : null,
+            child: Text(
+              isReject
+                  ? t('تأكيد الرفض', 'Reject')
+                  : t('تأكيد الاعتماد', 'Approve'),
+            ),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
   Future<void> _changeStatus({
     required String id,
     required String status,
   }) async {
+    String? note;
+    if (status == 'approved' || status == 'rejected') {
+      note = await _askDecisionNote(status);
+      if (note == null) return;
+    }
+
     try {
       await DedaBackend.updateRequestStatus(
         collection: widget.collection,
         id: id,
         status: status,
+        note: note,
       );
+      if (!mounted) return;
+      setState(() => _expandedId = null);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -338,7 +536,20 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
+  Future<void> _markViewed(String id) async {
+    try {
+      await DedaBackend.markRequestViewed(
+        collection: widget.collection,
+        id: id,
+      );
+    } catch (_) {
+      // Keep the unread indicator if the server could not save the view.
+    }
+  }
+
   Widget _requestDetails(Map<String, dynamic> data) {
+    final commonAudit = _auditDetails(data);
+
     if (widget.collection == 'support_requests') {
       final imageUrl = _text(data['imageUrl']);
       return Column(
@@ -363,11 +574,14 @@ class _RequestListState extends State<_RequestList> {
                   height: 70,
                   alignment: Alignment.center,
                   color: const Color(0xFFEAF4E7),
-                  child: Text(t('تعذر عرض الصورة.', 'Could not display image.')),
+                  child: Text(
+                    t('تعذر عرض الصورة.', 'Could not display image.'),
+                  ),
                 ),
               ),
             ),
           ],
+          commonAudit,
         ],
       );
     }
@@ -406,8 +620,11 @@ class _RequestListState extends State<_RequestList> {
               placeName: placeName,
             ),
             icon: const Icon(Icons.map_outlined),
-            label: Text(t('فتح الموقع على الخريطة', 'Open location on map')),
+            label: Text(
+              t('فتح الموقع على الخريطة', 'Open location on map'),
+            ),
           ),
+        commonAudit,
       ],
     );
   }
@@ -435,6 +652,98 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 
+  bool _matchesSection(String status) {
+    switch (_section) {
+      case 'approved':
+        return status == 'approved';
+      case 'rejected':
+        return status == 'rejected';
+      default:
+        return status != 'approved' && status != 'rejected';
+    }
+  }
+
+  int _countSection(
+    Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    String section,
+  ) {
+    return docs.where((doc) {
+      final status = _text(doc.data()['status']);
+      if (section == 'approved') return status == 'approved';
+      if (section == 'rejected') return status == 'rejected';
+      return status != 'approved' && status != 'rejected';
+    }).length;
+  }
+
+  Widget _sectionChip({
+    required String value,
+    required String arLabel,
+    required String enLabel,
+    required int count,
+  }) {
+    return ChoiceChip(
+      selected: _section == value,
+      selectedColor: const Color(0xFFDDEDDD),
+      label: Text('${t(arLabel, enLabel)} ($count)'),
+      onSelected: (_) {
+        setState(() {
+          _section = value;
+          _expandedId = null;
+        });
+      },
+    );
+  }
+
+  Widget _actionsForStatus({
+    required String status,
+    required String id,
+  }) {
+    if (status == 'approved' || status == 'rejected') {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'reviewing',
+            id: id,
+            arLabel: 'إعادة للمراجعة',
+            enLabel: 'Return to review',
+          ),
+        ],
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _statusButton(
+          currentStatus: status,
+          targetStatus: 'reviewing',
+          id: id,
+          arLabel: 'قيد المراجعة',
+          enLabel: 'Under review',
+        ),
+        _statusButton(
+          currentStatus: status,
+          targetStatus: 'approved',
+          id: id,
+          arLabel: 'اعتماد',
+          enLabel: 'Approve',
+        ),
+        _statusButton(
+          currentStatus: status,
+          targetStatus: 'rejected',
+          id: id,
+          arLabel: 'رفض',
+          enLabel: 'Reject',
+          selectedColor: const Color(0xFFB3261E),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -449,86 +758,195 @@ class _RequestListState extends State<_RequestList> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final documents = snapshot.data!.docs;
-        if (documents.isEmpty) {
-          return Center(
-            child: Text(t('لا توجد طلبات حاليًا.', 'No requests yet.')),
-          );
-        }
+        final allDocuments = snapshot.data!.docs;
+        final currentCount = _countSection(allDocuments, 'current');
+        final approvedCount = _countSection(allDocuments, 'approved');
+        final rejectedCount = _countSection(allDocuments, 'rejected');
+        final documents = allDocuments.where((doc) {
+          final status = _text(doc.data()['status']);
+          return _matchesSection(status);
+        }).toList();
 
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemCount: documents.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (context, index) {
-            final doc = documents[index];
-            final data = doc.data();
-            final title = (data['name'] ??
-                    data['placeName'] ??
-                    t('طلب جديد', 'New request'))
-                .toString();
-            final status = (data['status'] ?? 'new').toString();
-
-            return Card(
-              clipBehavior: Clip.antiAlias,
-              child: ExpansionTile(
-                key: ValueKey('${doc.id}-${_expandedId == doc.id}'),
-                initiallyExpanded: _expandedId == doc.id,
-                onExpansionChanged: (expanded) {
-                  setState(() => _expandedId = expanded ? doc.id : null);
-                },
-                shape: const RoundedRectangleBorder(side: BorderSide.none),
-                collapsedShape:
-                    const RoundedRectangleBorder(side: BorderSide.none),
-                leading: Icon(
-                  widget.collection == 'support_requests'
-                      ? Icons.support_agent
-                      : Icons.storefront,
-                  color: const Color(0xFF17652F),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _sectionChip(
+                      value: 'current',
+                      arLabel: 'الحالية',
+                      enLabel: 'Current',
+                      count: currentCount,
+                    ),
+                    const SizedBox(width: 8),
+                    _sectionChip(
+                      value: 'approved',
+                      arLabel: 'المعتمدات',
+                      enLabel: 'Approved',
+                      count: approvedCount,
+                    ),
+                    const SizedBox(width: 8),
+                    _sectionChip(
+                      value: 'rejected',
+                      arLabel: 'المرفوضات',
+                      enLabel: 'Rejected',
+                      count: rejectedCount,
+                    ),
+                  ],
                 ),
-                title: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  '${t('الحالة', 'Status')}: ${statusLabel(status)}',
-                ),
-                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                children: [
-                  _requestDetails(data),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _statusButton(
-                        currentStatus: status,
-                        targetStatus: 'reviewing',
-                        id: doc.id,
-                        arLabel: 'قيد المراجعة',
-                        enLabel: 'Under review',
-                      ),
-                      _statusButton(
-                        currentStatus: status,
-                        targetStatus: 'approved',
-                        id: doc.id,
-                        arLabel: 'اعتماد',
-                        enLabel: 'Approve',
-                      ),
-                      _statusButton(
-                        currentStatus: status,
-                        targetStatus: 'rejected',
-                        id: doc.id,
-                        arLabel: 'رفض',
-                        enLabel: 'Reject',
-                        selectedColor: const Color(0xFFB3261E),
-                      ),
-                    ],
-                  ),
-                ],
               ),
-            );
-          },
+            ),
+            Expanded(
+              child: documents.isEmpty
+                  ? Center(
+                      child: Text(
+                        _section == 'approved'
+                            ? t(
+                                'لا توجد طلبات معتمدة في هذا القسم.',
+                                'There are no approved requests in this section.',
+                              )
+                            : _section == 'rejected'
+                                ? t(
+                                    'لا توجد طلبات مرفوضة في هذا القسم.',
+                                    'There are no rejected requests in this section.',
+                                  )
+                                : t(
+                                    'لا توجد طلبات حالية.',
+                                    'There are no current requests.',
+                                  ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: documents.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final doc = documents[index];
+                        final data = doc.data();
+                        final title = (data['name'] ??
+                                data['placeName'] ??
+                                t('طلب جديد', 'New request'))
+                            .toString();
+                        final status = (data['status'] ?? 'new').toString();
+                        final expanded = _expandedId == doc.id;
+                        final unread = data['firstViewedAt'] == null &&
+                            status != 'approved' &&
+                            status != 'rejected';
+
+                        return Card(
+                          clipBehavior: Clip.antiAlias,
+                          color: expanded ? const Color(0xFFEAF4E7) : null,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: expanded
+                                  ? const Color(0xFF17652F)
+                                  : Colors.transparent,
+                              width: expanded ? 2 : 0,
+                            ),
+                          ),
+                          child: ExpansionTile(
+                            key: ValueKey('${doc.id}-$expanded'),
+                            initiallyExpanded: expanded,
+                            onExpansionChanged: (isExpanded) {
+                              setState(
+                                () => _expandedId =
+                                    isExpanded ? doc.id : null,
+                              );
+                              if (isExpanded && data['firstViewedAt'] == null) {
+                                _markViewed(doc.id);
+                              }
+                            },
+                            shape: const RoundedRectangleBorder(
+                              side: BorderSide.none,
+                            ),
+                            collapsedShape: const RoundedRectangleBorder(
+                              side: BorderSide.none,
+                            ),
+                            leading: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Icon(
+                                  widget.collection == 'support_requests'
+                                      ? Icons.support_agent
+                                      : Icons.storefront,
+                                  color: const Color(0xFF17652F),
+                                ),
+                                if (unread)
+                                  Positioned(
+                                    right: -7,
+                                    top: -5,
+                                    child: Container(
+                                      width: 11,
+                                      height: 11,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFD62828),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            title: Text(
+                              title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${t('الحالة', 'Status')}: '
+                              '${statusLabel(status)}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (expanded) ...[
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFD4E8D4),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      t('مفتوح الآن', 'Open now'),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF17652F),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
+                                Icon(
+                                  expanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                ),
+                              ],
+                            ),
+                            childrenPadding:
+                                const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                            children: [
+                              _requestDetails(data),
+                              const SizedBox(height: 12),
+                              _actionsForStatus(
+                                status: status,
+                                id: doc.id,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
     );
