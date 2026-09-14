@@ -13,15 +13,43 @@ class DedaBackend {
     if (!isReady) throw StateError('firebase-not-ready');
     final auth = FirebaseAuth.instance;
     final currentUser = auth.currentUser;
-
-    // Preserve an already authenticated session (including the DEDA admin
-    // account). Public actions must never sign the administrator out behind
-    // the scenes. If nobody is signed in, use anonymous authentication.
     if (currentUser != null) return currentUser;
 
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
+  }
+
+  static Future<Map<String, String>> _adminIdentity() async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('admin-not-signed-in');
+    }
+
+    final admin = await FirebaseFirestore.instance
+        .collection('admins')
+        .doc(user.uid)
+        .get();
+    final data = admin.data();
+    if (!admin.exists || data?['active'] != true) {
+      throw StateError('admin-not-authorized');
+    }
+
+    final configuredName =
+        (data?['displayName'] ?? data?['name'] ?? '').toString().trim();
+    final configuredRole =
+        (data?['role'] ?? data?['jobTitle'] ?? 'manager').toString().trim();
+
+    return <String, String>{
+      'uid': user.uid,
+      'name': configuredName.isNotEmpty
+          ? configuredName
+          : (user.email?.trim().isNotEmpty == true
+              ? user.email!.trim()
+              : 'DEDA Admin'),
+      'role': configuredRole.isEmpty ? 'manager' : configuredRole,
+    };
   }
 
   static bool _hasRequiredPlaceData(Map<String, dynamic> data) {
@@ -51,7 +79,8 @@ class DedaBackend {
     String? imagePath,
   }) async {
     final user = await _ensurePublicUser();
-    final request = FirebaseFirestore.instance.collection('support_requests').doc();
+    final request =
+        FirebaseFirestore.instance.collection('support_requests').doc();
     String? imageUrl;
 
     if (imagePath != null && imagePath.isNotEmpty) {
@@ -92,7 +121,8 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
-    final request = FirebaseFirestore.instance.collection('place_requests').doc();
+    final request =
+        FirebaseFirestore.instance.collection('place_requests').doc();
     await request.set({
       ...data,
       'ownerUid': user.uid,
@@ -114,30 +144,38 @@ class DedaBackend {
     );
     final uid = credential.user?.uid;
     if (uid == null) return false;
-    final admin = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+
+    final admin =
+        await FirebaseFirestore.instance.collection('admins').doc(uid).get();
     if (admin.exists && admin.data()?['active'] == true) {
       await registerAdminNotifications();
       return true;
     }
+
     await FirebaseAuth.instance.signOut();
     return false;
   }
 
   static Future<bool> currentUserIsAdmin() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (!isReady || uid == null || FirebaseAuth.instance.currentUser!.isAnonymous) {
+    if (!isReady ||
+        uid == null ||
+        FirebaseAuth.instance.currentUser!.isAnonymous) {
       return false;
     }
-    final admin = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+    final admin =
+        await FirebaseFirestore.instance.collection('admins').doc(uid).get();
     return admin.exists && admin.data()?['active'] == true;
   }
 
   static Future<void> registerAdminNotifications() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) return;
+
     await FirebaseMessaging.instance.requestPermission();
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null) return;
+
     await FirebaseFirestore.instance.collection('admins').doc(user.uid).set({
       'fcmTokens': FieldValue.arrayUnion([token]),
       'lastSeenAt': FieldValue.serverTimestamp(),
@@ -172,49 +210,101 @@ class DedaBackend {
         .toList();
   }
 
+  static Future<void> markRequestViewed({
+    required String collection,
+    required String id,
+  }) async {
+    final actor = await _adminIdentity();
+    final firestore = FirebaseFirestore.instance;
+    final request = firestore.collection(collection).doc(id);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(request);
+      if (!snapshot.exists) throw StateError('request-not-found');
+
+      final data = snapshot.data() ?? <String, dynamic>{};
+      final update = <String, dynamic>{
+        'lastViewedAt': FieldValue.serverTimestamp(),
+        'lastViewedByUid': actor['uid'],
+        'lastViewedByName': actor['name'],
+        'lastViewedByRole': actor['role'],
+      };
+
+      if (data['firstViewedAt'] == null) {
+        update.addAll({
+          'firstViewedAt': FieldValue.serverTimestamp(),
+          'firstViewedByUid': actor['uid'],
+          'firstViewedByName': actor['name'],
+          'firstViewedByRole': actor['role'],
+        });
+      }
+
+      transaction.update(request, update);
+    });
+  }
+
   static Future<void> updateRequestStatus({
     required String collection,
     required String id,
     required String status,
+    String? note,
   }) async {
+    final actor = await _adminIdentity();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection(collection).doc(id);
+
+    final statusUpdate = <String, dynamic>{
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'reviewedBy': actor['uid'],
+      'reviewedByName': actor['name'],
+      'reviewedByRole': actor['role'],
+    };
+
+    if (status == 'approved' || status == 'rejected') {
+      statusUpdate.addAll({
+        'decisionAction': status,
+        'decisionAt': FieldValue.serverTimestamp(),
+        'decisionByUid': actor['uid'],
+        'decisionByName': actor['name'],
+        'decisionByRole': actor['role'],
+        'decisionNote': note?.trim() ?? '',
+      });
+    }
+
     if (collection == 'place_requests') {
       final snapshot = await request.get();
       if (!snapshot.exists) throw StateError('place-request-not-found');
-      if (status == 'approved' && !_hasRequiredPlaceData(snapshot.data()!)) {
+      final requestData = snapshot.data()!;
+
+      if (status == 'approved' && !_hasRequiredPlaceData(requestData)) {
         throw StateError('incomplete-place-request');
       }
+
       final batch = firestore.batch();
-      batch.update(request, {
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'reviewedBy': FirebaseAuth.instance.currentUser?.uid,
-      });
+      batch.update(request, statusUpdate);
+
       final published = firestore.collection('published_places').doc(id);
       if (status == 'approved') {
-        final data = snapshot.data()!;
         batch.set(published, {
-          ...data,
+          ...requestData,
           'requestId': id,
           'published': true,
+          'approvedByUid': actor['uid'],
+          'approvedByName': actor['name'],
+          'approvedByRole': actor['role'],
           'publishedAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        // Any non-approved state must remove the place from the public list.
-        // This keeps the public map consistent when an admin changes a prior
-        // approval back to under review or rejected.
         batch.delete(published);
       }
+
       await batch.commit();
       return;
     }
-    await request.update({
-      'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'reviewedBy': FirebaseAuth.instance.currentUser?.uid,
-    });
+
+    await request.update(statusUpdate);
   }
 
   static Future<void> signOutAdmin() => FirebaseAuth.instance.signOut();
