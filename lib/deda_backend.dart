@@ -201,7 +201,10 @@ class DedaBackend {
           'publishedAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
-      } else if (status == 'rejected') {
+      } else {
+        // Any non-approved state must remove the place from the public list.
+        // This keeps the public map consistent when an admin changes a prior
+        // approval back to under review or rejected.
         batch.delete(published);
       }
       await batch.commit();

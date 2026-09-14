@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import 'admin_place_map.dart';
 import 'deda_backend.dart';
 
 class DedaAdminLoginPage extends StatefulWidget {
@@ -41,7 +41,10 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
       );
       if (!mounted) return;
       if (!allowed) {
-        setState(() => _error = t('هذا الحساب ليس مديرًا معتمدًا.', 'This is not an approved admin account.'));
+        setState(() => _error = t(
+              'هذا الحساب ليس مديرًا معتمدًا.',
+              'This is not an approved admin account.',
+            ));
         return;
       }
       Navigator.pushReplacement(
@@ -52,7 +55,10 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
       );
     } catch (_) {
       if (mounted) {
-        setState(() => _error = t('تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.', 'Sign-in failed. Check the details and internet connection.'));
+        setState(() => _error = t(
+              'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
+              'Sign-in failed. Check the details and internet connection.',
+            ));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -72,31 +78,67 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.admin_panel_settings, size: 72, color: Color(0xFF17652F)),
+                const Icon(
+                  Icons.admin_panel_settings,
+                  size: 72,
+                  color: Color(0xFF17652F),
+                ),
                 const SizedBox(height: 18),
-                Text(t('دخول الإدارة المحمي', 'Protected admin sign-in'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 25, fontWeight: FontWeight.bold)),
+                Text(
+                  t('دخول الإدارة المحمي', 'Protected admin sign-in'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 22),
                 TextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   textDirection: TextDirection.ltr,
-                  decoration: InputDecoration(labelText: t('البريد الإلكتروني الإداري', 'Admin email'), prefixIcon: const Icon(Icons.email_outlined), border: const OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: t('البريد الإلكتروني الإداري', 'Admin email'),
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: _password,
                   obscureText: true,
                   textDirection: TextDirection.ltr,
-                  decoration: InputDecoration(labelText: t('كلمة المرور', 'Password'), prefixIcon: const Icon(Icons.lock_outline), border: const OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: t('كلمة المرور', 'Password'),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: const OutlineInputBorder(),
+                  ),
                   onSubmitted: (_) => _login(),
                 ),
-                if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red))),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   onPressed: _loading ? null : _login,
-                  icon: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.login),
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.login),
                   label: Text(t('دخول', 'Sign in')),
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), backgroundColor: const Color(0xFF17652F)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: const Color(0xFF17652F),
+                  ),
                 ),
               ],
             ),
@@ -168,7 +210,11 @@ class _RequestList extends StatefulWidget {
   final String collection;
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
 
-  const _RequestList({required this.isArabic, required this.collection, required this.stream});
+  const _RequestList({
+    required this.isArabic,
+    required this.collection,
+    required this.stream,
+  });
 
   @override
   State<_RequestList> createState() => _RequestListState();
@@ -207,7 +253,10 @@ class _RequestListState extends State<_RequestList> {
       case 'photo':
         return t('إرسال صورة', 'Send a photo');
       default:
-        return t('التواصل مع الشركة مباشرة', 'Contact company directly');
+        return t(
+          'التواصل مع الشركة مباشرة',
+          'Contact company directly',
+        );
     }
   }
 
@@ -234,7 +283,8 @@ class _RequestListState extends State<_RequestList> {
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
           Expanded(
             child: Directionality(
-              textDirection: ltr ? TextDirection.ltr : Directionality.of(context),
+              textDirection:
+                  ltr ? TextDirection.ltr : Directionality.of(context),
               child: SelectableText(
                 text.isEmpty ? t('غير محدد', 'Not provided') : text,
                 textAlign: ltr ? TextAlign.left : TextAlign.start,
@@ -246,11 +296,21 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 
-  Future<void> _openMap(double latitude, double longitude) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+  Future<void> _openMap({
+    required double latitude,
+    required double longitude,
+    required String placeName,
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DedaAdminPlaceMapPage(
+          isArabic: widget.isArabic,
+          latitude: latitude,
+          longitude: longitude,
+          placeName: placeName,
+        ),
+      ),
     );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _changeStatus({
@@ -284,7 +344,10 @@ class _RequestListState extends State<_RequestList> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _detailRow(t('نوع التواصل', 'Contact type'), _supportTypeLabel(_text(data['type']))),
+          _detailRow(
+            t('نوع التواصل', 'Contact type'),
+            _supportTypeLabel(_text(data['type'])),
+          ),
           _detailRow(t('الاسم', 'Name'), data['name']),
           _detailRow(t('الهاتف', 'Phone'), data['phone'], ltr: true),
           _detailRow(t('الرسالة', 'Message'), data['message']),
@@ -311,6 +374,8 @@ class _RequestListState extends State<_RequestList> {
 
     final latitude = (data['latitude'] as num?)?.toDouble();
     final longitude = (data['longitude'] as num?)?.toDouble();
+    final placeName = _text(data['placeName']);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -335,11 +400,38 @@ class _RequestListState extends State<_RequestList> {
         ),
         if (latitude != null && longitude != null)
           OutlinedButton.icon(
-            onPressed: () => _openMap(latitude, longitude),
+            onPressed: () => _openMap(
+              latitude: latitude,
+              longitude: longitude,
+              placeName: placeName,
+            ),
             icon: const Icon(Icons.map_outlined),
             label: Text(t('فتح الموقع على الخريطة', 'Open location on map')),
           ),
       ],
+    );
+  }
+
+  Widget _statusButton({
+    required String currentStatus,
+    required String targetStatus,
+    required String id,
+    required String arLabel,
+    required String enLabel,
+    Color selectedColor = const Color(0xFF17652F),
+  }) {
+    final selected = currentStatus == targetStatus;
+    return OutlinedButton(
+      onPressed: selected
+          ? null
+          : () => _changeStatus(id: id, status: targetStatus),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: selected ? selectedColor : null,
+        foregroundColor: selected ? Colors.white : null,
+        disabledBackgroundColor: selected ? selectedColor : null,
+        disabledForegroundColor: selected ? Colors.white : null,
+      ),
+      child: Text(t(arLabel, enLabel)),
     );
   }
 
@@ -348,10 +440,22 @@ class _RequestListState extends State<_RequestList> {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: widget.stream,
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text(t('تعذر تحميل الطلبات.', 'Could not load requests.')));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(t('تعذر تحميل الطلبات.', 'Could not load requests.')),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         final documents = snapshot.data!.docs;
-        if (documents.isEmpty) return Center(child: Text(t('لا توجد طلبات حاليًا.', 'No requests yet.')));
+        if (documents.isEmpty) {
+          return Center(
+            child: Text(t('لا توجد طلبات حاليًا.', 'No requests yet.')),
+          );
+        }
+
         return ListView.separated(
           padding: const EdgeInsets.all(12),
           itemCount: documents.length,
@@ -359,9 +463,12 @@ class _RequestListState extends State<_RequestList> {
           itemBuilder: (context, index) {
             final doc = documents[index];
             final data = doc.data();
-            final title = (data['name'] ?? data['placeName'] ?? t('طلب جديد', 'New request')).toString();
+            final title = (data['name'] ??
+                    data['placeName'] ??
+                    t('طلب جديد', 'New request'))
+                .toString();
             final status = (data['status'] ?? 'new').toString();
-            final isFinal = status == 'approved' || status == 'rejected';
+
             return Card(
               clipBehavior: Clip.antiAlias,
               child: ExpansionTile(
@@ -371,10 +478,21 @@ class _RequestListState extends State<_RequestList> {
                   setState(() => _expandedId = expanded ? doc.id : null);
                 },
                 shape: const RoundedRectangleBorder(side: BorderSide.none),
-                collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
-                leading: Icon(widget.collection == 'support_requests' ? Icons.support_agent : Icons.storefront, color: const Color(0xFF17652F)),
-                title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${t('الحالة', 'Status')}: ${statusLabel(status)}'),
+                collapsedShape:
+                    const RoundedRectangleBorder(side: BorderSide.none),
+                leading: Icon(
+                  widget.collection == 'support_requests'
+                      ? Icons.support_agent
+                      : Icons.storefront,
+                  color: const Color(0xFF17652F),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  '${t('الحالة', 'Status')}: ${statusLabel(status)}',
+                ),
                 childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                 children: [
                   _requestDetails(data),
@@ -383,59 +501,27 @@ class _RequestListState extends State<_RequestList> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      OutlinedButton(
-                        onPressed: isFinal || status == 'reviewing'
-                            ? null
-                            : () => _changeStatus(id: doc.id, status: 'reviewing'),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: status == 'reviewing'
-                              ? const Color(0xFF17652F)
-                              : null,
-                          foregroundColor:
-                              status == 'reviewing' ? Colors.white : null,
-                          disabledBackgroundColor: status == 'reviewing'
-                              ? const Color(0xFF17652F)
-                              : null,
-                          disabledForegroundColor:
-                              status == 'reviewing' ? Colors.white : null,
-                        ),
-                        child: Text(t('قيد المراجعة', 'Under review')),
+                      _statusButton(
+                        currentStatus: status,
+                        targetStatus: 'reviewing',
+                        id: doc.id,
+                        arLabel: 'قيد المراجعة',
+                        enLabel: 'Under review',
                       ),
-                      OutlinedButton(
-                        onPressed: isFinal
-                            ? null
-                            : () => _changeStatus(id: doc.id, status: 'approved'),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: status == 'approved'
-                              ? const Color(0xFF17652F)
-                              : null,
-                          foregroundColor:
-                              status == 'approved' ? Colors.white : null,
-                          disabledBackgroundColor: status == 'approved'
-                              ? const Color(0xFF17652F)
-                              : null,
-                          disabledForegroundColor:
-                              status == 'approved' ? Colors.white : null,
-                        ),
-                        child: Text(t('اعتماد', 'Approve')),
+                      _statusButton(
+                        currentStatus: status,
+                        targetStatus: 'approved',
+                        id: doc.id,
+                        arLabel: 'اعتماد',
+                        enLabel: 'Approve',
                       ),
-                      OutlinedButton(
-                        onPressed: isFinal
-                            ? null
-                            : () => _changeStatus(id: doc.id, status: 'rejected'),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: status == 'rejected'
-                              ? const Color(0xFFB3261E)
-                              : null,
-                          foregroundColor:
-                              status == 'rejected' ? Colors.white : null,
-                          disabledBackgroundColor: status == 'rejected'
-                              ? const Color(0xFFB3261E)
-                              : null,
-                          disabledForegroundColor:
-                              status == 'rejected' ? Colors.white : null,
-                        ),
-                        child: Text(t('رفض', 'Reject')),
+                      _statusButton(
+                        currentStatus: status,
+                        targetStatus: 'rejected',
+                        id: doc.id,
+                        arLabel: 'رفض',
+                        enLabel: 'Reject',
+                        selectedColor: const Color(0xFFB3261E),
                       ),
                     ],
                   ),
