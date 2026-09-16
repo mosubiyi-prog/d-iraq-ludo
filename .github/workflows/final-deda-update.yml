@@ -1,0 +1,43 @@
+name: Apply final DEDA update
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - places-v1
+    paths:
+      - tools/final_deda_update.py
+      - .github/workflows/final-deda-update.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout places-v1
+        uses: actions/checkout@v4
+        with:
+          ref: places-v1
+          fetch-depth: 0
+
+      - name: Apply final DEDA patch
+        run: python3 tools/final_deda_update.py
+
+      - name: Verify patch cleanliness
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Commit final source changes
+        run: |
+          if git diff --quiet; then
+            echo "No source changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/admin_pages.dart lib/deda_backend.dart firestore.rules functions/index.js
+          git commit -m "Apply final DEDA owner flow and assistant [deda-final-patched]"
+          git push origin HEAD:places-v1
