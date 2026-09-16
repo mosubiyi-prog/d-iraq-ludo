@@ -14,7 +14,6 @@ class DedaBackend {
     final auth = FirebaseAuth.instance;
     final currentUser = auth.currentUser;
     if (currentUser != null) return currentUser;
-
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
@@ -26,7 +25,6 @@ class DedaBackend {
     if (user == null || user.isAnonymous) {
       throw StateError('admin-not-signed-in');
     }
-
     final admin = await FirebaseFirestore.instance
         .collection('admins')
         .doc(user.uid)
@@ -35,12 +33,10 @@ class DedaBackend {
     if (!admin.exists || data?['active'] != true) {
       throw StateError('admin-not-authorized');
     }
-
     final configuredName =
         (data?['displayName'] ?? data?['name'] ?? '').toString().trim();
     final configuredRole =
         (data?['role'] ?? data?['jobTitle'] ?? 'manager').toString().trim();
-
     return <String, String>{
       'uid': user.uid,
       'name': configuredName.isNotEmpty
@@ -82,7 +78,6 @@ class DedaBackend {
     final request =
         FirebaseFirestore.instance.collection('support_requests').doc();
     String? imageUrl;
-
     if (imagePath != null && imagePath.isNotEmpty) {
       final extension = imagePath.contains('.')
           ? imagePath.split('.').last.toLowerCase()
@@ -101,7 +96,6 @@ class DedaBackend {
       );
       imageUrl = await reference.getDownloadURL();
     }
-
     await request.set({
       'ownerUid': user.uid,
       'type': type,
@@ -121,16 +115,97 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
+    await registerOwnerNotifications();
     final request =
         FirebaseFirestore.instance.collection('place_requests').doc();
     await request.set({
       ...data,
       'ownerUid': user.uid,
+      'requestType': 'create',
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     return request.id;
+  }
+
+  static Future<String> submitPlaceEdit({
+    required String originalPlaceId,
+    required Map<String, dynamic> data,
+  }) async {
+    if (!_hasRequiredPlaceData(data)) {
+      throw ArgumentError('incomplete-place-request');
+    }
+    final user = await _ensurePublicUser();
+    await registerOwnerNotifications();
+    final original = await FirebaseFirestore.instance
+        .collection('published_places')
+        .doc(originalPlaceId)
+        .get();
+    if (!original.exists || original.data()?['ownerUid'] != user.uid) {
+      throw StateError('not-place-owner');
+    }
+    final request =
+        FirebaseFirestore.instance.collection('place_requests').doc();
+    await request.set({
+      ...data,
+      'ownerUid': user.uid,
+      'requestType': 'update',
+      'originalPlaceId': originalPlaceId,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return request.id;
+  }
+
+  static Future<Map<String, dynamic>?> ownerRequestById(String id) async {
+    final user = await _ensurePublicUser();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('place_requests')
+        .doc(id)
+        .get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null || data['ownerUid'] != user.uid) {
+      return null;
+    }
+    return {'id': snapshot.id, ...data};
+  }
+
+  static Future<Map<String, dynamic>?> publishedPlaceById(String id) async {
+    if (!isReady) return null;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('published_places')
+        .doc(id)
+        .get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return null;
+    return {'id': snapshot.id, ...data};
+  }
+
+  static Future<void> registerOwnerNotifications() async {
+    final user = await _ensurePublicUser();
+    await FirebaseMessaging.instance.requestPermission();
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      'fcmTokens': FieldValue.arrayUnion([token]),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> updateOwnerAvailability({
+    required String placeId,
+    required bool isAvailableNow,
+  }) async {
+    await _ensurePublicUser();
+    await FirebaseFirestore.instance
+        .collection('published_places')
+        .doc(placeId)
+        .update({
+      'isAvailableNow': isAvailableNow,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   static Future<bool> signInAdmin({
@@ -144,14 +219,12 @@ class DedaBackend {
     );
     final uid = credential.user?.uid;
     if (uid == null) return false;
-
     final admin =
         await FirebaseFirestore.instance.collection('admins').doc(uid).get();
     if (admin.exists && admin.data()?['active'] == true) {
       await registerAdminNotifications();
       return true;
     }
-
     await FirebaseAuth.instance.signOut();
     return false;
   }
@@ -171,11 +244,9 @@ class DedaBackend {
   static Future<void> registerAdminNotifications() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) return;
-
     await FirebaseMessaging.instance.requestPermission();
     final token = await FirebaseMessaging.instance.getToken();
     if (token == null) return;
-
     await FirebaseFirestore.instance.collection('admins').doc(user.uid).set({
       'fcmTokens': FieldValue.arrayUnion([token]),
       'lastSeenAt': FieldValue.serverTimestamp(),
@@ -217,11 +288,9 @@ class DedaBackend {
     final actor = await _adminIdentity();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection(collection).doc(id);
-
     await firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(request);
       if (!snapshot.exists) throw StateError('request-not-found');
-
       final data = snapshot.data() ?? <String, dynamic>{};
       final update = <String, dynamic>{
         'lastViewedAt': FieldValue.serverTimestamp(),
@@ -229,7 +298,6 @@ class DedaBackend {
         'lastViewedByName': actor['name'],
         'lastViewedByRole': actor['role'],
       };
-
       if (data['firstViewedAt'] == null) {
         update.addAll({
           'firstViewedAt': FieldValue.serverTimestamp(),
@@ -238,8 +306,148 @@ class DedaBackend {
           'firstViewedByRole': actor['role'],
         });
       }
-
       transaction.update(request, update);
+    });
+  }
+
+  static String _formatApprovalDate(DateTime value) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(value.day)}/${two(value.month)}/${value.year}';
+  }
+
+  static String _approvalMessage({
+    required String placeName,
+    required String approvalNumber,
+    required String approvalDate,
+  }) {
+    return 'تم اعتماد: $placeName\n'
+        'رقم الاعتماد: $approvalNumber\n'
+        'تاريخ الاعتماد: $approvalDate\n'
+        'DEDA - الدليل الدقيق';
+  }
+
+  static Future<Map<String, dynamic>> preparePlaceApproval(String id) async {
+    final actor = await _adminIdentity();
+    final firestore = FirebaseFirestore.instance;
+    final request = firestore.collection('place_requests').doc(id);
+    final counter = firestore.collection('system_counters').doc('place_approval');
+
+    return firestore.runTransaction<Map<String, dynamic>>((transaction) async {
+      final requestSnapshot = await transaction.get(request);
+      if (!requestSnapshot.exists) throw StateError('place-request-not-found');
+      final data = requestSnapshot.data()!;
+      if (!_hasRequiredPlaceData(data)) {
+        throw StateError('incomplete-place-request');
+      }
+
+      var approvalNumber = (data['approvalNumber'] ?? '').toString().trim();
+      var approvalDate = (data['approvalDate'] ?? '').toString().trim();
+      if (approvalNumber.isEmpty) {
+        final counterSnapshot = await transaction.get(counter);
+        final current = (counterSnapshot.data()?['value'] as num?)?.toInt() ?? 0;
+        final next = current + 1;
+        final now = DateTime.now();
+        approvalNumber = 'DEDA-${now.year}-${next.toString().padLeft(6, '0')}';
+        approvalDate = _formatApprovalDate(now);
+        transaction.set(
+          counter,
+          {'value': next, 'updatedAt': FieldValue.serverTimestamp()},
+          SetOptions(merge: true),
+        );
+      }
+      if (approvalDate.isEmpty) {
+        approvalDate = _formatApprovalDate(DateTime.now());
+      }
+      final placeName = (data['placeName'] ?? '').toString().trim();
+      final message = _approvalMessage(
+        placeName: placeName,
+        approvalNumber: approvalNumber,
+        approvalDate: approvalDate,
+      );
+      transaction.update(request, {
+        'approvalNumber': approvalNumber,
+        'approvalDate': approvalDate,
+        'approvalMessageDraft': message,
+        'approvalPreparedAt': FieldValue.serverTimestamp(),
+        'approvalPreparedByUid': actor['uid'],
+        'approvalPreparedByName': actor['name'],
+      });
+      return {
+        'approvalNumber': approvalNumber,
+        'approvalDate': approvalDate,
+        'placeName': placeName,
+        'message': message,
+      };
+    });
+  }
+
+  static Future<void> finalizePlaceApproval({
+    required String id,
+    required String message,
+  }) async {
+    final actor = await _adminIdentity();
+    final firestore = FirebaseFirestore.instance;
+    final request = firestore.collection('place_requests').doc(id);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(request);
+      if (!snapshot.exists) throw StateError('place-request-not-found');
+      final data = snapshot.data()!;
+      if (!_hasRequiredPlaceData(data)) {
+        throw StateError('incomplete-place-request');
+      }
+      final approvalNumber = (data['approvalNumber'] ?? '').toString().trim();
+      final approvalDate = (data['approvalDate'] ?? '').toString().trim();
+      if (approvalNumber.isEmpty || approvalDate.isEmpty) {
+        throw StateError('approval-not-prepared');
+      }
+      final cleanMessage = message.trim().isEmpty
+          ? _approvalMessage(
+              placeName: (data['placeName'] ?? '').toString(),
+              approvalNumber: approvalNumber,
+              approvalDate: approvalDate,
+            )
+          : message.trim();
+
+      final originalPlaceId = (data['originalPlaceId'] ?? '').toString().trim();
+      final publishedId = originalPlaceId.isNotEmpty ? originalPlaceId : id;
+      final published = firestore.collection('published_places').doc(publishedId);
+
+      transaction.update(request, {
+        'status': 'approved',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': actor['uid'],
+        'reviewedByName': actor['name'],
+        'reviewedByRole': actor['role'],
+        'decisionAction': 'approved',
+        'decisionAt': FieldValue.serverTimestamp(),
+        'decisionByUid': actor['uid'],
+        'decisionByName': actor['name'],
+        'decisionByRole': actor['role'],
+        'decisionNote': '',
+        'approvalMessage': cleanMessage,
+      });
+
+      transaction.set(
+        published,
+        {
+          ...data,
+          'requestId': publishedId,
+          'sourceRequestId': id,
+          'lastSourceRequestId': id,
+          'published': true,
+          'status': 'approved',
+          'approvalNumber': approvalNumber,
+          'approvalDate': approvalDate,
+          'approvalMessage': cleanMessage,
+          'approvedByUid': actor['uid'],
+          'approvedByName': actor['name'],
+          'approvedByRole': actor['role'],
+          'publishedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
     });
   }
 
@@ -249,10 +457,15 @@ class DedaBackend {
     required String status,
     String? note,
   }) async {
+    if (collection == 'place_requests' && status == 'approved') {
+      final prepared = await preparePlaceApproval(id);
+      await finalizePlaceApproval(id: id, message: prepared['message'].toString());
+      return;
+    }
+
     final actor = await _adminIdentity();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection(collection).doc(id);
-
     final statusUpdate = <String, dynamic>{
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -260,8 +473,7 @@ class DedaBackend {
       'reviewedByName': actor['name'],
       'reviewedByRole': actor['role'],
     };
-
-    if (status == 'approved' || status == 'rejected') {
+    if (status == 'rejected' || status == 'needs_changes') {
       statusUpdate.addAll({
         'decisionAction': status,
         'decisionAt': FieldValue.serverTimestamp(),
@@ -271,39 +483,6 @@ class DedaBackend {
         'decisionNote': note?.trim() ?? '',
       });
     }
-
-    if (collection == 'place_requests') {
-      final snapshot = await request.get();
-      if (!snapshot.exists) throw StateError('place-request-not-found');
-      final requestData = snapshot.data()!;
-
-      if (status == 'approved' && !_hasRequiredPlaceData(requestData)) {
-        throw StateError('incomplete-place-request');
-      }
-
-      final batch = firestore.batch();
-      batch.update(request, statusUpdate);
-
-      final published = firestore.collection('published_places').doc(id);
-      if (status == 'approved') {
-        batch.set(published, {
-          ...requestData,
-          'requestId': id,
-          'published': true,
-          'approvedByUid': actor['uid'],
-          'approvedByName': actor['name'],
-          'approvedByRole': actor['role'],
-          'publishedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } else {
-        batch.delete(published);
-      }
-
-      await batch.commit();
-      return;
-    }
-
     await request.update(statusUpdate);
   }
 

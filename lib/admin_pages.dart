@@ -234,6 +234,8 @@ class _RequestListState extends State<_RequestList> {
         return t('قيد المراجعة', 'Under review');
       case 'approved':
         return t('معتمد', 'Approved');
+      case 'needs_changes':
+        return t('يحتاج تعديل', 'Needs changes');
       case 'rejected':
         return t('مرفوض', 'Rejected');
       case 'new':
@@ -440,7 +442,7 @@ class _RequestListState extends State<_RequestList> {
         title: Text(
           isReject
               ? t('تأكيد رفض الطلب', 'Confirm rejection')
-              : t('تأكيد اعتماد الطلب', 'Confirm approval'),
+              : t('الطلب يحتاج تعديل', 'Request changes'),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -448,29 +450,23 @@ class _RequestListState extends State<_RequestList> {
             Text(
               isReject
                   ? t(
-                      'سيُنقل الطلب إلى قسم المرفوضات. يمكنك كتابة سبب الرفض أو ملاحظة إدارية.',
-                      'The request will move to Rejected. You may add a rejection reason or admin note.',
+                      'اكتب سبب الرفض أو الملاحظة التي ستصل لصاحب المكان.',
+                      'Enter the rejection reason or note that will reach the place owner.',
                     )
                   : t(
-                      'سيُنقل الطلب إلى قسم المعتمدات ويُحفظ اسم الموظف وصفته ووقت القرار.',
-                      'The request will move to Approved and the staff name, role, and decision time will be recorded.',
+                      'اكتب التعديل المطلوب بوضوح ليصل إلى صاحب المكان.',
+                      'Clearly describe the required changes for the place owner.',
                     ),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: controller,
               minLines: 2,
-              maxLines: 4,
+              maxLines: 5,
               decoration: InputDecoration(
                 labelText: isReject
-                    ? t(
-                        'سبب الرفض / ملاحظة إدارية',
-                        'Rejection reason / admin note',
-                      )
-                    : t(
-                        'ملاحظة الاعتماد (اختياري)',
-                        'Approval note (optional)',
-                      ),
+                    ? t('سبب الرفض', 'Rejection reason')
+                    : t('التعديل المطلوب', 'Required change'),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -482,18 +478,11 @@ class _RequestListState extends State<_RequestList> {
             child: Text(t('إلغاء', 'Cancel')),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
             style: isReject
-                ? FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFB3261E),
-                  )
+                ? FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))
                 : null,
-            child: Text(
-              isReject
-                  ? t('تأكيد الرفض', 'Reject')
-                  : t('تأكيد الاعتماد', 'Approve'),
-            ),
+            child: Text(isReject ? t('تأكيد الرفض', 'Reject') : t('إرسال الملاحظة', 'Send note')),
           ),
         ],
       ),
@@ -502,12 +491,95 @@ class _RequestListState extends State<_RequestList> {
     return result;
   }
 
+  Future<String?> _editApprovalMessage(Map<String, dynamic> prepared) async {
+    final controller = TextEditingController(text: prepared['message']?.toString() ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('رسالة اعتماد المكان', 'Place approval message')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                t(
+                  'جهّز DEDA البيانات تلقائياً. راجع الرسالة، وعدّلها فقط إذا وجدت خطأ، ثم اضغط إرسال.',
+                  'DEDA generated the details automatically. Review the message, edit only if needed, then press Send.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                minLines: 5,
+                maxLines: 8,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            icon: const Icon(Icons.send_outlined),
+            label: Text(t('إرسال واعتماد', 'Send & approve')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _approveAndNotify(String id) async {
+    try {
+      final prepared = await DedaBackend.preparePlaceApproval(id);
+      if (!mounted) return;
+      final message = await _editApprovalMessage(prepared);
+      if (message == null) return;
+      await DedaBackend.finalizePlaceApproval(id: id, message: message);
+      if (!mounted) return;
+      setState(() => _expandedId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم اعتماد المكان وإرسال الرد لصاحب المكان.',
+              'The place was approved and the reply was sent to the owner.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر اعتماد الطلب. تأكد من اكتمال البيانات وحاول مرة أخرى.',
+              'Could not approve the request. Check the details and try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _changeStatus({
     required String id,
     required String status,
   }) async {
+    if (status == 'approved') {
+      await _approveAndNotify(id);
+      return;
+    }
+
     String? note;
-    if (status == 'approved' || status == 'rejected') {
+    if (status == 'rejected' || status == 'needs_changes') {
       note = await _askDecisionNote(status);
       if (note == null) return;
     }
@@ -724,6 +796,14 @@ class _RequestListState extends State<_RequestList> {
           id: id,
           arLabel: 'قيد المراجعة',
           enLabel: 'Under review',
+        ),
+        _statusButton(
+          currentStatus: status,
+          targetStatus: 'needs_changes',
+          id: id,
+          arLabel: 'يحتاج تعديل',
+          enLabel: 'Needs changes',
+          selectedColor: const Color(0xFFB26A00),
         ),
         _statusButton(
           currentStatus: status,

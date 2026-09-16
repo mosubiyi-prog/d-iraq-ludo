@@ -2136,6 +2136,9 @@ class OwnerPlacePage extends StatefulWidget {
 
 class _OwnerPlacePageState extends State<OwnerPlacePage> {
   static const String _draftKey = 'deda_owner_place_draft_v1';
+  static const String _placeIdKey = 'deda_owner_place_id_v2';
+  static const String _pendingEditIdKey = 'deda_owner_pending_edit_id_v2';
+  static const String _submittedSnapshotKey = 'deda_owner_submitted_snapshot_v2';
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -2145,17 +2148,24 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   final _hoursController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _otherCategoryTextController = TextEditingController();
-  final _otherCategoryTextFocus = FocusNode();
 
   String _categoryCode = 'restaurant';
   double? _latitude;
   double? _longitude;
-  bool _loadingDraft = true;
+  bool _loading = true;
   bool _gettingLocation = false;
   bool _saving = false;
   bool _submitting = false;
   bool _isAvailableNow = false;
+  bool _editingApproved = false;
   DateTime? _savedAt;
+  String? _placeId;
+  String? _pendingEditId;
+  String _status = 'draft';
+  String? _approvalNumber;
+  String? _approvalDate;
+  String? _approvalMessage;
+  String? _decisionNote;
 
   static const List<Map<String, String>> _categories = [
     {'code': 'restaurant', 'ar': 'مطعم', 'en': 'Restaurant'},
@@ -2172,13 +2182,21 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     {'code': 'other', 'ar': 'أخرى', 'en': 'Other'},
   ];
 
+  bool get _formEditable =>
+      _status == 'draft' ||
+      _status == 'rejected' ||
+      _status == 'needs_changes' ||
+      (_status == 'approved' && _editingApproved);
+
+  bool get _availabilityEditable => _formEditable || _status == 'approved';
+
   @override
   void initState() {
     super.initState();
     _phoneController.text = DedaPreferences.accountPhone.isNotEmpty
         ? DedaPreferences.accountPhone
         : DedaPreferences.phone;
-    _loadDraft();
+    _loadState();
   }
 
   @override
@@ -2190,82 +2208,152 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     _hoursController.dispose();
     _descriptionController.dispose();
     _otherCategoryTextController.dispose();
-    _otherCategoryTextFocus.dispose();
     super.dispose();
   }
 
   String _categoryLabel(Map<String, String> item) =>
       DedaLanguageState.isArabic ? item['ar']! : item['en']!;
 
-  Future<void> _loadDraft() async {
+  void _applyData(Map<String, dynamic> data) {
+    _nameController.text = (data['placeName'] ?? data['name'] ?? '').toString();
+    _phoneController.text = (data['phone'] ?? _phoneController.text).toString();
+    _governorateController.text = (data['governorate'] ?? '').toString();
+    _addressController.text = (data['address'] ?? '').toString();
+    _hoursController.text = (data['openingHours'] ?? data['hours'] ?? '').toString();
+    _descriptionController.text = (data['description'] ?? '').toString();
+    final category = (data['category'] ?? 'restaurant').toString();
+    if (_categories.any((item) => item['code'] == category)) {
+      _categoryCode = category;
+    }
+    _otherCategoryTextController.text =
+        (data['otherCategoryText'] ?? '').toString();
+    _latitude = (data['latitude'] as num?)?.toDouble();
+    _longitude = (data['longitude'] as num?)?.toDouble();
+    _isAvailableNow = data['isAvailableNow'] == true;
+    _approvalNumber = data['approvalNumber']?.toString();
+    _approvalDate = data['approvalDate']?.toString();
+    _approvalMessage = data['approvalMessage']?.toString();
+    _decisionNote = data['decisionNote']?.toString();
+  }
+
+  Future<void> _loadState() async {
+    if (mounted) setState(() => _loading = true);
     try {
+      try {
+        await DedaBackend.registerOwnerNotifications();
+      } catch (_) {}
+
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_draftKey);
-      if (raw != null && raw.isNotEmpty) {
-        final data = jsonDecode(raw) as Map<String, dynamic>;
-        _nameController.text = (data['name'] ?? '').toString();
-        _phoneController.text = (data['phone'] ?? _phoneController.text).toString();
-        _governorateController.text = (data['governorate'] ?? '').toString();
-        _addressController.text = (data['address'] ?? '').toString();
-        _hoursController.text = (data['hours'] ?? '').toString();
-        _descriptionController.text = (data['description'] ?? '').toString();
-        final savedCategory = (data['category'] ?? 'restaurant').toString();
-        if (_categories.any((item) => item['code'] == savedCategory)) {
-          _categoryCode = savedCategory;
-        }
-        _otherCategoryTextController.text =
-            (data['otherCategoryText'] ?? '').toString();
-        _latitude = (data['latitude'] as num?)?.toDouble();
-        _longitude = (data['longitude'] as num?)?.toDouble();
-        _isAvailableNow = data['isAvailableNow'] == true;
-        final savedAt = data['savedAt']?.toString();
-        if (savedAt != null && savedAt.isNotEmpty) {
-          _savedAt = DateTime.tryParse(savedAt);
-        }
+      _placeId = prefs.getString(_placeIdKey);
+      _pendingEditId = prefs.getString(_pendingEditIdKey);
+      final snapshotRaw = prefs.getString(_submittedSnapshotKey);
+      Map<String, dynamic>? localSnapshot;
+      if (snapshotRaw != null && snapshotRaw.isNotEmpty) {
+        try {
+          localSnapshot = Map<String, dynamic>.from(jsonDecode(snapshotRaw));
+        } catch (_) {}
       }
-    } catch (_) {
-      // Keep the form usable even if an old draft cannot be decoded.
-    }
 
-    for (final controller in [
-      _nameController,
-      _governorateController,
-      _addressController,
-      _hoursController,
-      _descriptionController,
-      _otherCategoryTextController,
-    ]) {
-      controller.selection =
-          TextSelection.collapsed(offset: controller.text.length);
-    }
+      if (_placeId != null && _placeId!.isNotEmpty) {
+        final activeRequestId = _pendingEditId ?? _placeId!;
+        Map<String, dynamic>? request;
+        try {
+          request = await DedaBackend.ownerRequestById(activeRequestId);
+        } catch (_) {}
 
-    if (mounted) {
-      setState(() => _loadingDraft = false);
+        if (request != null) {
+          _status = (request['status'] ?? 'pending').toString();
+          _decisionNote = request['decisionNote']?.toString();
+          if (_status == 'approved') {
+            final published = await DedaBackend.publishedPlaceById(_placeId!);
+            _applyData(published ?? request);
+            if (_pendingEditId != null) {
+              await prefs.remove(_pendingEditIdKey);
+              _pendingEditId = null;
+            }
+          } else if (localSnapshot != null) {
+            _applyData(localSnapshot);
+          } else {
+            _applyData(request);
+          }
+        } else {
+          final published = await DedaBackend.publishedPlaceById(_placeId!);
+          if (published != null) {
+            final lastSource = (published['lastSourceRequestId'] ?? '').toString();
+            if (_pendingEditId != null && lastSource != _pendingEditId) {
+              _status = 'reviewing';
+              if (localSnapshot != null) _applyData(localSnapshot);
+            } else {
+              _status = 'approved';
+              _applyData(published);
+              if (_pendingEditId != null) {
+                await prefs.remove(_pendingEditIdKey);
+                _pendingEditId = null;
+              }
+            }
+          } else {
+            _status = 'pending';
+            if (localSnapshot != null) _applyData(localSnapshot);
+          }
+        }
+      } else {
+        await _loadDraftOnly();
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<void> _loadDraftOnly() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || raw.isEmpty) return;
+      final data = Map<String, dynamic>.from(jsonDecode(raw));
+      _applyData(data);
+      final savedAt = data['savedAt']?.toString();
+      if (savedAt != null && savedAt.isNotEmpty) {
+        _savedAt = DateTime.tryParse(savedAt);
+      }
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _currentData() {
+    final category = _categories.firstWhere(
+      (item) => item['code'] == _categoryCode,
+    );
+    return <String, dynamic>{
+      'placeName': _nameController.text.trim(),
+      'name': _nameController.text.trim(),
+      'category': _categoryCode,
+      'categoryLabelAr': category['ar'],
+      'categoryLabelEn': category['en'],
+      'otherCategory': _categoryCode == 'other' ? 'other_custom' : null,
+      'otherCategoryLabelAr': null,
+      'otherCategoryLabelEn': null,
+      'otherCategoryText': _categoryCode == 'other'
+          ? _otherCategoryTextController.text.trim()
+          : null,
+      'phone': _phoneController.text.trim(),
+      'governorate': _governorateController.text.trim(),
+      'address': _addressController.text.trim(),
+      'openingHours': _hoursController.text.trim(),
+      'hours': _hoursController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'latitude': _latitude,
+      'longitude': _longitude,
+      'isAvailableNow': _isAvailableNow,
+      'submittedByName': DedaPreferences.userName,
+    };
+  }
+
   Future<void> _saveDraft() async {
+    if (!_formEditable) return;
     setState(() => _saving = true);
     try {
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
-      final data = <String, dynamic>{
-        'name': _nameController.text.trim(),
-        'category': _categoryCode,
-        'otherCategory': _categoryCode == 'other' ? 'other_custom' : null,
-        'otherCategoryText': _categoryCode == 'other'
-            ? _otherCategoryTextController.text.trim()
-            : null,
-        'phone': _phoneController.text.trim(),
-        'governorate': _governorateController.text.trim(),
-        'address': _addressController.text.trim(),
-        'hours': _hoursController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'latitude': _latitude,
-        'longitude': _longitude,
-        'isAvailableNow': _isAvailableNow,
-        'savedAt': now.toIso8601String(),
-      };
+      final data = _currentData()..['savedAt'] = now.toIso8601String();
       await prefs.setString(_draftKey, jsonEncode(data));
       if (!mounted) return;
       setState(() => _savedAt = now);
@@ -2273,130 +2361,179 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         SnackBar(
           content: Text(
             dedaText(
-              'تم حفظ مسودة المكان على هذا الهاتف.',
-              'Place draft saved on this phone.',
+              'تم حفظ مسودة المكان. يمكنك الرجوع إليها من «مسوداتي».',
+              'Place draft saved. You can reopen it from “My drafts”.',
             ),
           ),
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
   }
 
+  Future<void> _showDrafts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_draftKey);
+    Map<String, dynamic>? draft;
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        draft = Map<String, dynamic>.from(jsonDecode(raw));
+      } catch (_) {}
+    }
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 2, 18, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                dedaText('مسوداتي', 'My drafts'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 14),
+              if (draft == null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    dedaText(
+                      'لا توجد مسودة مكان محفوظة حالياً.',
+                      'There is no saved place draft right now.',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else ...[
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.drafts_outlined, color: Color(0xFF17652F)),
+                    title: Text(
+                      (draft['placeName'] ?? draft['name'] ?? dedaText('مسودة مكان', 'Place draft')).toString(),
+                    ),
+                    subtitle: Text(
+                      draft['savedAt'] == null
+                          ? dedaText('مسودة محفوظة', 'Saved draft')
+                          : '${dedaText('آخر حفظ', 'Last saved')}: ${draft['savedAt']}',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: () {
+                    _applyData(draft!);
+                    setState(() {
+                      _status = 'draft';
+                      _editingApproved = false;
+                    });
+                    Navigator.pop(sheetContext);
+                  },
+                  icon: const Icon(Icons.edit_note_outlined),
+                  label: Text(dedaText('متابعة المسودة', 'Continue draft')),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await prefs.remove(_draftKey);
+                    if (mounted) setState(() => _savedAt = null);
+                    if (sheetContext.mounted) Navigator.pop(sheetContext);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(dedaText('حذف المسودة', 'Delete draft')),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB3261E),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _captureCurrentLocation() async {
+    if (!_formEditable || _gettingLocation) return;
     setState(() => _gettingLocation = true);
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'فعّل GPS أولاً ثم حاول مرة أخرى.',
-                'Enable GPS first, then try again.',
-              ),
-            ),
-          ),
+          SnackBar(content: Text(dedaText('فعّل GPS أولاً.', 'Enable GPS first.'))),
         );
         return;
       }
-
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              dedaText('لم يتم منح إذن الموقع.', 'Location permission was not granted.'),
+              dedaText('نحتاج إذن الموقع لتثبيت مكانك.', 'Location permission is required.'),
             ),
           ),
         );
         return;
       }
-      if (permission == LocationPermission.deniedForever) {
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(dedaText('إذن الموقع', 'Location permission')),
-            content: Text(
-              dedaText(
-                'إذن الموقع مرفوض نهائياً. افتح إعدادات التطبيق ومنح DEDA إذن الموقع.',
-                'Location permission is permanently denied. Open app settings and allow location for DEDA.',
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: Text(dedaText('إلغاء', 'Cancel')),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  Geolocator.openAppSettings();
-                },
-                child: Text(dedaText('فتح الإعدادات', 'Open settings')),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (!mounted) return;
       setState(() {
         _latitude = position.latitude;
         _longitude = position.longitude;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'تم تثبيت موقع المكان من GPS.',
-              'Place location captured from GPS.',
-            ),
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'تعذر تحديد الموقع الآن. حاول مرة أخرى.',
-              'Could not determine the location right now. Try again.',
-            ),
-          ),
-        ),
-      );
     } finally {
-      if (mounted) {
-        setState(() => _gettingLocation = false);
+      if (mounted) setState(() => _gettingLocation = false);
+    }
+  }
+
+  Future<void> _setAvailability(bool value) async {
+    if (!_availabilityEditable) return;
+    final previous = _isAvailableNow;
+    setState(() => _isAvailableNow = value);
+    if (_status == 'approved' && !_editingApproved && _placeId != null) {
+      try {
+        await DedaBackend.updateOwnerAvailability(
+          placeId: _placeId!,
+          isAvailableNow: value,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _isAvailableNow = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'تعذر تحديث حالة التواجد الآن.',
+                'Could not update availability right now.',
+              ),
+            ),
+          ),
+        );
       }
     }
   }
 
-  Future<void> _prepareForReview() async {
+  Future<void> _submitForReview() async {
+    if (_submitting || !_formEditable) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_latitude == null || _longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText(
-              'حدد موقع المكان من GPS قبل المتابعة.',
-              'Capture the place location with GPS before continuing.',
-            ),
+            dedaText('ثبّت موقع المكان أولاً.', 'Capture the place location first.'),
           ),
         ),
       );
@@ -2405,32 +2542,37 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
 
     setState(() => _submitting = true);
     try {
-      final category = _categories.firstWhere((item) => item['code'] == _categoryCode);
-      final requestId = await DedaBackend.submitPlace({
-        'placeName': _nameController.text.trim(),
-        'category': _categoryCode,
-        'categoryLabelAr': category['ar'],
-        'categoryLabelEn': category['en'],
-        'otherCategory': _categoryCode == 'other' ? 'other_custom' : null,
-        'otherCategoryLabelAr': null,
-        'otherCategoryLabelEn': null,
-        'otherCategoryText': _categoryCode == 'other'
-            ? _otherCategoryTextController.text.trim()
-            : null,
-        'phone': _phoneController.text.trim(),
-        'governorate': _governorateController.text.trim(),
-        'address': _addressController.text.trim(),
-        'openingHours': _hoursController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'latitude': _latitude,
-        'longitude': _longitude,
-        'isAvailableNow': _isAvailableNow,
-        'submittedByName': DedaPreferences.userName,
-      });
+      final data = _currentData();
       final prefs = await SharedPreferences.getInstance();
+      late final String requestId;
+      final editingExisting = _placeId != null &&
+          (_status == 'approved' || _status == 'needs_changes') &&
+          (_editingApproved || _pendingEditId != null || _status == 'needs_changes');
+
+      if (editingExisting) {
+        requestId = await DedaBackend.submitPlaceEdit(
+          originalPlaceId: _placeId!,
+          data: data,
+        );
+        _pendingEditId = requestId;
+        await prefs.setString(_pendingEditIdKey, requestId);
+      } else {
+        requestId = await DedaBackend.submitPlace(data);
+        _placeId = requestId;
+        _pendingEditId = null;
+        await prefs.setString(_placeIdKey, requestId);
+        await prefs.remove(_pendingEditIdKey);
+      }
+
+      await prefs.setString(_submittedSnapshotKey, jsonEncode(data));
       await prefs.remove(_draftKey);
       if (!mounted) return;
-      setState(() => _savedAt = null);
+      setState(() {
+        _savedAt = null;
+        _status = 'pending';
+        _editingApproved = false;
+      });
+
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
@@ -2438,21 +2580,61 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
           content: Text(
             dedaText(
               'وصل طلب المكان إلى إدارة DEDA. لن يظهر للعامة قبل مراجعته واعتماده. رقم المتابعة: $requestId',
-              'The place request reached DEDA administration. It will not be public until reviewed and approved. Reference: $requestId',
+              'The request reached DEDA administration. It will not be public until reviewed and approved. Reference: $requestId',
             ),
           ),
           actions: [
-            FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(dedaText('حسناً', 'OK'))),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(dedaText('حسناً', 'OK')),
+            ),
           ],
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(dedaText('تعذر إرسال الطلب الآن. المسودة باقية على هذا الهاتف ويمكنك المحاولة مجددًا.', 'Could not submit now. The draft remains on this phone; please try again.'))),
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر إرسال الطلب الآن. احفظه كمسودة وحاول مجدداً.',
+              'Could not submit now. Save it as a draft and try again.',
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  String _statusLabel() {
+    switch (_status) {
+      case 'pending':
+        return dedaText('قيد الانتظار', 'Pending');
+      case 'reviewing':
+        return dedaText('قيد المراجعة', 'Under review');
+      case 'approved':
+        return dedaText('معتمد', 'Approved');
+      case 'needs_changes':
+        return dedaText('يحتاج تعديل', 'Needs changes');
+      case 'rejected':
+        return dedaText('مرفوض', 'Rejected');
+      default:
+        return dedaText('مسودة', 'Draft');
+    }
+  }
+
+  Color _statusColor() {
+    switch (_status) {
+      case 'approved':
+        return const Color(0xFF17652F);
+      case 'rejected':
+        return const Color(0xFFB3261E);
+      case 'needs_changes':
+        return const Color(0xFFB26A00);
+      default:
+        return const Color(0xFF58665B);
     }
   }
 
@@ -2475,7 +2657,139 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         borderSide: const BorderSide(color: Color(0xFF17652F), width: 2),
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: _formEditable ? Colors.white : const Color(0xFFF0F2EF),
+    );
+  }
+
+  Widget _statusCard() {
+    if (_status == 'draft' && _placeId == null) return const SizedBox.shrink();
+    return Card(
+      elevation: 0,
+      color: _statusColor().withOpacity(0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: _statusColor().withOpacity(0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.verified_outlined, color: _statusColor()),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    '${dedaText('حالة المكان', 'Place status')}: ${_statusLabel()}',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: _statusColor(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_status == 'approved' && _approvalNumber?.isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              Text('${dedaText('رقم الاعتماد', 'Approval number')}: $_approvalNumber'),
+              if (_approvalDate?.isNotEmpty == true)
+                Text('${dedaText('تاريخ الاعتماد', 'Approval date')}: $_approvalDate'),
+            ],
+            if (_approvalMessage?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              SelectableText(
+                _approvalMessage!,
+                style: const TextStyle(height: 1.45, fontWeight: FontWeight.w600),
+              ),
+            ] else if (_decisionNote?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              Text(
+                '${dedaText('ملاحظة الإدارة', 'Administration note')}: $_decisionNote',
+              ),
+            ],
+            if (_status == 'pending' || _status == 'reviewing') ...[
+              const SizedBox(height: 8),
+              Text(
+                dedaText(
+                  'بيانات الطلب محفوظة ومقفلة حتى تنتهي مراجعة إدارة DEDA.',
+                  'The request is saved and locked until DEDA review is complete.',
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _availabilityCard() {
+    Widget option(bool value, String ar, String en, Color dot) {
+      final selected = _isAvailableNow == value;
+      return Expanded(
+        child: InkWell(
+          onTap: _availabilityEditable ? () => _setAvailability(value) : null,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            height: 108,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? dot.withOpacity(0.16) : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? dot.withOpacity(0.7) : const Color(0xFFB8C1B9),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  dedaText(ar, en),
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(Icons.circle, color: dot, size: 22),
+                    if (selected)
+                      const Icon(Icons.check, color: Colors.white, size: 15),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFF0F5EE),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Text(
+              dedaText('حالة التواجد الآن', 'Current availability'),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                option(true, 'متواجد الآن', 'Available now', const Color(0xFF159447)),
+                const SizedBox(width: 8),
+                option(false, 'غير متواجد حالياً', 'Not available now', const Color(0xFF777D78)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2486,9 +2800,27 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       appBar: AppBar(
         title: Text(dedaText('إدارة مكاني', 'Manage my place')),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: dedaText('مسوداتي', 'My drafts'),
+            onPressed: _showDrafts,
+            icon: const Icon(Icons.drafts_outlined),
+          ),
+          if (_status == 'approved' && !_editingApproved)
+            TextButton.icon(
+              onPressed: () => setState(() => _editingApproved = true),
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(dedaText('تعديل المكان', 'Edit place')),
+            ),
+          IconButton(
+            tooltip: dedaText('تحديث الحالة', 'Refresh status'),
+            onPressed: _loading ? null : _loadState,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: SafeArea(
-        child: _loadingDraft
+        child: _loading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
@@ -2509,35 +2841,21 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               color: Color(0xFF17652F),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
                           Text(
                             dedaText('إضافة أو إدارة مكان', 'Add or manage a place'),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 27,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontSize: 27, fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            dedaText(
-                              'املأ البيانات بدقة. لا يتم نشر أي مكان قبل المراجعة والاعتماد.',
-                              'Enter accurate details. No place is published before review and approval.',
-                            ),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 15.5,
-                              height: 1.5,
-                              color: Color(0xFF5A655D),
-                            ),
-                          ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 14),
+                          _statusCard(),
+                          if (_status != 'draft' || _placeId != null)
+                            const SizedBox(height: 14),
                           TextFormField(
                             controller: _nameController,
+                            enabled: _formEditable,
                             textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
                             decoration: _fieldDecoration(
                               label: dedaText('اسم المكان', 'Place name'),
                               icon: Icons.storefront_outlined,
@@ -2561,47 +2879,30 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _categoryCode = value;
-                                });
-                              }
-                            },
+                            onChanged: _formEditable
+                                ? (value) {
+                                    if (value != null) setState(() => _categoryCode = value);
+                                  }
+                                : null,
                           ),
                           if (_categoryCode == 'other') ...[
                             const SizedBox(height: 14),
                             TextFormField(
                               controller: _otherCategoryTextController,
-                              focusNode: _otherCategoryTextFocus,
-                              keyboardType: TextInputType.text,
-                              textDirection: DedaLanguageState.direction,
-                              textAlign: DedaLanguageState.isArabic
-                                  ? TextAlign.right
-                                  : TextAlign.left,
+                              enabled: _formEditable,
                               decoration: _fieldDecoration(
-                                label: dedaText(
-                                  'اكتب نوع المكان',
-                                  'Enter place type',
-                                ),
+                                label: dedaText('اكتب نوع المكان', 'Enter place type'),
                                 icon: Icons.edit_outlined,
-                                hint: dedaText(
-                                  'مثال: استوديو، نادي، مركز تدريب...',
-                                  'Example: studio, club, training center...',
-                                ),
                               ),
-                              validator: (value) =>
-                                  value == null || value.trim().isEmpty
-                                      ? dedaText(
-                                          'اكتب نوع المكان.',
-                                          'Enter the place type.',
-                                        )
-                                      : null,
+                              validator: (value) => value == null || value.trim().isEmpty
+                                  ? dedaText('اكتب نوع المكان.', 'Enter the place type.')
+                                  : null,
                             ),
                           ],
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _phoneController,
+                            enabled: _formEditable,
                             textDirection: TextDirection.ltr,
                             textAlign: TextAlign.left,
                             keyboardType: TextInputType.phone,
@@ -2617,10 +2918,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _governorateController,
-                            textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            enabled: _formEditable,
                             decoration: _fieldDecoration(
                               label: dedaText('المحافظة', 'Governorate'),
                               icon: Icons.location_city_outlined,
@@ -2632,19 +2930,12 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _addressController,
-                            textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            enabled: _formEditable,
                             minLines: 2,
                             maxLines: 3,
                             decoration: _fieldDecoration(
                               label: dedaText('العنوان بالتفصيل', 'Detailed address'),
                               icon: Icons.signpost_outlined,
-                              hint: dedaText(
-                                'المنطقة، الشارع، أقرب نقطة دالة',
-                                'Area, street, nearest landmark',
-                              ),
                             ),
                             validator: (value) => value == null || value.trim().isEmpty
                                 ? dedaText('اكتب عنوان المكان.', 'Enter the place address.')
@@ -2654,49 +2945,26 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           Card(
                             elevation: 0,
                             color: const Color(0xFFEAF4E7),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                              side: const BorderSide(color: Color(0xFFB9CEB7)),
-                            ),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.my_location,
-                                        color: Color(0xFF17652F),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          dedaText('موقع المكان على الخريطة', 'Place location on map'),
-                                          style: const TextStyle(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    dedaText('موقع المكان على الخريطة', 'Place location on map'),
+                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 8),
                                   Text(
                                     _latitude == null || _longitude == null
-                                        ? dedaText(
-                                            'لم يتم تثبيت الموقع بعد.',
-                                            'Location has not been captured yet.',
-                                          )
+                                        ? dedaText('لم يتم تثبيت الموقع بعد.', 'Location has not been captured yet.')
                                         : '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Color(0xFF536158),
-                                    ),
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 10),
                                   OutlinedButton.icon(
-                                    onPressed: _gettingLocation ? null : _captureCurrentLocation,
+                                    onPressed: !_formEditable || _gettingLocation
+                                        ? null
+                                        : _captureCurrentLocation,
                                     icon: _gettingLocation
                                         ? const SizedBox(
                                             width: 18,
@@ -2705,12 +2973,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                           )
                                         : const Icon(Icons.gps_fixed),
                                     label: Text(
-                                      _gettingLocation
-                                          ? dedaText('جاري تحديد الموقع...', 'Locating...')
-                                          : dedaText(
-                                              'استخدام موقعي الحالي',
-                                              'Use my current location',
-                                            ),
+                                      dedaText('استخدام موقعي الحالي', 'Use my current location'),
                                     ),
                                   ),
                                 ],
@@ -2718,212 +2981,83 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          Card(
-                            elevation: 0,
-                            color: const Color(0xFFF0F5EE),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    dedaText(
-                                      'حالة التواجد الآن',
-                                      'Current availability',
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: InkWell(
-                                          onTap: () => setState(() => _isAvailableNow = true),
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 180),
-                                            height: 108,
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: _isAvailableNow ? const Color(0xFFBFE8C8) : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(16),
-                                              border: Border.all(color: _isAvailableNow ? const Color(0xFF75C58A) : const Color(0xFFB8C1B9)),
-                                            ),
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  dedaText('متواجد الآن', 'Available now'),
-                                                  maxLines: 2,
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Stack(
-                                                  alignment: Alignment.center,
-                                                  children: [
-                                                    const Icon(Icons.circle, color: Color(0xFF159447), size: 22),
-                                                    if (_isAvailableNow) const Icon(Icons.check, color: Colors.white, size: 15),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: InkWell(
-                                          onTap: () => setState(() => _isAvailableNow = false),
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 180),
-                                            height: 108,
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: !_isAvailableNow ? const Color(0xFFE0E3E0) : Colors.transparent,
-                                              borderRadius: BorderRadius.circular(16),
-                                              border: Border.all(color: !_isAvailableNow ? const Color(0xFF949B95) : const Color(0xFFB8C1B9)),
-                                            ),
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  dedaText('غير متواجد حاليًا', 'Not available now'),
-                                                  maxLines: 2,
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Stack(
-                                                  alignment: Alignment.center,
-                                                  children: [
-                                                    const Icon(Icons.circle, color: Color(0xFF777D78), size: 22),
-                                                    if (!_isAvailableNow) const Icon(Icons.check, color: Colors.white, size: 15),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                          _availabilityCard(),
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _hoursController,
-                            textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            enabled: _formEditable,
                             decoration: _fieldDecoration(
                               label: dedaText('أوقات العمل', 'Opening hours'),
                               icon: Icons.schedule_outlined,
-                              hint: dedaText('مثال: 8 صباحاً - 11 مساءً', 'Example: 8 AM - 11 PM'),
+                              hint: dedaText('مثال: 8 صباحاً - 10 مساءً', 'Example: 8 AM - 10 PM'),
                             ),
                             validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText(
-                                    'اكتب أوقات العمل.',
-                                    'Enter the opening hours.',
-                                  )
+                                ? dedaText('اكتب أوقات العمل.', 'Enter opening hours.')
                                 : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
                             controller: _descriptionController,
-                            textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            enabled: _formEditable,
                             minLines: 3,
                             maxLines: 5,
                             decoration: _fieldDecoration(
                               label: dedaText('وصف مختصر', 'Short description'),
                               icon: Icons.notes_outlined,
-                              hint: dedaText(
-                                'الخدمات أو المميزات المهمة للمستخدم',
-                                'Important services or features for users',
-                              ),
                             ),
                             validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText(
-                                    'اكتب وصفًا مختصرًا للمكان.',
-                                    'Enter a short place description.',
-                                  )
+                                ? dedaText('اكتب وصفاً مختصراً للمكان.', 'Enter a short place description.')
                                 : null,
                           ),
                           const SizedBox(height: 18),
-                          if (_savedAt != null)
+                          if (_savedAt != null && _formEditable)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: Text(
                                 dedaText(
-                                  'لديك مسودة محفوظة على هذا الهاتف.',
-                                  'You have a draft saved on this phone.',
+                                  'لديك مسودة محفوظة ويمكن الوصول إليها من «مسوداتي».',
+                                  'A saved draft is available from “My drafts”.',
                                 ),
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Color(0xFF4E6252),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: const TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ),
-                          OutlinedButton.icon(
-                            onPressed: _saving ? null : _saveDraft,
-                            icon: _saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: Text(dedaText('حفظ مسودة', 'Save draft')),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(54),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: _submitting ? null : _prepareForReview,
-                            icon: _submitting
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.fact_check_outlined),
-                            label: Text(
-                              _submitting
-                                  ? dedaText('جاري الإرسال...', 'Submitting...')
-                                  : dedaText('إرسال الطلب للمراجعة', 'Submit for review'),
-                            ),
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(58),
-                              backgroundColor: const Color(0xFF17652F),
-                              textStyle: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
+                          if (_formEditable) ...[
+                            OutlinedButton.icon(
+                              onPressed: _saving ? null : _saveDraft,
+                              icon: _saving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.save_outlined),
+                              label: Text(dedaText('حفظ مسودة', 'Save draft')),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(54),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            dedaText(
-                              'لا يُنشر أي مكان للعامة قبل أن تراجعه إدارة DEDA وتعتمده.',
-                              'No place is published publicly before DEDA administration reviews and approves it.',
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: _submitting ? null : _submitForReview,
+                              icon: _submitting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.fact_check_outlined),
+                              label: Text(
+                                _status == 'approved' || _editingApproved
+                                    ? dedaText('إرسال التعديل للمراجعة', 'Submit changes for review')
+                                    : dedaText('إرسال الطلب للمراجعة', 'Submit for review'),
+                              ),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(58),
+                                backgroundColor: const Color(0xFF17652F),
+                              ),
                             ),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              height: 1.45,
-                              color: Color(0xFF6A746C),
-                            ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -2934,7 +3068,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     );
   }
 }
-
 
 class DedaPersonalPlace {
   final String id;
@@ -4052,7 +4185,6 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-
     if (category.title == 'إدارة مكاني') {
       Navigator.push(
         context,
@@ -4060,7 +4192,6 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-
     if (category.title == 'الخريطة') {
       Navigator.push(
         context,
@@ -4068,12 +4199,9 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => NearbyPlacesPage(category: category),
-      ),
+      MaterialPageRoute(builder: (_) => NearbyPlacesPage(category: category)),
     );
   }
 
@@ -4083,14 +4211,16 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText('اكتب حرفين على الأقل من اسم المكان', 'Type at least two letters of the place name'),
+            dedaText(
+              'اكتب حرفين على الأقل من اسم المكان',
+              'Type at least two letters of the place name',
+            ),
             textAlign: TextAlign.center,
           ),
         ),
       );
       return;
     }
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -4105,6 +4235,180 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(
         builder: (_) => SavedPlacesPage(showFavorites: favorites),
       ),
+    );
+  }
+
+  void openDedaAssistant() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFF8FAF2),
+      builder: (sheetContext) {
+        Widget guideCard({
+          required IconData icon,
+          required String title,
+          required String subtitle,
+          required List<String> steps,
+        }) {
+          return Card(
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFFE2F0DE),
+                        child: Icon(icon, color: const Color(0xFF17652F)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              style: const TextStyle(
+                                color: Color(0xFF5D685F),
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...steps.asMap().entries.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 7),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                alignment: Alignment.center,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF17652F),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${entry.key + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  entry.value,
+                                  style: const TextStyle(height: 1.45),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              0,
+              16,
+              20 + MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  dedaText('مساعد DEDA', 'DEDA Assistant'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  dedaText(
+                    'اختر القسم الذي تريد معرفة طريقة استخدامه.',
+                    'Choose the guide you need.',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF5D685F)),
+                ),
+                const SizedBox(height: 14),
+                guideCard(
+                  icon: Icons.person_outline,
+                  title: dedaText('مستخدم', 'User'),
+                  subtitle: dedaText(
+                    'للبحث عن الأماكن والمفضلة والملاحة.',
+                    'For search, favorites, and navigation.',
+                  ),
+                  steps: [
+                    dedaText(
+                      'اكتب اسم المكان في البحث، أو اختر أحد الأقسام مثل المطاعم أو الفنادق.',
+                      'Type a place name in Search, or choose a category such as Restaurants or Hotels.',
+                    ),
+                    dedaText(
+                      'افتح المكان الذي تريده، ثم استخدم الخريطة أو الملاحة أو أضفه للمفضلة.',
+                      'Open a place, then use the map/navigation or add it to Favorites.',
+                    ),
+                    dedaText(
+                      'يمكنك الرجوع إلى المفضلة والأماكن الأخيرة من الواجهة الرئيسية.',
+                      'Return to Favorites and Recent places from the home screen.',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                guideCard(
+                  icon: Icons.storefront_outlined,
+                  title: dedaText('صاحب مكان', 'Place owner'),
+                  subtitle: dedaText(
+                    'لتسجيل مكانك وإدارته بعد اعتماد DEDA.',
+                    'Register and manage your place after DEDA approval.',
+                  ),
+                  steps: [
+                    dedaText(
+                      'اختر نوع الحساب «صاحب مكان» من الإعدادات إذا لم يكن مفعلاً.',
+                      'Choose “Place owner” as the account type in Settings if it is not enabled.',
+                    ),
+                    dedaText(
+                      'افتح «إدارة مكاني»، وأكمل بيانات المكان والموقع ثم أرسل الطلب للمراجعة.',
+                      'Open “Manage my place”, complete the place details/location, then submit for review.',
+                    ),
+                    dedaText(
+                      'بعد الاعتماد ستظهر بيانات مكانك محفوظة ومقفلة، ويمكنك استخدام «تعديل المكان» عند الحاجة.',
+                      'After approval, your saved place details are locked; use “Edit place” when needed.',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -4166,142 +4470,177 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            isLandscape ? 24 : 18,
-            14,
-            isLandscape ? 24 : 18,
-            28,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    dedaText('هلا بك ${widget.userName}', 'Welcome ${widget.userName}'),
-                    textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
-                    style: TextStyle(
-                      fontSize: isLandscape ? 23 : 25,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.72),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: TextField(
-                      controller: searchController,
-                      textDirection: DedaLanguageState.direction,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => openPlaceSearch(),
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                      hintText: dedaText(
-                        'ابحث عن مكان بالاسم أو عن نوع مكان...',
-                        'Search by place name or category...',
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              isLandscape ? 24 : 18,
+              14,
+              isLandscape ? 24 : 18,
+              28,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      dedaText(
+                        'هلا بك ${widget.userName}',
+                        'Welcome ${widget.userName}',
                       ),
-                      prefixIcon: IconButton(
-                        tooltip: dedaText('بحث بالاسم', 'Search by name'),
-                        onPressed: openPlaceSearch,
-                        icon: const Icon(Icons.search),
+                      textAlign: DedaLanguageState.isArabic
+                          ? TextAlign.right
+                          : TextAlign.left,
+                      style: TextStyle(
+                        fontSize: isLandscape ? 23 : 25,
+                        fontWeight: FontWeight.bold,
                       ),
-                      suffixIcon: searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                searchController.clear();
-                                setState(() {});
-                              },
-                              icon: const Icon(Icons.clear),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 58,
+                            child: TextField(
+                              controller: searchController,
+                              textDirection: DedaLanguageState.direction,
+                              textInputAction: TextInputAction.search,
+                              onSubmitted: (_) => openPlaceSearch(),
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                hintText: dedaText('بحث...', 'Search...'),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.78),
+                                prefixIcon: IconButton(
+                                  tooltip: dedaText('بحث بالاسم', 'Search by name'),
+                                  onPressed: openPlaceSearch,
+                                  icon: const Icon(Icons.search),
+                                ),
+                                suffixIcon: searchController.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        onPressed: () {
+                                          searchController.clear();
+                                          setState(() {});
+                                        },
+                                        icon: const Icon(Icons.clear),
+                                      ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
                             ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 58,
+                            child: OutlinedButton.icon(
+                              onPressed: openDedaAssistant,
+                              icon: const Icon(Icons.assistant_outlined),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  dedaText('مساعد DEDA', 'DEDA Assistant'),
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white.withOpacity(0.74),
+                                side: const BorderSide(
+                                  color: Color(0xFF6F8A74),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: openPlaceSearch,
+                        icon: const Icon(Icons.travel_explore),
+                        label: Text(
+                          dedaText(
+                            'بحث حقيقي عن المكان بالاسم',
+                            'Search by exact place name',
+                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 48,
-                    child: FilledButton.icon(
-                      onPressed: openPlaceSearch,
-                      icon: const Icon(Icons.travel_explore),
-                      label: Text(
-                        dedaText(
-                          'بحث حقيقي عن المكان بالاسم',
-                          'Search by exact place name',
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => openSavedPlaces(favorites: true),
+                            icon: const Icon(Icons.favorite),
+                            label: Text(dedaText('المفضلة', 'Favorites')),
+                          ),
                         ),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => openSavedPlaces(favorites: false),
+                            icon: const Icon(Icons.history),
+                            label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => openSavedPlaces(favorites: true),
-                          icon: const Icon(Icons.favorite),
-                          label: Text(dedaText('المفضلة', 'Favorites')),
+                    const SizedBox(height: 14),
+                    if (categories.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 36),
+                        child: Text(
+                          dedaText(
+                            'لا توجد فئة مطابقة. استخدم زر البحث للبحث عن ${searchController.text.trim()} بالاسم.',
+                            'No matching category. Use Search to look for ${searchController.text.trim()} by name.',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 18),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => openSavedPlaces(favorites: false),
-                          icon: const Icon(Icons.history),
-                          label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: categories.length,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: isLandscape ? 1.18 : 1.0,
                         ),
+                        itemBuilder: (context, index) {
+                          final category = categories[index];
+                          return DedaCategory(
+                            icon: category.icon,
+                            title: dedaCategoryLabel(category.title),
+                            onTap: () => openCategory(category),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (categories.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 36),
-                      child: Text(
-                        dedaText(
-                          'لا توجد فئة مطابقة. اضغط "بحث حقيقي" للبحث عن ${searchController.text.trim()} بالاسم.',
-                          'No matching category. Tap "Search by exact place name" to search for ${searchController.text.trim()}.',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                    )
-                  else
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: categories.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: isLandscape ? 1.18 : 1.0,
-                      ),
-                      itemBuilder: (context, index) {
-                        final category = categories[index];
-                        return DedaCategory(
-                          icon: category.icon,
-                          title: dedaCategoryLabel(category.title),
-                          onTap: () => openCategory(category),
-                        );
-                      },
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-      ),
     );
   }
-
 }
 
 class DedaCategoryData {
