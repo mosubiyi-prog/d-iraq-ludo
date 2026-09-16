@@ -37,7 +37,9 @@ jobs:
           cp /tmp/google-services.json android/app/google-services.json
 
       - name: Apply final DEDA phone prefix fix
-        run: python3 tools/final_release_fix.py
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
 
       - name: Apply map destination auto-fit
         run: python3 tools/map_zoom_fix.py
