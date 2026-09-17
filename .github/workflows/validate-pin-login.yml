@@ -1,0 +1,52 @@
+name: Validate PIN login
+
+on:
+  push:
+    branches:
+      - pin-login-v1-work
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
+
+      - name: Create Flutter project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Apply existing release patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed DEDA code
+        run: flutter analyze lib/main.dart lib/admin_pages.dart lib/deda_pin_auth.dart lib/deda_recovery_admin.dart lib/deda_backend.dart
+
+      - name: Check Cloud Functions JavaScript syntax
+        run: node --check functions/index.js
