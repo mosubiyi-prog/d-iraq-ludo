@@ -141,21 +141,28 @@ class DedaPreferences {
     required String normalizedPhone,
     required DedaAccountType type,
   }) async {
-    userName = name;
+    final prefs = await SharedPreferences.getInstance();
+    final previousPhone = prefs.getString(_phoneKey) ?? '';
+    final previousName = prefs.getString(_userNameKey) ?? '';
+    final resolvedName = previousPhone == normalizedPhone &&
+            previousName.trim().isNotEmpty
+        ? previousName.trim()
+        : name.trim();
+
+    userName = resolvedName;
     phone = normalizedPhone;
     accountPhone = normalizedPhone;
     accountType = type;
     isLoggedIn = true;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_userNameKey, name);
+    await prefs.setString(_userNameKey, resolvedName);
     await prefs.setString(_phoneKey, normalizedPhone);
     await prefs.setString(_accountPhoneKey, normalizedPhone);
     await prefs.setString(_accountTypeKey, type.name);
     await prefs.setBool(_loggedInKey, true);
     try {
       await DedaBackend.syncCurrentUserProfile(
-        name: name,
+        name: resolvedName,
         phone: normalizedPhone,
         accountType: type.name,
       );
@@ -1212,7 +1219,16 @@ class _DedaContactPageState extends State<DedaContactPage> {
 
   Future<void> _showMySupportHistory() async {
     try {
-      final items = await DedaBackend.mySupportRequests();
+      try {
+        await DedaBackend.syncCurrentUserProfile(
+          name: DedaPreferences.userName,
+          phone: DedaPreferences.phone,
+          accountType: DedaPreferences.accountType?.name ?? 'user',
+        );
+      } catch (_) {}
+      final items = await DedaBackend.mySupportRequests(
+        phone: DedaPreferences.phone,
+      );
       if (!mounted) return;
       await showModalBottomSheet<void>(
         context: context,
@@ -1405,13 +1421,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
       final supportPhone = _usingAccountIdentity
           ? DedaPreferences.phone.trim()
           : _phoneController.text.trim();
-      if (_usingAccountIdentity) {
-        await DedaBackend.syncCurrentUserProfile(
-          name: supportName,
-          phone: supportPhone,
-          accountType: DedaPreferences.accountType?.name ?? 'user',
-        );
-      }
+      // Do not block support/photo sending on a profile sync. submitSupport
+      // performs its own best-effort sync and then sends the ticket.
       final requestId = await DedaBackend.submitSupport(
         type: _contactType,
         name: supportName,
@@ -6044,48 +6055,111 @@ class DedaMapPlaceMarker extends StatelessWidget {
 
     final active = place.isAvailableNow;
     final pinColor = active ? const Color(0xFF159447) : const Color(0xFF707873);
+
+    // The map's Marker keeps a compact anchor, while OverflowBox lets the
+    // approved place name appear above it without covering nearby roads.
     return GestureDetector(
       onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: pinColor, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: active ? 13 : 5,
-                  spreadRadius: active ? 4 : 1,
-                  color: pinColor.withOpacity(active ? 0.72 : 0.3),
+      child: OverflowBox(
+        maxWidth: 140,
+        maxHeight: 92,
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          width: 136,
+          height: 88,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Container(
+                constraints: const BoxConstraints(maxWidth: 132),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: pinColor.withOpacity(0.72)),
+                  boxShadow: const [
+                    BoxShadow(blurRadius: 5, color: Color(0x33000000)),
+                  ],
                 ),
-              ],
-            ),
-            child: Icon(icon, size: 29, color: pinColor),
-          ),
-          Positioned(
-            right: -6,
-            bottom: -5,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF17652F),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-              child: const Text(
-                'DEDA',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 7,
-                  fontWeight: FontWeight.w900,
+                child: Directionality(
+                  textDirection: DedaLanguageState.direction,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          place.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF203326),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: pinColor.withOpacity(0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(icon, size: 12, color: pinColor),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 2),
+              Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: pinColor, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: active ? 10 : 5,
+                          spreadRadius: active ? 2 : 1,
+                          color: pinColor.withOpacity(active ? 0.52 : 0.25),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: 23, color: pinColor),
+                  ),
+                  Positioned(
+                    right: -17,
+                    bottom: 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF17652F),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white, width: 1.2),
+                      ),
+                      child: const Text(
+                        'DEDA',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 7,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

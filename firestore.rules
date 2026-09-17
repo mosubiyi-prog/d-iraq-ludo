@@ -20,7 +20,7 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
-          'createdAt', 'updatedAt'
+          'accountKey', 'createdAt', 'updatedAt'
         ]);
       allow update: if signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -37,7 +37,13 @@ service cloud.firestore {
         && request.resource.data.type in ['company', 'problem', 'case', 'photo']
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
-      allow read, update: if isAdmin();
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || (signedIn()
+          && resource.data.accountKey is string
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == resource.data.accountKey);
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
@@ -73,7 +79,10 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (signedIn()
-          && resource.data.ownerUid == request.auth.uid
+          && (resource.data.ownerUid == request.auth.uid
+            || (resource.data.accountKey is string
+              && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == resource.data.accountKey))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailableNow', 'updatedAt']));
     }
 

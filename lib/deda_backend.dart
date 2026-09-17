@@ -10,6 +10,25 @@ import 'package:firebase_storage/firebase_storage.dart';
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
 
+  // Build 87 review fixes: one logical account key per normalized phone.
+  // Firebase anonymous UIDs may differ per device, so DEDA data also carries
+  // this stable key. Phone verification can later harden ownership without
+  // changing the stored account linkage.
+  static String accountKeyForPhone(String phone) =>
+      phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+  static Future<String> _currentAccountKey(User user) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final key = (snapshot.data()?['accountKey'] ?? '').toString().trim();
+      if (key.isNotEmpty) return key;
+    } catch (_) {}
+    return user.uid;
+  }
+
   static Future<User> _ensurePublicUser() async {
     if (!isReady) throw StateError('firebase-not-ready');
     final auth = FirebaseAuth.instance;
@@ -80,6 +99,7 @@ class DedaBackend {
     await ref.set({
       'name': name.trim(),
       'phone': phone.trim(),
+      'accountKey': accountKeyForPhone(phone),
       'accountType': accountType.trim(),
       if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -87,13 +107,29 @@ class DedaBackend {
     }, SetOptions(merge: true));
   }
 
-  static Future<bool> _hasActivePlaceRequest(String ownerUid) async {
-    final snapshot = await FirebaseFirestore.instance
+  static Future<bool> _hasActivePlaceRequest(
+    String ownerUid,
+    String accountKey,
+  ) async {
+    final firestore = FirebaseFirestore.instance;
+    try {
+      final byAccount = await firestore
+          .collection('place_requests')
+          .where('accountKey', isEqualTo: accountKey)
+          .limit(25)
+          .get();
+      if (byAccount.docs.any((doc) {
+        final status = (doc.data()['status'] ?? '').toString();
+        return status == 'pending' || status == 'reviewing';
+      })) return true;
+    } catch (_) {}
+
+    final byUid = await firestore
         .collection('place_requests')
         .where('ownerUid', isEqualTo: ownerUid)
         .limit(25)
         .get();
-    return snapshot.docs.any((doc) {
+    return byUid.docs.any((doc) {
       final status = (doc.data()['status'] ?? '').toString();
       return status == 'pending' || status == 'reviewing';
     });
@@ -111,14 +147,19 @@ class DedaBackend {
     final request = firestore.collection('support_requests').doc();
     final cleanName = name.trim();
     final cleanPhone = phone.trim();
+    final accountKey = accountKeyForPhone(cleanPhone);
 
-    // Keep one account identity for support, admin review and notifications.
-    await firestore.collection('users').doc(user.uid).set({
-      'name': cleanName,
-      'phone': cleanPhone,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'lastSeenAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    // Best effort only: a stale deployed users rule must never block a support
+    // message or photo. Login/profile sync can retry independently.
+    try {
+      await firestore.collection('users').doc(user.uid).set({
+        'name': cleanName,
+        'phone': cleanPhone,
+        'accountKey': accountKey,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
 
     String? imageUrl;
     String? imageBase64;
@@ -180,6 +221,7 @@ class DedaBackend {
 
     await request.set({
       'ownerUid': user.uid,
+      'accountKey': accountKey,
       'type': type,
       'name': cleanName,
       'phone': cleanPhone,
@@ -208,7 +250,8 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
-    if (await _hasActivePlaceRequest(user.uid)) {
+    final accountKey = await _currentAccountKey(user);
+    if (await _hasActivePlaceRequest(user.uid, accountKey)) {
       throw StateError('active-place-request');
     }
     await registerOwnerNotifications();
@@ -217,6 +260,7 @@ class DedaBackend {
     await request.set({
       ...data,
       'ownerUid': user.uid,
+      'accountKey': accountKey,
       'requestType': 'create',
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
@@ -233,7 +277,8 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
-    if (await _hasActivePlaceRequest(user.uid)) {
+    final accountKey = await _currentAccountKey(user);
+    if (await _hasActivePlaceRequest(user.uid, accountKey)) {
       throw StateError('active-place-request');
     }
     await registerOwnerNotifications();
@@ -241,7 +286,10 @@ class DedaBackend {
         .collection('published_places')
         .doc(originalPlaceId)
         .get();
-    if (!original.exists || original.data()?['ownerUid'] != user.uid) {
+    final originalData = original.data();
+    final sameOwner = originalData?['ownerUid'] == user.uid ||
+        (originalData?['accountKey']?.toString() == accountKey);
+    if (!original.exists || !sameOwner) {
       throw StateError('not-place-owner');
     }
     final request =
@@ -249,6 +297,7 @@ class DedaBackend {
     await request.set({
       ...data,
       'ownerUid': user.uid,
+      'accountKey': accountKey,
       'requestType': 'update',
       'originalPlaceId': originalPlaceId,
       'status': 'pending',
@@ -260,14 +309,16 @@ class DedaBackend {
 
   static Future<Map<String, dynamic>?> ownerRequestById(String id) async {
     final user = await _ensurePublicUser();
+    final accountKey = await _currentAccountKey(user);
     final snapshot = await FirebaseFirestore.instance
         .collection('place_requests')
         .doc(id)
         .get();
     final data = snapshot.data();
-    if (!snapshot.exists || data == null || data['ownerUid'] != user.uid) {
-      return null;
-    }
+    if (!snapshot.exists || data == null) return null;
+    final sameOwner = data['ownerUid'] == user.uid ||
+        data['accountKey']?.toString() == accountKey;
+    if (!sameOwner) return null;
     return {'id': snapshot.id, ...data};
   }
 
@@ -596,20 +647,43 @@ class DedaBackend {
             : null);
   }
 
-  static Future<List<Map<String, dynamic>>> mySupportRequests() async {
+  static Future<List<Map<String, dynamic>>> mySupportRequests({
+    required String phone,
+  }) async {
     final user = await _ensurePublicUser();
-    final snapshot = await FirebaseFirestore.instance
-        .collection('support_requests')
-        .where('ownerUid', isEqualTo: user.uid)
-        .limit(50)
-        .get();
-    final items = snapshot.docs
-        .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-        .toList();
-    int millis(dynamic value) => value is Timestamp
-        ? value.millisecondsSinceEpoch
-        : 0;
-    items.sort((a, b) => millis(b['createdAt']).compareTo(millis(a['createdAt'])));
+    final accountKey = accountKeyForPhone(phone);
+    final firestore = FirebaseFirestore.instance;
+    final byId = <String, Map<String, dynamic>>{};
+
+    // New records are account-key based, so the same phone sees the same
+    // support history on another device. Keep UID fallback for older tickets.
+    try {
+      final snapshot = await firestore
+          .collection('support_requests')
+          .where('accountKey', isEqualTo: accountKey)
+          .limit(50)
+          .get();
+      for (final doc in snapshot.docs) {
+        byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+      }
+    } catch (_) {}
+
+    try {
+      final snapshot = await firestore
+          .collection('support_requests')
+          .where('ownerUid', isEqualTo: user.uid)
+          .limit(50)
+          .get();
+      for (final doc in snapshot.docs) {
+        byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+      }
+    } catch (_) {}
+
+    final items = byId.values.toList();
+    int millis(dynamic value) =>
+        value is Timestamp ? value.millisecondsSinceEpoch : 0;
+    items.sort((a, b) =>
+        millis(b['createdAt']).compareTo(millis(a['createdAt'])));
     return items;
   }
 
@@ -655,47 +729,106 @@ class DedaBackend {
   }) async {
     final actor = await _adminIdentity();
     final firestore = FirebaseFirestore.instance;
-    final user = await firestore.collection('users').doc(ownerUid).get();
-    final placeRequests = await firestore
-        .collection('place_requests')
-        .where('ownerUid', isEqualTo: ownerUid)
-        .limit(50)
-        .get();
-    final published = await firestore
-        .collection('published_places')
-        .where('ownerUid', isEqualTo: ownerUid)
-        .limit(50)
-        .get();
-    final support = await firestore
-        .collection('support_requests')
-        .where('ownerUid', isEqualTo: ownerUid)
-        .limit(50)
-        .get();
 
-    // Every read-only account review is auditable.
-    await firestore.collection('admin_audit').add({
-      'action': 'read_user_account',
-      'ownerUid': ownerUid,
-      'sourceCollection': sourceCollection,
-      'sourceId': sourceId,
-      'adminUid': actor['uid'],
-      'adminName': actor['name'],
-      'adminRole': actor['role'],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    Map<String, dynamic> sourceData = <String, dynamic>{};
+    try {
+      final source =
+          await firestore.collection(sourceCollection).doc(sourceId).get();
+      sourceData = source.data() ?? <String, dynamic>{};
+    } catch (_) {}
+
+    final sourcePhone = (sourceData['phone'] ?? '').toString().trim();
+    final sourceKey = (sourceData['accountKey'] ?? '').toString().trim();
+    final accountKey = sourceKey.isNotEmpty
+        ? sourceKey
+        : (sourcePhone.isNotEmpty ? accountKeyForPhone(sourcePhone) : '');
+
+    Map<String, dynamic> profile = <String, dynamic>{};
+    try {
+      final user = await firestore.collection('users').doc(ownerUid).get();
+      profile = user.data() ?? <String, dynamic>{};
+    } catch (_) {}
+    if (profile.isEmpty && accountKey.isNotEmpty) {
+      try {
+        final users = await firestore
+            .collection('users')
+            .where('accountKey', isEqualTo: accountKey)
+            .limit(1)
+            .get();
+        if (users.docs.isNotEmpty) profile = users.docs.first.data();
+      } catch (_) {}
+    }
+    profile = <String, dynamic>{
+      'name': profile['name'] ?? sourceData['name'] ?? '',
+      'phone': profile['phone'] ?? sourceData['phone'] ?? '',
+      'accountType': profile['accountType'] ?? sourceData['accountType'] ?? '',
+      'accountKey': profile['accountKey'] ?? accountKey,
+      ...profile,
+    };
+
+    Future<List<Map<String, dynamic>>> owned(String collection) async {
+      final byId = <String, Map<String, dynamic>>{};
+      if (accountKey.isNotEmpty) {
+        try {
+          final snapshot = await firestore
+              .collection(collection)
+              .where('accountKey', isEqualTo: accountKey)
+              .limit(50)
+              .get();
+          for (final doc in snapshot.docs) {
+            byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+          }
+        } catch (_) {}
+      }
+      try {
+        final snapshot = await firestore
+            .collection(collection)
+            .where('ownerUid', isEqualTo: ownerUid)
+            .limit(50)
+            .get();
+        for (final doc in snapshot.docs) {
+          byId[doc.id] = <String, dynamic>{'id': doc.id, ...doc.data()};
+        }
+      } catch (_) {}
+      return byId.values.toList();
+    }
+
+    final placeRequests = await owned('place_requests');
+    final published = await owned('published_places');
+    final support = await owned('support_requests');
+
+    // Always attempt an audit record. If that collection has not been deployed
+    // yet, record the review on the source ticket/request instead so the action
+    // remains traceable and the read-only window still opens.
+    try {
+      await firestore.collection('admin_audit').add({
+        'action': 'read_user_account',
+        'ownerUid': ownerUid,
+        'accountKey': accountKey,
+        'sourceCollection': sourceCollection,
+        'sourceId': sourceId,
+        'adminUid': actor['uid'],
+        'adminName': actor['name'],
+        'adminRole': actor['role'],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+    try {
+      await firestore.collection(sourceCollection).doc(sourceId).update({
+        'accountReviewedAt': FieldValue.serverTimestamp(),
+        'accountReviewedByUid': actor['uid'],
+        'accountReviewedByName': actor['name'],
+        'accountReviewedByRole': actor['role'],
+      });
+    } catch (_) {}
 
     return <String, dynamic>{
       'uid': ownerUid,
-      'profile': user.data() ?? <String, dynamic>{},
-      'placeRequests': placeRequests.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList(),
-      'publishedPlaces': published.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList(),
-      'supportRequests': support.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList(),
+      'accountKey': accountKey,
+      'profile': profile,
+      'placeRequests': placeRequests,
+      'publishedPlaces': published,
+      'supportRequests': support,
     };
   }
 
