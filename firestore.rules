@@ -7,6 +7,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
     }
+    function sameAccount(accountKey) {
+      return signedIn()
+        && accountKey is string
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
+    }
 
     match /admins/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
@@ -20,14 +26,63 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
-          'accountKey', 'createdAt', 'updatedAt'
+          'accountKey', 'createdAt', 'updatedAt', 'authMethod',
+          'trustedInstallIds'
         ]);
       allow update: if signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
-          'accountKey', 'createdAt', 'updatedAt'
+          'accountKey', 'createdAt', 'updatedAt', 'authMethod',
+          'trustedInstallIds'
         ]);
       allow delete: if false;
+    }
+
+    // Public-to-the-signed-in-app account existence directory. It contains no
+    // PIN or password. Individual documents can be fetched by a known phone key,
+    // while collection listing is denied to reduce phone-number enumeration.
+    match /deda_account_directory/{accountKey} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.auth.token.email is string
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.authEmail == request.auth.token.email
+        && request.resource.data.createdUid == request.auth.uid
+        && request.resource.data.active == true
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'authEmail', 'active', 'createdUid',
+          'createdAt', 'updatedAt'
+        ]);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /recovery_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.accountKey is string
+        && request.resource.data.phone is string
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() >= 2
+        && request.resource.data.requesterInstallId is string
+        && request.resource.data.keys().hasOnly([
+          'requesterUid', 'requesterInstallId', 'accountKey', 'phone',
+          'fullName', 'status', 'createdAt', 'updatedAt'
+        ]);
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.requesterUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // A newly generated recovery PIN is intentionally hidden from the admin UI.
+    // Only the Firebase session that created the recovery request can read it.
+    match /recovery_secrets/{requestId} {
+      allow get: if signedIn()
+        && resource.data.requesterUid == request.auth.uid;
+      allow list, create, update, delete: if false;
     }
 
     match /support_requests/{requestId} {
@@ -37,11 +92,9 @@ service cloud.firestore {
         && request.resource.data.type in ['company', 'problem', 'case', 'photo']
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
-      // A support ticket can be read by the signed-in Firebase owner or DEDA
-      // administration. A typed phone number alone is never an authorization
-      // credential; cross-device recovery requires verified phone auth.
       allow read: if isAdmin()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || sameAccount(resource.data.accountKey);
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -67,14 +120,16 @@ service cloud.firestore {
         && (request.resource.data.category != 'other'
           || (request.resource.data.otherCategoryText is string
             && request.resource.data.otherCategoryText.size() > 0))
-        // Update requests must target a place owned by this authenticated UID.
-        // A matching typed phone number is not sufficient authorization.
         && (request.resource.data.requestType != 'update'
           || (request.resource.data.originalPlaceId is string
             && exists(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId))
-            && get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid));
+            && (
+              get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid
+              || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
+            )));
       allow read: if isAdmin()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || sameAccount(resource.data.accountKey);
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -84,7 +139,8 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (signedIn()
-          && resource.data.ownerUid == request.auth.uid
+          && (resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailableNow', 'updatedAt']));
     }
 
