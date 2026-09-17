@@ -25,7 +25,7 @@ service cloud.firestore {
       allow update: if signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
-          'createdAt', 'updatedAt'
+          'accountKey', 'createdAt', 'updatedAt'
         ]);
       allow delete: if false;
     }
@@ -37,12 +37,11 @@ service cloud.firestore {
         && request.resource.data.type in ['company', 'problem', 'case', 'photo']
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
+      // A support ticket can be read by the signed-in Firebase owner or DEDA
+      // administration. A typed phone number alone is never an authorization
+      // credential; cross-device recovery requires verified phone auth.
       allow read: if isAdmin()
-        || (signedIn() && resource.data.ownerUid == request.auth.uid)
-        || (signedIn()
-          && resource.data.accountKey is string
-          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == resource.data.accountKey);
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -79,14 +78,11 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (signedIn()
-          && (resource.data.ownerUid == request.auth.uid
-            || (resource.data.accountKey is string
-              && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == resource.data.accountKey))
+          && resource.data.ownerUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailableNow', 'updatedAt']));
     }
 
-    // DEDA 10-point fixes v1: immutable audit trail for admin read-only review.
+    // Immutable audit trail for read-only admin account review.
     match /admin_audit/{auditId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;
