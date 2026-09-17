@@ -22,12 +22,28 @@ jobs:
           ref: places-v1
           fetch-depth: 0
 
+      - name: Normalize patch matcher
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/deda_ten_points_fix.py')
+          text = path.read_text(encoding='utf-8')
+          old = r'.*?^  \\}\\n\\n  static Future<String> submitPlace\\('
+          new = r'.*?\\n  \\}\\n\\n  static Future<String> submitPlace\\('
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+              print('Normalized backend support regex matcher.')
+          else:
+              print('Backend support regex matcher already normalized or changed.')
+          PY
+
       - name: Apply the reviewed DEDA patch
         run: python3 tools/deda_ten_points_fix.py
 
       - name: Commit source changes
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- lib/main.dart lib/deda_backend.dart lib/admin_pages.dart firestore.rules storage.rules functions/index.js; then
             echo "No source changes were needed."
             exit 0
           fi
