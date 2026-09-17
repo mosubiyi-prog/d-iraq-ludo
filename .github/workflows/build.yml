@@ -41,6 +41,9 @@ jobs:
           python3 tools/final_release_fix_compat.py
           python3 tools/final_release_fix.py
 
+      - name: Apply DEDA PIN login and recovery
+        run: python3 tools/pin_login_patch.py
+
       - name: Apply map destination auto-fit
         run: python3 tools/map_zoom_fix.py
 
