@@ -2,12 +2,6 @@ name: Deploy DEDA Firestore rules
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - places-v1
-    paths:
-      - firestore.rules
-      - .github/workflows/deploy-deda-firestore-rules.yml
 
 jobs:
   deploy:
@@ -15,6 +9,8 @@ jobs:
     steps:
       - name: Checkout places-v1
         uses: actions/checkout@v4
+        with:
+          ref: places-v1
 
       - name: Select Firebase credential
         id: auth
