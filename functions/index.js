@@ -1,7 +1,9 @@
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
+const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {randomInt} = require("node:crypto");
 
 initializeApp();
 
@@ -36,6 +38,13 @@ async function notifyOwner(ownerUid, title, body, requestId, type = "place_resul
   const values = user.data().fcmTokens;
   const tokens = Array.isArray(values) ? values : [];
   await notifyTokens(tokens, title, body, type, requestId);
+}
+
+function normalizeName(value) {
+  return String(value || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
 }
 
 exports.onSupportRequestCreated = onDocumentCreated(
@@ -125,5 +134,117 @@ exports.onPlaceRequestUpdated = onDocumentUpdated(
           body,
           event.params.requestId,
       );
+    },
+);
+
+exports.onRecoveryRequestCreated = onDocumentCreated(
+    "recovery_requests/{requestId}",
+    async (event) => {
+      const data = event.data && event.data.data();
+      if (!data) return;
+
+      const firestore = getFirestore();
+      const requestRef = event.data.ref;
+      const accountKey = String(data.accountKey || "").trim();
+      let accountFound = false;
+      let sameDevice = false;
+      let nameMatches = false;
+      let riskLevel = "review";
+
+      try {
+        const directory = await firestore
+            .collection("deda_account_directory")
+            .doc(accountKey)
+            .get();
+        if (directory.exists && directory.data().active === true) {
+          const authEmail = String(directory.data().authEmail || "").trim();
+          if (authEmail) {
+            const userRecord = await getAuth().getUserByEmail(authEmail);
+            const profile = await firestore.collection("users").doc(userRecord.uid).get();
+            const profileData = profile.exists ? profile.data() : {};
+            const trusted = Array.isArray(profileData.trustedInstallIds) ?
+              profileData.trustedInstallIds : [];
+            sameDevice = trusted.includes(String(data.requesterInstallId || ""));
+            nameMatches = normalizeName(profileData.name) === normalizeName(data.fullName);
+            accountFound = true;
+            riskLevel = sameDevice && nameMatches ? "low" : "review";
+          }
+        }
+      } catch (_) {
+        riskLevel = "review";
+      }
+
+      await requestRef.update({
+        accountFound,
+        sameDevice,
+        nameMatches,
+        riskLevel,
+        status: riskLevel === "low" ? "new" : "review",
+        checkedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+
+      await notifyAdmins(
+          "طلب استرجاع دخول جديد في DEDA",
+          data.fullName || data.phone || "طلب استرجاع",
+          "recovery",
+          event.params.requestId,
+      );
+    },
+);
+
+exports.onRecoveryRequestUpdated = onDocumentUpdated(
+    "recovery_requests/{requestId}",
+    async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after) return;
+      if (before.status === after.status) return;
+      if (after.status !== "approved") return;
+
+      const firestore = getFirestore();
+      const requestRef = event.data.after.ref;
+      const accountKey = String(after.accountKey || "").trim();
+      const requesterUid = String(after.requesterUid || "").trim();
+
+      try {
+        const directory = await firestore
+            .collection("deda_account_directory")
+            .doc(accountKey)
+            .get();
+        if (!directory.exists || directory.data().active !== true) {
+          throw new Error("account-directory-missing");
+        }
+
+        const authEmail = String(directory.data().authEmail || "").trim();
+        if (!authEmail) throw new Error("auth-email-missing");
+        const userRecord = await getAuth().getUserByEmail(authEmail);
+        const pin = String(randomInt(100000, 1000000));
+        await getAuth().updateUser(userRecord.uid, {password: pin});
+
+        const now = Date.now();
+        await firestore
+            .collection("recovery_secrets")
+            .doc(event.params.requestId)
+            .set({
+              requesterUid,
+              pin,
+              createdAt: Timestamp.fromMillis(now),
+              expiresAt: Timestamp.fromMillis(now + (30 * 60 * 1000)),
+            });
+
+        await requestRef.update({
+          status: "ready",
+          resolvedAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          processingError: null,
+        });
+      } catch (error) {
+        await requestRef.update({
+          status: "error",
+          updatedAt: Timestamp.now(),
+          processingError: String(error && error.message ? error.message : "recovery-failed"),
+        });
+      }
     },
 );
