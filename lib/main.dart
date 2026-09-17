@@ -153,6 +153,15 @@ class DedaPreferences {
     await prefs.setString(_accountPhoneKey, normalizedPhone);
     await prefs.setString(_accountTypeKey, type.name);
     await prefs.setBool(_loggedInKey, true);
+    try {
+      await DedaBackend.syncCurrentUserProfile(
+        name: name,
+        phone: normalizedPhone,
+        accountType: type.name,
+      );
+    } catch (_) {
+      // Local sign-in remains usable if the network is temporarily unavailable.
+    }
   }
 
   static Future<void> setAccountType(DedaAccountType type) async {
@@ -1156,8 +1165,18 @@ class _DedaContactPageState extends State<DedaContactPage> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialName);
-    _phoneController = TextEditingController(text: widget.initialPhone);
+    final loggedInName = DedaPreferences.isLoggedIn
+        ? DedaPreferences.userName.trim()
+        : '';
+    final loggedInPhone = DedaPreferences.isLoggedIn
+        ? DedaPreferences.phone.trim()
+        : '';
+    _nameController = TextEditingController(
+      text: loggedInName.isNotEmpty ? loggedInName : widget.initialName,
+    );
+    _phoneController = TextEditingController(
+      text: loggedInPhone.isNotEmpty ? loggedInPhone : widget.initialPhone,
+    );
     _loadDraft();
   }
 
@@ -1171,6 +1190,99 @@ class _DedaContactPageState extends State<DedaContactPage> {
 
   String _typeLabel(Map<String, String> item) =>
       DedaLanguageState.isArabic ? item['ar']! : item['en']!;
+
+  // DEDA 10-point fixes v1: account identity is authoritative after sign-in.
+  bool get _usingAccountIdentity =>
+      DedaPreferences.isLoggedIn &&
+      DedaPreferences.userName.trim().isNotEmpty &&
+      DedaPreferences.phone.trim().isNotEmpty;
+
+  String _supportStatusLabel(String status) {
+    switch (status) {
+      case 'in_progress':
+        return dedaText('قيد المعالجة', 'In progress');
+      case 'replied':
+        return dedaText('تم الرد', 'Replied');
+      case 'closed':
+        return dedaText('تم الحل / مغلق', 'Resolved / closed');
+      default:
+        return dedaText('جديد', 'New');
+    }
+  }
+
+  Future<void> _showMySupportHistory() async {
+    try {
+      final items = await DedaBackend.mySupportRequests();
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.72,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+                  child: Text(
+                    dedaText('رسائلي مع دعم DEDA', 'My DEDA support messages'),
+                    style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Expanded(
+                  child: items.isEmpty
+                      ? Center(child: Text(dedaText('لا توجد رسائل دعم بعد.', 'No support messages yet.')))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (_, index) {
+                            final item = items[index];
+                            final reply = (item['adminReply'] ?? '').toString().trim();
+                            return Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(14),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text(
+                                      '${dedaText('الحالة', 'Status')}: ${_supportStatusLabel((item['status'] ?? 'new').toString())}',
+                                      style: const TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text((item['message'] ?? '').toString()),
+                                    if (reply.isNotEmpty) ...[
+                                      const Divider(height: 24),
+                                      Text(
+                                        dedaText('رد إدارة DEDA', 'DEDA reply'),
+                                        style: const TextStyle(
+                                          color: Color(0xFF17652F),
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      SelectableText(reply),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaText('تعذر تحميل رسائل الدعم الآن.', 'Could not load support messages now.'))),
+      );
+    }
+  }
 
   Future<void> _loadDraft() async {
     try {
@@ -1246,8 +1358,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
     try {
       final image = await ImagePicker().pickImage(
         source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1600,
+        imageQuality: 55,
+        maxWidth: 1024,
       );
       if (image == null || !mounted) return;
       setState(() {
@@ -1287,10 +1399,23 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
     setState(() => _submitting = true);
     try {
+      final supportName = _usingAccountIdentity
+          ? DedaPreferences.userName.trim()
+          : _nameController.text.trim();
+      final supportPhone = _usingAccountIdentity
+          ? DedaPreferences.phone.trim()
+          : _phoneController.text.trim();
+      if (_usingAccountIdentity) {
+        await DedaBackend.syncCurrentUserProfile(
+          name: supportName,
+          phone: supportPhone,
+          accountType: DedaPreferences.accountType?.name ?? 'user',
+        );
+      }
       final requestId = await DedaBackend.submitSupport(
         type: _contactType,
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        name: supportName,
+        phone: supportPhone,
         message: _messageController.text.trim(),
         imagePath: _attachedImagePath,
       );
@@ -1358,6 +1483,14 @@ class _DedaContactPageState extends State<DedaContactPage> {
       appBar: AppBar(
         title: Text(dedaText('التواصل مع الشركة', 'Contact company')),
         centerTitle: true,
+        actions: [
+          if (DedaPreferences.isLoggedIn)
+            IconButton(
+              tooltip: dedaText('رسائلي وردود الإدارة', 'My messages and replies'),
+              onPressed: _showMySupportHistory,
+              icon: const Icon(Icons.mark_chat_read_outlined),
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -1468,6 +1601,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     ],
                     TextFormField(
                       controller: _nameController,
+                      readOnly: _usingAccountIdentity,
                       textDirection: DedaLanguageState.direction,
                       textAlign: DedaLanguageState.isArabic
                           ? TextAlign.right
@@ -1480,6 +1614,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _phoneController,
+                      readOnly: _usingAccountIdentity,
                       keyboardType: TextInputType.phone,
                       textDirection: TextDirection.ltr,
                       decoration: _decoration(
@@ -8150,6 +8285,27 @@ class _MapReadyPageState extends State<MapReadyPage> {
     await Geolocator.openAppSettings();
   }
 
+  // DEDA 10-point fixes v1: normalize Arabic names and digits for local DEDA search.
+  String _normalizeDedaSearchText(String value) {
+    const digitMap = <String, String>{
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+      '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+      '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+    };
+    var text = value.toLowerCase().trim();
+    digitMap.forEach((from, to) => text = text.replaceAll(from, to));
+    text = text
+        .replaceAll(RegExp(r'[\u064B-\u065F\u0670]'), '')
+        .replaceAll(RegExp(r'[إأآٱ]'), 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي')
+        .replaceAll('ـ', '')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    return text;
+  }
+
   Future<void> searchInsideMap() async {
     final query = _mapSearchController.text.trim();
     final position = currentPosition;
@@ -8176,11 +8332,21 @@ class _MapReadyPageState extends State<MapReadyPage> {
     });
     try {
       final activePosition = currentPosition!;
-      final registered = await DedaRegisteredPlacesStore.readAll();
-      final needle = query.toLowerCase();
+      final freshRegistered = await DedaRegisteredPlacesStore.readAll();
+      final mergedRegistered = <PlaceInfo>[];
+      final seenDeda = <String>{};
+      for (final place in <PlaceInfo>[...registeredPlaces, ...freshRegistered]) {
+        final key = '${place.name}|${place.location.latitude.toStringAsFixed(6)}|${place.location.longitude.toStringAsFixed(6)}';
+        if (seenDeda.add(key)) mergedRegistered.add(place);
+      }
+      registeredPlaces = mergedRegistered;
+      final needle = _normalizeDedaSearchText(query);
       final results = <PlaceInfo>[];
-      for (final place in registered) {
-        if (place.name.toLowerCase().contains(needle)) results.add(place);
+      for (final place in mergedRegistered) {
+        final searchable = _normalizeDedaSearchText(
+          '${place.name} ${place.type} ${place.address ?? ''}',
+        );
+        if (searchable.contains(needle)) results.add(place);
       }
       if (results.isEmpty) {
         try {

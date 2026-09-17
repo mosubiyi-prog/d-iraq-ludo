@@ -16,11 +16,17 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['fcmTokens', 'lastSeenAt']);
+        && request.resource.data.keys().hasOnly([
+          'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
+          'createdAt', 'updatedAt'
+        ]);
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'lastSeenAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
+          'createdAt', 'updatedAt'
+        ]);
       allow delete: if false;
     }
 
@@ -69,6 +75,12 @@ service cloud.firestore {
         || (signedIn()
           && resource.data.ownerUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailableNow', 'updatedAt']));
+    }
+
+    // DEDA 10-point fixes v1: immutable audit trail for admin read-only review.
+    match /admin_audit/{auditId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /system_counters/{counterId} {

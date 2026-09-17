@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -67,6 +68,37 @@ class DedaBackend {
     return hasText && hasLocation && hasCategory && hasCustomType;
   }
 
+  // DEDA 10-point fixes v1: unified user identity + robust support uploads.
+  static Future<void> syncCurrentUserProfile({
+    required String name,
+    required String phone,
+    required String accountType,
+  }) async {
+    final user = await _ensurePublicUser();
+    final ref = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final existing = await ref.get();
+    await ref.set({
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'accountType': accountType.trim(),
+      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  static Future<bool> _hasActivePlaceRequest(String ownerUid) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('place_requests')
+        .where('ownerUid', isEqualTo: ownerUid)
+        .limit(25)
+        .get();
+    return snapshot.docs.any((doc) {
+      final status = (doc.data()['status'] ?? '').toString();
+      return status == 'pending' || status == 'reviewing';
+    });
+  }
+
   static Future<String> submitSupport({
     required String type,
     required String name,
@@ -75,35 +107,96 @@ class DedaBackend {
     String? imagePath,
   }) async {
     final user = await _ensurePublicUser();
-    final request =
-        FirebaseFirestore.instance.collection('support_requests').doc();
+    final firestore = FirebaseFirestore.instance;
+    final request = firestore.collection('support_requests').doc();
+    final cleanName = name.trim();
+    final cleanPhone = phone.trim();
+
+    // Keep one account identity for support, admin review and notifications.
+    await firestore.collection('users').doc(user.uid).set({
+      'name': cleanName,
+      'phone': cleanPhone,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
     String? imageUrl;
+    String? imageBase64;
+    String? imageMimeType;
     if (imagePath != null && imagePath.isNotEmpty) {
+      final file = File(imagePath);
+      if (!await file.exists()) throw StateError('support-image-missing');
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 8 * 1024 * 1024) {
+        throw StateError('support-image-too-large');
+      }
       final extension = imagePath.contains('.')
           ? imagePath.split('.').last.toLowerCase()
           : 'jpg';
-      final reference = FirebaseStorage.instance
-          .ref('support_uploads/${user.uid}/${request.id}.$extension');
       final contentType = switch (extension) {
         'png' => 'image/png',
         'webp' => 'image/webp',
         'gif' => 'image/gif',
         _ => 'image/jpeg',
       };
-      await reference.putFile(
-        File(imagePath),
-        SettableMetadata(contentType: contentType),
-      );
-      imageUrl = await reference.getDownloadURL();
+      imageMimeType = contentType;
+      try {
+        final reference = FirebaseStorage.instance
+            .ref('support_uploads/${user.uid}/${request.id}.$extension');
+        await reference.putData(
+          bytes,
+          SettableMetadata(contentType: contentType),
+        );
+        imageUrl = await reference.getDownloadURL();
+      } catch (_) {
+        // Small compressed photos can still be delivered through Firestore
+        // if Storage is temporarily unavailable or its rules are not deployed yet.
+        if (bytes.length <= 650 * 1024) {
+          imageBase64 = base64Encode(bytes);
+        } else {
+          rethrow;
+        }
+      }
     }
+
+    // If this is a place owner, link the support ticket directly to the
+    // approved DEDA place so the employee never has to search for it manually.
+    Map<String, dynamic>? linkedPlace;
+    String? linkedPlaceId;
+    try {
+      final owned = await firestore
+          .collection('published_places')
+          .where('ownerUid', isEqualTo: user.uid)
+          .limit(20)
+          .get();
+      for (final doc in owned.docs) {
+        if (doc.data()['published'] == true) {
+          linkedPlaceId = doc.id;
+          linkedPlace = doc.data();
+          break;
+        }
+      }
+    } catch (_) {}
+
     await request.set({
       'ownerUid': user.uid,
       'type': type,
-      'name': name,
-      'phone': phone,
-      'message': message,
+      'name': cleanName,
+      'phone': cleanPhone,
+      'message': message.trim(),
       'imageUrl': imageUrl,
+      'imageBase64': imageBase64,
+      'imageMimeType': imageMimeType,
       'status': 'new',
+      if (linkedPlaceId != null) 'linkedPlaceId': linkedPlaceId,
+      if (linkedPlace != null) ...{
+        'linkedPlaceName': linkedPlace['placeName'],
+        'linkedApprovalNumber': linkedPlace['approvalNumber'],
+        'linkedLatitude': linkedPlace['latitude'],
+        'linkedLongitude': linkedPlace['longitude'],
+        'linkedSourceRequestId': linkedPlace['lastSourceRequestId'] ??
+            linkedPlace['sourceRequestId'],
+      },
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -115,6 +208,9 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
+    if (await _hasActivePlaceRequest(user.uid)) {
+      throw StateError('active-place-request');
+    }
     await registerOwnerNotifications();
     final request =
         FirebaseFirestore.instance.collection('place_requests').doc();
@@ -137,6 +233,9 @@ class DedaBackend {
       throw ArgumentError('incomplete-place-request');
     }
     final user = await _ensurePublicUser();
+    if (await _hasActivePlaceRequest(user.uid)) {
+      throw StateError('active-place-request');
+    }
     await registerOwnerNotifications();
     final original = await FirebaseFirestore.instance
         .collection('published_places')
@@ -347,7 +446,7 @@ class DedaBackend {
         final current = (counterSnapshot.data()?['value'] as num?)?.toInt() ?? 0;
         final next = current + 1;
         final now = DateTime.now();
-        approvalNumber = 'DEDA-${now.year}-${next.toString().padLeft(6, '0')}';
+        approvalNumber = 'DEDA-${now.year}-${next.toString().padLeft(7, '0')}';
         approvalDate = _formatApprovalDate(now);
         transaction.set(
           counter,
@@ -484,6 +583,120 @@ class DedaBackend {
       });
     }
     await request.update(statusUpdate);
+  }
+
+  // DEDA 10-point fixes v1: support replies and read-only account review.
+  static Stream<Map<String, dynamic>?> publishedPlaceStream(String id) {
+    return FirebaseFirestore.instance
+        .collection('published_places')
+        .doc(id)
+        .snapshots()
+        .map((snapshot) => snapshot.exists && snapshot.data() != null
+            ? <String, dynamic>{'id': snapshot.id, ...snapshot.data()!}
+            : null);
+  }
+
+  static Future<List<Map<String, dynamic>>> mySupportRequests() async {
+    final user = await _ensurePublicUser();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('support_requests')
+        .where('ownerUid', isEqualTo: user.uid)
+        .limit(50)
+        .get();
+    final items = snapshot.docs
+        .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+        .toList();
+    int millis(dynamic value) => value is Timestamp
+        ? value.millisecondsSinceEpoch
+        : 0;
+    items.sort((a, b) => millis(b['createdAt']).compareTo(millis(a['createdAt'])));
+    return items;
+  }
+
+  static Future<void> updateSupportStatus({
+    required String id,
+    required String status,
+  }) async {
+    const allowed = {'new', 'in_progress', 'replied', 'closed'};
+    if (!allowed.contains(status)) throw ArgumentError('invalid-support-status');
+    final actor = await _adminIdentity();
+    await FirebaseFirestore.instance.collection('support_requests').doc(id).update({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'reviewedBy': actor['uid'],
+      'reviewedByName': actor['name'],
+      'reviewedByRole': actor['role'],
+      if (status == 'closed') 'closedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> replyToSupport({
+    required String id,
+    required String message,
+  }) async {
+    final clean = message.trim();
+    if (clean.isEmpty) throw ArgumentError('empty-support-reply');
+    final actor = await _adminIdentity();
+    await FirebaseFirestore.instance.collection('support_requests').doc(id).update({
+      'status': 'replied',
+      'adminReply': clean,
+      'adminReplyAt': FieldValue.serverTimestamp(),
+      'adminReplyByUid': actor['uid'],
+      'adminReplyByName': actor['name'],
+      'adminReplyByRole': actor['role'],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<Map<String, dynamic>> adminUserSnapshot({
+    required String ownerUid,
+    required String sourceCollection,
+    required String sourceId,
+  }) async {
+    final actor = await _adminIdentity();
+    final firestore = FirebaseFirestore.instance;
+    final user = await firestore.collection('users').doc(ownerUid).get();
+    final placeRequests = await firestore
+        .collection('place_requests')
+        .where('ownerUid', isEqualTo: ownerUid)
+        .limit(50)
+        .get();
+    final published = await firestore
+        .collection('published_places')
+        .where('ownerUid', isEqualTo: ownerUid)
+        .limit(50)
+        .get();
+    final support = await firestore
+        .collection('support_requests')
+        .where('ownerUid', isEqualTo: ownerUid)
+        .limit(50)
+        .get();
+
+    // Every read-only account review is auditable.
+    await firestore.collection('admin_audit').add({
+      'action': 'read_user_account',
+      'ownerUid': ownerUid,
+      'sourceCollection': sourceCollection,
+      'sourceId': sourceId,
+      'adminUid': actor['uid'],
+      'adminName': actor['name'],
+      'adminRole': actor['role'],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return <String, dynamic>{
+      'uid': ownerUid,
+      'profile': user.data() ?? <String, dynamic>{},
+      'placeRequests': placeRequests.docs
+          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+          .toList(),
+      'publishedPlaces': published.docs
+          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+          .toList(),
+      'supportRequests': support.docs
+          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+          .toList(),
+    };
   }
 
   static Future<void> signOutAdmin() => FirebaseAuth.instance.signOut();

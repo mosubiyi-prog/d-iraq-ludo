@@ -29,13 +29,13 @@ async function notifyAdmins(title, body, type, requestId) {
   await notifyTokens(tokens, title, body, type, requestId);
 }
 
-async function notifyOwner(ownerUid, title, body, requestId) {
+async function notifyOwner(ownerUid, title, body, requestId, type = "place_result") {
   if (!ownerUid) return;
   const user = await getFirestore().collection("users").doc(ownerUid).get();
   if (!user.exists) return;
   const values = user.data().fcmTokens;
   const tokens = Array.isArray(values) ? values : [];
-  await notifyTokens(tokens, title, body, "place_result", requestId);
+  await notifyTokens(tokens, title, body, type, requestId);
 }
 
 exports.onSupportRequestCreated = onDocumentCreated(
@@ -48,6 +48,36 @@ exports.onSupportRequestCreated = onDocumentCreated(
           data.name || "طلب دعم جديد",
           "support",
           event.params.requestId,
+      );
+    },
+);
+
+// DEDA 10-point fixes v1: notify users when support is handled or replied to.
+exports.onSupportRequestUpdated = onDocumentUpdated(
+    "support_requests/{requestId}",
+    async (event) => {
+      const before = event.data && event.data.before.data();
+      const after = event.data && event.data.after.data();
+      if (!before || !after) return;
+      if (before.status === after.status && before.adminReply === after.adminReply) return;
+
+      let title = "تحديث من دعم DEDA";
+      let body = "تم تحديث حالة رسالتك لدى فريق DEDA.";
+      if (after.status === "in_progress") {
+        body = "رسالتك قيد المعالجة لدى فريق DEDA.";
+      } else if (after.status === "replied") {
+        title = "رد جديد من دعم DEDA";
+        body = after.adminReply || "لديك رد جديد من فريق DEDA.";
+      } else if (after.status === "closed") {
+        title = "تم إغلاق طلب الدعم في DEDA";
+        body = after.adminReply || "تمت معالجة طلب الدعم وإغلاقه.";
+      }
+      await notifyOwner(
+          after.ownerUid,
+          title,
+          body,
+          event.params.requestId,
+          "support_result",
       );
     },
 );

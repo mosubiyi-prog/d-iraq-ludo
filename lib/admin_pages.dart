@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -240,6 +242,12 @@ class _RequestListState extends State<_RequestList> {
         return t('مرفوض', 'Rejected');
       case 'new':
         return t('جديد', 'New');
+      case 'in_progress':
+        return t('قيد المعالجة', 'In progress');
+      case 'replied':
+        return t('تم الرد', 'Replied');
+      case 'closed':
+        return t('تم الحل / مغلق', 'Resolved / closed');
       default:
         return status;
     }
@@ -433,6 +441,234 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 
+  // DEDA 10-point fixes v1: support workflow and read-only account review.
+  Widget _liveAvailability(Map<String, dynamic> data, String requestId) {
+    final fallback = data['isAvailableNow'] == true;
+    if (_text(data['status']) != 'approved') {
+      return _detailRow(
+        t('حالة التواجد', 'Availability'),
+        fallback
+            ? t('متواجد الآن', 'Available now')
+            : t('غير متواجد حاليًا', 'Not available now'),
+      );
+    }
+    final original = _text(data['originalPlaceId']);
+    final publishedId = original.isNotEmpty ? original : requestId;
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: DedaBackend.publishedPlaceStream(publishedId),
+      builder: (context, snapshot) {
+        final live = snapshot.data?['isAvailableNow'];
+        final available = live is bool ? live : fallback;
+        return _detailRow(
+          t('حالة التواجد', 'Availability'),
+          available
+              ? t('متواجد الآن', 'Available now')
+              : t('غير متواجد حاليًا', 'Not available now'),
+        );
+      },
+    );
+  }
+
+  Future<String?> _askSupportReply() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('الرد على المستخدم', 'Reply to user')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 6,
+              children: [
+                ActionChip(
+                  label: Text(t('جاري المراجعة', 'Under review')),
+                  onPressed: () => controller.text = t(
+                    'جاري مراجعة المشكلة وسنوافيك بالتحديث.',
+                    'We are reviewing the issue and will update you.',
+                  ),
+                ),
+                ActionChip(
+                  label: Text(t('تم حل المشكلة', 'Issue resolved')),
+                  onPressed: () => controller.text = t(
+                    'تم حل المشكلة. شكرًا لتواصلك مع DEDA.',
+                    'The issue has been resolved. Thank you for contacting DEDA.',
+                  ),
+                ),
+                ActionChip(
+                  label: Text(t('نحتاج معلومات إضافية', 'Need more information')),
+                  onPressed: () => controller.text = t(
+                    'نحتاج معلومات إضافية حتى نكمل معالجة طلبك.',
+                    'We need additional information to continue handling your request.',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              minLines: 3,
+              maxLines: 7,
+              decoration: InputDecoration(
+                labelText: t('رد الإدارة', 'Administration reply'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            icon: const Icon(Icons.send_outlined),
+            label: Text(t('إرسال الرد', 'Send reply')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _replySupport(String id) async {
+    final message = await _askSupportReply();
+    if (message == null || message.trim().isEmpty) return;
+    try {
+      await DedaBackend.replyToSupport(id: id, message: message);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('تم إرسال الرد للمستخدم.', 'Reply sent to the user.'))),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('تعذر إرسال الرد الآن.', 'Could not send the reply now.'))),
+      );
+    }
+  }
+
+  Future<void> _setSupportStatus(String id, String status) async {
+    try {
+      await DedaBackend.updateSupportStatus(id: id, status: status);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('تعذر تحديث حالة الدعم.', 'Could not update support status.'))),
+      );
+    }
+  }
+
+  Widget _supportActions({required String status, required String id}) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          onPressed: status == 'in_progress'
+              ? null
+              : () => _setSupportStatus(id, 'in_progress'),
+          icon: const Icon(Icons.hourglass_top),
+          label: Text(t('قيد المعالجة', 'In progress')),
+        ),
+        FilledButton.icon(
+          onPressed: () => _replySupport(id),
+          icon: const Icon(Icons.reply),
+          label: Text(t('إرسال رد', 'Send reply')),
+        ),
+        OutlinedButton.icon(
+          onPressed: status == 'closed'
+              ? null
+              : () => _setSupportStatus(id, 'closed'),
+          icon: const Icon(Icons.task_alt),
+          label: Text(t('تم الحل / إغلاق', 'Resolve / close')),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showUserAccount({
+    required String ownerUid,
+    required String sourceId,
+  }) async {
+    if (ownerUid.isEmpty) return;
+    try {
+      final snapshot = await DedaBackend.adminUserSnapshot(
+        ownerUid: ownerUid,
+        sourceCollection: widget.collection,
+        sourceId: sourceId,
+      );
+      if (!mounted) return;
+      final profile = Map<String, dynamic>.from(
+        snapshot['profile'] as Map? ?? const <String, dynamic>{},
+      );
+      final places = (snapshot['publishedPlaces'] as List? ?? const []);
+      final requests = (snapshot['placeRequests'] as List? ?? const []);
+      final support = (snapshot['supportRequests'] as List? ?? const []);
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.visibility_outlined),
+              const SizedBox(width: 8),
+              Expanded(child: Text(t('حساب المستخدم • قراءة فقط', 'User account • read only'))),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _detailRow(t('الاسم', 'Name'), profile['name']),
+                _detailRow(t('الهاتف', 'Phone'), profile['phone'], ltr: true),
+                _detailRow(t('نوع الحساب', 'Account type'), profile['accountType']),
+                const Divider(),
+                _detailRow(t('الأماكن المعتمدة', 'Approved places'), places.length),
+                _detailRow(t('طلبات الأماكن', 'Place requests'), requests.length),
+                _detailRow(t('رسائل الدعم', 'Support messages'), support.length),
+                if (places.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(t('أماكن المستخدم', 'User places'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ...places.take(10).map((raw) {
+                    final item = Map<String, dynamic>.from(raw as Map);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.storefront_outlined),
+                      title: Text(_text(item['placeName'])),
+                      subtitle: Text(_text(item['approvalNumber'])),
+                    );
+                  }),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  t(
+                    'لا يمكن تعديل بيانات المستخدم من هذه النافذة. تم تسجيل هذه المشاهدة في السجل الإداري.',
+                    'User data cannot be edited here. This review was recorded in the admin audit log.',
+                  ),
+                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF5B665D)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('تعذر فتح حساب المستخدم الآن.', 'Could not open the user account now.'))),
+      );
+    }
+  }
+
   Future<String?> _askDecisionNote(String status) async {
     final controller = TextEditingController();
     final isReject = status == 'rejected';
@@ -619,11 +855,18 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
-  Widget _requestDetails(Map<String, dynamic> data) {
+  Widget _requestDetails(Map<String, dynamic> data, String id) {
     final commonAudit = _auditDetails(data);
 
     if (widget.collection == 'support_requests') {
       final imageUrl = _text(data['imageUrl']);
+      final imageBase64 = _text(data['imageBase64']);
+      final linkedPlaceId = _text(data['linkedPlaceId']);
+      final linkedPlaceName = _text(data['linkedPlaceName']);
+      final linkedLatitude = (data['linkedLatitude'] as num?)?.toDouble();
+      final linkedLongitude = (data['linkedLongitude'] as num?)?.toDouble();
+      final reply = _text(data['adminReply']);
+      final ownerUid = _text(data['ownerUid']);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -634,25 +877,70 @@ class _RequestListState extends State<_RequestList> {
           _detailRow(t('الاسم', 'Name'), data['name']),
           _detailRow(t('الهاتف', 'Phone'), data['phone'], ltr: true),
           _detailRow(t('الرسالة', 'Message'), data['message']),
-          if (imageUrl.isNotEmpty) ...[
+          if (imageUrl.isNotEmpty || imageBase64.isNotEmpty) ...[
             const SizedBox(height: 4),
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: Image.network(
-                imageUrl,
-                height: 190,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 70,
-                  alignment: Alignment.center,
-                  color: const Color(0xFFEAF4E7),
-                  child: Text(
-                    t('تعذر عرض الصورة.', 'Could not display image.'),
-                  ),
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      height: 190,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 70,
+                        alignment: Alignment.center,
+                        color: const Color(0xFFEAF4E7),
+                        child: Text(t('تعذر عرض الصورة.', 'Could not display image.')),
+                      ),
+                    )
+                  : Image.memory(
+                      base64Decode(imageBase64),
+                      height: 190,
+                      fit: BoxFit.cover,
+                    ),
+            ),
+          ],
+          if (linkedPlaceId.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Card(
+              elevation: 0,
+              color: const Color(0xFFEAF4E7),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${t('المكان المرتبط', 'Linked place')}: ${linkedPlaceName.isEmpty ? linkedPlaceId : linkedPlaceName}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    if (_text(data['linkedApprovalNumber']).isNotEmpty)
+                      Text('${t('رقم الاعتماد', 'Approval number')}: ${_text(data['linkedApprovalNumber'])}'),
+                    if (linkedLatitude != null && linkedLongitude != null)
+                      OutlinedButton.icon(
+                        onPressed: () => _openMap(
+                          latitude: linkedLatitude,
+                          longitude: linkedLongitude,
+                          placeName: linkedPlaceName,
+                        ),
+                        icon: const Icon(Icons.map_outlined),
+                        label: Text(t('فتح المكان مباشرة', 'Open linked place')),
+                      ),
+                  ],
                 ),
               ),
             ),
           ],
+          if (reply.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _detailRow(t('رد الإدارة', 'Administration reply'), reply),
+          ],
+          if (ownerUid.isNotEmpty)
+            OutlinedButton.icon(
+              onPressed: () => _showUserAccount(ownerUid: ownerUid, sourceId: id),
+              icon: const Icon(Icons.visibility_outlined),
+              label: Text(t('عرض حساب المستخدم • قراءة فقط', 'View user account • read only')),
+            ),
           commonAudit,
         ],
       );
@@ -671,12 +959,7 @@ class _RequestListState extends State<_RequestList> {
         _detailRow(t('العنوان', 'Address'), data['address']),
         _detailRow(t('أوقات العمل', 'Opening hours'), data['openingHours']),
         _detailRow(t('الوصف', 'Description'), data['description']),
-        _detailRow(
-          t('حالة التواجد', 'Availability'),
-          data['isAvailableNow'] == true
-              ? t('متواجد الآن', 'Available now')
-              : t('غير متواجد حاليًا', 'Not available now'),
-        ),
+        _liveAvailability(data, id),
         _detailRow(
           t('الإحداثيات', 'Coordinates'),
           latitude == null || longitude == null
@@ -725,6 +1008,16 @@ class _RequestListState extends State<_RequestList> {
   }
 
   bool _matchesSection(String status) {
+    if (widget.collection == 'support_requests') {
+      switch (_section) {
+        case 'approved':
+          return status == 'replied';
+        case 'rejected':
+          return status == 'closed';
+        default:
+          return status == 'new' || status == 'in_progress';
+      }
+    }
     switch (_section) {
       case 'approved':
         return status == 'approved';
@@ -741,6 +1034,11 @@ class _RequestListState extends State<_RequestList> {
   ) {
     return docs.where((doc) {
       final status = _text(doc.data()['status']);
+      if (widget.collection == 'support_requests') {
+        if (section == 'approved') return status == 'replied';
+        if (section == 'rejected') return status == 'closed';
+        return status == 'new' || status == 'in_progress';
+      }
       if (section == 'approved') return status == 'approved';
       if (section == 'rejected') return status == 'rejected';
       return status != 'approved' && status != 'rejected';
@@ -770,6 +1068,9 @@ class _RequestListState extends State<_RequestList> {
     required String status,
     required String id,
   }) {
+    if (widget.collection == 'support_requests') {
+      return _supportActions(status: status, id: id);
+    }
     if (status == 'approved' || status == 'rejected') {
       return Wrap(
         spacing: 8,
@@ -864,15 +1165,15 @@ class _RequestListState extends State<_RequestList> {
                     const SizedBox(width: 8),
                     _sectionChip(
                       value: 'approved',
-                      arLabel: 'المعتمدات',
-                      enLabel: 'Approved',
+                      arLabel: widget.collection == 'support_requests' ? 'تم الرد' : 'المعتمدات',
+                      enLabel: widget.collection == 'support_requests' ? 'Replied' : 'Approved',
                       count: approvedCount,
                     ),
                     const SizedBox(width: 8),
                     _sectionChip(
                       value: 'rejected',
-                      arLabel: 'المرفوضات',
-                      enLabel: 'Rejected',
+                      arLabel: widget.collection == 'support_requests' ? 'المغلقة' : 'المرفوضات',
+                      enLabel: widget.collection == 'support_requests' ? 'Closed' : 'Rejected',
                       count: rejectedCount,
                     ),
                   ],
@@ -1014,7 +1315,7 @@ class _RequestListState extends State<_RequestList> {
                             childrenPadding:
                                 const EdgeInsets.fromLTRB(16, 0, 16, 14),
                             children: [
-                              _requestDetails(data),
+                              _requestDetails(data, doc.id),
                               const SizedBox(height: 12),
                               _actionsForStatus(
                                 status: status,
