@@ -1,0 +1,44 @@
+name: Apply DEDA 10-point fixes
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - places-v1
+    paths:
+      - tools/deda_ten_points_fix.py
+      - .github/workflows/apply-deda-ten-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout places-v1
+        uses: actions/checkout@v4
+        with:
+          ref: places-v1
+          fetch-depth: 0
+
+      - name: Apply the reviewed DEDA patch
+        run: python3 tools/deda_ten_points_fix.py
+
+      - name: Commit source changes
+        run: |
+          if git diff --quiet; then
+            echo "No source changes were needed."
+            exit 0
+          fi
+          git config user.name "DEDA Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            lib/main.dart \
+            lib/deda_backend.dart \
+            lib/admin_pages.dart \
+            firestore.rules \
+            storage.rules \
+            functions/index.js
+          git commit -m "Apply DEDA 10-point fixes"
+          git push origin HEAD:places-v1
