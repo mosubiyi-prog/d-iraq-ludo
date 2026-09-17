@@ -66,7 +66,13 @@ service cloud.firestore {
         && request.resource.data.longitude is number
         && (request.resource.data.category != 'other'
           || (request.resource.data.otherCategoryText is string
-            && request.resource.data.otherCategoryText.size() > 0));
+            && request.resource.data.otherCategoryText.size() > 0))
+        // Update requests must target a place owned by this authenticated UID.
+        // A matching typed phone number is not sufficient authorization.
+        && (request.resource.data.requestType != 'update'
+          || (request.resource.data.originalPlaceId is string
+            && exists(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId))
+            && get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid));
       allow read: if isAdmin()
         || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow update: if isAdmin();
