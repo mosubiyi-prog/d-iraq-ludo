@@ -1,0 +1,38 @@
+name: Apply Build 87 five fixes
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - places-v1
+    paths:
+      - tools/build87_five_fixes.py
+      - .github/workflows/apply-build87-five-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout places-v1
+        uses: actions/checkout@v4
+        with:
+          ref: places-v1
+          fetch-depth: 0
+
+      - name: Apply five reviewed fixes
+        run: python3 tools/build87_five_fixes.py
+
+      - name: Commit reviewed source changes
+        run: |
+          if git diff --quiet -- lib/main.dart lib/deda_backend.dart firestore.rules; then
+            echo "No source changes were needed."
+            exit 0
+          fi
+          git config user.name "DEDA Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add lib/main.dart lib/deda_backend.dart firestore.rules
+          git commit -m "Apply Build 87 five review fixes"
+          git push origin HEAD:places-v1
