@@ -2,12 +2,6 @@ name: Deploy DEDA Firestore rules
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - places-v1
-    paths:
-      - 'firestore.rules'
-      - '.github/workflows/deploy-deda-firestore-rules.yml'
 
 jobs:
   deploy:
