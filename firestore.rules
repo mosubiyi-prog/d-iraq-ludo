@@ -218,6 +218,8 @@ service cloud.firestore {
     match /place_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.accountKey is string
+        && sameAccount(request.resource.data.accountKey)
         && request.resource.data.status == 'pending'
         && request.resource.data.placeName is string
         && request.resource.data.placeName.size() > 0
