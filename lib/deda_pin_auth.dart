@@ -29,11 +29,15 @@ class DedaPinAuth {
     }
   }
 
-  static Future<User> _ensureSession() async {
+  static Future<User> _ensureAnonymousSession() async {
     await _ensureFirebaseReady();
     final auth = FirebaseAuth.instance;
     final current = auth.currentUser;
-    if (current != null) return current;
+    if (current != null && current.isAnonymous) return current;
+
+    if (current != null) {
+      await auth.signOut();
+    }
     final credential = await auth.signInAnonymously();
     final user = credential.user;
     if (user == null) throw StateError('anonymous-auth-failed');
@@ -60,10 +64,64 @@ class DedaPinAuth {
         .doc(key);
   }
 
+  static DocumentReference<Map<String, dynamic>> _credentialRef(
+    String accountKey,
+  ) {
+    return FirebaseFirestore.instance
+        .collection('deda_credentials')
+        .doc(accountKey);
+  }
+
+  static DocumentReference<Map<String, dynamic>> _profileRef(
+    String accountKey,
+  ) {
+    return FirebaseFirestore.instance
+        .collection('deda_account_profiles')
+        .doc(accountKey);
+  }
+
   static Future<bool> accountExists(String phone) async {
-    await _ensureSession();
+    await _ensureAnonymousSession();
     final snapshot = await _directoryRef(phone).get();
     return snapshot.exists && snapshot.data()?['active'] == true;
+  }
+
+  static Future<void> _provePin({
+    required String accountKey,
+    required String pin,
+  }) async {
+    final user = await _ensureAnonymousSession();
+    final attempt = FirebaseFirestore.instance
+        .collection('deda_auth_attempts')
+        .doc(user.uid);
+    try {
+      await attempt.set(<String, dynamic>{
+        'uid': user.uid,
+        'accountKey': accountKey,
+        'pin': pin,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        throw StateError('invalid-pin');
+      }
+      rethrow;
+    }
+  }
+
+  static Future<void> _openSession(String accountKey) async {
+    final user = await _ensureAnonymousSession();
+    final install = await installId();
+    await FirebaseFirestore.instance
+        .collection('deda_sessions')
+        .doc(user.uid)
+        .set(<String, dynamic>{
+      'uid': user.uid,
+      'accountKey': accountKey,
+      'installId': install,
+      'signedInAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    });
   }
 
   static Future<Map<String, dynamic>> createAccount({
@@ -78,65 +136,65 @@ class DedaPinAuth {
       throw ArgumentError('invalid-pin');
     }
 
+    final user = await _ensureAnonymousSession();
     final accountKey = accountKeyForPhone(phone);
-    final authEmail = authEmailForPhone(phone);
-    final auth = FirebaseAuth.instance;
+    final install = await installId();
+    final firestore = FirebaseFirestore.instance;
+    final directory = _directoryRef(phone);
+    final credential = _credentialRef(accountKey);
 
-    UserCredential credential;
-    try {
-      credential = await auth.createUserWithEmailAndPassword(
-        email: authEmail,
-        password: pin,
-      );
-    } on FirebaseAuthException catch (error) {
-      if (error.code == 'email-already-in-use') {
+    await firestore.runTransaction((transaction) async {
+      final directorySnapshot = await transaction.get(directory);
+      final credentialSnapshot = await transaction.get(credential);
+      if (directorySnapshot.exists || credentialSnapshot.exists) {
         throw StateError('account-already-exists');
       }
-      rethrow;
-    }
 
-    final user = credential.user;
-    if (user == null) throw StateError('account-create-failed');
-
-    try {
-      final install = await installId();
-      final firestore = FirebaseFirestore.instance;
-      await firestore.runTransaction((transaction) async {
-        final directory = _directoryRef(phone);
-        final current = await transaction.get(directory);
-        if (current.exists) throw StateError('account-already-exists');
-
-        transaction.set(directory, <String, dynamic>{
-          'accountKey': accountKey,
-          'authEmail': authEmail,
-          'active': true,
-          'createdUid': user.uid,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        transaction.set(
-          firestore.collection('users').doc(user.uid),
-          <String, dynamic>{
-            'name': cleanName,
-            'phone': phone.trim(),
-            'accountKey': accountKey,
-            'accountType': 'user',
-            'authMethod': 'deda_pin_v1',
-            'trustedInstallIds': <String>[install],
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            'lastSeenAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+      transaction.set(credential, <String, dynamic>{
+        'accountKey': accountKey,
+        'pin': pin,
+        'active': true,
+        'createdUid': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-    } catch (_) {
-      try {
-        await user.delete();
-      } catch (_) {}
-      rethrow;
-    }
+      transaction.set(directory, <String, dynamic>{
+        'accountKey': accountKey,
+        'active': true,
+        'createdUid': user.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+
+    await _provePin(accountKey: accountKey, pin: pin);
+    await _openSession(accountKey);
+
+    await _profileRef(accountKey).set(<String, dynamic>{
+      'accountKey': accountKey,
+      'name': cleanName,
+      'phone': phone.trim(),
+      'accountType': 'user',
+      'trustedInstallIds': <String>[install],
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    });
+
+    await firestore.collection('users').doc(user.uid).set(
+      <String, dynamic>{
+        'name': cleanName,
+        'phone': phone.trim(),
+        'accountKey': accountKey,
+        'accountType': 'user',
+        'authMethod': 'deda_pin_firestore_v1',
+        'trustedInstallIds': <String>[install],
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
 
     return <String, dynamic>{
       'uid': user.uid,
@@ -155,32 +213,69 @@ class DedaPinAuth {
       throw ArgumentError('invalid-pin');
     }
 
-    final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: authEmailForPhone(phone),
-      password: pin,
-    );
-    final user = credential.user;
+    final accountKey = accountKeyForPhone(phone);
+    await _provePin(accountKey: accountKey, pin: pin);
+    await _openSession(accountKey);
+
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('sign-in-failed');
 
-    await markCurrentDeviceTrusted();
+    final profileSnapshot = await _profileRef(accountKey).get();
+    final profile = profileSnapshot.data() ?? <String, dynamic>{};
+    final name = (profile['name'] ?? '').toString().trim();
+    final storedPhone = (profile['phone'] ?? phone).toString().trim();
+    final accountType = (profile['accountType'] ?? 'user').toString().trim();
 
-    final profile = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final data = profile.data() ?? <String, dynamic>{};
+    if (name.isEmpty) throw StateError('missing-profile-name');
+
+    final install = await installId();
+    await _profileRef(accountKey).set(<String, dynamic>{
+      'trustedInstallIds': FieldValue.arrayUnion(<String>[install]),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      <String, dynamic>{
+        'name': name,
+        'phone': storedPhone,
+        'accountKey': accountKey,
+        'accountType': accountType,
+        'authMethod': 'deda_pin_firestore_v1',
+        'trustedInstallIds': FieldValue.arrayUnion(<String>[install]),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
     return <String, dynamic>{
       'uid': user.uid,
-      'name': (data['name'] ?? '').toString().trim(),
-      'phone': (data['phone'] ?? phone).toString().trim(),
-      'accountType': (data['accountType'] ?? 'user').toString().trim(),
+      'name': name,
+      'phone': storedPhone,
+      'accountType': accountType,
     };
   }
 
   static Future<void> markCurrentDeviceTrusted() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.isAnonymous) return;
+    if (user == null || !user.isAnonymous) return;
+
+    final session = await FirebaseFirestore.instance
+        .collection('deda_sessions')
+        .doc(user.uid)
+        .get();
+    final accountKey =
+        (session.data()?['accountKey'] ?? '').toString().trim();
+    if (accountKey.isEmpty) return;
+
     final install = await installId();
+    await _profileRef(accountKey).set(<String, dynamic>{
+      'trustedInstallIds': FieldValue.arrayUnion(<String>[install]),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
       'trustedInstallIds': FieldValue.arrayUnion(<String>[install]),
       'lastSeenAt': FieldValue.serverTimestamp(),
@@ -235,17 +330,7 @@ class DedaPinAuth {
     final cleanName = fullName.trim();
     if (cleanName.length < 2) throw ArgumentError('invalid-name');
 
-    final auth = FirebaseAuth.instance;
-    final targetEmail = authEmailForPhone(phone);
-    final current = auth.currentUser;
-    if (current == null ||
-        (!current.isAnonymous && current.email?.toLowerCase() != targetEmail)) {
-      if (current != null) await auth.signOut();
-      await auth.signInAnonymously();
-    }
-
-    final requester = auth.currentUser;
-    if (requester == null) throw StateError('recovery-session-failed');
+    final requester = await _ensureAnonymousSession();
     final install = await installId();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection('recovery_requests').doc();
@@ -275,23 +360,40 @@ class DedaPinAuth {
   static Future<String?> readRecoveryPin(String requestId) async {
     final current = FirebaseAuth.instance.currentUser;
     if (current == null) return null;
+
     final snapshot = await FirebaseFirestore.instance
-        .collection('recovery_secrets')
+        .collection('recovery_requests')
         .doc(requestId)
         .get();
     final data = snapshot.data();
     if (!snapshot.exists || data == null) return null;
     if ((data['requesterUid'] ?? '').toString() != current.uid) return null;
+    if ((data['status'] ?? '').toString() != 'ready') return null;
 
-    final expiresAt = data['expiresAt'];
+    final expiresAt = data['recoveryPinExpiresAt'];
     if (expiresAt is Timestamp && expiresAt.toDate().isBefore(DateTime.now())) {
       return null;
     }
-    final pin = (data['pin'] ?? '').toString().trim();
+
+    final pin = (data['recoveryPin'] ?? '').toString().trim();
     return RegExp(r'^\d{6}$').hasMatch(pin) ? pin : null;
   }
 
   static Future<void> signOutFirebase() async {
-    await FirebaseAuth.instance.signOut();
+    final auth = FirebaseAuth.instance;
+    final current = auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      final firestore = FirebaseFirestore.instance;
+      try {
+        await firestore.collection('deda_sessions').doc(current.uid).delete();
+      } catch (_) {}
+      try {
+        await firestore
+            .collection('deda_auth_attempts')
+            .doc(current.uid)
+            .delete();
+      } catch (_) {}
+    }
+    await auth.signOut();
   }
 }
