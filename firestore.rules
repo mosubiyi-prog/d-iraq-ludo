@@ -2,59 +2,173 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
     }
+
+    function hasDedaSession(accountKey) {
+      return signedIn()
+        && accountKey is string
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey;
+    }
+
     function sameAccount(accountKey) {
       return signedIn()
         && accountKey is string
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
+        && (
+          hasDedaSession(accountKey)
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          )
+        );
     }
 
     match /admins/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow create, delete: if false;
       allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'lastSeenAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fcmTokens', 'lastSeenAt'
+        ]);
+    }
+
+    // DEDA free PIN authentication. The credential document is never readable
+    // by an ordinary app session. Firestore rules compare a submitted PIN to it.
+    match /deda_credentials/{accountKey} {
+      allow get, list: if false;
+
+      allow create: if isAdmin() || (
+        signedIn()
+        && !exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.pin is string
+        && request.resource.data.pin.matches('^[0-9]{6}$')
+        && request.resource.data.active == true
+        && request.resource.data.createdUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'pin', 'active', 'createdUid',
+          'createdAt', 'updatedAt'
+        ])
+      );
+
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /deda_account_directory/{accountKey} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.active == true
+        && request.resource.data.createdUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'active', 'createdUid',
+          'createdAt', 'updatedAt'
+        ])
+        && existsAfter(/databases/$(database)/documents/deda_credentials/$(accountKey))
+        && getAfter(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.createdUid == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // A correct PIN can create/update only the caller's proof document.
+    // The credential itself remains unreadable to the client.
+    match /deda_auth_attempts/{uid} {
+      allow get, list: if false;
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.pin is string
+        && request.resource.data.pin.matches('^[0-9]{6}$')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'pin', 'createdAt'
+        ])
+        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.active == true
+        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin == request.resource.data.pin;
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /deda_sessions/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.installId is string
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey == request.resource.data.accountKey
+        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
+          == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin;
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /deda_account_profiles/{accountKey} {
+      allow get: if isAdmin() || hasDedaSession(accountKey);
+      allow list: if isAdmin();
+
+      allow create: if isAdmin() || (
+        hasDedaSession(accountKey)
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'name', 'phone', 'accountType',
+          'trustedInstallIds', 'createdAt', 'updatedAt', 'lastSeenAt'
+        ])
+      );
+
+      allow update: if isAdmin() || (
+        hasDedaSession(accountKey)
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'accountType', 'trustedInstallIds',
+          'updatedAt', 'lastSeenAt'
+        ])
+      );
+
+      allow delete: if false;
     }
 
     match /users/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create: if signedIn() && request.auth.uid == uid
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.accountKey is string
+        && hasDedaSession(request.resource.data.accountKey)
         && request.resource.data.keys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
           'accountKey', 'createdAt', 'updatedAt', 'authMethod',
           'trustedInstallIds'
         ]);
-      allow update: if signedIn() && request.auth.uid == uid
+
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.accountKey is string
+        && hasDedaSession(resource.data.accountKey)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
           'accountKey', 'createdAt', 'updatedAt', 'authMethod',
           'trustedInstallIds'
         ]);
-      allow delete: if false;
-    }
 
-    // Public-to-the-signed-in-app account existence directory. It contains no
-    // PIN or password. Individual documents can be fetched by a known phone key,
-    // while collection listing is denied to reduce phone-number enumeration.
-    match /deda_account_directory/{accountKey} {
-      allow get: if signedIn();
-      allow list: if false;
-      allow create: if signedIn()
-        && request.auth.token.email is string
-        && request.resource.data.accountKey == accountKey
-        && request.resource.data.authEmail == request.auth.token.email
-        && request.resource.data.createdUid == request.auth.uid
-        && request.resource.data.active == true
-        && request.resource.data.keys().hasOnly([
-          'accountKey', 'authEmail', 'active', 'createdUid',
-          'createdAt', 'updatedAt'
-        ]);
-      allow update: if isAdmin();
       allow delete: if false;
     }
 
@@ -71,18 +185,18 @@ service cloud.firestore {
           'requesterUid', 'requesterInstallId', 'accountKey', 'phone',
           'fullName', 'status', 'createdAt', 'updatedAt'
         ]);
+
       allow read: if isAdmin()
         || (signedIn() && resource.data.requesterUid == request.auth.uid);
+
       allow update: if isAdmin();
       allow delete: if false;
     }
 
-    // A newly generated recovery PIN is intentionally hidden from the admin UI.
-    // Only the Firebase session that created the recovery request can read it.
+    // Retained as a denied legacy path so older test builds cannot expose
+    // recovery secrets. Build 95 reads the approved code from its own request.
     match /recovery_secrets/{requestId} {
-      allow get: if signedIn()
-        && resource.data.requesterUid == request.auth.uid;
-      allow list, create, update, delete: if false;
+      allow read, write: if false;
     }
 
     match /support_requests/{requestId} {
@@ -92,9 +206,11 @@ service cloud.firestore {
         && request.resource.data.type in ['company', 'problem', 'case', 'photo']
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
+
       allow read: if isAdmin()
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
+
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -127,9 +243,11 @@ service cloud.firestore {
               get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid
               || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
             )));
+
       allow read: if isAdmin()
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
+
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -137,14 +255,20 @@ service cloud.firestore {
     match /published_places/{placeId} {
       allow read: if true;
       allow create, delete: if isAdmin();
+
       allow update: if isAdmin()
-        || (signedIn()
-          && (resource.data.ownerUid == request.auth.uid
-            || sameAccount(resource.data.accountKey))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailableNow', 'updatedAt']));
+        || (
+          signedIn()
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isAvailableNow', 'updatedAt'
+          ])
+        );
     }
 
-    // Immutable audit trail for read-only admin account review.
     match /admin_audit/{auditId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;
