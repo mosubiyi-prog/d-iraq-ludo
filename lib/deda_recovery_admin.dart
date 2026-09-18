@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -15,29 +17,16 @@ class DedaRecoveryAdminList extends StatelessWidget {
   String _statusLabel(String status) {
     switch (status) {
       case 'new':
-        return t('جديد', 'New');
+        return t('بانتظار مراجعة الإدارة', 'Waiting for admin review');
       case 'review':
-        return t('يحتاج تدقيق', 'Needs review');
-      case 'low_risk':
-        return t('منخفض الخطورة', 'Low risk');
-      case 'approved':
-        return t('جارٍ إصدار رمز جديد', 'Issuing new code');
+        return t('قيد المراجعة', 'Under review');
       case 'ready':
         return t('تم إصدار رمز جديد', 'New code issued');
       case 'rejected':
         return t('مرفوض', 'Rejected');
-      case 'error':
-        return t('تعذر التنفيذ', 'Processing failed');
       default:
         return status;
     }
-  }
-
-  String _riskLabel(Map<String, dynamic> data) {
-    final risk = (data['riskLevel'] ?? '').toString();
-    if (risk == 'low') return t('منخفض الخطورة', 'Low risk');
-    if (risk == 'review') return t('يحتاج تدقيق', 'Needs review');
-    return t('بانتظار فحص النظام', 'Waiting for system check');
   }
 
   String _formatTime(dynamic value) {
@@ -48,25 +37,104 @@ class DedaRecoveryAdminList extends StatelessWidget {
         '${two(date.hour)}:${two(date.minute)}';
   }
 
-  Future<void> _approve(BuildContext context, String id) async {
+  String _normalizeName(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  String _newPin() =>
+      (100000 + Random.secure().nextInt(900000)).toString();
+
+  Future<void> _approve(
+    BuildContext context,
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    try {
-      await FirebaseFirestore.instance
-          .collection('recovery_requests')
-          .doc(id)
-          .update(<String, dynamic>{
-        'status': 'approved',
-        'approvedBy': uid,
-        'approvedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+    final accountKey = (data['accountKey'] ?? '').toString().trim();
+    if (uid.isEmpty || accountKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'بيانات الطلب غير مكتملة ولا يمكن اعتماده.',
+              'The request is incomplete and cannot be approved.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final directory = await firestore
+        .collection('deda_account_directory')
+        .doc(accountKey)
+        .get();
+    if (!directory.exists || directory.data()?['active'] != true) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             t(
-              'تم اعتماد الطلب. النظام سيصدر رمزًا جديدًا للمستخدم.',
-              'Request approved. The system will issue a new code.',
+              'لا يوجد حساب DEDA فعّال مطابق لهذا الرقم.',
+              'No active DEDA account matches this number.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final pin = _newPin();
+    final requestRef = firestore.collection('recovery_requests').doc(id);
+    final credentialRef = firestore.collection('deda_credentials').doc(accountKey);
+    final profileRef =
+        firestore.collection('deda_account_profiles').doc(accountKey);
+    final profile = await profileRef.get();
+
+    final batch = firestore.batch();
+    batch.set(
+      credentialRef,
+      <String, dynamic>{
+        'accountKey': accountKey,
+        'pin': pin,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'recoveryUpdatedBy': uid,
+      },
+      SetOptions(merge: true),
+    );
+
+    if (!profile.exists) {
+      batch.set(profileRef, <String, dynamic>{
+        'accountKey': accountKey,
+        'name': (data['fullName'] ?? '').toString().trim(),
+        'phone': (data['phone'] ?? '').toString().trim(),
+        'accountType': 'user',
+        'trustedInstallIds': <String>[],
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    batch.update(requestRef, <String, dynamic>{
+      'status': 'ready',
+      'recoveryPin': pin,
+      'recoveryPinExpiresAt':
+          Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 30))),
+      'approvedBy': uid,
+      'approvedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    try {
+      await batch.commit();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم اعتماد الطلب وإصدار رمز جديد. سيظهر الرمز للمستخدم داخل DEDA.',
+              'Request approved and a new code was issued inside DEDA.',
             ),
           ),
         ),
@@ -110,7 +178,7 @@ class DedaRecoveryAdminList extends StatelessWidget {
     }
   }
 
-  Widget _flag(String text, {required bool warning}) {
+  Widget _badge(String text, {required bool warning}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -128,6 +196,63 @@ class DedaRecoveryAdminList extends StatelessWidget {
         text,
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
       ),
+    );
+  }
+
+  Widget _registeredAccountInfo(Map<String, dynamic> requestData) {
+    final accountKey = (requestData['accountKey'] ?? '').toString().trim();
+    if (accountKey.isEmpty) {
+      return _badge(t('رقم الحساب غير مكتمل', 'Account key missing'),
+          warning: true);
+    }
+
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance
+          .collection('deda_account_profiles')
+          .doc(accountKey)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Text(
+            t('جارٍ مطابقة بيانات الحساب...', 'Checking account data...'),
+            style: const TextStyle(fontSize: 12),
+          );
+        }
+
+        final profile = snapshot.data?.data();
+        if (profile == null) {
+          return _badge(
+            t('الحساب موجود لكن ملفه القديم غير مكتمل',
+                'Account exists but its old profile is incomplete'),
+            warning: true,
+          );
+        }
+
+        final registeredName = (profile['name'] ?? '').toString().trim();
+        final requestedName = (requestData['fullName'] ?? '').toString().trim();
+        final matches = registeredName.isNotEmpty &&
+            _normalizeName(registeredName) == _normalizeName(requestedName);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${t('الاسم المسجل', 'Registered name')}: $registeredName',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _badge(
+                matches
+                    ? t('الاسم مطابق', 'Name matches')
+                    : t('الاسم يحتاج تدقيق', 'Name needs review'),
+                warning: !matches,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -178,9 +303,6 @@ class DedaRecoveryAdminList extends StatelessWidget {
             final doc = docs[index];
             final data = doc.data();
             final status = (data['status'] ?? 'new').toString();
-            final sameDevice = data['sameDevice'] == true;
-            final nameMatches = data['nameMatches'] == true;
-            final classified = data.containsKey('riskLevel');
             final canDecide = status == 'new' || status == 'review';
 
             return Card(
@@ -205,9 +327,9 @@ class DedaRecoveryAdminList extends StatelessWidget {
                             ),
                           ),
                         ),
-                        _flag(
-                          _riskLabel(data),
-                          warning: data['riskLevel'] != 'low',
+                        _badge(
+                          _statusLabel(status),
+                          warning: canDecide || status == 'rejected',
                         ),
                       ],
                     ),
@@ -220,52 +342,23 @@ class DedaRecoveryAdminList extends StatelessWidget {
                       Text(
                         '${t('وقت الطلب', 'Requested')}: ${_formatTime(data['createdAt'])}',
                       ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${t('الحالة', 'Status')}: ${_statusLabel(status)}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (classified) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _flag(
-                            sameDevice
-                                ? t('جهاز معروف', 'Known device')
-                                : t('جهاز جديد', 'New device'),
-                            warning: !sameDevice,
-                          ),
-                          _flag(
-                            nameMatches
-                                ? t('الاسم مطابق', 'Name matches')
-                                : t('الاسم غير مطابق', 'Name mismatch'),
-                            warning: !nameMatches,
-                          ),
-                        ],
-                      ),
-                    ],
-                    if ((data['processingError'] ?? '')
-                        .toString()
-                        .trim()
-                        .isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                    const SizedBox(height: 10),
+                    _registeredAccountInfo(data),
+                    if (canDecide) ...[
+                      const SizedBox(height: 14),
                       Text(
                         t(
-                          'تعذر إصدار الرمز آليًا. راجع إعدادات النظام.',
-                          'Automatic code issuance failed. Check system settings.',
+                          'راجع الاسم ورقم الهاتف، ثم اعتمد الطلب فقط إذا تأكدت من صاحب الحساب.',
+                          'Review the name and phone number, then approve only after confirming the account owner.',
                         ),
-                        style: const TextStyle(color: Colors.red),
+                        style: const TextStyle(fontSize: 12),
                       ),
-                    ],
-                    if (canDecide) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
                             child: FilledButton.icon(
-                              onPressed: () => _approve(context, doc.id),
+                              onPressed: () => _approve(context, doc.id, data),
                               icon: const Icon(Icons.check_circle_outline),
                               label: Text(
                                 t(
