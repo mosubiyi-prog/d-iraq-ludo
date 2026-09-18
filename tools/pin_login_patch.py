@@ -100,8 +100,8 @@ new_login = r"""  Future<void> login() async {
     } on FirebaseAuthException catch (error) {
       if (error.code == 'operation-not-allowed') {
         _showLoginMessage(
-          'نظام دخول DEDA يحتاج تفعيل البريد الإلكتروني/كلمة المرور في Firebase مرة واحدة.',
-          'DEDA sign-in needs Email/Password enabled in Firebase once.',
+          'تعذر بدء جلسة DEDA. تأكد من تفعيل تسجيل الدخول المجهول في Firebase.',
+          'Could not start the DEDA session. Ensure Anonymous sign-in is enabled in Firebase.',
         );
       } else {
         _showLoginMessage(
@@ -250,8 +250,8 @@ class _DedaPinCreatePageState extends State<DedaPinCreatePage> {
     } on FirebaseAuthException catch (error) {
       if (error.code == 'operation-not-allowed') {
         _message(
-          'نظام دخول DEDA غير مفعّل بعد في Firebase.',
-          'DEDA sign-in is not enabled in Firebase yet.',
+          'تعذر بدء جلسة DEDA في Firebase.',
+          'Could not start the DEDA session in Firebase.',
         );
       } else if (error.code == 'email-already-in-use') {
         _message(
@@ -472,11 +472,16 @@ class _DedaPinSignInPageState extends State<DedaPinSignInPage> {
           'Could not sign in now. Check the internet and try again.',
         );
       }
-    } catch (_) {
-      _message(
-        'تعذر تسجيل الدخول الآن. تحقق من الإنترنت وحاول مجددًا.',
-        'Could not sign in now. Check the internet and try again.',
-      );
+    } catch (error) {
+      if (error.toString().contains('invalid-pin')) {
+        await DedaPinAuth.recordFailedAttempt(widget.phone);
+        _message('رمز الدخول غير صحيح.', 'The sign-in code is incorrect.');
+      } else {
+        _message(
+          'تعذر تسجيل الدخول الآن. تحقق من الإنترنت وحاول مجددًا.',
+          'Could not sign in now. Check the internet and try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
