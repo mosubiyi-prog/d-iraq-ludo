@@ -145,8 +145,7 @@ class DedaPinAuth {
 
     await firestore.runTransaction((transaction) async {
       final directorySnapshot = await transaction.get(directory);
-      final credentialSnapshot = await transaction.get(credential);
-      if (directorySnapshot.exists || credentialSnapshot.exists) {
+      if (directorySnapshot.exists) {
         throw StateError('account-already-exists');
       }
 
