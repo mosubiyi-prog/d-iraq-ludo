@@ -9448,9 +9448,13 @@ class MapReadyPage extends StatefulWidget {
 
 class _MapReadyPageState extends State<MapReadyPage> {
   final PlacesService _placesService = PlacesService();
+  final DedaRouteService _mapRouteService = DedaRouteService();
   final TextEditingController _mapSearchController = TextEditingController();
   Position? currentPosition;
   LatLng? selectedDestination;
+  DedaRouteResult? mapRoutePreview;
+  bool isRoutePreviewLoading = false;
+  int _routePreviewGeneration = 0;
   List<PlaceInfo> mapSearchResults = <PlaceInfo>[];
   List<PlaceInfo> registeredPlaces = <PlaceInfo>[];
   bool isLoading = false;
@@ -9567,6 +9571,59 @@ class _MapReadyPageState extends State<MapReadyPage> {
     return text;
   }
 
+  Future<void> _previewRouteTo(LatLng destination) async {
+    final position = currentPosition;
+    if (position == null) return;
+
+    final generation = ++_routePreviewGeneration;
+    if (mounted) {
+      setState(() {
+        isRoutePreviewLoading = true;
+        mapRoutePreview = null;
+      });
+    }
+
+    try {
+      final result = await _mapRouteService.getDrivingRoute(
+        start: LatLng(position.latitude, position.longitude),
+        destination: destination,
+        travelMode: DedaPreferences.defaultTravelMode,
+      );
+      if (!mounted || generation != _routePreviewGeneration) return;
+      final selected = selectedDestination;
+      if (selected == null ||
+          Geolocator.distanceBetween(
+                selected.latitude,
+                selected.longitude,
+                destination.latitude,
+                destination.longitude,
+              ) >
+              5) {
+        return;
+      }
+      setState(() {
+        mapRoutePreview = result;
+        statusMessage = dedaText(
+          'تم تحديد الوجهة ورسم الطريق الأخضر تلقائيًا.',
+          'Destination selected and the green route is shown automatically.',
+        );
+      });
+    } catch (_) {
+      if (!mounted || generation != _routePreviewGeneration) return;
+      setState(() {
+        mapRoutePreview = null;
+        statusMessage = dedaText(
+          'تم تحديد الوجهة. تعذر رسم الطريق الآن؛ اضغط عرض الطريق للمحاولة.',
+          'Destination selected. Route preview is unavailable; tap Show route to try again.',
+        );
+      });
+    } finally {
+      if (mounted && generation == _routePreviewGeneration) {
+        setState(() => isRoutePreviewLoading = false);
+      }
+    }
+  }
+
   Future<void> searchInsideMap() async {
     final query = _mapSearchController.text.trim();
     final position = currentPosition;
@@ -9628,6 +9685,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
         mapSearchResults = results;
         if (results.isNotEmpty) {
           selectedDestination = results.first.location;
+          mapRoutePreview = null;
         }
         statusMessage = results.isEmpty
             ? dedaText(
@@ -9635,10 +9693,13 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 'No place with this name was found in Iraq.',
               )
             : dedaText(
-                'ظهرت ${results.length} نتيجة على الخريطة. اضغط على الدبوس لاختيار الوجهة.',
-                '${results.length} results are shown on the map. Tap a pin to choose it.',
+                'ظهرت ${results.length} نتيجة. جاري رسم الطريق الأخضر إلى أول نتيجة...',
+                '${results.length} results found. Drawing the green route to the first result...',
               );
       });
+      if (results.isNotEmpty) {
+        _previewRouteTo(results.first.location);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -9655,11 +9716,13 @@ class _MapReadyPageState extends State<MapReadyPage> {
   void selectMapPlace(PlaceInfo place) {
     setState(() {
       selectedDestination = place.location;
+      mapRoutePreview = null;
       statusMessage = dedaText(
-        'تم اختيار ${place.name}. اضغط عرض الطريق للانطلاق.',
-        '${place.name} selected. Tap Show route to start.',
+        'تم اختيار ${place.name}. جاري رسم الطريق الأخضر...',
+        '${place.name} selected. Drawing the green route...',
       );
     });
+    _previewRouteTo(place.location);
   }
 
   void openSelectedDestination() {
@@ -9689,6 +9752,19 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
   Widget buildMap(Position position) {
     final point = LatLng(position.latitude, position.longitude);
+    final previewPoints = mapRoutePreview?.points ?? const <LatLng>[];
+    final fitPoints = previewPoints.length >= 2
+        ? <LatLng>[
+            point,
+            ...previewPoints,
+            if (selectedDestination != null) selectedDestination!,
+          ]
+        : selectedDestination != null
+            ? <LatLng>[point, selectedDestination!]
+            : <LatLng>[
+                point,
+                ...visibleMapSearchResults.map((place) => place.location),
+              ];
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
@@ -9698,33 +9774,47 @@ class _MapReadyPageState extends State<MapReadyPage> {
             Positioned.fill(
               child: FlutterMap(
                 key: ValueKey(
-                  '${position.latitude}-${position.longitude}-${mapStyle.name}-${mapSearchResults.length}-${selectedDestination?.latitude}-${selectedDestination?.longitude}-$showAvailableOnly',
+                  '${position.latitude}-${position.longitude}-${mapStyle.name}-${mapSearchResults.length}-${selectedDestination?.latitude}-${selectedDestination?.longitude}-${previewPoints.length}-${mapRoutePreview?.distanceMeters.round()}-$showAvailableOnly',
                 ),
                 options: MapOptions(
                   initialCenter: point,
                   initialZoom: 16,
-                  initialCameraFit: visibleMapSearchResults.isEmpty
+                  initialCameraFit: fitPoints.length < 2
                       ? null
                       : CameraFit.coordinates(
-                          coordinates: <LatLng>[
-                            point,
-                            ...visibleMapSearchResults.map(
-                              (place) => place.location,
-                            ),
-                          ],
-                          padding: const EdgeInsets.all(55),
+                          coordinates: fitPoints,
+                          padding: const EdgeInsets.fromLTRB(38, 58, 38, 72),
                           maxZoom: 15,
                         ),
                   onLongPress: (_, destination) {
                     setState(() {
                       selectedDestination = destination;
-                      statusMessage =
-                          dedaText('تم اختيار الوجهة. اضغط الزر أسفل الخريطة لعرض الطريق.', 'Destination selected. Tap the button below the map to show the route.');
+                      mapRoutePreview = null;
+                      statusMessage = dedaText(
+                        'تم اختيار الوجهة. جاري رسم الطريق الأخضر...',
+                        'Destination selected. Drawing the green route...',
+                      );
                     });
+                    _previewRouteTo(destination);
                   },
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
+                  if (previewPoints.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: previewPoints,
+                          strokeWidth: 9,
+                          color: Colors.white.withOpacity(0.96),
+                        ),
+                        Polyline(
+                          points: previewPoints,
+                          strokeWidth: 6,
+                          color: const Color(0xFF17652F),
+                        ),
+                      ],
+                    ),
                   MarkerLayer(
                     markers: [
                       Marker(
@@ -9962,7 +10052,11 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     onChanged: (value) {
                       setState(() {
                         showAvailableOnly = value;
-                        if (value) selectedDestination = null;
+                        if (value) {
+                          selectedDestination = null;
+                          mapRoutePreview = null;
+                          _routePreviewGeneration += 1;
+                        }
                         statusMessage = value
                             ? dedaText(
                                 'تظهر الآن أماكن DEDA التي أعلن أصحابها أنهم متواجدون فقط.',
@@ -9979,6 +10073,28 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 const SizedBox(height: 8),
                 buildMap(currentPosition!),
                 const SizedBox(height: 12),
+                if (isRoutePreviewLoading)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          dedaText('جاري رسم الطريق الأخضر...', 'Drawing green route...'),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (selectedDestination != null)
                   SizedBox(
                     height: 56,
