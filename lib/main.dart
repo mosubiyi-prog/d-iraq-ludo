@@ -327,6 +327,25 @@ String dedaMapAttribution(DedaMapStyle style) {
       : 'Tiles © Esri';
 }
 
+List<Widget> dedaNavigationMapLayers(DedaMapStyle style) {
+  if (style == DedaMapStyle.normal) {
+    return [
+      TileLayer(
+        urlTemplate:
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        userAgentPackageName: 'com.diraq.ludo',
+      ),
+    ];
+  }
+  return dedaBaseMapLayers(style);
+}
+
+String dedaNavigationMapAttribution(DedaMapStyle style) {
+  return style == DedaMapStyle.normal
+      ? 'Tiles © Esri'
+      : dedaMapAttribution(style);
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -7397,19 +7416,24 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   StreamSubscription<Position>? _positionSubscription;
   Timer? _toolsAutoHideTimer;
+  Timer? _positionAnimationTimer;
   late DedaMapStyle mapStyle;
   DedaRouteResult? route;
   Position? livePosition;
   LatLng? _lastRouteOrigin;
   LatLng? _previousLivePoint;
+  LatLng? _displayPosition;
   LatLng? _lastHazardFetchPoint;
   double? _liveRemainingMeters;
   double _navigationHeading = 0;
+  double _displayHeading = 0;
   bool _hasNavigationHeading = false;
   bool _navigationToolsOpen = false;
+  bool _mapFullscreen = false;
   bool _submittingHazard = false;
   bool _hazardsLoading = false;
   DateTime? _lastHazardFetchAt;
+  DateTime? _lastRerouteAttemptAt;
   List<DedaRoadHazard> _roadHazards = <DedaRoadHazard>[];
   DedaRoadHazard? _activeHazard;
   String? _lastHazardSpokenId;
@@ -7505,6 +7529,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     super.initState();
     mapStyle = widget.initialStyle;
     livePosition = widget.startPosition;
+    _displayPosition = LatLng(
+      widget.startPosition.latitude,
+      widget.startPosition.longitude,
+    );
+    if (widget.startPosition.heading.isFinite &&
+        widget.startPosition.heading >= 0 &&
+        widget.startPosition.heading <= 360) {
+      _navigationHeading = widget.startPosition.heading % 360;
+      _displayHeading = _navigationHeading;
+    }
     _initTts();
     loadRoute();
   }
@@ -7513,6 +7547,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   void dispose() {
     _positionSubscription?.cancel();
     _toolsAutoHideTimer?.cancel();
+    _positionAnimationTimer?.cancel();
     _tts.stop();
     super.dispose();
   }
@@ -7547,10 +7582,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           navigationStatus = dedaText('الملاحة نشطة — يتم تحديث الطريق حسب موقعك.', 'Navigation is active — the route is updating with your location.');
         }
       });
-      _fitRouteOnMap(navigation: tripStarted);
       if (tripStarted) {
+        _followLivePosition(_displayPosition ?? startPoint);
         _speakCurrentInstruction();
         _refreshRoadHazards(force: true);
+      } else {
+        _fitRouteOnMap();
       }
     } catch (e) {
       if (!mounted) return;
@@ -7733,6 +7770,35 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return _navigationHeading;
   }
 
+  ({LatLng point, double distance, double fraction}) _projectToSegment(
+    LatLng point,
+    LatLng a,
+    LatLng b,
+  ) {
+    final cosLatitude =
+        math.cos(point.latitude * math.pi / 180).abs().clamp(0.15, 1.0);
+    final ax = (a.longitude - point.longitude) * cosLatitude;
+    final ay = a.latitude - point.latitude;
+    final bx = (b.longitude - point.longitude) * cosLatitude;
+    final by = b.latitude - point.latitude;
+    final dx = bx - ax;
+    final dy = by - ay;
+    final lengthSquared = dx * dx + dy * dy;
+    final rawFraction = lengthSquared <= 1e-16
+        ? 0.0
+        : (-(ax * dx + ay * dy) / lengthSquared);
+    final fraction = rawFraction.clamp(0.0, 1.0).toDouble();
+    final projected = LatLng(
+      a.latitude + (b.latitude - a.latitude) * fraction,
+      a.longitude + (b.longitude - a.longitude) * fraction,
+    );
+    return (
+      point: projected,
+      distance: _metersBetween(point, projected),
+      fraction: fraction,
+    );
+  }
+
   double _remainingDistanceFrom(LatLng current) {
     final currentRoute = route;
     final direct = _metersBetween(current, widget.destination.location);
@@ -7742,22 +7808,24 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       return direct;
     }
 
-    var nearestIndex = 0;
+    final points = currentRoute.points;
+    var nearestSegment = 0;
     var nearestDistance = double.infinity;
-    for (var i = 0; i < currentRoute.points.length; i++) {
-      final distance = _metersBetween(current, currentRoute.points[i]);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = i;
+    var nearestProjection = points.first;
+
+    for (var i = 0; i < points.length - 1; i++) {
+      final projection = _projectToSegment(current, points[i], points[i + 1]);
+      if (projection.distance < nearestDistance) {
+        nearestDistance = projection.distance;
+        nearestSegment = i;
+        nearestProjection = projection.point;
       }
     }
 
-    var remaining = nearestDistance;
-    for (var i = nearestIndex; i < currentRoute.points.length - 1; i++) {
-      remaining += _metersBetween(
-        currentRoute.points[i],
-        currentRoute.points[i + 1],
-      );
+    var remaining = nearestDistance +
+        _metersBetween(nearestProjection, points[nearestSegment + 1]);
+    for (var i = nearestSegment + 1; i < points.length - 1; i++) {
+      remaining += _metersBetween(points[i], points[i + 1]);
     }
     return math.max(direct, remaining);
   }
@@ -7765,19 +7833,145 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   double _distanceToRoute(LatLng point) {
     final points = route?.points ?? const <LatLng>[];
     if (points.isEmpty) return double.infinity;
+    if (points.length == 1) return _metersBetween(point, points.first);
+
     var nearest = double.infinity;
-    for (final routePoint in points) {
-      final distance = _metersBetween(point, routePoint);
-      if (distance < nearest) nearest = distance;
+    for (var i = 0; i < points.length - 1; i++) {
+      final projection = _projectToSegment(point, points[i], points[i + 1]);
+      if (projection.distance < nearest) nearest = projection.distance;
     }
     return nearest;
+  }
+
+  double _currentMapZoom() {
+    try {
+      return _mapController.camera.zoom;
+    } catch (_) {
+      return 16.2;
+    }
   }
 
   void _followLivePosition(LatLng current) {
     if (!tripStarted) return;
     try {
-      _mapController.move(current, 17);
+      _mapController.move(current, _currentMapZoom());
     } catch (_) {}
+  }
+
+  void _focusNavigationPosition() {
+    try {
+      _mapController.move(_displayPosition ?? startPoint, 16.2);
+    } catch (_) {}
+  }
+
+  void _animateNavigationMarker(LatLng target, double targetHeading) {
+    _positionAnimationTimer?.cancel();
+    final from = _displayPosition ?? target;
+    final fromHeading = _displayHeading;
+    final rawDelta = (targetHeading - fromHeading + 540) % 360 - 180;
+    final distance = _metersBetween(from, target);
+    final durationMs =
+        (280 + math.min(distance, 25) * 16).round().clamp(280, 680);
+    const frameMs = 50;
+    final totalFrames = math.max(1, (durationMs / frameMs).ceil());
+    var frame = 0;
+
+    _positionAnimationTimer = Timer.periodic(
+      const Duration(milliseconds: frameMs),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        frame += 1;
+        final linear = (frame / totalFrames).clamp(0.0, 1.0);
+        final eased = Curves.easeOutCubic.transform(linear);
+        final point = LatLng(
+          from.latitude + (target.latitude - from.latitude) * eased,
+          from.longitude + (target.longitude - from.longitude) * eased,
+        );
+        final heading = (fromHeading + rawDelta * eased + 360) % 360;
+
+        setState(() {
+          _displayPosition = point;
+          _displayHeading = heading;
+        });
+        if (tripStarted) _followLivePosition(point);
+
+        if (linear >= 1) {
+          timer.cancel();
+          _displayPosition = target;
+          _displayHeading = targetHeading % 360;
+        }
+      },
+    );
+  }
+
+  void _zoomMap(double delta) {
+    try {
+      final camera = _mapController.camera;
+      final nextZoom = (camera.zoom + delta).clamp(3.0, 19.0).toDouble();
+      _mapController.move(camera.center, nextZoom);
+    } catch (_) {}
+  }
+
+  void _toggleMapFullscreen() {
+    final zoom = _currentMapZoom();
+    setState(() => _mapFullscreen = !_mapFullscreen);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _mapController.move(_displayPosition ?? startPoint, zoom);
+      } catch (_) {}
+    });
+  }
+
+  Widget _buildMapZoomControls() {
+    Widget control({
+      required IconData icon,
+      required String tooltip,
+      required VoidCallback onPressed,
+    }) {
+      return SizedBox(
+        width: 46,
+        height: 46,
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 25),
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.white.withOpacity(0.90),
+      elevation: 5,
+      borderRadius: BorderRadius.circular(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          control(
+            icon: Icons.add,
+            tooltip: dedaText('تكبير الخريطة', 'Zoom in'),
+            onPressed: () => _zoomMap(1),
+          ),
+          const Divider(height: 1),
+          control(
+            icon: Icons.remove,
+            tooltip: dedaText('تصغير الخريطة', 'Zoom out'),
+            onPressed: () => _zoomMap(-1),
+          ),
+          const Divider(height: 1),
+          control(
+            icon: _mapFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+            tooltip: _mapFullscreen
+                ? dedaText('الخروج من ملء الشاشة', 'Exit fullscreen')
+                : dedaText('ملء الشاشة', 'Fullscreen'),
+            onPressed: _toggleMapFullscreen,
+          ),
+        ],
+      ),
+    );
   }
 
   bool _hazardIsUsable(DedaRoadHazard hazard) {
@@ -8026,7 +8220,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     }
   }
 
-  Widget _buildLandscapeTools() {
+  Widget _buildLandscapeTools({required double edgeInset}) {
     Widget action({
       required IconData icon,
       required String label,
@@ -8049,9 +8243,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
-      left: _navigationToolsOpen ? 0 : -218,
+      left: _navigationToolsOpen ? edgeInset : edgeInset - 218,
       top: 80,
       child: Row(
+        textDirection: TextDirection.ltr,
         children: [
           Material(
             color: Colors.white.withOpacity(0.96),
@@ -8269,13 +8464,13 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       navigationStatus =
           dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
-    _fitRouteOnMap(navigation: true);
+    _focusNavigationPosition();
     _speakCurrentInstruction(force: true);
     _refreshRoadHazards(force: true);
 
     const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 2,
     );
 
     _positionSubscription = Geolocator.getPositionStream(
@@ -8292,9 +8487,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           _navigationHeading = heading;
           _liveRemainingMeters = remaining;
         });
+        _animateNavigationMarker(current, heading);
         _previousLivePoint = current;
 
-        _followLivePosition(current);
         _evaluateRoadHazards(current);
         _refreshRoadHazards();
 
@@ -8308,7 +8503,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         final origin = _lastRouteOrigin;
         if (origin != null) {
           final moved = _metersBetween(origin, current);
-          if (moved >= 40 && !isRerouting) {
+          final offRoute = route != null &&
+              !route!.isDirectFallback &&
+              _distanceToRoute(current) >= 65;
+          final now = DateTime.now();
+          final rerouteAllowed = _lastRerouteAttemptAt == null ||
+              now.difference(_lastRerouteAttemptAt!) >=
+                  const Duration(seconds: 12);
+          if ((offRoute || moved >= 120) &&
+              rerouteAllowed &&
+              !isRerouting) {
+            _lastRerouteAttemptAt = now;
             loadRoute(background: true);
           }
         }
@@ -8331,9 +8536,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
     }
     _toolsAutoHideTimer?.cancel();
+    _positionAnimationTimer?.cancel();
     setState(() {
       tripStarted = false;
       _navigationToolsOpen = false;
+      _mapFullscreen = false;
       _activeHazard = null;
       navigationStatus = reached
           ? dedaText('وصلت إلى الوجهة.', 'You have arrived.')
@@ -8468,6 +8675,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final isInsetDrivingMap =
+        isLandscape && tripStarted && !_mapFullscreen;
     final destinationPoint = widget.destination.location;
     final routePoints = route?.points ?? const <LatLng>[];
     final fitCoordinates = routePoints.isNotEmpty
@@ -8476,12 +8685,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     final markers = <Marker>[
       Marker(
-        point: startPoint,
-        width: 64,
-        height: 64,
+        point: tripStarted ? (_displayPosition ?? startPoint) : startPoint,
+        width: tripStarted ? 58 : 64,
+        height: tripStarted ? 58 : 64,
         child: tripStarted
             ? Transform.rotate(
-                angle: _navigationHeading * math.pi / 180,
+                angle: _displayHeading * math.pi / 180,
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.96),
@@ -8496,7 +8705,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   ),
                   child: const Icon(
                     Icons.navigation,
-                    size: 38,
+                    size: 34,
                     color: Color(0xFF17652F),
                   ),
                 ),
@@ -8557,7 +8766,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
-      appBar: isLandscape && tripStarted
+      appBar: isLandscape && tripStarted && _mapFullscreen
           ? null
           : AppBar(
               title: Text(
@@ -8577,43 +8786,76 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: startPoint,
-                  initialZoom: tripStarted ? 17 : 13,
-                  initialCameraFit: tripStarted
-                      ? null
-                      : CameraFit.coordinates(
-                          coordinates: fitCoordinates,
-                          padding: const EdgeInsets.fromLTRB(44, 70, 44, 265),
-                          maxZoom: 17,
-                        ),
-                ),
-                children: [
-                  ...dedaBaseMapLayers(mapStyle),
-                  if (routePoints.isNotEmpty)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routePoints,
-                          strokeWidth: tripStarted ? 11 : 9,
-                          color: Colors.white.withOpacity(0.92),
-                        ),
-                        Polyline(
-                          points: routePoints,
-                          strokeWidth: tripStarted ? 7 : 6,
-                          color: const Color(0xFF17652F),
+              child: Padding(
+                padding: isInsetDrivingMap
+                    ? const EdgeInsets.fromLTRB(14, 10, 14, 58)
+                    : EdgeInsets.zero,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius:
+                        BorderRadius.circular(isInsetDrivingMap ? 18 : 0),
+                    boxShadow: isInsetDrivingMap
+                        ? const [
+                            BoxShadow(
+                              blurRadius: 14,
+                              offset: Offset(0, 5),
+                              color: Colors.black26,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(isInsetDrivingMap ? 18 : 0),
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _displayPosition ?? startPoint,
+                        initialZoom: tripStarted ? 16.2 : 13,
+                        initialCameraFit: tripStarted
+                            ? null
+                            : CameraFit.coordinates(
+                                coordinates: fitCoordinates,
+                                padding:
+                                    const EdgeInsets.fromLTRB(44, 70, 44, 265),
+                                maxZoom: 17,
+                              ),
+                      ),
+                      children: [
+                        ...dedaNavigationMapLayers(mapStyle),
+                        if (routePoints.isNotEmpty)
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: routePoints,
+                                strokeWidth: tripStarted ? 13 : 10,
+                                color: Colors.white.withOpacity(0.96),
+                              ),
+                              Polyline(
+                                points: routePoints,
+                                strokeWidth: tripStarted ? 9 : 7,
+                                color: const Color(0xFF0A5426),
+                              ),
+                              if (tripStarted)
+                                Polyline(
+                                  points: routePoints,
+                                  strokeWidth: 5,
+                                  color: const Color(0xFF2CCB66),
+                                ),
+                            ],
+                          ),
+                        MarkerLayer(markers: markers),
+                        RichAttributionWidget(
+                          attributions: [
+                            TextSourceAttribution(
+                              dedaNavigationMapAttribution(mapStyle),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  MarkerLayer(markers: markers),
-                  RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution(dedaMapAttribution(mapStyle)),
-                    ],
                   ),
-                ],
+                ),
               ),
             ),
             if (!(isLandscape && tripStarted))
@@ -8696,64 +8938,77 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: isLandscape && tripStarted
-                    ? 10
-                    : (tripStarted ? 52 : 74),
-                left: isLandscape && tripStarted
-                    ? 90
-                    : (tripStarted ? 44 : 28),
-                right: isLandscape && tripStarted
-                    ? 90
-                    : (tripStarted ? 44 : 28),
-                child: Material(
-                  color: Colors.white.withOpacity(0.96),
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    child: Row(
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: const Color(0xFFEAF3E9),
-                          child: Icon(
-                            directionIcon(firstUsefulStep!),
-                            color: const Color(0xFF17652F),
+                top: isLandscape && tripStarted ? 8 : (tripStarted ? 48 : 70),
+                left: isLandscape && tripStarted ? 0 : 24,
+                right: isLandscape && tripStarted ? 0 : 24,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: FractionallySizedBox(
+                    widthFactor: isLandscape && tripStarted ? 0.58 : 1.0,
+                    child: Material(
+                      color: Colors.white.withOpacity(0.84),
+                      elevation: 2,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.65),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                firstUsefulStep!.instruction,
-                                textAlign: TextAlign.right,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                        child: Row(
+                          textDirection: TextDirection.rtl,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor:
+                                  const Color(0xFFEAF3E9).withOpacity(0.90),
+                              child: Icon(
+                                directionIcon(firstUsefulStep!),
+                                size: 20,
+                                color: const Color(0xFF17652F),
                               ),
-                              Text(
-                                dedaText(
-                                  'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                  'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                ),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF5B665D),
-                                ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    firstUsefulStep!.instruction,
+                                    textAlign: TextAlign.right,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    dedaText(
+                                      'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                      'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                    ),
+                                    textAlign: TextAlign.right,
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xFF4E5B52),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -8782,7 +9037,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   child: _buildLandscapeDrivingStatus(),
                 ),
               ),
-            if (tripStarted && isLandscape) _buildLandscapeTools(),
+            if (tripStarted && isLandscape)
+              Positioned(
+                right: isInsetDrivingMap ? 24 : 10,
+                top: 78,
+                child: _buildMapZoomControls(),
+              ),
+            if (tripStarted && isLandscape)
+              _buildLandscapeTools(
+                edgeInset: isInsetDrivingMap ? 14 : 0,
+              ),
             if (!tripStarted)
               Positioned(
                 left: 12,
