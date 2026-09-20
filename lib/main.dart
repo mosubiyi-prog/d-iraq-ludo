@@ -7754,18 +7754,21 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   double _resolvedHeading(Position position, LatLng current) {
+    // Movement direction has priority so the arrow always follows the user's
+    // real travel direction, even when travelling opposite the suggested route.
+    final previous = _previousLivePoint;
+    if (previous != null && _metersBetween(previous, current) >= 2) {
+      _hasNavigationHeading = true;
+      return _bearingBetween(previous, current);
+    }
+
     final gpsHeading = position.heading;
     if (gpsHeading.isFinite &&
         gpsHeading >= 0 &&
         gpsHeading <= 360 &&
-        position.speed >= 0.8) {
+        position.speed >= 0.5) {
       _hasNavigationHeading = true;
       return gpsHeading % 360;
-    }
-    final previous = _previousLivePoint;
-    if (previous != null && _metersBetween(previous, current) >= 3) {
-      _hasNavigationHeading = true;
-      return _bearingBetween(previous, current);
     }
     return _navigationHeading;
   }
