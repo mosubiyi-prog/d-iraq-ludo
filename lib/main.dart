@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7244,6 +7245,129 @@ class DedaRouteService {
   }
 }
 
+
+class DedaRoadHazard {
+  final String id;
+  final String type;
+  final LatLng location;
+  final int confirmations;
+  final int resolvedReports;
+  final int expiresAtMillis;
+
+  const DedaRoadHazard({
+    required this.id,
+    required this.type,
+    required this.location,
+    required this.confirmations,
+    required this.resolvedReports,
+    required this.expiresAtMillis,
+  });
+
+  factory DedaRoadHazard.fromMap(Map<String, dynamic> data) {
+    return DedaRoadHazard(
+      id: (data['id'] ?? '').toString(),
+      type: (data['type'] ?? '').toString(),
+      location: LatLng(
+        (data['latitude'] as num?)?.toDouble() ?? 0,
+        (data['longitude'] as num?)?.toDouble() ?? 0,
+      ),
+      confirmations: (data['confirmations'] as num?)?.toInt() ?? 0,
+      resolvedReports: (data['resolvedReports'] as num?)?.toInt() ?? 0,
+      expiresAtMillis: (data['expiresAtMillis'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  bool get isExpired =>
+      expiresAtMillis > 0 &&
+      DateTime.now().millisecondsSinceEpoch >= expiresAtMillis;
+
+  String get label {
+    switch (type) {
+      case 'bump':
+        return dedaText('مطب', 'Speed bump');
+      case 'roadworks':
+        return dedaText('حفريات', 'Road works');
+      case 'maintenance':
+        return dedaText('صيانة طريق', 'Road maintenance');
+      case 'detour':
+        return dedaText('تحويلة أو غلق طريق', 'Detour or road closure');
+      case 'speed_camera':
+        return dedaText('كاميرا سرعة — التزم بالسرعة', 'Speed camera — obey the speed limit');
+      case 'checkpoint':
+        return dedaText('سيطرة مرورية — اتبع التعليمات', 'Traffic checkpoint — follow instructions');
+      case 'accident':
+        return dedaText('حادث', 'Accident');
+      case 'congestion':
+        return dedaText('ازدحام شديد', 'Heavy traffic');
+      case 'road_object':
+        return dedaText('جسم على الطريق', 'Object on road');
+      case 'flooded':
+        return dedaText('طريق مغمور بالماء', 'Flooded road');
+      default:
+        return dedaText('تنبيه على الطريق', 'Road alert');
+    }
+  }
+
+  IconData get icon {
+    switch (type) {
+      case 'bump':
+        return Icons.speed;
+      case 'roadworks':
+      case 'maintenance':
+        return Icons.construction;
+      case 'detour':
+        return Icons.alt_route;
+      case 'speed_camera':
+        return Icons.photo_camera_outlined;
+      case 'checkpoint':
+        return Icons.local_police_outlined;
+      case 'accident':
+        return Icons.car_crash_outlined;
+      case 'congestion':
+        return Icons.traffic;
+      case 'road_object':
+        return Icons.warning_amber_rounded;
+      case 'flooded':
+        return Icons.water;
+      default:
+        return Icons.report_problem_outlined;
+    }
+  }
+
+  static const List<String> reportTypes = <String>[
+    'bump',
+    'roadworks',
+    'maintenance',
+    'detour',
+    'speed_camera',
+    'checkpoint',
+    'accident',
+    'congestion',
+    'road_object',
+    'flooded',
+  ];
+
+  static String labelForType(String type) =>
+      DedaRoadHazard(
+        id: '',
+        type: type,
+        location: const LatLng(0, 0),
+        confirmations: 0,
+        resolvedReports: 0,
+        expiresAtMillis: 0,
+      ).label;
+
+  static IconData iconForType(String type) =>
+      DedaRoadHazard(
+        id: '',
+        type: type,
+        location: const LatLng(0, 0),
+        confirmations: 0,
+        resolvedReports: 0,
+        expiresAtMillis: 0,
+      ).icon;
+}
+
 class DedaRoutePage extends StatefulWidget {
   final Position startPosition;
   final PlaceInfo destination;
@@ -7272,10 +7396,23 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   String? _lastSpokenInstruction;
 
   StreamSubscription<Position>? _positionSubscription;
+  Timer? _toolsAutoHideTimer;
   late DedaMapStyle mapStyle;
   DedaRouteResult? route;
   Position? livePosition;
   LatLng? _lastRouteOrigin;
+  LatLng? _previousLivePoint;
+  LatLng? _lastHazardFetchPoint;
+  double? _liveRemainingMeters;
+  double _navigationHeading = 0;
+  bool _hasNavigationHeading = false;
+  bool _navigationToolsOpen = false;
+  bool _submittingHazard = false;
+  bool _hazardsLoading = false;
+  DateTime? _lastHazardFetchAt;
+  List<DedaRoadHazard> _roadHazards = <DedaRoadHazard>[];
+  DedaRoadHazard? _activeHazard;
+  String? _lastHazardSpokenId;
   bool isLoading = true;
   bool isRerouting = false;
   bool tripStarted = false;
@@ -7375,6 +7512,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _toolsAutoHideTimer?.cancel();
     _tts.stop();
     super.dispose();
   }
@@ -7403,13 +7541,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       setState(() {
         route = result;
         _lastRouteOrigin = origin;
+        _liveRemainingMeters = result.distanceMeters;
         errorMessage = null;
         if (tripStarted) {
           navigationStatus = dedaText('الملاحة نشطة — يتم تحديث الطريق حسب موقعك.', 'Navigation is active — the route is updating with your location.');
         }
       });
       _fitRouteOnMap(navigation: tripStarted);
-      if (tripStarted) _speakCurrentInstruction();
+      if (tripStarted) {
+        _speakCurrentInstruction();
+        _refreshRoadHazards(force: true);
+      }
     } catch (e) {
       if (!mounted) return;
       if (background) {
@@ -7548,6 +7690,529 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     });
   }
 
+
+  double _metersBetween(LatLng a, LatLng b) {
+    return Geolocator.distanceBetween(
+      a.latitude,
+      a.longitude,
+      b.latitude,
+      b.longitude,
+    );
+  }
+
+  double _bearingBetween(LatLng from, LatLng to) {
+    final lat1 = from.latitude * math.pi / 180;
+    final lat2 = to.latitude * math.pi / 180;
+    final deltaLon = (to.longitude - from.longitude) * math.pi / 180;
+    final y = math.sin(deltaLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(deltaLon);
+    final degrees = math.atan2(y, x) * 180 / math.pi;
+    return (degrees + 360) % 360;
+  }
+
+  double _headingDifference(double a, double b) {
+    final raw = (a - b).abs() % 360;
+    return raw > 180 ? 360 - raw : raw;
+  }
+
+  double _resolvedHeading(Position position, LatLng current) {
+    final gpsHeading = position.heading;
+    if (gpsHeading.isFinite &&
+        gpsHeading >= 0 &&
+        gpsHeading <= 360 &&
+        position.speed >= 0.8) {
+      _hasNavigationHeading = true;
+      return gpsHeading % 360;
+    }
+    final previous = _previousLivePoint;
+    if (previous != null && _metersBetween(previous, current) >= 3) {
+      _hasNavigationHeading = true;
+      return _bearingBetween(previous, current);
+    }
+    return _navigationHeading;
+  }
+
+  double _remainingDistanceFrom(LatLng current) {
+    final currentRoute = route;
+    final direct = _metersBetween(current, widget.destination.location);
+    if (currentRoute == null ||
+        currentRoute.isDirectFallback ||
+        currentRoute.points.length < 2) {
+      return direct;
+    }
+
+    var nearestIndex = 0;
+    var nearestDistance = double.infinity;
+    for (var i = 0; i < currentRoute.points.length; i++) {
+      final distance = _metersBetween(current, currentRoute.points[i]);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = i;
+      }
+    }
+
+    var remaining = nearestDistance;
+    for (var i = nearestIndex; i < currentRoute.points.length - 1; i++) {
+      remaining += _metersBetween(
+        currentRoute.points[i],
+        currentRoute.points[i + 1],
+      );
+    }
+    return math.max(direct, remaining);
+  }
+
+  double _distanceToRoute(LatLng point) {
+    final points = route?.points ?? const <LatLng>[];
+    if (points.isEmpty) return double.infinity;
+    var nearest = double.infinity;
+    for (final routePoint in points) {
+      final distance = _metersBetween(point, routePoint);
+      if (distance < nearest) nearest = distance;
+    }
+    return nearest;
+  }
+
+  void _followLivePosition(LatLng current) {
+    if (!tripStarted) return;
+    try {
+      _mapController.move(current, 17);
+    } catch (_) {}
+  }
+
+  bool _hazardIsUsable(DedaRoadHazard hazard) {
+    return !hazard.isExpired &&
+        hazard.resolvedReports < 3 &&
+        hazard.location.latitude.abs() <= 90 &&
+        hazard.location.longitude.abs() <= 180;
+  }
+
+  Future<void> _refreshRoadHazards({bool force = false}) async {
+    if (!tripStarted || !DedaBackend.isReady || _hazardsLoading) return;
+    final now = DateTime.now();
+    final last = _lastHazardFetchAt;
+    if (!force &&
+        last != null &&
+        now.difference(last) < const Duration(seconds: 45)) {
+      _evaluateRoadHazards(startPoint);
+      return;
+    }
+    final current = startPoint;
+    final lastPoint = _lastHazardFetchPoint;
+    if (!force &&
+        lastPoint != null &&
+        _metersBetween(lastPoint, current) < 700 &&
+        last != null &&
+        now.difference(last) < const Duration(minutes: 2)) {
+      _evaluateRoadHazards(current);
+      return;
+    }
+
+    _hazardsLoading = true;
+    try {
+      final raw = await DedaBackend.roadHazards();
+      if (!mounted) return;
+      final hazards = raw
+          .map(DedaRoadHazard.fromMap)
+          .where(_hazardIsUsable)
+          .toList();
+      setState(() {
+        _roadHazards = hazards;
+        _lastHazardFetchAt = now;
+        _lastHazardFetchPoint = current;
+      });
+      _evaluateRoadHazards(current);
+    } catch (_) {
+      // The route keeps working if alerts cannot refresh.
+    } finally {
+      _hazardsLoading = false;
+    }
+  }
+
+  void _evaluateRoadHazards(LatLng current) {
+    if (!tripStarted) return;
+    DedaRoadHazard? best;
+    var bestDistance = double.infinity;
+
+    for (final hazard in _roadHazards) {
+      if (!_hazardIsUsable(hazard)) continue;
+      final distance = _metersBetween(current, hazard.location);
+      if (distance > 2500) continue;
+
+      final currentRoute = route;
+      if (currentRoute != null &&
+          !currentRoute.isDirectFallback &&
+          currentRoute.points.isNotEmpty &&
+          _distanceToRoute(hazard.location) > 140) {
+        continue;
+      }
+
+      if (_hasNavigationHeading && distance > 45) {
+        final bearing = _bearingBetween(current, hazard.location);
+        if (_headingDifference(_navigationHeading, bearing) > 85) continue;
+      }
+
+      if (distance < bestDistance) {
+        best = hazard;
+        bestDistance = distance;
+      }
+    }
+
+    if (!mounted) return;
+    if (_activeHazard?.id != best?.id) {
+      setState(() => _activeHazard = best);
+    }
+
+    if (best != null &&
+        bestDistance <= 1200 &&
+        best.id != _lastHazardSpokenId) {
+      _lastHazardSpokenId = best.id;
+      _speakText(
+        dedaText(
+          'تنبيه. ${best.label} بعد ${formatRouteDistance(bestDistance)}.',
+          'Warning. ${best.label} in ${formatRouteDistance(bestDistance)}.',
+        ),
+      );
+    }
+  }
+
+  Future<void> _voteRoadHazard(DedaRoadHazard hazard, bool present) async {
+    try {
+      await DedaBackend.voteRoadHazard(
+        id: hazard.id,
+        type: hazard.type,
+        present: present,
+      );
+      if (!mounted) return;
+      if (!present) {
+        setState(() {
+          _roadHazards =
+              _roadHazards.where((item) => item.id != hazard.id).toList();
+          if (_activeHazard?.id == hazard.id) _activeHazard = null;
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            present
+                ? dedaText('شكرًا، تم تأكيد التنبيه.', 'Thanks, the alert was confirmed.')
+                : dedaText('شكرًا، تم تسجيل أن التنبيه انتهى.', 'Thanks, the alert was marked as ended.'),
+          ),
+        ),
+      );
+      _refreshRoadHazards(force: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تحديث التنبيه الآن. تحقق من الإنترنت.',
+              'Could not update the alert. Check your internet connection.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showHazardReportSheet() async {
+    if (_submittingHazard) return;
+    final selectedType = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 520),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+                child: Text(
+                  dedaText(
+                    'إبلاغ عن تنبيه على الطريق',
+                    'Report a road alert',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  children: DedaRoadHazard.reportTypes
+                      .map(
+                        (type) => ListTile(
+                          leading: Icon(
+                            DedaRoadHazard.iconForType(type),
+                            color: const Color(0xFFB65A00),
+                          ),
+                          title: Text(DedaRoadHazard.labelForType(type)),
+                          onTap: () => Navigator.pop(sheetContext, type),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selectedType == null || !mounted) return;
+
+    setState(() => _submittingHazard = true);
+    try {
+      final current = startPoint;
+      await DedaBackend.submitRoadHazard(
+        type: selectedType,
+        latitude: current.latitude,
+        longitude: current.longitude,
+        heading: _hasNavigationHeading ? _navigationHeading : null,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تم إرسال التنبيه. سيظهر للسائقين القريبين على نفس المسار.',
+              'Alert sent. Nearby users on the same route can now see it.',
+            ),
+          ),
+        ),
+      );
+      await _refreshRoadHazards(force: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر إرسال التنبيه الآن. تحقق من الإنترنت وحاول مجددًا.',
+              'Could not send the alert. Check the internet and try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submittingHazard = false);
+    }
+  }
+
+  void _recenterNavigation() {
+    _followLivePosition(startPoint);
+    if (_navigationToolsOpen) {
+      setState(() => _navigationToolsOpen = false);
+    }
+  }
+
+  void _cycleMapStyle() {
+    final values = DedaMapStyle.values;
+    final next = values[(values.indexOf(mapStyle) + 1) % values.length];
+    setState(() => mapStyle = next);
+  }
+
+  void _toggleNavigationTools() {
+    _toolsAutoHideTimer?.cancel();
+    final opening = !_navigationToolsOpen;
+    setState(() => _navigationToolsOpen = opening);
+    if (opening) {
+      _toolsAutoHideTimer = Timer(const Duration(seconds: 8), () {
+        if (mounted && _navigationToolsOpen) {
+          setState(() => _navigationToolsOpen = false);
+        }
+      });
+    }
+  }
+
+  Widget _buildLandscapeTools() {
+    Widget action({
+      required IconData icon,
+      required String label,
+      required VoidCallback onTap,
+      Color? color,
+    }) {
+      return ListTile(
+        dense: true,
+        leading: Icon(icon, color: color ?? const Color(0xFF17652F)),
+        title: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        onTap: onTap,
+      );
+    }
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      left: _navigationToolsOpen ? 0 : -218,
+      top: 80,
+      child: Row(
+        children: [
+          Material(
+            color: Colors.white.withOpacity(0.96),
+            elevation: 8,
+            borderRadius: const BorderRadius.horizontal(
+              right: Radius.circular(18),
+            ),
+            child: SizedBox(
+              width: 218,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  action(
+                    icon: voiceEnabled ? Icons.volume_up : Icons.volume_off,
+                    label: dedaText('الصوت', 'Voice'),
+                    onTap: _toggleVoice,
+                  ),
+                  action(
+                    icon: Icons.my_location,
+                    label: dedaText('إعادة التمركز', 'Recenter'),
+                    onTap: _recenterNavigation,
+                  ),
+                  action(
+                    icon: Icons.layers_outlined,
+                    label: dedaText('نوع الخريطة', 'Map type'),
+                    onTap: _cycleMapStyle,
+                  ),
+                  action(
+                    icon: Icons.report_problem_outlined,
+                    label: dedaText('إبلاغ عن خطر', 'Report hazard'),
+                    color: const Color(0xFFB65A00),
+                    onTap: _showHazardReportSheet,
+                  ),
+                  action(
+                    icon: Icons.stop_circle_outlined,
+                    label: dedaText('إيقاف الرحلة', 'Stop trip'),
+                    color: const Color(0xFFB3261E),
+                    onTap: () => stopTrip(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _toggleNavigationTools,
+            child: Container(
+              width: 36,
+              height: 78,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.96),
+                borderRadius: const BorderRadius.horizontal(
+                  right: Radius.circular(16),
+                ),
+                boxShadow: const [
+                  BoxShadow(blurRadius: 7, color: Colors.black26),
+                ],
+              ),
+              child: Icon(
+                _navigationToolsOpen
+                    ? Icons.chevron_left
+                    : Icons.chevron_right,
+                size: 30,
+                color: const Color(0xFF17652F),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHazardWarning(DedaRoadHazard hazard) {
+    final distance = _metersBetween(startPoint, hazard.location);
+    return Material(
+      color: const Color(0xFFFFF4E5).withOpacity(0.97),
+      elevation: 6,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(hazard.icon, color: const Color(0xFFB65A00), size: 28),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: DedaLanguageState.isArabic
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hazard.label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
+                  ),
+                  Text(
+                    dedaText(
+                      'بعد ${formatRouteDistance(distance)}',
+                      'In ${formatRouteDistance(distance)}',
+                    ),
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => _voteRoadHazard(hazard, true),
+              child: Text(dedaText('موجود', 'Still there')),
+            ),
+            TextButton(
+              onPressed: () => _voteRoadHazard(hazard, false),
+              child: Text(dedaText('انتهى', 'Cleared')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapeDrivingStatus() {
+    final currentRoute = route;
+    final remaining = _liveRemainingMeters ?? currentRoute?.distanceMeters;
+    final distance = remaining == null ? '—' : formatRouteDistance(remaining);
+    var seconds =
+        currentRoute == null ? 0.0 : _estimatedDurationSeconds(currentRoute);
+    if (currentRoute != null &&
+        currentRoute.distanceMeters > 0 &&
+        remaining != null) {
+      final ratio =
+          (remaining / currentRoute.distanceMeters).clamp(0.0, 1.5).toDouble();
+      seconds *= ratio;
+    }
+    return Material(
+      color: Colors.white.withOpacity(0.94),
+      elevation: 6,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              dedaTravelModeIcon(widget.travelMode),
+              color: const Color(0xFF17652F),
+            ),
+            const SizedBox(width: 9),
+            Text(
+              '$distance  •  ${formatRouteDuration(seconds)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   DedaRouteStep? get firstUsefulStep {
     final steps = route?.steps;
     if (steps == null || steps.isEmpty) return null;
@@ -7598,11 +8263,15 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     setState(() {
       tripStarted = true;
+      _liveRemainingMeters = route!.distanceMeters;
+      _previousLivePoint = startPoint;
+      _navigationToolsOpen = false;
       navigationStatus =
           dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
     _fitRouteOnMap(navigation: true);
     _speakCurrentInstruction(force: true);
+    _refreshRoadHazards(force: true);
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -7614,18 +8283,23 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     ).listen(
       (position) {
         if (!mounted) return;
+        final current = LatLng(position.latitude, position.longitude);
+        final heading = _resolvedHeading(position, current);
+        final remaining = _remainingDistanceFrom(current);
+
         setState(() {
           livePosition = position;
+          _navigationHeading = heading;
+          _liveRemainingMeters = remaining;
         });
+        _previousLivePoint = current;
 
-        final current = LatLng(position.latitude, position.longitude);
+        _followLivePosition(current);
+        _evaluateRoadHazards(current);
+        _refreshRoadHazards();
 
-        final toDestination = Geolocator.distanceBetween(
-          position.latitude,
-          position.longitude,
-          widget.destination.location.latitude,
-          widget.destination.location.longitude,
-        );
+        final toDestination =
+            _metersBetween(current, widget.destination.location);
         if (toDestination <= 35) {
           stopTrip(reached: true);
           return;
@@ -7633,12 +8307,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
         final origin = _lastRouteOrigin;
         if (origin != null) {
-          final moved = Geolocator.distanceBetween(
-            origin.latitude,
-            origin.longitude,
-            current.latitude,
-            current.longitude,
-          );
+          final moved = _metersBetween(origin, current);
           if (moved >= 40 && !isRerouting) {
             loadRoute(background: true);
           }
@@ -7661,8 +8330,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (reached) {
       await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
     }
+    _toolsAutoHideTimer?.cancel();
     setState(() {
       tripStarted = false;
+      _navigationToolsOpen = false;
+      _activeHazard = null;
       navigationStatus = reached
           ? dedaText('وصلت إلى الوجهة.', 'You have arrived.')
           : dedaText('تم إيقاف متابعة الرحلة.', 'Trip tracking stopped.');
@@ -7671,12 +8343,20 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   Widget _buildCompactNavigationBar() {
     final currentRoute = route;
-    final distance = currentRoute == null
-        ? '—'
-        : formatRouteDistance(currentRoute.distanceMeters);
-    final duration = currentRoute == null
-        ? '—'
-        : formatRouteDuration(_estimatedDurationSeconds(currentRoute));
+    final remaining = _liveRemainingMeters ?? currentRoute?.distanceMeters;
+    final distance =
+        remaining == null ? '—' : formatRouteDistance(remaining);
+    var durationSeconds =
+        currentRoute == null ? 0.0 : _estimatedDurationSeconds(currentRoute);
+    if (currentRoute != null &&
+        currentRoute.distanceMeters > 0 &&
+        remaining != null) {
+      final ratio =
+          (remaining / currentRoute.distanceMeters).clamp(0.0, 1.5).toDouble();
+      durationSeconds *= ratio;
+    }
+    final duration =
+        currentRoute == null ? '—' : formatRouteDuration(durationSeconds);
     return Card(
       elevation: 8,
       shape: RoundedRectangleBorder(
@@ -7693,6 +8373,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               icon: Icon(
                 voiceEnabled ? Icons.volume_up : Icons.volume_off,
                 color: const Color(0xFF17652F),
+              ),
+            ),
+            IconButton(
+              tooltip: dedaText('إبلاغ عن خطر', 'Report hazard'),
+              onPressed: _submittingHazard ? null : _showHazardReportSheet,
+              icon: const Icon(
+                Icons.report_problem_outlined,
+                color: Color(0xFFB65A00),
               ),
             ),
             const SizedBox(width: 4),
@@ -7778,6 +8466,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     final destinationPoint = widget.destination.location;
     final routePoints = route?.points ?? const <LatLng>[];
     final fitCoordinates = routePoints.isNotEmpty
@@ -7789,11 +8479,33 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         point: startPoint,
         width: 64,
         height: 64,
-        child: const Icon(
-          Icons.location_pin,
-          size: 58,
-          color: Colors.red,
-        ),
+        child: tripStarted
+            ? Transform.rotate(
+                angle: _navigationHeading * math.pi / 180,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.96),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF17652F),
+                      width: 2,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 7, color: Colors.black26),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.navigation,
+                    size: 38,
+                    color: Color(0xFF17652F),
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.location_pin,
+                size: 58,
+                color: Colors.red,
+              ),
       ),
       Marker(
         point: destinationPoint,
@@ -7812,18 +8524,55 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           ),
         ),
       ),
+      if (tripStarted)
+        ..._roadHazards
+            .where(
+              (hazard) =>
+                  _hazardIsUsable(hazard) &&
+                  _metersBetween(startPoint, hazard.location) <= 2500,
+            )
+            .map(
+              (hazard) => Marker(
+                point: hazard.location,
+                width: 42,
+                height: 42,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4E5).withOpacity(0.97),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFB65A00),
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    hazard.icon,
+                    size: 24,
+                    color: const Color(0xFFB65A00),
+                  ),
+                ),
+              ),
+            ),
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
-      appBar: AppBar(
-        title: Text(
-          tripStarted
-              ? dedaText('الملاحة • ${dedaTravelModeLabel(widget.travelMode)}', 'Navigation • ${dedaTravelModeLabel(widget.travelMode)}')
-              : dedaText('الطريق • ${dedaTravelModeLabel(widget.travelMode)}', 'Route • ${dedaTravelModeLabel(widget.travelMode)}'),
-        ),
-        centerTitle: true,
-      ),
+      appBar: isLandscape && tripStarted
+          ? null
+          : AppBar(
+              title: Text(
+                tripStarted
+                    ? dedaText(
+                        'الملاحة • ${dedaTravelModeLabel(widget.travelMode)}',
+                        'Navigation • ${dedaTravelModeLabel(widget.travelMode)}',
+                      )
+                    : dedaText(
+                        'الطريق • ${dedaTravelModeLabel(widget.travelMode)}',
+                        'Route • ${dedaTravelModeLabel(widget.travelMode)}',
+                      ),
+              ),
+              centerTitle: true,
+            ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -7832,7 +8581,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 mapController: _mapController,
                 options: MapOptions(
                   initialCenter: startPoint,
-                  initialZoom: tripStarted ? 16 : 13,
+                  initialZoom: tripStarted ? 17 : 13,
                   initialCameraFit: tripStarted
                       ? null
                       : CameraFit.coordinates(
@@ -7848,7 +8597,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                       polylines: [
                         Polyline(
                           points: routePoints,
-                          strokeWidth: 6,
+                          strokeWidth: tripStarted ? 11 : 9,
+                          color: Colors.white.withOpacity(0.92),
+                        ),
+                        Polyline(
+                          points: routePoints,
+                          strokeWidth: tripStarted ? 7 : 6,
                           color: const Color(0xFF17652F),
                         ),
                       ],
@@ -7862,86 +8616,95 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 ],
               ),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.94),
-                elevation: 3,
-                borderRadius: BorderRadius.circular(14),
-                child: PopupMenuButton<DedaMapStyle>(
-                  tooltip: dedaText('نوع الخريطة', 'Map type'),
-                  onSelected: (style) => setState(() => mapStyle = style),
-                  itemBuilder: (context) => DedaMapStyle.values
-                      .map(
-                        (style) => PopupMenuItem<DedaMapStyle>(
-                          value: style,
-                          child: Row(
-                            children: [
-                              Icon(
-                                style == mapStyle
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_off,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(dedaMapStyleLabel(style)),
-                            ],
+            if (!(isLandscape && tripStarted))
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Material(
+                  color: Colors.white.withOpacity(0.94),
+                  elevation: 3,
+                  borderRadius: BorderRadius.circular(14),
+                  child: PopupMenuButton<DedaMapStyle>(
+                    tooltip: dedaText('نوع الخريطة', 'Map type'),
+                    onSelected: (style) => setState(() => mapStyle = style),
+                    itemBuilder: (context) => DedaMapStyle.values
+                        .map(
+                          (style) => PopupMenuItem<DedaMapStyle>(
+                            value: style,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  style == mapStyle
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_off,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(dedaMapStyleLabel(style)),
+                              ],
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.layers_outlined),
-                        const SizedBox(width: 6),
-                        Text(dedaMapStyleLabel(mapStyle)),
-                      ],
+                        )
+                        .toList(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.layers_outlined),
+                          const SizedBox(width: 6),
+                          Text(dedaMapStyleLabel(mapStyle)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.94),
-                elevation: 2,
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: dedaText('شرح الخريطة', 'Map guide'),
-                  onPressed: showMapLegend,
-                  icon: const Icon(Icons.info_outline),
+            if (!(isLandscape && tripStarted))
+              Positioned(
+                top: 12,
+                left: 12,
+                child: Material(
+                  color: Colors.white.withOpacity(0.94),
+                  elevation: 2,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: dedaText('شرح الخريطة', 'Map guide'),
+                    onPressed: showMapLegend,
+                    icon: const Icon(Icons.info_outline),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 62,
-              left: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.94),
-                elevation: 2,
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: dedaText('عرض المسار كاملًا', 'Show full route'),
-                  onPressed: () =>
-                      _fitRouteOnMap(navigation: tripStarted),
-                  icon: const Icon(Icons.fit_screen),
+            if (!(isLandscape && tripStarted))
+              Positioned(
+                top: 62,
+                left: 12,
+                child: Material(
+                  color: Colors.white.withOpacity(0.94),
+                  elevation: 2,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: dedaText('عرض المسار كاملًا', 'Show full route'),
+                    onPressed: () =>
+                        _fitRouteOnMap(navigation: tripStarted),
+                    icon: const Icon(Icons.fit_screen),
+                  ),
                 ),
               ),
-            ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: tripStarted ? 52 : 74,
-                left: tripStarted ? 44 : 28,
-                right: tripStarted ? 44 : 28,
+                top: isLandscape && tripStarted
+                    ? 10
+                    : (tripStarted ? 52 : 74),
+                left: isLandscape && tripStarted
+                    ? 90
+                    : (tripStarted ? 44 : 28),
+                right: isLandscape && tripStarted
+                    ? 90
+                    : (tripStarted ? 44 : 28),
                 child: Material(
                   color: Colors.white.withOpacity(0.96),
                   elevation: 4,
@@ -7969,13 +8732,18 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               Text(
                                 firstUsefulStep!.instruction,
                                 textAlign: TextAlign.right,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
                               Text(
-                                dedaText('بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}', 'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}'),
+                                dedaText(
+                                  'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                  'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
+                                ),
                                 textAlign: TextAlign.right,
                                 style: const TextStyle(
                                   fontSize: 13,
@@ -7990,176 +8758,209 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   ),
                 ),
               ),
-            if (tripStarted)
+            if (tripStarted && _activeHazard != null)
+              Positioned(
+                top: isLandscape ? 86 : 128,
+                left: isLandscape ? 90 : 18,
+                right: isLandscape ? 90 : 18,
+                child: _buildHazardWarning(_activeHazard!),
+              ),
+            if (tripStarted && !isLandscape)
               Positioned(
                 left: 12,
                 right: 12,
                 bottom: 10,
                 child: _buildCompactNavigationBar(),
               ),
+            if (tripStarted && isLandscape)
+              Positioned(
+                left: 90,
+                right: 90,
+                bottom: 8,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _buildLandscapeDrivingStatus(),
+                ),
+              ),
+            if (tripStarted && isLandscape) _buildLandscapeTools(),
             if (!tripStarted)
               Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        widget.destination.name,
-                        textAlign: TextAlign.center,
-                        textDirection: TextDirection.rtl,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (isLoading) ...[
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 8),
-                        Text(dedaText('جاري حساب أفضل طريق...', 'Calculating the best route...')),
-                      ] else if (errorMessage != null) ...[
-                        Text(errorMessage!, textAlign: TextAlign.center),
-                        const SizedBox(height: 8),
-                        FilledButton.icon(
-                          onPressed: () => loadRoute(),
-                          icon: const Icon(Icons.refresh),
-                          label: Text(dedaText('إعادة المحاولة', 'Try again')),
-                        ),
-                      ] else if (route != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          widget.destination.name,
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F6EF),
-                            borderRadius: BorderRadius.circular(14),
+                        ),
+                        const SizedBox(height: 8),
+                        if (isLoading) ...[
+                          const LinearProgressIndicator(),
+                          const SizedBox(height: 8),
+                          Text(
+                            dedaText(
+                              'جاري حساب أفضل طريق...',
+                              'Calculating the best route...',
+                            ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                dedaTravelModeIcon(widget.travelMode),
-                                color: const Color(0xFF17652F),
-                                size: 22,
-                              ),
-                              const SizedBox(width: 7),
-                              Text(
-                                dedaText(
-                                  'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
-                                  'Travel mode: ${dedaTravelModeLabel(widget.travelMode)}',
+                        ] else if (errorMessage != null) ...[
+                          Text(errorMessage!, textAlign: TextAlign.center),
+                          const SizedBox(height: 8),
+                          FilledButton.icon(
+                            onPressed: () => loadRoute(),
+                            icon: const Icon(Icons.refresh),
+                            label: Text(dedaText('إعادة المحاولة', 'Try again')),
+                          ),
+                        ] else if (route != null) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F6EF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  dedaTravelModeIcon(widget.travelMode),
+                                  color: const Color(0xFF17652F),
+                                  size: 22,
                                 ),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                                const SizedBox(width: 7),
+                                Text(
+                                  dedaText(
+                                    'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
+                                    'Travel mode: ${dedaTravelModeLabel(widget.travelMode)}',
+                                  ),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _DedaRouteStat(
+                                  icon: Icons.route,
+                                  label: route!.isDirectFallback
+                                      ? dedaText(
+                                          'المسافة المباشرة',
+                                          'Straight-line distance',
+                                        )
+                                      : dedaText(
+                                          'مسافة الطريق',
+                                          'Route distance',
+                                        ),
+                                  value: formatRouteDistance(
+                                    route!.distanceMeters,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _DedaRouteStat(
+                                  icon: Icons.schedule,
+                                  label: dedaText(
+                                    'الوقت التقريبي',
+                                    'Estimated time',
+                                  ),
+                                  value: formatRouteDuration(
+                                    _estimatedDurationSeconds(route!),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DedaRouteStat(
-                                icon: Icons.route,
-                                label: route!.isDirectFallback
-                                    ? dedaText('المسافة المباشرة', 'Straight-line distance')
-                                    : dedaText('مسافة الطريق', 'Route distance'),
-                                value: formatRouteDistance(route!.distanceMeters),
-                              ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _travelEstimateNote,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Color(0xFF5B665D),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _DedaRouteStat(
-                                icon: Icons.schedule,
-                                label: dedaText('الوقت التقريبي', 'Estimated time'),
-                                value: formatRouteDuration(_estimatedDurationSeconds(route!)),
+                          ),
+                          if (isRerouting) ...[
+                            const SizedBox(height: 8),
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 4),
+                            Text(
+                              dedaText(
+                                'جاري تحديث المسار من موقعك الحالي...',
+                                'Updating the route from your current location...',
+                              ),
+                              style: const TextStyle(fontSize: 12.5),
+                            ),
+                          ],
+                          if (navigationStatus.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              navigationStatus,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: navigationStatus ==
+                                        dedaText(
+                                          'وصلت إلى الوجهة.',
+                                          'You have arrived.',
+                                        )
+                                    ? const Color(0xFF17652F)
+                                    : const Color(0xFF4D5C50),
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _travelEstimateNote,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            color: Color(0xFF5B665D),
-                          ),
-                        ),
-                        if (isRerouting) ...[
-                          const SizedBox(height: 8),
-                          const LinearProgressIndicator(),
-                          const SizedBox(height: 4),
-                          Text(
-              dedaText('جاري تحديث المسار من موقعك الحالي...', 'Updating the route from your current location...'),
-                            style: TextStyle(fontSize: 12.5),
-                          ),
-                        ],
-                        if (navigationStatus.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            navigationStatus,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: navigationStatus == dedaText('وصلت إلى الوجهة.', 'You have arrived.')
-                                  ? const Color(0xFF17652F)
-                                  : const Color(0xFF4D5C50),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: FilledButton.icon(
+                              onPressed: startTrip,
+                              icon: const Icon(Icons.navigation),
+                              label: Text(
+                                dedaText('ابدأ الرحلة', 'Start trip'),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: tripStarted
-                              ? OutlinedButton.icon(
-                                  onPressed: () => stopTrip(),
-                                  icon: const Icon(Icons.stop_circle_outlined),
-                                  label: Text(
-                                    dedaText('إيقاف الرحلة', 'Stop trip'),
-                                    style: TextStyle(fontSize: 17),
-                                  ),
-                                )
-                              : FilledButton.icon(
-                                  onPressed: startTrip,
-                                  icon: const Icon(Icons.navigation),
-                                  label: Text(
-                                    dedaText('ابدأ الرحلة', 'Start trip'),
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 }
-
 class _DedaRouteStat extends StatelessWidget {
   final IconData icon;
   final String label;

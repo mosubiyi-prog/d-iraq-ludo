@@ -271,6 +271,79 @@ service cloud.firestore {
         );
     }
 
+
+    match /road_hazards/{hazardId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.type in [
+          'bump', 'roadworks', 'maintenance', 'detour', 'speed_camera',
+          'checkpoint', 'accident', 'congestion', 'road_object', 'flooded'
+        ]
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && (request.resource.data.heading == null
+          || request.resource.data.heading is number)
+        && request.resource.data.status == 'active'
+        && request.resource.data.confirmations == 1
+        && request.resource.data.resolvedReports == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastConfirmedAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <=
+          request.time + duration.value(30, 'd')
+        && request.resource.data.keys().hasOnly([
+          'reporterUid', 'type', 'latitude', 'longitude', 'heading',
+          'status', 'confirmations', 'resolvedReports', 'createdAt',
+          'updatedAt', 'lastConfirmedAt', 'expiresAt'
+        ]);
+
+      allow update: if signedIn()
+        && request.resource.data.reporterUid == resource.data.reporterUid
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.latitude == resource.data.latitude
+        && request.resource.data.longitude == resource.data.longitude
+        && request.resource.data.status == 'active'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'confirmations', 'resolvedReports', 'lastConfirmedAt',
+          'updatedAt', 'expiresAt'
+        ])
+        && (
+          (
+            request.resource.data.confirmations ==
+              resource.data.confirmations + 1
+            && request.resource.data.resolvedReports ==
+              resource.data.resolvedReports
+            && request.resource.data.lastConfirmedAt == request.time
+            && request.resource.data.expiresAt is timestamp
+            && request.resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt <=
+              request.time + duration.value(30, 'd')
+          )
+          ||
+          (
+            request.resource.data.confirmations ==
+              resource.data.confirmations
+            && request.resource.data.resolvedReports ==
+              resource.data.resolvedReports + 1
+            && request.resource.data.lastConfirmedAt ==
+              resource.data.lastConfirmedAt
+            && request.resource.data.expiresAt ==
+              resource.data.expiresAt
+          )
+        );
+
+      allow delete: if isAdmin();
+    }
+
     match /admin_audit/{auditId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;

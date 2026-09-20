@@ -358,6 +358,136 @@ class DedaBackend {
     });
   }
 
+
+  static int _hazardLifetimeHours(String type) {
+    switch (type) {
+      case 'congestion':
+        return 1;
+      case 'accident':
+      case 'road_object':
+        return 2;
+      case 'checkpoint':
+        return 4;
+      case 'flooded':
+        return 6;
+      case 'detour':
+      case 'roadworks':
+      case 'maintenance':
+        return 12;
+      case 'bump':
+      case 'speed_camera':
+        return 24 * 30;
+      default:
+        return 6;
+    }
+  }
+
+  static const Set<String> _hazardTypes = <String>{
+    'bump',
+    'roadworks',
+    'maintenance',
+    'detour',
+    'speed_camera',
+    'checkpoint',
+    'accident',
+    'congestion',
+    'road_object',
+    'flooded',
+  };
+
+  static Future<List<Map<String, dynamic>>> roadHazards() async {
+    if (!isReady) return const <Map<String, dynamic>>[];
+    await _ensurePublicUser();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('road_hazards')
+        .where('status', isEqualTo: 'active')
+        .limit(500)
+        .get();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final items = <Map<String, dynamic>>[];
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final expiresAt = data['expiresAt'];
+      final expiresMillis =
+          expiresAt is Timestamp ? expiresAt.millisecondsSinceEpoch : 0;
+      final resolved = (data['resolvedReports'] as num?)?.toInt() ?? 0;
+      if (expiresMillis > 0 && expiresMillis <= now) continue;
+      if (resolved >= 3) continue;
+      items.add(<String, dynamic>{
+        'id': doc.id,
+        ...data,
+        'expiresAtMillis': expiresMillis,
+      });
+    }
+    return items;
+  }
+
+  static Future<String> submitRoadHazard({
+    required String type,
+    required double latitude,
+    required double longitude,
+    double? heading,
+  }) async {
+    if (!_hazardTypes.contains(type)) {
+      throw ArgumentError('invalid-road-hazard-type');
+    }
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      throw ArgumentError('invalid-road-hazard-location');
+    }
+
+    final user = await _ensurePublicUser();
+    final expires =
+        DateTime.now().add(Duration(hours: _hazardLifetimeHours(type)));
+    final ref =
+        FirebaseFirestore.instance.collection('road_hazards').doc();
+    await ref.set(<String, dynamic>{
+      'reporterUid': user.uid,
+      'type': type,
+      'latitude': latitude,
+      'longitude': longitude,
+      'heading': heading,
+      'status': 'active',
+      'confirmations': 1,
+      'resolvedReports': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastConfirmedAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expires),
+    });
+    return ref.id;
+  }
+
+  static Future<void> voteRoadHazard({
+    required String id,
+    required String type,
+    required bool present,
+  }) async {
+    if (!_hazardTypes.contains(type)) {
+      throw ArgumentError('invalid-road-hazard-type');
+    }
+    await _ensurePublicUser();
+    final ref =
+        FirebaseFirestore.instance.collection('road_hazards').doc(id);
+    if (present) {
+      final expires =
+          DateTime.now().add(Duration(hours: _hazardLifetimeHours(type)));
+      await ref.update(<String, dynamic>{
+        'confirmations': FieldValue.increment(1),
+        'lastConfirmedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(expires),
+      });
+    } else {
+      await ref.update(<String, dynamic>{
+        'resolvedReports': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
   static Future<bool> signInAdmin({
     required String email,
     required String password,
