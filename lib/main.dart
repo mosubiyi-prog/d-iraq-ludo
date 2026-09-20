@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -328,22 +329,11 @@ String dedaMapAttribution(DedaMapStyle style) {
 }
 
 List<Widget> dedaNavigationMapLayers(DedaMapStyle style) {
-  if (style == DedaMapStyle.normal) {
-    return [
-      TileLayer(
-        urlTemplate:
-            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-        userAgentPackageName: 'com.diraq.ludo',
-      ),
-    ];
-  }
   return dedaBaseMapLayers(style);
 }
 
 String dedaNavigationMapAttribution(DedaMapStyle style) {
-  return style == DedaMapStyle.normal
-      ? 'Tiles © Esri'
-      : dedaMapAttribution(style);
+  return dedaMapAttribution(style);
 }
 
 Future<void> main() async {
@@ -7309,7 +7299,7 @@ class DedaRoadHazard {
       case 'maintenance':
         return dedaText('صيانة طريق', 'Road maintenance');
       case 'detour':
-        return dedaText('تحويلة أو غلق طريق', 'Detour or road closure');
+        return dedaText('تحويلة / غلق طريق', 'Detour / road closure');
       case 'speed_camera':
         return dedaText('كاميرا سرعة — التزم بالسرعة', 'Speed camera — obey the speed limit');
       case 'checkpoint':
@@ -7415,6 +7405,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   String? _lastSpokenInstruction;
 
   StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<CompassEvent>? _compassSubscription;
   Timer? _toolsAutoHideTimer;
   Timer? _positionAnimationTimer;
   late DedaMapStyle mapStyle;
@@ -7428,12 +7419,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   double _navigationHeading = 0;
   double _displayHeading = 0;
   bool _hasNavigationHeading = false;
+  bool _hasCompassHeading = false;
+  DateTime? _lastCompassHeadingAt;
   bool _navigationToolsOpen = false;
   bool _mapFullscreen = false;
   bool _submittingHazard = false;
   bool _hazardsLoading = false;
   DateTime? _lastHazardFetchAt;
   DateTime? _lastRerouteAttemptAt;
+  int _offRouteFixes = 0;
+  String? _lastAutoReroutedHazardId;
   List<DedaRoadHazard> _roadHazards = <DedaRoadHazard>[];
   DedaRoadHazard? _activeHazard;
   String? _lastHazardSpokenId;
@@ -7546,6 +7541,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _compassSubscription?.cancel();
     _toolsAutoHideTimer?.cancel();
     _positionAnimationTimer?.cancel();
     _tts.stop();
@@ -7753,11 +7749,56 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return raw > 180 ? 360 - raw : raw;
   }
 
+  bool get _compassHeadingIsFresh =>
+      _hasCompassHeading &&
+      _lastCompassHeadingAt != null &&
+      DateTime.now().difference(_lastCompassHeadingAt!) <
+          const Duration(seconds: 2);
+
+  double _blendHeading(double from, double to, {double factor = 0.68}) {
+    final delta = (to - from + 540) % 360 - 180;
+    return (from + delta * factor + 360) % 360;
+  }
+
+  void _startCompassTracking() {
+    _compassSubscription?.cancel();
+    final stream = FlutterCompass.events;
+    if (stream == null) return;
+    _compassSubscription = stream.listen(
+      (event) {
+        if (!mounted || !tripStarted) return;
+        final heading = event.heading;
+        if (heading == null || !heading.isFinite) return;
+        final normalized = (heading + 360) % 360;
+        setState(() {
+          _hasCompassHeading = true;
+          _lastCompassHeadingAt = DateTime.now();
+          _navigationHeading = _blendHeading(
+            _navigationHeading,
+            normalized,
+            factor: 0.82,
+          );
+          _displayHeading = _blendHeading(
+            _displayHeading,
+            normalized,
+            factor: 0.82,
+          );
+        });
+      },
+      onError: (_) {
+        _hasCompassHeading = false;
+      },
+    );
+  }
+
   double _resolvedHeading(Position position, LatLng current) {
-    // Movement direction has priority so the arrow always follows the user's
-    // real travel direction, even when travelling opposite the suggested route.
+    if (_compassHeadingIsFresh) {
+      _hasNavigationHeading = true;
+      return _navigationHeading;
+    }
+
     final previous = _previousLivePoint;
-    if (previous != null && _metersBetween(previous, current) >= 2) {
+    if (previous != null && _metersBetween(previous, current) >= 3) {
       _hasNavigationHeading = true;
       return _bearingBetween(previous, current);
     }
@@ -7766,7 +7807,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (gpsHeading.isFinite &&
         gpsHeading >= 0 &&
         gpsHeading <= 360 &&
-        position.speed >= 0.5) {
+        position.speed >= 0.8) {
       _hasNavigationHeading = true;
       return gpsHeading % 360;
     }
@@ -7833,17 +7874,35 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return math.max(direct, remaining);
   }
 
-  double _distanceToRoute(LatLng point) {
+  ({double distanceToRoute, double progressMeters})? _routeProgress(
+    LatLng point,
+  ) {
     final points = route?.points ?? const <LatLng>[];
-    if (points.isEmpty) return double.infinity;
-    if (points.length == 1) return _metersBetween(point, points.first);
+    if (points.length < 2) return null;
 
-    var nearest = double.infinity;
+    var nearestDistance = double.infinity;
+    var nearestProgress = 0.0;
+    var cumulative = 0.0;
+
     for (var i = 0; i < points.length - 1; i++) {
+      final segmentLength = _metersBetween(points[i], points[i + 1]);
       final projection = _projectToSegment(point, points[i], points[i + 1]);
-      if (projection.distance < nearest) nearest = projection.distance;
+      if (projection.distance < nearestDistance) {
+        nearestDistance = projection.distance;
+        nearestProgress =
+            cumulative + segmentLength * projection.fraction;
+      }
+      cumulative += segmentLength;
     }
-    return nearest;
+
+    return (
+      distanceToRoute: nearestDistance,
+      progressMeters: nearestProgress,
+    );
+  }
+
+  double _distanceToRoute(LatLng point) {
+    return _routeProgress(point)?.distanceToRoute ?? double.infinity;
   }
 
   double _currentMapZoom() {
@@ -7863,7 +7922,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   void _focusNavigationPosition() {
     try {
-      _mapController.move(_displayPosition ?? startPoint, 16.2);
+      _mapController.move(_displayPosition ?? startPoint, 15.5);
     } catch (_) {}
   }
 
@@ -8030,6 +8089,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (!tripStarted) return;
     DedaRoadHazard? best;
     var bestDistance = double.infinity;
+    final currentProgress = _routeProgress(current);
 
     for (final hazard in _roadHazards) {
       if (!_hazardIsUsable(hazard)) continue;
@@ -8039,14 +8099,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       final currentRoute = route;
       if (currentRoute != null &&
           !currentRoute.isDirectFallback &&
-          currentRoute.points.isNotEmpty &&
-          _distanceToRoute(hazard.location) > 140) {
-        continue;
-      }
-
-      if (_hasNavigationHeading && distance > 45) {
-        final bearing = _bearingBetween(current, hazard.location);
-        if (_headingDifference(_navigationHeading, bearing) > 85) continue;
+          currentRoute.points.length >= 2) {
+        final hazardProgress = _routeProgress(hazard.location);
+        if (hazardProgress == null ||
+            hazardProgress.distanceToRoute > 140) {
+          continue;
+        }
+        if (currentProgress != null &&
+            hazardProgress.progressMeters + 35 <
+                currentProgress.progressMeters) {
+          continue;
+        }
       }
 
       if (distance < bestDistance) {
@@ -8064,12 +8127,37 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         bestDistance <= 1200 &&
         best.id != _lastHazardSpokenId) {
       _lastHazardSpokenId = best.id;
+      final confidence = best.confirmations >= 2
+          ? dedaText(
+              'مؤكد من ${best.confirmations} مستخدمين.',
+              'Confirmed by ${best.confirmations} users.',
+            )
+          : dedaText(
+              'بلاغ جديد، يرجى الانتباه.',
+              'New report, please use caution.',
+            );
       _speakText(
         dedaText(
-          'تنبيه. ${best.label} بعد ${formatRouteDistance(bestDistance)}.',
-          'Warning. ${best.label} in ${formatRouteDistance(bestDistance)}.',
+          'تنبيه. ${best.label} بعد ${formatRouteDistance(bestDistance)}. $confidence',
+          'Warning. ${best.label} in ${formatRouteDistance(bestDistance)}. $confidence',
         ),
       );
+    }
+
+    if (best != null &&
+        best.type == 'detour' &&
+        bestDistance <= 900 &&
+        best.id != _lastAutoReroutedHazardId &&
+        !isRerouting) {
+      _lastAutoReroutedHazardId = best.id;
+      setState(() {
+        navigationStatus = dedaText(
+          'تحويلة أو غلق طريق أمامك — يجري تحديث الطريق تلقائيًا.',
+          'Detour or road closure ahead — updating the route automatically.',
+        );
+      });
+      _lastRerouteAttemptAt = DateTime.now();
+      loadRoute(background: true);
     }
   }
 
@@ -8324,46 +8412,65 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   Widget _buildHazardWarning(DedaRoadHazard hazard) {
     final distance = _metersBetween(startPoint, hazard.location);
+    final confidence = hazard.confirmations >= 2
+        ? dedaText(
+            '${hazard.confirmations} تأكيد',
+            '${hazard.confirmations} confirmations',
+          )
+        : dedaText('بلاغ جديد', 'New report');
     return Material(
-      color: const Color(0xFFFFF4E5).withOpacity(0.97),
-      elevation: 6,
-      borderRadius: BorderRadius.circular(16),
+      color: const Color(0xFFFFF4E5).withOpacity(0.88),
+      elevation: 3,
+      borderRadius: BorderRadius.circular(13),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         child: Row(
           children: [
-            Icon(hazard.icon, color: const Color(0xFFB65A00), size: 28),
-            const SizedBox(width: 9),
+            Icon(hazard.icon, color: const Color(0xFFB65A00), size: 23),
+            const SizedBox(width: 7),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: DedaLanguageState.isArabic
                     ? CrossAxisAlignment.end
                     : CrossAxisAlignment.start,
                 children: [
                   Text(
                     hazard.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
-                      fontSize: 15,
+                      fontSize: 13,
                     ),
                   ),
                   Text(
                     dedaText(
-                      'بعد ${formatRouteDistance(distance)}',
-                      'In ${formatRouteDistance(distance)}',
+                      'بعد ${formatRouteDistance(distance)} • $confidence',
+                      'In ${formatRouteDistance(distance)} • $confidence',
                     ),
-                    style: const TextStyle(fontSize: 12.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10.5),
                   ),
                 ],
               ),
             ),
             TextButton(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
               onPressed: () => _voteRoadHazard(hazard, true),
-              child: Text(dedaText('موجود', 'Still there')),
+              child: Text(dedaText('موجود', 'There'), style: const TextStyle(fontSize: 11)),
             ),
             TextButton(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
               onPressed: () => _voteRoadHazard(hazard, false),
-              child: Text(dedaText('انتهى', 'Cleared')),
+              child: Text(dedaText('انتهى', 'Cleared'), style: const TextStyle(fontSize: 11)),
             ),
           ],
         ),
@@ -8468,6 +8575,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
     _focusNavigationPosition();
+    _startCompassTracking();
     _speakCurrentInstruction(force: true);
     _refreshRoadHazards(force: true);
 
@@ -8503,22 +8611,27 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           return;
         }
 
-        final origin = _lastRouteOrigin;
-        if (origin != null) {
-          final moved = _metersBetween(origin, current);
-          final offRoute = route != null &&
-              !route!.isDirectFallback &&
-              _distanceToRoute(current) >= 65;
-          final now = DateTime.now();
-          final rerouteAllowed = _lastRerouteAttemptAt == null ||
-              now.difference(_lastRerouteAttemptAt!) >=
-                  const Duration(seconds: 12);
-          if ((offRoute || moved >= 120) &&
-              rerouteAllowed &&
-              !isRerouting) {
-            _lastRerouteAttemptAt = now;
-            loadRoute(background: true);
-          }
+        final currentRoute = route;
+        final gpsAccurateEnough =
+            !position.accuracy.isNaN && position.accuracy <= 40;
+        final offRoute = currentRoute != null &&
+            !currentRoute.isDirectFallback &&
+            _distanceToRoute(current) >= 90;
+
+        if (gpsAccurateEnough && offRoute) {
+          _offRouteFixes += 1;
+        } else {
+          _offRouteFixes = 0;
+        }
+
+        final now = DateTime.now();
+        final rerouteAllowed = _lastRerouteAttemptAt == null ||
+            now.difference(_lastRerouteAttemptAt!) >=
+                const Duration(seconds: 20);
+        if (_offRouteFixes >= 3 && rerouteAllowed && !isRerouting) {
+          _offRouteFixes = 0;
+          _lastRerouteAttemptAt = now;
+          loadRoute(background: true);
         }
       },
       onError: (_) {
@@ -8534,6 +8647,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   Future<void> stopTrip({bool reached = false}) async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    await _compassSubscription?.cancel();
+    _compassSubscription = null;
     if (!mounted) return;
     if (reached) {
       await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
@@ -8544,6 +8659,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       tripStarted = false;
       _navigationToolsOpen = false;
       _mapFullscreen = false;
+      _offRouteFixes = 0;
+      _lastAutoReroutedHazardId = null;
       _activeHazard = null;
       navigationStatus = reached
           ? dedaText('وصلت إلى الوجهة.', 'You have arrived.')
@@ -8941,26 +9058,28 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: isLandscape && tripStarted ? 8 : (tripStarted ? 48 : 70),
-                left: isLandscape && tripStarted ? 0 : 24,
-                right: isLandscape && tripStarted ? 0 : 24,
+                top: tripStarted ? 8 : 70,
+                left: 0,
+                right: 0,
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: FractionallySizedBox(
-                    widthFactor: isLandscape && tripStarted ? 0.58 : 1.0,
+                    widthFactor: tripStarted
+                        ? (isLandscape ? 0.46 : 0.70)
+                        : 0.88,
                     child: Material(
-                      color: Colors.white.withOpacity(0.84),
-                      elevation: 2,
-                      borderRadius: BorderRadius.circular(14),
+                      color: Colors.white.withOpacity(tripStarted ? 0.70 : 0.88),
+                      elevation: tripStarted ? 1 : 2,
+                      borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.65),
+                            color: Colors.white.withOpacity(0.55),
                           ),
                         ),
                         child: Row(
@@ -8968,16 +9087,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             CircleAvatar(
-                              radius: 16,
+                              radius: 13,
                               backgroundColor:
-                                  const Color(0xFFEAF3E9).withOpacity(0.90),
+                                  const Color(0xFFEAF3E9).withOpacity(0.82),
                               child: Icon(
                                 directionIcon(firstUsefulStep!),
-                                size: 20,
+                                size: 17,
                                 color: const Color(0xFF17652F),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -8989,7 +9108,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 12.5,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -9001,7 +9120,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                     textAlign: TextAlign.right,
                                     maxLines: 1,
                                     style: const TextStyle(
-                                      fontSize: 11.5,
+                                      fontSize: 9.5,
                                       color: Color(0xFF4E5B52),
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -9018,9 +9137,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (tripStarted && _activeHazard != null)
               Positioned(
-                top: isLandscape ? 86 : 128,
-                left: isLandscape ? 90 : 18,
-                right: isLandscape ? 90 : 18,
+                top: isLandscape ? 58 : 62,
+                left: isLandscape ? 96 : 18,
+                right: isLandscape ? 96 : 18,
                 child: _buildHazardWarning(_activeHazard!),
               ),
             if (tripStarted && !isLandscape)
