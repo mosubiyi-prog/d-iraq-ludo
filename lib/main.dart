@@ -8916,35 +8916,46 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   _hazardIsUsable(hazard) &&
                   _metersBetween(startPoint, hazard.location) <= 2500,
             )
-            .map(
-              (hazard) => Marker(
+            .map((hazard) {
+              final overlapsLiveArrow =
+                  _metersBetween(startPoint, hazard.location) <= 25;
+              return Marker(
                 point: hazard.location,
-                width: 44,
-                height: 44,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => _showHazardDetails(hazard),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF4E5).withOpacity(0.97),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFB65A00),
-                        width: 2,
+                width: overlapsLiveArrow ? 150 : 44,
+                height: overlapsLiveArrow ? 58 : 44,
+                child: Align(
+                  alignment: overlapsLiveArrow
+                      ? Alignment.centerLeft
+                      : Alignment.center,
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _showHazardDetails(hazard),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF4E5).withOpacity(0.97),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFB65A00),
+                            width: 2,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(blurRadius: 4, color: Colors.black26),
+                          ],
+                        ),
+                        child: Icon(
+                          hazard.icon,
+                          size: 24,
+                          color: const Color(0xFFB65A00),
+                        ),
                       ),
-                      boxShadow: const [
-                        BoxShadow(blurRadius: 4, color: Colors.black26),
-                      ],
-                    ),
-                    child: Icon(
-                      hazard.icon,
-                      size: 24,
-                      color: const Color(0xFFB65A00),
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
       Marker(
         point: destinationPoint,
         width: 58,
