@@ -8201,6 +8201,108 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     }
   }
 
+  Future<void> _showHazardDetails(DedaRoadHazard hazard) async {
+    final distance = _metersBetween(startPoint, hazard.location);
+    final confidence = hazard.confirmations >= 2
+        ? dedaText(
+            '${hazard.confirmations} تأكيد',
+            '${hazard.confirmations} confirmations',
+          )
+        : dedaText('بلاغ جديد', 'New report');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                textDirection: TextDirection.rtl,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFFFFF4E5),
+                    child: Icon(
+                      hazard.icon,
+                      color: const Color(0xFFB65A00),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          hazard.label,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          dedaText(
+                            'يبعد ${formatRouteDistance(distance)} • $confidence',
+                            '${formatRouteDistance(distance)} away • $confidence',
+                          ),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: Color(0xFF5B665D),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                dedaText(
+                  'إذا ما زال التنبيه موجودًا اضغط «موجود». وإذا انتهى الحادث أو الازدحام أو أزيل الخطر اضغط «انتهى».',
+                  'Tap “There” if the alert is still present, or “Cleared” when the incident, traffic, or hazard is gone.',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(sheetContext);
+                        await _voteRoadHazard(hazard, true);
+                      },
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: Text(dedaText('موجود', 'There')),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFB65A00),
+                      ),
+                      onPressed: () async {
+                        Navigator.pop(sheetContext);
+                        await _voteRoadHazard(hazard, false);
+                      },
+                      icon: const Icon(Icons.done_all),
+                      label: Text(dedaText('انتهى', 'Cleared')),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showHazardReportSheet() async {
     if (_submittingHazard) return;
     final selectedType = await showModalBottomSheet<String>(
@@ -8422,6 +8524,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       color: const Color(0xFFFFF4E5).withOpacity(0.88),
       elevation: 3,
       borderRadius: BorderRadius.circular(13),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         child: Row(
@@ -8804,6 +8907,62 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         : <LatLng>[startPoint, destinationPoint];
 
     final markers = <Marker>[
+      // Road alerts are drawn first so they never cover the live navigation
+      // arrow. Tapping any alert opens its confirmation/cleared controls.
+      if (tripStarted)
+        ..._roadHazards
+            .where(
+              (hazard) =>
+                  _hazardIsUsable(hazard) &&
+                  _metersBetween(startPoint, hazard.location) <= 2500,
+            )
+            .map(
+              (hazard) => Marker(
+                point: hazard.location,
+                width: 44,
+                height: 44,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showHazardDetails(hazard),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4E5).withOpacity(0.97),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFB65A00),
+                        width: 2,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(blurRadius: 4, color: Colors.black26),
+                      ],
+                    ),
+                    child: Icon(
+                      hazard.icon,
+                      size: 24,
+                      color: const Color(0xFFB65A00),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+      Marker(
+        point: destinationPoint,
+        width: 58,
+        height: 58,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(blurRadius: 5, color: Colors.black26)],
+          ),
+          child: Icon(
+            widget.categoryIcon,
+            size: 34,
+            color: const Color(0xFF0B57D0),
+          ),
+        ),
+      ),
+      // Keep the user's live location/arrow last so it is always visible on top.
       Marker(
         point: tripStarted ? (_displayPosition ?? startPoint) : startPoint,
         width: tripStarted ? 58 : 64,
@@ -8836,52 +8995,6 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 color: Colors.red,
               ),
       ),
-      Marker(
-        point: destinationPoint,
-        width: 58,
-        height: 58,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(blurRadius: 5, color: Colors.black26)],
-          ),
-          child: Icon(
-            widget.categoryIcon,
-            size: 34,
-            color: const Color(0xFF0B57D0),
-          ),
-        ),
-      ),
-      if (tripStarted)
-        ..._roadHazards
-            .where(
-              (hazard) =>
-                  _hazardIsUsable(hazard) &&
-                  _metersBetween(startPoint, hazard.location) <= 2500,
-            )
-            .map(
-              (hazard) => Marker(
-                point: hazard.location,
-                width: 42,
-                height: 42,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF4E5).withOpacity(0.97),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFFB65A00),
-                      width: 2,
-                    ),
-                  ),
-                  child: Icon(
-                    hazard.icon,
-                    size: 24,
-                    color: const Color(0xFFB65A00),
-                  ),
-                ),
-              ),
-            ),
     ];
 
     return Scaffold(
