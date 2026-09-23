@@ -44,6 +44,22 @@ service cloud.firestore {
         );
     }
 
+    function validAdminRole(role) {
+      return role in [
+        'general_manager', 'deputy_manager', 'employee', 'province_agent'
+      ];
+    }
+
+    function validAdminStatus(status) {
+      return status in ['active', 'temporarily_stopped', 'disabled'];
+    }
+
+    function inviteData(inviteId) {
+      return get(
+        /databases/$(database)/documents/admin_invites/$(inviteId)
+      ).data;
+    }
+
     function adminProvinceMatches(data) {
       return !isProvinceAgent()
         || (
@@ -84,14 +100,625 @@ service cloud.firestore {
         );
     }
 
+    match /admin_invites/{inviteId} {
+      allow read: if isGeneralManager()
+        || (
+          signedIn()
+          && resource.data.keys().hasAny(['claimedUid'])
+          && resource.data.claimedUid == request.auth.uid
+          && resource.data.status in ['claimed', 'completed']
+        );
+
+      allow create: if isGeneralManager()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.adminId is string
+        && request.resource.data.adminId.size() > 0
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3
+        && request.resource.data.phone is string
+        && request.resource.data.department is string
+        && request.resource.data.department.size() > 0
+        && validAdminRole(request.resource.data.role)
+        && request.resource.data.governorate is string
+        && (
+          request.resource.data.role != 'province_agent'
+          || request.resource.data.governorate.size() > 0
+        )
+        && request.resource.data.permissions is map
+        && request.resource.data.activationCode is string
+        && request.resource.data.activationCode.matches('^[0-9]{8}
+    // DEDA free PIN authentication. The credential document is never readable
+    // by an ordinary app session. Firestore rules compare a submitted PIN to it.
+    match /deda_credentials/{accountKey} {
+      allow get, list: if false;
+
+      allow create: if isGeneralManager() || (
+        signedIn()
+        && !exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.pin is string
+        && request.resource.data.pin.matches('^[0-9]{6}$')
+        && request.resource.data.active == true
+        && request.resource.data.createdUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'pin', 'active', 'createdUid',
+          'createdAt', 'updatedAt'
+        ])
+      );
+
+      allow update: if isGeneralManager();
+      allow delete: if false;
+    }
+
+    match /deda_account_directory/{accountKey} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.active == true
+        && request.resource.data.createdUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'active', 'createdUid',
+          'createdAt', 'updatedAt'
+        ])
+        && existsAfter(/databases/$(database)/documents/deda_credentials/$(accountKey))
+        && getAfter(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.createdUid == request.auth.uid;
+
+      allow update: if isGeneralManager();
+      allow delete: if false;
+    }
+
+    // A correct PIN can create/update only the caller's proof document.
+    // The credential itself remains unreadable to the client.
+    match /deda_auth_attempts/{uid} {
+      allow get, list: if false;
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.pin is string
+        && request.resource.data.pin.matches('^[0-9]{6}$')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'pin', 'createdAt'
+        ])
+        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.active == true
+        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin == request.resource.data.pin;
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /deda_sessions/{uid} {
+      allow read: if isGeneralManager() || (signedIn() && request.auth.uid == uid);
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.installId is string
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey == request.resource.data.accountKey
+        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
+          == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin;
+
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /deda_account_profiles/{accountKey} {
+      allow get: if isGeneralManager() || hasDedaSession(accountKey);
+      allow list: if isGeneralManager();
+
+      allow create: if isGeneralManager() || (
+        hasDedaSession(accountKey)
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'name', 'phone', 'accountType',
+          'trustedInstallIds', 'createdAt', 'updatedAt', 'lastSeenAt'
+        ])
+      );
+
+      allow update: if isGeneralManager() || (
+        hasDedaSession(accountKey)
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'accountType', 'trustedInstallIds',
+          'updatedAt', 'lastSeenAt'
+        ])
+      );
+
+      allow delete: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if canReadUsers()
+        || (signedIn() && request.auth.uid == uid);
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.accountKey is string
+        && hasDedaSession(request.resource.data.accountKey)
+        && request.resource.data.keys().hasOnly([
+          'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
+          'accountKey', 'createdAt', 'updatedAt', 'authMethod',
+          'trustedInstallIds'
+        ]);
+
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.accountKey is string
+        && hasDedaSession(resource.data.accountKey)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fcmTokens', 'lastSeenAt', 'name', 'phone', 'accountType',
+          'accountKey', 'createdAt', 'updatedAt', 'authMethod',
+          'trustedInstallIds'
+        ]);
+
+      allow delete: if false;
+    }
+
+    match /recovery_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.accountKey is string
+        && request.resource.data.phone is string
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() >= 2
+        && request.resource.data.requesterInstallId is string
+        && request.resource.data.keys().hasOnly([
+          'requesterUid', 'requesterInstallId', 'accountKey', 'phone',
+          'fullName', 'status', 'createdAt', 'updatedAt'
+        ]);
+
+      allow read: if isGeneralManager()
+        || (signedIn() && resource.data.requesterUid == request.auth.uid);
+
+      allow update: if isGeneralManager();
+      allow delete: if false;
+    }
+
+    // Retained as a denied legacy path so older test builds cannot expose
+    // recovery secrets. Build 95 reads the approved code from its own request.
+    match /recovery_secrets/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /support_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.type in ['company', 'problem', 'case', 'photo']
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 5;
+
+      allow read: if canReadSupport()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || sameAccount(resource.data.accountKey);
+
+      allow update: if (
+          canReplySupport()
+          && request.resource.data.status in [
+            'new', 'in_progress', 'replied', 'closed'
+          ]
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedBy', 'reviewedByName',
+            'reviewedByRole', 'closedAt', 'adminReply', 'adminReplyAt',
+            'adminReplyByUid', 'adminReplyByName', 'adminReplyByRole',
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
+        )
+        || (
+          canReadSupport()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
+        );
+      allow delete: if false;
+    }
+
+    match /place_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.accountKey is string
+        && sameAccount(request.resource.data.accountKey)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.placeName is string
+        && request.resource.data.placeName.size() > 0
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() > 0
+        && request.resource.data.governorate is string
+        && request.resource.data.governorate.size() > 0
+        && request.resource.data.address is string
+        && request.resource.data.address.size() > 0
+        && request.resource.data.openingHours is string
+        && request.resource.data.openingHours.size() > 0
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && (request.resource.data.category != 'other'
+          || (request.resource.data.otherCategoryText is string
+            && request.resource.data.otherCategoryText.size() > 0))
+        && (request.resource.data.requestType != 'update'
+          || (request.resource.data.originalPlaceId is string
+            && exists(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId))
+            && (
+              get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid
+              || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
+            )));
+
+      allow read: if (
+          hasAdminPermission('viewPlaceRequests')
+          && adminProvinceMatches(resource.data)
+        )
+        || (signedIn() && resource.data.ownerUid == request.auth.uid)
+        || sameAccount(resource.data.accountKey);
+
+      allow update: if (
+          adminProvinceMatches(resource.data)
+          && adminProvinceMatches(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedBy', 'reviewedByName',
+            'reviewedByRole', 'decisionAction', 'decisionAt',
+            'decisionByUid', 'decisionByName', 'decisionByRole',
+            'decisionNote', 'approvalNumber', 'approvalDate',
+            'approvalMessageDraft', 'approvalPreparedAt',
+            'approvalPreparedByUid', 'approvalPreparedByName',
+            'approvalMessage', 'firstViewedAt', 'firstViewedByUid',
+            'firstViewedByName', 'firstViewedByRole', 'lastViewedAt',
+            'lastViewedByUid', 'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
+          && (
+            (
+              request.resource.data.status == 'approved'
+              && hasAdminPermission('approvePlaces')
+            )
+            || (
+              request.resource.data.status == 'rejected'
+              && hasAdminPermission('rejectPlaces')
+            )
+            || (
+              request.resource.data.status in ['reviewing', 'needs_changes']
+              && hasAdminPermission('reviewPlaceRequests')
+            )
+            || (
+              request.resource.data.status == resource.data.status
+              && hasAdminPermission('approvePlaces')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'approvalNumber', 'approvalDate', 'approvalMessageDraft',
+                'approvalPreparedAt', 'approvalPreparedByUid',
+                'approvalPreparedByName'
+              ])
+            )
+            || (
+              request.resource.data.status == resource.data.status
+              && hasAdminPermission('viewPlaceRequests')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+                'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+                'lastViewedByName', 'lastViewedByRole',
+                'accountReviewedAt', 'accountReviewedByUid',
+                'accountReviewedByName', 'accountReviewedByRole'
+              ])
+            )
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /published_places/{placeId} {
+      allow read: if true;
+      allow create: if hasAdminPermission('approvePlaces')
+        && adminProvinceMatches(request.resource.data);
+      allow delete: if isGeneralManager();
+
+      allow update: if (
+          hasAdminPermission('approvePlaces')
+          && adminProvinceMatches(resource.data)
+          && adminProvinceMatches(request.resource.data)
+        )
+        || (
+          signedIn()
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isAvailableNow', 'updatedAt'
+          ])
+        );
+    }
+
+
+    match /road_hazards/{hazardId} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.type in [
+          'bump', 'roadworks', 'maintenance', 'detour', 'speed_camera',
+          'checkpoint', 'accident', 'congestion', 'road_object', 'flooded'
+        ]
+        && request.resource.data.latitude is number
+        && request.resource.data.latitude >= -90
+        && request.resource.data.latitude <= 90
+        && request.resource.data.longitude is number
+        && request.resource.data.longitude >= -180
+        && request.resource.data.longitude <= 180
+        && (request.resource.data.heading == null
+          || request.resource.data.heading is number)
+        && request.resource.data.status == 'active'
+        && request.resource.data.confirmations == 1
+        && request.resource.data.resolvedReports == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastConfirmedAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <=
+          request.time + duration.value(30, 'd')
+        && request.resource.data.keys().hasOnly([
+          'reporterUid', 'type', 'latitude', 'longitude', 'heading',
+          'status', 'confirmations', 'resolvedReports', 'createdAt',
+          'updatedAt', 'lastConfirmedAt', 'expiresAt'
+        ]);
+
+      allow update: if signedIn()
+        && request.resource.data.reporterUid == resource.data.reporterUid
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.latitude == resource.data.latitude
+        && request.resource.data.longitude == resource.data.longitude
+        && request.resource.data.status == 'active'
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'confirmations', 'resolvedReports', 'lastConfirmedAt',
+          'updatedAt', 'expiresAt'
+        ])
+        && (
+          (
+            request.resource.data.confirmations ==
+              resource.data.confirmations + 1
+            && request.resource.data.resolvedReports ==
+              resource.data.resolvedReports
+            && request.resource.data.lastConfirmedAt == request.time
+            && request.resource.data.expiresAt is timestamp
+            && request.resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt <=
+              request.time + duration.value(30, 'd')
+          )
+          ||
+          (
+            request.resource.data.confirmations ==
+              resource.data.confirmations
+            && request.resource.data.resolvedReports ==
+              resource.data.resolvedReports + 1
+            && request.resource.data.lastConfirmedAt ==
+              resource.data.lastConfirmedAt
+            && request.resource.data.expiresAt ==
+              resource.data.expiresAt
+          )
+        );
+
+      allow delete: if hasAdminPermission('manageReports')
+        && !isProvinceAgent();
+    }
+
+    match /admin_audit/{auditId} {
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || hasAdminPermission('approvePlaces');
+    }
+  }
+}
+)
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.keys().hasOnly([
+          'adminId', 'displayName', 'email', 'phone', 'department',
+          'role', 'governorate', 'permissions', 'status', 'activationCode',
+          'createdByUid', 'createdByName', 'createdAt', 'updatedAt',
+          'expiresAt'
+        ]);
+
+      allow update: if isGeneralManager()
+        || (
+          signedIn()
+          && resource.data.status == 'pending'
+          && resource.data.expiresAt is timestamp
+          && resource.data.expiresAt > request.time
+          && request.auth.token.email == resource.data.email
+          && request.resource.data.status == 'claimed'
+          && request.resource.data.claimedUid == request.auth.uid
+          && request.resource.data.claimCode == resource.data.activationCode
+          && request.resource.data.claimedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'claimedUid', 'claimCode', 'claimedAt', 'updatedAt'
+          ])
+        )
+        || (
+          signedIn()
+          && resource.data.status == 'claimed'
+          && resource.data.claimedUid == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && !request.resource.data.keys().hasAny([
+            'claimedUid', 'claimCode', 'claimedAt'
+          ])
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'claimedUid', 'claimCode', 'claimedAt', 'updatedAt'
+          ])
+        )
+        || (
+          signedIn()
+          && resource.data.status == 'claimed'
+          && resource.data.claimedUid == request.auth.uid
+          && request.resource.data.status == 'completed'
+          && request.resource.data.claimedUid == request.auth.uid
+          && request.resource.data.acceptedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && !request.resource.data.keys().hasAny([
+            'activationCode', 'claimCode'
+          ])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'acceptedAt', 'updatedAt',
+            'activationCode', 'claimCode'
+          ])
+        );
+
+      allow delete: if isGeneralManager();
+    }
+
     match /admins/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid)
         || isGeneralManager();
-      allow create, delete: if false;
-      allow update: if signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fcmTokens', 'lastSeenAt', 'lastLoginAt'
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.inviteId is string
+        && exists(
+          /databases/$(database)/documents/admin_invites/$(request.resource.data.inviteId)
+        )
+        && inviteData(request.resource.data.inviteId).status == 'claimed'
+        && inviteData(request.resource.data.inviteId).claimedUid == uid
+        && request.auth.token.email == inviteData(request.resource.data.inviteId).email
+        && request.resource.data.adminId ==
+          inviteData(request.resource.data.inviteId).adminId
+        && request.resource.data.displayName ==
+          inviteData(request.resource.data.inviteId).displayName
+        && request.resource.data.email ==
+          inviteData(request.resource.data.inviteId).email
+        && request.resource.data.phone ==
+          inviteData(request.resource.data.inviteId).phone
+        && request.resource.data.department ==
+          inviteData(request.resource.data.inviteId).department
+        && request.resource.data.role ==
+          inviteData(request.resource.data.inviteId).role
+        && request.resource.data.governorate ==
+          inviteData(request.resource.data.inviteId).governorate
+        && request.resource.data.permissions ==
+          inviteData(request.resource.data.inviteId).permissions
+        && request.resource.data.createdByUid ==
+          inviteData(request.resource.data.inviteId).createdByUid
+        && request.resource.data.createdByName ==
+          inviteData(request.resource.data.inviteId).createdByName
+        && validAdminRole(request.resource.data.role)
+        && request.resource.data.status == 'active'
+        && request.resource.data.active == true
+        && request.resource.data.mustChangePassword == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.permissionsUpdatedAt == request.time
+        && request.resource.data.lastSeenAt == request.time
+        && request.resource.data.lastLoginAt == request.time
+        && request.resource.data.firstLoginCompletedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'adminId', 'displayName', 'email', 'phone', 'department',
+          'role', 'governorate', 'status', 'active', 'permissions',
+          'mustChangePassword', 'inviteId', 'createdAt', 'updatedAt',
+          'createdByUid', 'createdByName',
+          'permissionsUpdatedAt', 'permissionsUpdatedByUid',
+          'permissionsUpdatedByName', 'lastSeenAt', 'lastLoginAt',
+          'firstLoginCompletedAt'
         ]);
+
+      allow update: if (
+          signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fcmTokens', 'lastSeenAt', 'lastLoginAt'
+          ])
+        )
+        || (
+          signedIn()
+          && request.auth.uid == uid
+          && resource.data.mustChangePassword == true
+          && request.resource.data.mustChangePassword == false
+          && request.resource.data.firstLoginCompletedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'mustChangePassword', 'firstLoginCompletedAt', 'updatedAt'
+          ])
+        )
+        || (
+          isGeneralManager()
+          && validAdminRole(request.resource.data.role)
+          && validAdminStatus(request.resource.data.status)
+          && request.resource.data.active ==
+            (request.resource.data.status == 'active')
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.department is string
+          && request.resource.data.department.size() > 0
+          && request.resource.data.permissions is map
+          && (
+            request.resource.data.role != 'province_agent'
+            || (
+              request.resource.data.governorate is string
+              && request.resource.data.governorate.size() > 0
+            )
+          )
+          && (
+            request.auth.uid != uid
+            || (
+              request.resource.data.role == resource.data.role
+              && request.resource.data.status == resource.data.status
+              && request.resource.data.active == resource.data.active
+            )
+          )
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.updatedByUid == request.auth.uid
+          && request.resource.data.permissionsUpdatedAt == request.time
+          && request.resource.data.permissionsUpdatedByUid == request.auth.uid
+          && request.resource.data.statusUpdatedAt == request.time
+          && request.resource.data.statusUpdatedByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'phone', 'department', 'role', 'governorate',
+            'status', 'active', 'permissions', 'updatedAt',
+            'updatedByUid', 'updatedByName',
+            'permissionsUpdatedAt', 'permissionsUpdatedByUid',
+            'permissionsUpdatedByName', 'statusReason', 'statusUpdatedAt',
+            'statusUpdatedByUid', 'statusUpdatedByName'
+          ])
+        );
+
+      allow delete: if isGeneralManager()
+        && request.auth.uid != uid;
     }
 
     // DEDA free PIN authentication. The credential document is never readable
