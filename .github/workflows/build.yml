@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - places-v1
+      - build112-admin-invite-work
 
 jobs:
   build:
