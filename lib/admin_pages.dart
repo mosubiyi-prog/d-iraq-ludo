@@ -853,6 +853,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           'general_manager')
                         _dashboardCard(
                           icon: Icons.groups_2_outlined,
+                          accentColor: const Color(0xFF2F6B8A),
+                          backgroundColor: const Color(0xD9EAF3F8),
                           title: t(
                             'إدارة الفريق والصلاحيات',
                             'Team & permissions',
@@ -872,6 +874,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       ))
                         _dashboardCard(
                           icon: Icons.storefront_outlined,
+                          accentColor: const Color(0xFF2E7D32),
+                          backgroundColor: const Color(0xD9ECF7ED),
                           title: t('طلبات الأماكن', 'Place requests'),
                           subtitle: t(
                             'المراجعة والاعتماد حسب الصلاحية',
@@ -886,6 +890,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       if (DedaBackend.adminHasPermission(profile, 'supportRead'))
                         _dashboardCard(
                           icon: Icons.support_agent,
+                          accentColor: const Color(0xFF00796B),
+                          backgroundColor: const Color(0xD9E7F6F3),
                           title: t('الدعم', 'Support'),
                           subtitle: t(
                             'رسائل المستخدمين والردود',
@@ -901,6 +907,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           'general_manager')
                         _dashboardCard(
                           icon: Icons.lock_reset,
+                          accentColor: const Color(0xFF9A6700),
+                          backgroundColor: const Color(0xD9FFF4D9),
                           title: t('استرجاع الدخول', 'Recovery'),
                           subtitle: t(
                             'طلبات استرجاع الحساب الحساسة',
@@ -921,6 +929,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       if (DedaBackend.adminHasPermission(profile, 'viewUsers'))
                         _dashboardCard(
                           icon: Icons.people_alt_outlined,
+                          accentColor: const Color(0xFF4F5AA8),
+                          backgroundColor: const Color(0xD9EFF0FA),
                           title: t('المستخدمون', 'Users'),
                           subtitle: t('قراءة فقط', 'Read only'),
                           onTap: () => _open(
@@ -931,6 +941,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           'general_manager')
                         _dashboardCard(
                           icon: Icons.person_remove_alt_1_outlined,
+                          accentColor: const Color(0xFFA3463C),
+                          backgroundColor: const Color(0xD9FAEEEC),
                           title: t(
                             'طلبات حذف الحساب',
                             'Account deletion',
@@ -952,6 +964,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       ))
                         _dashboardCard(
                           icon: Icons.report_gmailerrorred_outlined,
+                          accentColor: const Color(0xFFB35C00),
+                          backgroundColor: const Color(0xD9FFF0E0),
                           title: t('البلاغات', 'Reports'),
                           subtitle: t(
                             'بلاغات الطريق الحالية',
@@ -968,6 +982,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       ))
                         _dashboardCard(
                           icon: Icons.map_outlined,
+                          accentColor: const Color(0xFF5F6F2E),
+                          backgroundColor: const Color(0xD9F2F6E7),
                           title: t('المحافظات', 'Governorates'),
                           subtitle: t(
                             'نطاق عمل الوكلاء',
@@ -984,6 +1000,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       ))
                         _dashboardCard(
                           icon: Icons.analytics_outlined,
+                          accentColor: const Color(0xFF6F4E8C),
+                          backgroundColor: const Color(0xD9F5EEF8),
                           title: t('التقارير', 'Analytics'),
                           subtitle: t(
                             'ملخص تشغيلي سريع',
@@ -999,6 +1017,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                               'province_agent')
                         _dashboardCard(
                           icon: Icons.fact_check_outlined,
+                          accentColor: const Color(0xFF476A78),
+                          backgroundColor: const Color(0xD9ECF3F5),
                           title: t('السجل الإداري', 'Audit log'),
                           subtitle: t(
                             'من قام بماذا ومتى',
@@ -1010,6 +1030,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                         ),
                       _dashboardCard(
                         icon: Icons.settings_outlined,
+                        accentColor: const Color(0xFF5B6770),
+                        backgroundColor: const Color(0xD9F0F2F3),
                         title: t('الإعدادات', 'Settings'),
                         subtitle: t(
                           'بيانات حسابك الإداري',
