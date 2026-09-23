@@ -1590,6 +1590,7 @@ class DedaAdminAuditPage extends StatelessWidget {
       'recovery_approved': 'اعتماد استرجاع الدخول',
       'recovery_rejected': 'رفض استرجاع الدخول',
       'read_user_account': 'مشاهدة حساب مستخدم',
+      'account_deletion_status_changed': 'تحديث طلب حذف حساب',
       'road_hazard_deleted': 'حذف بلاغ طريق',
       'request_viewed': 'مشاهدة طلب',
       'support_replied': 'الرد على الدعم',
