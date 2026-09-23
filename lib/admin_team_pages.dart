@@ -1799,6 +1799,370 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
   }
 }
 
+
+class DedaAccountDeletionRequestsPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaAccountDeletionRequestsPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  @override
+  State<DedaAccountDeletionRequestsPage> createState() =>
+      _DedaAccountDeletionRequestsPageState();
+}
+
+class _DedaAccountDeletionRequestsPageState
+    extends State<DedaAccountDeletionRequestsPage> {
+  String _filter = 'all';
+
+  bool get ar => widget.isArabic;
+  String t(String a, String e) => ar ? a : e;
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'new':
+        return t('جديد', 'New');
+      case 'reviewing':
+        return t('قيد المراجعة', 'Under review');
+      case 'deleted':
+        return t('تم الحذف', 'Deleted');
+      case 'cancelled':
+      case 'rejected':
+        return t('ملغي / مرفوض', 'Cancelled / rejected');
+      default:
+        return status;
+    }
+  }
+
+  bool _matches(String status) {
+    if (_filter == 'all') return true;
+    if (_filter == 'closed') {
+      return status == 'cancelled' || status == 'rejected';
+    }
+    return status == _filter;
+  }
+
+  Future<String?> _askNote(String title) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          minLines: 2,
+          maxLines: 5,
+          decoration: InputDecoration(
+            labelText: t('ملاحظة الإدارة', 'Administration note'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: Text(t('تأكيد', 'Confirm')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _changeStatus(
+    String requestId,
+    String status,
+    Map<String, dynamic> data,
+  ) async {
+    final title = status == 'deleted'
+        ? t(
+            'تأكيد تسجيل الطلب كتم الحذف',
+            'Confirm marking this request as deleted',
+          )
+        : status == 'reviewing'
+            ? t('بدء المراجعة', 'Start review')
+            : t('إغلاق الطلب', 'Close request');
+    final note = await _askNote(title);
+    if (note == null) return;
+
+    try {
+      await DedaBackend.updateAccountDeletionRequestStatus(
+        requestId: requestId,
+        status: status,
+        note: note,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تم تحديث حالة الطلب.', 'Request status updated.'),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaFriendlyAdminError(ar, error))),
+      );
+    }
+  }
+
+  Widget _filterChip(String value, String arLabel, String enLabel) {
+    return ChoiceChip(
+      selected: _filter == value,
+      selectedColor: const Color(0xFFDDEDDD),
+      label: Text(t(arLabel, enLabel)),
+      onSelected: (_) => setState(() => _filter = value),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            t('طلبات حذف الحساب', 'Account deletion requests'),
+          ),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.accountDeletionRequests(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                t(
+                  'تعذر تحميل طلبات حذف الحساب.',
+                  'Could not load account deletion requests.',
+                ),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs.where((doc) {
+            final status = (doc.data()['status'] ?? 'new').toString();
+            return _matches(status);
+          }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _filterChip('all', 'الكل', 'All'),
+                    _filterChip('new', 'جديد', 'New'),
+                    _filterChip('reviewing', 'قيد المراجعة', 'Under review'),
+                    _filterChip('deleted', 'تم الحذف', 'Deleted'),
+                    _filterChip('closed', 'ملغي/مرفوض', 'Cancelled/rejected'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: docs.isEmpty
+                    ? Center(
+                        child: Text(
+                          t(
+                            'لا توجد طلبات في هذا القسم.',
+                            'There are no requests in this section.',
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final doc = docs[index];
+                          final data = doc.data();
+                          final status =
+                              (data['status'] ?? 'new').toString();
+                          final name =
+                              (data['name'] ?? '').toString().trim();
+                          final phone =
+                              (data['phone'] ?? '').toString().trim();
+                          final reason =
+                              (data['reason'] ?? '').toString().trim();
+                          return Card(
+                            clipBehavior: Clip.antiAlias,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: ExpansionTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFF3E7E4),
+                                child: Icon(
+                                  Icons.person_remove_alt_1_outlined,
+                                  color: Color(0xFF8A3C32),
+                                ),
+                              ),
+                              title: Text(
+                                name.isEmpty
+                                    ? t(
+                                        'طلب حذف حساب',
+                                        'Account deletion request',
+                                      )
+                                    : name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (phone.isNotEmpty)
+                                    Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        phone,
+                                        textAlign: TextAlign.left,
+                                      ),
+                                    ),
+                                  Text(
+                                    t('الحالة: ', 'Status: ') +
+                                        _statusLabel(status),
+                                  ),
+                                  Text(
+                                    t('التاريخ: ', 'Date: ') +
+                                        dedaAdminTimestamp(
+                                          data['createdAt'],
+                                        ),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              childrenPadding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                              children: [
+                                if (reason.isNotEmpty)
+                                  Align(
+                                    alignment:
+                                        AlignmentDirectional.centerStart,
+                                    child: Text(
+                                      t('السبب: ', 'Reason: ') + reason,
+                                    ),
+                                  ),
+                                const SizedBox(height: 8),
+                                if ((data['reviewNote'] ?? '')
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty)
+                                  Align(
+                                    alignment:
+                                        AlignmentDirectional.centerStart,
+                                    child: Text(
+                                      t(
+                                            'ملاحظة الإدارة: ',
+                                            'Administration note: ',
+                                          ) +
+                                          data['reviewNote'].toString(),
+                                    ),
+                                  ),
+                                if ((data['reviewedByName'] ?? '')
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty)
+                                  Align(
+                                    alignment:
+                                        AlignmentDirectional.centerStart,
+                                    child: Text(
+                                      t(
+                                            'آخر إجراء بواسطة: ',
+                                            'Last action by: ',
+                                          ) +
+                                          data['reviewedByName'].toString(),
+                                    ),
+                                  ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (status != 'reviewing' &&
+                                        status != 'deleted' &&
+                                        status != 'cancelled' &&
+                                        status != 'rejected')
+                                      OutlinedButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'reviewing',
+                                          data,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.manage_search_outlined,
+                                        ),
+                                        label: Text(
+                                          t(
+                                            'قيد المراجعة',
+                                            'Under review',
+                                          ),
+                                        ),
+                                      ),
+                                    if (status != 'deleted')
+                                      FilledButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'deleted',
+                                          data,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.delete_forever_outlined,
+                                        ),
+                                        label: Text(
+                                          t('تم الحذف', 'Deleted'),
+                                        ),
+                                      ),
+                                    if (status != 'cancelled' &&
+                                        status != 'rejected' &&
+                                        status != 'deleted')
+                                      OutlinedButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'rejected',
+                                          data,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.cancel_outlined,
+                                        ),
+                                        label: Text(
+                                          t(
+                                            'ملغي / مرفوض',
+                                            'Cancelled / rejected',
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class DedaAdminRoadReportsPage extends StatefulWidget {
   final bool isArabic;
   final Map<String, dynamic> adminProfile;
