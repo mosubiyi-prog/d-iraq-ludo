@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -1179,6 +1180,14 @@ class DedaBackend {
         .snapshots();
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>> adminInvitations() {
+    return FirebaseFirestore.instance
+        .collection('admin_invites')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots();
+  }
+
   static Stream<QuerySnapshot<Map<String, dynamic>>> adminAudit() {
     return FirebaseFirestore.instance
         .collection('admin_audit')
@@ -1194,7 +1203,20 @@ class DedaBackend {
         .snapshots();
   }
 
-  static Future<Map<String, dynamic>> createAdminMember({
+  static String _newAdminInviteCode() {
+    final random = Random.secure();
+    return List<String>.generate(8, (_) => random.nextInt(10).toString()).join();
+  }
+
+  static Map<String, bool> _cleanAdminPermissions(
+    Map<String, bool> permissions,
+  ) {
+    return <String, bool>{
+      for (final entry in permissions.entries) entry.key: entry.value == true,
+    };
+  }
+
+  static Future<Map<String, dynamic>> createAdminInvitation({
     required String displayName,
     required String email,
     required String role,
@@ -1203,18 +1225,294 @@ class DedaBackend {
     required Map<String, bool> permissions,
     String phone = '',
   }) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('createAdminMember');
-    final result = await callable.call(<String, dynamic>{
-      'displayName': displayName.trim(),
-      'email': email.trim(),
-      'phone': phone.trim(),
-      'role': role,
-      'department': department.trim(),
-      'governorate': governorate.trim(),
-      'permissions': permissions,
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+
+    final cleanName = displayName.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    final cleanDepartment = department.trim();
+    final cleanRole = normalizeAdminRole(role);
+    final cleanGovernorate =
+        cleanRole == 'province_agent' ? governorate.trim() : '';
+
+    if (cleanName.isEmpty) throw ArgumentError('display-name-required');
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+      throw ArgumentError('valid-email-required');
+    }
+    if (cleanDepartment.isEmpty) throw ArgumentError('department-required');
+    if (!<String>{
+      'general_manager',
+      'deputy_manager',
+      'employee',
+      'province_agent',
+    }.contains(cleanRole)) {
+      throw ArgumentError('invalid-admin-role');
+    }
+    if (cleanRole == 'province_agent' && cleanGovernorate.isEmpty) {
+      throw ArgumentError('governorate-required');
+    }
+
+    final firestore = FirebaseFirestore.instance;
+
+    final existingAdmin = await firestore
+        .collection('admins')
+        .where('email', isEqualTo: cleanEmail)
+        .limit(1)
+        .get();
+    if (existingAdmin.docs.isNotEmpty) {
+      throw StateError('email-already-exists');
+    }
+
+    final existingInvite = await firestore
+        .collection('admin_invites')
+        .where('email', isEqualTo: cleanEmail)
+        .limit(10)
+        .get();
+    if (existingInvite.docs.any((doc) {
+      final status = (doc.data()['status'] ?? '').toString();
+      return status == 'pending' || status == 'claimed';
+    })) {
+      throw StateError('invite-already-exists');
+    }
+
+    final inviteRef = firestore.collection('admin_invites').doc();
+    final counterRef =
+        firestore.collection('system_counters').doc('admin_members');
+    final code = _newAdminInviteCode();
+    final expiresAt = Timestamp.fromDate(
+      DateTime.now().add(const Duration(days: 7)),
+    );
+    final cleanPermissions = _cleanAdminPermissions(permissions);
+
+    late String adminId;
+    await firestore.runTransaction((transaction) async {
+      final counter = await transaction.get(counterRef);
+      final current = (counter.data()?['value'] as num?)?.toInt() ?? 0;
+      final next = current + 1;
+      adminId = 'DEDA-ADM-${next.toString().padLeft(6, '0')}';
+
+      transaction.set(
+        counterRef,
+        <String, dynamic>{
+          'value': next,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      transaction.set(inviteRef, <String, dynamic>{
+        'adminId': adminId,
+        'displayName': cleanName,
+        'email': cleanEmail,
+        'phone': phone.trim(),
+        'department': cleanDepartment,
+        'role': cleanRole,
+        'governorate': cleanGovernorate,
+        'permissions': cleanPermissions,
+        'status': 'pending',
+        'activationCode': code,
+        'createdByUid': actor['uid'].toString(),
+        'createdByName': actor['displayName'].toString(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'expiresAt': expiresAt,
+      });
     });
-    return Map<String, dynamic>.from(result.data as Map);
+
+    await _writeAdminAudit(
+      'admin_invite_created',
+      details: <String, dynamic>{
+        'inviteId': inviteRef.id,
+        'targetAdminId': adminId,
+        'targetAdminName': cleanName,
+        'targetAdminRole': cleanRole,
+        'targetEmail': cleanEmail,
+        'targetGovernorate':
+            cleanRole == 'province_agent' ? cleanGovernorate : null,
+      },
+    );
+
+    return <String, dynamic>{
+      'inviteId': inviteRef.id,
+      'adminId': adminId,
+      'email': cleanEmail,
+      'activationCode': code,
+      'expiresAt': expiresAt,
+    };
+  }
+
+  static Future<void> cancelAdminInvitation(String inviteId) async {
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    final ref =
+        FirebaseFirestore.instance.collection('admin_invites').doc(inviteId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    final data = snapshot.data() ?? <String, dynamic>{};
+    await _writeAdminAudit(
+      'admin_invite_cancelled',
+      details: <String, dynamic>{
+        'inviteId': inviteId,
+        'targetAdminId': data['adminId'],
+        'targetAdminName': data['displayName'],
+        'targetEmail': data['email'],
+      },
+    );
+    await ref.delete();
+  }
+
+  static Future<Map<String, dynamic>> activateAdminInvitation({
+    required String inviteId,
+    required String activationCode,
+    required String email,
+    required String password,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final cleanInviteId = inviteId.trim();
+    final cleanCode = activationCode.trim();
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanInviteId.isEmpty) throw ArgumentError('invite-id-required');
+    if (!RegExp(r'^\d{8}$').hasMatch(cleanCode)) {
+      throw ArgumentError('invalid-invite-code');
+    }
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+      throw ArgumentError('valid-email-required');
+    }
+    if (password.length < 8) throw ArgumentError('weak-password');
+
+    final auth = FirebaseAuth.instance;
+    UserCredential credential;
+    try {
+      credential = await auth.createUserWithEmailAndPassword(
+        email: cleanEmail,
+        password: password,
+      );
+    } catch (error) {
+      rethrow;
+    }
+
+    final user = credential.user;
+    if (user == null) {
+      await auth.signOut();
+      throw StateError('admin-account-create-failed');
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final inviteRef =
+        firestore.collection('admin_invites').doc(cleanInviteId);
+    final adminRef = firestore.collection('admins').doc(user.uid);
+    var claimed = false;
+    var adminCreated = false;
+
+    try {
+      await inviteRef.update(<String, dynamic>{
+        'status': 'claimed',
+        'claimedUid': user.uid,
+        'claimCode': cleanCode,
+        'claimedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      claimed = true;
+
+      final inviteSnapshot = await inviteRef.get();
+      if (!inviteSnapshot.exists) throw StateError('invite-not-found');
+      final invite = inviteSnapshot.data() ?? <String, dynamic>{};
+      if ((invite['status'] ?? '').toString() != 'claimed' ||
+          (invite['claimedUid'] ?? '').toString() != user.uid) {
+        throw StateError('invite-not-claimed');
+      }
+      if ((invite['email'] ?? '').toString().trim().toLowerCase() != cleanEmail) {
+        throw StateError('invite-email-mismatch');
+      }
+
+      final expiresAt = invite['expiresAt'];
+      if (expiresAt is Timestamp && expiresAt.toDate().isBefore(DateTime.now())) {
+        throw StateError('invite-expired');
+      }
+
+      final role = normalizeAdminRole(invite['role']);
+      final permissions = invite['permissions'] is Map
+          ? Map<String, dynamic>.from(invite['permissions'] as Map)
+          : <String, dynamic>{};
+
+      await adminRef.set(<String, dynamic>{
+        'adminId': (invite['adminId'] ?? '').toString(),
+        'displayName': (invite['displayName'] ?? '').toString(),
+        'email': cleanEmail,
+        'phone': (invite['phone'] ?? '').toString(),
+        'department': (invite['department'] ?? '').toString(),
+        'role': role,
+        'governorate':
+            role == 'province_agent' ? (invite['governorate'] ?? '').toString() : '',
+        'status': 'active',
+        'active': true,
+        'permissions': permissions,
+        'mustChangePassword': false,
+        'inviteId': cleanInviteId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdByUid': (invite['createdByUid'] ?? '').toString(),
+        'createdByName': (invite['createdByName'] ?? '').toString(),
+        'permissionsUpdatedAt': FieldValue.serverTimestamp(),
+        'permissionsUpdatedByUid': (invite['createdByUid'] ?? '').toString(),
+        'permissionsUpdatedByName': (invite['createdByName'] ?? '').toString(),
+        'lastSeenAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'firstLoginCompletedAt': FieldValue.serverTimestamp(),
+      });
+      adminCreated = true;
+
+      try {
+        await inviteRef.update(<String, dynamic>{
+          'status': 'completed',
+          'acceptedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'activationCode': FieldValue.delete(),
+          'claimCode': FieldValue.delete(),
+        });
+      } catch (_) {
+        // The admin record is already secure and usable. Invite cleanup can
+        // be completed later by the general manager if the network drops here.
+      }
+
+      try {
+        await registerAdminNotifications();
+      } catch (_) {}
+      await _writeAdminAudit(
+        'admin_invite_accepted',
+        details: <String, dynamic>{
+          'inviteId': cleanInviteId,
+          'targetAdminId': invite['adminId'],
+          'targetAdminName': invite['displayName'],
+          'targetAdminRole': role,
+        },
+      );
+      return currentAdminProfile();
+    } catch (error) {
+      if (!adminCreated) {
+        if (claimed) {
+          try {
+            await inviteRef.update(<String, dynamic>{
+              'status': 'pending',
+              'claimedUid': FieldValue.delete(),
+              'claimCode': FieldValue.delete(),
+              'claimedAt': FieldValue.delete(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } catch (_) {}
+        }
+        try {
+          await user.delete();
+        } catch (_) {}
+        try {
+          await auth.signOut();
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   static Future<void> updateAdminMember({
@@ -1228,57 +1526,172 @@ class DedaBackend {
     required String reason,
     String phone = '',
   }) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('updateAdminMember');
-    await callable.call(<String, dynamic>{
-      'uid': uid,
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    if (reason.trim().isEmpty) throw ArgumentError('reason-required');
+
+    final ref = FirebaseFirestore.instance.collection('admins').doc(uid);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) throw StateError('admin-member-not-found');
+    final current = snapshot.data() ?? <String, dynamic>{};
+
+    final newRole = normalizeAdminRole(role);
+    final newStatus = status.trim().toLowerCase();
+    if (!<String>{
+      'general_manager',
+      'deputy_manager',
+      'employee',
+      'province_agent',
+    }.contains(newRole)) {
+      throw ArgumentError('invalid-admin-role');
+    }
+    if (!<String>{
+      'active',
+      'temporarily_stopped',
+      'disabled',
+    }.contains(newStatus)) {
+      throw ArgumentError('invalid-admin-status');
+    }
+    if (displayName.trim().isEmpty) {
+      throw ArgumentError('display-name-required');
+    }
+    if (department.trim().isEmpty) {
+      throw ArgumentError('department-required');
+    }
+    if (newRole == 'province_agent' && governorate.trim().isEmpty) {
+      throw ArgumentError('governorate-required');
+    }
+
+    if (uid == actor['uid'].toString()) {
+      final oldRole = normalizeAdminRole(current['role']);
+      final oldStatus = normalizeAdminStatus(current);
+      if (newRole != oldRole || newStatus != oldStatus) {
+        throw StateError('cannot-change-current-admin-access');
+      }
+    }
+
+    final cleanPermissions = _cleanAdminPermissions(permissions);
+    await ref.update(<String, dynamic>{
       'displayName': displayName.trim(),
       'phone': phone.trim(),
-      'role': role,
       'department': department.trim(),
-      'governorate': governorate.trim(),
-      'status': status,
-      'permissions': permissions,
-      'reason': reason.trim(),
+      'role': newRole,
+      'governorate':
+          newRole == 'province_agent' ? governorate.trim() : '',
+      'status': newStatus,
+      'active': newStatus == 'active',
+      'permissions': cleanPermissions,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedByUid': actor['uid'].toString(),
+      'updatedByName': actor['displayName'].toString(),
+      'permissionsUpdatedAt': FieldValue.serverTimestamp(),
+      'permissionsUpdatedByUid': actor['uid'].toString(),
+      'permissionsUpdatedByName': actor['displayName'].toString(),
+      'statusReason': reason.trim(),
+      'statusUpdatedAt': FieldValue.serverTimestamp(),
+      'statusUpdatedByUid': actor['uid'].toString(),
+      'statusUpdatedByName': actor['displayName'].toString(),
     });
+
+    await _writeAdminAudit(
+      'admin_member_updated',
+      details: <String, dynamic>{
+        'targetAdminUid': uid,
+        'targetAdminId': current['adminId'],
+        'targetAdminName': displayName.trim(),
+        'oldRole': normalizeAdminRole(current['role']),
+        'newRole': newRole,
+        'oldStatus': normalizeAdminStatus(current),
+        'newStatus': newStatus,
+        'reason': reason.trim(),
+      },
+    );
   }
 
   static Future<void> revokeAdminMemberSessions({
     required String uid,
     required String reason,
   }) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('revokeAdminMemberSessions');
-    await callable.call(<String, dynamic>{
-      'uid': uid,
-      'reason': reason.trim(),
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    if (uid == actor['uid'].toString()) {
+      throw StateError('cannot-stop-current-session');
+    }
+    if (reason.trim().isEmpty) throw ArgumentError('reason-required');
+
+    final ref = FirebaseFirestore.instance.collection('admins').doc(uid);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) throw StateError('admin-member-not-found');
+    final data = snapshot.data() ?? <String, dynamic>{};
+
+    await ref.update(<String, dynamic>{
+      'status': 'temporarily_stopped',
+      'active': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'statusReason': reason.trim(),
+      'statusUpdatedAt': FieldValue.serverTimestamp(),
+      'statusUpdatedByUid': actor['uid'].toString(),
+      'statusUpdatedByName': actor['displayName'].toString(),
     });
+    await _writeAdminAudit(
+      'admin_access_suspended',
+      details: <String, dynamic>{
+        'targetAdminUid': uid,
+        'targetAdminId': data['adminId'],
+        'targetAdminName': data['displayName'] ?? data['name'],
+        'reason': reason.trim(),
+      },
+    );
   }
 
-  static Future<String> resetAdminTemporaryPassword({
-    required String uid,
-    required String reason,
+  static Future<void> sendAdminPasswordReset({
+    required String email,
   }) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('resetAdminTemporaryPassword');
-    final result = await callable.call(<String, dynamic>{
-      'uid': uid,
-      'reason': reason.trim(),
-    });
-    final data = Map<String, dynamic>.from(result.data as Map);
-    return (data['temporaryPassword'] ?? '').toString();
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail.isEmpty) throw ArgumentError('valid-email-required');
+    await FirebaseAuth.instance.sendPasswordResetEmail(email: cleanEmail);
+    await _writeAdminAudit(
+      'admin_password_reset_sent',
+      details: <String, dynamic>{'targetEmail': cleanEmail},
+    );
   }
 
   static Future<void> deleteAdminMember({
     required String uid,
     required String reason,
   }) async {
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('deleteAdminMember');
-    await callable.call(<String, dynamic>{
-      'uid': uid,
-      'reason': reason.trim(),
-    });
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    if (uid == actor['uid'].toString()) {
+      throw StateError('cannot-delete-current-admin');
+    }
+    if (reason.trim().isEmpty) throw ArgumentError('reason-required');
+
+    final ref = FirebaseFirestore.instance.collection('admins').doc(uid);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    final data = snapshot.data() ?? <String, dynamic>{};
+    await _writeAdminAudit(
+      'admin_member_access_removed',
+      details: <String, dynamic>{
+        'targetAdminUid': uid,
+        'targetAdminId': data['adminId'],
+        'targetAdminName': data['displayName'] ?? data['name'],
+        'targetAdminRole': normalizeAdminRole(data['role']),
+        'reason': reason.trim(),
+      },
+    );
+    await ref.delete();
   }
 
   static Future<void> changeCurrentAdminPassword(String newPassword) async {
@@ -1287,9 +1700,11 @@ class DedaBackend {
       throw StateError('admin-not-signed-in');
     }
     await user.updatePassword(newPassword);
-    final callable =
-        FirebaseFunctions.instance.httpsCallable('completeAdminFirstLogin');
-    await callable.call();
+    await FirebaseFirestore.instance.collection('admins').doc(user.uid).update({
+      'mustChangePassword': false,
+      'firstLoginCompletedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   static Future<void> deleteRoadHazardAsAdmin({
