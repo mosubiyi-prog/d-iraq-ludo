@@ -19,14 +19,26 @@ async function notifyTokens(tokens, title, body, type, requestId) {
   });
 }
 
-async function notifyAdmins(title, body, type, requestId) {
+async function notifyAdmins(title, body, type, requestId, options = {}) {
   const admins = await getFirestore()
       .collection("admins")
       .where("active", "==", true)
       .get();
   const tokens = [];
   admins.forEach((document) => {
-    const values = document.data().fcmTokens;
+    const data = document.data() || {};
+    if (normalizedAdminStatus(data) !== "active") return;
+    const role = normalizedAdminRole(data);
+    if (options.permission &&
+        !adminDocumentHasPermission(data, options.permission)) return;
+    if (options.allowProvinceAgent === false && role === "province_agent") {
+      return;
+    }
+    if (role === "province_agent" && options.governorate) {
+      if (String(data.governorate || "").trim() !==
+          String(options.governorate || "").trim()) return;
+    }
+    const values = data.fcmTokens;
     if (Array.isArray(values)) tokens.push(...values);
   });
   await notifyTokens(tokens, title, body, type, requestId);
@@ -58,6 +70,7 @@ exports.onSupportRequestCreated = onDocumentCreated(
           data.name || "طلب دعم جديد",
           "support",
           event.params.requestId,
+          {permission: "supportRead", allowProvinceAgent: false},
       );
     },
 );
@@ -102,6 +115,10 @@ exports.onPlaceRequestCreated = onDocumentCreated(
           data.placeName || "مكان جديد للمراجعة",
           "place",
           event.params.requestId,
+          {
+            permission: "viewPlaceRequests",
+            governorate: data.governorate,
+          },
       );
     },
 );
@@ -190,6 +207,7 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
           data.fullName || data.phone || "طلب استرجاع",
           "recovery",
           event.params.requestId,
+          {permission: "supportRead", allowProvinceAgent: false},
       );
     },
 );
@@ -303,6 +321,13 @@ function normalizedAdminStatus(data) {
   const raw = String(data.status || "").trim().toLowerCase();
   if (ADMIN_STATUSES.has(raw)) return raw;
   return data.active === true ? "active" : "disabled";
+}
+
+function adminDocumentHasPermission(data, permission) {
+  if (normalizedAdminRole(data) === "general_manager") return true;
+  const permissions = data && typeof data.permissions === "object" ?
+    data.permissions : {};
+  return permissions[permission] === true;
 }
 
 function defaultPermissions(role) {
