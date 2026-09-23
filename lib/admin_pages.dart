@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_place_map.dart';
 import 'admin_team_pages.dart';
@@ -18,6 +19,10 @@ class DedaAdminLoginPage extends StatefulWidget {
 }
 
 class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
+  static const _savedNameKey = 'deda_admin_last_name_v1';
+  static const _savedEmailKey = 'deda_admin_last_email_v1';
+
+  final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
@@ -26,13 +31,43 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedIdentity();
+  }
+
+  Future<void> _loadSavedIdentity() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedName = prefs.getString(_savedNameKey) ?? '';
+    final savedEmail = prefs.getString(_savedEmailKey) ?? '';
+    if (!mounted) return;
+    if (_name.text.isEmpty) _name.text = savedName;
+    if (_email.text.isEmpty) _email.text = savedEmail;
+  }
+
+  Future<void> _saveIdentity() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_savedNameKey, _name.text.trim());
+    await prefs.setString(_savedEmailKey, _email.text.trim());
+  }
+
+  @override
   void dispose() {
+    _name.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
+    final cleanName = _name.text.trim();
+    if (cleanName.length < 2) {
+      setState(() => _error = t(
+            'اكتب الاسم الكامل للإدارة.',
+            'Enter the administrator full name.',
+          ));
+      return;
+    }
     if (_email.text.trim().isEmpty || _password.text.isEmpty) return;
     setState(() {
       _loading = true;
@@ -42,6 +77,7 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
       final allowed = await DedaBackend.signInAdmin(
         email: _email.text,
         password: _password.text,
+        displayName: cleanName,
       );
       if (!mounted) return;
       if (!allowed) {
@@ -51,6 +87,7 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             ));
         return;
       }
+      await _saveIdentity();
       final profile = await DedaBackend.currentAdminProfile();
       if (profile['mustChangePassword'] == true) {
         final changed = await _forcePasswordChange();
@@ -201,6 +238,20 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                 ),
                 const SizedBox(height: 22),
                 TextField(
+                  controller: _name,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: t('الاسم الكامل', 'Full name'),
+                    hintText: t(
+                      'يُحفظ كاسمك الإداري الرسمي',
+                      'Saved as your official admin name',
+                    ),
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   textDirection: TextDirection.ltr,
@@ -217,8 +268,8 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                   textDirection: TextDirection.ltr,
                   decoration: InputDecoration(
                     labelText: t(
-                      'كلمة المرور / الرمز المؤقت',
-                      'Password / temporary code',
+                      'رمز الدخول / كلمة المرور',
+                      'Access code / password',
                     ),
                     prefixIcon: const Icon(Icons.lock_outline),
                     border: const OutlineInputBorder(),
