@@ -323,6 +323,20 @@ service cloud.firestore {
 
       allow update: if (
           adminProvinceMatches(resource.data)
+          && adminProvinceMatches(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedBy', 'reviewedByName',
+            'reviewedByRole', 'decisionAction', 'decisionAt',
+            'decisionByUid', 'decisionByName', 'decisionByRole',
+            'decisionNote', 'approvalNumber', 'approvalDate',
+            'approvalMessageDraft', 'approvalPreparedAt',
+            'approvalPreparedByUid', 'approvalPreparedByName',
+            'approvalMessage', 'firstViewedAt', 'firstViewedByUid',
+            'firstViewedByName', 'firstViewedByRole', 'lastViewedAt',
+            'lastViewedByUid', 'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
           && (
             (
               request.resource.data.status == 'approved'
@@ -338,10 +352,16 @@ service cloud.firestore {
             )
             || (
               request.resource.data.status == resource.data.status
-              && hasAdminPermission('reviewPlaceRequests')
+              && hasAdminPermission('approvePlaces')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'approvalNumber', 'approvalDate', 'approvalMessageDraft',
+                'approvalPreparedAt', 'approvalPreparedByUid',
+                'approvalPreparedByName'
+              ])
             )
             || (
-              hasAdminPermission('viewPlaceRequests')
+              request.resource.data.status == resource.data.status
+              && hasAdminPermission('viewPlaceRequests')
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
                 'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
@@ -364,6 +384,7 @@ service cloud.firestore {
       allow update: if (
           hasAdminPermission('approvePlaces')
           && adminProvinceMatches(resource.data)
+          && adminProvinceMatches(request.resource.data)
         )
         || (
           signedIn()
