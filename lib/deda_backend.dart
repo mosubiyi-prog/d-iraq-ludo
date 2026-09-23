@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -102,34 +101,6 @@ class DedaBackend {
         data?['active'] != true ||
         normalizeAdminStatus(data) != 'active') {
       throw StateError('admin-not-authorized');
-    }
-
-    final rawRole = (data?['role'] ?? '').toString().trim();
-    final rawStatus = (data?['status'] ?? '').toString().trim();
-    final needsMetadataNormalization =
-        (data?['adminId'] ?? '').toString().trim().isEmpty ||
-            !<String>{
-              'general_manager',
-              'deputy_manager',
-              'employee',
-              'province_agent',
-            }.contains(rawRole) ||
-            !<String>{
-              'active',
-              'temporarily_stopped',
-              'disabled',
-            }.contains(rawStatus);
-
-    if (needsMetadataNormalization) {
-      try {
-        final callable =
-            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
-        await callable.call();
-        snapshot = await ref.get();
-        data = snapshot.data();
-      } catch (_) {
-        // Legacy active admins remain usable while the backend is deploying.
-      }
     }
 
     final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);
@@ -620,13 +591,6 @@ class DedaBackend {
         'lastSeenAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      try {
-        final callable =
-            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
-        await callable.call();
-      } catch (_) {
-        // Preserve login compatibility if the backend is still deploying.
-      }
       await registerAdminNotifications();
       await _writeAdminAudit('admin_signed_in');
       return true;
