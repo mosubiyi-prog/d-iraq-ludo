@@ -49,10 +49,19 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             ));
         return;
       }
+      final profile = await DedaBackend.currentAdminProfile();
+      if (profile['mustChangePassword'] == true) {
+        final changed = await _forcePasswordChange();
+        if (!changed) {
+          await DedaBackend.signOutAdmin();
+          return;
+        }
+      }
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => DedaAdminInboxPage(isArabic: widget.isArabic),
+          builder: (_) => DedaAdminDashboardPage(isArabic: widget.isArabic),
         ),
       );
     } catch (_) {
@@ -65,6 +74,88 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<bool> _forcePasswordChange() async {
+    final first = TextEditingController();
+    final second = TextEditingController();
+    String? dialogError;
+    final newPassword = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(t(
+            'تغيير كلمة المرور لأول دخول',
+            'Change password on first sign-in',
+          )),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t(
+                'هذا الرمز مؤقت. اختر كلمة مرور جديدة قبل الدخول إلى الإدارة.',
+                'The invitation code is temporary. Choose a new password before entering administration.',
+              )),
+              const SizedBox(height: 14),
+              TextField(
+                controller: first,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  labelText: t('كلمة المرور الجديدة', 'New password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: second,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  labelText: t('تأكيد كلمة المرور', 'Confirm password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  dialogError!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                final value = first.text;
+                if (value.length < 8) {
+                  setDialogState(() => dialogError = t(
+                    'استخدم 8 أحرف/أرقام على الأقل.',
+                    'Use at least 8 characters.',
+                  ));
+                  return;
+                }
+                if (value != second.text) {
+                  setDialogState(() => dialogError = t(
+                    'كلمتا المرور غير متطابقتين.',
+                    'Passwords do not match.',
+                  ));
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: Text(t('حفظ والمتابعة', 'Save and continue')),
+            ),
+          ],
+        ),
+      ),
+    );
+    first.dispose();
+    second.dispose();
+    if (newPassword == null) return false;
+    await DedaBackend.changeCurrentAdminPassword(newPassword);
+    return true;
   }
 
   @override
