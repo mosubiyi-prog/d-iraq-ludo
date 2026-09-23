@@ -707,11 +707,13 @@ class _RequestList extends StatefulWidget {
   final bool isArabic;
   final String collection;
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
+  final Map<String, dynamic>? adminProfile;
 
   const _RequestList({
     required this.isArabic,
     required this.collection,
     required this.stream,
+    this.adminProfile,
   });
 
   @override
@@ -723,6 +725,12 @@ class _RequestListState extends State<_RequestList> {
   String _section = 'current';
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  bool _can(String permission) {
+    final profile = widget.adminProfile;
+    return profile == null ||
+        DedaBackend.adminHasPermission(profile, permission);
+  }
 
   String statusLabel(String status) {
     switch (status) {
@@ -1058,6 +1066,15 @@ class _RequestListState extends State<_RequestList> {
   }
 
   Widget _supportActions({required String status, required String id}) {
+    if (!_can('supportReply')) {
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Chip(
+          avatar: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(t('قراءة فقط', 'Read only')),
+        ),
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -1431,7 +1448,7 @@ class _RequestListState extends State<_RequestList> {
             const SizedBox(height: 10),
             _detailRow(t('رد الإدارة', 'Administration reply'), reply),
           ],
-          if (ownerUid.isNotEmpty)
+          if (ownerUid.isNotEmpty && _can('viewUsers'))
             OutlinedButton.icon(
               onPressed: () => _showUserAccount(ownerUid: ownerUid, sourceId: id),
               icon: const Icon(Icons.visibility_outlined),
@@ -1567,7 +1584,21 @@ class _RequestListState extends State<_RequestList> {
     if (widget.collection == 'support_requests') {
       return _supportActions(status: status, id: id);
     }
+
+    final canReview = _can('reviewPlaceRequests');
+    final canApprove = _can('approvePlaces');
+    final canReject = _can('rejectPlaces');
+
     if (status == 'approved' || status == 'rejected') {
+      if (!canReview) {
+        return Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Chip(
+            avatar: const Icon(Icons.visibility_outlined, size: 18),
+            label: Text(t('قراءة فقط', 'Read only')),
+          ),
+        );
+      }
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1583,40 +1614,54 @@ class _RequestListState extends State<_RequestList> {
       );
     }
 
+    if (!canReview && !canApprove && !canReject) {
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Chip(
+          avatar: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(t('قراءة فقط', 'Read only')),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'reviewing',
-          id: id,
-          arLabel: 'قيد المراجعة',
-          enLabel: 'Under review',
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'needs_changes',
-          id: id,
-          arLabel: 'يحتاج تعديل',
-          enLabel: 'Needs changes',
-          selectedColor: const Color(0xFFB26A00),
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'approved',
-          id: id,
-          arLabel: 'اعتماد',
-          enLabel: 'Approve',
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'rejected',
-          id: id,
-          arLabel: 'رفض',
-          enLabel: 'Reject',
-          selectedColor: const Color(0xFFB3261E),
-        ),
+        if (canReview)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'reviewing',
+            id: id,
+            arLabel: 'قيد المراجعة',
+            enLabel: 'Under review',
+          ),
+        if (canReview)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'needs_changes',
+            id: id,
+            arLabel: 'يحتاج تعديل',
+            enLabel: 'Needs changes',
+            selectedColor: const Color(0xFFB26A00),
+          ),
+        if (canApprove)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'approved',
+            id: id,
+            arLabel: 'اعتماد',
+            enLabel: 'Approve',
+          ),
+        if (canReject)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'rejected',
+            id: id,
+            arLabel: 'رفض',
+            enLabel: 'Reject',
+            selectedColor: const Color(0xFFB3261E),
+          ),
       ],
     );
   }
