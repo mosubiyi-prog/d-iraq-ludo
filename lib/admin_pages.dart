@@ -831,12 +831,20 @@ class _RequestListState extends State<_RequestList> {
       case 'manager':
       case 'director':
       case 'admin':
-        return t('المدير', 'Manager');
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
       case 'assistant':
       case 'assistant_manager':
       case 'assistant-manager':
       case 'deputy_manager':
-        return t('مساعد المدير', 'Assistant manager');
+        return t('معاون المدير', 'Deputy manager');
+      case 'employee':
+      case 'staff':
+        return t('موظف', 'Employee');
+      case 'province_agent':
+      case 'governorate_agent':
+      case 'agent':
+        return t('وكيل محافظة', 'Province agent');
       default:
         return raw.isEmpty ? t('الإدارة', 'Administration') : raw;
     }
