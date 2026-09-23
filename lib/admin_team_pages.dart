@@ -347,12 +347,11 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
                   ),
                 ),
               ),
-              SizedBox(
-                height: 54,
-                child: ListView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  scrollDirection: Axis.horizontal,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     _filterMenu(
                       value: _roleFilter,
@@ -371,7 +370,6 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
                       onChanged: (value) =>
                           setState(() => _roleFilter = value),
                     ),
-                    const SizedBox(width: 8),
                     _filterMenu(
                       value: _statusFilter,
                       icon: Icons.toggle_on_outlined,
@@ -386,7 +384,6 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
                       onChanged: (value) =>
                           setState(() => _statusFilter = value),
                     ),
-                    const SizedBox(width: 8),
                     _filterMenu(
                       value: _governorateFilter,
                       icon: Icons.location_on_outlined,
