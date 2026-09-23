@@ -1667,8 +1667,6 @@ class DedaAdminAuditPage extends StatelessWidget {
                     (data['targetUserName'] ?? '').toString().trim();
                 final targetPhone =
                     (data['targetUserPhone'] ?? '').toString().trim();
-                final accountKey =
-                    (data['accountKey'] ?? '').toString().trim();
                 if (targetName.isNotEmpty && targetPhone.isNotEmpty) {
                   target = '$targetName • \u200E$targetPhone\u200E';
                 } else if (targetName.isNotEmpty) {
