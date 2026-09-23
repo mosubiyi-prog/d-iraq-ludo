@@ -859,6 +859,25 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             DedaAdminUsersPage(isArabic: ar),
                           ),
                         ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.person_remove_alt_1_outlined,
+                          title: t(
+                            'طلبات حذف الحساب',
+                            'Account deletion',
+                          ),
+                          subtitle: t(
+                            'مراجعة طلبات الحذف الحساسة',
+                            'Review sensitive deletion requests',
+                          ),
+                          onTap: () => _open(
+                            DedaAccountDeletionRequestsPage(
+                              isArabic: ar,
+                            ),
+                          ),
+                        ),
+
                       if (DedaBackend.adminHasPermission(
                         profile,
                         'viewReports',
