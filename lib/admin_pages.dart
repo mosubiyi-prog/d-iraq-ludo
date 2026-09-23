@@ -632,18 +632,21 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 38, color: const Color(0xFF17652F)),
-              const SizedBox(height: 10),
+              Icon(icon, size: 36, color: const Color(0xFF17652F)),
+              const SizedBox(height: 8),
               Text(
                 title,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
+                  height: 1.18,
                 ),
               ),
               const SizedBox(height: 5),
@@ -654,6 +657,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 11.5,
+                  height: 1.2,
                   color: Color(0xFF5D685F),
                 ),
               ),
@@ -725,9 +729,12 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             children: [
                               Text(
                                 (profile['displayName'] ?? '').toString(),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
-                                  fontSize: 18,
+                                  fontSize: 16.5,
+                                  height: 1.15,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -769,9 +776,9 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                     crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
+                    mainAxisSpacing: 12,
                     crossAxisSpacing: 10,
-                    childAspectRatio: 1.08,
+                    mainAxisExtent: 190,
                     children: [
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
