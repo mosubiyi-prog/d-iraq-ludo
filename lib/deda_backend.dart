@@ -566,6 +566,7 @@ class DedaBackend {
   static Future<bool> signInAdmin({
     required String email,
     required String password,
+    String displayName = '',
   }) async {
     if (!isReady) throw StateError('firebase-not-ready');
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -587,16 +588,64 @@ class DedaBackend {
         throw StateError('admin-disabled');
       }
 
-      await FirebaseFirestore.instance.collection('admins').doc(uid).set({
+      final cleanName = displayName.trim();
+      final update = <String, dynamic>{
         'lastSeenAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      };
+      if (cleanName.isNotEmpty) {
+        update.addAll(<String, dynamic>{
+          'displayName': cleanName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await FirebaseFirestore.instance
+          .collection('admins')
+          .doc(uid)
+          .set(update, SetOptions(merge: true));
       await registerAdminNotifications();
       await _writeAdminAudit('admin_signed_in');
       return true;
     }
     await FirebaseAuth.instance.signOut();
     return false;
+  }
+
+  static Future<void> updateCurrentAdminDisplayName(
+    String displayName,
+  ) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('admin-not-signed-in');
+    }
+
+    final cleanName = displayName.trim();
+    if (cleanName.length < 2) {
+      throw ArgumentError('invalid-admin-display-name');
+    }
+
+    final ref =
+        FirebaseFirestore.instance.collection('admins').doc(user.uid);
+    final snapshot = await ref.get();
+    final data = snapshot.data();
+    if (!snapshot.exists ||
+        data?['active'] != true ||
+        normalizeAdminStatus(data) != 'active') {
+      throw StateError('admin-not-authorized');
+    }
+
+    await ref.set({
+      'displayName': cleanName,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await _writeAdminAudit(
+      'admin_display_name_updated',
+      details: <String, dynamic>{
+        'targetAdminName': cleanName,
+      },
+    );
   }
 
   static Future<bool> currentUserIsAdmin() async {
