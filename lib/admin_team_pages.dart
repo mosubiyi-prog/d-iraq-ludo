@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_backend.dart';
 
@@ -1611,6 +1612,7 @@ class DedaAdminAuditPage extends StatelessWidget {
       'admin_signed_in': 'تسجيل دخول إداري',
       'admin_signed_out': 'تسجيل خروج إداري',
       'admin_profile_normalized': 'تهيئة بيانات الحساب الإداري',
+      'admin_display_name_updated': 'تعديل الاسم الإداري',
       'recovery_approved': 'اعتماد استرجاع الدخول',
       'recovery_rejected': 'رفض استرجاع الدخول',
       'read_user_account': 'مشاهدة حساب مستخدم',
@@ -2751,7 +2753,7 @@ class _DedaAdminReportsPageState extends State<DedaAdminReportsPage> {
   }
 }
 
-class DedaAdminSettingsPage extends StatelessWidget {
+class DedaAdminSettingsPage extends StatefulWidget {
   final bool isArabic;
   final Map<String, dynamic> profile;
 
@@ -2761,18 +2763,142 @@ class DedaAdminSettingsPage extends StatelessWidget {
     required this.profile,
   });
 
+  @override
+  State<DedaAdminSettingsPage> createState() =>
+      _DedaAdminSettingsPageState();
+}
+
+class _DedaAdminSettingsPageState extends State<DedaAdminSettingsPage> {
+  late Map<String, dynamic> _profile;
+
+  bool get isArabic => widget.isArabic;
   String t(String a, String e) => isArabic ? a : e;
 
   @override
-  Widget build(BuildContext context) {
-    final email = (profile['email'] ?? '').toString().trim();
-    final rawName =
-        (profile['name'] ?? profile['displayName'] ?? '').toString().trim();
-    final adminName = rawName.isEmpty ||
-            (email.isNotEmpty && rawName.toLowerCase() == email.toLowerCase())
-        ? t('غير محدد', 'Not provided')
-        : rawName;
+  void initState() {
+    super.initState();
+    _profile = Map<String, dynamic>.from(widget.profile);
+  }
 
+  String get _email => (_profile['email'] ?? '').toString().trim();
+
+  String get _adminName {
+    final rawName =
+        (_profile['displayName'] ?? _profile['name'] ?? '').toString().trim();
+    if (rawName.isEmpty ||
+        (_email.isNotEmpty &&
+            rawName.toLowerCase() == _email.toLowerCase())) {
+      return t('غير محدد', 'Not provided');
+    }
+    return rawName;
+  }
+
+  Future<void> _editName() async {
+    final controller = TextEditingController(
+      text: _adminName == t('غير محدد', 'Not provided') ? '' : _adminName,
+    );
+    String? dialogError;
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(t('تعديل الاسم الإداري', 'Edit admin name')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: t('الاسم الكامل', 'Full name'),
+                  prefixIcon: const Icon(Icons.person_outline),
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (text) {
+                  final clean = text.trim();
+                  if (clean.length < 2) {
+                    setDialogState(() {
+                      dialogError = t(
+                        'اكتب اسمًا واضحًا من حرفين على الأقل.',
+                        'Enter a clear name with at least 2 characters.',
+                      );
+                    });
+                    return;
+                  }
+                  Navigator.pop(dialogContext, clean);
+                },
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  dialogError!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                final clean = controller.text.trim();
+                if (clean.length < 2) {
+                  setDialogState(() {
+                    dialogError = t(
+                      'اكتب اسمًا واضحًا من حرفين على الأقل.',
+                      'Enter a clear name with at least 2 characters.',
+                    );
+                  });
+                  return;
+                }
+                Navigator.pop(dialogContext, clean);
+              },
+              child: Text(t('حفظ', 'Save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+
+    if (value == null || value.trim().isEmpty) return;
+    try {
+      await DedaBackend.updateCurrentAdminDisplayName(value);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('deda_admin_last_name_v1', value.trim());
+      if (!mounted) return;
+      setState(() {
+        _profile['displayName'] = value.trim();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تم تحديث الاسم الإداري.', 'Admin name updated.'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر تحديث الاسم الآن. حاول مجددًا.',
+              'Could not update the name now. Try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -2787,19 +2913,29 @@ class DedaAdminSettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.person_outline),
                   title: Text(t('الاسم', 'Name')),
-                  subtitle: Text(adminName),
+                  subtitle: Text(_adminName),
+                  trailing: IconButton(
+                    tooltip: t('تعديل الاسم', 'Edit name'),
+                    onPressed: _editName,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.email_outlined),
                   title: Text(t('البريد', 'Email')),
-                  subtitle:
-                      Text((profile['email'] ?? '—').toString()),
+                  subtitle: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      _email.isEmpty ? '—' : _email,
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.badge_outlined),
                   title: Text(t('الدور', 'Role')),
                   subtitle: Text(
-                    dedaAdminRoleLabel(isArabic, profile['role']),
+                    dedaAdminRoleLabel(isArabic, _profile['role']),
                   ),
                 ),
                 ListTile(
@@ -2808,7 +2944,7 @@ class DedaAdminSettingsPage extends StatelessWidget {
                   subtitle: Text(
                     dedaAdminStatusLabel(
                       isArabic,
-                      DedaBackend.normalizeAdminStatus(profile),
+                      DedaBackend.normalizeAdminStatus(_profile),
                     ),
                   ),
                 ),
@@ -2817,7 +2953,7 @@ class DedaAdminSettingsPage extends StatelessWidget {
                   title: Text(t('آخر دخول', 'Last sign-in')),
                   subtitle: Text(
                     dedaAdminTimestamp(
-                      profile['lastLoginAt'] ?? profile['lastSeenAt'],
+                      _profile['lastLoginAt'] ?? _profile['lastSeenAt'],
                     ),
                   ),
                 ),
