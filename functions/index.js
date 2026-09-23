@@ -652,14 +652,30 @@ exports.updateAdminMember = onCall(async (request) => {
     update.statusReason = reason;
   }
 
-  await ref.set(update, {merge: true});
-
+  const previousAuthDisabled = oldStatus === "disabled";
+  let authUpdated = false;
   try {
     await getAuth().updateUser(targetUid, {
       displayName,
       disabled: status === "disabled",
     });
-  } catch (_) {}
+    authUpdated = true;
+    await ref.set(update, {merge: true});
+  } catch (error) {
+    if (authUpdated) {
+      try {
+        await getAuth().updateUser(targetUid, {
+          displayName: cleanText(
+              current.displayName || current.name || "",
+              120,
+          ),
+          disabled: previousAuthDisabled,
+        });
+      } catch (_) {}
+    }
+    throw error;
+  }
+
   if (status !== "active") {
     try {
       await getAuth().revokeRefreshTokens(targetUid);
