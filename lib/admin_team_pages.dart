@@ -595,6 +595,41 @@ class _DedaAdminMemberEditorPageState
     });
   }
 
+  void _setPermission(String key, bool value) {
+    setState(() {
+      _permissions[key] = value;
+
+      if (key == 'supportReply' && value) {
+        _permissions['supportRead'] = true;
+      }
+      if (key == 'supportRead' && !value) {
+        _permissions['supportReply'] = false;
+      }
+
+      if (<String>{
+        'reviewPlaceRequests',
+        'approvePlaces',
+        'rejectPlaces',
+      }.contains(key) && value) {
+        _permissions['viewPlaceRequests'] = true;
+      }
+      if (key == 'viewPlaceRequests' && !value) {
+        _permissions['reviewPlaceRequests'] = false;
+        _permissions['approvePlaces'] = false;
+        _permissions['rejectPlaces'] = false;
+      }
+
+      if (key == 'manageReports' && value) {
+        _permissions['viewReports'] = true;
+      }
+      if (key == 'viewReports' && !value) {
+        _permissions['manageReports'] = false;
+      }
+
+      _enforceRolePermissions();
+    });
+  }
+
   Future<String?> _askReason(String title) async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -1101,8 +1136,7 @@ class _DedaAdminMemberEditorPageState
                 value: _permissions[key] == true,
                 onChanged: locked || _saving
                     ? null
-                    : (value) =>
-                        setState(() => _permissions[key] = value),
+                    : (value) => _setPermission(key, value),
                 title: Text(dedaPermissionLabel(ar, key)),
               ),
             );
