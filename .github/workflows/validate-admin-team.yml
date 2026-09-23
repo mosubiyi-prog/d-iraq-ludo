@@ -26,6 +26,12 @@ jobs:
         with:
           channel: stable
 
+      - name: Setup Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Get dependencies
         run: flutter pub get
 
