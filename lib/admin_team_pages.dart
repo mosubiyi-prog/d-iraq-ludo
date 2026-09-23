@@ -593,9 +593,20 @@ class DedaAdminInvitationsPage extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 7),
-              SelectableText(
-                t('الرقم الإداري: ', 'Admin ID: ') +
+              Text(
+                t('الرقم الإداري:', 'Admin ID:'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
                     (data['adminId'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
               ),
               const SizedBox(height: 7),
               Text(
@@ -1062,9 +1073,20 @@ class _DedaAdminMemberEditorPageState
                     ),
                   ),
                   const SizedBox(height: 8),
-                  SelectableText(
-                    t('الرقم الإداري: ', 'Admin ID: ') +
+                  Text(
+                    t('الرقم الإداري:', 'Admin ID:'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: SelectableText(
                         (result['adminId'] ?? '').toString(),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Text(
