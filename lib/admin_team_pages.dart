@@ -1718,6 +1718,154 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
     super.dispose();
   }
 
+  Widget _readOnlyRow(
+    String label,
+    dynamic value, {
+    bool ltr = false,
+  }) {
+    final text = value?.toString().trim() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          Expanded(
+            child: Directionality(
+              textDirection: ltr ? TextDirection.ltr : Directionality.of(context),
+              child: Text(
+                text.isEmpty ? t('غير محدد', 'Not provided') : text,
+                textAlign: ltr ? TextAlign.left : TextAlign.start,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openUser(String uid) async {
+    if (uid.trim().isEmpty) return;
+    try {
+      final snapshot = await DedaBackend.adminUserSnapshot(
+        ownerUid: uid,
+        sourceCollection: 'users',
+        sourceId: uid,
+      );
+      if (!mounted) return;
+      final profile = Map<String, dynamic>.from(
+        snapshot['profile'] as Map? ?? const <String, dynamic>{},
+      );
+      final places = snapshot['publishedPlaces'] as List? ?? const [];
+      final requests = snapshot['placeRequests'] as List? ?? const [];
+      final support = snapshot['supportRequests'] as List? ?? const [];
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.visibility_outlined),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  t(
+                    'حساب المستخدم • قراءة فقط',
+                    'User account • read only',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _readOnlyRow(t('الاسم', 'Name'), profile['name']),
+                _readOnlyRow(
+                  t('الهاتف', 'Phone'),
+                  profile['phone'],
+                  ltr: true,
+                ),
+                _readOnlyRow(
+                  t('نوع الحساب', 'Account type'),
+                  profile['accountType'],
+                ),
+                const Divider(),
+                _readOnlyRow(
+                  t('الأماكن المعتمدة', 'Approved places'),
+                  places.length,
+                ),
+                _readOnlyRow(
+                  t('طلبات الأماكن', 'Place requests'),
+                  requests.length,
+                ),
+                _readOnlyRow(
+                  t('رسائل الدعم', 'Support messages'),
+                  support.length,
+                ),
+                if (places.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    t('أماكن المستخدم', 'User places'),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  ...places.take(10).map((raw) {
+                    final item =
+                        Map<String, dynamic>.from(raw as Map);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.storefront_outlined),
+                      title: Text(
+                        (item['placeName'] ?? '').toString(),
+                      ),
+                      subtitle: Text(
+                        (item['approvalNumber'] ?? '').toString(),
+                      ),
+                    );
+                  }),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  t(
+                    'لا يمكن تعديل بيانات المستخدم من هذه النافذة. تم تسجيل هذه المشاهدة في السجل الإداري.',
+                    'User data cannot be edited here. This review was recorded in the admin audit log.',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF5B665D),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(t('إغلاق', 'Close')),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر فتح حساب المستخدم الآن.',
+              'Could not open the user account now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1788,7 +1936,8 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                         separatorBuilder: (_, __) =>
                             const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final data = items[index].data();
+                          final doc = items[index];
+                          final data = doc.data();
                           final name =
                               (data['name'] ?? '').toString().trim();
                           final phone =
@@ -1800,6 +1949,7 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                               accountType.isEmpty;
                           return Card(
                             child: ListTile(
+                              onTap: () => _openUser(doc.id),
                               leading: Icon(
                                 incomplete
                                     ? Icons.person_off_outlined
