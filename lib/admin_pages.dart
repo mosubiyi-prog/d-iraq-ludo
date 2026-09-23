@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_place_map.dart';
+import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 
 class DedaAdminLoginPage extends StatefulWidget {
@@ -237,6 +238,410 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+class DedaAdminDashboardPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaAdminDashboardPage({super.key, required this.isArabic});
+
+  @override
+  State<DedaAdminDashboardPage> createState() =>
+      _DedaAdminDashboardPageState();
+}
+
+class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
+  Map<String, dynamic>? _profile;
+  String? _error;
+
+  bool get ar => widget.isArabic;
+  String t(String a, String e) => ar ? a : e;
+
+  String _roleLabel(dynamic value) {
+    switch (DedaBackend.normalizeAdminRole(value)) {
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
+      case 'deputy_manager':
+        return t('معاون المدير', 'Deputy manager');
+      case 'province_agent':
+        return t('وكيل محافظة', 'Province agent');
+      case 'employee':
+        return t('موظف', 'Employee');
+      default:
+        return value?.toString() ?? '';
+    }
+  }
+
+  String _statusLabel(Map<String, dynamic> value) {
+    switch (DedaBackend.normalizeAdminStatus(value)) {
+      case 'active':
+        return t('نشط', 'Active');
+      case 'temporarily_stopped':
+        return t('متوقف مؤقتًا', 'Temporarily stopped');
+      case 'disabled':
+        return t('معطّل', 'Disabled');
+      default:
+        return '';
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await DedaBackend.currentAdminProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = t(
+            'تعذر تحميل صلاحيات الحساب الإداري.',
+            'Could not load the administrative account permissions.',
+          ));
+    }
+  }
+
+  Future<void> _open(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    if (mounted) _load();
+  }
+
+  Widget _dashboardCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 38, color: const Color(0xFF17652F)),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF5D685F),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = _profile;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(t('إدارة DEDA', 'DEDA administration')),
+        actions: [
+          IconButton(
+            tooltip: t('تحديث', 'Refresh'),
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: t('تسجيل الخروج', 'Sign out'),
+            onPressed: () async {
+              await DedaBackend.signOutAdmin();
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: profile == null
+          ? Center(
+              child: _error == null
+                  ? const CircularProgressIndicator()
+                  : Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7F1E4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFB8CCB6)),
+                    ),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Color(0xFF17652F),
+                          child: Icon(
+                            Icons.admin_panel_settings,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (profile['displayName'] ?? '').toString(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(_roleLabel(profile['role'])),
+                              if ((profile['governorate'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty)
+                                Text(
+                                  t('المحافظة: ', 'Province: ') +
+                                      profile['governorate'].toString(),
+                                  style: const TextStyle(fontSize: 12.5),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4EAD5),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            _statusLabel(profile),
+                            style: const TextStyle(
+                              color: Color(0xFF17652F),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.08,
+                    children: [
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.groups_2_outlined,
+                          title: t(
+                            'إدارة الفريق والصلاحيات',
+                            'Team & permissions',
+                          ),
+                          subtitle: t(
+                            'إضافة الأعضاء وتحديد أدوارهم',
+                            'Members, roles and access',
+                          ),
+                          onTap: () => _open(DedaAdminTeamPage(
+                            isArabic: ar,
+                            currentAdmin: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewPlaceRequests',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.storefront_outlined,
+                          title: t('طلبات الأماكن', 'Place requests'),
+                          subtitle: t(
+                            'المراجعة والاعتماد حسب الصلاحية',
+                            'Review according to permission',
+                          ),
+                          onTap: () => _open(_AdminRequestsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                            collection: 'place_requests',
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'supportRead'))
+                        _dashboardCard(
+                          icon: Icons.support_agent,
+                          title: t('الدعم', 'Support'),
+                          subtitle: t(
+                            'رسائل المستخدمين والردود',
+                            'User messages and replies',
+                          ),
+                          onTap: () => _open(_AdminRequestsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                            collection: 'support_requests',
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'viewUsers'))
+                        _dashboardCard(
+                          icon: Icons.people_alt_outlined,
+                          title: t('المستخدمون', 'Users'),
+                          subtitle: t('قراءة فقط', 'Read only'),
+                          onTap: () => _open(
+                            DedaAdminUsersPage(isArabic: ar),
+                          ),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewReports',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.report_gmailerrorred_outlined,
+                          title: t('البلاغات', 'Reports'),
+                          subtitle: t(
+                            'بلاغات الطريق الحالية',
+                            'Current road reports',
+                          ),
+                          onTap: () => _open(DedaAdminRoadReportsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewGovernorates',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.map_outlined,
+                          title: t('المحافظات', 'Governorates'),
+                          subtitle: t(
+                            'نطاق عمل الوكلاء',
+                            'Agent coverage',
+                          ),
+                          onTap: () => _open(DedaGovernoratesPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewReports',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.analytics_outlined,
+                          title: t('التقارير', 'Analytics'),
+                          subtitle: t(
+                            'ملخص تشغيلي سريع',
+                            'Quick operations summary',
+                          ),
+                          onTap: () => _open(DedaAdminReportsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'viewAudit') &&
+                          DedaBackend.normalizeAdminRole(profile['role']) !=
+                              'province_agent')
+                        _dashboardCard(
+                          icon: Icons.fact_check_outlined,
+                          title: t('السجل الإداري', 'Audit log'),
+                          subtitle: t(
+                            'من قام بماذا ومتى',
+                            'Who did what and when',
+                          ),
+                          onTap: () => _open(
+                            DedaAdminAuditPage(isArabic: ar),
+                          ),
+                        ),
+                      _dashboardCard(
+                        icon: Icons.settings_outlined,
+                        title: t('الإعدادات', 'Settings'),
+                        subtitle: t(
+                          'بيانات حسابك الإداري',
+                          'Your admin account',
+                        ),
+                        onTap: () => _open(DedaAdminSettingsPage(
+                          isArabic: ar,
+                          profile: profile,
+                        )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _AdminRequestsPage extends StatelessWidget {
+  final bool isArabic;
+  final Map<String, dynamic> adminProfile;
+  final String collection;
+
+  const _AdminRequestsPage({
+    required this.isArabic,
+    required this.adminProfile,
+    required this.collection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSupport = collection == 'support_requests';
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          isSupport
+              ? (isArabic ? 'الدعم' : 'Support')
+              : (isArabic ? 'طلبات الأماكن' : 'Place requests'),
+        ),
+      ),
+      body: _RequestList(
+        isArabic: isArabic,
+        collection: collection,
+        adminProfile: adminProfile,
+        stream: isSupport
+            ? DedaBackend.supportRequestsForAdmin(adminProfile)
+            : DedaBackend.placeRequestsForAdmin(adminProfile),
       ),
     );
   }
