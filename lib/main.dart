@@ -9992,27 +9992,27 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       if (selectedDestination != null)
                         Marker(
                           point: selectedDestination!,
-                          width: 70,
-                          height: 70,
+                          width: 46,
+                          height: 46,
                           child: Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: const Color(0xFF0B57D0),
-                                width: 3,
+                                width: 2,
                               ),
                               boxShadow: const [
                                 BoxShadow(
-                                  blurRadius: 7,
-                                  spreadRadius: 1,
-                                  color: Colors.black38,
+                                  blurRadius: 4,
+                                  spreadRadius: 0,
+                                  color: Colors.black26,
                                 ),
                               ],
                             ),
                             child: const Icon(
                               Icons.gps_fixed,
-                              size: 40,
+                              size: 26,
                               color: Color(0xFF0B57D0),
                             ),
                           ),
