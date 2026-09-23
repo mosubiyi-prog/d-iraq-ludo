@@ -415,15 +415,21 @@ async function requireGeneralManager(request) {
   return actor;
 }
 
-async function writeAdminAudit(actor, action, extra = {}) {
-  await getFirestore().collection("admin_audit").add({
+function adminAuditData(actor, action, extra = {}) {
+  return {
     action,
     adminUid: actor.uid,
     adminName: actor.name,
     adminRole: actor.role,
     createdAt: Timestamp.now(),
     ...extra,
-  });
+  };
+}
+
+async function writeAdminAudit(actor, action, extra = {}) {
+  await getFirestore()
+      .collection("admin_audit")
+      .add(adminAuditData(actor, action, extra));
 }
 
 async function countOtherActiveGeneralManagers(excludedUid) {
