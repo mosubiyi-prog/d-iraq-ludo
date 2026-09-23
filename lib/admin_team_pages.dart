@@ -249,7 +249,11 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(t('إدارة الفريق والصلاحيات', 'Team & permissions')),
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(t('إدارة الفريق والصلاحيات', 'Team & permissions')),
+        ),
         actions: [
           IconButton(
             tooltip: t('الدعوات الإدارية', 'Admin invitations'),
