@@ -463,6 +463,76 @@ async function nextAdminId() {
   });
 }
 
+exports.ensureCurrentAdminProfile = onCall(async (request) => {
+  const actor = await requireActiveAdmin(request);
+  const current = actor.data || {};
+  const role = actor.role;
+  const status = normalizedAdminStatus(current);
+  const permissions = normalizePermissions(role, current.permissions);
+  let adminId = cleanText(current.adminId, 40);
+
+  if (!adminId) {
+    adminId = await nextAdminId();
+  }
+
+  const displayName = cleanText(
+      current.displayName ||
+      current.name ||
+      request.auth.token.name ||
+      request.auth.token.email ||
+      "DEDA Admin",
+      120,
+  );
+  const email = cleanEmail(
+      current.email || request.auth.token.email || "",
+  );
+  const now = Timestamp.now();
+
+  const update = {
+    adminId,
+    displayName,
+    email,
+    role,
+    status,
+    active: status === "active",
+    permissions,
+    department: cleanText(current.department, 80),
+    governorate: role === "province_agent" ?
+      cleanText(current.governorate, 80) : "",
+    updatedAt: now,
+  };
+
+  if (!current.createdAt) {
+    update.createdAt = now;
+    update.createdByUid = actor.uid;
+    update.createdByName = displayName;
+  }
+  if (!current.permissionsUpdatedAt) {
+    update.permissionsUpdatedAt = now;
+    update.permissionsUpdatedByUid = actor.uid;
+    update.permissionsUpdatedByName = displayName;
+  }
+
+  await actor.ref.set(update, {merge: true});
+
+  if (!current.adminId ||
+      normalizedAdminRole(current.role || current.jobTitle) !== role ||
+      normalizedAdminStatus(current) !== status) {
+    await writeAdminAudit(actor, "admin_profile_normalized", {
+      targetAdminUid: actor.uid,
+      targetAdminId: adminId,
+      targetAdminName: displayName,
+      targetAdminRole: role,
+    });
+  }
+
+  return {
+    uid: actor.uid,
+    ...current,
+    ...update,
+  };
+});
+
 exports.createAdminMember = onCall(async (request) => {
   const actor = await requireGeneralManager(request);
   const input = request.data || {};
@@ -514,7 +584,7 @@ exports.createAdminMember = onCall(async (request) => {
       phone,
       department,
       role,
-      governorate: role === "province_agent" ? governorate : governorate,
+      governorate: role === "province_agent" ? governorate : "",
       status: "active",
       active: true,
       permissions,
@@ -633,7 +703,7 @@ exports.updateAdminMember = onCall(async (request) => {
     phone,
     department,
     role,
-    governorate: role === "province_agent" ? governorate : governorate,
+    governorate: role === "province_agent" ? governorate : "",
     status,
     active: status === "active",
     permissions,
