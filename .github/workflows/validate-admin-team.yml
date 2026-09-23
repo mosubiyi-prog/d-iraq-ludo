@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - admin-team-work-2026-09-23
+      - admin-team-invite-build112-work
     paths:
       - lib/main.dart
       - lib/admin_pages.dart
