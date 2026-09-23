@@ -710,6 +710,13 @@ class DedaBackend {
       }
       transaction.update(request, update);
     });
+    await _writeAdminAudit(
+      'request_viewed',
+      details: <String, dynamic>{
+        'sourceCollection': collection,
+        'sourceId': id,
+      },
+    );
   }
 
   static String _formatApprovalDate(DateTime value) {
@@ -851,6 +858,13 @@ class DedaBackend {
         SetOptions(merge: true),
       );
     });
+    await _writeAdminAudit(
+      'place_approved',
+      details: <String, dynamic>{
+        'sourceCollection': 'place_requests',
+        'sourceId': id,
+      },
+    );
   }
 
   static Future<void> updateRequestStatus({
@@ -863,6 +877,11 @@ class DedaBackend {
       final prepared = await preparePlaceApproval(id);
       await finalizePlaceApproval(id: id, message: prepared['message'].toString());
       return;
+    }
+
+    if ((status == 'rejected' || status == 'needs_changes') &&
+        (note == null || note.trim().isEmpty)) {
+      throw ArgumentError('reason-required');
     }
 
     final actor = await _adminIdentity();
@@ -886,6 +905,17 @@ class DedaBackend {
       });
     }
     await request.update(statusUpdate);
+    await _writeAdminAudit(
+      collection == 'place_requests'
+          ? 'place_status_changed'
+          : 'request_status_changed',
+      details: <String, dynamic>{
+        'sourceCollection': collection,
+        'sourceId': id,
+        'newStatus': status,
+        if (note != null && note.trim().isNotEmpty) 'reason': note.trim(),
+      },
+    );
   }
 
   // DEDA 10-point fixes v1: support replies and read-only account review.
@@ -954,6 +984,14 @@ class DedaBackend {
       'reviewedByRole': actor['role'],
       if (status == 'closed') 'closedAt': FieldValue.serverTimestamp(),
     });
+    await _writeAdminAudit(
+      'support_status_changed',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': id,
+        'newStatus': status,
+      },
+    );
   }
 
   static Future<void> replyToSupport({
@@ -972,6 +1010,13 @@ class DedaBackend {
       'adminReplyByRole': actor['role'],
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await _writeAdminAudit(
+      'support_replied',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': id,
+      },
+    );
   }
 
   static Future<Map<String, dynamic>> adminUserSnapshot({
