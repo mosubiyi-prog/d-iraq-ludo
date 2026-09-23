@@ -342,6 +342,13 @@ function normalizePermissions(role, value) {
       result[key] = defaults[key] === true;
     }
   }
+  if (role === "province_agent") {
+    result.supportRead = false;
+    result.supportReply = false;
+    result.viewUsers = false;
+    result.viewAudit = false;
+    result.manageReports = false;
+  }
   return result;
 }
 
