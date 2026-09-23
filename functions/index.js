@@ -348,7 +348,7 @@ function defaultPermissions(role) {
       approvePlaces: false,
       rejectPlaces: false,
       viewUsers: false,
-      viewReports: true,
+      viewReports: false,
       manageReports: false,
       viewGovernorates: true,
       viewAudit: false,
@@ -371,6 +371,7 @@ function normalizePermissions(role, value) {
     result.supportRead = false;
     result.supportReply = false;
     result.viewUsers = false;
+    result.viewReports = false;
     result.viewAudit = false;
     result.manageReports = false;
   }
