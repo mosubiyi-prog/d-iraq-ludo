@@ -626,6 +626,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
   }) {
     return Card(
       elevation: 2,
+      clipBehavior: Clip.antiAlias,
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: InkWell(
@@ -778,7 +779,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 10,
-                    mainAxisExtent: 190,
+                    mainAxisExtent: 198,
                     children: [
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
