@@ -1167,6 +1167,99 @@ class DedaBackend {
         .snapshots();
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      accountDeletionRequests() {
+    return FirebaseFirestore.instance
+        .collection('account_deletion_requests')
+        .orderBy('createdAt', descending: true)
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<String> submitAccountDeletionRequest({
+    required String name,
+    required String phone,
+    String reason = '',
+  }) async {
+    final user = await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final cleanName = name.trim();
+    final cleanPhone = phone.trim();
+    final accountKey = accountKeyForPhone(cleanPhone);
+    final request = firestore.collection('account_deletion_requests').doc();
+
+    await request.set(<String, dynamic>{
+      'requesterUid': user.uid,
+      'accountKey': accountKey,
+      'name': cleanName,
+      'phone': cleanPhone,
+      'reason': reason.trim(),
+      'status': 'new',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return request.id;
+  }
+
+  static Future<void> updateAccountDeletionRequestStatus({
+    required String requestId,
+    required String status,
+    String note = '',
+  }) async {
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    const allowed = <String>{
+      'new',
+      'reviewing',
+      'deleted',
+      'cancelled',
+      'rejected',
+    };
+    if (!allowed.contains(status)) {
+      throw ArgumentError('invalid-account-deletion-status');
+    }
+
+    final ref = FirebaseFirestore.instance
+        .collection('account_deletion_requests')
+        .doc(requestId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) {
+      throw StateError('account-deletion-request-not-found');
+    }
+    final current = snapshot.data() ?? <String, dynamic>{};
+
+    final update = <String, dynamic>{
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'reviewedByUid': actor['uid'].toString(),
+      'reviewedByName': actor['displayName'].toString(),
+      'reviewedByRole': normalizeAdminRole(actor['role']),
+      'reviewNote': note.trim(),
+    };
+    if (status == 'deleted') {
+      update['completedAt'] = FieldValue.serverTimestamp();
+    }
+    if (status == 'cancelled' || status == 'rejected') {
+      update['closedAt'] = FieldValue.serverTimestamp();
+    }
+
+    await ref.update(update);
+    await _writeAdminAudit(
+      'account_deletion_status_changed',
+      details: <String, dynamic>{
+        'requestId': requestId,
+        'targetUserUid': current['requesterUid'],
+        'targetUserName': current['name'],
+        'targetUserPhone': current['phone'],
+        'oldStatus': current['status'],
+        'newStatus': status,
+        'note': note.trim(),
+      },
+    );
+  }
+
   static String _newAdminInviteCode() {
     final random = Random.secure();
     return List<String>.generate(8, (_) => random.nextInt(10).toString()).join();
