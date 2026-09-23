@@ -19,7 +19,7 @@ const List<String> dedaAdminGovernorates = <String>[
   'واسط',
   'ميسان',
   'المثنى',
-  'القادسية',
+  'الديوانية',
   'دهوك',
   'السليمانية',
   'حلبجة',
@@ -149,6 +149,16 @@ String dedaFriendlyAdminError(bool ar, Object error) {
   }
   if (raw.contains('email-already-exists')) {
     return ar ? 'هذا البريد مستخدم بالفعل.' : 'This email is already in use.';
+  }
+  if (raw.contains('invite-already-exists')) {
+    return ar
+        ? 'توجد دعوة إدارية معلقة لهذا البريد بالفعل.'
+        : 'There is already a pending admin invitation for this email.';
+  }
+  if (raw.contains('cannot-change-current-admin-access')) {
+    return ar
+        ? 'لا يمكنك تغيير دور أو حالة حسابك الإداري الحالي من نفس الجلسة.'
+        : 'You cannot change the role or status of your current admin account from this session.';
   }
   if (raw.contains('reason-required')) {
     return ar ? 'اكتب سبب الإجراء أولًا.' : 'Enter a reason for this action.';
@@ -727,7 +737,7 @@ class _DedaAdminMemberEditorPageState
         );
         Navigator.pop(context);
       } else {
-        final result = await DedaBackend.createAdminMember(
+        final result = await DedaBackend.createAdminInvitation(
           displayName: name,
           email: email,
           phone: _phone.text,
@@ -742,38 +752,54 @@ class _DedaAdminMemberEditorPageState
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
             title: Text(
-              t('تم إنشاء العضو الإداري', 'Admin member created'),
+              t('تم إنشاء الدعوة الإدارية', 'Admin invitation created'),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  t(
-                    'أرسل له البريد والرمز المؤقت التالي. سيُطلب منه تغيير كلمة المرور في أول دخول.',
-                    'Send the email and temporary code below. They must change the password on first sign-in.',
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    t(
+                      'أرسل للعضو البريد ومعرّف الدعوة ورمز التفعيل. من شاشة دخول الإدارة يختار «تفعيل دعوة إدارية» ويحدد كلمة المرور بنفسه.',
+                      'Send the member the email, invitation ID, and activation code. From admin sign-in they choose “Activate admin invitation” and set their own password.',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                SelectableText(
-                  t('البريد: ', 'Email: ') +
-                      (result['email'] ?? '').toString(),
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  t('الرمز المؤقت: ', 'Temporary code: ') +
-                      (result['temporaryPassword'] ?? '').toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
+                  const SizedBox(height: 14),
+                  SelectableText(
+                    t('البريد: ', 'Email: ') +
+                        (result['email'] ?? '').toString(),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  t('الرقم الإداري: ', 'Admin ID: ') +
-                      (result['adminId'] ?? '').toString(),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    t('معرّف الدعوة: ', 'Invitation ID: ') +
+                        (result['inviteId'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    t('رمز التفعيل: ', 'Activation code: ') +
+                        (result['activationCode'] ?? '').toString(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    t('الرقم الإداري: ', 'Admin ID: ') +
+                        (result['adminId'] ?? '').toString(),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    t(
+                      'صلاحية الدعوة 7 أيام. لا يتم إنشاء صلاحية إدارية فعلية إلا بعد التفعيل.',
+                      'The invitation is valid for 7 days. Admin access is not created until activation.',
+                    ),
+                    style: const TextStyle(color: Color(0xFF5C665E)),
+                  ),
+                ],
+              ),
             ),
             actions: [
               FilledButton(
@@ -798,8 +824,8 @@ class _DedaAdminMemberEditorPageState
   Future<void> _revokeSessions() async {
     final reason = await _askReason(
       t(
-        'تسجيل خروج العضو من جميع الأجهزة',
-        'Sign member out from all devices',
+        'إيقاف وصول العضو مؤقتًا',
+        'Temporarily suspend member access',
       ),
     );
     if (reason == null) return;
@@ -813,8 +839,8 @@ class _DedaAdminMemberEditorPageState
         SnackBar(
           content: Text(
             t(
-              'تم تسجيل خروجه من جميع الأجهزة.',
-              'Sessions revoked.',
+              'تم إيقاف وصول العضو مؤقتًا.',
+              'Member access was temporarily suspended.',
             ),
           ),
         ),
@@ -827,37 +853,32 @@ class _DedaAdminMemberEditorPageState
     }
   }
 
-  Future<void> _resetTemporaryPassword() async {
-    final reason = await _askReason(
-      t(
-        'إنشاء رمز دخول مؤقت جديد',
-        'Create a new temporary sign-in code',
-      ),
-    );
-    if (reason == null) return;
-    try {
-      final code = await DedaBackend.resetAdminTemporaryPassword(
-        uid: widget.member!['uid'].toString(),
-        reason: reason,
-      );
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(t('الرمز المؤقت الجديد', 'New temporary code')),
-          content: SelectableText(
-            code,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
+  Future<void> _sendPasswordResetEmail() async {
+    final email = (widget.member?['email'] ?? '').toString().trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'لا يوجد بريد إلكتروني لهذا العضو.',
+              'This member has no email address.',
             ),
           ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(t('تم', 'Done')),
+        ),
+      );
+      return;
+    }
+    try {
+      await DedaBackend.sendAdminPasswordReset(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريد العضو.',
+              'A password reset link was sent to the member email.',
             ),
-          ],
+          ),
         ),
       );
     } catch (error) {
@@ -1169,7 +1190,7 @@ class _DedaAdminMemberEditorPageState
             label: Text(
               editing
                   ? t('حفظ التعديلات', 'Save changes')
-                  : t('إنشاء العضو', 'Create member'),
+                  : t('إنشاء دعوة العضو', 'Create member invitation'),
             ),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(54),
@@ -1192,18 +1213,18 @@ class _DedaAdminMemberEditorPageState
               icon: const Icon(Icons.logout),
               label: Text(
                 t(
-                  'تسجيل خروج من جميع الأجهزة',
-                  'Sign out from all devices',
+                  'إيقاف الوصول مؤقتًا',
+                  'Temporarily suspend access',
                 ),
               ),
             ),
             OutlinedButton.icon(
-              onPressed: _resetTemporaryPassword,
+              onPressed: _sendPasswordResetEmail,
               icon: const Icon(Icons.password_outlined),
               label: Text(
                 t(
-                  'إنشاء رمز دخول مؤقت جديد',
-                  'Create new temporary sign-in code',
+                  'إرسال رابط إعادة تعيين كلمة المرور',
+                  'Send password reset link',
                 ),
               ),
             ),
@@ -1240,6 +1261,12 @@ class DedaAdminAuditPage extends StatelessWidget {
       'admin_member_created': 'إضافة عضو إداري',
       'admin_member_updated': 'تعديل عضو/صلاحيات',
       'admin_member_deleted': 'حذف عضو إداري',
+      'admin_invite_created': 'إنشاء دعوة عضو إداري',
+      'admin_invite_cancelled': 'إلغاء دعوة إدارية',
+      'admin_invite_accepted': 'تفعيل دعوة إدارية',
+      'admin_access_suspended': 'إيقاف وصول عضو مؤقتًا',
+      'admin_password_reset_sent': 'إرسال رابط إعادة تعيين كلمة المرور',
+      'admin_member_access_removed': 'إزالة صلاحية عضو إداري',
       'admin_sessions_revoked': 'تسجيل خروج من جميع الأجهزة',
       'admin_temporary_password_reset': 'إنشاء رمز دخول مؤقت',
       'admin_first_login_completed': 'اكتمال أول دخول',
