@@ -1797,16 +1797,33 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                                 (data['name'] ?? t('مستخدم', 'User'))
                                     .toString(),
                               ),
-                              subtitle: Text(
-                                t('الهاتف: ', 'Phone: ') +
-                                    (data['phone'] ?? '—').toString() +
-                                    '\n' +
+                              subtitle: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(t('الهاتف: ', 'Phone: ')),
+                                      Expanded(
+                                        child: Directionality(
+                                          textDirection: TextDirection.ltr,
+                                          child: Text(
+                                            (data['phone'] ?? '—').toString(),
+                                            textAlign: TextAlign.left,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
                                     t(
-                                      'نوع الحساب: ',
-                                      'Account type: ',
-                                    ) +
-                                    (data['accountType'] ?? '—')
-                                        .toString(),
+                                          'نوع الحساب: ',
+                                          'Account type: ',
+                                        ) +
+                                        (data['accountType'] ?? '—')
+                                            .toString(),
+                                  ),
+                                ],
                               ),
                             ),
                           );
