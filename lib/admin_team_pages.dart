@@ -2003,9 +2003,16 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                                       Expanded(
                                         child: Directionality(
                                           textDirection: TextDirection.ltr,
-                                          child: Text(
-                                            (data['phone'] ?? '—').toString(),
-                                            textAlign: TextAlign.left,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              (data['phone'] ?? '—')
+                                                  .toString(),
+                                              maxLines: 1,
+                                              softWrap: false,
+                                              textAlign: TextAlign.left,
+                                            ),
                                           ),
                                         ),
                                       ),
