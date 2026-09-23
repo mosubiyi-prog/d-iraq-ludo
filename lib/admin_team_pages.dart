@@ -2182,7 +2182,40 @@ class _DedaAccountDeletionRequestsPageState
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8EFEA),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFFD8B9AD),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        color: Color(0xFF8A3C32),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          t(
+                            'هذه الصفحة لمتابعة طلبات الحذف. سجّل «تم الحذف» فقط بعد تنفيذ حذف الحساب فعليًا.',
+                            'This page tracks deletion requests. Mark “Deleted” only after the account has actually been deleted.',
+                          ),
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 6,
