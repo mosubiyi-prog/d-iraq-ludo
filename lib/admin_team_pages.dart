@@ -564,9 +564,23 @@ class DedaAdminInvitationsPage extends StatelessWidget {
                     (data['email'] ?? '').toString(),
               ),
               const SizedBox(height: 7),
-              SelectableText(
-                t('معرّف الدعوة: ', 'Invitation ID: ') + inviteId,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+              Text(
+                t('معرّف الدعوة:', 'Invitation ID:'),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
+                    inviteId,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
               ),
               if (code.isNotEmpty) ...[
                 const SizedBox(height: 7),
@@ -1020,10 +1034,23 @@ class _DedaAdminMemberEditorPageState
                         (result['email'] ?? '').toString(),
                   ),
                   const SizedBox(height: 8),
-                  SelectableText(
-                    t('معرّف الدعوة: ', 'Invitation ID: ') +
+                  Text(
+                    t('معرّف الدعوة:', 'Invitation ID:'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: SelectableText(
                         (result['inviteId'] ?? '').toString(),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   SelectableText(
