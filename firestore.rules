@@ -135,6 +135,8 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <=
+          request.time + duration.value(8, 'd')
         && request.resource.data.keys().hasOnly([
           'adminId', 'displayName', 'email', 'phone', 'department',
           'role', 'governorate', 'permissions', 'status', 'activationCode',
@@ -223,6 +225,10 @@ service cloud.firestore {
         && request.resource.data.createdByUid ==
           inviteData(request.resource.data.inviteId).createdByUid
         && request.resource.data.createdByName ==
+          inviteData(request.resource.data.inviteId).createdByName
+        && request.resource.data.permissionsUpdatedByUid ==
+          inviteData(request.resource.data.inviteId).createdByUid
+        && request.resource.data.permissionsUpdatedByName ==
           inviteData(request.resource.data.inviteId).createdByName
         && validAdminRole(request.resource.data.role)
         && request.resource.data.status == 'active'
