@@ -3,10 +3,66 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
 
+    function adminData() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+        && adminData().active == true
+        && (
+          !adminData().keys().hasAny(['status'])
+          || adminData().status == 'active'
+        );
+    }
+
+    function isGeneralManager() {
+      return isAdmin()
+        && (
+          !adminData().keys().hasAny(['role'])
+          || adminData().role in [
+            'general_manager', 'manager', 'director', 'admin'
+          ]
+        );
+    }
+
+    function isProvinceAgent() {
+      return isAdmin()
+        && adminData().keys().hasAny(['role'])
+        && adminData().role == 'province_agent';
+    }
+
+    function hasAdminPermission(permission) {
+      return isGeneralManager()
+        || (
+          isAdmin()
+          && adminData().keys().hasAny(['permissions'])
+          && adminData().permissions is map
+          && adminData().permissions.keys().hasAny([permission])
+          && adminData().permissions[permission] == true
+        );
+    }
+
+    function adminProvinceMatches(data) {
+      return !isProvinceAgent()
+        || (
+          adminData().keys().hasAny(['governorate'])
+          && data.keys().hasAny(['governorate'])
+          && adminData().governorate == data.governorate
+        );
+    }
+
+    function canReadSupport() {
+      return hasAdminPermission('supportRead') && !isProvinceAgent();
+    }
+
+    function canReplySupport() {
+      return hasAdminPermission('supportReply') && !isProvinceAgent();
+    }
+
+    function canReadUsers() {
+      return hasAdminPermission('viewUsers') && !isProvinceAgent();
     }
 
     function hasDedaSession(accountKey) {
@@ -29,11 +85,12 @@ service cloud.firestore {
     }
 
     match /admins/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if (signedIn() && request.auth.uid == uid)
+        || isGeneralManager();
       allow create, delete: if false;
       allow update: if signedIn() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'fcmTokens', 'lastSeenAt'
+          'fcmTokens', 'lastSeenAt', 'lastLoginAt'
         ]);
     }
 
@@ -42,7 +99,7 @@ service cloud.firestore {
     match /deda_credentials/{accountKey} {
       allow get, list: if false;
 
-      allow create: if isAdmin() || (
+      allow create: if isGeneralManager() || (
         signedIn()
         && !exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
         && request.resource.data.accountKey == accountKey
@@ -56,7 +113,7 @@ service cloud.firestore {
         ])
       );
 
-      allow update: if isAdmin();
+      allow update: if isGeneralManager();
       allow delete: if false;
     }
 
@@ -75,7 +132,7 @@ service cloud.firestore {
         && existsAfter(/databases/$(database)/documents/deda_credentials/$(accountKey))
         && getAfter(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.createdUid == request.auth.uid;
 
-      allow update: if isAdmin();
+      allow update: if isGeneralManager();
       allow delete: if false;
     }
 
@@ -102,7 +159,7 @@ service cloud.firestore {
     }
 
     match /deda_sessions/{uid} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow read: if isGeneralManager() || (signedIn() && request.auth.uid == uid);
 
       allow create, update: if signedIn()
         && request.auth.uid == uid
@@ -122,10 +179,10 @@ service cloud.firestore {
     }
 
     match /deda_account_profiles/{accountKey} {
-      allow get: if isAdmin() || hasDedaSession(accountKey);
-      allow list: if isAdmin();
+      allow get: if isGeneralManager() || hasDedaSession(accountKey);
+      allow list: if isGeneralManager();
 
-      allow create: if isAdmin() || (
+      allow create: if isGeneralManager() || (
         hasDedaSession(accountKey)
         && request.resource.data.accountKey == accountKey
         && request.resource.data.keys().hasOnly([
@@ -134,7 +191,7 @@ service cloud.firestore {
         ])
       );
 
-      allow update: if isAdmin() || (
+      allow update: if isGeneralManager() || (
         hasDedaSession(accountKey)
         && request.resource.data.accountKey == accountKey
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -147,7 +204,8 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow read: if canReadUsers()
+        || (signedIn() && request.auth.uid == uid);
 
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -186,10 +244,10 @@ service cloud.firestore {
           'fullName', 'status', 'createdAt', 'updatedAt'
         ]);
 
-      allow read: if isAdmin()
+      allow read: if canReadSupport()
         || (signedIn() && resource.data.requesterUid == request.auth.uid);
 
-      allow update: if isAdmin();
+      allow update: if canReplySupport();
       allow delete: if false;
     }
 
@@ -207,11 +265,11 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
 
-      allow read: if isAdmin()
+      allow read: if canReadSupport()
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
 
-      allow update: if isAdmin();
+      allow update: if canReplySupport();
       allow delete: if false;
     }
 
@@ -246,19 +304,47 @@ service cloud.firestore {
               || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
             )));
 
-      allow read: if isAdmin()
+      allow read: if (
+          hasAdminPermission('viewPlaceRequests')
+          && adminProvinceMatches(resource.data)
+        )
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
 
-      allow update: if isAdmin();
+      allow update: if (
+          adminProvinceMatches(resource.data)
+          && (
+            (
+              request.resource.data.status == 'approved'
+              && hasAdminPermission('approvePlaces')
+            )
+            || (
+              request.resource.data.status == 'rejected'
+              && hasAdminPermission('rejectPlaces')
+            )
+            || (
+              request.resource.data.status in ['reviewing', 'needs_changes']
+              && hasAdminPermission('reviewPlaceRequests')
+            )
+            || (
+              request.resource.data.status == resource.data.status
+              && hasAdminPermission('reviewPlaceRequests')
+            )
+          )
+        );
       allow delete: if false;
     }
 
     match /published_places/{placeId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
+      allow create: if hasAdminPermission('approvePlaces')
+        && adminProvinceMatches(request.resource.data);
+      allow delete: if isGeneralManager();
 
-      allow update: if isAdmin()
+      allow update: if (
+          hasAdminPermission('approvePlaces')
+          && adminProvinceMatches(resource.data)
+        )
         || (
           signedIn()
           && (
@@ -341,16 +427,25 @@ service cloud.firestore {
           )
         );
 
-      allow delete: if isAdmin();
+      allow delete: if hasAdminPermission('manageReports')
+        && !isProvinceAgent();
     }
 
     match /admin_audit/{auditId} {
-      allow read, create: if isAdmin();
+      allow read: if hasAdminPermission('viewAudit');
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
       allow update, delete: if false;
     }
 
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
     match /system_counters/{counterId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isGeneralManager()
+        || hasAdminPermission('approvePlaces');
     }
   }
 }
