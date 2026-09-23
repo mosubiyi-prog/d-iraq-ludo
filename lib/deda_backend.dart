@@ -1106,12 +1106,20 @@ class DedaBackend {
     // yet, record the review on the source ticket/request instead so the action
     // remains traceable and the read-only window still opens.
     try {
-      await firestore.collection('admin_audit').add({
+      // A single tap can occasionally trigger the same async open twice on a
+      // slow device. Use a short deterministic bucket so concurrent duplicate
+      // calls collapse into one audit record, while later genuine views still
+      // create a new entry.
+      final auditBucket = DateTime.now().millisecondsSinceEpoch ~/ 5000;
+      final auditId =
+          'read_${actor['uid']}_${ownerUid}_$auditBucket';
+      await firestore.collection('admin_audit').doc(auditId).set({
         'action': 'read_user_account',
         'ownerUid': ownerUid,
         'accountKey': accountKey,
-        'targetUserName': (profile['name'] ?? '').toString(),
-        'targetUserPhone': (profile['phone'] ?? sourcePhone).toString(),
+        'targetUserName': (profile['name'] ?? '').toString().trim(),
+        'targetUserPhone':
+            (profile['phone'] ?? sourcePhone).toString().trim(),
         'sourceCollection': sourceCollection,
         'sourceId': sourceId,
         'adminUid': actor['uid'],
