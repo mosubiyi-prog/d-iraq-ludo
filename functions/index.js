@@ -903,23 +903,27 @@ exports.deleteAdminMember = onCall(async (request) => {
     }
   }
 
-  await writeAdminAudit(actor, "admin_member_deleted", {
+  const batch = firestore.batch();
+  const auditRef = firestore.collection("admin_audit").doc();
+  const historyRef = firestore.collection("admin_history").doc(targetUid);
+
+  batch.set(auditRef, adminAuditData(actor, "admin_member_deleted", {
     targetAdminUid: targetUid,
     targetAdminId: data.adminId || null,
     targetAdminName: data.displayName || data.name || "",
     targetAdminRole: normalizedAdminRole(data),
     reason,
-  });
-
-  await firestore.collection("admin_history").doc(targetUid).set({
+  }));
+  batch.set(historyRef, {
     ...data,
     deletedAt: Timestamp.now(),
     deletedByUid: actor.uid,
     deletedByName: actor.name,
     deleteReason: reason,
   }, {merge: true});
+  batch.delete(ref);
+  await batch.commit();
 
-  await ref.delete();
   try {
     await getAuth().deleteUser(targetUid);
   } catch (_) {}
