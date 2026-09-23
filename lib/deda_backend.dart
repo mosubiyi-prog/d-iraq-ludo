@@ -104,6 +104,7 @@ class DedaBackend {
     }
     final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);
     return <String, dynamic>{
+      ...?data,
       'uid': user.uid,
       'email': user.email ?? data?['email'] ?? '',
       'displayName':
@@ -111,7 +112,6 @@ class DedaBackend {
               .toString(),
       'role': role,
       'status': normalizeAdminStatus(data),
-      ...?data,
       'roleNormalized': role,
     };
   }
@@ -634,6 +634,43 @@ class DedaBackend {
         .snapshots();
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>> placeRequestsForAdmin(
+    Map<String, dynamic> adminProfile,
+  ) {
+    final role = normalizeAdminRole(
+      adminProfile['roleNormalized'] ?? adminProfile['role'],
+    );
+    final collection = FirebaseFirestore.instance.collection('place_requests');
+    if (role == 'province_agent') {
+      final governorate =
+          (adminProfile['governorate'] ?? '').toString().trim();
+      if (governorate.isEmpty) {
+        return collection
+            .where('governorate', isEqualTo: '__no_governorate__')
+            .limit(1)
+            .snapshots();
+      }
+      return collection
+          .where('governorate', isEqualTo: governorate)
+          .limit(100)
+          .snapshots();
+    }
+    return collection
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> supportRequestsForAdmin(
+    Map<String, dynamic> adminProfile,
+  ) {
+    return FirebaseFirestore.instance
+        .collection('support_requests')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots();
+  }
+
   static Future<List<Map<String, dynamic>>> publishedPlaces() async {
     if (!isReady) return const [];
     final snapshot = await FirebaseFirestore.instance
@@ -1050,7 +1087,7 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> adminMembers() {
     return FirebaseFirestore.instance
         .collection('admins')
-        .orderBy('displayName')
+        .limit(200)
         .snapshots();
   }
 
@@ -1065,7 +1102,6 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> adminUsers() {
     return FirebaseFirestore.instance
         .collection('users')
-        .orderBy('lastSeenAt', descending: true)
         .limit(200)
         .snapshots();
   }
@@ -1166,6 +1202,26 @@ class DedaBackend {
     final callable =
         FirebaseFunctions.instance.httpsCallable('completeAdminFirstLogin');
     await callable.call();
+  }
+
+  static Future<void> deleteRoadHazardAsAdmin({
+    required String id,
+    required String reason,
+  }) async {
+    final actor = await _adminIdentity();
+    final ref = FirebaseFirestore.instance.collection('road_hazards').doc(id);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    await ref.delete();
+    await _writeAdminAudit(
+      'road_hazard_deleted',
+      details: <String, dynamic>{
+        'targetId': id,
+        'reason': reason.trim(),
+        'hazardType': snapshot.data()?['type'],
+        'adminUid': actor['uid'],
+      },
+    );
   }
 
   static Future<void> signOutAdmin() async {
