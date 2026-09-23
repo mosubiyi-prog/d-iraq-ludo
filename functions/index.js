@@ -554,6 +554,9 @@ exports.createAdminMember = onCall(async (request) => {
   if (!email || !email.includes("@")) {
     throw new HttpsError("invalid-argument", "valid-email-required");
   }
+  if (!department) {
+    throw new HttpsError("invalid-argument", "department-required");
+  }
   if (!ADMIN_ROLES.has(role)) {
     throw new HttpsError("invalid-argument", "invalid-admin-role");
   }
@@ -675,6 +678,9 @@ exports.updateAdminMember = onCall(async (request) => {
   }
   if (!displayName) {
     throw new HttpsError("invalid-argument", "display-name-required");
+  }
+  if (!department) {
+    throw new HttpsError("invalid-argument", "department-required");
   }
   if (role === "province_agent" && !governorate) {
     throw new HttpsError("invalid-argument", "governorate-required");
