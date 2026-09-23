@@ -13,6 +13,11 @@ on:
       - lib/admin_pages.dart
       - lib/admin_team_pages.dart
       - lib/deda_backend.dart
+      - lib/deda_recovery_admin.dart
+      - tools/final_release_fix.py
+      - tools/final_release_fix_compat.py
+      - tools/pin_login_patch.py
+      - tools/map_zoom_fix.py
       - functions/index.js
       - firestore.rules
       - pubspec.yaml
@@ -37,6 +42,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Apply release-time source patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -47,6 +59,7 @@ jobs:
             lib/admin_pages.dart \
             lib/admin_team_pages.dart \
             lib/deda_backend.dart \
+            lib/deda_recovery_admin.dart \
             --no-fatal-warnings \
             --no-fatal-infos
 
