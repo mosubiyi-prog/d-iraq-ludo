@@ -583,6 +583,13 @@ class DedaBackend {
         'lastSeenAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      try {
+        final callable =
+            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
+        await callable.call();
+      } catch (_) {
+        // Preserve login compatibility if the backend is still deploying.
+      }
       await registerAdminNotifications();
       await _writeAdminAudit('admin_signed_in');
       return true;
