@@ -1110,6 +1110,8 @@ class DedaBackend {
         'action': 'read_user_account',
         'ownerUid': ownerUid,
         'accountKey': accountKey,
+        'targetUserName': (profile['name'] ?? '').toString(),
+        'targetUserPhone': (profile['phone'] ?? sourcePhone).toString(),
         'sourceCollection': sourceCollection,
         'sourceId': sourceId,
         'adminUid': actor['uid'],
