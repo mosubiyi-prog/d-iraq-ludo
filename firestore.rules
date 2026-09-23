@@ -269,7 +269,22 @@ service cloud.firestore {
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
 
-      allow update: if canReplySupport()
+      allow update: if (
+          canReplySupport()
+          && request.resource.data.status in [
+            'new', 'in_progress', 'replied', 'closed'
+          ]
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedBy', 'reviewedByName',
+            'reviewedByRole', 'closedAt', 'adminReply', 'adminReplyAt',
+            'adminReplyByUid', 'adminReplyByName', 'adminReplyByRole',
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
+        )
         || (
           canReadSupport()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
