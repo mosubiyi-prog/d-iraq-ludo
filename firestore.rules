@@ -254,8 +254,24 @@ service cloud.firestore {
           signedIn()
           && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'fcmTokens', 'lastSeenAt', 'lastLoginAt'
+            'fcmTokens', 'lastSeenAt', 'lastLoginAt',
+            'displayName', 'updatedAt'
           ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'displayName'
+            ])
+            || (
+              request.resource.data.displayName is string
+              && request.resource.data.displayName.size() >= 2
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'updatedAt'
+            ])
+            || request.resource.data.updatedAt == request.time
+          )
         )
         || (
           signedIn()
