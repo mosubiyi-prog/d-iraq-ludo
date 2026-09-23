@@ -463,6 +463,44 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /account_deletion_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.reason is string
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'requesterUid', 'accountKey', 'name', 'phone', 'reason',
+          'status', 'createdAt', 'updatedAt'
+        ]);
+
+      allow read: if isGeneralManager()
+        || (
+          signedIn()
+          && resource.data.requesterUid == request.auth.uid
+        );
+
+      allow update: if isGeneralManager()
+        && request.resource.data.status in [
+          'new', 'reviewing', 'deleted', 'cancelled', 'rejected'
+        ]
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.reviewedByUid == request.auth.uid
+        && request.resource.data.reviewedByName is string
+        && request.resource.data.reviewedByRole is string
+        && request.resource.data.reviewNote is string
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'reviewedByUid', 'reviewedByName',
+          'reviewedByRole', 'reviewNote', 'completedAt', 'closedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
     match /recovery_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.requesterUid == request.auth.uid
