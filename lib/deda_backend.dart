@@ -92,16 +92,45 @@ class DedaBackend {
     if (user == null || user.isAnonymous) {
       throw StateError('admin-not-signed-in');
     }
-    final snapshot = await FirebaseFirestore.instance
-        .collection('admins')
-        .doc(user.uid)
-        .get();
-    final data = snapshot.data();
+
+    final ref =
+        FirebaseFirestore.instance.collection('admins').doc(user.uid);
+    var snapshot = await ref.get();
+    var data = snapshot.data();
     if (!snapshot.exists ||
         data?['active'] != true ||
         normalizeAdminStatus(data) != 'active') {
       throw StateError('admin-not-authorized');
     }
+
+    final rawRole = (data?['role'] ?? '').toString().trim();
+    final rawStatus = (data?['status'] ?? '').toString().trim();
+    final needsMetadataNormalization =
+        (data?['adminId'] ?? '').toString().trim().isEmpty ||
+            !<String>{
+              'general_manager',
+              'deputy_manager',
+              'employee',
+              'province_agent',
+            }.contains(rawRole) ||
+            !<String>{
+              'active',
+              'temporarily_stopped',
+              'disabled',
+            }.contains(rawStatus);
+
+    if (needsMetadataNormalization) {
+      try {
+        final callable =
+            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
+        await callable.call();
+        snapshot = await ref.get();
+        data = snapshot.data();
+      } catch (_) {
+        // Legacy active admins remain usable while the backend is deploying.
+      }
+    }
+
     final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);
     return <String, dynamic>{
       ...?data,
