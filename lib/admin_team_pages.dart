@@ -250,6 +250,19 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
         title: Text(t('إدارة الفريق والصلاحيات', 'Team & permissions')),
+        actions: [
+          IconButton(
+            tooltip: t('الدعوات الإدارية', 'Admin invitations'),
+            icon: const Icon(Icons.mark_email_unread_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DedaAdminInvitationsPage(isArabic: ar),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(),
@@ -494,6 +507,241 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
                       ),
               ),
             ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+class DedaAdminInvitationsPage extends StatelessWidget {
+  final bool isArabic;
+
+  const DedaAdminInvitationsPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  String t(String a, String e) => isArabic ? a : e;
+
+  String _statusLabel(String value) {
+    switch (value) {
+      case 'pending':
+        return t('بانتظار التفعيل', 'Pending activation');
+      case 'claimed':
+        return t('جارٍ التفعيل', 'Activation in progress');
+      case 'completed':
+        return t('مفعّلة', 'Activated');
+      default:
+        return value;
+    }
+  }
+
+  Future<void> _showInvite(
+    BuildContext context,
+    String inviteId,
+    Map<String, dynamic> data,
+  ) async {
+    final code = (data['activationCode'] ?? '').toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('بيانات الدعوة الإدارية', 'Admin invitation details')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SelectableText(
+                t('الاسم: ', 'Name: ') +
+                    (data['displayName'] ?? '').toString(),
+              ),
+              const SizedBox(height: 7),
+              SelectableText(
+                t('البريد: ', 'Email: ') +
+                    (data['email'] ?? '').toString(),
+              ),
+              const SizedBox(height: 7),
+              SelectableText(
+                t('معرّف الدعوة: ', 'Invitation ID: ') + inviteId,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              if (code.isNotEmpty) ...[
+                const SizedBox(height: 7),
+                SelectableText(
+                  t('رمز التفعيل: ', 'Activation code: ') + code,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 20,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 7),
+              SelectableText(
+                t('الرقم الإداري: ', 'Admin ID: ') +
+                    (data['adminId'] ?? '').toString(),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                t('الحالة: ', 'Status: ') +
+                    _statusLabel((data['status'] ?? '').toString()),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                t('تنتهي: ', 'Expires: ') +
+                    dedaAdminTimestamp(data['expiresAt']),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('تم', 'Done')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _cancelInvite(
+    BuildContext context,
+    String inviteId,
+    Map<String, dynamic> data,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('إلغاء الدعوة؟', 'Cancel invitation?')),
+        content: Text(
+          t(
+            'سيتم إلغاء دعوة ${(data['displayName'] ?? data['email'] ?? '').toString()} ولن يمكن استخدامها بعد ذلك.',
+            'The invitation for ${(data['displayName'] ?? data['email'] ?? '').toString()} will be cancelled and can no longer be used.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('رجوع', 'Back')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('إلغاء الدعوة', 'Cancel invitation')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await DedaBackend.cancelAdminInvitation(inviteId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(t('تم إلغاء الدعوة.', 'Invitation cancelled.')),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaFriendlyAdminError(isArabic, error))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(t('الدعوات الإدارية', 'Admin invitations')),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.adminInvitations(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                t(
+                  'تعذر تحميل الدعوات الإدارية.',
+                  'Could not load admin invitations.',
+                ),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs.where((doc) {
+            final status = (doc.data()['status'] ?? '').toString();
+            return status == 'pending' || status == 'claimed';
+          }).toList();
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Text(
+                t(
+                  'لا توجد دعوات معلقة.',
+                  'There are no pending invitations.',
+                ),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: docs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data();
+              final status = (data['status'] ?? '').toString();
+              return Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(14),
+                  onTap: () => _showInvite(context, doc.id, data),
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE7F1E4),
+                    child: Icon(
+                      Icons.mail_outline,
+                      color: Color(0xFF17652F),
+                    ),
+                  ),
+                  title: Text(
+                    (data['displayName'] ?? data['email'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text((data['email'] ?? '').toString()),
+                      Text(
+                        dedaAdminRoleLabel(isArabic, data['role']) +
+                            ' • ' +
+                            _statusLabel(status),
+                      ),
+                      Text(
+                        t('تنتهي: ', 'Expires: ') +
+                            dedaAdminTimestamp(data['expiresAt']),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  trailing: status == 'pending'
+                      ? IconButton(
+                          tooltip: t('إلغاء الدعوة', 'Cancel invitation'),
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () =>
+                              _cancelInvite(context, doc.id, data),
+                        )
+                      : null,
+                ),
+              );
+            },
           );
         },
       ),
