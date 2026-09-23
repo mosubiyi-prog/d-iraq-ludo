@@ -629,11 +629,12 @@ exports.updateAdminMember = onCall(async (request) => {
 
   await ref.set(update, {merge: true});
 
-  if (displayName && displayName !== cleanText(current.displayName || current.name, 120)) {
-    try {
-      await getAuth().updateUser(targetUid, {displayName});
-    } catch (_) {}
-  }
+  try {
+    await getAuth().updateUser(targetUid, {
+      displayName,
+      disabled: status === "disabled",
+    });
+  } catch (_) {}
   if (status !== "active") {
     try {
       await getAuth().revokeRefreshTokens(targetUid);
