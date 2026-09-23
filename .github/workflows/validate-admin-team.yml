@@ -1,0 +1,49 @@
+name: Validate DEDA admin team
+
+on:
+  push:
+    branches:
+      - admin-team-work-2026-09-23
+    paths:
+      - lib/admin_pages.dart
+      - lib/admin_team_pages.dart
+      - lib/deda_backend.dart
+      - functions/index.js
+      - firestore.rules
+      - pubspec.yaml
+      - .github/workflows/validate-admin-team.yml
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout admin work
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed Dart files
+        run: |
+          flutter analyze \
+            lib/admin_pages.dart \
+            lib/admin_team_pages.dart \
+            lib/deda_backend.dart \
+            --no-fatal-warnings \
+            --no-fatal-infos
+
+      - name: Check Cloud Functions syntax
+        run: node --check functions/index.js
+
+      - name: Validate Firestore rules with emulator
+        run: |
+          npx --yes firebase-tools@latest emulators:exec \
+            --only firestore \
+            --project demo-deda \
+            "echo firestore-rules-ok"
