@@ -1916,7 +1916,11 @@ class _RequestListState extends State<_RequestList> {
     return ChoiceChip(
       selected: _section == value,
       selectedColor: const Color(0xFFDDEDDD),
-      label: Text('${t(arLabel, enLabel)} ($count)'),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text('${t(arLabel, enLabel)} ($count)'),
+      ),
       onSelected: (_) {
         setState(() {
           _section = value;
@@ -2041,33 +2045,44 @@ class _RequestListState extends State<_RequestList> {
         return Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _sectionChip(
+              padding: const EdgeInsets.fromLTRB(10, 12, 10, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _sectionChip(
                       value: 'current',
                       arLabel: 'الحالية',
                       enLabel: 'Current',
                       count: currentCount,
                     ),
-                    const SizedBox(width: 8),
-                    _sectionChip(
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _sectionChip(
                       value: 'approved',
-                      arLabel: widget.collection == 'support_requests' ? 'تم الرد' : 'المعتمدات',
-                      enLabel: widget.collection == 'support_requests' ? 'Replied' : 'Approved',
+                      arLabel: widget.collection == 'support_requests'
+                          ? 'تم الرد'
+                          : 'المعتمدات',
+                      enLabel: widget.collection == 'support_requests'
+                          ? 'Replied'
+                          : 'Approved',
                       count: approvedCount,
                     ),
-                    const SizedBox(width: 8),
-                    _sectionChip(
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: _sectionChip(
                       value: 'rejected',
-                      arLabel: widget.collection == 'support_requests' ? 'المغلقة' : 'المرفوضات',
-                      enLabel: widget.collection == 'support_requests' ? 'Closed' : 'Rejected',
+                      arLabel: widget.collection == 'support_requests'
+                          ? 'المغلقة'
+                          : 'المرفوضات',
+                      enLabel: widget.collection == 'support_requests'
+                          ? 'Closed'
+                          : 'Rejected',
                       count: rejectedCount,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Expanded(
