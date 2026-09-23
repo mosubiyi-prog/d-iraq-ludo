@@ -1603,7 +1603,7 @@ class DedaGovernoratesPage extends StatelessWidget {
             Card(
               color: const Color(0xFFE6F1E4),
               child: ListTile(
-                leading: const Icon(Icons.lock_location_outlined),
+                leading: const Icon(Icons.location_on_outlined),
                 title: Text(t('نطاق حسابك', 'Your account scope')),
                 subtitle: Text(scope),
               ),
