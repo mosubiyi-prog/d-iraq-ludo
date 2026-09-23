@@ -29,6 +29,9 @@ async function notifyAdmins(title, body, type, requestId, options = {}) {
     const data = document.data() || {};
     if (normalizedAdminStatus(data) !== "active") return;
     const role = normalizedAdminRole(data);
+    if (options.generalManagerOnly === true && role !== "general_manager") {
+      return;
+    }
     if (options.permission &&
         !adminDocumentHasPermission(data, options.permission)) return;
     if (options.allowProvinceAgent === false && role === "province_agent") {
@@ -207,7 +210,7 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
           data.fullName || data.phone || "طلب استرجاع",
           "recovery",
           event.params.requestId,
-          {permission: "supportRead", allowProvinceAgent: false},
+          {generalManagerOnly: true},
       );
     },
 );
