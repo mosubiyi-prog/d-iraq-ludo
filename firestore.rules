@@ -264,6 +264,19 @@ service cloud.firestore {
         )
         || (
           isGeneralManager()
+          && request.auth.uid != uid
+          && request.resource.data.status == 'temporarily_stopped'
+          && request.resource.data.active == false
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.statusUpdatedAt == request.time
+          && request.resource.data.statusUpdatedByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'active', 'updatedAt', 'statusReason',
+            'statusUpdatedAt', 'statusUpdatedByUid', 'statusUpdatedByName'
+          ])
+        )
+        || (
+          isGeneralManager()
           && validAdminRole(request.resource.data.role)
           && validAdminStatus(request.resource.data.status)
           && request.resource.data.active ==
@@ -716,7 +729,10 @@ service cloud.firestore {
 
     match /system_counters/{counterId} {
       allow read, write: if isGeneralManager()
-        || hasAdminPermission('approvePlaces');
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
     }
   }
 }
