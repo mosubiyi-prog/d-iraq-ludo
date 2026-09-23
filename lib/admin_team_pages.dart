@@ -1676,7 +1676,10 @@ class DedaAdminAuditPage extends StatelessWidget {
                 } else if (targetPhone.isNotEmpty) {
                   target = '\u200E$targetPhone\u200E';
                 } else {
-                  target = accountKey;
+                  target = t(
+                    'بيانات غير مكتملة',
+                    'Incomplete profile',
+                  );
                 }
               } else {
                 target = (data['targetAdminName'] ??
@@ -1733,6 +1736,7 @@ class DedaAdminUsersPage extends StatefulWidget {
 
 class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
   final _search = TextEditingController();
+  final Set<String> _openingUsers = <String>{};
 
   bool get ar => widget.isArabic;
   String t(String a, String e) => ar ? a : e;
@@ -1773,12 +1777,14 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
   }
 
   Future<void> _openUser(String uid) async {
-    if (uid.trim().isEmpty) return;
+    final cleanUid = uid.trim();
+    if (cleanUid.isEmpty || _openingUsers.contains(cleanUid)) return;
+    _openingUsers.add(cleanUid);
     try {
       final snapshot = await DedaBackend.adminUserSnapshot(
-        ownerUid: uid,
+        ownerUid: cleanUid,
         sourceCollection: 'users',
-        sourceId: uid,
+        sourceId: cleanUid,
       );
       if (!mounted) return;
       final profile = Map<String, dynamic>.from(
@@ -1877,17 +1883,20 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
         ),
       );
     } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t(
-              'تعذر فتح حساب المستخدم الآن.',
-              'Could not open the user account now.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t(
+                'تعذر فتح حساب المستخدم الآن.',
+                'Could not open the user account now.',
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
+    } finally {
+      _openingUsers.remove(cleanUid);
     }
   }
 
