@@ -65,12 +65,24 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
           builder: (_) => DedaAdminDashboardPage(isArabic: widget.isArabic),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(() => _error = t(
-              'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
-              'Sign-in failed. Check the details and internet connection.',
-            ));
+        final raw = error.toString().toLowerCase();
+        final message = raw.contains('admin-temporarily-stopped')
+            ? t(
+                'هذا الحساب متوقف مؤقتًا. تواصل مع المدير العام.',
+                'This account is temporarily stopped. Contact the general manager.',
+              )
+            : raw.contains('admin-disabled') || raw.contains('user-disabled')
+                ? t(
+                    'هذا الحساب معطّل. تواصل مع المدير العام.',
+                    'This account is disabled. Contact the general manager.',
+                  )
+                : t(
+                    'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
+                    'Sign-in failed. Check the details and internet connection.',
+                  );
+        setState(() => _error = message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -203,7 +215,10 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                   obscureText: true,
                   textDirection: TextDirection.ltr,
                   decoration: InputDecoration(
-                    labelText: t('كلمة المرور', 'Password'),
+                    labelText: t(
+                      'كلمة المرور / الرمز المؤقت',
+                      'Password / temporary code',
+                    ),
                     prefixIcon: const Icon(Icons.lock_outline),
                     border: const OutlineInputBorder(),
                   ),
