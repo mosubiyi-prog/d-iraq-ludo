@@ -244,10 +244,10 @@ service cloud.firestore {
           'fullName', 'status', 'createdAt', 'updatedAt'
         ]);
 
-      allow read: if canReadSupport()
+      allow read: if isGeneralManager()
         || (signedIn() && resource.data.requesterUid == request.auth.uid);
 
-      allow update: if canReplySupport();
+      allow update: if isGeneralManager();
       allow delete: if false;
     }
 
