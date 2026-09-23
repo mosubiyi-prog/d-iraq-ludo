@@ -1227,11 +1227,22 @@ class _RequestListState extends State<_RequestList> {
             child: Text(t('إلغاء', 'Cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
             style: isReject
-                ? FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))
+                ? FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  )
                 : null,
-            child: Text(isReject ? t('تأكيد الرفض', 'Reject') : t('إرسال الملاحظة', 'Send note')),
+            child: Text(
+              isReject
+                  ? t('تأكيد الرفض', 'Reject')
+                  : t('إرسال الملاحظة', 'Send note'),
+            ),
           ),
         ],
       ),
