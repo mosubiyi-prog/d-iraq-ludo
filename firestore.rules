@@ -561,7 +561,6 @@ service cloud.firestore {
           && resource.data.status == 'pending'
           && resource.data.expiresAt is timestamp
           && resource.data.expiresAt > request.time
-          && request.auth.token.email is string
           && request.auth.token.email == resource.data.email
           && request.resource.data.status == 'claimed'
           && request.resource.data.claimedUid == request.auth.uid
@@ -617,7 +616,6 @@ service cloud.firestore {
         )
         && inviteData(request.resource.data.inviteId).status == 'claimed'
         && inviteData(request.resource.data.inviteId).claimedUid == uid
-        && request.auth.token.email is string
         && request.auth.token.email == inviteData(request.resource.data.inviteId).email
         && request.resource.data.adminId ==
           inviteData(request.resource.data.inviteId).adminId
