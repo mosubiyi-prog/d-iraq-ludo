@@ -87,7 +87,7 @@ Map<String, bool> dedaDefaultAdminPermissions(String role) {
   } else if (role == 'province_agent') {
     values['viewPlaceRequests'] = true;
     values['reviewPlaceRequests'] = true;
-    values['viewReports'] = true;
+    values['viewReports'] = false;
     values['viewGovernorates'] = true;
   }
   if (role == 'province_agent') {
@@ -580,6 +580,7 @@ class _DedaAdminMemberEditorPageState
       _permissions['supportRead'] = false;
       _permissions['supportReply'] = false;
       _permissions['viewUsers'] = false;
+      _permissions['viewReports'] = false;
       _permissions['viewAudit'] = false;
       _permissions['manageReports'] = false;
     }
@@ -1608,7 +1609,7 @@ class DedaGovernoratesPage extends StatelessWidget {
                 subtitle: Text(scope),
               ),
             ),
-          ...dedaAdminGovernorates.map(
+          ...(scope.isNotEmpty ? <String>[scope] : dedaAdminGovernorates).map(
             (name) => Card(
               child: ListTile(
                 leading: const Icon(Icons.location_city_outlined),
