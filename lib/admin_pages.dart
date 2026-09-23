@@ -250,6 +250,291 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                     backgroundColor: const Color(0xFF17652F),
                   ),
                 ),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => DedaAdminInviteActivationPage(
+                                isArabic: widget.isArabic,
+                              ),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.mark_email_read_outlined),
+                  label: Text(
+                    t(
+                      'تفعيل دعوة إدارية',
+                      'Activate admin invitation',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DedaAdminInviteActivationPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaAdminInviteActivationPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  @override
+  State<DedaAdminInviteActivationPage> createState() =>
+      _DedaAdminInviteActivationPageState();
+}
+
+class _DedaAdminInviteActivationPageState
+    extends State<DedaAdminInviteActivationPage> {
+  final _email = TextEditingController();
+  final _inviteId = TextEditingController();
+  final _code = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+
+  bool _loading = false;
+  String? _error;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _inviteId.dispose();
+    _code.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  String _friendlyActivationError(Object error) {
+    final raw = error.toString().toLowerCase();
+    if (raw.contains('email-already-in-use')) {
+      return t(
+        'هذا البريد مرتبط بحساب مسبقًا. إذا كان الحساب إداريًا استخدم شاشة الدخول العادية.',
+        'This email already has an account. If it is an admin account, use normal sign-in.',
+      );
+    }
+    if (raw.contains('weak-password') || raw.contains('weak-password')) {
+      return t(
+        'اختر كلمة مرور من 8 أحرف/أرقام على الأقل.',
+        'Choose a password with at least 8 characters.',
+      );
+    }
+    if (raw.contains('permission-denied') ||
+        raw.contains('invalid-invite-code') ||
+        raw.contains('invite-not-found') ||
+        raw.contains('invite-not-claimed') ||
+        raw.contains('invite-email-mismatch')) {
+      return t(
+        'بيانات الدعوة غير صحيحة أو لم تعد صالحة. تحقق من البريد ومعرّف الدعوة ورمز التفعيل.',
+        'The invitation details are incorrect or no longer valid. Check the email, invitation ID, and activation code.',
+      );
+    }
+    if (raw.contains('invite-expired')) {
+      return t(
+        'انتهت صلاحية الدعوة. اطلب من المدير العام إنشاء دعوة جديدة.',
+        'This invitation has expired. Ask the general manager for a new invitation.',
+      );
+    }
+    return t(
+      'تعذر تفعيل الدعوة. تحقق من البيانات واتصال الإنترنت ثم حاول مجددًا.',
+      'Could not activate the invitation. Check the details and internet connection, then try again.',
+    );
+  }
+
+  Future<void> _activate() async {
+    final email = _email.text.trim();
+    final inviteId = _inviteId.text.trim();
+    final code = _code.text.trim();
+    final password = _password.text;
+
+    if (email.isEmpty ||
+        !email.contains('@') ||
+        inviteId.isEmpty ||
+        code.length != 8 ||
+        password.length < 8) {
+      setState(() {
+        _error = t(
+          'أكمل البريد ومعرّف الدعوة ورمز التفعيل المكوّن من 8 أرقام، واستخدم كلمة مرور من 8 أحرف/أرقام على الأقل.',
+          'Complete the email, invitation ID, 8-digit activation code, and use a password of at least 8 characters.',
+        );
+      });
+      return;
+    }
+    if (password != _confirm.text) {
+      setState(() {
+        _error = t(
+          'كلمتا المرور غير متطابقتين.',
+          'Passwords do not match.',
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await DedaBackend.activateAdminInvitation(
+        inviteId: inviteId,
+        activationCode: code,
+        email: email,
+        password: password,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => DedaAdminDashboardPage(
+            isArabic: widget.isArabic,
+          ),
+        ),
+        (route) => route.isFirst,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _friendlyActivationError(error));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          t(
+            'تفعيل دعوة إدارية',
+            'Activate admin invitation',
+          ),
+        ),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(
+                  Icons.mark_email_read_outlined,
+                  size: 64,
+                  color: Color(0xFF17652F),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  t(
+                    'أدخل البيانات التي استلمتها من المدير العام، ثم اختر كلمة مرور خاصة بك.',
+                    'Enter the details received from the general manager, then choose your own password.',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(height: 1.45),
+                ),
+                const SizedBox(height: 22),
+                TextField(
+                  controller: _email,
+                  enabled: !_loading,
+                  keyboardType: TextInputType.emailAddress,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('البريد الإلكتروني', 'Email'),
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _inviteId,
+                  enabled: !_loading,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('معرّف الدعوة', 'Invitation ID'),
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _code,
+                  enabled: !_loading,
+                  keyboardType: TextInputType.number,
+                  textDirection: TextDirection.ltr,
+                  maxLength: 8,
+                  decoration: InputDecoration(
+                    labelText: t('رمز التفعيل • 8 أرقام', 'Activation code • 8 digits'),
+                    prefixIcon: const Icon(Icons.pin_outlined),
+                    border: const OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _password,
+                  enabled: !_loading,
+                  obscureText: true,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('كلمة المرور الجديدة', 'New password'),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _confirm,
+                  enabled: !_loading,
+                  obscureText: true,
+                  textDirection: TextDirection.ltr,
+                  decoration: InputDecoration(
+                    labelText: t('تأكيد كلمة المرور', 'Confirm password'),
+                    prefixIcon: const Icon(Icons.lock_reset_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _activate(),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _activate,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.verified_user_outlined),
+                  label: Text(
+                    t(
+                      'تفعيل الحساب الإداري',
+                      'Activate admin account',
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: const Color(0xFF17652F),
+                  ),
+                ),
               ],
             ),
           ),
