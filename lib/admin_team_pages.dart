@@ -2767,6 +2767,14 @@ class DedaAdminSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final email = (profile['email'] ?? '').toString().trim();
+    final rawName =
+        (profile['name'] ?? profile['displayName'] ?? '').toString().trim();
+    final adminName = rawName.isEmpty ||
+            (email.isNotEmpty && rawName.toLowerCase() == email.toLowerCase())
+        ? t('غير محدد', 'Not provided')
+        : rawName;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -2781,9 +2789,7 @@ class DedaAdminSettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.person_outline),
                   title: Text(t('الاسم', 'Name')),
-                  subtitle: Text(
-                    (profile['displayName'] ?? '—').toString(),
-                  ),
+                  subtitle: Text(adminName),
                 ),
                 ListTile(
                   leading: const Icon(Icons.email_outlined),
