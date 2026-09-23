@@ -269,7 +269,17 @@ service cloud.firestore {
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
 
-      allow update: if canReplySupport();
+      allow update: if canReplySupport()
+        || (
+          canReadSupport()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+            'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+            'lastViewedByName', 'lastViewedByRole',
+            'accountReviewedAt', 'accountReviewedByUid',
+            'accountReviewedByName', 'accountReviewedByRole'
+          ])
+        );
       allow delete: if false;
     }
 
@@ -329,6 +339,16 @@ service cloud.firestore {
             || (
               request.resource.data.status == resource.data.status
               && hasAdminPermission('reviewPlaceRequests')
+            )
+            || (
+              hasAdminPermission('viewPlaceRequests')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
+                'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
+                'lastViewedByName', 'lastViewedByRole',
+                'accountReviewedAt', 'accountReviewedByUid',
+                'accountReviewedByName', 'accountReviewedByRole'
+              ])
             )
           )
         );
