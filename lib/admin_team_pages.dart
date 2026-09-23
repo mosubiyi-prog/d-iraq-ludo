@@ -1789,13 +1789,34 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                             const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final data = items[index].data();
+                          final name =
+                              (data['name'] ?? '').toString().trim();
+                          final phone =
+                              (data['phone'] ?? '').toString().trim();
+                          final accountType =
+                              (data['accountType'] ?? '').toString().trim();
+                          final incomplete = name.isEmpty ||
+                              phone.isEmpty ||
+                              accountType.isEmpty;
                           return Card(
                             child: ListTile(
-                              leading:
-                                  const Icon(Icons.person_outline),
+                              leading: Icon(
+                                incomplete
+                                    ? Icons.person_off_outlined
+                                    : Icons.person_outline,
+                              ),
                               title: Text(
-                                (data['name'] ?? t('مستخدم', 'User'))
-                                    .toString(),
+                                name.isEmpty
+                                    ? t(
+                                        'بيانات غير مكتملة',
+                                        'Incomplete profile',
+                                      )
+                                    : name,
+                                style: TextStyle(
+                                  fontWeight: incomplete
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                ),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment:
@@ -1825,6 +1846,17 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
                                   ),
                                 ],
                               ),
+                              trailing: incomplete
+                                  ? Chip(
+                                      label: Text(
+                                        t(
+                                          'بيانات ناقصة',
+                                          'Incomplete',
+                                        ),
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                    )
+                                  : const Icon(Icons.chevron_right),
                             ),
                           );
                         },
