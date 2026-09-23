@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'deda_backend.dart';
+
 class DedaRecoveryAdminList extends StatelessWidget {
   final bool isArabic;
 
@@ -65,6 +67,7 @@ class DedaRecoveryAdminList extends StatelessWidget {
     }
 
     final firestore = FirebaseFirestore.instance;
+    final adminProfile = await DedaBackend.currentAdminProfile();
     final directory = await firestore
         .collection('deda_account_directory')
         .doc(accountKey)
@@ -126,6 +129,18 @@ class DedaRecoveryAdminList extends StatelessWidget {
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
+    final auditRef = firestore.collection('admin_audit').doc();
+    batch.set(auditRef, <String, dynamic>{
+      'action': 'recovery_approved',
+      'adminUid': uid,
+      'adminName': (adminProfile['displayName'] ?? '').toString(),
+      'adminRole': DedaBackend.normalizeAdminRole(adminProfile['role']),
+      'sourceCollection': 'recovery_requests',
+      'sourceId': id,
+      'targetAccountKey': accountKey,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
     try {
       await batch.commit();
       if (!context.mounted) return;
@@ -155,17 +170,66 @@ class DedaRecoveryAdminList extends StatelessWidget {
   }
 
   Future<void> _reject(BuildContext context, String id) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('رفض طلب الاسترجاع', 'Reject recovery request')),
+        content: TextField(
+          controller: controller,
+          minLines: 2,
+          maxLines: 4,
+          decoration: InputDecoration(
+            labelText: t('سبب الرفض', 'Reason for rejection'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: Text(t('تأكيد الرفض', 'Confirm rejection')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || reason.isEmpty) return;
+
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) return;
+
     try {
-      await FirebaseFirestore.instance
-          .collection('recovery_requests')
-          .doc(id)
-          .update(<String, dynamic>{
+      final firestore = FirebaseFirestore.instance;
+      final adminProfile = await DedaBackend.currentAdminProfile();
+      final batch = firestore.batch();
+      final requestRef = firestore.collection('recovery_requests').doc(id);
+      final auditRef = firestore.collection('admin_audit').doc();
+
+      batch.update(requestRef, <String, dynamic>{
         'status': 'rejected',
         'rejectedBy': uid,
         'rejectedAt': FieldValue.serverTimestamp(),
+        'rejectionReason': reason,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+      batch.set(auditRef, <String, dynamic>{
+        'action': 'recovery_rejected',
+        'adminUid': uid,
+        'adminName': (adminProfile['displayName'] ?? '').toString(),
+        'adminRole': DedaBackend.normalizeAdminRole(adminProfile['role']),
+        'sourceCollection': 'recovery_requests',
+        'sourceId': id,
+        'reason': reason,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
     } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -136,6 +136,13 @@ owner_replace(
 text = text[:owner_start] + owner + text[owner_end:]
 path.write_text(text)
 
+# Build 111+ uses the first-class team/permissions system and its central
+# administrative audit log. Keep the legacy release-only admin-history patch
+# disabled there; the owner-side fixes above still apply normally.
+if Path("lib/admin_team_pages.dart").exists():
+    print("DEDA admin team system detected; skipped legacy admin-history patch.")
+    raise SystemExit(0)
+
 # Keep the admin source stable in the repository and apply the release-only
 # audit improvements in one controlled build step, just like the owner fix.
 admin_path = Path("lib/admin_pages.dart")

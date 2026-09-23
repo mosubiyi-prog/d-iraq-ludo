@@ -828,6 +828,12 @@ if count != 1:
 text = text.replace(marker, pages + marker, 1)
 main_path.write_text(text)
 
+# Build 111+ exposes recovery from the permission-aware admin dashboard.
+# The legacy inbox-tab patch below is kept only for older branches.
+if Path("lib/admin_team_pages.dart").exists():
+    print("Applied DEDA PIN login/recovery; skipped legacy admin inbox tab patch.")
+    raise SystemExit(0)
+
 admin_path = Path("lib/admin_pages.dart")
 admin = admin_path.read_text()
 

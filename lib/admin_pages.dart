@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_place_map.dart';
+import 'admin_team_pages.dart';
 import 'deda_backend.dart';
+import 'deda_recovery_admin.dart';
 
 class DedaAdminLoginPage extends StatefulWidget {
   final bool isArabic;
@@ -49,22 +51,125 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             ));
         return;
       }
+      final profile = await DedaBackend.currentAdminProfile();
+      if (profile['mustChangePassword'] == true) {
+        final changed = await _forcePasswordChange();
+        if (!changed) {
+          await DedaBackend.signOutAdmin();
+          return;
+        }
+      }
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => DedaAdminInboxPage(isArabic: widget.isArabic),
+          builder: (_) => DedaAdminDashboardPage(isArabic: widget.isArabic),
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        setState(() => _error = t(
-              'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
-              'Sign-in failed. Check the details and internet connection.',
-            ));
+        final raw = error.toString().toLowerCase();
+        final message = raw.contains('admin-temporarily-stopped')
+            ? t(
+                'هذا الحساب متوقف مؤقتًا. تواصل مع المدير العام.',
+                'This account is temporarily stopped. Contact the general manager.',
+              )
+            : raw.contains('admin-disabled') || raw.contains('user-disabled')
+                ? t(
+                    'هذا الحساب معطّل. تواصل مع المدير العام.',
+                    'This account is disabled. Contact the general manager.',
+                  )
+                : t(
+                    'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
+                    'Sign-in failed. Check the details and internet connection.',
+                  );
+        setState(() => _error = message);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<bool> _forcePasswordChange() async {
+    final first = TextEditingController();
+    final second = TextEditingController();
+    String? dialogError;
+    final newPassword = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(t(
+            'تغيير كلمة المرور لأول دخول',
+            'Change password on first sign-in',
+          )),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t(
+                'هذا الرمز مؤقت. اختر كلمة مرور جديدة قبل الدخول إلى الإدارة.',
+                'The invitation code is temporary. Choose a new password before entering administration.',
+              )),
+              const SizedBox(height: 14),
+              TextField(
+                controller: first,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  labelText: t('كلمة المرور الجديدة', 'New password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: second,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                  labelText: t('تأكيد كلمة المرور', 'Confirm password'),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (dialogError != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  dialogError!,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () {
+                final value = first.text;
+                if (value.length < 8) {
+                  setDialogState(() => dialogError = t(
+                    'استخدم 8 أحرف/أرقام على الأقل.',
+                    'Use at least 8 characters.',
+                  ));
+                  return;
+                }
+                if (value != second.text) {
+                  setDialogState(() => dialogError = t(
+                    'كلمتا المرور غير متطابقتين.',
+                    'Passwords do not match.',
+                  ));
+                  return;
+                }
+                Navigator.pop(dialogContext, value);
+              },
+              child: Text(t('حفظ والمتابعة', 'Save and continue')),
+            ),
+          ],
+        ),
+      ),
+    );
+    first.dispose();
+    second.dispose();
+    if (newPassword == null) return false;
+    await DedaBackend.changeCurrentAdminPassword(newPassword);
+    return true;
   }
 
   @override
@@ -111,7 +216,10 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                   obscureText: true,
                   textDirection: TextDirection.ltr,
                   decoration: InputDecoration(
-                    labelText: t('كلمة المرور', 'Password'),
+                    labelText: t(
+                      'كلمة المرور / الرمز المؤقت',
+                      'Password / temporary code',
+                    ),
                     prefixIcon: const Icon(Icons.lock_outline),
                     border: const OutlineInputBorder(),
                   ),
@@ -146,6 +254,431 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+class DedaAdminDashboardPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaAdminDashboardPage({super.key, required this.isArabic});
+
+  @override
+  State<DedaAdminDashboardPage> createState() =>
+      _DedaAdminDashboardPageState();
+}
+
+class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
+  Map<String, dynamic>? _profile;
+  String? _error;
+
+  bool get ar => widget.isArabic;
+  String t(String a, String e) => ar ? a : e;
+
+  String _roleLabel(dynamic value) {
+    switch (DedaBackend.normalizeAdminRole(value)) {
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
+      case 'deputy_manager':
+        return t('معاون المدير', 'Deputy manager');
+      case 'province_agent':
+        return t('وكيل محافظة', 'Province agent');
+      case 'employee':
+        return t('موظف', 'Employee');
+      default:
+        return value?.toString() ?? '';
+    }
+  }
+
+  String _statusLabel(Map<String, dynamic> value) {
+    switch (DedaBackend.normalizeAdminStatus(value)) {
+      case 'active':
+        return t('نشط', 'Active');
+      case 'temporarily_stopped':
+        return t('متوقف مؤقتًا', 'Temporarily stopped');
+      case 'disabled':
+        return t('معطّل', 'Disabled');
+      default:
+        return '';
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final profile = await DedaBackend.currentAdminProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = t(
+            'تعذر تحميل صلاحيات الحساب الإداري.',
+            'Could not load the administrative account permissions.',
+          ));
+    }
+  }
+
+  Future<void> _open(Widget page) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    if (mounted) _load();
+  }
+
+  Widget _dashboardCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 38, color: const Color(0xFF17652F)),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF5D685F),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = _profile;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(t('إدارة DEDA', 'DEDA administration')),
+        actions: [
+          IconButton(
+            tooltip: t('تحديث', 'Refresh'),
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: t('تسجيل الخروج', 'Sign out'),
+            onPressed: () async {
+              await DedaBackend.signOutAdmin();
+              if (context.mounted) Navigator.pop(context);
+            },
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: profile == null
+          ? Center(
+              child: _error == null
+                  ? const CircularProgressIndicator()
+                  : Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7F1E4),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFB8CCB6)),
+                    ),
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Color(0xFF17652F),
+                          child: Icon(
+                            Icons.admin_panel_settings,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (profile['displayName'] ?? '').toString(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(_roleLabel(profile['role'])),
+                              if ((profile['governorate'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty)
+                                Text(
+                                  t('المحافظة: ', 'Province: ') +
+                                      profile['governorate'].toString(),
+                                  style: const TextStyle(fontSize: 12.5),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD4EAD5),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            _statusLabel(profile),
+                            style: const TextStyle(
+                              color: Color(0xFF17652F),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.08,
+                    children: [
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.groups_2_outlined,
+                          title: t(
+                            'إدارة الفريق والصلاحيات',
+                            'Team & permissions',
+                          ),
+                          subtitle: t(
+                            'إضافة الأعضاء وتحديد أدوارهم',
+                            'Members, roles and access',
+                          ),
+                          onTap: () => _open(DedaAdminTeamPage(
+                            isArabic: ar,
+                            currentAdmin: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewPlaceRequests',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.storefront_outlined,
+                          title: t('طلبات الأماكن', 'Place requests'),
+                          subtitle: t(
+                            'المراجعة والاعتماد حسب الصلاحية',
+                            'Review according to permission',
+                          ),
+                          onTap: () => _open(_AdminRequestsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                            collection: 'place_requests',
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'supportRead'))
+                        _dashboardCard(
+                          icon: Icons.support_agent,
+                          title: t('الدعم', 'Support'),
+                          subtitle: t(
+                            'رسائل المستخدمين والردود',
+                            'User messages and replies',
+                          ),
+                          onTap: () => _open(_AdminRequestsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                            collection: 'support_requests',
+                          )),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.lock_reset,
+                          title: t('استرجاع الدخول', 'Recovery'),
+                          subtitle: t(
+                            'طلبات استرجاع الحساب الحساسة',
+                            'Sensitive account recovery requests',
+                          ),
+                          onTap: () => _open(
+                            Scaffold(
+                              backgroundColor: const Color(0xFFF8FAF2),
+                              appBar: AppBar(
+                                title: Text(
+                                  t('استرجاع الدخول', 'Sign-in recovery'),
+                                ),
+                              ),
+                              body: DedaRecoveryAdminList(isArabic: ar),
+                            ),
+                          ),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'viewUsers'))
+                        _dashboardCard(
+                          icon: Icons.people_alt_outlined,
+                          title: t('المستخدمون', 'Users'),
+                          subtitle: t('قراءة فقط', 'Read only'),
+                          onTap: () => _open(
+                            DedaAdminUsersPage(isArabic: ar),
+                          ),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewReports',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.report_gmailerrorred_outlined,
+                          title: t('البلاغات', 'Reports'),
+                          subtitle: t(
+                            'بلاغات الطريق الحالية',
+                            'Current road reports',
+                          ),
+                          onTap: () => _open(DedaAdminRoadReportsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewGovernorates',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.map_outlined,
+                          title: t('المحافظات', 'Governorates'),
+                          subtitle: t(
+                            'نطاق عمل الوكلاء',
+                            'Agent coverage',
+                          ),
+                          onTap: () => _open(DedaGovernoratesPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(
+                        profile,
+                        'viewReports',
+                      ))
+                        _dashboardCard(
+                          icon: Icons.analytics_outlined,
+                          title: t('التقارير', 'Analytics'),
+                          subtitle: t(
+                            'ملخص تشغيلي سريع',
+                            'Quick operations summary',
+                          ),
+                          onTap: () => _open(DedaAdminReportsPage(
+                            isArabic: ar,
+                            adminProfile: profile,
+                          )),
+                        ),
+                      if (DedaBackend.adminHasPermission(profile, 'viewAudit') &&
+                          DedaBackend.normalizeAdminRole(profile['role']) !=
+                              'province_agent')
+                        _dashboardCard(
+                          icon: Icons.fact_check_outlined,
+                          title: t('السجل الإداري', 'Audit log'),
+                          subtitle: t(
+                            'من قام بماذا ومتى',
+                            'Who did what and when',
+                          ),
+                          onTap: () => _open(
+                            DedaAdminAuditPage(isArabic: ar),
+                          ),
+                        ),
+                      _dashboardCard(
+                        icon: Icons.settings_outlined,
+                        title: t('الإعدادات', 'Settings'),
+                        subtitle: t(
+                          'بيانات حسابك الإداري',
+                          'Your admin account',
+                        ),
+                        onTap: () => _open(DedaAdminSettingsPage(
+                          isArabic: ar,
+                          profile: profile,
+                        )),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _AdminRequestsPage extends StatelessWidget {
+  final bool isArabic;
+  final Map<String, dynamic> adminProfile;
+  final String collection;
+
+  const _AdminRequestsPage({
+    required this.isArabic,
+    required this.adminProfile,
+    required this.collection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSupport = collection == 'support_requests';
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          isSupport
+              ? (isArabic ? 'الدعم' : 'Support')
+              : (isArabic ? 'طلبات الأماكن' : 'Place requests'),
+        ),
+      ),
+      body: _RequestList(
+        isArabic: isArabic,
+        collection: collection,
+        adminProfile: adminProfile,
+        stream: isSupport
+            ? DedaBackend.supportRequestsForAdmin(adminProfile)
+            : DedaBackend.placeRequestsForAdmin(adminProfile),
       ),
     );
   }
@@ -211,11 +744,13 @@ class _RequestList extends StatefulWidget {
   final bool isArabic;
   final String collection;
   final Stream<QuerySnapshot<Map<String, dynamic>>> stream;
+  final Map<String, dynamic>? adminProfile;
 
   const _RequestList({
     required this.isArabic,
     required this.collection,
     required this.stream,
+    this.adminProfile,
   });
 
   @override
@@ -227,6 +762,12 @@ class _RequestListState extends State<_RequestList> {
   String _section = 'current';
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  bool _can(String permission) {
+    final profile = widget.adminProfile;
+    return profile == null ||
+        DedaBackend.adminHasPermission(profile, permission);
+  }
 
   String statusLabel(String status) {
     switch (status) {
@@ -290,12 +831,20 @@ class _RequestListState extends State<_RequestList> {
       case 'manager':
       case 'director':
       case 'admin':
-        return t('المدير', 'Manager');
+      case 'general_manager':
+        return t('المدير العام', 'General manager');
       case 'assistant':
       case 'assistant_manager':
       case 'assistant-manager':
       case 'deputy_manager':
-        return t('مساعد المدير', 'Assistant manager');
+        return t('معاون المدير', 'Deputy manager');
+      case 'employee':
+      case 'staff':
+        return t('موظف', 'Employee');
+      case 'province_agent':
+      case 'governorate_agent':
+      case 'agent':
+        return t('وكيل محافظة', 'Province agent');
       default:
         return raw.isEmpty ? t('الإدارة', 'Administration') : raw;
     }
@@ -562,6 +1111,15 @@ class _RequestListState extends State<_RequestList> {
   }
 
   Widget _supportActions({required String status, required String id}) {
+    if (!_can('supportReply')) {
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Chip(
+          avatar: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(t('قراءة فقط', 'Read only')),
+        ),
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -714,11 +1272,22 @@ class _RequestListState extends State<_RequestList> {
             child: Text(t('إلغاء', 'Cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) {
+                Navigator.pop(dialogContext, value);
+              }
+            },
             style: isReject
-                ? FilledButton.styleFrom(backgroundColor: const Color(0xFFB3261E))
+                ? FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  )
                 : null,
-            child: Text(isReject ? t('تأكيد الرفض', 'Reject') : t('إرسال الملاحظة', 'Send note')),
+            child: Text(
+              isReject
+                  ? t('تأكيد الرفض', 'Reject')
+                  : t('إرسال الملاحظة', 'Send note'),
+            ),
           ),
         ],
       ),
@@ -935,7 +1504,7 @@ class _RequestListState extends State<_RequestList> {
             const SizedBox(height: 10),
             _detailRow(t('رد الإدارة', 'Administration reply'), reply),
           ],
-          if (ownerUid.isNotEmpty)
+          if (ownerUid.isNotEmpty && _can('viewUsers'))
             OutlinedButton.icon(
               onPressed: () => _showUserAccount(ownerUid: ownerUid, sourceId: id),
               icon: const Icon(Icons.visibility_outlined),
@@ -1071,7 +1640,21 @@ class _RequestListState extends State<_RequestList> {
     if (widget.collection == 'support_requests') {
       return _supportActions(status: status, id: id);
     }
+
+    final canReview = _can('reviewPlaceRequests');
+    final canApprove = _can('approvePlaces');
+    final canReject = _can('rejectPlaces');
+
     if (status == 'approved' || status == 'rejected') {
+      if (!canReview) {
+        return Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Chip(
+            avatar: const Icon(Icons.visibility_outlined, size: 18),
+            label: Text(t('قراءة فقط', 'Read only')),
+          ),
+        );
+      }
       return Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -1087,40 +1670,54 @@ class _RequestListState extends State<_RequestList> {
       );
     }
 
+    if (!canReview && !canApprove && !canReject) {
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Chip(
+          avatar: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(t('قراءة فقط', 'Read only')),
+        ),
+      );
+    }
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'reviewing',
-          id: id,
-          arLabel: 'قيد المراجعة',
-          enLabel: 'Under review',
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'needs_changes',
-          id: id,
-          arLabel: 'يحتاج تعديل',
-          enLabel: 'Needs changes',
-          selectedColor: const Color(0xFFB26A00),
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'approved',
-          id: id,
-          arLabel: 'اعتماد',
-          enLabel: 'Approve',
-        ),
-        _statusButton(
-          currentStatus: status,
-          targetStatus: 'rejected',
-          id: id,
-          arLabel: 'رفض',
-          enLabel: 'Reject',
-          selectedColor: const Color(0xFFB3261E),
-        ),
+        if (canReview)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'reviewing',
+            id: id,
+            arLabel: 'قيد المراجعة',
+            enLabel: 'Under review',
+          ),
+        if (canReview)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'needs_changes',
+            id: id,
+            arLabel: 'يحتاج تعديل',
+            enLabel: 'Needs changes',
+            selectedColor: const Color(0xFFB26A00),
+          ),
+        if (canApprove)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'approved',
+            id: id,
+            arLabel: 'اعتماد',
+            enLabel: 'Approve',
+          ),
+        if (canReject)
+          _statusButton(
+            currentStatus: status,
+            targetStatus: 'rejected',
+            id: id,
+            arLabel: 'رفض',
+            enLabel: 'Reject',
+            selectedColor: const Color(0xFFB3261E),
+          ),
       ],
     );
   }

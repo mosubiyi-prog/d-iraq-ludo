@@ -2241,7 +2241,7 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => isAdmin
-                              ? DedaAdminInboxPage(
+                              ? DedaAdminDashboardPage(
                                   isArabic: DedaLanguageState.isArabic,
                                 )
                               : DedaAdminLoginPage(

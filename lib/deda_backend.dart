@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -39,33 +40,135 @@ class DedaBackend {
     return credential.user!;
   }
 
-  static Future<Map<String, String>> _adminIdentity() async {
+  static String normalizeAdminRole(dynamic value) {
+    final raw = (value ?? '').toString().trim().toLowerCase();
+    if (raw.isEmpty ||
+        raw == 'manager' ||
+        raw == 'director' ||
+        raw == 'admin' ||
+        raw == 'general_manager') {
+      return 'general_manager';
+    }
+    if (raw == 'assistant' ||
+        raw == 'assistant_manager' ||
+        raw == 'assistant-manager' ||
+        raw == 'deputy_manager') {
+      return 'deputy_manager';
+    }
+    if (raw == 'staff' || raw == 'employee') return 'employee';
+    if (raw == 'agent' ||
+        raw == 'governorate_agent' ||
+        raw == 'province_agent') {
+      return 'province_agent';
+    }
+    return raw;
+  }
+
+  static String normalizeAdminStatus(Map<String, dynamic>? data) {
+    if (data == null) return 'disabled';
+    final raw = (data['status'] ?? '').toString().trim().toLowerCase();
+    if (raw == 'active' ||
+        raw == 'temporarily_stopped' ||
+        raw == 'disabled') {
+      return raw;
+    }
+    return data['active'] == true ? 'active' : 'disabled';
+  }
+
+  static bool adminHasPermission(
+    Map<String, dynamic>? profile,
+    String permission,
+  ) {
+    if (profile == null) return false;
+    final role = normalizeAdminRole(profile['role'] ?? profile['jobTitle']);
+    if (role == 'general_manager') return true;
+    final permissions = profile['permissions'];
+    return permissions is Map && permissions[permission] == true;
+  }
+
+  static Future<Map<String, dynamic>> currentAdminProfile() async {
     if (!isReady) throw StateError('firebase-not-ready');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) {
       throw StateError('admin-not-signed-in');
     }
-    final admin = await FirebaseFirestore.instance
-        .collection('admins')
-        .doc(user.uid)
-        .get();
-    final data = admin.data();
-    if (!admin.exists || data?['active'] != true) {
+
+    final ref =
+        FirebaseFirestore.instance.collection('admins').doc(user.uid);
+    var snapshot = await ref.get();
+    var data = snapshot.data();
+    if (!snapshot.exists ||
+        data?['active'] != true ||
+        normalizeAdminStatus(data) != 'active') {
       throw StateError('admin-not-authorized');
     }
-    final configuredName =
-        (data?['displayName'] ?? data?['name'] ?? '').toString().trim();
-    final configuredRole =
-        (data?['role'] ?? data?['jobTitle'] ?? 'manager').toString().trim();
-    return <String, String>{
+
+    final rawRole = (data?['role'] ?? '').toString().trim();
+    final rawStatus = (data?['status'] ?? '').toString().trim();
+    final needsMetadataNormalization =
+        (data?['adminId'] ?? '').toString().trim().isEmpty ||
+            !<String>{
+              'general_manager',
+              'deputy_manager',
+              'employee',
+              'province_agent',
+            }.contains(rawRole) ||
+            !<String>{
+              'active',
+              'temporarily_stopped',
+              'disabled',
+            }.contains(rawStatus);
+
+    if (needsMetadataNormalization) {
+      try {
+        final callable =
+            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
+        await callable.call();
+        snapshot = await ref.get();
+        data = snapshot.data();
+      } catch (_) {
+        // Legacy active admins remain usable while the backend is deploying.
+      }
+    }
+
+    final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);
+    return <String, dynamic>{
+      ...?data,
       'uid': user.uid,
-      'name': configuredName.isNotEmpty
-          ? configuredName
-          : (user.email?.trim().isNotEmpty == true
-              ? user.email!.trim()
-              : 'DEDA Admin'),
-      'role': configuredRole.isEmpty ? 'manager' : configuredRole,
+      'email': user.email ?? data?['email'] ?? '',
+      'displayName':
+          (data?['displayName'] ?? data?['name'] ?? user.email ?? 'DEDA Admin')
+              .toString(),
+      'role': role,
+      'status': normalizeAdminStatus(data),
+      'roleNormalized': role,
     };
+  }
+
+  static Future<Map<String, String>> _adminIdentity() async {
+    final data = await currentAdminProfile();
+    return <String, String>{
+      'uid': data['uid'].toString(),
+      'name': data['displayName'].toString(),
+      'role': normalizeAdminRole(data['role']),
+    };
+  }
+
+  static Future<void> _writeAdminAudit(
+    String action, {
+    Map<String, dynamic> details = const <String, dynamic>{},
+  }) async {
+    try {
+      final actor = await _adminIdentity();
+      await FirebaseFirestore.instance.collection('admin_audit').add({
+        'action': action,
+        'adminUid': actor['uid'],
+        'adminName': actor['name'],
+        'adminRole': actor['role'],
+        ...details,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   static bool _hasRequiredPlaceData(Map<String, dynamic> data) {
@@ -501,8 +604,30 @@ class DedaBackend {
     if (uid == null) return false;
     final admin =
         await FirebaseFirestore.instance.collection('admins').doc(uid).get();
-    if (admin.exists && admin.data()?['active'] == true) {
+    final data = admin.data();
+    if (admin.exists) {
+      final status = normalizeAdminStatus(data);
+      if (data?['active'] != true || status != 'active') {
+        await FirebaseAuth.instance.signOut();
+        if (status == 'temporarily_stopped') {
+          throw StateError('admin-temporarily-stopped');
+        }
+        throw StateError('admin-disabled');
+      }
+
+      await FirebaseFirestore.instance.collection('admins').doc(uid).set({
+        'lastSeenAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      try {
+        final callable =
+            FirebaseFunctions.instance.httpsCallable('ensureCurrentAdminProfile');
+        await callable.call();
+      } catch (_) {
+        // Preserve login compatibility if the backend is still deploying.
+      }
       await registerAdminNotifications();
+      await _writeAdminAudit('admin_signed_in');
       return true;
     }
     await FirebaseAuth.instance.signOut();
@@ -518,7 +643,10 @@ class DedaBackend {
     }
     final admin =
         await FirebaseFirestore.instance.collection('admins').doc(uid).get();
-    return admin.exists && admin.data()?['active'] == true;
+    final data = admin.data();
+    return admin.exists &&
+        data?['active'] == true &&
+        normalizeAdminStatus(data) == 'active';
   }
 
   static Future<void> registerAdminNotifications() async {
@@ -544,6 +672,43 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> placeRequests() {
     return FirebaseFirestore.instance
         .collection('place_requests')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> placeRequestsForAdmin(
+    Map<String, dynamic> adminProfile,
+  ) {
+    final role = normalizeAdminRole(
+      adminProfile['roleNormalized'] ?? adminProfile['role'],
+    );
+    final collection = FirebaseFirestore.instance.collection('place_requests');
+    if (role == 'province_agent') {
+      final governorate =
+          (adminProfile['governorate'] ?? '').toString().trim();
+      if (governorate.isEmpty) {
+        return collection
+            .where('governorate', isEqualTo: '__no_governorate__')
+            .limit(1)
+            .snapshots();
+      }
+      return collection
+          .where('governorate', isEqualTo: governorate)
+          .limit(100)
+          .snapshots();
+    }
+    return collection
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> supportRequestsForAdmin(
+    Map<String, dynamic> adminProfile,
+  ) {
+    return FirebaseFirestore.instance
+        .collection('support_requests')
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots();
@@ -588,6 +753,13 @@ class DedaBackend {
       }
       transaction.update(request, update);
     });
+    await _writeAdminAudit(
+      'request_viewed',
+      details: <String, dynamic>{
+        'sourceCollection': collection,
+        'sourceId': id,
+      },
+    );
   }
 
   static String _formatApprovalDate(DateTime value) {
@@ -729,6 +901,13 @@ class DedaBackend {
         SetOptions(merge: true),
       );
     });
+    await _writeAdminAudit(
+      'place_approved',
+      details: <String, dynamic>{
+        'sourceCollection': 'place_requests',
+        'sourceId': id,
+      },
+    );
   }
 
   static Future<void> updateRequestStatus({
@@ -741,6 +920,11 @@ class DedaBackend {
       final prepared = await preparePlaceApproval(id);
       await finalizePlaceApproval(id: id, message: prepared['message'].toString());
       return;
+    }
+
+    if ((status == 'rejected' || status == 'needs_changes') &&
+        (note == null || note.trim().isEmpty)) {
+      throw ArgumentError('reason-required');
     }
 
     final actor = await _adminIdentity();
@@ -764,6 +948,17 @@ class DedaBackend {
       });
     }
     await request.update(statusUpdate);
+    await _writeAdminAudit(
+      collection == 'place_requests'
+          ? 'place_status_changed'
+          : 'request_status_changed',
+      details: <String, dynamic>{
+        'sourceCollection': collection,
+        'sourceId': id,
+        'newStatus': status,
+        if (note != null && note.trim().isNotEmpty) 'reason': note.trim(),
+      },
+    );
   }
 
   // DEDA 10-point fixes v1: support replies and read-only account review.
@@ -832,6 +1027,14 @@ class DedaBackend {
       'reviewedByRole': actor['role'],
       if (status == 'closed') 'closedAt': FieldValue.serverTimestamp(),
     });
+    await _writeAdminAudit(
+      'support_status_changed',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': id,
+        'newStatus': status,
+      },
+    );
   }
 
   static Future<void> replyToSupport({
@@ -850,6 +1053,13 @@ class DedaBackend {
       'adminReplyByRole': actor['role'],
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await _writeAdminAudit(
+      'support_replied',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': id,
+      },
+    );
   }
 
   static Future<Map<String, dynamic>> adminUserSnapshot({
@@ -962,5 +1172,150 @@ class DedaBackend {
     };
   }
 
-  static Future<void> signOutAdmin() => FirebaseAuth.instance.signOut();
+  static Stream<QuerySnapshot<Map<String, dynamic>>> adminMembers() {
+    return FirebaseFirestore.instance
+        .collection('admins')
+        .limit(200)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> adminAudit() {
+    return FirebaseFirestore.instance
+        .collection('admin_audit')
+        .orderBy('createdAt', descending: true)
+        .limit(300)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>> adminUsers() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<Map<String, dynamic>> createAdminMember({
+    required String displayName,
+    required String email,
+    required String role,
+    required String department,
+    required String governorate,
+    required Map<String, bool> permissions,
+    String phone = '',
+  }) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('createAdminMember');
+    final result = await callable.call(<String, dynamic>{
+      'displayName': displayName.trim(),
+      'email': email.trim(),
+      'phone': phone.trim(),
+      'role': role,
+      'department': department.trim(),
+      'governorate': governorate.trim(),
+      'permissions': permissions,
+    });
+    return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  static Future<void> updateAdminMember({
+    required String uid,
+    required String displayName,
+    required String role,
+    required String department,
+    required String governorate,
+    required String status,
+    required Map<String, bool> permissions,
+    required String reason,
+    String phone = '',
+  }) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('updateAdminMember');
+    await callable.call(<String, dynamic>{
+      'uid': uid,
+      'displayName': displayName.trim(),
+      'phone': phone.trim(),
+      'role': role,
+      'department': department.trim(),
+      'governorate': governorate.trim(),
+      'status': status,
+      'permissions': permissions,
+      'reason': reason.trim(),
+    });
+  }
+
+  static Future<void> revokeAdminMemberSessions({
+    required String uid,
+    required String reason,
+  }) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('revokeAdminMemberSessions');
+    await callable.call(<String, dynamic>{
+      'uid': uid,
+      'reason': reason.trim(),
+    });
+  }
+
+  static Future<String> resetAdminTemporaryPassword({
+    required String uid,
+    required String reason,
+  }) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('resetAdminTemporaryPassword');
+    final result = await callable.call(<String, dynamic>{
+      'uid': uid,
+      'reason': reason.trim(),
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return (data['temporaryPassword'] ?? '').toString();
+  }
+
+  static Future<void> deleteAdminMember({
+    required String uid,
+    required String reason,
+  }) async {
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('deleteAdminMember');
+    await callable.call(<String, dynamic>{
+      'uid': uid,
+      'reason': reason.trim(),
+    });
+  }
+
+  static Future<void> changeCurrentAdminPassword(String newPassword) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      throw StateError('admin-not-signed-in');
+    }
+    await user.updatePassword(newPassword);
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('completeAdminFirstLogin');
+    await callable.call();
+  }
+
+  static Future<void> deleteRoadHazardAsAdmin({
+    required String id,
+    required String reason,
+  }) async {
+    final actor = await _adminIdentity();
+    final ref = FirebaseFirestore.instance.collection('road_hazards').doc(id);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    await ref.delete();
+    await _writeAdminAudit(
+      'road_hazard_deleted',
+      details: <String, dynamic>{
+        'targetId': id,
+        'reason': reason.trim(),
+        'hazardType': snapshot.data()?['type'],
+        'adminUid': actor['uid'],
+      },
+    );
+  }
+
+  static Future<void> signOutAdmin() async {
+    try {
+      await _writeAdminAudit('admin_signed_out');
+    } catch (_) {}
+    await FirebaseAuth.instance.signOut();
+  }
 }

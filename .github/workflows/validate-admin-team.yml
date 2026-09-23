@@ -1,0 +1,74 @@
+name: Validate DEDA admin team
+
+concurrency:
+  group: deda-admin-team-validation
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - admin-team-work-2026-09-23
+    paths:
+      - lib/main.dart
+      - lib/admin_pages.dart
+      - lib/admin_team_pages.dart
+      - lib/deda_backend.dart
+      - lib/deda_recovery_admin.dart
+      - tools/final_release_fix.py
+      - tools/final_release_fix_compat.py
+      - tools/pin_login_patch.py
+      - tools/map_zoom_fix.py
+      - functions/index.js
+      - firestore.rules
+      - pubspec.yaml
+      - .github/workflows/validate-admin-team.yml
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout admin work
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Setup Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Apply release-time source patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed Dart files
+        run: |
+          flutter analyze \
+            lib/main.dart \
+            lib/admin_pages.dart \
+            lib/admin_team_pages.dart \
+            lib/deda_backend.dart \
+            lib/deda_recovery_admin.dart \
+            --no-fatal-warnings \
+            --no-fatal-infos
+
+      - name: Check Cloud Functions syntax
+        run: node --check functions/index.js
+
+      - name: Validate Firestore rules with emulator
+        run: |
+          npx --yes firebase-tools@latest emulators:exec \
+            --only firestore \
+            --project demo-deda \
+            "echo firestore-rules-ok"
