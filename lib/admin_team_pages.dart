@@ -287,6 +287,16 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
 
           final all = snapshot.data!.docs.map((doc) {
             final data = <String, dynamic>{'uid': doc.id, ...doc.data()};
+            if (doc.id == widget.currentAdmin['uid']?.toString()) {
+              for (final key in ['displayName', 'email', 'adminId', 'phone']) {
+                final currentValue = (data[key] ?? '').toString().trim();
+                final resolvedValue =
+                    (widget.currentAdmin[key] ?? '').toString().trim();
+                if (currentValue.isEmpty && resolvedValue.isNotEmpty) {
+                  data[key] = resolvedValue;
+                }
+              }
+            }
             data['roleNormalized'] = DedaBackend.normalizeAdminRole(
               data['role'] ?? data['jobTitle'],
             );
