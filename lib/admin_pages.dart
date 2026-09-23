@@ -2200,7 +2200,10 @@ class _RequestListState extends State<_RequestList> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      t('مفتوح الآن', 'Open now'),
+                                      t(
+                                        'التفاصيل مفتوحة',
+                                        'Details open',
+                                      ),
                                       style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
