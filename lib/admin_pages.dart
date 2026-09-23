@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'admin_place_map.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
+import 'deda_recovery_admin.dart';
 
 class DedaAdminLoginPage extends StatefulWidget {
   final bool isArabic;
@@ -534,6 +535,27 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             adminProfile: profile,
                             collection: 'support_requests',
                           )),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.lock_reset,
+                          title: t('استرجاع الدخول', 'Recovery'),
+                          subtitle: t(
+                            'طلبات استرجاع الحساب الحساسة',
+                            'Sensitive account recovery requests',
+                          ),
+                          onTap: () => _open(
+                            Scaffold(
+                              backgroundColor: const Color(0xFFF8FAF2),
+                              appBar: AppBar(
+                                title: Text(
+                                  t('استرجاع الدخول', 'Sign-in recovery'),
+                                ),
+                              ),
+                              body: DedaRecoveryAdminList(isArabic: ar),
+                            ),
+                          ),
                         ),
                       if (DedaBackend.adminHasPermission(profile, 'viewUsers'))
                         _dashboardCard(
