@@ -623,29 +623,45 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    Color accentColor = const Color(0xFF17652F),
+    Color backgroundColor = const Color(0xDDF4F8F1),
   }) {
     return Card(
-      elevation: 2,
+      elevation: 1.5,
       clipBehavior: Clip.antiAlias,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: backgroundColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: accentColor.withOpacity(0.22),
+        ),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 36, color: const Color(0xFF17652F)),
-              const SizedBox(height: 8),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: accentColor.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 32, color: accentColor),
+              ),
+              const SizedBox(height: 9),
               Text(
                 title,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                   fontSize: 15,
                   height: 1.18,
                 ),
@@ -709,37 +725,72 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE7F1E4),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFB8CCB6)),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xE6E5F2E4),
+                          Color(0xDDECF4F2),
+                        ],
+                        begin: AlignmentDirectional.topStart,
+                        end: AlignmentDirectional.bottomEnd,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFF9AB89D),
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x17000000),
+                          blurRadius: 14,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
-                        const CircleAvatar(
-                          radius: 28,
-                          backgroundColor: Color(0xFF17652F),
-                          child: Icon(
+                        Container(
+                          width: 62,
+                          height: 62,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF17652F),
+                                Color(0xFF2E7D4A),
+                              ],
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
                             Icons.admin_panel_settings,
                             color: Colors.white,
+                            size: 32,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 13),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                (profile['displayName'] ?? '').toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16.5,
-                                  height: 1.15,
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment:
+                                    AlignmentDirectional.centerStart,
+                                child: Text(
+                                  (profile['displayName'] ?? '').toString(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 17,
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(_roleLabel(profile['role'])),
+                              const SizedBox(height: 5),
+                              Text(
+                                _roleLabel(profile['role']),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF324B38),
+                                ),
+                              ),
                               if ((profile['governorate'] ?? '')
                                   .toString()
                                   .trim()
@@ -747,7 +798,10 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                                 Text(
                                   t('المحافظة: ', 'Province: ') +
                                       profile['governorate'].toString(),
-                                  style: const TextStyle(fontSize: 12.5),
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF516455),
+                                  ),
                                 ),
                             ],
                           ),
@@ -755,18 +809,32 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
-                            vertical: 6,
+                            vertical: 7,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFD4EAD5),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            _statusLabel(profile),
-                            style: const TextStyle(
-                              color: Color(0xFF17652F),
-                              fontWeight: FontWeight.w800,
+                            color: const Color(0xCCE0F1E2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: const Color(0xFFB0CEB4),
                             ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.circle,
+                                size: 8,
+                                color: Color(0xFF17652F),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _statusLabel(profile),
+                                style: const TextStyle(
+                                  color: Color(0xFF17652F),
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
