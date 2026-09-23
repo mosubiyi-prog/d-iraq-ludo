@@ -441,15 +441,39 @@ class _DedaAdminTeamPageState extends State<DedaAdminTeamPage> {
                                       : Colors.grey,
                                 ),
                               ),
-                              title: Text(
-                                (member['displayName'] ??
-                                        member['name'] ??
-                                        member['email'] ??
-                                        t('عضو إداري', 'Admin member'))
-                                    .toString(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                              title: Builder(
+                                builder: (context) {
+                                  final title =
+                                      (member['displayName'] ??
+                                              member['name'] ??
+                                              member['email'] ??
+                                              t(
+                                                'عضو إداري',
+                                                'Admin member',
+                                              ))
+                                          .toString()
+                                          .trim();
+                                  final isEmail = title.contains('@');
+                                  return Directionality(
+                                    textDirection: isEmail
+                                        ? TextDirection.ltr
+                                        : Directionality.of(context),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment:
+                                          AlignmentDirectional.centerStart,
+                                      child: Text(
+                                        title,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                        overflow: TextOverflow.visible,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 5),
