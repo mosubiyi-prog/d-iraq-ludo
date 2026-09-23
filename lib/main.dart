@@ -2232,32 +2232,113 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final isAdmin = await DedaBackend.currentUserIsAdmin();
-                      if (!context.mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => isAdmin
-                              ? DedaAdminDashboardPage(
-                                  isArabic: DedaLanguageState.isArabic,
-                                )
-                              : DedaAdminLoginPage(
-                                  isArabic: DedaLanguageState.isArabic,
+                  _sectionTitle(dedaText('الإدارة', 'Administration')),
+                  Card(
+                    color: const Color(0xFFF1F6EF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: const BorderSide(
+                        color: Color(0xFFB8CCB6),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFDDEDDD),
+                                  shape: BoxShape.circle,
                                 ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.admin_panel_settings_outlined),
-                    label: Text(dedaText('دخول إدارة DEDA', 'DEDA admin sign-in')),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.admin_panel_settings_outlined,
+                                  color: Color(0xFF17652F),
+                                  size: 27,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      dedaText(
+                                        'إدارة DEDA',
+                                        'DEDA administration',
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      dedaText(
+                                        'للمخولين فقط',
+                                        'Authorized personnel only',
+                                      ),
+                                      style: const TextStyle(
+                                        color: Color(0xFF5A655D),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final isAdmin =
+                                  await DedaBackend.currentUserIsAdmin();
+                              if (!context.mounted) return;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => isAdmin
+                                      ? DedaAdminDashboardPage(
+                                          isArabic:
+                                              DedaLanguageState.isArabic,
+                                        )
+                                      : DedaAdminLoginPage(
+                                          isArabic:
+                                              DedaLanguageState.isArabic,
+                                        ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.shield_outlined,
+                            ),
+                            label: Text(
+                              dedaText(
+                                'دخول الإدارة',
+                                'Admin sign-in',
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(50),
+                              foregroundColor: const Color(0xFF17652F),
+                              side: const BorderSide(
+                                color: Color(0xFF7FA486),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 24),
                   const Divider(),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
