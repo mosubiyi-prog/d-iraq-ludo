@@ -755,7 +755,22 @@ exports.updateAdminMember = onCall(async (request) => {
       disabled: status === "disabled",
     });
     authUpdated = true;
-    await ref.set(update, {merge: true});
+
+    const batch = firestore.batch();
+    const auditRef = firestore.collection("admin_audit").doc();
+    batch.set(ref, update, {merge: true});
+    batch.set(auditRef, adminAuditData(actor, "admin_member_updated", {
+      targetAdminUid: targetUid,
+      targetAdminId: current.adminId || null,
+      targetAdminName: displayName,
+      oldRole,
+      newRole: role,
+      oldStatus,
+      newStatus: status,
+      permissionsChanged,
+      reason: reason || null,
+    }));
+    await batch.commit();
   } catch (error) {
     if (authUpdated) {
       try {
@@ -776,18 +791,6 @@ exports.updateAdminMember = onCall(async (request) => {
       await getAuth().revokeRefreshTokens(targetUid);
     } catch (_) {}
   }
-
-  await writeAdminAudit(actor, "admin_member_updated", {
-    targetAdminUid: targetUid,
-    targetAdminId: current.adminId || null,
-    targetAdminName: displayName,
-    oldRole,
-    newRole: role,
-    oldStatus,
-    newStatus: status,
-    permissionsChanged,
-    reason: reason || null,
-  });
 
   return {success: true};
 });
