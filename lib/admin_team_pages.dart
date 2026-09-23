@@ -744,7 +744,13 @@ class DedaAdminInvitationsPage extends StatelessWidget {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text((data['email'] ?? '').toString()),
+                      Text(
+                        (data['email'] ?? '').toString(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.left,
+                      ),
                       Text(
                         dedaAdminRoleLabel(isArabic, data['role']) +
                             ' • ' +
