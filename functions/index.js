@@ -609,6 +609,9 @@ exports.createAdminMember = onCall(async (request) => {
     });
   } catch (error) {
     try {
+      await getFirestore().collection("admins").doc(userRecord.uid).delete();
+    } catch (_) {}
+    try {
       await getAuth().deleteUser(userRecord.uid);
     } catch (_) {}
     throw error;
