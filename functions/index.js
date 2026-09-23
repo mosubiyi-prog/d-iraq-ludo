@@ -591,7 +591,12 @@ exports.createAdminMember = onCall(async (request) => {
   const now = Timestamp.now();
 
   try {
-    await getFirestore().collection("admins").doc(userRecord.uid).set({
+    const firestore = getFirestore();
+    const batch = firestore.batch();
+    const adminRef = firestore.collection("admins").doc(userRecord.uid);
+    const auditRef = firestore.collection("admin_audit").doc();
+
+    batch.set(adminRef, {
       adminId,
       displayName,
       email,
@@ -614,17 +619,16 @@ exports.createAdminMember = onCall(async (request) => {
       firstLoginCompletedAt: null,
     });
 
-    await writeAdminAudit(actor, "admin_member_created", {
+    batch.set(auditRef, adminAuditData(actor, "admin_member_created", {
       targetAdminUid: userRecord.uid,
       targetAdminId: adminId,
       targetAdminName: displayName,
       targetAdminRole: role,
       targetGovernorate: role === "province_agent" ? governorate : null,
-    });
+    }));
+
+    await batch.commit();
   } catch (error) {
-    try {
-      await getFirestore().collection("admins").doc(userRecord.uid).delete();
-    } catch (_) {}
     try {
       await getAuth().deleteUser(userRecord.uid);
     } catch (_) {}
