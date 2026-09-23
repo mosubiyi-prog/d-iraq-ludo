@@ -1635,12 +1635,34 @@ class DedaAdminAuditPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final data = docs[index].data();
               final reason = (data['reason'] ?? '').toString().trim();
-              final target = (data['targetAdminName'] ??
-                      data['targetId'] ??
-                      data['sourceId'] ??
-                      '')
-                  .toString()
-                  .trim();
+              final action = (data['action'] ?? '').toString();
+              String target;
+              if (action == 'read_user_account') {
+                final targetName =
+                    (data['targetUserName'] ?? '').toString().trim();
+                final targetPhone =
+                    (data['targetUserPhone'] ?? '').toString().trim();
+                final accountKey =
+                    (data['accountKey'] ?? '').toString().trim();
+                if (targetName.isNotEmpty && targetPhone.isNotEmpty) {
+                  target = '$targetName • $targetPhone';
+                } else if (targetName.isNotEmpty) {
+                  target = targetName;
+                } else if (targetPhone.isNotEmpty) {
+                  target = targetPhone;
+                } else {
+                  target = accountKey;
+                }
+              } else {
+                target = (data['targetAdminName'] ??
+                        data['targetUserName'] ??
+                        data['targetUserPhone'] ??
+                        data['targetId'] ??
+                        data['sourceId'] ??
+                        '')
+                    .toString()
+                    .trim();
+              }
               return Card(
                 child: ListTile(
                   leading: const Icon(
