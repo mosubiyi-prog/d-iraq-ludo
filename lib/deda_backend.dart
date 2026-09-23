@@ -576,9 +576,16 @@ class DedaBackend {
     final admin =
         await FirebaseFirestore.instance.collection('admins').doc(uid).get();
     final data = admin.data();
-    if (admin.exists &&
-        data?['active'] == true &&
-        normalizeAdminStatus(data) == 'active') {
+    if (admin.exists) {
+      final status = normalizeAdminStatus(data);
+      if (data?['active'] != true || status != 'active') {
+        await FirebaseAuth.instance.signOut();
+        if (status == 'temporarily_stopped') {
+          throw StateError('admin-temporarily-stopped');
+        }
+        throw StateError('admin-disabled');
+      }
+
       await FirebaseFirestore.instance.collection('admins').doc(uid).set({
         'lastSeenAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
