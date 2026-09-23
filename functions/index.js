@@ -375,6 +375,11 @@ function normalizePermissions(role, value) {
     result.viewAudit = false;
     result.manageReports = false;
   }
+  if (result.supportReply) result.supportRead = true;
+  if (result.reviewPlaceRequests || result.approvePlaces || result.rejectPlaces) {
+    result.viewPlaceRequests = true;
+  }
+  if (result.manageReports) result.viewReports = true;
   return result;
 }
 
