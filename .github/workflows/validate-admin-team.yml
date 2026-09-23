@@ -1,5 +1,9 @@
 name: Validate DEDA admin team
 
+concurrency:
+  group: deda-admin-team-validation
+  cancel-in-progress: true
+
 on:
   push:
     branches:
