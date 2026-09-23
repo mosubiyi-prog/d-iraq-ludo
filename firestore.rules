@@ -432,7 +432,8 @@ service cloud.firestore {
     }
 
     match /admin_audit/{auditId} {
-      allow read: if hasAdminPermission('viewAudit');
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
       allow create: if isAdmin()
         && request.resource.data.adminUid == request.auth.uid;
       allow update, delete: if false;
