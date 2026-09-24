@@ -6970,6 +6970,7 @@ class DedaRouteStep {
   final String maneuverType;
   final String? maneuverModifier;
   final List<DedaLaneGuide> lanes;
+  final LatLng? maneuverPoint;
 
   const DedaRouteStep({
     required this.instruction,
@@ -6977,6 +6978,7 @@ class DedaRouteStep {
     required this.maneuverType,
     required this.maneuverModifier,
     this.lanes = const <DedaLaneGuide>[],
+    this.maneuverPoint,
   });
 }
 
@@ -7108,6 +7110,13 @@ class DedaRouteService {
           final m = Map<String, dynamic>.from(raw);
           final type = m['type'] is num ? (m['type'] as num).toInt() : 8;
           final length = m['length'];
+          final rawBeginShapeIndex = m['begin_shape_index'];
+          final beginShapeIndex =
+              rawBeginShapeIndex is num ? rawBeginShapeIndex.toInt() : -1;
+          final maneuverPoint =
+              beginShapeIndex >= 0 && beginShapeIndex < decoded.length
+                  ? decoded[beginShapeIndex]
+                  : null;
           steps.add(
             DedaRouteStep(
               instruction: _fallbackValhallaInstruction(type),
@@ -7115,6 +7124,7 @@ class DedaRouteService {
               maneuverType: _maneuverType(type),
               maneuverModifier: _maneuverModifier(type),
               lanes: _parseLaneList(m['lanes']),
+              maneuverPoint: maneuverPoint,
             ),
           );
         }
@@ -7191,6 +7201,17 @@ class DedaRouteService {
           final maneuver = rawStep['maneuver'] as Map;
           final type = (maneuver['type'] ?? '').toString();
           final modifier = maneuver['modifier']?.toString();
+          final rawLocation = maneuver['location'];
+          LatLng? maneuverPoint;
+          if (rawLocation is List &&
+              rawLocation.length >= 2 &&
+              rawLocation[0] is num &&
+              rawLocation[1] is num) {
+            maneuverPoint = LatLng(
+              (rawLocation[1] as num).toDouble(),
+              (rawLocation[0] as num).toDouble(),
+            );
+          }
           final stepDistance = rawStep['distance'];
           steps.add(DedaRouteStep(
             instruction: _osrmInstruction(type: type, modifier: modifier),
@@ -7198,6 +7219,7 @@ class DedaRouteService {
             maneuverType: type,
             maneuverModifier: modifier,
             lanes: _osrmLaneGuidance(rawStep),
+            maneuverPoint: maneuverPoint,
           ));
         }
       }
@@ -7632,7 +7654,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final key = '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}';
     if (!force && key == _lastSpokenInstruction) return;
     _lastSpokenInstruction = key;
-    final distance = formatRouteDistance(step.distanceMeters);
+    final distance = formatRouteDistance(_distanceToManeuver(step));
     await _speakText(
       DedaLanguageState.isArabic
           ? '${step.instruction}. بعد $distance.'
@@ -8851,8 +8873,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                       Flexible(
                         child: Text(
                           dedaText(
-                            'بعد ${formatRouteDistance(step.distanceMeters)}',
-                            'In ${formatRouteDistance(step.distanceMeters)}',
+                            'بعد ${formatRouteDistance(_distanceToManeuver(step))}',
+                            'In ${formatRouteDistance(_distanceToManeuver(step))}',
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -8919,14 +8941,49 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 
+  double _distanceToManeuver(DedaRouteStep step) {
+    final target = step.maneuverPoint;
+    if (!tripStarted || target == null) return step.distanceMeters;
+    final currentProgress =
+        _routeProgress(_displayPosition ?? startPoint)?.progressMeters;
+    final targetProgress = _routeProgress(target)?.progressMeters;
+    if (currentProgress == null || targetProgress == null) {
+      return step.distanceMeters;
+    }
+    final remaining = targetProgress - currentProgress;
+    return remaining >= 0 ? remaining : step.distanceMeters;
+  }
+
   DedaRouteStep? get firstUsefulStep {
     final steps = route?.steps;
     if (steps == null || steps.isEmpty) return null;
-    for (final step in steps) {
-      if (step.maneuverType != 'depart' && step.maneuverType != 'arrive') {
-        return step;
+    final useful = steps
+        .where(
+          (step) =>
+              step.maneuverType != 'depart' &&
+              step.maneuverType != 'arrive',
+        )
+        .toList();
+
+    if (useful.isNotEmpty && tripStarted) {
+      final currentProgress =
+          _routeProgress(_displayPosition ?? startPoint)?.progressMeters;
+      if (currentProgress != null) {
+        DedaRouteStep? firstWithPoint;
+        for (final step in useful) {
+          final point = step.maneuverPoint;
+          if (point == null) continue;
+          firstWithPoint ??= step;
+          final progress = _routeProgress(point)?.progressMeters;
+          if (progress != null && progress >= currentProgress - 18) {
+            return step;
+          }
+        }
+        if (firstWithPoint != null) return useful.last;
       }
     }
+
+    if (useful.isNotEmpty) return useful.first;
     final currentRoute = route;
     if (currentRoute != null && currentRoute.distanceMeters > 0) {
       return DedaRouteStep(
@@ -9001,6 +9058,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         });
         _animateNavigationMarker(current, heading);
         _previousLivePoint = current;
+        _speakCurrentInstruction();
 
         _evaluateRoadHazards(current);
         _refreshRoadHazards();
