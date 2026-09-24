@@ -2,12 +2,6 @@ name: Deploy DEDA current Firestore rules
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - map-nav-9-points-work-2026-09-24
-    paths:
-      - .github/workflows/deploy-map-nav-firestore-rules.yml
-      - firestore.rules
 
 jobs:
   deploy:
