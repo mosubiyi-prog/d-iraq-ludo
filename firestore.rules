@@ -643,7 +643,10 @@ service cloud.firestore {
       allow read: if (
           hasAdminPermission('viewPlaceRequests')
           && adminProvinceMatches(resource.data)
-          && adminCanReadCreatedAfterActivation(resource.data)
+          && (
+            isProvinceAgent()
+            || adminCanReadCreatedAfterActivation(resource.data)
+          )
         )
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
