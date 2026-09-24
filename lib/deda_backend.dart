@@ -1406,6 +1406,110 @@ class DedaBackend {
     );
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      deletedPlaceRequestsForAdmin() {
+    return FirebaseFirestore.instance
+        .collection('admin_trash_place_requests')
+        .orderBy('deletedAt', descending: true)
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<void> trashPlaceRequest(String id) async {
+    await trashPlaceRequests(<String>[id]);
+  }
+
+  static Future<void> trashPlaceRequests(List<String> ids) async {
+    final actor = await _requireGeneralManagerProfile();
+    final uniqueIds = ids
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .take(100)
+        .toList();
+    if (uniqueIds.isEmpty) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+    final moved = <String>[];
+
+    for (final id in uniqueIds) {
+      final source = firestore.collection('place_requests').doc(id);
+      final snapshot = await source.get();
+      if (!snapshot.exists || snapshot.data() == null) continue;
+      final data = snapshot.data()!;
+      final trash =
+          firestore.collection('admin_trash_place_requests').doc(id);
+      batch.set(trash, <String, dynamic>{
+        ...data,
+        'originalId': id,
+        'trashKind': 'place_request',
+        'deletedFromCollection': 'place_requests',
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedByUid': actor['uid'].toString(),
+        'deletedByName': actor['displayName'].toString(),
+        'deletedByRole': normalizeAdminRole(actor['role']),
+      });
+      batch.delete(source);
+      moved.add(id);
+    }
+
+    if (moved.isEmpty) return;
+    await batch.commit();
+    await _writeAdminAudit(
+      moved.length == 1
+          ? 'place_request_deleted'
+          : 'place_requests_bulk_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'place_requests',
+        'sourceId': moved.length == 1 ? moved.first : '',
+        'deletedCount': moved.length,
+        'deletedIds': moved,
+      },
+    );
+  }
+
+  static Future<void> restoreDeletedPlaceRequest(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final trash =
+        firestore.collection('admin_trash_place_requests').doc(cleanId);
+    final source = firestore.collection('place_requests').doc(cleanId);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(trash);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('deleted-place-request-not-found');
+      }
+      final restored = Map<String, dynamic>.from(snapshot.data()!);
+      for (final key in <String>[
+        'originalId',
+        'trashKind',
+        'deletedFromCollection',
+        'deletedAt',
+        'deletedByUid',
+        'deletedByName',
+        'deletedByRole',
+      ]) {
+        restored.remove(key);
+      }
+      restored['updatedAt'] = FieldValue.serverTimestamp();
+      transaction.set(source, restored);
+      transaction.delete(trash);
+    });
+
+    await _writeAdminAudit(
+      'place_request_restored',
+      details: <String, dynamic>{
+        'sourceCollection': 'place_requests',
+        'sourceId': cleanId,
+        'restoredByUid': actor['uid'],
+      },
+    );
+  }
+
   static Future<void> updateSupportStatus({
     required String id,
     required String status,
