@@ -638,13 +638,18 @@ service cloud.firestore {
         && (request.resource.data.category != 'other'
           || (request.resource.data.otherCategoryText is string
             && request.resource.data.otherCategoryText.size() > 0))
-        && (request.resource.data.requestType != 'update'
+        && (
+          (
+            request.resource.data.requestType != 'update'
+            && request.resource.data.requestType != 'delete'
+          )
           || (request.resource.data.originalPlaceId is string
             && exists(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId))
             && (
               get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid
               || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
-            )))
+            ))
+        )
         );
 
       allow read: if (
@@ -669,7 +674,8 @@ service cloud.firestore {
             'decisionNote', 'approvalNumber', 'approvalDate',
             'approvalMessageDraft', 'approvalPreparedAt',
             'approvalPreparedByUid', 'approvalPreparedByName',
-            'approvalMessage', 'firstViewedAt', 'firstViewedByUid',
+            'approvalMessage', 'deletionCompletedAt',
+            'firstViewedAt', 'firstViewedByUid',
             'firstViewedByName', 'firstViewedByRole', 'lastViewedAt',
             'lastViewedByUid', 'lastViewedByName', 'lastViewedByRole',
             'accountReviewedAt', 'accountReviewedByUid',
