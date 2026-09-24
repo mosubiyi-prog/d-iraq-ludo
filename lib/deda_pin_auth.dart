@@ -124,6 +124,31 @@ class DedaPinAuth {
     });
   }
 
+  // Restore the already-approved DEDA owner session on this same installation
+  // without storing the user's PIN locally. Firestore rules verify that the
+  // random installation ID is already present in the account's trusted list.
+  static Future<User> restoreTrustedSessionForAccountKey(
+    String accountKey,
+  ) async {
+    await _ensureFirebaseReady();
+    final cleanKey = accountKey.trim();
+    if (cleanKey.isEmpty) throw ArgumentError('empty-account-key');
+
+    final user = await _ensureAnonymousSession();
+    final install = await installId();
+    await FirebaseFirestore.instance
+        .collection('deda_sessions')
+        .doc(user.uid)
+        .set(<String, dynamic>{
+      'uid': user.uid,
+      'accountKey': cleanKey,
+      'installId': install,
+      'signedInAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    });
+    return user;
+  }
+
   static Future<Map<String, dynamic>> createAccount({
     required String phone,
     required String fullName,

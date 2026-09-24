@@ -2,9 +2,16 @@ name: Deploy DEDA current Firestore rules
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - map-nav-9-points-work-2026-09-24
+    paths:
+      - firestore.rules
+
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[deploy-rules]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current DEDA navigation branch

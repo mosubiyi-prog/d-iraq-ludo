@@ -8,6 +8,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import 'deda_pin_auth.dart';
+
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
 
@@ -51,6 +53,35 @@ class DedaBackend {
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
+  }
+
+  static Future<User> _ensureOwnerSessionForAccountKey(
+    String accountKey,
+  ) async {
+    final cleanKey = accountKey.trim();
+    var user = await _ensurePublicUser();
+    if (cleanKey.isEmpty) return user;
+
+    // Reuse the current DEDA session when it is already the same owner.
+    if (user.isAnonymous) {
+      try {
+        final session = await FirebaseFirestore.instance
+            .collection('deda_sessions')
+            .doc(user.uid)
+            .get();
+        if (session.exists &&
+            (session.data()?['accountKey'] ?? '').toString() == cleanKey) {
+          return user;
+        }
+      } catch (_) {}
+    } else {
+      // Admin sign-in uses the same FirebaseAuth instance. Leaving admin work
+      // for owner work must close that admin session cleanly first.
+      await signOutAdmin();
+    }
+
+    user = await DedaPinAuth.restoreTrustedSessionForAccountKey(cleanKey);
+    return user;
   }
 
   static String normalizeAdminRole(dynamic value) {
@@ -472,10 +503,13 @@ class DedaBackend {
   }) async {
     final cleanId = placeId.trim();
     if (cleanId.isEmpty) return null;
-    final user = await _ensurePublicUser();
     final override = accountKeyOverride?.trim() ?? '';
+    var user = await _ensurePublicUser();
     final accountKey =
         override.isNotEmpty ? override : await _currentAccountKey(user);
+    if (override.isNotEmpty) {
+      user = await _ensureOwnerSessionForAccountKey(accountKey);
+    }
     final snapshot = await FirebaseFirestore.instance
         .collection('place_deletion_requests')
         .doc(cleanId)
@@ -496,11 +530,14 @@ class DedaBackend {
     final cleanId = placeId.trim();
     if (cleanId.isEmpty) throw ArgumentError('place-id-required');
 
-    final user = await _ensurePublicUser();
     final firestore = FirebaseFirestore.instance;
     final override = accountKeyOverride?.trim() ?? '';
+    var user = await _ensurePublicUser();
     final accountKey =
         override.isNotEmpty ? override : await _currentAccountKey(user);
+    if (override.isNotEmpty) {
+      user = await _ensureOwnerSessionForAccountKey(accountKey);
+    }
     final placeRef = firestore.collection('published_places').doc(cleanId);
     final placeSnapshot = await placeRef.get();
     final place = placeSnapshot.data();

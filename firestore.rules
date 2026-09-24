@@ -430,11 +430,22 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
         ])
-        && exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey == request.resource.data.accountKey
-        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
-          == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin;
+        && (
+          (
+            exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
+            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey
+              == request.resource.data.accountKey
+            && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
+              == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin
+          )
+          || (
+            exists(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey))
+            && get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds is list
+            && request.resource.data.installId
+              in get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds
+          )
+        );
 
       allow delete: if signedIn() && request.auth.uid == uid;
     }

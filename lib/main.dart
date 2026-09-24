@@ -4927,6 +4927,16 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final categories = filteredCategories;
+    DedaCategoryData? mapCategory;
+    for (final category in categories) {
+      if (category.title == 'الخريطة') {
+        mapCategory = category;
+        break;
+      }
+    }
+    final gridCategories = categories
+        .where((category) => category.title != 'الخريطة')
+        .toList();
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
     final crossAxisCount = isLandscape ? 4 : 2;
@@ -5106,7 +5116,13 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (categories.isEmpty)
+                    if (mapCategory != null) ...[
+                      _DedaMapHeroCard(
+                        onTap: () => openCategory(mapCategory!),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (mapCategory == null && gridCategories.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 36),
                         child: Text(
@@ -5118,11 +5134,11 @@ class _HomePageState extends State<HomePage> {
                           style: const TextStyle(fontSize: 18),
                         ),
                       )
-                    else
+                    else if (gridCategories.isNotEmpty)
                       GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        itemCount: categories.length,
+                        itemCount: gridCategories.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 12,
@@ -5130,7 +5146,7 @@ class _HomePageState extends State<HomePage> {
                           childAspectRatio: isLandscape ? 1.18 : 1.0,
                         ),
                         itemBuilder: (context, index) {
-                          final category = categories[index];
+                          final category = gridCategories[index];
                           return DedaCategory(
                             icon: category.icon,
                             title: dedaCategoryLabel(category.title),
@@ -5141,6 +5157,104 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaMapHeroCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _DedaMapHeroCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    return SizedBox(
+      height: isLandscape ? 108 : 142,
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: 6,
+        color: const Color(0xFF0B9DB2).withOpacity(0.90),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: Colors.white.withOpacity(0.82)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            child: Row(
+              textDirection: DedaLanguageState.direction,
+              children: [
+                Container(
+                  width: isLandscape ? 64 : 76,
+                  height: isLandscape ? 64 : 76,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.20),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.map_outlined,
+                    size: isLandscape ? 38 : 46,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: DedaLanguageState.isArabic
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dedaText('الخريطة', 'Map'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 27,
+                          fontWeight: FontWeight.w900,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x55000000),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dedaText(
+                          'استكشف الأماكن والطريق من هنا',
+                          'Explore places and routes from here',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.95),
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  DedaLanguageState.isArabic
+                      ? Icons.chevron_left
+                      : Icons.chevron_right,
+                  color: Colors.white,
+                  size: 34,
+                ),
+              ],
             ),
           ),
         ),
@@ -7999,6 +8113,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   DateTime? _lastCompassHeadingAt;
   bool _navigationToolsOpen = false;
   bool _mapFullscreen = false;
+  bool _autoFollowMap = true;
   bool _submittingHazard = false;
   bool _hazardsLoading = false;
   DateTime? _lastHazardFetchAt;
@@ -8558,7 +8673,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   void _followLivePosition(LatLng current) {
-    if (!tripStarted) return;
+    if (!tripStarted || !_autoFollowMap) return;
     try {
       _mapController.move(current, _currentMapZoom());
     } catch (_) {}
@@ -9048,10 +9163,18 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   void _recenterNavigation() {
-    _followLivePosition(startPoint);
-    if (_navigationToolsOpen) {
-      setState(() => _navigationToolsOpen = false);
+    if (mounted) {
+      setState(() {
+        _autoFollowMap = true;
+        _navigationToolsOpen = false;
+      });
     }
+    try {
+      _mapController.move(
+        _displayPosition ?? startPoint,
+        _currentMapZoom(),
+      );
+    } catch (_) {}
   }
 
   void _cycleMapStyle() {
@@ -9535,6 +9658,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     setState(() {
       tripStarted = true;
+      _autoFollowMap = true;
       _liveRemainingMeters = route!.distanceMeters;
       _previousLivePoint = startPoint;
       _navigationToolsOpen = false;
@@ -9627,6 +9751,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       tripStarted = false;
       _navigationToolsOpen = false;
       _mapFullscreen = false;
+      _autoFollowMap = true;
       _offRouteFixes = 0;
       _lastAutoReroutedHazardId = null;
       _activeHazard = null;
@@ -9959,11 +10084,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             }),
       Marker(
         point: destinationPoint,
-        width: 78,
-        height: 78,
-        // The destination coordinate sits in the visual center of the flag
-        // base, so the green route ends exactly at the pole pedestal.
-        alignment: const Alignment(0, 0.90),
+        width: 70,
+        height: 48,
+        // The route endpoint is exactly the bottom-center of the flag.
+        alignment: Alignment.bottomCenter,
         child: const _DedaIraqDestinationFlag(),
       ),
       // Keep one small green heading arrow for the user's start/live position.
@@ -10043,6 +10167,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                     : const EdgeInsets.fromLTRB(44, 70, 44, 265),
                                 maxZoom: 17,
                               ),
+                        onPositionChanged: (camera, hasGesture) {
+                          if (tripStarted &&
+                              hasGesture &&
+                              _autoFollowMap &&
+                              mounted) {
+                            setState(() => _autoFollowMap = false);
+                          }
+                        },
                       ),
                       children: [
                         ...dedaNavigationMapLayers(mapStyle),
@@ -10205,6 +10337,22 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 left: isLandscape ? 96 : 18,
                 right: isLandscape ? 96 : 18,
                 child: _buildHazardWarning(_activeHazard!),
+              ),
+            if (tripStarted && !_autoFollowMap)
+              Positioned(
+                right: isLandscape ? 18 : 12,
+                bottom: isLandscape ? 70 : 88,
+                child: FloatingActionButton.small(
+                  heroTag: 'deda_route_recenter',
+                  tooltip: dedaText(
+                    'العودة إلى موقعي',
+                    'Return to my location',
+                  ),
+                  onPressed: _recenterNavigation,
+                  backgroundColor: Colors.white.withOpacity(0.96),
+                  foregroundColor: const Color(0xFF17652F),
+                  child: const Icon(Icons.my_location),
+                ),
               ),
             if (tripStarted && !isLandscape)
               Positioned(
@@ -10416,114 +10564,61 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 78,
-      height: 78,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          const Positioned(
-            left: 37,
-            top: 5,
-            bottom: 5,
-            width: 5,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.all(Radius.circular(3)),
-              ),
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        width: 66,
+        height: 42,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white, width: 1.4),
+          borderRadius: BorderRadius.circular(3),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 5,
+              offset: Offset(0, 2),
+              color: Colors.black38,
             ),
-          ),
-          const Positioned(
-            left: 38,
-            top: 5,
-            bottom: 5,
-            width: 3,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xFF2C312E),
-                borderRadius: BorderRadius.all(Radius.circular(2)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: Column(
+            children: [
+              const Expanded(
+                child: ColoredBox(color: Color(0xFFCE1126)),
               ),
-            ),
-          ),
-          Positioned(
-            left: 41,
-            top: 5,
-            width: 37,
-            height: 31,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFF202421),
-                  width: 1.0,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 3,
-                    offset: Offset(0, 1),
-                    color: Colors.black38,
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Expanded(
-                    child: ColoredBox(color: Color(0xFFCE1126)),
-                  ),
-                  Expanded(
-                    child: ColoredBox(
-                      color: Colors.white,
-                      child: Center(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            'الله أكبر',
-                            maxLines: 1,
-                            textDirection: TextDirection.rtl,
-                            style: TextStyle(
-                              fontSize: 7.2,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF007A3D),
-                            ),
-                          ),
+              Expanded(
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'الله أكبر',
+                        maxLines: 1,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(
+                          fontSize: 9,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF007A3D),
                         ),
                       ),
                     ),
                   ),
-                  const Expanded(
-                    child: ColoredBox(color: Color(0xFF000000)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const Positioned(
-            left: 31,
-            bottom: 0,
-            width: 16,
-            height: 8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xFF2C312E),
-                borderRadius: BorderRadius.all(Radius.circular(4)),
-                border: Border.fromBorderSide(
-                  BorderSide(color: Colors.white, width: 1.2),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 3,
-                    color: Colors.black38,
-                  ),
-                ],
               ),
-            ),
+              const Expanded(
+                child: ColoredBox(color: Colors.black),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
+
 
 class _DedaRouteStat extends StatelessWidget {
   final IconData icon;
@@ -11099,32 +11194,33 @@ class _MapReadyPageState extends State<MapReadyPage> {
                           ),
                         ),
                       ),
-                      ...visibleMapSearchResults
-                          .where((place) => !place.isDedaRegistered)
-                          .map(
-                            (place) => Marker(
-                              point: place.location,
-                              width: 52,
-                              height: 52,
-                              child: GestureDetector(
-                                onTap: () => selectMapPlace(place),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: const Color(0xFF0B57D0),
-                                      width: 2,
+                      if (selectedDestination == null)
+                        ...visibleMapSearchResults
+                            .where((place) => !place.isDedaRegistered)
+                            .map(
+                              (place) => Marker(
+                                point: place.location,
+                                width: 52,
+                                height: 52,
+                                child: GestureDetector(
+                                  onTap: () => selectMapPlace(place),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFF0B57D0),
+                                        width: 2,
+                                      ),
                                     ),
-                                  ),
-                                  child: Icon(
-                                    dedaIconForPlaceType(place.type),
-                                    color: const Color(0xFF0B57D0),
+                                    child: Icon(
+                                      dedaIconForPlaceType(place.type),
+                                      color: const Color(0xFF0B57D0),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
                       if (selectedDestination != null)
                         Marker(
                           point: selectedDestination!,
