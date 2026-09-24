@@ -467,12 +467,15 @@ class DedaBackend {
 
 
   static Future<Map<String, dynamic>?> ownerPlaceDeletionRequestForPlace(
-    String placeId,
-  ) async {
+    String placeId, {
+    String? accountKeyOverride,
+  }) async {
     final cleanId = placeId.trim();
     if (cleanId.isEmpty) return null;
     final user = await _ensurePublicUser();
-    final accountKey = await _currentAccountKey(user);
+    final override = accountKeyOverride?.trim() ?? '';
+    final accountKey =
+        override.isNotEmpty ? override : await _currentAccountKey(user);
     final snapshot = await FirebaseFirestore.instance
         .collection('place_deletion_requests')
         .doc(cleanId)
@@ -488,13 +491,16 @@ class DedaBackend {
   static Future<String> submitPlaceDeletionRequest({
     required String placeId,
     String reason = '',
+    String? accountKeyOverride,
   }) async {
     final cleanId = placeId.trim();
     if (cleanId.isEmpty) throw ArgumentError('place-id-required');
 
     final user = await _ensurePublicUser();
     final firestore = FirebaseFirestore.instance;
-    final accountKey = await _currentAccountKey(user);
+    final override = accountKeyOverride?.trim() ?? '';
+    final accountKey =
+        override.isNotEmpty ? override : await _currentAccountKey(user);
     final placeRef = firestore.collection('published_places').doc(cleanId);
     final placeSnapshot = await placeRef.get();
     final place = placeSnapshot.data();
