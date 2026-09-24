@@ -1458,6 +1458,40 @@ class DedaBackend {
     };
   }
 
+  static Future<void> markAdminInvitationShared({
+    required String inviteId,
+    required String channel,
+  }) async {
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    final cleanId = inviteId.trim();
+    if (cleanId.isEmpty) return;
+    final ref =
+        FirebaseFirestore.instance.collection('admin_invites').doc(cleanId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    final data = snapshot.data() ?? <String, dynamic>{};
+    await ref.set(<String, dynamic>{
+      'lastSharedAt': FieldValue.serverTimestamp(),
+      'lastSharedByUid': actor['uid'].toString(),
+      'lastSharedByName': actor['displayName'].toString(),
+      'lastShareChannel': channel.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAdminAudit(
+      'admin_invite_shared',
+      details: <String, dynamic>{
+        'inviteId': cleanId,
+        'targetAdminId': data['adminId'],
+        'targetAdminName': data['displayName'],
+        'targetEmail': data['email'],
+        'channel': channel.trim(),
+      },
+    );
+  }
+
   static Future<void> cancelAdminInvitation(String inviteId) async {
     final actor = await currentAdminProfile();
     if (normalizeAdminRole(actor['role']) != 'general_manager') {
