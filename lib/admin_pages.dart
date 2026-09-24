@@ -2354,7 +2354,7 @@ class _RequestListState extends State<_RequestList> {
     final canReject = _can('rejectPlaces');
 
     if (status == 'approved' || status == 'rejected') {
-      if (!canReview) {
+      if (!canReview && !_isGeneralManager) {
         return Align(
           alignment: AlignmentDirectional.centerStart,
           child: Chip(
@@ -2367,13 +2367,14 @@ class _RequestListState extends State<_RequestList> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          _statusButton(
-            currentStatus: status,
-            targetStatus: 'reviewing',
-            id: id,
-            arLabel: 'إعادة للمراجعة',
-            enLabel: 'Return to review',
-          ),
+          if (canReview)
+            _statusButton(
+              currentStatus: status,
+              targetStatus: 'reviewing',
+              id: id,
+              arLabel: 'إعادة للمراجعة',
+              enLabel: 'Return to review',
+            ),
           if (_isGeneralManager)
             OutlinedButton.icon(
               onPressed: () => _deletePlaceRequest(id),
@@ -2387,7 +2388,7 @@ class _RequestListState extends State<_RequestList> {
       );
     }
 
-    if (!canReview && !canApprove && !canReject) {
+    if (!canReview && !canApprove && !canReject && !_isGeneralManager) {
       return Align(
         alignment: AlignmentDirectional.centerStart,
         child: Chip(
