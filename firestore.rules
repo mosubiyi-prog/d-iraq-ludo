@@ -609,6 +609,10 @@ service cloud.firestore {
       allow read, create, update, delete: if isGeneralManager();
     }
 
+    match /admin_trash_place_requests/{trashId} {
+      allow read, create, update, delete: if isGeneralManager();
+    }
+
     match /place_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
