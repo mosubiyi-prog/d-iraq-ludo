@@ -8881,7 +8881,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   int get _currentSpeedKmh {
     final metersPerSecond = livePosition?.speed ?? 0;
     if (!metersPerSecond.isFinite || metersPerSecond <= 0) return 0;
-    return (metersPerSecond * 3.6).round().clamp(0, 399);
+    return (metersPerSecond * 3.6).round().clamp(0, 399).toInt();
   }
 
   Widget _buildSpeedIndicator() {
