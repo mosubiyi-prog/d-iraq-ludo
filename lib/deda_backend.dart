@@ -727,16 +727,12 @@ class DedaBackend {
             .limit(1)
             .snapshots();
       }
-      Query<Map<String, dynamic>> query =
-          collection.where('governorate', isEqualTo: governorate);
-      if (cutoff != null) {
-        query = query.where(
-          'createdAt',
-          isGreaterThanOrEqualTo: cutoff,
-        );
-      }
-      return query
-          .orderBy('createdAt', descending: true)
+
+      // Province scope is enforced server-side without a composite index.
+      // The shared request-list UI applies the activation-time cutoff again
+      // before counters or records are rendered.
+      return collection
+          .where('governorate', isEqualTo: governorate)
           .limit(100)
           .snapshots();
     }
