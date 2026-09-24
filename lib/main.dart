@@ -8320,7 +8320,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
         setState(() {
           _displayPosition = point;
-          if (!_compassHeadingIsFresh) {
+          final movingByGps = (livePosition?.speed ?? 0) >= 0.8;
+          if (movingByGps || !_compassHeadingIsFresh) {
             _displayHeading = heading;
           }
         });
@@ -8329,7 +8330,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         if (linear >= 1) {
           timer.cancel();
           _displayPosition = target;
-          if (!_compassHeadingIsFresh) {
+          final movingByGps = (livePosition?.speed ?? 0) >= 0.8;
+          if (movingByGps || !_compassHeadingIsFresh) {
             _displayHeading = targetHeading % 360;
           }
         }
