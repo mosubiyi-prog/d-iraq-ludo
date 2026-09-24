@@ -8702,6 +8702,47 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 
+  int get _currentSpeedKmh {
+    final metersPerSecond = livePosition?.speed ?? 0;
+    if (!metersPerSecond.isFinite || metersPerSecond <= 0) return 0;
+    return (metersPerSecond * 3.6).round().clamp(0, 399);
+  }
+
+  Widget _buildSpeedIndicator() {
+    return Material(
+      color: Colors.white.withOpacity(0.94),
+      elevation: 4,
+      shape: const CircleBorder(),
+      child: SizedBox(
+        width: 62,
+        height: 62,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '$_currentSpeedKmh',
+              style: const TextStyle(
+                fontSize: 22,
+                height: 1,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF162018),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              dedaText('كم/س', 'km/h'),
+              style: const TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF59645B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   DedaRouteStep? get firstUsefulStep {
     final steps = route?.steps;
     if (steps == null || steps.isEmpty) return null;
@@ -9339,6 +9380,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                     ),
                   ),
                 ),
+              ),
+            if (tripStarted)
+              Positioned(
+                top: isLandscape ? 12 : 66,
+                right: isLandscape
+                    ? (isInsetDrivingMap ? 24 : 10)
+                    : 12,
+                child: _buildSpeedIndicator(),
               ),
             if (tripStarted && _activeHazard != null)
               Positioned(
