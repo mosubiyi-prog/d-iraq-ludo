@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'deda_backend.dart';
 
@@ -989,6 +991,108 @@ class _DedaAdminMemberEditorPageState
     return result;
   }
 
+  String _invitationMessage(Map<String, dynamic> result) {
+    final email = (result['email'] ?? '').toString();
+    final inviteId = (result['inviteId'] ?? '').toString();
+    final code = (result['activationCode'] ?? '').toString();
+    final adminId = (result['adminId'] ?? '').toString();
+    final expiresAt = result['expiresAt'];
+    final expiry = dedaAdminTimestamp(expiresAt);
+    return t(
+      'دعوة إدارية إلى DEDA - الدليل الدقيق\n\n'
+      'البريد: $email\n'
+      'معرّف الدعوة: $inviteId\n'
+      'رمز التفعيل: $code\n'
+      'الرقم الإداري: $adminId\n'
+      'تنتهي الصلاحية: $expiry\n\n'
+      'من شاشة دخول الإدارة اختر «تفعيل دعوة إدارية»، ثم أدخل هذه البيانات وحدد كلمة مرور خاصة بك.\n'
+      'لا تشارك رمز التفعيل مع أي شخص آخر.',
+      'DEDA administration invitation\n\n'
+      'Email: $email\n'
+      'Invitation ID: $inviteId\n'
+      'Activation code: $code\n'
+      'Admin ID: $adminId\n'
+      'Expires: $expiry\n\n'
+      'From admin sign-in choose “Activate admin invitation”, enter these details, then create your own password.\n'
+      'Do not share the activation code with anyone else.',
+    );
+  }
+
+  Future<void> _sendInvitationEmail(Map<String, dynamic> result) async {
+    final email = (result['email'] ?? '').toString().trim();
+    final inviteId = (result['inviteId'] ?? '').toString().trim();
+    if (email.isEmpty || inviteId.isEmpty) return;
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: <String, String>{
+        'subject': t(
+          'دعوة إدارية إلى DEDA',
+          'DEDA administration invitation',
+        ),
+        'body': _invitationMessage(result),
+      },
+    );
+
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      await Clipboard.setData(
+        ClipboardData(text: _invitationMessage(result)),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر فتح تطبيق البريد. تم نسخ الدعوة لتشاركها يدويًا.',
+              'Could not open the mail app. The invitation was copied for manual sharing.',
+            ),
+          ),
+        ),
+      );
+      await DedaBackend.markAdminInvitationShared(
+        inviteId: inviteId,
+        channel: 'copy_fallback',
+      );
+      return;
+    }
+
+    await DedaBackend.markAdminInvitationShared(
+      inviteId: inviteId,
+      channel: 'email_draft',
+    );
+  }
+
+  Future<void> _copyInvitationForSharing(
+    Map<String, dynamic> result,
+  ) async {
+    final inviteId = (result['inviteId'] ?? '').toString().trim();
+    await Clipboard.setData(
+      ClipboardData(text: _invitationMessage(result)),
+    );
+    if (inviteId.isNotEmpty) {
+      await DedaBackend.markAdminInvitationShared(
+        inviteId: inviteId,
+        channel: 'copy',
+      );
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          t(
+            'تم نسخ الدعوة. يمكنك إرسالها عبر واتساب أو الرسائل أو أي تطبيق آخر.',
+            'Invitation copied. You can send it through WhatsApp, messages, or another app.',
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _save() async {
     final name = _name.text.trim();
     final email = _email.text.trim();
@@ -1141,7 +1245,17 @@ class _DedaAdminMemberEditorPageState
               ),
             ),
             actions: [
-              FilledButton(
+              TextButton.icon(
+                onPressed: () => _copyInvitationForSharing(result),
+                icon: const Icon(Icons.copy_all_outlined),
+                label: Text(t('نسخ للمشاركة', 'Copy to share')),
+              ),
+              FilledButton.icon(
+                onPressed: () => _sendInvitationEmail(result),
+                icon: const Icon(Icons.outgoing_mail),
+                label: Text(t('إرسال الدعوة', 'Send invitation')),
+              ),
+              TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: Text(t('تم', 'Done')),
               ),
