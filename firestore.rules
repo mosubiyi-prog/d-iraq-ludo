@@ -614,7 +614,9 @@ service cloud.firestore {
     }
 
     match /place_requests/{requestId} {
-      allow create: if signedIn()
+      allow create: if isGeneralManager()
+        || (
+          signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.accountKey is string
         && sameAccount(request.resource.data.accountKey)
@@ -642,7 +644,8 @@ service cloud.firestore {
             && (
               get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.ownerUid == request.auth.uid
               || sameAccount(get(/databases/$(database)/documents/published_places/$(request.resource.data.originalPlaceId)).data.accountKey)
-            )));
+            )))
+        );
 
       allow read: if (
           hasAdminPermission('viewPlaceRequests')
