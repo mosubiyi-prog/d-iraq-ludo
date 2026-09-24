@@ -44,6 +44,18 @@ service cloud.firestore {
         );
     }
 
+    function adminCanReadCreatedAfterActivation(data) {
+      return isGeneralManager()
+        || (
+          isAdmin()
+          && adminData().keys().hasAny(['firstLoginCompletedAt'])
+          && adminData().firstLoginCompletedAt is timestamp
+          && data.keys().hasAny(['createdAt'])
+          && data.createdAt is timestamp
+          && data.createdAt >= adminData().firstLoginCompletedAt
+        );
+    }
+
     function validAdminRole(role) {
       return role in [
         'general_manager', 'deputy_manager', 'employee', 'province_agent'
@@ -552,12 +564,16 @@ service cloud.firestore {
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5;
 
-      allow read: if canReadSupport()
+      allow read: if (
+          canReadSupport()
+          && adminCanReadCreatedAfterActivation(resource.data)
+        )
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
 
       allow update: if (
           canReplySupport()
+          && adminCanReadCreatedAfterActivation(resource.data)
           && request.resource.data.status in [
             'new', 'in_progress', 'replied', 'closed'
           ]
@@ -574,6 +590,7 @@ service cloud.firestore {
         )
         || (
           canReadSupport()
+          && adminCanReadCreatedAfterActivation(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'firstViewedAt', 'firstViewedByUid', 'firstViewedByName',
             'firstViewedByRole', 'lastViewedAt', 'lastViewedByUid',
@@ -619,6 +636,7 @@ service cloud.firestore {
       allow read: if (
           hasAdminPermission('viewPlaceRequests')
           && adminProvinceMatches(resource.data)
+          && adminCanReadCreatedAfterActivation(resource.data)
         )
         || (signedIn() && resource.data.ownerUid == request.auth.uid)
         || sameAccount(resource.data.accountKey);
@@ -626,6 +644,7 @@ service cloud.firestore {
       allow update: if (
           adminProvinceMatches(resource.data)
           && adminProvinceMatches(request.resource.data)
+          && adminCanReadCreatedAfterActivation(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'updatedAt', 'reviewedBy', 'reviewedByName',
             'reviewedByRole', 'decisionAction', 'decisionAt',
