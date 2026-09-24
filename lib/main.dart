@@ -8777,11 +8777,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.end,
-      children: step.lanes.take(6).map((lane) {
+      children: step.lanes.take(5).map((lane) {
         return Container(
-          width: 23,
-          height: 23,
-          margin: const EdgeInsetsDirectional.only(start: 3),
+          width: 16,
+          height: 20,
+          margin: const EdgeInsetsDirectional.only(start: 1),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: lane.valid
@@ -8792,7 +8792,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           child: Text(
             _laneArrowSymbol(lane),
             style: TextStyle(
-              fontSize: 17,
+              fontSize: 14.5,
               height: 1,
               fontWeight: FontWeight.w900,
               color: lane.valid
