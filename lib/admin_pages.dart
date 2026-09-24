@@ -1269,6 +1269,27 @@ class _RequestListState extends State<_RequestList> {
         'general_manager';
   }
 
+  bool _visibleForCurrentAdmin(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final profile = widget.adminProfile;
+    if (profile == null) {
+      // Legacy inbox paths do not carry an authenticated admin profile.
+      // Fail closed rather than accidentally exposing historical records.
+      return false;
+    }
+
+    final role = DedaBackend.normalizeAdminRole(
+      profile['roleNormalized'] ?? profile['role'],
+    );
+    if (role == 'general_manager') return true;
+
+    final cutoff = profile['firstLoginCompletedAt'] ?? profile['createdAt'];
+    final createdAt = doc.data()['createdAt'];
+    if (cutoff is! Timestamp || createdAt is! Timestamp) return false;
+    return createdAt.compareTo(cutoff) >= 0;
+  }
+
   String statusLabel(String status) {
     switch (status) {
       case 'pending':
@@ -2359,7 +2380,20 @@ class _RequestListState extends State<_RequestList> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final allDocuments = snapshot.data!.docs;
+        final allDocuments = snapshot.data!.docs
+            .where(_visibleForCurrentAdmin)
+            .toList()
+          ..sort((a, b) {
+            final aCreated = a.data()['createdAt'];
+            final bCreated = b.data()['createdAt'];
+            final aMillis = aCreated is Timestamp
+                ? aCreated.millisecondsSinceEpoch
+                : 0;
+            final bMillis = bCreated is Timestamp
+                ? bCreated.millisecondsSinceEpoch
+                : 0;
+            return bMillis.compareTo(aMillis);
+          });
         final currentCount = _countSection(allDocuments, 'current');
         final approvedCount = _countSection(allDocuments, 'approved');
         final rejectedCount = _countSection(allDocuments, 'rejected');
