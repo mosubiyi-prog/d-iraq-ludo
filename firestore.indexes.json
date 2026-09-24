@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "place_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "governorate", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
