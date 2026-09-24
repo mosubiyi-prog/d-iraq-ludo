@@ -9099,9 +9099,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   text: dedaText('العلامة الحمراء: موقعك الحالي', 'Red marker: your current location'),
                 ),
                 _DedaLegendRow(
-                  icon: Icons.gps_fixed,
-                  iconColor: const Color(0xFF0B57D0),
-                  text: dedaText('العلامة الزرقاء: الوجهة', 'Blue marker: destination'),
+                  icon: Icons.flag_outlined,
+                  iconColor: const Color(0xFF17652F),
+                  text: dedaText(
+                    'علم العراق الصغير: نقطة الوصول النهائية',
+                    'Small Iraq flag: final destination',
+                  ),
                 ),
                 _DedaLegendRow(
                   icon: Icons.route,
@@ -9185,20 +9188,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             }),
       Marker(
         point: destinationPoint,
-        width: 58,
-        height: 58,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(blurRadius: 5, color: Colors.black26)],
-          ),
-          child: Icon(
-            widget.categoryIcon,
-            size: 34,
-            color: const Color(0xFF0B57D0),
-          ),
-        ),
+        width: 52,
+        height: 52,
+        child: const _DedaIraqDestinationFlag(),
       ),
       // Keep the user's live location/arrow last so it is always visible on top.
       Marker(
@@ -9710,6 +9702,85 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 }
+class _DedaIraqDestinationFlag extends StatelessWidget {
+  const _DedaIraqDestinationFlag();
+
+  @override
+  Widget build(BuildContext context) {
+    // The marker coordinate is at the exact center of this 52×52 box.
+    // The pole ends at that center point, so the visual flag never shifts
+    // the actual route destination.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Positioned(
+          left: 25,
+          top: 6,
+          width: 2,
+          height: 20,
+          child: ColoredBox(color: Color(0xFF5B625D)),
+        ),
+        Positioned(
+          left: 26,
+          top: 3,
+          width: 25,
+          height: 18,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Colors.black.withOpacity(0.12),
+                  width: 0.5,
+                ),
+              ),
+              child: Column(
+                children: [
+                  const Expanded(
+                    child: ColoredBox(color: Color(0xFFCE1126)),
+                  ),
+                  Expanded(
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: Center(
+                        child: Text(
+                          'الله أكبر',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 3.2,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0B7A36),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: ColoredBox(color: Color(0xFF111111)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 23.5,
+          top: 24,
+          child: Container(
+            width: 5,
+            height: 3,
+            decoration: BoxDecoration(
+              color: const Color(0xFF5B625D),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DedaRouteStat extends StatelessWidget {
   final IconData icon;
   final String label;
