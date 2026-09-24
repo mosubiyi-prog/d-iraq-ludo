@@ -784,6 +784,196 @@ class DedaBackend {
         .toList();
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      publishedPlacesForGeneralManager() {
+    return FirebaseFirestore.instance
+        .collection('published_places')
+        .limit(500)
+        .snapshots();
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      deletedPlacesForGeneralManager() {
+    return FirebaseFirestore.instance
+        .collection('admin_trash_places')
+        .orderBy('deletedAt', descending: true)
+        .limit(500)
+        .snapshots();
+  }
+
+  static Future<void> hidePublishedPlace(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final ref =
+        FirebaseFirestore.instance.collection('published_places').doc(cleanId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) throw StateError('published-place-not-found');
+
+    await ref.update(<String, dynamic>{
+      'published': false,
+      'hiddenByManager': true,
+      'hiddenAt': FieldValue.serverTimestamp(),
+      'hiddenByUid': actor['uid'].toString(),
+      'hiddenByName': actor['displayName'].toString(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _writeAdminAudit(
+      'published_place_hidden',
+      details: <String, dynamic>{
+        'sourceCollection': 'published_places',
+        'sourceId': cleanId,
+        'placeName': snapshot.data()?['placeName'],
+        'approvalNumber': snapshot.data()?['approvalNumber'],
+      },
+    );
+  }
+
+  static Future<void> restoreHiddenPublishedPlace(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final ref =
+        FirebaseFirestore.instance.collection('published_places').doc(cleanId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) throw StateError('published-place-not-found');
+
+    await ref.update(<String, dynamic>{
+      'published': true,
+      'hiddenByManager': FieldValue.delete(),
+      'hiddenAt': FieldValue.delete(),
+      'hiddenByUid': FieldValue.delete(),
+      'hiddenByName': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    await _writeAdminAudit(
+      'published_place_restored',
+      details: <String, dynamic>{
+        'sourceCollection': 'published_places',
+        'sourceId': cleanId,
+        'placeName': snapshot.data()?['placeName'],
+        'approvalNumber': snapshot.data()?['approvalNumber'],
+        'restoredByUid': actor['uid'],
+      },
+    );
+  }
+
+  static Future<void> trashPublishedPlace(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final source =
+        firestore.collection('published_places').doc(cleanId);
+    final trash =
+        firestore.collection('admin_trash_places').doc(cleanId);
+
+    Map<String, dynamic>? placeData;
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(source);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('published-place-not-found');
+      }
+      placeData = Map<String, dynamic>.from(snapshot.data()!);
+      transaction.set(trash, <String, dynamic>{
+        ...placeData!,
+        'originalId': cleanId,
+        'trashKind': 'published_place',
+        'deletedFromCollection': 'published_places',
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedByUid': actor['uid'].toString(),
+        'deletedByName': actor['displayName'].toString(),
+        'deletedByRole': normalizeAdminRole(actor['role']),
+      });
+      transaction.delete(source);
+    });
+
+    await _writeAdminAudit(
+      'published_place_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'published_places',
+        'sourceId': cleanId,
+        'placeName': placeData?['placeName'],
+        'approvalNumber': placeData?['approvalNumber'],
+      },
+    );
+  }
+
+  static Future<void> restoreDeletedPublishedPlace(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final trash =
+        firestore.collection('admin_trash_places').doc(cleanId);
+    final source =
+        firestore.collection('published_places').doc(cleanId);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(trash);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('deleted-place-not-found');
+      }
+      final restored =
+          Map<String, dynamic>.from(snapshot.data()!);
+      for (final key in <String>[
+        'originalId',
+        'trashKind',
+        'deletedFromCollection',
+        'deletedAt',
+        'deletedByUid',
+        'deletedByName',
+        'deletedByRole',
+        'hiddenByManager',
+        'hiddenAt',
+        'hiddenByUid',
+        'hiddenByName',
+      ]) {
+        restored.remove(key);
+      }
+      restored['published'] = true;
+      restored['updatedAt'] = FieldValue.serverTimestamp();
+      transaction.set(source, restored);
+      transaction.delete(trash);
+    });
+
+    await _writeAdminAudit(
+      'published_place_restored_from_trash',
+      details: <String, dynamic>{
+        'sourceCollection': 'published_places',
+        'sourceId': cleanId,
+        'restoredByUid': actor['uid'],
+      },
+    );
+  }
+
+  static Future<void> permanentlyDeletePublishedPlace(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final trash =
+        FirebaseFirestore.instance.collection('admin_trash_places').doc(cleanId);
+    final snapshot = await trash.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      throw StateError('deleted-place-not-found');
+    }
+    final data = snapshot.data()!;
+    await trash.delete();
+
+    await _writeAdminAudit(
+      'published_place_permanently_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'published_places',
+        'sourceId': cleanId,
+        'placeName': data['placeName'],
+        'approvalNumber': data['approvalNumber'],
+        'deletedByUid': actor['uid'],
+      },
+    );
+  }
+
   static Future<void> markRequestViewed({
     required String collection,
     required String id,
