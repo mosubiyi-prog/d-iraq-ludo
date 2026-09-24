@@ -9,7 +9,6 @@ on:
       - .github/workflows/deploy-build118-firebase.yml
       - firestore.rules
       - firestore.indexes.json
-      - storage.rules
       - firebase.json
 
 jobs:
@@ -47,17 +46,17 @@ jobs:
       - name: Validate Firestore index JSON
         run: python3 -m json.tool firestore.indexes.json > /dev/null
 
-      - name: Deploy Firestore rules indexes and Storage rules with service account
+      - name: Deploy Firestore rules and indexes with service account
         if: steps.auth.outputs.mode == 'service'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.path }}
         run: |
           npx --yes firebase-tools@latest deploy \
-            --only firestore:rules,firestore:indexes,storage \
+            --only firestore:rules,firestore:indexes \
             --project deda-25b88 \
             --non-interactive
 
-      - name: Deploy Firestore rules indexes and Storage rules with CI token
+      - name: Deploy Firestore rules and indexes with CI token
         if: steps.auth.outputs.mode == 'token'
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
