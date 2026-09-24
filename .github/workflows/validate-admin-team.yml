@@ -13,7 +13,6 @@ on:
       - admin-final-polish-work-2026-09-24
       - admin-note21-work-2026-09-24
       - build118-admin-privacy-delete-work-2026-09-24
-      - admin-note21-work-2026-09-24
     paths:
       - lib/main.dart
       - lib/admin_pages.dart
@@ -75,9 +74,10 @@ jobs:
       - name: Check Cloud Functions syntax
         run: node --check functions/index.js
 
-      - name: Validate Firestore rules with emulator
+      - name: Validate Firebase rules and indexes
         run: |
+          python3 -m json.tool firestore.indexes.json > /dev/null
           npx --yes firebase-tools@latest emulators:exec \
-            --only firestore \
+            --only firestore,storage \
             --project demo-deda \
-            "echo firestore-rules-ok"
+            "echo firebase-rules-ok"
