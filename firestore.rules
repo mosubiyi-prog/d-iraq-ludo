@@ -528,9 +528,44 @@ service cloud.firestore {
           'createdAt', 'updatedAt'
         ]);
 
-      allow read: if isGeneralManager()
+      // The request document uses the place ID as its ID. On the very
+      // first submission the request does not exist yet, so let the verified
+      // owner read that missing ID through ownership of the published place.
+      // This keeps the first tap idempotent instead of failing on the
+      // pre-create existence check.
+      allow get: if isGeneralManager()
         || (
           signedIn()
+          && (
+            (
+              resource != null
+              && (
+                resource.data.requesterUid == request.auth.uid
+                || sameAccount(resource.data.accountKey)
+              )
+            )
+            || (
+              exists(
+                /databases/$(database)/documents/published_places/$(requestId)
+              )
+              && (
+                get(
+                  /databases/$(database)/documents/published_places/$(requestId)
+                ).data.ownerUid == request.auth.uid
+                || sameAccount(
+                  get(
+                    /databases/$(database)/documents/published_places/$(requestId)
+                  ).data.accountKey
+                )
+              )
+            )
+          )
+        );
+
+      allow list: if isGeneralManager()
+        || (
+          signedIn()
+          && resource != null
           && (
             resource.data.requesterUid == request.auth.uid
             || sameAccount(resource.data.accountKey)
