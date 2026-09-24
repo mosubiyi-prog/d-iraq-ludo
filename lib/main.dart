@@ -2375,6 +2375,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   static const String _draftKey = 'deda_owner_place_draft_v1';
   static const String _placeIdKey = 'deda_owner_place_id_v2';
   static const String _pendingEditIdKey = 'deda_owner_pending_edit_id_v2';
+  static const String _pendingDeleteIdKey = 'deda_owner_pending_delete_id_v1';
   static const String _submittedSnapshotKey = 'deda_owner_submitted_snapshot_v2';
 
   final _formKey = GlobalKey<FormState>();
@@ -2393,11 +2394,15 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   bool _gettingLocation = false;
   bool _saving = false;
   bool _submitting = false;
+  bool _deletionSubmitting = false;
   bool _isAvailableNow = false;
   bool _editingApproved = false;
   DateTime? _savedAt;
   String? _placeId;
   String? _pendingEditId;
+  String? _deletionRequestId;
+  String? _deletionRequestStatus;
+  String? _deletionRequestNote;
   String _status = 'draft';
   String? _approvalNumber;
   String? _approvalDate;
@@ -2483,6 +2488,65 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       final prefs = await SharedPreferences.getInstance();
       _placeId = prefs.getString(_placeIdKey);
       _pendingEditId = prefs.getString(_pendingEditIdKey);
+      _deletionRequestId = prefs.getString(_pendingDeleteIdKey);
+
+      if (_placeId != null && _placeId!.isNotEmpty) {
+        Map<String, dynamic>? deletionRequest;
+        if (_deletionRequestId != null && _deletionRequestId!.isNotEmpty) {
+          try {
+            deletionRequest =
+                await DedaBackend.ownerRequestById(_deletionRequestId!);
+          } catch (_) {}
+        }
+        deletionRequest ??=
+            await DedaBackend.ownerLatestDeletionRequest(_placeId!);
+        if (deletionRequest != null &&
+            (deletionRequest['requestType'] ?? '').toString() == 'delete') {
+          _deletionRequestId = deletionRequest['id']?.toString();
+          _deletionRequestStatus =
+              (deletionRequest['status'] ?? 'pending').toString();
+          _deletionRequestNote = deletionRequest['decisionNote']?.toString();
+          if (_deletionRequestId?.isNotEmpty == true) {
+            await prefs.setString(
+              _pendingDeleteIdKey,
+              _deletionRequestId!,
+            );
+          }
+
+          if (_deletionRequestStatus == 'approved') {
+            await prefs.remove(_placeIdKey);
+            await prefs.remove(_pendingEditIdKey);
+            await prefs.remove(_pendingDeleteIdKey);
+            await prefs.remove(_submittedSnapshotKey);
+            _placeId = null;
+            _pendingEditId = null;
+            _deletionRequestId = null;
+            _status = 'draft';
+            _categoryCode = 'restaurant';
+            _nameController.clear();
+            _governorateController.clear();
+            _addressController.clear();
+            _hoursController.clear();
+            _descriptionController.clear();
+            _otherCategoryTextController.clear();
+            _phoneController.text = DedaPreferences.accountPhone.isNotEmpty
+                ? DedaPreferences.accountPhone
+                : DedaPreferences.phone;
+            _latitude = null;
+            _longitude = null;
+            _approvalNumber = null;
+            _approvalDate = null;
+            _approvalMessage = null;
+            _decisionNote = null;
+          }
+        } else if (_deletionRequestId != null) {
+          await prefs.remove(_pendingDeleteIdKey);
+          _deletionRequestId = null;
+          _deletionRequestStatus = null;
+          _deletionRequestNote = null;
+        }
+      }
+
       final snapshotRaw = prefs.getString(_submittedSnapshotKey);
       Map<String, dynamic>? localSnapshot;
       if (snapshotRaw != null && snapshotRaw.isNotEmpty) {
@@ -2843,6 +2907,232 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _requestPlaceDeletion() async {
+    final placeId = _placeId?.trim() ?? '';
+    if (placeId.isEmpty ||
+        _status != 'approved' ||
+        _editingApproved ||
+        _deletionSubmitting) {
+      return;
+    }
+
+    final activeDeletion = _deletionRequestStatus == 'pending' ||
+        _deletionRequestStatus == 'reviewing';
+    if (activeDeletion) return;
+
+    final confirmed = (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(
+              dedaText('طلب حذف المكان', 'Request place deletion'),
+            ),
+            content: Text(
+              dedaText(
+                'سيتم إرسال طلب حذف هذا المكان إلى إدارة DEDA. لن يُحذف المكان الآن، وسيبقى ظاهرًا حتى تعتمد الإدارة الطلب.',
+                'A deletion request will be sent to DEDA administration. The place will stay visible until the request is approved.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(dedaText('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(
+                  dedaText('إرسال طلب الحذف', 'Send deletion request'),
+                ),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+    if (!confirmed) return;
+
+    setState(() => _deletionSubmitting = true);
+    try {
+      final requestId = await DedaBackend.submitPlaceDeletionRequest(
+        originalPlaceId: placeId,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingDeleteIdKey, requestId);
+      if (!mounted) return;
+      setState(() {
+        _deletionRequestId = requestId;
+        _deletionRequestStatus = 'pending';
+        _deletionRequestNote = null;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            dedaText('تم إرسال طلب الحذف', 'Deletion request sent'),
+          ),
+          content: Text(
+            dedaText(
+              'وصل طلب حذف المكان إلى إدارة DEDA بنجاح، وحالته الآن قيد المراجعة.',
+              'The place deletion request reached DEDA administration successfully and is now under review.',
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(dedaText('حسناً', 'OK')),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر إرسال طلب حذف المكان الآن. حاول مرة أخرى.',
+              'Could not send the place deletion request right now. Try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deletionSubmitting = false);
+    }
+  }
+
+  Widget _placeDeletionCard() {
+    if (_placeId == null ||
+        _placeId!.isEmpty ||
+        _status != 'approved' ||
+        _editingApproved) {
+      return const SizedBox.shrink();
+    }
+
+    final pending = _deletionRequestStatus == 'pending' ||
+        _deletionRequestStatus == 'reviewing';
+    final rejected = _deletionRequestStatus == 'rejected';
+
+    return Card(
+      elevation: 0,
+      color: pending
+          ? const Color(0xFFFFF4E5)
+          : const Color(0xFFFFF1F0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: pending
+              ? const Color(0xFFD59A43)
+              : const Color(0xFFD68B85),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  pending
+                      ? Icons.hourglass_top
+                      : Icons.delete_outline,
+                  color: pending
+                      ? const Color(0xFF9A6500)
+                      : const Color(0xFFB3261E),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    pending
+                        ? dedaText(
+                            'طلب حذف المكان قيد المراجعة',
+                            'Place deletion request under review',
+                          )
+                        : dedaText(
+                            'إدارة حذف المكان',
+                            'Place deletion',
+                          ),
+                    style: const TextStyle(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              pending
+                  ? dedaText(
+                      'المكان يبقى ظاهرًا حتى تتخذ الإدارة القرار النهائي.',
+                      'The place remains visible until administration makes the final decision.',
+                    )
+                  : rejected
+                      ? dedaText(
+                          'تم رفض طلب الحذف السابق. يمكنك إرسال طلب جديد إذا رغبت.',
+                          'The previous deletion request was rejected. You can send a new request if needed.',
+                        )
+                      : dedaText(
+                          'يمكنك طلب حذف هذا المكان. الحذف لا يتم مباشرة؛ يصل الطلب إلى الإدارة أولًا.',
+                          'You can request deletion of this place. It is not deleted immediately; administration reviews the request first.',
+                        ),
+            ),
+            if (rejected &&
+                _deletionRequestNote?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              Text(
+                dedaText('ملاحظة الإدارة: ', 'Administration note: ') +
+                    _deletionRequestNote!.trim(),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: pending || _deletionSubmitting
+                  ? null
+                  : _requestPlaceDeletion,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB3261E),
+                side: const BorderSide(color: Color(0xFFB3261E)),
+                minimumSize: const Size.fromHeight(52),
+              ),
+              icon: _deletionSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      pending
+                          ? Icons.hourglass_top
+                          : Icons.delete_outline,
+                    ),
+              label: Text(
+                pending
+                    ? dedaText(
+                        'طلب الحذف قيد المراجعة',
+                        'Deletion request under review',
+                      )
+                    : rejected
+                        ? dedaText(
+                            'إعادة إرسال طلب حذف المكان',
+                            'Send deletion request again',
+                          )
+                        : dedaText(
+                            'طلب حذف المكان',
+                            'Request place deletion',
+                          ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _statusLabel() {
@@ -3294,6 +3584,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 backgroundColor: const Color(0xFF17652F),
                               ),
                             ),
+                          ],
+                          if (_placeId != null &&
+                              _placeId!.isNotEmpty &&
+                              _status == 'approved' &&
+                              !_editingApproved) ...[
+                            const SizedBox(height: 18),
+                            _placeDeletionCard(),
                           ],
                         ],
                       ),
@@ -9690,8 +9987,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             }),
       Marker(
         point: destinationPoint,
-        width: 68,
-        height: 64,
+        width: 84,
+        height: 80,
         alignment: Alignment.bottomCenter,
         child: const _DedaIraqDestinationFlag(),
       ),
@@ -10146,34 +10443,46 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 68,
-      height: 64,
+      width: 84,
+      height: 80,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // The pole is centered directly over the destination anchor.
           const Positioned(
-            left: 33,
+            left: 40.5,
             top: 4,
-            bottom: 1,
+            bottom: 3,
             width: 3,
-            child: ColoredBox(color: Color(0xFF353B37)),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xFF2F3531),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 2,
+                    offset: Offset(1, 1),
+                    color: Colors.black26,
+                  ),
+                ],
+              ),
+            ),
           ),
           Positioned(
-            left: 36,
+            left: 43.5,
             top: 4,
-            width: 34,
-            height: 27,
+            width: 40,
+            height: 30,
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: const Color(0xFF202421),
-                  width: 1.1,
+                  color: Colors.white,
+                  width: 1.4,
                 ),
                 boxShadow: const [
                   BoxShadow(
-                    blurRadius: 2.5,
-                    offset: Offset(0, 1),
-                    color: Colors.black26,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Colors.black38,
                   ),
                 ],
               ),
@@ -10186,37 +10495,50 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
                     child: ColoredBox(
                       color: Colors.white,
                       child: Center(
-                        child: Text(
-                          'الله أكبر',
-                          maxLines: 1,
-                          textDirection: TextDirection.rtl,
-                          style: TextStyle(
-                            fontSize: 5.0,
-                            height: 1,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF007A3D),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'الله أكبر',
+                            maxLines: 1,
+                            textDirection: TextDirection.rtl,
+                            style: TextStyle(
+                              fontSize: 7,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF007A3D),
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                   const Expanded(
-                    child: ColoredBox(color: Color(0xFF111111)),
+                    child: ColoredBox(color: Color(0xFF000000)),
                   ),
                 ],
               ),
             ),
           ),
-          // The bottom-center of this base is the exact destination coordinate.
+          // Bottom-center of this base is the exact destination coordinate.
           const Positioned(
-            left: 27,
+            left: 32,
             bottom: 0,
-            width: 14,
-            height: 5,
+            width: 20,
+            height: 7,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Color(0xFF353B37),
-                borderRadius: BorderRadius.all(Radius.circular(3)),
+                color: Color(0xFF2F3531),
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Colors.white, width: 1.1),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 3,
+                    offset: Offset(0, 1),
+                    color: Colors.black38,
+                  ),
+                ],
               ),
             ),
           ),
@@ -10225,6 +10547,7 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
     );
   }
 }
+
 
 class _DedaRouteStat extends StatelessWidget {
   final IconData icon;
