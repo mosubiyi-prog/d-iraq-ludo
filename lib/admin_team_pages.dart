@@ -576,6 +576,130 @@ class DedaAdminInvitationsPage extends StatelessWidget {
     }
   }
 
+  String _inviteMessage(
+    String inviteId,
+    Map<String, dynamic> data,
+  ) {
+    final email = (data['email'] ?? '').toString();
+    final code = (data['activationCode'] ?? '').toString();
+    final adminId = (data['adminId'] ?? '').toString();
+    final expiry = dedaAdminTimestamp(data['expiresAt']);
+    return t(
+      'دعوة إدارية إلى DEDA - الدليل الدقيق\n\n'
+      'البريد: $email\n'
+      'معرّف الدعوة: $inviteId\n'
+      'رمز التفعيل: $code\n'
+      'الرقم الإداري: $adminId\n'
+      'تنتهي الصلاحية: $expiry\n\n'
+      'من شاشة دخول الإدارة اختر «تفعيل دعوة إدارية»، ثم أدخل هذه البيانات وحدد كلمة مرور خاصة بك.\n'
+      'لا تشارك رمز التفعيل مع أي شخص آخر.',
+      'DEDA administration invitation\n\n'
+      'Email: $email\n'
+      'Invitation ID: $inviteId\n'
+      'Activation code: $code\n'
+      'Admin ID: $adminId\n'
+      'Expires: $expiry\n\n'
+      'From admin sign-in choose “Activate admin invitation”, enter these details, then create your own password.\n'
+      'Do not share the activation code with anyone else.',
+    );
+  }
+
+  Future<void> _sendInvite(
+    BuildContext context,
+    String inviteId,
+    Map<String, dynamic> data,
+  ) async {
+    final email = (data['email'] ?? '').toString().trim();
+    final code = (data['activationCode'] ?? '').toString().trim();
+    if (email.isEmpty || code.isEmpty) return;
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: <String, String>{
+        'subject': t(
+          'دعوة إدارية إلى DEDA',
+          'DEDA administration invitation',
+        ),
+        'body': _inviteMessage(inviteId, data),
+      },
+    );
+
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        await Clipboard.setData(
+          ClipboardData(text: _inviteMessage(inviteId, data)),
+        );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t(
+                'تعذر فتح البريد. تم نسخ الدعوة للمشاركة اليدوية.',
+                'Could not open mail. The invitation was copied for manual sharing.',
+              ),
+            ),
+          ),
+        );
+        await DedaBackend.markAdminInvitationShared(
+          inviteId: inviteId,
+          channel: 'copy_fallback',
+        );
+        return;
+      }
+      await DedaBackend.markAdminInvitationShared(
+        inviteId: inviteId,
+        channel: 'email_draft',
+      );
+    } catch (_) {
+      await Clipboard.setData(
+        ClipboardData(text: _inviteMessage(inviteId, data)),
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر فتح البريد. تم نسخ الدعوة للمشاركة اليدوية.',
+              'Could not open mail. The invitation was copied for manual sharing.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copyInvite(
+    BuildContext context,
+    String inviteId,
+    Map<String, dynamic> data,
+  ) async {
+    await Clipboard.setData(
+      ClipboardData(text: _inviteMessage(inviteId, data)),
+    );
+    try {
+      await DedaBackend.markAdminInvitationShared(
+        inviteId: inviteId,
+        channel: 'copy',
+      );
+    } catch (_) {}
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          t(
+            'تم نسخ الدعوة للمشاركة.',
+            'Invitation copied for sharing.',
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showInvite(
     BuildContext context,
     String inviteId,
@@ -659,7 +783,27 @@ class DedaAdminInvitationsPage extends StatelessWidget {
           ),
         ),
         actions: [
-          FilledButton(
+          if (code.isNotEmpty)
+            TextButton.icon(
+              onPressed: () => _copyInvite(
+                context,
+                inviteId,
+                data,
+              ),
+              icon: const Icon(Icons.copy_all_outlined),
+              label: Text(t('نسخ للمشاركة', 'Copy to share')),
+            ),
+          if (code.isNotEmpty)
+            FilledButton.icon(
+              onPressed: () => _sendInvite(
+                context,
+                inviteId,
+                data,
+              ),
+              icon: const Icon(Icons.outgoing_mail),
+              label: Text(t('إرسال الدعوة', 'Send invitation')),
+            ),
+          TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(t('تم', 'Done')),
           ),
