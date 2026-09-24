@@ -10412,6 +10412,10 @@ class _MapReadyPageState extends State<MapReadyPage> {
       final results = <PlaceInfo>[];
       final seen = <String>{};
       for (final place in <PlaceInfo>[...publicResults, ...dedaNameResults]) {
+        // Never auto-route to a provider result whose actual name does not
+        // contain the searched text. Address-only/fuzzy hits caused the
+        // long-distance wrong destinations seen during device testing.
+        if (_mapSearchRelevance(place, needle) >= 20) continue;
         final key =
             '${place.name.toLowerCase()}|'
             '${place.location.latitude.toStringAsFixed(5)}|'
