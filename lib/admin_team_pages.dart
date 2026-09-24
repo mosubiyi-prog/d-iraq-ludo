@@ -2351,6 +2351,467 @@ class _DedaAdminUsersPageState extends State<DedaAdminUsersPage> {
 }
 
 
+class DedaPlaceDeletionRequestsPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaPlaceDeletionRequestsPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  @override
+  State<DedaPlaceDeletionRequestsPage> createState() =>
+      _DedaPlaceDeletionRequestsPageState();
+}
+
+class _DedaPlaceDeletionRequestsPageState
+    extends State<DedaPlaceDeletionRequestsPage> {
+  String _filter = 'all';
+
+  bool get ar => widget.isArabic;
+  String t(String a, String e) => ar ? a : e;
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'new':
+        return t('جديد', 'New');
+      case 'reviewing':
+        return t('قيد المراجعة', 'Under review');
+      case 'deleted':
+        return t('تم حذف المكان', 'Place deleted');
+      case 'cancelled':
+      case 'rejected':
+        return t('مغلق / مرفوض', 'Closed / rejected');
+      default:
+        return status;
+    }
+  }
+
+  bool _matches(String status) {
+    if (_filter == 'all') return true;
+    if (_filter == 'closed') {
+      return status == 'cancelled' || status == 'rejected';
+    }
+    return status == _filter;
+  }
+
+  Future<String?> _askNote(String title, {required bool destructive}) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          minLines: 2,
+          maxLines: 5,
+          decoration: InputDecoration(
+            labelText: t(
+              destructive
+                  ? 'ملاحظة الحذف (اختيارية)'
+                  : 'ملاحظة الإدارة (اختيارية)',
+              destructive
+                  ? 'Deletion note (optional)'
+                  : 'Administration note (optional)',
+            ),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            style: destructive
+                ? FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  )
+                : null,
+            child: Text(
+              destructive
+                  ? t('تأكيد حذف المكان', 'Confirm place deletion')
+                  : t('تأكيد', 'Confirm'),
+            ),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _changeStatus(
+    String requestId,
+    String status,
+  ) async {
+    final destructive = status == 'deleted';
+    final title = destructive
+        ? t(
+            'اعتماد طلب حذف المكان',
+            'Approve place deletion request',
+          )
+        : status == 'reviewing'
+            ? t('بدء مراجعة الطلب', 'Start request review')
+            : t('رفض / إغلاق الطلب', 'Reject / close request');
+
+    if (destructive) {
+      final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              title: Text(title),
+              content: Text(
+                t(
+                  'سيُحذف المكان من الخريطة ويُنقل إلى محذوفات المدير العام مع بقاء سجل الطلب محفوظًا.',
+                  'The place will be removed from the map and moved to general-manager trash while the request record remains saved.',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(t('إلغاء', 'Cancel')),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB3261E),
+                  ),
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: Text(t('متابعة', 'Continue')),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed) return;
+    }
+
+    final note = await _askNote(title, destructive: destructive);
+    if (note == null) return;
+
+    try {
+      await DedaBackend.updatePlaceDeletionRequestStatus(
+        requestId: requestId,
+        status: status,
+        note: note,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            status == 'deleted'
+                ? t(
+                    'تم حذف المكان ونقل سجل المكان إلى محذوفات المدير العام.',
+                    'The place was deleted and its record moved to general-manager trash.',
+                  )
+                : t('تم تحديث حالة الطلب.', 'Request status updated.'),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaFriendlyAdminError(ar, error))),
+      );
+    }
+  }
+
+  Widget _filterChip(String value, String arLabel, String enLabel) {
+    return ChoiceChip(
+      selected: _filter == value,
+      selectedColor: const Color(0xFFDDEDDD),
+      label: Text(t(arLabel, enLabel)),
+      onSelected: (_) => setState(() => _filter = value),
+    );
+  }
+
+  Widget _detail(String label, dynamic value, {bool ltr = false}) {
+    final valueText = value?.toString().trim() ?? '';
+    if (valueText.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          Expanded(
+            child: Directionality(
+              textDirection: ltr ? TextDirection.ltr : Directionality.of(context),
+              child: Text(valueText),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            t('طلبات حذف الأماكن', 'Place deletion requests'),
+          ),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.placeDeletionRequestsForAdmin(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                t(
+                  'تعذر تحميل طلبات حذف الأماكن.',
+                  'Could not load place deletion requests.',
+                ),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs.where((doc) {
+            final status = (doc.data()['status'] ?? 'new').toString();
+            return _matches(status);
+          }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3F0),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFD8B1AA)),
+                  ),
+                  child: Text(
+                    t(
+                      'كل طلب هنا مرتبط بمعرّف المكان ورقم اعتماده. اعتماد الحذف يزيل المكان من الخريطة وينقله إلى محذوفات المدير العام.',
+                      'Every request is linked to the exact place ID and approval number. Approving deletion removes the place from the map and moves it to general-manager trash.',
+                    ),
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _filterChip('all', 'الكل', 'All'),
+                    _filterChip('new', 'جديد', 'New'),
+                    _filterChip('reviewing', 'قيد المراجعة', 'Under review'),
+                    _filterChip('deleted', 'تم الحذف', 'Deleted'),
+                    _filterChip('closed', 'مغلق/مرفوض', 'Closed/rejected'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: docs.isEmpty
+                    ? Center(
+                        child: Text(
+                          t(
+                            'لا توجد طلبات في هذا القسم.',
+                            'There are no requests in this section.',
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final doc = docs[index];
+                          final data = doc.data();
+                          final status =
+                              (data['status'] ?? 'new').toString();
+                          final placeName =
+                              (data['placeName'] ?? '').toString().trim();
+                          final approvalNumber =
+                              (data['approvalNumber'] ?? '').toString().trim();
+                          final reason =
+                              (data['reason'] ?? '').toString().trim();
+                          final latitude = data['latitude'];
+                          final longitude = data['longitude'];
+                          return Card(
+                            clipBehavior: Clip.antiAlias,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: ExpansionTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFFFE7E2),
+                                child: Icon(
+                                  Icons.location_off_outlined,
+                                  color: Color(0xFF9D4035),
+                                ),
+                              ),
+                              title: Text(
+                                placeName.isEmpty
+                                    ? t(
+                                        'طلب حذف مكان',
+                                        'Place deletion request',
+                                      )
+                                    : placeName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (approvalNumber.isNotEmpty)
+                                    Text(
+                                      t('رقم الاعتماد: ', 'Approval: ') +
+                                          approvalNumber,
+                                    ),
+                                  Text(
+                                    t('الحالة: ', 'Status: ') +
+                                        _statusLabel(status),
+                                  ),
+                                  Text(
+                                    t('التاريخ: ', 'Date: ') +
+                                        dedaAdminTimestamp(
+                                          data['createdAt'],
+                                        ),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              childrenPadding:
+                                  const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                              children: [
+                                _detail(
+                                  t('معرّف المكان', 'Place ID'),
+                                  data['placeId'],
+                                  ltr: true,
+                                ),
+                                _detail(
+                                  t('المحافظة', 'Governorate'),
+                                  data['governorate'],
+                                ),
+                                _detail(
+                                  t('العنوان', 'Address'),
+                                  data['address'],
+                                ),
+                                _detail(
+                                  t('هاتف المكان', 'Place phone'),
+                                  data['phone'],
+                                  ltr: true,
+                                ),
+                                if (latitude != null && longitude != null)
+                                  _detail(
+                                    t('الإحداثيات', 'Coordinates'),
+                                    '$latitude, $longitude',
+                                    ltr: true,
+                                  ),
+                                if (reason.isNotEmpty)
+                                  _detail(
+                                    t('سبب صاحب المكان', 'Owner reason'),
+                                    reason,
+                                  ),
+                                if ((data['reviewNote'] ?? '')
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty)
+                                  _detail(
+                                    t(
+                                      'ملاحظة الإدارة',
+                                      'Administration note',
+                                    ),
+                                    data['reviewNote'],
+                                  ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (status == 'new')
+                                      OutlinedButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'reviewing',
+                                        ),
+                                        icon: const Icon(
+                                          Icons.manage_search_outlined,
+                                        ),
+                                        label: Text(
+                                          t(
+                                            'قيد المراجعة',
+                                            'Under review',
+                                          ),
+                                        ),
+                                      ),
+                                    if (status != 'deleted' &&
+                                        status != 'rejected' &&
+                                        status != 'cancelled')
+                                      FilledButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'deleted',
+                                        ),
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor:
+                                              const Color(0xFFB3261E),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.delete_forever_outlined,
+                                        ),
+                                        label: Text(
+                                          t(
+                                            'اعتماد وحذف المكان',
+                                            'Approve & delete place',
+                                          ),
+                                        ),
+                                      ),
+                                    if (status != 'deleted' &&
+                                        status != 'rejected' &&
+                                        status != 'cancelled')
+                                      OutlinedButton.icon(
+                                        onPressed: () => _changeStatus(
+                                          doc.id,
+                                          'rejected',
+                                        ),
+                                        icon: const Icon(
+                                          Icons.cancel_outlined,
+                                        ),
+                                        label: Text(
+                                          t(
+                                            'رفض / إغلاق',
+                                            'Reject / close',
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class DedaAccountDeletionRequestsPage extends StatefulWidget {
   final bool isArabic;
 

@@ -11,6 +11,19 @@ import 'package:firebase_storage/firebase_storage.dart';
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
 
+  // Keep the authenticated administrator profile warm for short navigation
+  // hops. Firestore security rules remain authoritative for every write.
+  static Map<String, dynamic>? _cachedAdminProfile;
+  static String? _cachedAdminUid;
+  static DateTime? _cachedAdminAt;
+  static const Duration _adminProfileCacheTtl = Duration(seconds: 45);
+
+  static void _clearAdminProfileCache() {
+    _cachedAdminProfile = null;
+    _cachedAdminUid = null;
+    _cachedAdminAt = null;
+  }
+
   // Build 87 review fixes: one logical account key per normalized phone.
   // Firebase anonymous UIDs may differ per device, so DEDA data also carries
   // this stable key. Phone verification can later harden ownership without
@@ -86,25 +99,40 @@ class DedaBackend {
     return permissions is Map && permissions[permission] == true;
   }
 
-  static Future<Map<String, dynamic>> currentAdminProfile() async {
+  static Future<Map<String, dynamic>> currentAdminProfile({
+    bool forceRefresh = false,
+  }) async {
     if (!isReady) throw StateError('firebase-not-ready');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) {
+      _clearAdminProfileCache();
       throw StateError('admin-not-signed-in');
+    }
+
+    final now = DateTime.now();
+    final cached = _cachedAdminProfile;
+    final cachedAt = _cachedAdminAt;
+    if (!forceRefresh &&
+        cached != null &&
+        _cachedAdminUid == user.uid &&
+        cachedAt != null &&
+        now.difference(cachedAt) <= _adminProfileCacheTtl) {
+      return Map<String, dynamic>.from(cached);
     }
 
     final ref =
         FirebaseFirestore.instance.collection('admins').doc(user.uid);
-    var snapshot = await ref.get();
-    var data = snapshot.data();
+    final snapshot = await ref.get();
+    final data = snapshot.data();
     if (!snapshot.exists ||
         data?['active'] != true ||
         normalizeAdminStatus(data) != 'active') {
+      _clearAdminProfileCache();
       throw StateError('admin-not-authorized');
     }
 
     final role = normalizeAdminRole(data?['role'] ?? data?['jobTitle']);
-    return <String, dynamic>{
+    final profile = <String, dynamic>{
       ...?data,
       'uid': user.uid,
       'email': user.email ?? data?['email'] ?? '',
@@ -115,6 +143,10 @@ class DedaBackend {
       'status': normalizeAdminStatus(data),
       'roleNormalized': role,
     };
+    _cachedAdminProfile = Map<String, dynamic>.from(profile);
+    _cachedAdminUid = user.uid;
+    _cachedAdminAt = now;
+    return Map<String, dynamic>.from(profile);
   }
 
   static Future<Map<String, String>> _adminIdentity() async {
@@ -434,6 +466,87 @@ class DedaBackend {
   }
 
 
+  static Future<Map<String, dynamic>?> ownerPlaceDeletionRequestForPlace(
+    String placeId,
+  ) async {
+    final cleanId = placeId.trim();
+    if (cleanId.isEmpty) return null;
+    final user = await _ensurePublicUser();
+    final accountKey = await _currentAccountKey(user);
+    final snapshot = await FirebaseFirestore.instance
+        .collection('place_deletion_requests')
+        .doc(cleanId)
+        .get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return null;
+    final sameOwner = data['requesterUid'] == user.uid ||
+        data['accountKey']?.toString() == accountKey;
+    if (!sameOwner) return null;
+    return <String, dynamic>{'id': snapshot.id, ...data};
+  }
+
+  static Future<String> submitPlaceDeletionRequest({
+    required String placeId,
+    String reason = '',
+  }) async {
+    final cleanId = placeId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('place-id-required');
+
+    final user = await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final accountKey = await _currentAccountKey(user);
+    final placeRef = firestore.collection('published_places').doc(cleanId);
+    final placeSnapshot = await placeRef.get();
+    final place = placeSnapshot.data();
+    if (!placeSnapshot.exists || place == null) {
+      throw StateError('published-place-not-found');
+    }
+
+    final sameOwner = place['ownerUid'] == user.uid ||
+        place['accountKey']?.toString() == accountKey;
+    if (!sameOwner) throw StateError('not-place-owner');
+
+    final requestRef =
+        firestore.collection('place_deletion_requests').doc(cleanId);
+    final existing = await requestRef.get();
+    if (existing.exists && existing.data() != null) {
+      final status = (existing.data()!['status'] ?? '').toString();
+      if (status == 'new' || status == 'reviewing') {
+        return requestRef.id;
+      }
+      if (status == 'deleted') {
+        throw StateError('place-already-deleted');
+      }
+      if (status == 'rejected' || status == 'cancelled') {
+        await requestRef.update(<String, dynamic>{
+          'status': 'new',
+          'reason': reason.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'resubmittedAt': FieldValue.serverTimestamp(),
+        });
+        return requestRef.id;
+      }
+    }
+
+    await requestRef.set(<String, dynamic>{
+      'requesterUid': user.uid,
+      'accountKey': accountKey,
+      'placeId': cleanId,
+      'placeName': (place['placeName'] ?? place['name'] ?? '').toString(),
+      'approvalNumber': (place['approvalNumber'] ?? '').toString(),
+      'governorate': (place['governorate'] ?? '').toString(),
+      'address': (place['address'] ?? '').toString(),
+      'phone': (place['phone'] ?? '').toString(),
+      'latitude': place['latitude'],
+      'longitude': place['longitude'],
+      'reason': reason.trim(),
+      'status': 'new',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return requestRef.id;
+  }
+
   static int _hazardLifetimeHours(String type) {
     switch (type) {
       case 'congestion':
@@ -569,6 +682,7 @@ class DedaBackend {
     String displayName = '',
   }) async {
     if (!isReady) throw StateError('firebase-not-ready');
+    _clearAdminProfileCache();
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
@@ -639,6 +753,7 @@ class DedaBackend {
       'displayName': cleanName,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    _clearAdminProfileCache();
 
     await _writeAdminAudit(
       'admin_display_name_updated',
@@ -1711,6 +1826,106 @@ class DedaBackend {
   }
 
   static Stream<QuerySnapshot<Map<String, dynamic>>>
+      placeDeletionRequestsForAdmin() {
+    return FirebaseFirestore.instance
+        .collection('place_deletion_requests')
+        .orderBy('updatedAt', descending: true)
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<void> updatePlaceDeletionRequestStatus({
+    required String requestId,
+    required String status,
+    String note = '',
+  }) async {
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    if (!<String>{'reviewing', 'deleted', 'rejected', 'cancelled'}
+        .contains(status)) {
+      throw ArgumentError('invalid-place-deletion-status');
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    final requestRef =
+        firestore.collection('place_deletion_requests').doc(requestId);
+
+    Map<String, dynamic>? requestData;
+    if (status == 'deleted') {
+      await firestore.runTransaction((transaction) async {
+        final requestSnapshot = await transaction.get(requestRef);
+        if (!requestSnapshot.exists || requestSnapshot.data() == null) {
+          throw StateError('place-deletion-request-not-found');
+        }
+        final data = requestSnapshot.data()!;
+        requestData = Map<String, dynamic>.from(data);
+        final placeId = (data['placeId'] ?? requestId).toString().trim();
+        if (placeId.isEmpty) throw StateError('place-id-required');
+
+        final placeRef = firestore.collection('published_places').doc(placeId);
+        final trashRef = firestore.collection('admin_trash_places').doc(placeId);
+        final placeSnapshot = await transaction.get(placeRef);
+        if (placeSnapshot.exists && placeSnapshot.data() != null) {
+          final place = placeSnapshot.data()!;
+          transaction.set(trashRef, <String, dynamic>{
+            ...place,
+            'originalId': placeId,
+            'trashKind': 'owner_requested_place_deletion',
+            'deletedFromCollection': 'published_places',
+            'deletionRequestId': requestId,
+            'deletedAt': FieldValue.serverTimestamp(),
+            'deletedByUid': actor['uid'].toString(),
+            'deletedByName': actor['displayName'].toString(),
+            'deletedByRole': normalizeAdminRole(actor['role']),
+          });
+          transaction.delete(placeRef);
+        }
+
+        transaction.update(requestRef, <String, dynamic>{
+          'status': 'deleted',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'reviewedByUid': actor['uid'].toString(),
+          'reviewedByName': actor['displayName'].toString(),
+          'reviewedByRole': normalizeAdminRole(actor['role']),
+          'reviewNote': note.trim(),
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } else {
+      final snapshot = await requestRef.get();
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('place-deletion-request-not-found');
+      }
+      requestData = Map<String, dynamic>.from(snapshot.data()!);
+      await requestRef.update(<String, dynamic>{
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedByUid': actor['uid'].toString(),
+        'reviewedByName': actor['displayName'].toString(),
+        'reviewedByRole': normalizeAdminRole(actor['role']),
+        'reviewNote': note.trim(),
+        if (status == 'rejected' || status == 'cancelled')
+          'closedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await _writeAdminAudit(
+      'place_deletion_status_changed',
+      details: <String, dynamic>{
+        'requestId': requestId,
+        'placeId': requestData?['placeId'],
+        'placeName': requestData?['placeName'],
+        'approvalNumber': requestData?['approvalNumber'],
+        'requesterUid': requestData?['requesterUid'],
+        'newStatus': status,
+        'note': note.trim(),
+      },
+    );
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
       accountDeletionRequests() {
     return FirebaseFirestore.instance
         .collection('account_deletion_requests')
@@ -2339,6 +2554,7 @@ class DedaBackend {
       'firstLoginCompletedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    _clearAdminProfileCache();
   }
 
   static Future<void> deleteRoadHazardAsAdmin({
@@ -2365,6 +2581,7 @@ class DedaBackend {
     try {
       await _writeAdminAudit('admin_signed_out');
     } catch (_) {}
+    _clearAdminProfileCache();
     await FirebaseAuth.instance.signOut();
   }
 }

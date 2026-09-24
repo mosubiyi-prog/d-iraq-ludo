@@ -647,9 +647,11 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     try {
-      final profile = await DedaBackend.currentAdminProfile();
+      final profile = await DedaBackend.currentAdminProfile(
+        forceRefresh: forceRefresh,
+      );
       if (!mounted) return;
       setState(() {
         _profile = profile;
@@ -746,7 +748,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
         actions: [
           IconButton(
             tooltip: t('تحديث', 'Refresh'),
-            onPressed: _load,
+            onPressed: () => _load(forceRefresh: true),
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
@@ -769,7 +771,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                     ),
             )
           : RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: () => _load(forceRefresh: true),
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -1006,6 +1008,26 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           subtitle: t('قراءة فقط', 'Read only'),
                           onTap: () => _open(
                             DedaAdminUsersPage(isArabic: ar),
+                          ),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.location_off_outlined,
+                          accentColor: const Color(0xFF9D4035),
+                          backgroundColor: const Color(0xD9FBEDEA),
+                          title: t(
+                            'طلبات حذف الأماكن',
+                            'Place deletion requests',
+                          ),
+                          subtitle: t(
+                            'طلبات أصحاب الأماكن المرتبطة بالمكان المعتمد',
+                            'Owner requests linked to approved places',
+                          ),
+                          onTap: () => _open(
+                            DedaPlaceDeletionRequestsPage(
+                              isArabic: ar,
+                            ),
                           ),
                         ),
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
@@ -1254,6 +1276,7 @@ class _RequestList extends StatefulWidget {
 class _RequestListState extends State<_RequestList> {
   String? _expandedId;
   String _section = 'current';
+  final Set<String> _optimisticallyHiddenIds = <String>{};
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -1676,10 +1699,16 @@ class _RequestListState extends State<_RequestList> {
     if (!_isGeneralManager) return;
     final confirmed = await _confirmSupportDelete(count: 1);
     if (!confirmed) return;
+    setState(() {
+      _expandedId = null;
+      _optimisticallyHiddenIds.add(id);
+    });
     try {
       await DedaBackend.trashSupportRequest(id);
       if (!mounted) return;
-      setState(() => _expandedId = null);
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _optimisticallyHiddenIds.remove(id));
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1692,6 +1721,7 @@ class _RequestListState extends State<_RequestList> {
       );
     } catch (_) {
       if (!mounted) return;
+      setState(() => _optimisticallyHiddenIds.remove(id));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1711,12 +1741,19 @@ class _RequestListState extends State<_RequestList> {
     if (!_isGeneralManager || documents.isEmpty) return;
     final confirmed = await _confirmSupportDelete(count: documents.length);
     if (!confirmed) return;
+    final ids = documents.map((doc) => doc.id).toSet();
+    setState(() {
+      _expandedId = null;
+      _optimisticallyHiddenIds.addAll(ids);
+    });
     try {
-      await DedaBackend.trashSupportRequests(
-        documents.map((doc) => doc.id).toList(),
-      );
+      await DedaBackend.trashSupportRequests(ids.toList());
       if (!mounted) return;
-      setState(() => _expandedId = null);
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() => _optimisticallyHiddenIds.removeAll(ids));
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1729,6 +1766,7 @@ class _RequestListState extends State<_RequestList> {
       );
     } catch (_) {
       if (!mounted) return;
+      setState(() => _optimisticallyHiddenIds.removeAll(ids));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1776,10 +1814,16 @@ class _RequestListState extends State<_RequestList> {
     if (!_isGeneralManager) return;
     final confirmed = await _confirmPlaceRequestDelete();
     if (!confirmed) return;
+    setState(() {
+      _expandedId = null;
+      _optimisticallyHiddenIds.add(id);
+    });
     try {
       await DedaBackend.trashPlaceRequest(id);
       if (!mounted) return;
-      setState(() => _expandedId = null);
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _optimisticallyHiddenIds.remove(id));
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1792,6 +1836,7 @@ class _RequestListState extends State<_RequestList> {
       );
     } catch (_) {
       if (!mounted) return;
+      setState(() => _optimisticallyHiddenIds.remove(id));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2465,6 +2510,7 @@ class _RequestListState extends State<_RequestList> {
 
         final allDocuments = snapshot.data!.docs
             .where(_visibleForCurrentAdmin)
+            .where((doc) => !_optimisticallyHiddenIds.contains(doc.id))
             .toList()
           ..sort((a, b) {
             final aCreated = a.data()['createdAt'];

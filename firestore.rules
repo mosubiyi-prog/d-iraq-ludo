@@ -491,6 +491,85 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /place_deletion_requests/{requestId} {
+      allow create: if signedIn()
+        && requestId == request.resource.data.placeId
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.accountKey is string
+        && request.resource.data.placeId is string
+        && request.resource.data.placeName is string
+        && request.resource.data.approvalNumber is string
+        && request.resource.data.governorate is string
+        && request.resource.data.address is string
+        && request.resource.data.phone is string
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.reason is string
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && exists(
+          /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+        )
+        && (
+          get(
+            /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+          ).data.ownerUid == request.auth.uid
+          || sameAccount(
+            get(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            ).data.accountKey
+          )
+        )
+        && request.resource.data.keys().hasOnly([
+          'requesterUid', 'accountKey', 'placeId', 'placeName',
+          'approvalNumber', 'governorate', 'address', 'phone',
+          'latitude', 'longitude', 'reason', 'status',
+          'createdAt', 'updatedAt'
+        ]);
+
+      allow read: if isGeneralManager()
+        || (
+          signedIn()
+          && (
+            resource.data.requesterUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+        );
+
+      allow update: if (
+          isGeneralManager()
+          && request.resource.data.status in [
+            'reviewing', 'deleted', 'rejected', 'cancelled'
+          ]
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.reviewedByUid == request.auth.uid
+          && request.resource.data.reviewedByName is string
+          && request.resource.data.reviewedByRole is string
+          && request.resource.data.reviewNote is string
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedByUid', 'reviewedByName',
+            'reviewedByRole', 'reviewNote', 'completedAt', 'closedAt'
+          ])
+        )
+        || (
+          signedIn()
+          && (
+            resource.data.requesterUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+          && resource.data.status in ['rejected', 'cancelled']
+          && request.resource.data.status == 'new'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.resubmittedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'reason', 'updatedAt', 'resubmittedAt'
+          ])
+        );
+
+      allow delete: if false;
+    }
+
     match /account_deletion_requests/{requestId} {
       allow create: if signedIn()
         && request.resource.data.requesterUid == request.auth.uid
