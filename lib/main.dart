@@ -2547,7 +2547,14 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       if (_placeId != null && _placeId!.isNotEmpty) {
         try {
           final deletion =
-              await DedaBackend.ownerPlaceDeletionRequestForPlace(_placeId!);
+              await DedaBackend.ownerPlaceDeletionRequestForPlace(
+            _placeId!,
+            accountKeyOverride: DedaBackend.accountKeyForPhone(
+              DedaPreferences.accountPhone.isNotEmpty
+                  ? DedaPreferences.accountPhone
+                  : DedaPreferences.phone,
+            ),
+          );
           if (deletion != null) {
             _deletionRequestId = deletion['id']?.toString();
             _deletionRequestStatus = deletion['status']?.toString();
@@ -2852,6 +2859,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       final requestId = await DedaBackend.submitPlaceDeletionRequest(
         placeId: _placeId!,
         reason: reason,
+        accountKeyOverride: DedaBackend.accountKeyForPhone(
+          DedaPreferences.accountPhone.isNotEmpty
+              ? DedaPreferences.accountPhone
+              : DedaPreferences.phone,
+        ),
       );
       if (!mounted) return;
       setState(() {
