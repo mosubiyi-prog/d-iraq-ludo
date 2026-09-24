@@ -8073,6 +8073,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         ...currentRoute.points,
       widget.destination.location,
     ];
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || coordinates.length < 2) return;
@@ -8081,8 +8083,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           CameraFit.coordinates(
             coordinates: coordinates,
             padding: navigation
-                ? const EdgeInsets.fromLTRB(34, 105, 34, 150)
-                : const EdgeInsets.fromLTRB(44, 80, 44, 285),
+                ? (isLandscape
+                    ? const EdgeInsets.fromLTRB(80, 62, 80, 82)
+                    : const EdgeInsets.fromLTRB(34, 105, 34, 150))
+                : (isLandscape
+                    ? const EdgeInsets.fromLTRB(80, 44, 80, 86)
+                    : const EdgeInsets.fromLTRB(44, 80, 44, 285)),
             maxZoom: navigation ? 16 : 17,
           ),
         );
@@ -9054,15 +9060,23 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   Widget _buildTurnInstructionBanner(DedaRouteStep step) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     return Material(
       color: Colors.white.withOpacity(0.92),
       elevation: 2,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(isLandscape ? 10 : 12),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 48, maxHeight: 64),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        constraints: BoxConstraints(
+          minHeight: isLandscape ? 38 : 48,
+          maxHeight: isLandscape ? 48 : 64,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: isLandscape ? 6 : 8,
+          vertical: isLandscape ? 3 : 5,
+        ),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(isLandscape ? 10 : 12),
           border: Border.all(
             color: Colors.white.withOpacity(0.60),
           ),
@@ -9072,10 +9086,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           children: [
             Icon(
               directionIcon(step),
-              size: 24,
+              size: isLandscape ? 20 : 24,
               color: const Color(0xFF17652F),
             ),
-            const SizedBox(width: 5),
+            SizedBox(width: isLandscape ? 4 : 5),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -9086,8 +9100,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                     textAlign: TextAlign.right,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
+                    style: TextStyle(
+                      fontSize: isLandscape ? 11 : 12.5,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -9104,9 +9118,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 9.5,
-                            color: Color(0xFF4E5B52),
+                          style: TextStyle(
+                            fontSize: isLandscape ? 8.5 : 9.5,
+                            color: const Color(0xFF4E5B52),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -9676,8 +9690,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             }),
       Marker(
         point: destinationPoint,
-        width: 60,
-        height: 58,
+        width: 68,
+        height: 64,
         alignment: Alignment.bottomCenter,
         child: const _DedaIraqDestinationFlag(),
       ),
@@ -9753,8 +9767,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                             ? null
                             : CameraFit.coordinates(
                                 coordinates: fitCoordinates,
-                                padding:
-                                    const EdgeInsets.fromLTRB(44, 70, 44, 265),
+                                padding: isLandscape
+                                    ? const EdgeInsets.fromLTRB(80, 44, 80, 86)
+                                    : const EdgeInsets.fromLTRB(44, 70, 44, 265),
                                 maxZoom: 17,
                               ),
                       ),
@@ -9795,7 +9810,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 ),
               ),
             ),
-            if (!(isLandscape && tripStarted))
+            if (!(isLandscape && tripStarted) &&
+                !(tripStarted && _mapFullscreen))
               Positioned(
                 top: 12,
                 right: 12,
@@ -9842,7 +9858,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   ),
                 ),
               ),
-            if (!(isLandscape && tripStarted))
+            if (!(isLandscape && tripStarted) &&
+                !(tripStarted && _mapFullscreen))
               Positioned(
                 top: 12,
                 left: 12,
@@ -9857,7 +9874,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   ),
                 ),
               ),
-            if (!(isLandscape && tripStarted))
+            if (!(isLandscape && tripStarted) &&
+                !(tripStarted && _mapFullscreen))
               Positioned(
                 top: 62,
                 left: 12,
@@ -9875,9 +9893,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: 12,
-                left: isLandscape && tripStarted ? 90 : 68,
-                right: isLandscape && tripStarted ? 90 : 118,
+                top: isLandscape && tripStarted ? 8 : 12,
+                left: isLandscape && tripStarted ? 140 : 68,
+                right: isLandscape && tripStarted ? 140 : 118,
                 child: _buildTurnInstructionBanner(firstUsefulStep!),
               ),
             if (tripStarted && !isLandscape)
@@ -9885,6 +9903,24 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 top: 118,
                 left: 12,
                 child: _buildSpeedIndicator(),
+              ),
+            if (tripStarted && !isLandscape && _mapFullscreen)
+              Positioned(
+                top: 12,
+                right: 10,
+                child: Material(
+                  color: Colors.white.withOpacity(0.92),
+                  elevation: 4,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: dedaText(
+                      'الخروج من ملء الشاشة',
+                      'Exit fullscreen',
+                    ),
+                    onPressed: _toggleMapFullscreen,
+                    icon: const Icon(Icons.fullscreen_exit),
+                  ),
+                ),
               ),
             if (tripStarted && isLandscape)
               Positioned(
@@ -10110,32 +10146,32 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 60,
-      height: 58,
+      width: 68,
+      height: 64,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           const Positioned(
-            left: 29,
-            top: 5,
-            bottom: 4,
+            left: 33,
+            top: 4,
+            bottom: 1,
             width: 3,
-            child: ColoredBox(color: Color(0xFF3F4742)),
+            child: ColoredBox(color: Color(0xFF353B37)),
           ),
           Positioned(
-            left: 31,
-            top: 5,
-            width: 28,
-            height: 24,
+            left: 36,
+            top: 4,
+            width: 34,
+            height: 27,
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
                   color: const Color(0xFF202421),
-                  width: 1,
+                  width: 1.1,
                 ),
                 boxShadow: const [
                   BoxShadow(
-                    blurRadius: 2,
+                    blurRadius: 2.5,
                     offset: Offset(0, 1),
                     color: Colors.black26,
                   ),
@@ -10155,7 +10191,7 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
                           maxLines: 1,
                           textDirection: TextDirection.rtl,
                           style: TextStyle(
-                            fontSize: 4.4,
+                            fontSize: 5.0,
                             height: 1,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF007A3D),
@@ -10165,20 +10201,21 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
                     ),
                   ),
                   const Expanded(
-                    child: ColoredBox(color: Color(0xFF101010)),
+                    child: ColoredBox(color: Color(0xFF111111)),
                   ),
                 ],
               ),
             ),
           ),
-          Positioned(
-            left: 25,
+          // The bottom-center of this base is the exact destination coordinate.
+          const Positioned(
+            left: 27,
             bottom: 0,
-            width: 11,
+            width: 14,
             height: 5,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xFF3F4742),
+                color: Color(0xFF353B37),
                 borderRadius: BorderRadius.all(Radius.circular(3)),
               ),
             ),
@@ -10877,23 +10914,32 @@ class _MapReadyPageState extends State<MapReadyPage> {
               ),
             ),
             Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
+              left: 28,
+              right: 28,
+              bottom: 8,
               child: IgnorePointer(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 8,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(14),
+                    color: Colors.white.withOpacity(0.88),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-              dedaText('اضغط مطولًا على الخريطة لاختيار وجهة مباشرة', 'Long-press the map to choose a destination'),
+                    dedaText(
+                      'اضغط مطولًا على الخريطة لاختيار وجهة مباشرة',
+                      'Long-press the map to choose a destination',
+                    ),
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
