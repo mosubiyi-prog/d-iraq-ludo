@@ -1145,20 +1145,21 @@ class _AdminRequestsPage extends StatelessWidget {
               : (isArabic ? 'طلبات الأماكن' : 'Place requests'),
         ),
         actions: [
-          if (isSupport &&
-              DedaBackend.normalizeAdminRole(adminProfile['role']) ==
-                  'general_manager')
+          if (DedaBackend.normalizeAdminRole(adminProfile['role']) ==
+              'general_manager')
             IconButton(
-              tooltip: isArabic
-                  ? 'محذوفات الدعم'
-                  : 'Support trash',
+              tooltip: isSupport
+                  ? (isArabic ? 'محذوفات الدعم' : 'Support trash')
+                  : (isArabic
+                      ? 'محذوفات المدير العام'
+                      : 'General-manager trash'),
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => DedaSupportTrashPage(
-                      isArabic: isArabic,
-                    ),
+                    builder: (_) => isSupport
+                        ? DedaSupportTrashPage(isArabic: isArabic)
+                        : DedaPlaceRequestTrashPage(isArabic: isArabic),
                   ),
                 );
               },
@@ -1741,6 +1742,69 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
+  Future<bool> _confirmPlaceRequestDelete() async {
+    return (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(t('حذف طلب المكان', 'Delete place request')),
+            content: Text(
+              t(
+                'سينتقل هذا الطلب إلى محذوفات المدير العام فقط، وسيختفي فورًا عن جميع المعاونين والموظفين والوكلاء.',
+                'This request will move to general-manager trash only and will immediately disappear from deputies, employees, and province agents.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(t('تأكيد الحذف', 'Confirm delete')),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+  }
+
+  Future<void> _deletePlaceRequest(String id) async {
+    if (!_isGeneralManager) return;
+    final confirmed = await _confirmPlaceRequestDelete();
+    if (!confirmed) return;
+    try {
+      await DedaBackend.trashPlaceRequest(id);
+      if (!mounted) return;
+      setState(() => _expandedId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم نقل الطلب إلى محذوفات المدير العام.',
+              'Request moved to general-manager trash.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر حذف الطلب الآن.',
+              'Could not delete the request now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _supportActions({required String status, required String id}) {
     if (!_can('supportReply')) {
       return Align(
@@ -2310,6 +2374,15 @@ class _RequestListState extends State<_RequestList> {
             arLabel: 'إعادة للمراجعة',
             enLabel: 'Return to review',
           ),
+          if (_isGeneralManager)
+            OutlinedButton.icon(
+              onPressed: () => _deletePlaceRequest(id),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB3261E),
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: Text(t('حذف', 'Delete')),
+            ),
         ],
       );
     }
@@ -2361,6 +2434,15 @@ class _RequestListState extends State<_RequestList> {
             arLabel: 'رفض',
             enLabel: 'Reject',
             selectedColor: const Color(0xFFB3261E),
+          ),
+        if (_isGeneralManager)
+          OutlinedButton.icon(
+            onPressed: () => _deletePlaceRequest(id),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB3261E),
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: Text(t('حذف', 'Delete')),
           ),
       ],
     );
@@ -2620,6 +2702,200 @@ class _RequestListState extends State<_RequestList> {
           ],
         );
       },
+    );
+  }
+}
+
+
+class DedaPlaceRequestTrashPage extends StatelessWidget {
+  final bool isArabic;
+
+  const DedaPlaceRequestTrashPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  String t(String ar, String en) => isArabic ? ar : en;
+  String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  String _formatTimestamp(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) date = value.toDate();
+    if (value is DateTime) date = value;
+    if (date == null) return '—';
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return t('معتمد', 'Approved');
+      case 'rejected':
+        return t('مرفوض', 'Rejected');
+      case 'reviewing':
+        return t('قيد المراجعة', 'Under review');
+      case 'needs_changes':
+        return t('يحتاج تعديل', 'Needs changes');
+      case 'pending':
+        return t('قيد الانتظار', 'Pending');
+      default:
+        return status.isEmpty ? '—' : status;
+    }
+  }
+
+  Future<void> _restore(BuildContext context, String id) async {
+    final confirmed = (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(t('استرجاع الطلب', 'Restore request')),
+            content: Text(
+              t(
+                'سيعود الطلب إلى قسم طلبات الأماكن بالحالة التي كان عليها قبل الحذف.',
+                'The request will return to Place requests with its previous status.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                icon: const Icon(Icons.restore),
+                label: Text(t('استرجاع', 'Restore')),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+    if (!confirmed) return;
+    try {
+      await DedaBackend.restoreDeletedPlaceRequest(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('تم استرجاع الطلب.', 'Request restored.'))),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تعذر استرجاع الطلب الآن.', 'Could not restore the request now.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          t(
+            'محذوفات المدير العام • طلبات الأماكن',
+            'General-manager trash • Place requests',
+          ),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.deletedPlaceRequestsForAdmin(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(t('تعذر تحميل المحذوفات.', 'Could not load trash.')),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return Center(
+              child: Text(
+                t('لا توجد طلبات أماكن محذوفة.', 'No deleted place requests.'),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: docs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data();
+              final name = _text(data['placeName'] ?? data['name']);
+              final phone = _text(data['phone']);
+              final status = _statusLabel(_text(data['status']));
+              final deletedBy = _text(data['deletedByName']);
+              final deletedAt = _formatTimestamp(data['deletedAt']);
+
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.delete_sweep_outlined,
+                            color: Color(0xFFB3261E),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              name.isEmpty
+                                  ? t('طلب مكان محذوف', 'Deleted place request')
+                                  : name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Chip(label: Text(status)),
+                        ],
+                      ),
+                      if (phone.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(phone, textAlign: TextAlign.left),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        t(
+                          'حذف بواسطة: ${deletedBy.isEmpty ? '—' : deletedBy} • $deletedAt',
+                          'Deleted by: ${deletedBy.isEmpty ? '—' : deletedBy} • $deletedAt',
+                        ),
+                        style: const TextStyle(
+                          color: Color(0xFF5F665F),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _restore(context, doc.id),
+                          icon: const Icon(Icons.restore),
+                          label: Text(t('استرجاع', 'Restore')),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
