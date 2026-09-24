@@ -11,6 +11,7 @@ on:
       - admin-note21-work-2026-09-24
       - build118-admin-privacy-delete-work-2026-09-24
       - map-nav-9-points-work-2026-09-24
+      - priority-3-fixes-work-2026-09-24
 
 jobs:
   build:
