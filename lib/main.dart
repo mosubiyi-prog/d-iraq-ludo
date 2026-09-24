@@ -2498,8 +2498,14 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                 await DedaBackend.ownerRequestById(_deletionRequestId!);
           } catch (_) {}
         }
-        deletionRequest ??=
-            await DedaBackend.ownerLatestDeletionRequest(_placeId!);
+        if (deletionRequest == null) {
+          try {
+            deletionRequest =
+                await DedaBackend.ownerLatestDeletionRequest(_placeId!);
+          } catch (_) {
+            // A temporary network issue must not break Manage my place.
+          }
+        }
         if (deletionRequest != null &&
             (deletionRequest['requestType'] ?? '').toString() == 'delete') {
           _deletionRequestId = deletionRequest['id']?.toString();
