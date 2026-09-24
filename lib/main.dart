@@ -7006,9 +7006,8 @@ class DedaRouteService {
     required LatLng destination,
     DedaTravelMode travelMode = DedaTravelMode.car,
   }) async {
-    // Motorcycle and truck routes must remain mode-specific. If Valhalla
-    // cannot calculate one of those profiles, do not silently replace it
-    // with a normal car route because that would give the user a false route.
+    // Motorcycle and truck stay mode-specific because the public OSRM
+    // endpoints used below do not provide equivalent profiles for them.
     if (travelMode == DedaTravelMode.motorcycle ||
         travelMode == DedaTravelMode.truck) {
       return _getValhallaRoute(
@@ -7018,9 +7017,9 @@ class DedaRouteService {
       );
     }
 
-    // Walking and car have matching public OSRM fallbacks.
+    DedaRouteResult primary;
     try {
-      return await _getValhallaRoute(
+      primary = await _getValhallaRoute(
         start: start,
         destination: destination,
         travelMode: travelMode,
@@ -7032,6 +7031,154 @@ class DedaRouteService {
         travelMode: travelMode,
       );
     }
+
+    // Do not blindly trust a route that is much longer than the direct
+    // distance, snaps far away from either endpoint, or has an implausible
+    // static average speed. Cross-check only suspicious cases so normal
+    // searches keep the existing response time.
+    if (!_routeNeedsCrossCheck(
+      primary,
+      start: start,
+      destination: destination,
+      travelMode: travelMode,
+    )) {
+      return primary;
+    }
+
+    try {
+      final alternate = await _getOsrmFallback(
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+      return _chooseSaferRoute(
+        primary,
+        alternate,
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+    } catch (_) {
+      return primary;
+    }
+  }
+
+  double _straightRouteDistance(LatLng a, LatLng b) {
+    return Geolocator.distanceBetween(
+      a.latitude,
+      a.longitude,
+      b.latitude,
+      b.longitude,
+    );
+  }
+
+  double _routeEndpointDrift(
+    DedaRouteResult route, {
+    required LatLng start,
+    required LatLng destination,
+  }) {
+    if (route.points.length < 2) return double.infinity;
+    return _straightRouteDistance(start, route.points.first) +
+        _straightRouteDistance(destination, route.points.last);
+  }
+
+  ({double min, double max}) _reasonableStaticSpeedRange(
+    DedaTravelMode mode,
+  ) {
+    switch (mode) {
+      case DedaTravelMode.walking:
+        return (min: 2.5, max: 8.0);
+      case DedaTravelMode.motorcycle:
+        return (min: 25.0, max: 120.0);
+      case DedaTravelMode.car:
+        return (min: 30.0, max: 130.0);
+      case DedaTravelMode.truck:
+        return (min: 22.0, max: 100.0);
+    }
+  }
+
+  double _routeAverageSpeedKmh(DedaRouteResult route) {
+    if (route.durationSeconds <= 0 || route.distanceMeters <= 0) return 0;
+    return (route.distanceMeters / 1000) /
+        (route.durationSeconds / 3600);
+  }
+
+  bool _routeNeedsCrossCheck(
+    DedaRouteResult route, {
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) {
+    final straight = _straightRouteDistance(start, destination);
+    if (straight <= 250) return false;
+
+    final detourRatio = route.distanceMeters / straight;
+    final endpointDrift = _routeEndpointDrift(
+      route,
+      start: start,
+      destination: destination,
+    );
+    final averageSpeed = _routeAverageSpeedKmh(route);
+    final speedRange = _reasonableStaticSpeedRange(travelMode);
+    final speedIsSuspicious = averageSpeed > 0 &&
+        (averageSpeed < speedRange.min || averageSpeed > speedRange.max);
+
+    return detourRatio > 1.75 ||
+        endpointDrift > 1600 ||
+        speedIsSuspicious;
+  }
+
+  double _routeQualityScore(
+    DedaRouteResult route, {
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) {
+    final straight = math.max(
+      100.0,
+      _straightRouteDistance(start, destination),
+    );
+    final detourRatio = route.distanceMeters / straight;
+    final endpointPenalty =
+        _routeEndpointDrift(
+          route,
+          start: start,
+          destination: destination,
+        ) /
+        1000;
+
+    final averageSpeed = _routeAverageSpeedKmh(route);
+    final speedRange = _reasonableStaticSpeedRange(travelMode);
+    var speedPenalty = 0.0;
+    if (averageSpeed > 0 && averageSpeed < speedRange.min) {
+      speedPenalty = (speedRange.min - averageSpeed) / speedRange.min;
+    } else if (averageSpeed > speedRange.max) {
+      speedPenalty = (averageSpeed - speedRange.max) / speedRange.max;
+    }
+
+    return detourRatio + endpointPenalty * 0.75 + speedPenalty * 1.5;
+  }
+
+  DedaRouteResult _chooseSaferRoute(
+    DedaRouteResult primary,
+    DedaRouteResult alternate, {
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) {
+    final primaryScore = _routeQualityScore(
+      primary,
+      start: start,
+      destination: destination,
+      travelMode: travelMode,
+    );
+    final alternateScore = _routeQualityScore(
+      alternate,
+      start: start,
+      destination: destination,
+      travelMode: travelMode,
+    );
+    return alternateScore + 0.05 < primaryScore ? alternate : primary;
   }
 
   String _costingForMode(DedaTravelMode mode) {
@@ -7830,12 +7977,61 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   double _estimatedDurationSeconds(DedaRouteResult result) {
-    if (!result.isDirectFallback && result.durationSeconds > 0) {
-      return result.durationSeconds;
+    final fallbackSpeedMetersPerSecond = _averageSpeedKmhForMode() / 3.6;
+    final fallbackSeconds = fallbackSpeedMetersPerSecond <= 0
+        ? 0.0
+        : result.distanceMeters / fallbackSpeedMetersPerSecond;
+
+    if (result.isDirectFallback || result.durationSeconds <= 0) {
+      return fallbackSeconds;
     }
-    final speedMetersPerSecond = _averageSpeedKmhForMode() / 3.6;
-    if (speedMetersPerSecond <= 0) return 0;
-    return result.distanceMeters / speedMetersPerSecond;
+
+    final providerAverageKmh = result.distanceMeters <= 0
+        ? 0.0
+        : (result.distanceMeters / 1000) /
+              (result.durationSeconds / 3600);
+    double minReasonable;
+    double maxReasonable;
+    switch (widget.travelMode) {
+      case DedaTravelMode.walking:
+        minReasonable = 2.5;
+        maxReasonable = 8.0;
+        break;
+      case DedaTravelMode.motorcycle:
+        minReasonable = 25.0;
+        maxReasonable = 120.0;
+        break;
+      case DedaTravelMode.car:
+        minReasonable = 30.0;
+        maxReasonable = 130.0;
+        break;
+      case DedaTravelMode.truck:
+        minReasonable = 22.0;
+        maxReasonable = 100.0;
+        break;
+    }
+
+    if (providerAverageKmh < minReasonable ||
+        providerAverageKmh > maxReasonable) {
+      return fallbackSeconds;
+    }
+    return result.durationSeconds;
+  }
+
+  String formatCompactRouteDuration(double seconds) {
+    if (seconds <= 0) return '—';
+    final totalMinutes = (seconds / 60).ceil();
+    if (totalMinutes < 60) {
+      return DedaLanguageState.isArabic
+          ? '${totalMinutes}د'
+          : '${totalMinutes}m';
+    }
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    if (DedaLanguageState.isArabic) {
+      return minutes == 0 ? '${hours}س' : '${hours}س ${minutes}د';
+    }
+    return minutes == 0 ? '${hours}h' : '${hours}h ${minutes}m';
   }
 
   String get _travelEstimateNote {
@@ -7931,11 +8127,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         final heading = event.heading;
         if (heading == null || !heading.isFinite) return;
         final normalized = (heading + 360) % 360;
+        _hasCompassHeading = true;
+        _lastCompassHeadingAt = DateTime.now();
+
+        // While the user is moving, the arrow follows the actual GPS course.
+        // The phone compass is used immediately only at very low speed/still.
+        final speed = livePosition?.speed ?? 0;
+        if (speed >= 0.8) return;
         setState(() {
-          _hasCompassHeading = true;
-          _lastCompassHeadingAt = DateTime.now();
-          // Phone heading is authoritative while fresh: one degree of device
-          // rotation immediately becomes one degree of arrow rotation.
           _navigationHeading = normalized;
           _displayHeading = normalized;
         });
@@ -7947,9 +8146,13 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   double _resolvedHeading(Position position, LatLng current) {
-    if (_compassHeadingIsFresh) {
+    final gpsHeading = position.heading;
+    if (position.speed >= 0.8 &&
+        gpsHeading.isFinite &&
+        gpsHeading >= 0 &&
+        gpsHeading <= 360) {
       _hasNavigationHeading = true;
-      return _navigationHeading;
+      return gpsHeading % 360;
     }
 
     final previous = _previousLivePoint;
@@ -7958,13 +8161,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       return _bearingBetween(previous, current);
     }
 
-    final gpsHeading = position.heading;
-    if (gpsHeading.isFinite &&
-        gpsHeading >= 0 &&
-        gpsHeading <= 360 &&
-        position.speed >= 0.8) {
+    if (_compassHeadingIsFresh) {
       _hasNavigationHeading = true;
-      return gpsHeading % 360;
+      return _navigationHeading;
     }
     return _navigationHeading;
   }
@@ -8077,7 +8276,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   void _focusNavigationPosition() {
     try {
-      _mapController.move(_displayPosition ?? startPoint, 15.5);
+      final currentZoom = _currentMapZoom();
+      // Preserve useful route context when navigation starts instead of
+      // jumping abruptly to the old hard-coded 15.5 close zoom.
+      final navigationZoom = currentZoom.clamp(11.8, 14.2).toDouble();
+      _mapController.move(
+        _displayPosition ?? startPoint,
+        navigationZoom,
+      );
     } catch (_) {}
   }
 
@@ -8771,7 +8977,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             ),
             const SizedBox(width: 9),
             Text(
-              '$distance  •  ${formatRouteDuration(seconds)}',
+              '$distance  •  ${formatCompactRouteDuration(seconds)}',
               style: const TextStyle(
                 fontWeight: FontWeight.w900,
                 fontSize: 15,
@@ -9145,7 +9351,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       durationSeconds *= ratio;
     }
     final duration =
-        currentRoute == null ? '—' : formatRouteDuration(durationSeconds);
+        currentRoute == null ? '—' : formatCompactRouteDuration(durationSeconds);
     return Card(
       elevation: 8,
       shape: RoundedRectangleBorder(
@@ -9320,8 +9526,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
             }),
       Marker(
         point: destinationPoint,
-        width: 52,
-        height: 52,
+        width: 60,
+        height: 58,
+        alignment: Alignment.bottomCenter,
         child: const _DedaIraqDestinationFlag(),
       ),
       // Keep the user's live location/arrow last so it is always visible on top.
@@ -9535,9 +9742,21 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 right: isLandscape && tripStarted ? 90 : 118,
                 child: _buildTurnInstructionBanner(firstUsefulStep!),
               ),
+            if (tripStarted && !isLandscape)
+              Positioned(
+                top: 118,
+                left: 12,
+                child: _buildSpeedIndicator(),
+              ),
+            if (tripStarted && isLandscape)
+              Positioned(
+                top: 12,
+                left: 12,
+                child: _buildSpeedIndicator(),
+              ),
             if (tripStarted && _activeHazard != null)
               Positioned(
-                top: isLandscape ? 58 : 136,
+                top: isLandscape ? 78 : 188,
                 left: isLandscape ? 96 : 18,
                 right: isLandscape ? 96 : 18,
                 child: _buildHazardWarning(_activeHazard!),
@@ -9745,32 +9964,37 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The marker coordinate is at the exact center of this 52×52 box.
-    // The pole ends at that center point, so the visual flag never shifts
-    // the actual route destination.
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        const Positioned(
-          left: 25,
-          top: 6,
-          width: 2,
-          height: 20,
-          child: ColoredBox(color: Color(0xFF5B625D)),
-        ),
-        Positioned(
-          left: 26,
-          top: 3,
-          width: 25,
-          height: 18,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
+    return SizedBox(
+      width: 60,
+      height: 58,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Positioned(
+            left: 29,
+            top: 5,
+            bottom: 4,
+            width: 3,
+            child: ColoredBox(color: Color(0xFF3F4742)),
+          ),
+          Positioned(
+            left: 31,
+            top: 5,
+            width: 28,
+            height: 24,
             child: Container(
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: Colors.black.withOpacity(0.12),
-                  width: 0.5,
+                  color: const Color(0xFF202421),
+                  width: 1,
                 ),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
+                    color: Colors.black26,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -9784,37 +10008,38 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
                         child: Text(
                           'الله أكبر',
                           maxLines: 1,
+                          textDirection: TextDirection.rtl,
                           style: TextStyle(
-                            fontSize: 3.2,
+                            fontSize: 4.4,
                             height: 1,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF0B7A36),
+                            color: Color(0xFF007A3D),
                           ),
                         ),
                       ),
                     ),
                   ),
                   const Expanded(
-                    child: ColoredBox(color: Color(0xFF111111)),
+                    child: ColoredBox(color: Color(0xFF101010)),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-        Positioned(
-          left: 23.5,
-          top: 24,
-          child: Container(
-            width: 5,
-            height: 3,
-            decoration: BoxDecoration(
-              color: const Color(0xFF5B625D),
-              borderRadius: BorderRadius.circular(2),
+          Positioned(
+            left: 25,
+            bottom: 0,
+            width: 11,
+            height: 5,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFF3F4742),
+                borderRadius: BorderRadius.all(Radius.circular(3)),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -10110,16 +10335,11 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
   int _mapSearchRelevance(PlaceInfo place, String needle) {
     final name = _normalizeDedaSearchText(place.name);
-    if (name == needle) {
-      // An exact DEDA place name is authoritative. This prevents a public
-      // map result with the same text from sending the route to another city.
-      if (place.isDedaRegistered) return 0;
-      return 1;
-    }
-    if (place.isDedaRegistered && name.startsWith(needle)) return 2;
-    if (name.startsWith(needle)) return 3;
-    if (place.isDedaRegistered && name.contains(needle)) return 4;
-    if (name.contains(needle)) return 5;
+    // Search source must never decide the winner. First require the best
+    // name match, then searchInsideMap sorts equal matches by user distance.
+    if (name == needle) return 0;
+    if (name.startsWith(needle)) return 1;
+    if (name.contains(needle)) return 2;
     return 20;
   }
 
