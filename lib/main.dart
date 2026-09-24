@@ -9476,7 +9476,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (tripStarted && _activeHazard != null)
               Positioned(
-                top: isLandscape ? 58 : 62,
+                top: isLandscape ? 58 : 136,
                 left: isLandscape ? 96 : 18,
                 right: isLandscape ? 96 : 18,
                 child: _buildHazardWarning(_activeHazard!),
