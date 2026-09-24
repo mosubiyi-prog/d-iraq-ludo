@@ -7651,7 +7651,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   Future<void> _speakCurrentInstruction({bool force = false}) async {
     final step = firstUsefulStep;
     if (!tripStarted || step == null || !voiceEnabled) return;
-    final key = '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}';
+    final maneuverPoint = step.maneuverPoint;
+    final key = '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}|'
+        '${maneuverPoint?.latitude.toStringAsFixed(6)}|'
+        '${maneuverPoint?.longitude.toStringAsFixed(6)}';
     if (!force && key == _lastSpokenInstruction) return;
     _lastSpokenInstruction = key;
     final distance = formatRouteDistance(_distanceToManeuver(step));
