@@ -2569,3 +2569,274 @@ class _RequestListState extends State<_RequestList> {
     );
   }
 }
+
+
+class DedaSupportTrashPage extends StatelessWidget {
+  final bool isArabic;
+
+  const DedaSupportTrashPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  String t(String ar, String en) => isArabic ? ar : en;
+
+  String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  String _formatTimestamp(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) date = value.toDate();
+    if (value is DateTime) date = value;
+    if (date == null) return '—';
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  Future<bool> _confirm(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String action,
+    bool destructive = false,
+  }) async {
+    return (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: destructive
+                    ? FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFB3261E),
+                      )
+                    : null,
+                child: Text(action),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+  }
+
+  Future<void> _restore(BuildContext context, String id) async {
+    final ok = await _confirm(
+      context,
+      title: t('استرجاع رسالة الدعم', 'Restore support message'),
+      message: t(
+        'ستعود الرسالة إلى قسم الدعم وتظهر حسب الصلاحيات المعتمدة.',
+        'The message will return to Support and follow the normal access rules.',
+      ),
+      action: t('استرجاع', 'Restore'),
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.restoreDeletedSupportRequest(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تم استرجاع الرسالة.', 'Message restored.'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر استرجاع الرسالة الآن.',
+              'Could not restore the message now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteForever(BuildContext context, String id) async {
+    final ok = await _confirm(
+      context,
+      title: t('حذف نهائي', 'Permanent deletion'),
+      message: t(
+        'سيتم حذف هذه الرسالة نهائيًا من محذوفات المدير العام. لا يمكن التراجع بعد ذلك.',
+        'This message will be permanently removed from general-manager trash. This cannot be undone.',
+      ),
+      action: t('حذف نهائي', 'Delete forever'),
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.permanentlyDeleteSupportRequest(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تم الحذف النهائي.', 'Permanently deleted.'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر الحذف النهائي الآن.',
+              'Could not permanently delete now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          t('محذوفات الدعم • المدير العام', 'Support trash • General manager'),
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.deletedSupportRequestsForAdmin(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                t(
+                  'تعذر تحميل المحذوفات.',
+                  'Could not load trash.',
+                ),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return Center(
+              child: Text(
+                t(
+                  'لا توجد رسائل محذوفة.',
+                  'There are no deleted support messages.',
+                ),
+              ),
+            );
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: docs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final data = doc.data();
+              final name = _text(data['name']);
+              final phone = _text(data['phone']);
+              final message = _text(data['message']);
+              final deletedBy = _text(data['deletedByName']);
+              final deletedAt = _formatTimestamp(data['deletedAt']);
+
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.delete_sweep_outlined,
+                            color: Color(0xFFB3261E),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              name.isEmpty
+                                  ? t(
+                                      'رسالة دعم محذوفة',
+                                      'Deleted support message',
+                                    )
+                                  : name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (phone.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(
+                            phone,
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                      ],
+                      if (message.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          message,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        t(
+                          'حذف بواسطة: ${deletedBy.isEmpty ? '—' : deletedBy} • $deletedAt',
+                          'Deleted by: ${deletedBy.isEmpty ? '—' : deletedBy} • $deletedAt',
+                        ),
+                        style: const TextStyle(
+                          color: Color(0xFF5F665F),
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _restore(context, doc.id),
+                            icon: const Icon(Icons.restore),
+                            label: Text(t('استرجاع', 'Restore')),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _deleteForever(context, doc.id),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFB3261E),
+                            ),
+                            icon: const Icon(Icons.delete_forever_outlined),
+                            label: Text(
+                              t('حذف نهائي', 'Delete forever'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
