@@ -2860,3 +2860,536 @@ class DedaSupportTrashPage extends StatelessWidget {
     );
   }
 }
+
+
+class DedaPublishedPlacesAdminPage extends StatelessWidget {
+  final bool isArabic;
+
+  const DedaPublishedPlacesAdminPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  String t(String ar, String en) => isArabic ? ar : en;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAF2),
+        appBar: AppBar(
+          title: Text(
+            t(
+              'الأماكن المنشورة • المدير العام',
+              'Published places • General manager',
+            ),
+          ),
+          bottom: TabBar(
+            tabs: [
+              Tab(text: t('على الخريطة', 'On map')),
+              Tab(text: t('المخفية', 'Hidden')),
+              Tab(text: t('المحذوفات', 'Trash')),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _DedaPublishedPlacesList(
+              isArabic: isArabic,
+              mode: 'active',
+            ),
+            _DedaPublishedPlacesList(
+              isArabic: isArabic,
+              mode: 'hidden',
+            ),
+            _DedaPublishedPlacesList(
+              isArabic: isArabic,
+              mode: 'deleted',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaPublishedPlacesList extends StatefulWidget {
+  final bool isArabic;
+  final String mode;
+
+  const _DedaPublishedPlacesList({
+    required this.isArabic,
+    required this.mode,
+  });
+
+  @override
+  State<_DedaPublishedPlacesList> createState() =>
+      _DedaPublishedPlacesListState();
+}
+
+class _DedaPublishedPlacesListState
+    extends State<_DedaPublishedPlacesList> {
+  final _search = TextEditingController();
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+  String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  String _formatTimestamp(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) date = value.toDate();
+    if (value is DateTime) date = value;
+    if (date == null) return '—';
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} '
+        '${two(local.hour)}:${two(local.minute)}';
+  }
+
+  Future<bool> _confirm({
+    required String title,
+    required String message,
+    required String action,
+    bool destructive = false,
+  }) async {
+    return (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: destructive
+                    ? FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFB3261E),
+                      )
+                    : null,
+                child: Text(action),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+  }
+
+  Future<void> _hide(String id, String name) async {
+    final ok = await _confirm(
+      title: t('إخفاء المكان مؤقتًا', 'Temporarily hide place'),
+      message: t(
+        'سيختفي «$name» من الخريطة فورًا، ولن يراه المستخدمون أو الموظفون. يبقى ظاهرًا فقط للمدير العام ضمن قسم المخفية.',
+        '“$name” will disappear from the map immediately and will not be visible to users or staff. It remains visible only to general managers under Hidden.',
+      ),
+      action: t('إخفاء', 'Hide'),
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.hidePublishedPlace(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تعذر إخفاء المكان الآن.', 'Could not hide the place now.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showOnMap(String id, String name) async {
+    final ok = await _confirm(
+      title: t('إظهار المكان على الخريطة', 'Show place on map'),
+      message: t(
+        'سيعود «$name» للظهور على الخريطة للمستخدمين.',
+        '“$name” will become visible on the map again.',
+      ),
+      action: t('إظهار', 'Show'),
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.restoreHiddenPublishedPlace(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر إظهار المكان الآن.',
+              'Could not show the place now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _trash(String id, String name) async {
+    final ok = await _confirm(
+      title: t('حذف المكان من الخريطة', 'Delete place from map'),
+      message: t(
+        'سينتقل «$name» إلى محذوفات المدير العام ويختفي من الخريطة ومن جميع المستخدمين والموظفين. يمكن استرجاعه لاحقًا.',
+        '“$name” will move to general-manager trash and disappear from the map for all users and staff. It can be restored later.',
+      ),
+      action: t('حذف', 'Delete'),
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.trashPublishedPlace(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تعذر حذف المكان الآن.', 'Could not delete the place now.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _restoreDeleted(String id, String name) async {
+    final ok = await _confirm(
+      title: t('استرجاع المكان', 'Restore place'),
+      message: t(
+        'سيعود «$name» إلى الأماكن المنشورة ويظهر على الخريطة.',
+        '“$name” will return to published places and appear on the map.',
+      ),
+      action: t('استرجاع', 'Restore'),
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.restoreDeletedPublishedPlace(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر استرجاع المكان الآن.',
+              'Could not restore the place now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteForever(String id, String name) async {
+    final ok = await _confirm(
+      title: t('حذف المكان نهائيًا', 'Permanently delete place'),
+      message: t(
+        'سيُحذف «$name» نهائيًا من محذوفات المدير العام، ولن يمكن استرجاعه بعد ذلك.',
+        '“$name” will be permanently removed from general-manager trash and cannot be restored.',
+      ),
+      action: t('حذف نهائي', 'Delete forever'),
+      destructive: true,
+    );
+    if (!ok) return;
+    try {
+      await DedaBackend.permanentlyDeletePublishedPlace(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر الحذف النهائي الآن.',
+              'Could not permanently delete now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  bool _matchesMode(Map<String, dynamic> data) {
+    if (widget.mode == 'deleted') return true;
+    final hidden = data['hiddenByManager'] == true;
+    final published = data['published'] == true;
+    if (widget.mode == 'hidden') return hidden || !published;
+    return published && !hidden;
+  }
+
+  bool _matchesSearch(Map<String, dynamic> data) {
+    final query = _search.text.trim().toLowerCase();
+    if (query.isEmpty) return true;
+    final haystack = <dynamic>[
+      data['placeName'],
+      data['name'],
+      data['approvalNumber'],
+      data['address'],
+      data['governorate'],
+    ].map((value) => _text(value).toLowerCase()).join(' ');
+    return haystack.contains(query);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = widget.mode == 'deleted'
+        ? DedaBackend.deletedPlacesForGeneralManager()
+        : DedaBackend.publishedPlacesForGeneralManager();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          child: TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: t(
+                'بحث باسم المكان أو رقم الاعتماد أو العنوان',
+                'Search place, approval number, or address',
+              ),
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: stream,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    t(
+                      'تعذر تحميل الأماكن.',
+                      'Could not load places.',
+                    ),
+                  ),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final docs = snapshot.data!.docs
+                  .where((doc) => _matchesMode(doc.data()))
+                  .where((doc) => _matchesSearch(doc.data()))
+                  .toList()
+                ..sort((a, b) {
+                  final an = _text(
+                    a.data()['placeName'] ?? a.data()['name'],
+                  );
+                  final bn = _text(
+                    b.data()['placeName'] ?? b.data()['name'],
+                  );
+                  return an.compareTo(bn);
+                });
+
+              if (docs.isEmpty) {
+                return Center(
+                  child: Text(
+                    widget.mode == 'active'
+                        ? t(
+                            'لا توجد أماكن منشورة مطابقة.',
+                            'No matching published places.',
+                          )
+                        : widget.mode == 'hidden'
+                            ? t(
+                                'لا توجد أماكن مخفية.',
+                                'There are no hidden places.',
+                              )
+                            : t(
+                                'لا توجد أماكن محذوفة.',
+                                'There are no deleted places.',
+                              ),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(12),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final doc = docs[index];
+                  final data = doc.data();
+                  final name = _text(
+                    data['placeName'] ?? data['name'],
+                  );
+                  final approval = _text(data['approvalNumber']);
+                  final address = _text(data['address']);
+                  final deletedBy = _text(data['deletedByName']);
+                  final hiddenBy = _text(data['hiddenByName']);
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                widget.mode == 'deleted'
+                                    ? Icons.delete_sweep_outlined
+                                    : widget.mode == 'hidden'
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.place_outlined,
+                                color: widget.mode == 'active'
+                                    ? const Color(0xFF17652F)
+                                    : const Color(0xFF8A5A24),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  name.isEmpty
+                                      ? t(
+                                          'مكان بدون اسم',
+                                          'Unnamed place',
+                                        )
+                                      : name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (approval.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Directionality(
+                              textDirection: TextDirection.ltr,
+                              child: Text(
+                                approval,
+                                textAlign: TextAlign.left,
+                              ),
+                            ),
+                          ],
+                          if (address.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(address),
+                          ],
+                          if (widget.mode == 'hidden') ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              t(
+                                'مخفي بواسطة: ${hiddenBy.isEmpty ? '—' : hiddenBy}',
+                                'Hidden by: ${hiddenBy.isEmpty ? '—' : hiddenBy}',
+                              ),
+                              style: const TextStyle(
+                                color: Color(0xFF5F665F),
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                          if (widget.mode == 'deleted') ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              t(
+                                'حذف بواسطة: ${deletedBy.isEmpty ? '—' : deletedBy} • ${_formatTimestamp(data['deletedAt'])}',
+                                'Deleted by: ${deletedBy.isEmpty ? '—' : deletedBy} • ${_formatTimestamp(data['deletedAt'])}',
+                              ),
+                              style: const TextStyle(
+                                color: Color(0xFF5F665F),
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (widget.mode == 'active')
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _hide(doc.id, name),
+                                  icon: const Icon(
+                                    Icons.visibility_off_outlined,
+                                  ),
+                                  label: Text(
+                                    t(
+                                      'إخفاء مؤقت',
+                                      'Hide temporarily',
+                                    ),
+                                  ),
+                                ),
+                              if (widget.mode == 'hidden')
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _showOnMap(doc.id, name),
+                                  icon: const Icon(
+                                    Icons.visibility_outlined,
+                                  ),
+                                  label: Text(
+                                    t(
+                                      'إظهار على الخريطة',
+                                      'Show on map',
+                                    ),
+                                  ),
+                                ),
+                              if (widget.mode != 'deleted')
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _trash(doc.id, name),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor:
+                                        const Color(0xFFB3261E),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                  ),
+                                  label: Text(t('حذف', 'Delete')),
+                                ),
+                              if (widget.mode == 'deleted')
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _restoreDeleted(doc.id, name),
+                                  icon: const Icon(Icons.restore),
+                                  label: Text(
+                                    t('استرجاع', 'Restore'),
+                                  ),
+                                ),
+                              if (widget.mode == 'deleted')
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _deleteForever(doc.id, name),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor:
+                                        const Color(0xFFB3261E),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.delete_forever_outlined,
+                                  ),
+                                  label: Text(
+                                    t(
+                                      'حذف نهائي',
+                                      'Delete forever',
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
