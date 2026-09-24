@@ -6954,17 +6954,29 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
   }
 }
 
+class DedaLaneGuide {
+  final List<String> indications;
+  final bool valid;
+
+  const DedaLaneGuide({
+    required this.indications,
+    required this.valid,
+  });
+}
+
 class DedaRouteStep {
   final String instruction;
   final double distanceMeters;
   final String maneuverType;
   final String? maneuverModifier;
+  final List<DedaLaneGuide> lanes;
 
   const DedaRouteStep({
     required this.instruction,
     required this.distanceMeters,
     required this.maneuverType,
     required this.maneuverModifier,
+    this.lanes = const <DedaLaneGuide>[],
   });
 }
 
@@ -7102,6 +7114,7 @@ class DedaRouteService {
               distanceMeters: length is num ? length.toDouble() * 1000 : 0,
               maneuverType: _maneuverType(type),
               maneuverModifier: _maneuverModifier(type),
+              lanes: _parseLaneList(m['lanes']),
             ),
           );
         }
@@ -7184,6 +7197,7 @@ class DedaRouteService {
             distanceMeters: stepDistance is num ? stepDistance.toDouble() : 0,
             maneuverType: type,
             maneuverModifier: modifier,
+            lanes: _osrmLaneGuidance(rawStep),
           ));
         }
       }
@@ -7194,6 +7208,47 @@ class DedaRouteService {
       durationSeconds: duration.toDouble(),
       steps: steps,
     );
+  }
+
+  List<DedaLaneGuide> _parseLaneList(dynamic rawLanes) {
+    if (rawLanes is! List || rawLanes.isEmpty) {
+      return const <DedaLaneGuide>[];
+    }
+    final result = <DedaLaneGuide>[];
+    for (final rawLane in rawLanes) {
+      if (rawLane is! Map) continue;
+      final rawIndications = rawLane['indications'];
+      final indications = <String>[];
+      if (rawIndications is List) {
+        for (final indication in rawIndications) {
+          final text = indication?.toString().trim().toLowerCase() ?? '';
+          if (text.isNotEmpty) indications.add(text);
+        }
+      }
+      if (indications.isEmpty) {
+        final single = rawLane['indication']?.toString().trim().toLowerCase();
+        if (single != null && single.isNotEmpty) indications.add(single);
+      }
+      if (indications.isEmpty) continue;
+      result.add(
+        DedaLaneGuide(
+          indications: indications,
+          valid: rawLane['valid'] == true || rawLane['active'] == true,
+        ),
+      );
+    }
+    return result;
+  }
+
+  List<DedaLaneGuide> _osrmLaneGuidance(Map rawStep) {
+    final intersections = rawStep['intersections'];
+    if (intersections is! List) return const <DedaLaneGuide>[];
+    for (final rawIntersection in intersections) {
+      if (rawIntersection is! Map) continue;
+      final parsed = _parseLaneList(rawIntersection['lanes']);
+      if (parsed.isNotEmpty) return parsed;
+    }
+    return const <DedaLaneGuide>[];
   }
 
   Future<Map<String, dynamic>> _getJson(Uri uri) async {
@@ -8705,6 +8760,53 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 
+  String _laneArrowSymbol(DedaLaneGuide lane) {
+    final indications = lane.indications;
+    bool has(String value) => indications.contains(value);
+    if (has('uturn') || has('u-turn')) return '↶';
+    if (has('sharp left')) return '↙';
+    if (has('left')) return '←';
+    if (has('slight left')) return '↖';
+    if (has('sharp right')) return '↘';
+    if (has('right')) return '→';
+    if (has('slight right')) return '↗';
+    if (has('straight')) return '↑';
+    return '↑';
+  }
+
+  Widget _buildLaneGuide(DedaRouteStep step) {
+    if (step.lanes.isEmpty) return const SizedBox.shrink();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: step.lanes.take(6).map((lane) {
+        return Container(
+          width: 23,
+          height: 23,
+          margin: const EdgeInsetsDirectional.only(start: 3),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: lane.valid
+                ? const Color(0xFFDFF1E3)
+                : const Color(0xFFF0F1F0),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            _laneArrowSymbol(lane),
+            style: TextStyle(
+              fontSize: 17,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              color: lane.valid
+                  ? const Color(0xFF17652F)
+                  : const Color(0xFF7B827D),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   int get _currentSpeedKmh {
     final metersPerSecond = livePosition?.speed ?? 0;
     if (!metersPerSecond.isFinite || metersPerSecond <= 0) return 0;
@@ -9374,6 +9476,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                  if (firstUsefulStep!.lanes.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    _buildLaneGuide(firstUsefulStep!),
+                                  ],
                                 ],
                               ),
                             ),
