@@ -938,6 +938,26 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             collection: 'place_requests',
                           )),
                         ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.place_outlined,
+                          accentColor: const Color(0xFF7A5A2B),
+                          backgroundColor: const Color(0xD9F7F0E4),
+                          title: t(
+                            'الأماكن المنشورة',
+                            'Published places',
+                          ),
+                          subtitle: t(
+                            'إخفاء أو حذف الأماكن من الخريطة',
+                            'Hide or remove places from the map',
+                          ),
+                          onTap: () => _open(
+                            DedaPublishedPlacesAdminPage(
+                              isArabic: ar,
+                            ),
+                          ),
+                        ),
                       if (DedaBackend.adminHasPermission(profile, 'supportRead'))
                         _dashboardCard(
                           icon: Icons.support_agent,
