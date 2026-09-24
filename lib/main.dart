@@ -9535,7 +9535,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                     borderRadius: BorderRadius.circular(22),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -9543,10 +9543,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           widget.destination.name,
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.rtl,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: 16.5,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -9571,8 +9571,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                         ] else if (route != null) ...[
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                              horizontal: 9,
+                              vertical: 4,
                             ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF0F6EF),
@@ -9585,15 +9585,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                 Icon(
                                   dedaTravelModeIcon(widget.travelMode),
                                   color: const Color(0xFF17652F),
-                                  size: 22,
+                                  size: 18,
                                 ),
-                                const SizedBox(width: 7),
+                                const SizedBox(width: 5),
                                 Text(
                                   dedaText(
                                     'وسيلة التنقل: ${dedaTravelModeLabel(widget.travelMode)}',
                                     'Travel mode: ${dedaTravelModeLabel(widget.travelMode)}',
                                   ),
                                   style: const TextStyle(
+                                    fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -9635,15 +9636,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _travelEstimateNote,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              color: Color(0xFF5B665D),
-                            ),
-                          ),
+
                           if (isRerouting) ...[
                             const SizedBox(height: 8),
                             const LinearProgressIndicator(),
@@ -9674,17 +9667,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 7),
                           SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: 42,
                             child: FilledButton.icon(
                               onPressed: startTrip,
                               icon: const Icon(Icons.navigation),
                               label: Text(
                                 dedaText('ابدأ الرحلة', 'Start trip'),
                                 style: const TextStyle(
-                                  fontSize: 18,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -9796,35 +9789,47 @@ class _DedaRouteStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 12,
+        horizontal: 8,
+        vertical: 7,
       ),
       decoration: BoxDecoration(
         color: const Color(0xFFEAF3E9),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(13),
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             icon,
+            size: 19,
             color: const Color(0xFF17652F),
           ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF4D5C50),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: Color(0xFF4D5C50),
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
