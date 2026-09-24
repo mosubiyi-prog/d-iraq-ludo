@@ -10108,6 +10108,19 @@ class _MapReadyPageState extends State<MapReadyPage> {
     }
   }
 
+  int _mapSearchRelevance(PlaceInfo place, String needle) {
+    final name = _normalizeDedaSearchText(place.name);
+    if (name == needle) {
+      // Generic map/geographic results are preferred for an exact locality
+      // name such as "كركوك", ahead of businesses whose address merely
+      // contains the governorate name.
+      return place.type == 'مكان' ? 0 : 1;
+    }
+    if (name.startsWith(needle)) return 2;
+    if (name.contains(needle)) return 3;
+    return 20;
+  }
+
   Future<void> searchInsideMap() async {
     final query = _mapSearchController.text.trim();
     final position = currentPosition;
@@ -10143,27 +10156,67 @@ class _MapReadyPageState extends State<MapReadyPage> {
       }
       registeredPlaces = mergedRegistered;
       final needle = _normalizeDedaSearchText(query);
-      final results = <PlaceInfo>[];
-      for (final place in mergedRegistered) {
-        final searchable = _normalizeDedaSearchText(
-          '${place.name} ${place.type} ${place.address ?? ''}',
+
+      // Search the public Iraq map even when DEDA has registered places.
+      // Previously the registered-place address was searched first, so a
+      // query such as "كركوك" could match a DEDA business in Daqoq simply
+      // because its address contained "كركوك", and that wrong business became
+      // the automatic destination.
+      final publicResults = <PlaceInfo>[];
+      try {
+        publicResults.addAll(
+          await _placesService
+              .searchPlacesByName(
+                center: LatLng(
+                  activePosition.latitude,
+                  activePosition.longitude,
+                ),
+                queryText: query,
+              )
+              .timeout(const Duration(seconds: 12)),
         );
-        if (searchable.contains(needle)) results.add(place);
+      } catch (_) {
+        // Keep local DEDA name search usable if the public provider is busy.
       }
-      if (results.isEmpty) {
-        try {
-          results.addAll(
-            await _placesService
-                .searchPlacesByName(
-                  center: LatLng(activePosition.latitude, activePosition.longitude),
-                  queryText: query,
-                )
-                .timeout(const Duration(seconds: 12)),
-          );
-        } catch (_) {
-          // DEDA results remain usable even when public providers are busy.
+
+      final dedaNameResults = <PlaceInfo>[];
+      for (final place in mergedRegistered) {
+        final normalizedName = _normalizeDedaSearchText(place.name);
+        if (normalizedName.contains(needle)) {
+          dedaNameResults.add(place);
         }
       }
+
+      final results = <PlaceInfo>[];
+      final seen = <String>{};
+      for (final place in <PlaceInfo>[...publicResults, ...dedaNameResults]) {
+        final key =
+            '${place.name.toLowerCase()}|'
+            '${place.location.latitude.toStringAsFixed(5)}|'
+            '${place.location.longitude.toStringAsFixed(5)}';
+        if (seen.add(key)) results.add(place);
+      }
+      results.sort((a, b) {
+        final relevance =
+            _mapSearchRelevance(a, needle).compareTo(
+              _mapSearchRelevance(b, needle),
+            );
+        if (relevance != 0) return relevance;
+        final da = Geolocator.distanceBetween(
+          activePosition.latitude,
+          activePosition.longitude,
+          a.location.latitude,
+          a.location.longitude,
+        );
+        final db = Geolocator.distanceBetween(
+          activePosition.latitude,
+          activePosition.longitude,
+          b.location.latitude,
+          b.location.longitude,
+        );
+        return da.compareTo(db);
+      });
+
       if (!mounted) return;
       setState(() {
         mapSearchResults = results;
