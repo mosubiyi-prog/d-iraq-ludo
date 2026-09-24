@@ -1070,6 +1070,156 @@ class DedaBackend {
     return items;
   }
 
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      deletedSupportRequestsForAdmin() {
+    return FirebaseFirestore.instance
+        .collection('admin_trash_support')
+        .orderBy('deletedAt', descending: true)
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<Map<String, dynamic>> _requireGeneralManagerProfile() async {
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    return actor;
+  }
+
+  static Future<void> trashSupportRequest(String id) async {
+    await trashSupportRequests(<String>[id]);
+  }
+
+  static Future<void> trashSupportRequests(List<String> ids) async {
+    final actor = await _requireGeneralManagerProfile();
+    final uniqueIds = ids
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .take(100)
+        .toList();
+    if (uniqueIds.isEmpty) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+    final moved = <String>[];
+
+    for (final id in uniqueIds) {
+      final source =
+          firestore.collection('support_requests').doc(id);
+      final snapshot = await source.get();
+      if (!snapshot.exists || snapshot.data() == null) continue;
+      final data = snapshot.data()!;
+      final trash =
+          firestore.collection('admin_trash_support').doc(id);
+      batch.set(trash, <String, dynamic>{
+        ...data,
+        'originalId': id,
+        'trashKind': 'support_request',
+        'deletedFromCollection': 'support_requests',
+        'deletedAt': FieldValue.serverTimestamp(),
+        'deletedByUid': actor['uid'].toString(),
+        'deletedByName': actor['displayName'].toString(),
+        'deletedByRole': normalizeAdminRole(actor['role']),
+      });
+      batch.delete(source);
+      moved.add(id);
+    }
+
+    if (moved.isEmpty) return;
+    await batch.commit();
+    await _writeAdminAudit(
+      moved.length == 1 ? 'support_deleted' : 'support_bulk_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': moved.length == 1 ? moved.first : '',
+        'deletedCount': moved.length,
+        'deletedIds': moved,
+      },
+    );
+  }
+
+  static Future<void> restoreDeletedSupportRequest(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final trash =
+        firestore.collection('admin_trash_support').doc(cleanId);
+    final source =
+        firestore.collection('support_requests').doc(cleanId);
+
+    await firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(trash);
+      if (!snapshot.exists || snapshot.data() == null) {
+        throw StateError('deleted-support-not-found');
+      }
+      final restored =
+          Map<String, dynamic>.from(snapshot.data()!);
+      for (final key in <String>[
+        'originalId',
+        'trashKind',
+        'deletedFromCollection',
+        'deletedAt',
+        'deletedByUid',
+        'deletedByName',
+        'deletedByRole',
+      ]) {
+        restored.remove(key);
+      }
+      restored['updatedAt'] = FieldValue.serverTimestamp();
+      transaction.set(source, restored);
+      transaction.delete(trash);
+    });
+
+    await _writeAdminAudit(
+      'support_restored',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': cleanId,
+        'restoredByUid': actor['uid'],
+      },
+    );
+  }
+
+  static Future<void> permanentlyDeleteSupportRequest(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+    final firestore = FirebaseFirestore.instance;
+    final trash =
+        firestore.collection('admin_trash_support').doc(cleanId);
+    final snapshot = await trash.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      throw StateError('deleted-support-not-found');
+    }
+    final data = snapshot.data()!;
+    final imageUrl = (data['imageUrl'] ?? '').toString().trim();
+
+    await trash.delete();
+
+    if (imageUrl.isNotEmpty) {
+      try {
+        await FirebaseStorage.instance.refFromURL(imageUrl).delete();
+      } catch (_) {
+        // The support record is already permanently removed. Storage cleanup
+        // is best effort so a stale/missing file never blocks the deletion.
+      }
+    }
+
+    await _writeAdminAudit(
+      'support_permanently_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'support_requests',
+        'sourceId': cleanId,
+        'targetUserName': data['name'],
+        'targetUserPhone': data['phone'],
+        'deletedByUid': actor['uid'],
+      },
+    );
+  }
+
   static Future<void> updateSupportStatus({
     required String id,
     required String status,
