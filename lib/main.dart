@@ -7909,16 +7909,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         setState(() {
           _hasCompassHeading = true;
           _lastCompassHeadingAt = DateTime.now();
-          _navigationHeading = _blendHeading(
-            _navigationHeading,
-            normalized,
-            factor: 0.82,
-          );
-          _displayHeading = _blendHeading(
-            _displayHeading,
-            normalized,
-            factor: 0.82,
-          );
+          // Phone heading is authoritative while fresh: one degree of device
+          // rotation immediately becomes one degree of arrow rotation.
+          _navigationHeading = normalized;
+          _displayHeading = normalized;
         });
       },
       onError: (_) {
@@ -8095,14 +8089,18 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
         setState(() {
           _displayPosition = point;
-          _displayHeading = heading;
+          if (!_compassHeadingIsFresh) {
+            _displayHeading = heading;
+          }
         });
         if (tripStarted) _followLivePosition(point);
 
         if (linear >= 1) {
           timer.cancel();
           _displayPosition = target;
-          _displayHeading = targetHeading % 360;
+          if (!_compassHeadingIsFresh) {
+            _displayHeading = targetHeading % 360;
+          }
         }
       },
     );
@@ -9268,28 +9266,25 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       // Keep the user's live location/arrow last so it is always visible on top.
       Marker(
         point: tripStarted ? (_displayPosition ?? startPoint) : startPoint,
-        width: tripStarted ? 58 : 64,
-        height: tripStarted ? 58 : 64,
+        width: tripStarted ? 42 : 64,
+        height: tripStarted ? 42 : 64,
         child: tripStarted
             ? Transform.rotate(
                 angle: _displayHeading * math.pi / 180,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.96),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF17652F),
-                      width: 2,
+                child: const Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(
+                      Icons.navigation,
+                      size: 39,
+                      color: Colors.white,
                     ),
-                    boxShadow: const [
-                      BoxShadow(blurRadius: 7, color: Colors.black26),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.navigation,
-                    size: 34,
-                    color: Color(0xFF17652F),
-                  ),
+                    Icon(
+                      Icons.navigation,
+                      size: 34,
+                      color: Color(0xFF17652F),
+                    ),
+                  ],
                 ),
               )
             : const Icon(
