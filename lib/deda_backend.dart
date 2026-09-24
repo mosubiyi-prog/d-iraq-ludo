@@ -509,6 +509,7 @@ class DedaBackend {
 
     final firestore = FirebaseFirestore.instance;
     final requestRef = firestore.collection('place_requests').doc(cleanId);
+    final auditRef = firestore.collection('admin_audit').doc();
 
     String originalPlaceId = '';
     String placeName = '';
@@ -561,19 +562,18 @@ class DedaBackend {
         'deletionCompletedAt': FieldValue.serverTimestamp(),
         'approvalMessage': 'تمت الموافقة على حذف المكان من DEDA.',
       });
-    });
-
-    // The critical delete is complete before audit logging, while the cached
-    // admin identity keeps this write from adding another profile read.
-    await _writeAdminAudit(
-      'owner_place_deletion_approved',
-      details: <String, dynamic>{
+      transaction.set(auditRef, <String, dynamic>{
+        'action': 'owner_place_deletion_approved',
+        'adminUid': actor['uid'],
+        'adminName': actor['name'],
+        'adminRole': actor['role'],
         'sourceCollection': 'place_requests',
         'sourceId': cleanId,
         'originalPlaceId': originalPlaceId,
         'placeName': placeName,
-      },
-    );
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
   static Future<Map<String, dynamic>?> ownerRequestById(String id) async {
@@ -1649,18 +1649,21 @@ class DedaBackend {
     }
 
     if (moved.isEmpty) return;
-    await batch.commit();
-    await _writeAdminAudit(
-      moved.length == 1
+    final audit = firestore.collection('admin_audit').doc();
+    batch.set(audit, <String, dynamic>{
+      'action': moved.length == 1
           ? 'place_request_deleted'
           : 'place_requests_bulk_deleted',
-      details: <String, dynamic>{
-        'sourceCollection': 'place_requests',
-        'sourceId': moved.length == 1 ? moved.first : '',
-        'deletedCount': moved.length,
-        'deletedIds': moved,
-      },
-    );
+      'adminUid': actor['uid'].toString(),
+      'adminName': actor['displayName'].toString(),
+      'adminRole': normalizeAdminRole(actor['role']),
+      'sourceCollection': 'place_requests',
+      'sourceId': moved.length == 1 ? moved.first : '',
+      'deletedCount': moved.length,
+      'deletedIds': moved,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
   }
 
   static Future<void> restoreDeletedPlaceRequest(String id) async {
