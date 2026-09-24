@@ -704,15 +704,26 @@ service cloud.firestore {
     }
 
     match /published_places/{placeId} {
-      allow read: if true;
+      allow read: if isGeneralManager()
+        || (
+          resource.data.keys().hasAny(['published'])
+          && resource.data.published == true
+        );
+
       allow create: if hasAdminPermission('approvePlaces')
         && adminProvinceMatches(request.resource.data);
+
       allow delete: if isGeneralManager();
 
-      allow update: if (
+      allow update: if isGeneralManager()
+        || (
           hasAdminPermission('approvePlaces')
           && adminProvinceMatches(resource.data)
           && adminProvinceMatches(request.resource.data)
+          && request.resource.data.published == resource.data.published
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'hiddenByManager', 'hiddenAt', 'hiddenByUid', 'hiddenByName'
+          ])
         )
         || (
           signedIn()
@@ -724,6 +735,10 @@ service cloud.firestore {
             'isAvailableNow', 'updatedAt'
           ])
         );
+    }
+
+    match /admin_trash_places/{trashId} {
+      allow read, create, update, delete: if isGeneralManager();
     }
 
 
