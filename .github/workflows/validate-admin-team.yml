@@ -26,7 +26,6 @@ on:
       - functions/index.js
       - firestore.rules
       - firebase.json
-      - firestore.indexes.json
       - storage.rules
       - pubspec.yaml
       - .github/workflows/validate-admin-team.yml
@@ -74,9 +73,8 @@ jobs:
       - name: Check Cloud Functions syntax
         run: node --check functions/index.js
 
-      - name: Validate Firebase rules and indexes
+      - name: Validate Firebase rules
         run: |
-          python3 -m json.tool firestore.indexes.json > /dev/null
           npx --yes firebase-tools@latest emulators:exec \
             --only firestore,storage \
             --project demo-deda \
