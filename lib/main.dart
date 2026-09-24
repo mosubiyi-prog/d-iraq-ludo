@@ -6999,7 +6999,7 @@ class DedaRouteResult {
 }
 
 class DedaRouteService {
-  static const Duration _timeout = Duration(seconds: 20);
+  static const Duration _timeout = Duration(seconds: 14);
 
   Future<DedaRouteResult> getDrivingRoute({
     required LatLng start,
@@ -7688,6 +7688,7 @@ class DedaRoutePage extends StatefulWidget {
   final IconData categoryIcon;
   final DedaMapStyle initialStyle;
   final DedaTravelMode travelMode;
+  final DedaRouteResult? initialRoute;
 
   const DedaRoutePage({
     super.key,
@@ -7696,6 +7697,7 @@ class DedaRoutePage extends StatefulWidget {
     required this.categoryIcon,
     required this.initialStyle,
     this.travelMode = DedaTravelMode.car,
+    this.initialRoute,
   });
 
   @override
@@ -7843,7 +7845,17 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       _displayHeading = _navigationHeading;
     }
     _initTts();
-    loadRoute();
+    _startCompassTracking();
+    final initialRoute = widget.initialRoute;
+    if (initialRoute != null) {
+      route = initialRoute;
+      isLoading = false;
+      _liveRemainingMeters = initialRoute.distanceMeters;
+      _lastRouteOrigin = startPoint;
+      _fitRouteOnMap();
+    } else {
+      loadRoute();
+    }
   }
 
   @override
@@ -8123,7 +8135,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (stream == null) return;
     _compassSubscription = stream.listen(
       (event) {
-        if (!mounted || !tripStarted) return;
+        if (!mounted) return;
         final heading = event.heading;
         if (heading == null || !heading.isFinite) return;
         final normalized = (heading + 360) % 360;
@@ -8225,7 +8237,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     for (var i = nearestSegment + 1; i < points.length - 1; i++) {
       remaining += _metersBetween(points[i], points[i + 1]);
     }
-    return math.max(direct, remaining);
+    return math.min(
+      currentRoute.distanceMeters,
+      math.max(direct, remaining),
+    );
   }
 
   ({double distanceToRoute, double progressMeters})? _routeProgress(
@@ -9154,7 +9169,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
   double _distanceToManeuver(DedaRouteStep step) {
     final target = step.maneuverPoint;
-    if (!tripStarted || target == null) return step.distanceMeters;
+    if (target == null) return step.distanceMeters;
     final currentProgress =
         _routeProgress(_displayPosition ?? startPoint)?.progressMeters;
     final targetProgress = _routeProgress(target)?.progressMeters;
@@ -9218,11 +9233,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       case 'right':
       case 'slight right':
       case 'sharp right':
-        return Icons.arrow_forward;
+        return Icons.east;
       case 'left':
       case 'slight left':
       case 'sharp left':
-        return Icons.arrow_back;
+        return Icons.west;
       case 'uturn':
         return Icons.rotate_left;
       default:
@@ -9397,11 +9412,16 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                     dedaTravelModeLabel(widget.travelMode),
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  Text(
-                    '$distance  •  $duration',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13.5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: DedaLanguageState.isArabic
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Text(
+                      '$distance  •  $duration',
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 13.5),
+                    ),
                   ),
                 ],
               ),
@@ -9411,6 +9431,129 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               tooltip: dedaText('إيقاف الرحلة', 'Stop trip'),
               onPressed: () => stopTrip(),
               icon: const Icon(Icons.stop_circle_outlined),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapePreTripPanel() {
+    final currentRoute = route;
+
+    if (isLoading) {
+      return Card(
+        elevation: 6,
+        margin: EdgeInsets.zero,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: LinearProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Card(
+        elevation: 6,
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  errorMessage!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 38,
+                child: FilledButton.icon(
+                  onPressed: () => loadRoute(),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(dedaText('إعادة المحاولة', 'Retry')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (currentRoute == null) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 7,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                widget.destination.name,
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.rtl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: _DedaRouteStat(
+                icon: Icons.route,
+                label: currentRoute.isDirectFallback
+                    ? dedaText('المباشرة', 'Direct')
+                    : dedaText('المسافة', 'Distance'),
+                value: formatRouteDistance(currentRoute.distanceMeters),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _DedaRouteStat(
+                icon: Icons.schedule,
+                label: dedaText('الوقت', 'Time'),
+                value: formatRouteDuration(
+                  _estimatedDurationSeconds(currentRoute),
+                ),
+              ),
+            ),
+            if (isRerouting) ...[
+              const SizedBox(width: 8),
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ],
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 150,
+              height: 40,
+              child: FilledButton.icon(
+                onPressed: startTrip,
+                icon: const Icon(Icons.navigation, size: 18),
+                label: Text(
+                  dedaText('ابدأ الرحلة', 'Start trip'),
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -9472,9 +9615,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         isLandscape && tripStarted && !_mapFullscreen;
     final destinationPoint = widget.destination.location;
     final routePoints = route?.points ?? const <LatLng>[];
-    final fitCoordinates = routePoints.isNotEmpty
-        ? routePoints
-        : <LatLng>[startPoint, destinationPoint];
+    final routeOrigin =
+        tripStarted ? (_displayPosition ?? startPoint) : startPoint;
+    final displayRoutePoints = <LatLng>[
+      routeOrigin,
+      ...routePoints,
+      destinationPoint,
+    ];
+    final fitCoordinates = displayRoutePoints;
 
     final markers = <Marker>[
       // Road alerts are drawn first so they never cover the live navigation
@@ -9533,41 +9681,25 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         alignment: Alignment.bottomCenter,
         child: const _DedaIraqDestinationFlag(),
       ),
-      // Keep the user's live location/arrow last so it is always visible on top.
+      // Keep one small green heading arrow for the user's start/live position.
       Marker(
-        point: tripStarted ? (_displayPosition ?? startPoint) : startPoint,
-        width: tripStarted ? 42 : 64,
-        height: tripStarted ? 42 : 64,
-        child: tripStarted
-            ? Transform.rotate(
-                angle: _displayHeading * math.pi / 180,
-                child: const Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(
-                      Icons.navigation,
-                      size: 39,
-                      color: Colors.white,
-                    ),
-                    Icon(
-                      Icons.navigation,
-                      size: 34,
-                      color: Color(0xFF17652F),
-                    ),
-                  ],
-                ),
-              )
-            : const Icon(
-                Icons.location_pin,
-                size: 58,
-                color: Colors.red,
-              ),
+        point: _displayPosition ?? startPoint,
+        width: 42,
+        height: 42,
+        child: Transform.rotate(
+          angle: _displayHeading * math.pi / 180,
+          child: const Icon(
+            Icons.navigation,
+            size: 34,
+            color: Color(0xFF17652F),
+          ),
+        ),
       ),
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
-      appBar: isLandscape && tripStarted && _mapFullscreen
+      appBar: tripStarted && _mapFullscreen
           ? null
           : AppBar(
               title: Text(
@@ -9584,6 +9716,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               centerTitle: true,
             ),
       body: SafeArea(
+        top: !(tripStarted && _mapFullscreen),
+        bottom: !(tripStarted && _mapFullscreen),
+        left: !(tripStarted && _mapFullscreen),
+        right: !(tripStarted && _mapFullscreen),
         child: Stack(
           children: [
             Positioned.fill(
@@ -9628,18 +9764,18 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           PolylineLayer(
                             polylines: [
                               Polyline(
-                                points: routePoints,
+                                points: displayRoutePoints,
                                 strokeWidth: tripStarted ? 13 : 10,
                                 color: Colors.white.withOpacity(0.96),
                               ),
                               Polyline(
-                                points: routePoints,
+                                points: displayRoutePoints,
                                 strokeWidth: tripStarted ? 9 : 7,
                                 color: const Color(0xFF0A5426),
                               ),
                               if (tripStarted)
                                 Polyline(
-                                  points: routePoints,
+                                  points: displayRoutePoints,
                                   strokeWidth: 5,
                                   color: const Color(0xFF2CCB66),
                                 ),
@@ -9790,7 +9926,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               _buildLandscapeTools(
                 edgeInset: isInsetDrivingMap ? 14 : 0,
               ),
-            if (!tripStarted)
+            if (!tripStarted && isLandscape)
+              Positioned(
+                left: 72,
+                right: 72,
+                bottom: 6,
+                child: _buildLandscapePreTripPanel(),
+              ),
+            if (!tripStarted && !isLandscape)
               Positioned(
                 left: 12,
                 right: 12,
@@ -10092,13 +10235,16 @@ class _DedaRouteStat extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  value,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
@@ -10371,7 +10517,27 @@ class _MapReadyPageState extends State<MapReadyPage> {
     });
     try {
       final activePosition = currentPosition!;
-      final freshRegistered = await DedaRegisteredPlacesStore.readAll();
+
+      // Start both independent lookups together. This preserves exact-name
+      // ranking while avoiding serial network waits on weak connections.
+      final registeredFuture = DedaRegisteredPlacesStore.readAll();
+      final publicSearchFuture = _placesService
+          .searchPlacesByName(
+            center: LatLng(
+              activePosition.latitude,
+              activePosition.longitude,
+            ),
+            queryText: query,
+          )
+          .timeout(const Duration(seconds: 12));
+
+      List<PlaceInfo> freshRegistered = const <PlaceInfo>[];
+      try {
+        freshRegistered = await registeredFuture;
+      } catch (_) {
+        // Keep the already loaded DEDA places if refresh is temporarily slow.
+      }
+
       final mergedRegistered = <PlaceInfo>[];
       final seenDeda = <String>{};
       for (final place in <PlaceInfo>[...registeredPlaces, ...freshRegistered]) {
@@ -10382,23 +10548,11 @@ class _MapReadyPageState extends State<MapReadyPage> {
       final needle = _normalizeDedaSearchText(query);
 
       // Search the public Iraq map even when DEDA has registered places.
-      // Previously the registered-place address was searched first, so a
-      // query such as "كركوك" could match a DEDA business in Daqoq simply
-      // because its address contained "كركوك", and that wrong business became
-      // the automatic destination.
+      // Name relevance remains the deciding rule, so a governorate/address
+      // match cannot replace a true place-name match.
       final publicResults = <PlaceInfo>[];
       try {
-        publicResults.addAll(
-          await _placesService
-              .searchPlacesByName(
-                center: LatLng(
-                  activePosition.latitude,
-                  activePosition.longitude,
-                ),
-                queryText: query,
-              )
-              .timeout(const Duration(seconds: 12)),
-        );
+        publicResults.addAll(await publicSearchFuture);
       } catch (_) {
         // Keep local DEDA name search usable if the public provider is busy.
       }
@@ -10510,6 +10664,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
           categoryIcon: Icons.gps_fixed,
           initialStyle: mapStyle,
           travelMode: DedaPreferences.defaultTravelMode,
+          initialRoute: mapRoutePreview,
         ),
       ),
     );
@@ -10533,7 +10688,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: SizedBox(
-        height: 500,
+        height: MediaQuery.of(context).orientation == Orientation.landscape
+            ? 190
+            : 340,
         child: Stack(
           children: [
             Positioned.fill(
@@ -10749,6 +10906,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -10757,14 +10916,17 @@ class _MapReadyPageState extends State<MapReadyPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.symmetric(
+            horizontal: isLandscape ? 54 : 16,
+            vertical: isLandscape ? 8 : 16,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 statusMessage,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 17),
+                style: TextStyle(fontSize: isLandscape ? 14.5 : 17),
               ),
               const SizedBox(height: 12),
               if (isLoading)
@@ -10781,6 +10943,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                   textInputAction: TextInputAction.search,
                   onSubmitted: (_) => searchInsideMap(),
                   decoration: InputDecoration(
+                    isDense: isLandscape,
                     hintText: dedaText(
                       'ابحث داخل الخريطة باسم المكان...',
                       'Search the map by place name...',
@@ -10806,6 +10969,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 Card(
                   elevation: 0,
                   child: SwitchListTile(
+                    dense: isLandscape,
+                    visualDensity:
+                        isLandscape ? VisualDensity.compact : VisualDensity.standard,
                     value: showAvailableOnly,
                     activeColor: const Color(0xFF159447),
                     secondary: const Icon(Icons.online_prediction),
@@ -10864,7 +11030,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                   ),
                 if (selectedDestination != null)
                   SizedBox(
-                    height: 56,
+                    height: isLandscape ? 42 : 52,
                     child: FilledButton.icon(
                       onPressed: openSelectedDestination,
                       icon: const Icon(Icons.navigation),
@@ -10877,7 +11043,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 const SizedBox(height: 12),
               ],
               SizedBox(
-                height: 54,
+                height: isLandscape ? 42 : 50,
                 child: FilledButton.icon(
                   onPressed: isLoading ? null : determinePosition,
                   icon: Icon(
