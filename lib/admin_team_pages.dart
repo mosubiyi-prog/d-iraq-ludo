@@ -1179,11 +1179,42 @@ class _DedaAdminMemberEditorPageState
       },
     );
 
-    final opened = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened) {
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        await Clipboard.setData(
+          ClipboardData(text: _invitationMessage(result)),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t(
+                'تعذر فتح تطبيق البريد. تم نسخ الدعوة لتشاركها يدويًا.',
+                'Could not open the mail app. The invitation was copied for manual sharing.',
+              ),
+            ),
+          ),
+        );
+        try {
+          await DedaBackend.markAdminInvitationShared(
+            inviteId: inviteId,
+            channel: 'copy_fallback',
+          );
+        } catch (_) {}
+        return;
+      }
+
+      try {
+        await DedaBackend.markAdminInvitationShared(
+          inviteId: inviteId,
+          channel: 'email_draft',
+        );
+      } catch (_) {}
+    } catch (_) {
       await Clipboard.setData(
         ClipboardData(text: _invitationMessage(result)),
       );
@@ -1198,17 +1229,7 @@ class _DedaAdminMemberEditorPageState
           ),
         ),
       );
-      await DedaBackend.markAdminInvitationShared(
-        inviteId: inviteId,
-        channel: 'copy_fallback',
-      );
-      return;
     }
-
-    await DedaBackend.markAdminInvitationShared(
-      inviteId: inviteId,
-      channel: 'email_draft',
-    );
   }
 
   Future<void> _copyInvitationForSharing(
