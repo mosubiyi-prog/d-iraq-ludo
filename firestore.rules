@@ -512,7 +512,8 @@ service cloud.firestore {
           /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
         )
         && (
-          get(
+          isGeneralManager()
+          || get(
             /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
           ).data.ownerUid == request.auth.uid
           || sameAccount(
