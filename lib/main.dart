@@ -10111,13 +10111,15 @@ class _MapReadyPageState extends State<MapReadyPage> {
   int _mapSearchRelevance(PlaceInfo place, String needle) {
     final name = _normalizeDedaSearchText(place.name);
     if (name == needle) {
-      // Generic map/geographic results are preferred for an exact locality
-      // name such as "كركوك", ahead of businesses whose address merely
-      // contains the governorate name.
-      return place.type == 'مكان' ? 0 : 1;
+      // An exact DEDA place name is authoritative. This prevents a public
+      // map result with the same text from sending the route to another city.
+      if (place.isDedaRegistered) return 0;
+      return 1;
     }
-    if (name.startsWith(needle)) return 2;
-    if (name.contains(needle)) return 3;
+    if (place.isDedaRegistered && name.startsWith(needle)) return 2;
+    if (name.startsWith(needle)) return 3;
+    if (place.isDedaRegistered && name.contains(needle)) return 4;
+    if (name.contains(needle)) return 5;
     return 20;
   }
 
