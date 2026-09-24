@@ -691,13 +691,33 @@ class DedaBackend {
         .snapshots();
   }
 
+  static Timestamp? _adminVisibilityCutoff(
+    Map<String, dynamic> adminProfile,
+  ) {
+    final role = normalizeAdminRole(
+      adminProfile['roleNormalized'] ?? adminProfile['role'],
+    );
+    if (role == 'general_manager') return null;
+
+    final firstLogin = adminProfile['firstLoginCompletedAt'];
+    if (firstLogin is Timestamp) return firstLogin;
+
+    final createdAt = adminProfile['createdAt'];
+    if (createdAt is Timestamp) return createdAt;
+
+    // Fail closed for a non-general-manager account with incomplete metadata.
+    return Timestamp.fromDate(DateTime.now().add(const Duration(days: 36500)));
+  }
+
   static Stream<QuerySnapshot<Map<String, dynamic>>> placeRequestsForAdmin(
     Map<String, dynamic> adminProfile,
   ) {
     final role = normalizeAdminRole(
       adminProfile['roleNormalized'] ?? adminProfile['role'],
     );
+    final cutoff = _adminVisibilityCutoff(adminProfile);
     final collection = FirebaseFirestore.instance.collection('place_requests');
+
     if (role == 'province_agent') {
       final governorate =
           (adminProfile['governorate'] ?? '').toString().trim();
@@ -707,12 +727,28 @@ class DedaBackend {
             .limit(1)
             .snapshots();
       }
-      return collection
-          .where('governorate', isEqualTo: governorate)
+      Query<Map<String, dynamic>> query =
+          collection.where('governorate', isEqualTo: governorate);
+      if (cutoff != null) {
+        query = query.where(
+          'createdAt',
+          isGreaterThanOrEqualTo: cutoff,
+        );
+      }
+      return query
+          .orderBy('createdAt', descending: true)
           .limit(100)
           .snapshots();
     }
-    return collection
+
+    Query<Map<String, dynamic>> query = collection;
+    if (cutoff != null) {
+      query = query.where(
+        'createdAt',
+        isGreaterThanOrEqualTo: cutoff,
+      );
+    }
+    return query
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots();
@@ -721,8 +757,16 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> supportRequestsForAdmin(
     Map<String, dynamic> adminProfile,
   ) {
-    return FirebaseFirestore.instance
-        .collection('support_requests')
+    final cutoff = _adminVisibilityCutoff(adminProfile);
+    Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance.collection('support_requests');
+    if (cutoff != null) {
+      query = query.where(
+        'createdAt',
+        isGreaterThanOrEqualTo: cutoff,
+      );
+    }
+    return query
         .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots();
