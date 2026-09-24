@@ -2078,6 +2078,66 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
+  Future<void> _approveDeletionRequest(String id) async {
+    if (!_isGeneralManager) return;
+    final confirmed = (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(t('اعتماد حذف المكان', 'Approve place deletion')),
+            content: Text(
+              t(
+                'سيتم حذف المكان المنشور المرتبط بهذا الطلب من DEDA. يبقى سجل الطلب محفوظًا للإدارة.',
+                'The published place linked to this request will be removed from DEDA. The request record remains in administration.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E),
+                ),
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: Text(t('اعتماد الحذف', 'Approve deletion')),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+    if (!confirmed) return;
+
+    try {
+      await DedaBackend.approvePlaceDeletionRequest(id);
+      if (!mounted) return;
+      setState(() => _expandedId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم اعتماد طلب الحذف وحذف المكان المنشور.',
+              'Deletion approved and the published place was removed.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر اعتماد حذف المكان الآن. تحقق من الطلب وحاول مرة أخرى.',
+              'Could not approve place deletion right now. Check the request and try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _changeStatus({
     required String id,
     required String status,
@@ -2222,10 +2282,54 @@ class _RequestListState extends State<_RequestList> {
     final latitude = (data['latitude'] as num?)?.toDouble();
     final longitude = (data['longitude'] as num?)?.toDouble();
     final placeName = _text(data['placeName']);
+    final requestType = _text(data['requestType']);
+    final isDeletionRequest = requestType == 'delete';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (isDeletionRequest)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFE9E7),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFD06A62)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.delete_forever_outlined,
+                  color: Color(0xFFB3261E),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    t(
+                      'طلب حذف مكان من صاحب المكان',
+                      'Place deletion request from the owner',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _detailRow(
+          t('نوع الطلب', 'Request type'),
+          isDeletionRequest
+              ? t('حذف المكان', 'Delete place')
+              : requestType == 'update'
+                  ? t('تعديل المكان', 'Edit place')
+                  : t('إضافة مكان', 'Add place'),
+        ),
+        if (isDeletionRequest)
+          _detailRow(
+            t('رقم الاعتماد', 'Approval number'),
+            data['approvalNumber'],
+            ltr: true,
+          ),
         _detailRow(t('نوع المكان', 'Place type'), _placeType(data)),
         _detailRow(t('الهاتف', 'Phone'), data['phone'], ltr: true),
         _detailRow(t('المحافظة', 'Governorate'), data['governorate']),
@@ -2344,6 +2448,7 @@ class _RequestListState extends State<_RequestList> {
   Widget _actionsForStatus({
     required String status,
     required String id,
+    required Map<String, dynamic> data,
   }) {
     if (widget.collection == 'support_requests') {
       return _supportActions(status: status, id: id);
@@ -2352,6 +2457,33 @@ class _RequestListState extends State<_RequestList> {
     final canReview = _can('reviewPlaceRequests');
     final canApprove = _can('approvePlaces');
     final canReject = _can('rejectPlaces');
+    final isDeletionRequest = _text(data['requestType']) == 'delete';
+
+    if (isDeletionRequest && status == 'approved') {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          Chip(
+            avatar: const Icon(
+              Icons.task_alt,
+              size: 18,
+              color: Color(0xFF17652F),
+            ),
+            label: Text(t('تم حذف المكان', 'Place deleted')),
+          ),
+          if (_isGeneralManager)
+            OutlinedButton.icon(
+              onPressed: () => _deletePlaceRequest(id),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB3261E),
+              ),
+              icon: const Icon(Icons.delete_outline),
+              label: Text(t('حذف الطلب', 'Delete request')),
+            ),
+        ],
+      );
+    }
 
     if (status == 'approved' || status == 'rejected') {
       if (!canReview && !_isGeneralManager) {
@@ -2410,7 +2542,7 @@ class _RequestListState extends State<_RequestList> {
             arLabel: 'قيد المراجعة',
             enLabel: 'Under review',
           ),
-        if (canReview)
+        if (canReview && !isDeletionRequest)
           _statusButton(
             currentStatus: status,
             targetStatus: 'needs_changes',
@@ -2419,13 +2551,32 @@ class _RequestListState extends State<_RequestList> {
             enLabel: 'Needs changes',
             selectedColor: const Color(0xFFB26A00),
           ),
-        if (canApprove)
+        if (isDeletionRequest && canApprove && _isGeneralManager)
+          FilledButton.icon(
+            onPressed: () => _approveDeletionRequest(id),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB3261E),
+            ),
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: Text(t('اعتماد حذف المكان', 'Approve place deletion')),
+          )
+        else if (!isDeletionRequest && canApprove)
           _statusButton(
             currentStatus: status,
             targetStatus: 'approved',
             id: id,
             arLabel: 'اعتماد',
             enLabel: 'Approve',
+          ),
+        if (isDeletionRequest && !_isGeneralManager && canApprove)
+          Chip(
+            avatar: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+            label: Text(
+              t(
+                'الاعتماد النهائي للمدير العام',
+                'Final approval by general manager',
+              ),
+            ),
           ),
         if (canReject)
           _statusButton(
@@ -2582,6 +2733,8 @@ class _RequestListState extends State<_RequestList> {
                                 t('طلب جديد', 'New request'))
                             .toString();
                         final status = (data['status'] ?? 'new').toString();
+                        final isDeletionRequest =
+                            _text(data['requestType']) == 'delete';
                         final expanded = _expandedId == doc.id;
                         final unread = data['firstViewedAt'] == null &&
                             status != 'approved' &&
@@ -2623,8 +2776,12 @@ class _RequestListState extends State<_RequestList> {
                                 Icon(
                                   widget.collection == 'support_requests'
                                       ? Icons.support_agent
-                                      : Icons.storefront,
-                                  color: const Color(0xFF17652F),
+                                      : isDeletionRequest
+                                          ? Icons.delete_forever_outlined
+                                          : Icons.storefront,
+                                  color: isDeletionRequest
+                                      ? const Color(0xFFB3261E)
+                                      : const Color(0xFF17652F),
                                 ),
                                 if (unread)
                                   Positioned(
@@ -2642,9 +2799,14 @@ class _RequestListState extends State<_RequestList> {
                               ],
                             ),
                             title: Text(
-                              title,
-                              style: const TextStyle(
+                              isDeletionRequest
+                                  ? t('طلب حذف', 'Delete request') + ' • ' + title
+                                  : title,
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
+                                color: isDeletionRequest
+                                    ? const Color(0xFFB3261E)
+                                    : null,
                               ),
                             ),
                             subtitle: Text(
@@ -2693,6 +2855,7 @@ class _RequestListState extends State<_RequestList> {
                               _actionsForStatus(
                                 status: status,
                                 id: doc.id,
+                                data: data,
                               ),
                             ],
                           ),
