@@ -8013,9 +8013,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final fromHeading = _displayHeading;
     final rawDelta = (targetHeading - fromHeading + 540) % 360 - 180;
     final distance = _metersBetween(from, target);
+    // Keep the marker moving continuously between GPS fixes. A ~60 Hz
+    // interpolation avoids visible jumps while restarting cleanly from the
+    // current displayed point when a newer fix arrives.
     final durationMs =
-        (280 + math.min(distance, 25) * 16).round().clamp(280, 680);
-    const frameMs = 50;
+        (560 + math.min(distance, 30) * 16).round().clamp(560, 1050);
+    const frameMs = 16;
     final totalFrames = math.max(1, (durationMs / frameMs).ceil());
     var frame = 0;
 
@@ -8028,7 +8031,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         }
         frame += 1;
         final linear = (frame / totalFrames).clamp(0.0, 1.0);
-        final eased = Curves.easeOutCubic.transform(linear);
+        final eased = Curves.easeInOutCubic.transform(linear);
         final point = LatLng(
           from.latitude + (target.latitude - from.latitude) * eased,
           from.longitude + (target.longitude - from.longitude) * eased,
@@ -8806,7 +8809,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.best,
-      distanceFilter: 2,
+      distanceFilter: 1,
     );
 
     _positionSubscription = Geolocator.getPositionStream(
