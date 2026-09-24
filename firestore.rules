@@ -557,12 +557,15 @@ service cloud.firestore {
     }
 
     match /support_requests/{requestId} {
-      allow create: if signedIn()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.status == 'new'
-        && request.resource.data.type in ['company', 'problem', 'case', 'photo']
-        && request.resource.data.message is string
-        && request.resource.data.message.size() >= 5;
+      allow create: if isGeneralManager()
+        || (
+          signedIn()
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.status == 'new'
+          && request.resource.data.type in ['company', 'problem', 'case', 'photo']
+          && request.resource.data.message is string
+          && request.resource.data.message.size() >= 5
+        );
 
       allow read: if (
           canReadSupport()
@@ -599,7 +602,11 @@ service cloud.firestore {
             'accountReviewedByName', 'accountReviewedByRole'
           ])
         );
-      allow delete: if false;
+      allow delete: if isGeneralManager();
+    }
+
+    match /admin_trash_support/{trashId} {
+      allow read, create, update, delete: if isGeneralManager();
     }
 
     match /place_requests/{requestId} {
