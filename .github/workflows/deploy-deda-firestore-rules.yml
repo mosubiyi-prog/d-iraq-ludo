@@ -5,17 +5,19 @@ on:
   push:
     branches:
       - places-v1
+      - map-nav-9-points-work-2026-09-24
     paths:
+      - .github/workflows/deploy-deda-firestore-rules.yml
       - firestore.rules
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout places-v1
+      - name: Checkout triggering branch
         uses: actions/checkout@v4
         with:
-          ref: places-v1
+          ref: ${{ github.ref_name }}
 
       - name: Select Firebase credential
         id: auth
