@@ -8807,6 +8807,79 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 
+  Widget _buildTurnInstructionBanner(DedaRouteStep step) {
+    return Material(
+      color: Colors.white.withOpacity(0.92),
+      elevation: 2,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 48, maxHeight: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.60),
+          ),
+        ),
+        child: Row(
+          textDirection: TextDirection.rtl,
+          children: [
+            Icon(
+              directionIcon(step),
+              size: 24,
+              color: const Color(0xFF17652F),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    step.instruction,
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Row(
+                    textDirection: TextDirection.rtl,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          dedaText(
+                            'بعد ${formatRouteDistance(step.distanceMeters)}',
+                            'In ${formatRouteDistance(step.distanceMeters)}',
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            color: Color(0xFF4E5B52),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (step.lanes.isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        _buildLaneGuide(step),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   int get _currentSpeedKmh {
     final metersPerSecond = livePosition?.speed ?? 0;
     if (!metersPerSecond.isFinite || metersPerSecond <= 0) return 0;
@@ -9401,94 +9474,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               ),
             if (!isLoading && errorMessage == null && firstUsefulStep != null)
               Positioned(
-                top: tripStarted ? 8 : 70,
-                left: 0,
-                right: 0,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: FractionallySizedBox(
-                    widthFactor: tripStarted
-                        ? (isLandscape ? 0.46 : 0.70)
-                        : 0.88,
-                    child: Material(
-                      color: Colors.white.withOpacity(tripStarted ? 0.70 : 0.88),
-                      elevation: tripStarted ? 1 : 2,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.55),
-                          ),
-                        ),
-                        child: Row(
-                          textDirection: TextDirection.rtl,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 13,
-                              backgroundColor:
-                                  const Color(0xFFEAF3E9).withOpacity(0.82),
-                              child: Icon(
-                                directionIcon(firstUsefulStep!),
-                                size: 17,
-                                color: const Color(0xFF17652F),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    firstUsefulStep!.instruction,
-                                    textAlign: TextAlign.right,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  Text(
-                                    dedaText(
-                                      'بعد ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                      'In ${formatRouteDistance(firstUsefulStep!.distanceMeters)}',
-                                    ),
-                                    textAlign: TextAlign.right,
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      fontSize: 9.5,
-                                      color: Color(0xFF4E5B52),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (firstUsefulStep!.lanes.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    _buildLaneGuide(firstUsefulStep!),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (tripStarted)
-              Positioned(
-                top: isLandscape ? 12 : 66,
-                right: isLandscape
-                    ? (isInsetDrivingMap ? 24 : 10)
-                    : 12,
-                child: _buildSpeedIndicator(),
+                top: 12,
+                left: isLandscape && tripStarted ? 90 : 68,
+                right: isLandscape && tripStarted ? 90 : 118,
+                child: _buildTurnInstructionBanner(firstUsefulStep!),
               ),
             if (tripStarted && _activeHazard != null)
               Positioned(
