@@ -9983,7 +9983,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 ),
                 options: MapOptions(
                   initialCenter: point,
-                  initialZoom: 16,
+                  // Open the main map at a district-scale overview instead of
+                  // dropping the user into a street-level close zoom.
+                  initialZoom: 11.8,
                   initialCameraFit: fitPoints.length < 2
                       ? null
                       : CameraFit.coordinates(
