@@ -1124,6 +1124,26 @@ class _AdminRequestsPage extends StatelessWidget {
               ? (isArabic ? 'الدعم' : 'Support')
               : (isArabic ? 'طلبات الأماكن' : 'Place requests'),
         ),
+        actions: [
+          if (isSupport &&
+              DedaBackend.normalizeAdminRole(adminProfile['role']) ==
+                  'general_manager')
+            IconButton(
+              tooltip: isArabic
+                  ? 'محذوفات الدعم'
+                  : 'Support trash',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => DedaSupportTrashPage(
+                      isArabic: isArabic,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
       body: _RequestList(
         isArabic: isArabic,
@@ -1220,6 +1240,13 @@ class _RequestListState extends State<_RequestList> {
     final profile = widget.adminProfile;
     return profile == null ||
         DedaBackend.adminHasPermission(profile, permission);
+  }
+
+  bool get _isGeneralManager {
+    final profile = widget.adminProfile;
+    if (profile == null) return false;
+    return DedaBackend.normalizeAdminRole(profile['role']) ==
+        'general_manager';
   }
 
   String statusLabel(String status) {
@@ -1563,6 +1590,116 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
+  Future<bool> _confirmSupportDelete({
+    required int count,
+  }) async {
+    return (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(
+              count == 1
+                  ? t('حذف رسالة الدعم', 'Delete support message')
+                  : t('حذف رسائل الدعم', 'Delete support messages'),
+            ),
+            content: Text(
+              t(
+                count == 1
+                    ? 'ستنقل الرسالة إلى محذوفات المدير العام، ولن تظهر لأي موظف أو مستخدم. يمكن استرجاعها لاحقًا.'
+                    : 'ستنقل $count رسالة إلى محذوفات المدير العام، ولن تظهر لأي موظف أو مستخدم. يمكن استرجاعها لاحقًا.',
+                count == 1
+                    ? 'The message will move to general-manager trash and will no longer be visible to staff or users. It can be restored later.'
+                    : '$count messages will move to general-manager trash and will no longer be visible to staff or users. They can be restored later.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E),
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: Text(t('تأكيد الحذف', 'Confirm delete')),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+  }
+
+  Future<void> _deleteSupportMessage(String id) async {
+    if (!_isGeneralManager) return;
+    final confirmed = await _confirmSupportDelete(count: 1);
+    if (!confirmed) return;
+    try {
+      await DedaBackend.trashSupportRequest(id);
+      if (!mounted) return;
+      setState(() => _expandedId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم نقل الرسالة إلى محذوفات المدير العام.',
+              'Message moved to general-manager trash.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر حذف الرسالة الآن.',
+              'Could not delete the message now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteVisibleSupport(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+  ) async {
+    if (!_isGeneralManager || documents.isEmpty) return;
+    final confirmed = await _confirmSupportDelete(count: documents.length);
+    if (!confirmed) return;
+    try {
+      await DedaBackend.trashSupportRequests(
+        documents.map((doc) => doc.id).toList(),
+      );
+      if (!mounted) return;
+      setState(() => _expandedId = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم نقل عناصر هذا القسم إلى محذوفات المدير العام.',
+              'This section was moved to general-manager trash.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر حذف عناصر القسم الآن.',
+              'Could not delete the section items now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _supportActions({required String status, required String id}) {
     if (!_can('supportReply')) {
       return Align(
@@ -1596,6 +1733,15 @@ class _RequestListState extends State<_RequestList> {
           icon: const Icon(Icons.task_alt),
           label: Text(t('تم الحل / إغلاق', 'Resolve / close')),
         ),
+        if (_isGeneralManager)
+          OutlinedButton.icon(
+            onPressed: () => _deleteSupportMessage(id),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFB3261E),
+            ),
+            icon: const Icon(Icons.delete_outline),
+            label: Text(t('حذف', 'Delete')),
+          ),
       ],
     );
   }
@@ -2245,6 +2391,28 @@ class _RequestListState extends State<_RequestList> {
                 ],
               ),
             ),
+            if (widget.collection == 'support_requests' &&
+                _isGeneralManager &&
+                documents.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: TextButton.icon(
+                    onPressed: () => _deleteVisibleSupport(documents),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFB3261E),
+                    ),
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    label: Text(
+                      t(
+                        'حذف عناصر هذا القسم',
+                        'Delete this section',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
               child: documents.isEmpty
                   ? Center(
