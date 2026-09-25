@@ -1174,7 +1174,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
   bool _submitting = false;
   bool _showMessageValidation = false;
   DateTime? _savedAt;
-  String? _attachedImagePath;
+  final List<String> _attachedImagePaths = <String>[];
 
   static const List<Map<String, String>> _types = [
     {
@@ -1335,11 +1335,23 @@ class _DedaContactPageState extends State<DedaContactPage> {
         _phoneController.text = (data['phone'] ?? '').toString();
       }
       _messageController.text = (data['message'] ?? '').toString();
-      final savedImagePath = data['imagePath']?.toString();
-      if (savedImagePath != null &&
-          savedImagePath.isNotEmpty &&
-          File(savedImagePath).existsSync()) {
-        _attachedImagePath = savedImagePath;
+      _attachedImagePaths.clear();
+      final rawImagePaths = data['imagePaths'];
+      if (rawImagePaths is List) {
+        for (final value in rawImagePaths.take(3)) {
+          final path = value?.toString().trim() ?? '';
+          if (path.isNotEmpty && File(path).existsSync()) {
+            _attachedImagePaths.add(path);
+          }
+        }
+      } else {
+        // One-time compatibility with drafts created by older DEDA builds.
+        final savedImagePath = data['imagePath']?.toString();
+        if (savedImagePath != null &&
+            savedImagePath.isNotEmpty &&
+            File(savedImagePath).existsSync()) {
+          _attachedImagePaths.add(savedImagePath);
+        }
       }
       final savedAt = data['savedAt']?.toString();
       if (savedAt != null && savedAt.isNotEmpty) {
@@ -1367,7 +1379,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
           'name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
           'message': _messageController.text.trim(),
-          'imagePath': _attachedImagePath,
+          'imagePaths': _attachedImagePaths,
           'savedAt': now.toIso8601String(),
         }),
       );
@@ -1388,18 +1400,52 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
-  Future<void> _pickContactImage() async {
+  Future<void> _pickContactImages() async {
+    if (_attachedImagePaths.length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'الحد الأقصى 3 صور لكل طلب.',
+              'You can attach up to 3 photos per request.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
-      final image = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+      final images = await ImagePicker().pickMultiImage(
         imageQuality: 55,
         maxWidth: 1024,
       );
-      if (image == null || !mounted) return;
+      if (images.isEmpty || !mounted) return;
+
+      final remaining = 3 - _attachedImagePaths.length;
+      final selected = images
+          .map((image) => image.path)
+          .where((path) => !_attachedImagePaths.contains(path))
+          .take(remaining)
+          .toList();
+
       setState(() {
-        _attachedImagePath = image.path;
+        _attachedImagePaths.addAll(selected);
         _contactType = 'photo';
       });
+
+      if (images.length > remaining && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'تم اعتماد أول 3 صور فقط، وهو الحد الأقصى للطلب.',
+                'Only the first 3 photos were kept, which is the request limit.',
+              ),
+            ),
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1415,10 +1461,15 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
+  void _removeContactImage(int index) {
+    if (index < 0 || index >= _attachedImagePaths.length) return;
+    setState(() => _attachedImagePaths.removeAt(index));
+  }
+
   Future<void> _prepareMessage() async {
     setState(() => _showMessageValidation = true);
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_contactType == 'photo' && _attachedImagePath == null) {
+    if (_contactType == 'photo' && _attachedImagePaths.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1446,14 +1497,14 @@ class _DedaContactPageState extends State<DedaContactPage> {
         name: supportName,
         phone: supportPhone,
         message: _messageController.text.trim(),
-        imagePath: _attachedImagePath,
+        imagePaths: List<String>.from(_attachedImagePaths),
       );
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
       if (!mounted) return;
       setState(() {
         _messageController.clear();
-        _attachedImagePath = null;
+        _attachedImagePaths.clear();
         _showMessageValidation = false;
         _savedAt = null;
       });
@@ -1592,38 +1643,91 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 14),
                     if (_contactType == 'photo') ...[
                       OutlinedButton.icon(
-                        onPressed: _pickContactImage,
+                        onPressed: _attachedImagePaths.length >= 3
+                            ? null
+                            : _pickContactImages,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                         label: Text(
-                          _attachedImagePath == null
-                              ? dedaText('اختيار صورة', 'Choose photo')
-                              : dedaText('تغيير الصورة', 'Change photo'),
+                          _attachedImagePaths.isEmpty
+                              ? dedaText(
+                                  'اختيار صور (حتى 3)',
+                                  'Choose photos (up to 3)',
+                                )
+                              : dedaText(
+                                  'إضافة صور (${_attachedImagePaths.length}/3)',
+                                  'Add photos (${_attachedImagePaths.length}/3)',
+                                ),
                         ),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
                         ),
                       ),
-                      if (_attachedImagePath != null) ...[
+                      if (_attachedImagePaths.isNotEmpty) ...[
                         const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.file(
-                            File(_attachedImagePath!),
-                            height: 170,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              height: 80,
-                              alignment: Alignment.center,
-                              color: const Color(0xFFEAF4E7),
-                              child: Text(
-                                dedaText(
-                                  'تم اختيار الصورة',
-                                  'Photo selected',
-                                ),
-                              ),
-                            ),
+                        Text(
+                          dedaText(
+                            'يمكنك إرسال 3 صور كحد أقصى داخل نفس الطلب.',
+                            'You can send up to 3 photos in the same request.',
                           ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF5F665F),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (var index = 0;
+                                index < _attachedImagePaths.length;
+                                index++)
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Image.file(
+                                      File(_attachedImagePaths[index]),
+                                      height: 105,
+                                      width: 105,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        height: 105,
+                                        width: 105,
+                                        alignment: Alignment.center,
+                                        color: const Color(0xFFEAF4E7),
+                                        child: const Icon(
+                                          Icons.image_outlined,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  PositionedDirectional(
+                                    top: -7,
+                                    end: -7,
+                                    child: Material(
+                                      color: const Color(0xFFB3261E),
+                                      shape: const CircleBorder(),
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: () =>
+                                            _removeContactImage(index),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(5),
+                                          child: Icon(
+                                            Icons.close,
+                                            size: 17,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
                         ),
                       ],
                       const SizedBox(height: 14),
@@ -2914,11 +3018,31 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
           .toList();
 
       if (unreadIds.isNotEmpty) {
-        unawaited(
-          DedaBackend.markOwnerPlaceNotificationsRead(unreadIds).catchError(
-            (_) {},
-          ),
-        );
+        try {
+          await DedaBackend.markOwnerPlaceNotificationsRead(
+            accountKey: accountKey,
+            notificationIds: unreadIds,
+          );
+          // Reflect the successful server write immediately in the sheet.
+          // The bell's Firestore stream will then remove its red counter too.
+          for (final item in items) {
+            if (unreadIds.contains((item['id'] ?? '').toString())) {
+              item['readAt'] = DateTime.now();
+            }
+          }
+        } catch (_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                dedaText(
+                  'تعذر تثبيت قراءة الإشعار الآن. تحقق من الاتصال وحاول مجددًا.',
+                  'Could not mark the notification as read. Check your connection and try again.',
+                ),
+              ),
+            ),
+          );
+        }
       }
 
       if (!mounted) return;

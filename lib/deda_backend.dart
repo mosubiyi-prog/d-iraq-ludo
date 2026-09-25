@@ -288,8 +288,12 @@ class DedaBackend {
     required String name,
     required String phone,
     required String message,
-    String? imagePath,
+    List<String> imagePaths = const <String>[],
   }) async {
+    if (imagePaths.length > 3) {
+      throw ArgumentError('support-image-limit');
+    }
+
     final user = await _ensurePublicUser();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection('support_requests').doc();
@@ -309,88 +313,122 @@ class DedaBackend {
       }, SetOptions(merge: true));
     } catch (_) {}
 
-    String? imageUrl;
-    String? imageBase64;
-    String? imageMimeType;
-    if (imagePath != null && imagePath.isNotEmpty) {
-      final file = File(imagePath);
-      if (!await file.exists()) throw StateError('support-image-missing');
-      final bytes = await file.readAsBytes();
-      if (bytes.length > 8 * 1024 * 1024) {
-        throw StateError('support-image-too-large');
-      }
-      final extension = imagePath.contains('.')
-          ? imagePath.split('.').last.toLowerCase()
-          : 'jpg';
-      final contentType = switch (extension) {
-        'png' => 'image/png',
-        'webp' => 'image/webp',
-        'gif' => 'image/gif',
-        _ => 'image/jpeg',
-      };
-      imageMimeType = contentType;
-      try {
-        final reference = FirebaseStorage.instance
-            .ref('support_uploads/${user.uid}/${request.id}.$extension');
-        await reference.putData(
-          bytes,
-          SettableMetadata(contentType: contentType),
-        );
-        imageUrl = await reference.getDownloadURL();
-      } catch (_) {
-        // Small compressed photos can still be delivered through Firestore
-        // if Storage is temporarily unavailable or its rules are not deployed yet.
-        if (bytes.length <= 650 * 1024) {
-          imageBase64 = base64Encode(bytes);
-        } else {
-          rethrow;
-        }
-      }
-    }
+    final cleanImagePaths = imagePaths
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .take(3)
+        .toList();
 
-    // If this is a place owner, link the support ticket directly to the
-    // approved DEDA place so the employee never has to search for it manually.
-    Map<String, dynamic>? linkedPlace;
-    String? linkedPlaceId;
+    final imageUrls = <String>[];
+    final imageMimeTypes = <String>[];
+    final uploadedReferences = <Reference>[];
+    String? legacyImageBase64;
+    String? legacyImageMimeType;
+
     try {
-      final owned = await firestore
-          .collection('published_places')
-          .where('ownerUid', isEqualTo: user.uid)
-          .limit(20)
-          .get();
-      for (final doc in owned.docs) {
-        if (doc.data()['published'] == true) {
-          linkedPlaceId = doc.id;
-          linkedPlace = doc.data();
-          break;
+      for (var index = 0; index < cleanImagePaths.length; index++) {
+        final imagePath = cleanImagePaths[index];
+        final file = File(imagePath);
+        if (!await file.exists()) throw StateError('support-image-missing');
+        final bytes = await file.readAsBytes();
+        if (bytes.length > 8 * 1024 * 1024) {
+          throw StateError('support-image-too-large');
+        }
+
+        final extension = imagePath.contains('.')
+            ? imagePath.split('.').last.toLowerCase()
+            : 'jpg';
+        final contentType = switch (extension) {
+          'png' => 'image/png',
+          'webp' => 'image/webp',
+          'gif' => 'image/gif',
+          _ => 'image/jpeg',
+        };
+
+        try {
+          final reference = FirebaseStorage.instance.ref(
+            'support_uploads/${user.uid}/${request.id}_${index + 1}.$extension',
+          );
+          await reference.putData(
+            bytes,
+            SettableMetadata(contentType: contentType),
+          );
+          uploadedReferences.add(reference);
+          imageUrls.add(await reference.getDownloadURL());
+          imageMimeTypes.add(contentType);
+        } catch (_) {
+          // Keep the proven single-photo Firestore fallback for older/stale
+          // Storage deployments. Multiple photos must use Storage so the
+          // Firestore document never approaches its size limit.
+          if (cleanImagePaths.length == 1 && bytes.length <= 650 * 1024) {
+            legacyImageBase64 = base64Encode(bytes);
+            legacyImageMimeType = contentType;
+          } else {
+            rethrow;
+          }
         }
       }
-    } catch (_) {}
 
-    await request.set({
-      'ownerUid': user.uid,
-      'accountKey': accountKey,
-      'type': type,
-      'name': cleanName,
-      'phone': cleanPhone,
-      'message': message.trim(),
-      'imageUrl': imageUrl,
-      'imageBase64': imageBase64,
-      'imageMimeType': imageMimeType,
-      'status': 'new',
-      if (linkedPlaceId != null) 'linkedPlaceId': linkedPlaceId,
-      if (linkedPlace != null) ...{
-        'linkedPlaceName': linkedPlace['placeName'],
-        'linkedApprovalNumber': linkedPlace['approvalNumber'],
-        'linkedLatitude': linkedPlace['latitude'],
-        'linkedLongitude': linkedPlace['longitude'],
-        'linkedSourceRequestId': linkedPlace['lastSourceRequestId'] ??
-            linkedPlace['sourceRequestId'],
-      },
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    return request.id;
+      // If this is a place owner, link the support ticket directly to the
+      // approved DEDA place so the employee never has to search for it manually.
+      Map<String, dynamic>? linkedPlace;
+      String? linkedPlaceId;
+      try {
+        final owned = await firestore
+            .collection('published_places')
+            .where('ownerUid', isEqualTo: user.uid)
+            .limit(20)
+            .get();
+        for (final doc in owned.docs) {
+          if (doc.data()['published'] == true) {
+            linkedPlaceId = doc.id;
+            linkedPlace = doc.data();
+            break;
+          }
+        }
+      } catch (_) {}
+
+      final firstImageUrl = imageUrls.isEmpty ? null : imageUrls.first;
+      final firstMimeType = imageMimeTypes.isEmpty
+          ? legacyImageMimeType
+          : imageMimeTypes.first;
+
+      await request.set({
+        'ownerUid': user.uid,
+        'accountKey': accountKey,
+        'type': type,
+        'name': cleanName,
+        'phone': cleanPhone,
+        'message': message.trim(),
+        // New multi-photo fields. Legacy fields remain for old builds/data.
+        'imageUrls': imageUrls,
+        'imageMimeTypes': imageMimeTypes,
+        'imageUrl': firstImageUrl,
+        'imageBase64': legacyImageBase64,
+        'imageMimeType': firstMimeType,
+        'status': 'new',
+        if (linkedPlaceId != null) 'linkedPlaceId': linkedPlaceId,
+        if (linkedPlace != null) ...{
+          'linkedPlaceName': linkedPlace['placeName'],
+          'linkedApprovalNumber': linkedPlace['approvalNumber'],
+          'linkedLatitude': linkedPlace['latitude'],
+          'linkedLongitude': linkedPlace['longitude'],
+          'linkedSourceRequestId': linkedPlace['lastSourceRequestId'] ??
+              linkedPlace['sourceRequestId'],
+        },
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return request.id;
+    } catch (_) {
+      // Avoid orphaned Storage objects if a multi-photo request fails midway.
+      for (final reference in uploadedReferences) {
+        try {
+          await reference.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   static Future<String> submitPlace(Map<String, dynamic> data) async {
@@ -615,7 +653,7 @@ class DedaBackend {
   ) async {
     final clean = accountKey.trim();
     if (clean.isEmpty) return const <Map<String, dynamic>>[];
-    await _ensurePublicUser();
+    await _ensureOwnerSessionForAccountKey(clean);
     final snapshot = await FirebaseFirestore.instance
         .collection('owner_place_notifications')
         .where('accountKey', isEqualTo: clean)
@@ -626,16 +664,23 @@ class DedaBackend {
         .toList();
   }
 
-  static Future<void> markOwnerPlaceNotificationsRead(
-    List<String> notificationIds,
-  ) async {
+  static Future<void> markOwnerPlaceNotificationsRead({
+    required String accountKey,
+    required List<String> notificationIds,
+  }) async {
+    final cleanAccountKey = accountKey.trim();
     final ids = notificationIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
         .take(100)
         .toList();
-    if (ids.isEmpty) return;
-    await _ensurePublicUser();
+    if (cleanAccountKey.isEmpty || ids.isEmpty) return;
+
+    // Reading an owner notification is an owner-account action. DEDA admin
+    // authentication shares FirebaseAuth with the public app, so always
+    // restore/verify the stable phone-account session before writing readAt.
+    await _ensureOwnerSessionForAccountKey(cleanAccountKey);
+
     final firestore = FirebaseFirestore.instance;
     final batch = firestore.batch();
     for (final id in ids) {
@@ -2045,11 +2090,20 @@ class DedaBackend {
       throw StateError('deleted-support-not-found');
     }
     final data = snapshot.data()!;
-    final imageUrl = (data['imageUrl'] ?? '').toString().trim();
+    final imageUrls = <String>{};
+    final rawImageUrls = data['imageUrls'];
+    if (rawImageUrls is List) {
+      for (final value in rawImageUrls) {
+        final url = value?.toString().trim() ?? '';
+        if (url.isNotEmpty) imageUrls.add(url);
+      }
+    }
+    final legacyImageUrl = (data['imageUrl'] ?? '').toString().trim();
+    if (legacyImageUrl.isNotEmpty) imageUrls.add(legacyImageUrl);
 
     await trash.delete();
 
-    if (imageUrl.isNotEmpty) {
+    for (final imageUrl in imageUrls) {
       try {
         await FirebaseStorage.instance.refFromURL(imageUrl).delete();
       } catch (_) {

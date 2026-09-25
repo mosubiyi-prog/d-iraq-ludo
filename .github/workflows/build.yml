@@ -165,6 +165,9 @@ jobs:
           path.write_text(text)
           PY
 
+      - name: Enable DEDA admin image saving
+        run: python3 tools/android_media_save_patch.py
+
       - name: Configure DEDA launcher icon
         run: |
           flutter pub add --dev flutter_launcher_icons

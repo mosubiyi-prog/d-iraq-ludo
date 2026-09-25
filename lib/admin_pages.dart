@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_place_map.dart';
@@ -1526,6 +1529,240 @@ class _DedaAdminInboxPageState extends State<DedaAdminInboxPage> {
   }
 }
 
+class _DedaSupportImage {
+  final String url;
+  final String base64Data;
+  final String mimeType;
+
+  const _DedaSupportImage({
+    this.url = '',
+    this.base64Data = '',
+    this.mimeType = 'image/jpeg',
+  });
+
+  bool get isNetwork => url.isNotEmpty;
+}
+
+class _DedaSupportImageViewer extends StatefulWidget {
+  final List<_DedaSupportImage> images;
+  final int initialIndex;
+  final bool isArabic;
+
+  const _DedaSupportImageViewer({
+    required this.images,
+    required this.initialIndex,
+    required this.isArabic,
+  });
+
+  @override
+  State<_DedaSupportImageViewer> createState() =>
+      _DedaSupportImageViewerState();
+}
+
+class _DedaSupportImageViewerState extends State<_DedaSupportImageViewer> {
+  static const MethodChannel _mediaChannel =
+      MethodChannel('com.diraq.ludo/media');
+
+  late final PageController _pageController;
+  late int _index;
+  bool _saving = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.images.isEmpty
+        ? 0
+        : widget.initialIndex
+            .clamp(0, widget.images.length - 1)
+            .toInt();
+    _pageController = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  String _extensionForMime(String mimeType) {
+    switch (mimeType.toLowerCase()) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/gif':
+        return 'gif';
+      default:
+        return 'jpg';
+    }
+  }
+
+  Future<Uint8List> _loadBytes(_DedaSupportImage image) async {
+    if (image.base64Data.isNotEmpty) {
+      return base64Decode(image.base64Data);
+    }
+
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse(image.url));
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('image-download-${response.statusCode}');
+      }
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in response) {
+        builder.add(chunk);
+      }
+      return builder.takeBytes();
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _saveCurrentImage() async {
+    if (_saving || widget.images.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final image = widget.images[_index];
+      final bytes = await _loadBytes(image);
+      final extension = _extensionForMime(image.mimeType);
+      final fileName =
+          'DEDA_support_${DateTime.now().millisecondsSinceEpoch}_${_index + 1}.$extension';
+      await _mediaChannel.invokeMethod<String>(
+        'saveImage',
+        <String, dynamic>{
+          'bytes': bytes,
+          'fileName': fileName,
+          'mimeType': image.mimeType,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم حفظ الصورة في صور الجهاز داخل مجلد DEDA.',
+              'The image was saved to your device Pictures in the DEDA folder.',
+            ),
+          ),
+        ),
+      );
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      final permissionNeeded = error.code == 'permission_required';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            permissionNeeded
+                ? t(
+                    'اسمح للتطبيق بحفظ الصور ثم اضغط حفظ مرة أخرى.',
+                    'Allow photo storage access, then tap Save again.',
+                  )
+                : t(
+                    'تعذر حفظ الصورة الآن.',
+                    'Could not save the image now.',
+                  ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر حفظ الصورة الآن.',
+              'Could not save the image now.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _image(_DedaSupportImage image) {
+    if (image.isNetwork) {
+      return Image.network(
+        image.url,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, progress) => progress == null
+            ? child
+            : const Center(child: CircularProgressIndicator()),
+        errorBuilder: (_, __, ___) => Center(
+          child: Text(
+            t('تعذر عرض الصورة.', 'Could not display image.'),
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    try {
+      return Image.memory(
+        base64Decode(image.base64Data),
+        fit: BoxFit.contain,
+      );
+    } catch (_) {
+      return Center(
+        child: Text(
+          t('تعذر عرض الصورة.', 'Could not display image.'),
+          style: const TextStyle(color: Colors.white),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          t(
+            'صورة ${_index + 1} من ${widget.images.length}',
+            'Image ${_index + 1} of ${widget.images.length}',
+          ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: t('حفظ الصورة', 'Save image'),
+            onPressed: _saving ? null : _saveCurrentImage,
+            icon: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.download_outlined),
+          ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.images.length,
+        onPageChanged: (value) => setState(() => _index = value),
+        itemBuilder: (context, index) => InteractiveViewer(
+          minScale: 0.8,
+          maxScale: 5.0,
+          boundaryMargin: const EdgeInsets.all(48),
+          child: SizedBox.expand(
+            child: Center(child: _image(widget.images[index])),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RequestList extends StatefulWidget {
   final bool isArabic;
   final String collection;
@@ -2443,12 +2680,105 @@ class _RequestListState extends State<_RequestList> {
     }
   }
 
+  List<_DedaSupportImage> _supportImages(
+    Map<String, dynamic> data,
+  ) {
+    final images = <_DedaSupportImage>[];
+    final seenUrls = <String>{};
+    final rawUrls = data['imageUrls'];
+    final rawMimeTypes = data['imageMimeTypes'];
+
+    if (rawUrls is List) {
+      for (var index = 0; index < rawUrls.length && images.length < 3; index++) {
+        final url = rawUrls[index]?.toString().trim() ?? '';
+        if (url.isEmpty || !seenUrls.add(url)) continue;
+        final mime = rawMimeTypes is List && index < rawMimeTypes.length
+            ? rawMimeTypes[index]?.toString().trim() ?? ''
+            : '';
+        images.add(
+          _DedaSupportImage(
+            url: url,
+            mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+          ),
+        );
+      }
+    }
+
+    final legacyUrl = _text(data['imageUrl']);
+    if (legacyUrl.isNotEmpty &&
+        images.length < 3 &&
+        seenUrls.add(legacyUrl)) {
+      final mime = _text(data['imageMimeType']);
+      images.add(
+        _DedaSupportImage(
+          url: legacyUrl,
+          mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+        ),
+      );
+    }
+
+    final legacyBase64 = _text(data['imageBase64']);
+    if (images.isEmpty && legacyBase64.isNotEmpty) {
+      final mime = _text(data['imageMimeType']);
+      images.add(
+        _DedaSupportImage(
+          base64Data: legacyBase64,
+          mimeType: mime.isEmpty ? 'image/jpeg' : mime,
+        ),
+      );
+    }
+
+    return images;
+  }
+
+  Widget _supportImageThumbnail(_DedaSupportImage image) {
+    if (image.isNetwork) {
+      return Image.network(
+        image.url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          alignment: Alignment.center,
+          color: const Color(0xFFEAF4E7),
+          child: Text(t('تعذر عرض الصورة.', 'Could not display image.')),
+        ),
+      );
+    }
+
+    try {
+      return Image.memory(
+        base64Decode(image.base64Data),
+        fit: BoxFit.cover,
+      );
+    } catch (_) {
+      return Container(
+        alignment: Alignment.center,
+        color: const Color(0xFFEAF4E7),
+        child: Text(t('تعذر عرض الصورة.', 'Could not display image.')),
+      );
+    }
+  }
+
+  Future<void> _openSupportImageViewer(
+    List<_DedaSupportImage> images,
+    int initialIndex,
+  ) async {
+    if (images.isEmpty || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _DedaSupportImageViewer(
+          images: images,
+          initialIndex: initialIndex,
+          isArabic: widget.isArabic,
+        ),
+      ),
+    );
+  }
+
   Widget _requestDetails(Map<String, dynamic> data, String id) {
     final commonAudit = _auditDetails(data);
 
     if (widget.collection == 'support_requests') {
-      final imageUrl = _text(data['imageUrl']);
-      final imageBase64 = _text(data['imageBase64']);
+      final supportImages = _supportImages(data);
       final linkedPlaceId = _text(data['linkedPlaceId']);
       final linkedPlaceName = _text(data['linkedPlaceName']);
       final linkedLatitude = (data['linkedLatitude'] as num?)?.toDouble();
@@ -2465,27 +2795,83 @@ class _RequestListState extends State<_RequestList> {
           _detailRow(t('الاسم', 'Name'), data['name']),
           _detailRow(t('الهاتف', 'Phone'), data['phone'], ltr: true),
           _detailRow(t('الرسالة', 'Message'), data['message']),
-          if (imageUrl.isNotEmpty || imageBase64.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: imageUrl.isNotEmpty
-                  ? Image.network(
-                      imageUrl,
-                      height: 190,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 70,
-                        alignment: Alignment.center,
-                        color: const Color(0xFFEAF4E7),
-                        child: Text(t('تعذر عرض الصورة.', 'Could not display image.')),
+          if (supportImages.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              t(
+                supportImages.length == 1
+                    ? 'الصورة المرفقة'
+                    : 'الصور المرفقة (${supportImages.length}/3)',
+                supportImages.length == 1
+                    ? 'Attached image'
+                    : 'Attached images (${supportImages.length}/3)',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: supportImages.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: supportImages.length == 1 ? 1 : 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: supportImages.length == 1 ? 1.8 : 1,
+              ),
+              itemBuilder: (context, index) => InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => _openSupportImageViewer(
+                  supportImages,
+                  index,
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: _supportImageThumbnail(
+                        supportImages[index],
                       ),
-                    )
-                  : Image.memory(
-                      base64Decode(imageBase64),
-                      height: 190,
-                      fit: BoxFit.cover,
                     ),
+                    PositionedDirectional(
+                      bottom: 6,
+                      end: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${index + 1}/${supportImages.length}',
+                          textDirection: TextDirection.ltr,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              t(
+                'اضغط على أي صورة لفتحها بالحجم الكامل والتكبير أو الحفظ.',
+                'Tap any image to open it full-screen, zoom, or save it.',
+              ),
+              style: const TextStyle(
+                color: Color(0xFF5F665F),
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
           if (linkedPlaceId.isNotEmpty) ...[
