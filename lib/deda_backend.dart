@@ -2227,6 +2227,37 @@ class DedaBackend {
     );
   }
 
+  static Future<void> permanentlyDeletePlaceRequest(String id) async {
+    final actor = await _requireGeneralManagerProfile();
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) return;
+
+    final firestore = FirebaseFirestore.instance;
+    final trash =
+        firestore.collection('admin_trash_place_requests').doc(cleanId);
+    final snapshot = await trash.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      throw StateError('deleted-place-request-not-found');
+    }
+    final data = snapshot.data()!;
+
+    // Only the archived request is removed. An already published place is a
+    // separate record and must never be affected by deleting request history.
+    await trash.delete();
+
+    await _writeAdminAudit(
+      'place_request_permanently_deleted',
+      details: <String, dynamic>{
+        'sourceCollection': 'place_requests',
+        'sourceId': cleanId,
+        'targetPlaceName': data['placeName'] ?? data['name'],
+        'targetPhone': data['phone'],
+        'approvalNumber': data['approvalNumber'],
+        'deletedByUid': actor['uid'],
+      },
+    );
+  }
+
   static Future<void> updateSupportStatus({
     required String id,
     required String status,
