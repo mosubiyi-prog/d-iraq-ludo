@@ -1,4 +1,5 @@
 rules_version = '2';
+// DEDA support uploads: up to three images per support request.
 service firebase.storage {
   match /b/{bucket}/o {
     match /support_uploads/{uid}/{fileName} {
