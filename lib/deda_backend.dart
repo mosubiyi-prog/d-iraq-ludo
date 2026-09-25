@@ -84,6 +84,16 @@ class DedaBackend {
     return user;
   }
 
+  static Future<bool> _isCurrentGeneralManagerSession(User user) async {
+    if (user.isAnonymous) return false;
+    try {
+      final profile = await currentAdminProfile();
+      return normalizeAdminRole(profile['role']) == 'general_manager';
+    } catch (_) {
+      return false;
+    }
+  }
+
   static String normalizeAdminRole(dynamic value) {
     final raw = (value ?? '').toString().trim().toLowerCase();
     if (raw.isEmpty ||
@@ -507,10 +517,10 @@ class DedaBackend {
     final firestore = FirebaseFirestore.instance;
     final override = accountKeyOverride?.trim() ?? '';
     var user = await _ensurePublicUser();
+    final generalManagerSession =
+        await _isCurrentGeneralManagerSession(user);
 
-    // Prefer the ownership data stored on the approved place itself. This
-    // avoids needlessly replacing a valid legacy owner UID with a restored
-    // session just because a phone-derived account key was supplied.
+    // Read the approved place first so we can keep legacy owner linkage.
     String placeOwnerUid = '';
     String placeAccountKey = '';
     try {
@@ -525,7 +535,12 @@ class DedaBackend {
         ? placeAccountKey
         : (override.isNotEmpty ? override : await _currentAccountKey(user));
 
-    if (placeOwnerUid != user.uid && accountKey.isNotEmpty) {
+    // The general manager can legitimately inspect this exact request without
+    // destroying the admin Firebase session. This is important on devices
+    // that also contain a legacy pre-PIN owner place.
+    if (!generalManagerSession &&
+        placeOwnerUid != user.uid &&
+        accountKey.isNotEmpty) {
       user = await _ensureOwnerSessionForAccountKey(accountKey);
     }
 
@@ -535,6 +550,9 @@ class DedaBackend {
         .get();
     final data = snapshot.data();
     if (!snapshot.exists || data == null) return null;
+    if (generalManagerSession) {
+      return <String, dynamic>{'id': snapshot.id, ...data};
+    }
     final sameOwner = data['requesterUid'] == user.uid ||
         data['accountKey']?.toString() == accountKey;
     if (!sameOwner) return null;
@@ -551,10 +569,14 @@ class DedaBackend {
 
     final firestore = FirebaseFirestore.instance;
     var user = await _ensurePublicUser();
+    final generalManagerSession =
+        await _isCurrentGeneralManagerSession(user);
 
-    // Read the approved place first. If this Firebase UID is still the
-    // original owner, keep it; forcing a session restore here can break older
-    // approved places that predate the trusted-install account migration.
+    // Read the approved place before changing authentication state. DEDA's
+    // general manager may use the same phone for both owner testing and
+    // administration; older approved places can predate PIN trusted-device
+    // migration. Keeping the authorized manager session avoids breaking that
+    // legitimate test path while ordinary users still require owner proof.
     final placeRef = firestore.collection('published_places').doc(cleanId);
     final placeSnapshot = await placeRef.get();
     final place = placeSnapshot.data();
@@ -569,7 +591,7 @@ class DedaBackend {
         ? placeAccountKey
         : (override.isNotEmpty ? override : await _currentAccountKey(user));
 
-    if (placeOwnerUid != user.uid) {
+    if (!generalManagerSession && placeOwnerUid != user.uid) {
       if (placeAccountKey.isEmpty) {
         throw StateError('not-place-owner');
       }
@@ -577,7 +599,8 @@ class DedaBackend {
       accountKey = placeAccountKey;
     }
 
-    final sameOwner = placeOwnerUid == user.uid ||
+    final sameOwner = generalManagerSession ||
+        placeOwnerUid == user.uid ||
         (placeAccountKey.isNotEmpty && placeAccountKey == accountKey);
     if (!sameOwner) throw StateError('not-place-owner');
 

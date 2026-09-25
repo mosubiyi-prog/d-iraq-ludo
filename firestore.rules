@@ -606,6 +606,16 @@ service cloud.firestore {
           ])
         )
         || (
+          isGeneralManager()
+          && resource.data.status in ['rejected', 'cancelled', 'pending']
+          && request.resource.data.status == 'new'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.resubmittedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'reason', 'updatedAt', 'resubmittedAt'
+          ])
+        )
+        || (
           signedIn()
           && (
             resource.data.requesterUid == request.auth.uid
