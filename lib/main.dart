@@ -1338,7 +1338,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
       _attachedImagePaths.clear();
       final rawImagePaths = data['imagePaths'];
       if (rawImagePaths is List) {
-        for (final value in rawImagePaths.take(3)) {
+        for (final value in rawImagePaths.take(1)) {
           final path = value?.toString().trim() ?? '';
           if (path.isNotEmpty && File(path).existsSync()) {
             _attachedImagePaths.add(path);
@@ -1400,52 +1400,20 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
-  Future<void> _pickContactImages() async {
-    if (_attachedImagePaths.length >= 3) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'الحد الأقصى 3 صور لكل طلب.',
-              'You can attach up to 3 photos per request.',
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
+  Future<void> _pickContactImage() async {
     try {
-      final images = await ImagePicker().pickMultiImage(
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
         imageQuality: 55,
         maxWidth: 1024,
       );
-      if (images.isEmpty || !mounted) return;
-
-      final remaining = 3 - _attachedImagePaths.length;
-      final selected = images
-          .map((image) => image.path)
-          .where((path) => !_attachedImagePaths.contains(path))
-          .take(remaining)
-          .toList();
-
+      if (image == null || !mounted) return;
       setState(() {
-        _attachedImagePaths.addAll(selected);
+        _attachedImagePaths
+          ..clear()
+          ..add(image.path);
         _contactType = 'photo';
       });
-
-      if (images.length > remaining && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'تم اعتماد أول 3 صور فقط، وهو الحد الأقصى للطلب.',
-                'Only the first 3 photos were kept, which is the request limit.',
-              ),
-            ),
-          ),
-        );
-      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1461,9 +1429,9 @@ class _DedaContactPageState extends State<DedaContactPage> {
     }
   }
 
-  void _removeContactImage(int index) {
-    if (index < 0 || index >= _attachedImagePaths.length) return;
-    setState(() => _attachedImagePaths.removeAt(index));
+  void _clearContactImage() {
+    if (_attachedImagePaths.isEmpty) return;
+    setState(() => _attachedImagePaths.clear());
   }
 
   Future<void> _prepareMessage() async {
@@ -1643,20 +1611,12 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     const SizedBox(height: 14),
                     if (_contactType == 'photo') ...[
                       OutlinedButton.icon(
-                        onPressed: _attachedImagePaths.length >= 3
-                            ? null
-                            : _pickContactImages,
+                        onPressed: _pickContactImage,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                         label: Text(
                           _attachedImagePaths.isEmpty
-                              ? dedaText(
-                                  'اختيار صور (حتى 3)',
-                                  'Choose photos (up to 3)',
-                                )
-                              : dedaText(
-                                  'إضافة صور (${_attachedImagePaths.length}/3)',
-                                  'Add photos (${_attachedImagePaths.length}/3)',
-                                ),
+                              ? dedaText('اختيار صورة', 'Choose photo')
+                              : dedaText('تغيير الصورة', 'Change photo'),
                         ),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
@@ -1666,8 +1626,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                         const SizedBox(height: 10),
                         Text(
                           dedaText(
-                            'يمكنك إرسال 3 صور كحد أقصى داخل نفس الطلب.',
-                            'You can send up to 3 photos in the same request.',
+                            'يمكن إرفاق صورة واحدة فقط مع كل طلب.',
+                            'Only one photo can be attached to each request.',
                           ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
@@ -1676,57 +1636,44 @@ class _DedaContactPageState extends State<DedaContactPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        Stack(
+                          clipBehavior: Clip.none,
                           children: [
-                            for (var index = 0;
-                                index < _attachedImagePaths.length;
-                                index++)
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: Image.file(
-                                      File(_attachedImagePaths[index]),
-                                      height: 105,
-                                      width: 105,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        height: 105,
-                                        width: 105,
-                                        alignment: Alignment.center,
-                                        color: const Color(0xFFEAF4E7),
-                                        child: const Icon(
-                                          Icons.image_outlined,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  PositionedDirectional(
-                                    top: -7,
-                                    end: -7,
-                                    child: Material(
-                                      color: const Color(0xFFB3261E),
-                                      shape: const CircleBorder(),
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: () =>
-                                            _removeContactImage(index),
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(5),
-                                          child: Icon(
-                                            Icons.close,
-                                            size: 17,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(
+                                File(_attachedImagePaths.first),
+                                height: 170,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 100,
+                                  alignment: Alignment.center,
+                                  color: const Color(0xFFEAF4E7),
+                                  child: const Icon(Icons.image_outlined),
+                                ),
                               ),
+                            ),
+                            PositionedDirectional(
+                              top: 8,
+                              end: 8,
+                              child: Material(
+                                color: const Color(0xFFB3261E),
+                                shape: const CircleBorder(),
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: _clearContactImage,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(6),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ],

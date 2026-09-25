@@ -290,7 +290,7 @@ class DedaBackend {
     required String message,
     List<String> imagePaths = const <String>[],
   }) async {
-    if (imagePaths.length > 3) {
+    if (imagePaths.length > 1) {
       throw ArgumentError('support-image-limit');
     }
 
@@ -316,7 +316,7 @@ class DedaBackend {
     final cleanImagePaths = imagePaths
         .map((path) => path.trim())
         .where((path) => path.isNotEmpty)
-        .take(3)
+        .take(1)
         .toList();
 
     final imageUrls = <String>[];
@@ -357,9 +357,8 @@ class DedaBackend {
           imageUrls.add(await reference.getDownloadURL());
           imageMimeTypes.add(contentType);
         } catch (_) {
-          // Keep the proven single-photo Firestore fallback for older/stale
-          // Storage deployments. Multiple photos must use Storage so the
-          // Firestore document never approaches its size limit.
+          // Keep the proven single-photo Firestore fallback while Storage is
+          // unavailable. The release UI intentionally permits one photo only.
           if (cleanImagePaths.length == 1 && bytes.length <= 650 * 1024) {
             legacyImageBase64 = base64Encode(bytes);
             legacyImageMimeType = contentType;
