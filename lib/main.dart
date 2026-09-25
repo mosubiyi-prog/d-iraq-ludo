@@ -2657,8 +2657,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
             _deletionRequestStatus = deletion['status']?.toString();
             _deletionReviewNote = deletion['reviewNote']?.toString();
             if (_deletionRequestStatus == 'deleted') {
-              _status = 'deleted';
-              _editingApproved = false;
+              await _resetOwnerAfterDeletedPlace(prefs);
             }
           }
         } catch (_) {}
@@ -2680,6 +2679,43 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         _savedAt = DateTime.tryParse(savedAt);
       }
     } catch (_) {}
+  }
+
+
+  Future<void> _resetOwnerAfterDeletedPlace(
+    SharedPreferences prefs,
+  ) async {
+    await prefs.remove(_placeIdKey);
+    await prefs.remove(_pendingEditIdKey);
+    await prefs.remove(_submittedSnapshotKey);
+    await prefs.remove(_draftKey);
+
+    _placeId = null;
+    _pendingEditId = null;
+    _status = 'draft';
+    _approvalNumber = null;
+    _approvalDate = null;
+    _approvalMessage = null;
+    _decisionNote = null;
+    _deletionRequestId = null;
+    _deletionRequestStatus = null;
+    _deletionReviewNote = null;
+    _editingApproved = false;
+    _savedAt = null;
+    _isAvailableNow = false;
+    _categoryCode = 'restaurant';
+    _latitude = null;
+    _longitude = null;
+
+    _nameController.clear();
+    _governorateController.clear();
+    _addressController.clear();
+    _hoursController.clear();
+    _descriptionController.clear();
+    _otherCategoryTextController.clear();
+    _phoneController.text = DedaPreferences.accountPhone.isNotEmpty
+        ? DedaPreferences.accountPhone
+        : DedaPreferences.phone;
   }
 
   Map<String, dynamic> _currentData() {
@@ -2819,6 +2855,268 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
           ),
         ),
       ),
+    );
+  }
+
+  int _ownerNotificationMillis(dynamic value) {
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    try {
+      final converted = (value as dynamic).toDate();
+      if (converted is DateTime) return converted.millisecondsSinceEpoch;
+    } catch (_) {}
+    return 0;
+  }
+
+  String _ownerNotificationTime(dynamic value) {
+    DateTime? date;
+    if (value is DateTime) {
+      date = value;
+    } else {
+      try {
+        final converted = (value as dynamic).toDate();
+        if (converted is DateTime) date = converted;
+      } catch (_) {}
+    }
+    if (date == null) return '';
+    final local = date.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return two(local.day) +
+        '/' +
+        two(local.month) +
+        '/' +
+        local.year.toString() +
+        ' ' +
+        two(local.hour) +
+        ':' +
+        two(local.minute);
+  }
+
+  Future<void> _showOwnerNotifications() async {
+    final accountKey = _ownerStorageAccountKey;
+    if (accountKey.isEmpty) return;
+
+    try {
+      final items = await DedaBackend.ownerPlaceNotifications(accountKey);
+      items.sort(
+        (a, b) => _ownerNotificationMillis(b['createdAt'])
+            .compareTo(_ownerNotificationMillis(a['createdAt'])),
+      );
+      final unreadIds = items
+          .where((item) => item['readAt'] == null)
+          .map((item) => (item['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (unreadIds.isNotEmpty) {
+        unawaited(
+          DedaBackend.markOwnerPlaceNotificationsRead(unreadIds).catchError(
+            (_) {},
+          ),
+        );
+      }
+
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => FractionallySizedBox(
+          heightFactor: 0.78,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    dedaText(
+                      'إشعارات إدارة DEDA',
+                      'DEDA administration notifications',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    dedaText(
+                      'هذه إشعارات إخبارية للقراءة فقط ولا تحتوي على رد مباشر.',
+                      'These are read-only information notices with no direct reply.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF5F665F),
+                      fontSize: 12.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: items.isEmpty
+                        ? Center(
+                            child: Text(
+                              dedaText(
+                                'لا توجد إشعارات من الإدارة حالياً.',
+                                'There are no administration notifications yet.',
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              final title = dedaText(
+                                (item['titleAr'] ?? '').toString(),
+                                (item['titleEn'] ?? '').toString(),
+                              );
+                              final body = dedaText(
+                                (item['bodyAr'] ?? '').toString(),
+                                (item['bodyEn'] ?? '').toString(),
+                              );
+                              final placeName =
+                                  (item['placeName'] ?? '').toString().trim();
+                              final time =
+                                  _ownerNotificationTime(item['createdAt']);
+                              final wasUnread = item['readAt'] == null;
+                              return Card(
+                                elevation: 0,
+                                color: wasUnread
+                                    ? const Color(0xFFEAF4E7)
+                                    : const Color(0xFFF4F5F1),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            wasUnread
+                                                ? Icons.notifications_active_outlined
+                                                : Icons.notifications_none_outlined,
+                                            color: const Color(0xFF17652F),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              title,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (placeName.isNotEmpty) ...[
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          dedaText(
+                                                'المكان: ',
+                                                'Place: ',
+                                              ) +
+                                              placeName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        body,
+                                        style: const TextStyle(height: 1.45),
+                                      ),
+                                      if (time.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          time,
+                                          textDirection: TextDirection.ltr,
+                                          style: const TextStyle(
+                                            color: Color(0xFF686F69),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تحميل إشعارات الإدارة الآن.',
+              'Could not load administration notifications right now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _ownerNotificationsBell() {
+    final accountKey = _ownerStorageAccountKey;
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: DedaBackend.ownerPlaceNotificationsStream(accountKey),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <Map<String, dynamic>>[];
+        final unread = items.where((item) => item['readAt'] == null).length;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              tooltip: dedaText(
+                'إشعارات الإدارة',
+                'Administration notifications',
+              ),
+              onPressed: _showOwnerNotifications,
+              icon: const Icon(Icons.notifications_none_outlined),
+            ),
+            if (unread > 0)
+              PositionedDirectional(
+                top: 5,
+                end: 4,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 17,
+                    minHeight: 17,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFB3261E),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    unread > 9 ? '9+' : unread.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -3399,6 +3697,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         title: Text(dedaText('إدارة مكاني', 'Manage my place')),
         centerTitle: true,
         actions: [
+          _ownerNotificationsBell(),
           IconButton(
             tooltip: dedaText('مسوداتي', 'My drafts'),
             onPressed: _showDrafts,

@@ -502,6 +502,63 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /owner_place_notifications/{notificationId} {
+      allow read: if isGeneralManager()
+        || (
+          signedIn()
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+        );
+
+      allow create: if isAdmin()
+        && adminProvinceMatches(request.resource.data)
+        && request.resource.data.type in [
+          'deletion_approved', 'deletion_rejected', 'needs_changes',
+          'edit_approved', 'place_report', 'admin_alert', 'custom'
+        ]
+        && request.resource.data.accountKey is string
+        && request.resource.data.accountKey.size() > 0
+        && request.resource.data.ownerUid is string
+        && request.resource.data.placeId is string
+        && request.resource.data.placeName is string
+        && request.resource.data.approvalNumber is string
+        && request.resource.data.governorate is string
+        && request.resource.data.titleAr is string
+        && request.resource.data.titleAr.size() > 0
+        && request.resource.data.titleEn is string
+        && request.resource.data.titleEn.size() > 0
+        && request.resource.data.bodyAr is string
+        && request.resource.data.bodyAr.size() > 0
+        && request.resource.data.bodyEn is string
+        && request.resource.data.bodyEn.size() > 0
+        && request.resource.data.sourceType is string
+        && request.resource.data.sourceId is string
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByRole is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'type', 'accountKey', 'ownerUid', 'placeId', 'placeName',
+          'approvalNumber', 'governorate', 'titleAr', 'titleEn',
+          'bodyAr', 'bodyEn', 'sourceType', 'sourceId',
+          'createdByUid', 'createdByName', 'createdByRole', 'createdAt'
+        ]);
+
+      allow update: if signedIn()
+        && (
+          resource.data.ownerUid == request.auth.uid
+          || sameAccount(resource.data.accountKey)
+        )
+        && request.resource.data.readAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'readAt'
+        ]);
+
+      allow delete: if false;
+    }
+
     match /place_deletion_requests/{requestId} {
       allow create: if signedIn()
         && requestId == request.resource.data.placeId

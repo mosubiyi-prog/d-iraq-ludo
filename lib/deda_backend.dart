@@ -492,6 +492,221 @@ class DedaBackend {
     }, SetOptions(merge: true));
   }
 
+
+  static const Set<String> _ownerNotificationTypes = <String>{
+    'deletion_approved',
+    'deletion_rejected',
+    'needs_changes',
+    'edit_approved',
+    'place_report',
+    'admin_alert',
+    'custom',
+  };
+
+  static Map<String, dynamic> _ownerNotificationPayload({
+    required Map<String, dynamic> actor,
+    required String type,
+    required String accountKey,
+    required String ownerUid,
+    required String placeId,
+    required String placeName,
+    required String approvalNumber,
+    required String governorate,
+    required String titleAr,
+    required String titleEn,
+    required String bodyAr,
+    required String bodyEn,
+    required String sourceType,
+    required String sourceId,
+  }) {
+    if (!_ownerNotificationTypes.contains(type)) {
+      throw ArgumentError('invalid-owner-notification-type');
+    }
+    return <String, dynamic>{
+      'type': type,
+      'accountKey': accountKey.trim(),
+      'ownerUid': ownerUid.trim(),
+      'placeId': placeId.trim(),
+      'placeName': placeName.trim(),
+      'approvalNumber': approvalNumber.trim(),
+      'governorate': governorate.trim(),
+      'titleAr': titleAr.trim(),
+      'titleEn': titleEn.trim(),
+      'bodyAr': bodyAr.trim(),
+      'bodyEn': bodyEn.trim(),
+      'sourceType': sourceType.trim(),
+      'sourceId': sourceId.trim(),
+      'createdByUid': (actor['uid'] ?? '').toString(),
+      'createdByName':
+          (actor['displayName'] ?? actor['name'] ?? '').toString(),
+      'createdByRole': normalizeAdminRole(actor['role']),
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  static Stream<List<Map<String, dynamic>>> ownerPlaceNotificationsStream(
+    String accountKey,
+  ) {
+    final clean = accountKey.trim();
+    if (clean.isEmpty) {
+      return Stream<List<Map<String, dynamic>>>.value(
+        const <Map<String, dynamic>>[],
+      );
+    }
+    return FirebaseFirestore.instance
+        .collection('owner_place_notifications')
+        .where('accountKey', isEqualTo: clean)
+        .limit(100)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+              .toList(),
+        );
+  }
+
+  static Future<List<Map<String, dynamic>>> ownerPlaceNotifications(
+    String accountKey,
+  ) async {
+    final clean = accountKey.trim();
+    if (clean.isEmpty) return const <Map<String, dynamic>>[];
+    await _ensurePublicUser();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('owner_place_notifications')
+        .where('accountKey', isEqualTo: clean)
+        .limit(100)
+        .get();
+    return snapshot.docs
+        .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+        .toList();
+  }
+
+  static Future<void> markOwnerPlaceNotificationsRead(
+    List<String> notificationIds,
+  ) async {
+    final ids = notificationIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .take(100)
+        .toList();
+    if (ids.isEmpty) return;
+    await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final batch = firestore.batch();
+    for (final id in ids) {
+      batch.update(
+        firestore.collection('owner_place_notifications').doc(id),
+        <String, dynamic>{'readAt': FieldValue.serverTimestamp()},
+      );
+    }
+    await batch.commit();
+  }
+
+  static Future<void> _writeOwnerNotificationAudit({
+    required String notificationType,
+    required String sourceType,
+    required String sourceId,
+    required String placeId,
+    required String placeName,
+    required String accountKey,
+    required String titleAr,
+    required String bodyAr,
+  }) async {
+    await _writeAdminAudit(
+      'owner_notification_sent',
+      details: <String, dynamic>{
+        'notificationType': notificationType,
+        'sourceType': sourceType,
+        'sourceId': sourceId,
+        'placeId': placeId,
+        'placeName': placeName,
+        'accountKey': accountKey,
+        'title': titleAr,
+        'message': bodyAr,
+      },
+    );
+  }
+
+  static Future<void> sendOwnerPlaceNotificationFromAdmin({
+    required String sourceCollection,
+    required String sourceId,
+    required String type,
+    required String titleAr,
+    required String titleEn,
+    required String bodyAr,
+    required String bodyEn,
+  }) async {
+    if (!<String>{'published_places', 'place_requests'}
+        .contains(sourceCollection)) {
+      throw ArgumentError('invalid-owner-notification-source');
+    }
+    if (!<String>{'place_report', 'admin_alert', 'custom'}.contains(type)) {
+      throw ArgumentError('invalid-manual-owner-notification-type');
+    }
+    if (titleAr.trim().isEmpty ||
+        titleEn.trim().isEmpty ||
+        bodyAr.trim().isEmpty ||
+        bodyEn.trim().isEmpty) {
+      throw ArgumentError('owner-notification-text-required');
+    }
+
+    final actor = await currentAdminProfile();
+    final firestore = FirebaseFirestore.instance;
+    final sourceRef = firestore.collection(sourceCollection).doc(sourceId);
+    final sourceSnapshot = await sourceRef.get();
+    final data = sourceSnapshot.data();
+    if (!sourceSnapshot.exists || data == null) {
+      throw StateError('owner-notification-source-not-found');
+    }
+
+    final accountKey = (data['accountKey'] ?? '').toString().trim();
+    if (accountKey.isEmpty) {
+      throw StateError('owner-account-not-linked');
+    }
+    final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+    final originalPlaceId =
+        (data['originalPlaceId'] ?? '').toString().trim();
+    final placeId = sourceCollection == 'published_places'
+        ? sourceId
+        : (originalPlaceId.isNotEmpty ? originalPlaceId : sourceId);
+    final placeName =
+        (data['placeName'] ?? data['name'] ?? '').toString().trim();
+    final approvalNumber =
+        (data['approvalNumber'] ?? '').toString().trim();
+    final governorate = (data['governorate'] ?? '').toString().trim();
+
+    final notification = firestore.collection('owner_place_notifications').doc();
+    await notification.set(
+      _ownerNotificationPayload(
+        actor: actor,
+        type: type,
+        accountKey: accountKey,
+        ownerUid: ownerUid,
+        placeId: placeId,
+        placeName: placeName,
+        approvalNumber: approvalNumber,
+        governorate: governorate,
+        titleAr: titleAr,
+        titleEn: titleEn,
+        bodyAr: bodyAr,
+        bodyEn: bodyEn,
+        sourceType: sourceCollection,
+        sourceId: sourceId,
+      ),
+    );
+
+    await _writeOwnerNotificationAudit(
+      notificationType: type,
+      sourceType: sourceCollection,
+      sourceId: sourceId,
+      placeId: placeId,
+      placeName: placeName,
+      accountKey: accountKey,
+      titleAr: titleAr,
+      bodyAr: bodyAr,
+    );
+  }
+
   static Future<void> updateOwnerAvailability({
     required String placeId,
     required bool isAvailableNow,
@@ -1299,6 +1514,10 @@ class DedaBackend {
     final actor = await _adminIdentity();
     final firestore = FirebaseFirestore.instance;
     final request = firestore.collection('place_requests').doc(id);
+    final editNotification = firestore
+        .collection('owner_place_notifications')
+        .doc('edit_approved_' + id);
+    Map<String, String>? editNotificationAudit;
 
     await firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(request);
@@ -1359,6 +1578,48 @@ class DedaBackend {
         },
         SetOptions(merge: true),
       );
+
+      final accountKey = (data['accountKey'] ?? '').toString().trim();
+      if ((data['requestType'] ?? '').toString() == 'update' &&
+          accountKey.isNotEmpty) {
+        final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+        final placeName = (data['placeName'] ?? '').toString().trim();
+        final governorate = (data['governorate'] ?? '').toString().trim();
+        const titleAr = 'تم اعتماد تعديل المكان';
+        const titleEn = 'Place changes approved';
+        final bodyAr =
+            'تم اعتماد التعديلات الخاصة بمكان «' + placeName +
+            '» وتحديث بياناته في DEDA.';
+        final bodyEn =
+            'The changes for “' + placeName +
+            '” were approved and the place information was updated in DEDA.';
+        transaction.set(
+          editNotification,
+          _ownerNotificationPayload(
+            actor: actor,
+            type: 'edit_approved',
+            accountKey: accountKey,
+            ownerUid: ownerUid,
+            placeId: publishedId,
+            placeName: placeName,
+            approvalNumber: approvalNumber,
+            governorate: governorate,
+            titleAr: titleAr,
+            titleEn: titleEn,
+            bodyAr: bodyAr,
+            bodyEn: bodyEn,
+            sourceType: 'place_requests',
+            sourceId: id,
+          ),
+        );
+        editNotificationAudit = <String, String>{
+          'accountKey': accountKey,
+          'placeId': publishedId,
+          'placeName': placeName,
+          'titleAr': titleAr,
+          'bodyAr': bodyAr,
+        };
+      }
     });
     await _writeAdminAudit(
       'place_approved',
@@ -1367,6 +1628,19 @@ class DedaBackend {
         'sourceId': id,
       },
     );
+    final editAudit = editNotificationAudit;
+    if (editAudit != null) {
+      await _writeOwnerNotificationAudit(
+        notificationType: 'edit_approved',
+        sourceType: 'place_requests',
+        sourceId: id,
+        placeId: editAudit['placeId'] ?? '',
+        placeName: editAudit['placeName'] ?? '',
+        accountKey: editAudit['accountKey'] ?? '',
+        titleAr: editAudit['titleAr'] ?? '',
+        bodyAr: editAudit['bodyAr'] ?? '',
+      );
+    }
   }
 
   static Future<void> updateRequestStatus({
@@ -1406,7 +1680,73 @@ class DedaBackend {
         'decisionNote': note?.trim() ?? '',
       });
     }
-    await request.update(statusUpdate);
+    Map<String, String>? needsChangesAudit;
+    if (collection == 'place_requests' && status == 'needs_changes') {
+      final snapshot = await request.get();
+      final data = snapshot.data();
+      if (!snapshot.exists || data == null) {
+        throw StateError('place-request-not-found');
+      }
+      final accountKey = (data['accountKey'] ?? '').toString().trim();
+      if (accountKey.isNotEmpty) {
+        final ownerUid = (data['ownerUid'] ?? '').toString().trim();
+        final placeName = (data['placeName'] ?? '').toString().trim();
+        final originalPlaceId =
+            (data['originalPlaceId'] ?? '').toString().trim();
+        final placeId = originalPlaceId.isNotEmpty ? originalPlaceId : id;
+        final approvalNumber =
+            (data['approvalNumber'] ?? '').toString().trim();
+        final governorate =
+            (data['governorate'] ?? '').toString().trim();
+        const titleAr = 'يحتاج طلبك تعديل';
+        const titleEn = 'Your request needs changes';
+        final cleanNote = note?.trim() ?? '';
+        final bodyAr =
+            'طلب المكان «' + placeName +
+            '» يحتاج إلى تعديل قبل اعتماده.' +
+            (cleanNote.isEmpty ? '' : ' ملاحظة الإدارة: ' + cleanNote);
+        final bodyEn =
+            'The request for “' + placeName +
+            '” needs changes before it can be approved.' +
+            (cleanNote.isEmpty ? '' : ' Administration note: ' + cleanNote);
+        final notification = firestore
+            .collection('owner_place_notifications')
+            .doc('needs_changes_' + id);
+        final batch = firestore.batch();
+        batch.update(request, statusUpdate);
+        batch.set(
+          notification,
+          _ownerNotificationPayload(
+            actor: actor,
+            type: 'needs_changes',
+            accountKey: accountKey,
+            ownerUid: ownerUid,
+            placeId: placeId,
+            placeName: placeName,
+            approvalNumber: approvalNumber,
+            governorate: governorate,
+            titleAr: titleAr,
+            titleEn: titleEn,
+            bodyAr: bodyAr,
+            bodyEn: bodyEn,
+            sourceType: 'place_requests',
+            sourceId: id,
+          ),
+        );
+        await batch.commit();
+        needsChangesAudit = <String, String>{
+          'accountKey': accountKey,
+          'placeId': placeId,
+          'placeName': placeName,
+          'titleAr': titleAr,
+          'bodyAr': bodyAr,
+        };
+      } else {
+        await request.update(statusUpdate);
+      }
+    } else {
+      await request.update(statusUpdate);
+    }
     await _writeAdminAudit(
       collection == 'place_requests'
           ? 'place_status_changed'
@@ -1418,6 +1758,19 @@ class DedaBackend {
         if (note != null && note.trim().isNotEmpty) 'reason': note.trim(),
       },
     );
+    final needsAudit = needsChangesAudit;
+    if (needsAudit != null) {
+      await _writeOwnerNotificationAudit(
+        notificationType: 'needs_changes',
+        sourceType: 'place_requests',
+        sourceId: id,
+        placeId: needsAudit['placeId'] ?? '',
+        placeName: needsAudit['placeName'] ?? '',
+        accountKey: needsAudit['accountKey'] ?? '',
+        titleAr: needsAudit['titleAr'] ?? '',
+        bodyAr: needsAudit['bodyAr'] ?? '',
+      );
+    }
   }
 
   // DEDA 10-point fixes v1: support replies and read-only account review.
@@ -1953,7 +2306,11 @@ class DedaBackend {
         firestore.collection('place_deletion_requests').doc(requestId);
 
     Map<String, dynamic>? requestData;
+    Map<String, String>? deletionNotificationAudit;
     if (status == 'deleted') {
+      final notificationRef = firestore
+          .collection('owner_place_notifications')
+          .doc('deletion_approved_' + requestId);
       await firestore.runTransaction((transaction) async {
         final requestSnapshot = await transaction.get(requestRef);
         if (!requestSnapshot.exists || requestSnapshot.data() == null) {
@@ -1992,6 +2349,55 @@ class DedaBackend {
           'reviewNote': note.trim(),
           'completedAt': FieldValue.serverTimestamp(),
         });
+
+        final accountKey = (data['accountKey'] ?? '').toString().trim();
+        if (accountKey.isNotEmpty) {
+          final ownerUid =
+              (data['requesterUid'] ?? '').toString().trim();
+          final placeName =
+              (data['placeName'] ?? '').toString().trim();
+          final approvalNumber =
+              (data['approvalNumber'] ?? '').toString().trim();
+          final governorate =
+              (data['governorate'] ?? '').toString().trim();
+          const titleAr = 'تمت الموافقة على حذف المكان';
+          const titleEn = 'Place deletion approved';
+          final bodyAr =
+              'بناءً على طلبك السابق، تمت الموافقة على حذف «' +
+              placeName +
+              '» من DEDA. يمكنك الآن إنشاء مكان جديد من قسم «إدارة مكاني».';
+          final bodyEn =
+              'Based on your previous request, “' +
+              placeName +
+              '” was removed from DEDA. You can now create a new place from Manage my place.';
+          transaction.set(
+            notificationRef,
+            _ownerNotificationPayload(
+              actor: actor,
+              type: 'deletion_approved',
+              accountKey: accountKey,
+              ownerUid: ownerUid,
+              placeId: placeId,
+              placeName: placeName,
+              approvalNumber: approvalNumber,
+              governorate: governorate,
+              titleAr: titleAr,
+              titleEn: titleEn,
+              bodyAr: bodyAr,
+              bodyEn: bodyEn,
+              sourceType: 'place_deletion_requests',
+              sourceId: requestId,
+            ),
+          );
+          deletionNotificationAudit = <String, String>{
+            'type': 'deletion_approved',
+            'accountKey': accountKey,
+            'placeId': placeId,
+            'placeName': placeName,
+            'titleAr': titleAr,
+            'bodyAr': bodyAr,
+          };
+        }
       });
     } else {
       final snapshot = await requestRef.get();
@@ -1999,7 +2405,7 @@ class DedaBackend {
         throw StateError('place-deletion-request-not-found');
       }
       requestData = Map<String, dynamic>.from(snapshot.data()!);
-      await requestRef.update(<String, dynamic>{
+      final update = <String, dynamic>{
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
         'reviewedByUid': actor['uid'].toString(),
@@ -2008,7 +2414,71 @@ class DedaBackend {
         'reviewNote': note.trim(),
         if (status == 'rejected' || status == 'cancelled')
           'closedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (status == 'rejected') {
+        final data = requestData!;
+        final accountKey = (data['accountKey'] ?? '').toString().trim();
+        if (accountKey.isNotEmpty) {
+          final placeId =
+              (data['placeId'] ?? requestId).toString().trim();
+          final ownerUid =
+              (data['requesterUid'] ?? '').toString().trim();
+          final placeName =
+              (data['placeName'] ?? '').toString().trim();
+          final approvalNumber =
+              (data['approvalNumber'] ?? '').toString().trim();
+          final governorate =
+              (data['governorate'] ?? '').toString().trim();
+          const titleAr = 'تم رفض طلب الحذف';
+          const titleEn = 'Place deletion request rejected';
+          final cleanNote = note.trim();
+          final bodyAr =
+              'تمت مراجعة طلب حذف «' + placeName +
+              '» ولم تتم الموافقة عليه.' +
+              (cleanNote.isEmpty ? '' : ' ملاحظة الإدارة: ' + cleanNote);
+          final bodyEn =
+              'The deletion request for “' + placeName +
+              '” was reviewed and was not approved.' +
+              (cleanNote.isEmpty ? '' : ' Administration note: ' + cleanNote);
+          final notificationRef = firestore
+              .collection('owner_place_notifications')
+              .doc('deletion_rejected_' + requestId);
+          final batch = firestore.batch();
+          batch.update(requestRef, update);
+          batch.set(
+            notificationRef,
+            _ownerNotificationPayload(
+              actor: actor,
+              type: 'deletion_rejected',
+              accountKey: accountKey,
+              ownerUid: ownerUid,
+              placeId: placeId,
+              placeName: placeName,
+              approvalNumber: approvalNumber,
+              governorate: governorate,
+              titleAr: titleAr,
+              titleEn: titleEn,
+              bodyAr: bodyAr,
+              bodyEn: bodyEn,
+              sourceType: 'place_deletion_requests',
+              sourceId: requestId,
+            ),
+          );
+          await batch.commit();
+          deletionNotificationAudit = <String, String>{
+            'type': 'deletion_rejected',
+            'accountKey': accountKey,
+            'placeId': placeId,
+            'placeName': placeName,
+            'titleAr': titleAr,
+            'bodyAr': bodyAr,
+          };
+        } else {
+          await requestRef.update(update);
+        }
+      } else {
+        await requestRef.update(update);
+      }
     }
 
     await _writeAdminAudit(
@@ -2023,6 +2493,19 @@ class DedaBackend {
         'note': note.trim(),
       },
     );
+    final deletionAudit = deletionNotificationAudit;
+    if (deletionAudit != null) {
+      await _writeOwnerNotificationAudit(
+        notificationType: deletionAudit['type'] ?? '',
+        sourceType: 'place_deletion_requests',
+        sourceId: requestId,
+        placeId: deletionAudit['placeId'] ?? '',
+        placeName: deletionAudit['placeName'] ?? '',
+        accountKey: deletionAudit['accountKey'] ?? '',
+        titleAr: deletionAudit['titleAr'] ?? '',
+        bodyAr: deletionAudit['bodyAr'] ?? '',
+      );
+    }
   }
 
   static Stream<QuerySnapshot<Map<String, dynamic>>>
