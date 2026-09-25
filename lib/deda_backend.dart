@@ -735,28 +735,35 @@ class DedaBackend {
     final generalManagerSession =
         await _isCurrentGeneralManagerSession(user);
 
-    // Read the approved place first so we can keep legacy owner linkage.
-    String placeOwnerUid = '';
-    String placeAccountKey = '';
-    try {
-      final placeSnapshot =
-          await firestore.collection('published_places').doc(cleanId).get();
-      final place = placeSnapshot.data();
-      placeOwnerUid = (place?['ownerUid'] ?? '').toString().trim();
-      placeAccountKey = (place?['accountKey'] ?? '').toString().trim();
-    } catch (_) {}
+    // The caller on "Manage my place" always knows the currently signed-in
+    // DEDA account key. Prefer that key before touching published_places.
+    // After an approved deletion the published document no longer exists and
+    // must not be required just to read the preserved deletion-request record.
+    var accountKey = override;
 
-    var accountKey = placeAccountKey.isNotEmpty
-        ? placeAccountKey
-        : (override.isNotEmpty ? override : await _currentAccountKey(user));
-
-    // The general manager can legitimately inspect this exact request without
-    // destroying the admin Firebase session. This is important on devices
-    // that also contain a legacy pre-PIN owner place.
-    if (!generalManagerSession &&
-        placeOwnerUid != user.uid &&
-        accountKey.isNotEmpty) {
+    if (!generalManagerSession && accountKey.isNotEmpty) {
       user = await _ensureOwnerSessionForAccountKey(accountKey);
+    }
+
+    // Legacy callers may not supply an account key. In that case, only use
+    // the still-published place as a fallback to recover its owner linkage.
+    if (!generalManagerSession && accountKey.isEmpty) {
+      String placeOwnerUid = '';
+      String placeAccountKey = '';
+      try {
+        final placeSnapshot =
+            await firestore.collection('published_places').doc(cleanId).get();
+        final place = placeSnapshot.data();
+        placeOwnerUid = (place?['ownerUid'] ?? '').toString().trim();
+        placeAccountKey = (place?['accountKey'] ?? '').toString().trim();
+      } catch (_) {}
+
+      accountKey = placeAccountKey.isNotEmpty
+          ? placeAccountKey
+          : await _currentAccountKey(user);
+      if (placeOwnerUid != user.uid && accountKey.isNotEmpty) {
+        user = await _ensureOwnerSessionForAccountKey(accountKey);
+      }
     }
 
     final snapshot = await firestore
@@ -768,8 +775,10 @@ class DedaBackend {
     if (generalManagerSession) {
       return <String, dynamic>{'id': snapshot.id, ...data};
     }
+
     final sameOwner = data['requesterUid'] == user.uid ||
-        data['accountKey']?.toString() == accountKey;
+        (accountKey.isNotEmpty &&
+            data['accountKey']?.toString().trim() == accountKey);
     if (!sameOwner) return null;
     return <String, dynamic>{'id': snapshot.id, ...data};
   }

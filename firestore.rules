@@ -611,28 +611,27 @@ service cloud.firestore {
       allow get: if isGeneralManager()
         || (
           signedIn()
+          && exists(
+            /databases/$(database)/documents/place_deletion_requests/$(requestId)
+          )
           && (
-            (
-              resource != null
-              && (
-                resource.data.requesterUid == request.auth.uid
-                || sameAccount(resource.data.accountKey)
-              )
-            )
-            || (
-              exists(
+            resource.data.requesterUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+        )
+        || (
+          signedIn()
+          && exists(
+            /databases/$(database)/documents/published_places/$(requestId)
+          )
+          && (
+            get(
+              /databases/$(database)/documents/published_places/$(requestId)
+            ).data.ownerUid == request.auth.uid
+            || sameAccount(
+              get(
                 /databases/$(database)/documents/published_places/$(requestId)
-              )
-              && (
-                get(
-                  /databases/$(database)/documents/published_places/$(requestId)
-                ).data.ownerUid == request.auth.uid
-                || sameAccount(
-                  get(
-                    /databases/$(database)/documents/published_places/$(requestId)
-                  ).data.accountKey
-                )
-              )
+              ).data.accountKey
             )
           )
         );

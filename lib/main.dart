@@ -2592,6 +2592,37 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         } catch (_) {}
       }
 
+      _deletionRequestId = null;
+      _deletionRequestStatus = null;
+      _deletionReviewNote = null;
+
+      // A completed deletion is authoritative and must be checked before
+      // loading an older approved request snapshot. Otherwise a preserved
+      // approved request can briefly (or permanently) put the owner page back
+      // into "Approved / Edit place" after the published place was removed.
+      if (_placeId != null && _placeId!.isNotEmpty) {
+        try {
+          final deletion =
+              await DedaBackend.ownerPlaceDeletionRequestForPlace(
+            _placeId!,
+            accountKeyOverride: DedaBackend.accountKeyForPhone(
+              DedaPreferences.accountPhone.isNotEmpty
+                  ? DedaPreferences.accountPhone
+                  : DedaPreferences.phone,
+            ),
+          );
+          if (deletion != null) {
+            _deletionRequestId = deletion['id']?.toString();
+            _deletionRequestStatus = deletion['status']?.toString();
+            _deletionReviewNote = deletion['reviewNote']?.toString();
+            if (_deletionRequestStatus == 'deleted') {
+              await _resetOwnerAfterDeletedPlace(prefs);
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
       if (_placeId != null && _placeId!.isNotEmpty) {
         final activeRequestId = _pendingEditId ?? _placeId!;
         Map<String, dynamic>? request;
@@ -2636,31 +2667,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         }
       } else {
         await _loadDraftOnly();
-      }
-
-      _deletionRequestId = null;
-      _deletionRequestStatus = null;
-      _deletionReviewNote = null;
-      if (_placeId != null && _placeId!.isNotEmpty) {
-        try {
-          final deletion =
-              await DedaBackend.ownerPlaceDeletionRequestForPlace(
-            _placeId!,
-            accountKeyOverride: DedaBackend.accountKeyForPhone(
-              DedaPreferences.accountPhone.isNotEmpty
-                  ? DedaPreferences.accountPhone
-                  : DedaPreferences.phone,
-            ),
-          );
-          if (deletion != null) {
-            _deletionRequestId = deletion['id']?.toString();
-            _deletionRequestStatus = deletion['status']?.toString();
-            _deletionReviewNote = deletion['reviewNote']?.toString();
-            if (_deletionRequestStatus == 'deleted') {
-              await _resetOwnerAfterDeletedPlace(prefs);
-            }
-          }
-        } catch (_) {}
       }
     } finally {
       if (mounted) setState(() => _loading = false);
