@@ -8746,9 +8746,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         initialRoute.distanceMeters > 0 &&
         initialRoute.durationSeconds.isFinite;
     if (initialRouteUsable) {
-      route = initialRoute;
+      final validInitialRoute = initialRoute!;
+      route = validInitialRoute;
       isLoading = false;
-      _liveRemainingMeters = initialRoute.distanceMeters;
+      _liveRemainingMeters = validInitialRoute.distanceMeters;
       _lastRouteOrigin = startPoint;
       _fitRouteOnMap();
     } else {
@@ -10189,6 +10190,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       await loadRoute();
       return;
     }
+    final validRoute = currentRoute!;
 
     await DedaPlacesStore.addRecent(widget.destination);
     if (!mounted) return;
@@ -10196,7 +10198,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     setState(() {
       tripStarted = true;
       _autoFollowMap = true;
-      _liveRemainingMeters = currentRoute.distanceMeters;
+      _liveRemainingMeters = validRoute.distanceMeters;
       _previousLivePoint = startPoint;
       _navigationToolsOpen = false;
       navigationStatus =
