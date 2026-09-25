@@ -3514,6 +3514,65 @@ class DedaPlaceRequestTrashPage extends StatelessWidget {
     }
   }
 
+  Future<void> _deleteForever(
+    BuildContext context,
+    String id,
+    String name,
+  ) async {
+    final confirmed = (await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(t('حذف الطلب نهائيًا', 'Permanently delete request')),
+            content: Text(
+              t(
+                'سيُحذف «$name» نهائيًا من محذوفات المدير العام، ولن يمكن استرجاع الطلب بعد ذلك. لن يتم حذف أي مكان منشور مرتبط به.',
+                '“$name” will be permanently removed from general-manager trash and the request cannot be restored. Any separately published place will not be deleted.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(t('إلغاء', 'Cancel')),
+              ),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E),
+                ),
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: Text(t('حذف نهائي', 'Delete forever')),
+              ),
+            ],
+          ),
+        )) ??
+        false;
+    if (!confirmed) return;
+
+    try {
+      await DedaBackend.permanentlyDeletePlaceRequest(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t('تم حذف الطلب نهائيًا.', 'Request permanently deleted.'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر الحذف النهائي الآن.',
+              'Could not permanently delete the request now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -3604,13 +3663,30 @@ class DedaPlaceRequestTrashPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _restore(context, doc.id),
-                          icon: const Icon(Icons.restore),
-                          label: Text(t('استرجاع', 'Restore')),
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _restore(context, doc.id),
+                            icon: const Icon(Icons.restore),
+                            label: Text(t('استرجاع', 'Restore')),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => _deleteForever(
+                              context,
+                              doc.id,
+                              name.isEmpty
+                                  ? t('طلب مكان محذوف', 'Deleted place request')
+                                  : name,
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFB3261E),
+                            ),
+                            icon: const Icon(Icons.delete_forever_outlined),
+                            label: Text(t('حذف نهائي', 'Delete forever')),
+                          ),
+                        ],
                       ),
                     ],
                   ),
