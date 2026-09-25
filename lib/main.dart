@@ -3444,23 +3444,41 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       final data = _currentData();
       final prefs = await SharedPreferences.getInstance();
       late final String requestId;
-      final editingExisting = _placeId != null &&
-          (_status == 'approved' || _status == 'needs_changes') &&
-          (_editingApproved || _pendingEditId != null || _status == 'needs_changes');
 
-      if (editingExisting) {
-        requestId = await DedaBackend.submitPlaceEdit(
-          originalPlaceId: _placeId!,
+      if (_status == 'needs_changes') {
+        final resubmitId = (_pendingEditId != null &&
+                _pendingEditId!.trim().isNotEmpty)
+            ? _pendingEditId!
+            : (_placeId ?? '');
+        requestId = await DedaBackend.resubmitPlaceRequest(
+          requestId: resubmitId,
           data: data,
         );
-        _pendingEditId = requestId;
-        await prefs.setString(_pendingEditIdKey, requestId);
+        if (_pendingEditId != null && _pendingEditId!.trim().isNotEmpty) {
+          await prefs.setString(_pendingEditIdKey, requestId);
+        } else {
+          _placeId = requestId;
+          await prefs.setString(_placeIdKey, requestId);
+        }
       } else {
-        requestId = await DedaBackend.submitPlace(data);
-        _placeId = requestId;
-        _pendingEditId = null;
-        await prefs.setString(_placeIdKey, requestId);
-        await prefs.remove(_pendingEditIdKey);
+        final editingExisting = _placeId != null &&
+            _status == 'approved' &&
+            (_editingApproved || _pendingEditId != null);
+
+        if (editingExisting) {
+          requestId = await DedaBackend.submitPlaceEdit(
+            originalPlaceId: _placeId!,
+            data: data,
+          );
+          _pendingEditId = requestId;
+          await prefs.setString(_pendingEditIdKey, requestId);
+        } else {
+          requestId = await DedaBackend.submitPlace(data);
+          _placeId = requestId;
+          _pendingEditId = null;
+          await prefs.setString(_placeIdKey, requestId);
+          await prefs.remove(_pendingEditIdKey);
+        }
       }
 
       await prefs.setString(_submittedSnapshotKey, jsonEncode(data));

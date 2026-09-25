@@ -455,6 +455,51 @@ class DedaBackend {
     return request.id;
   }
 
+
+  static Future<String> resubmitPlaceRequest({
+    required String requestId,
+    required Map<String, dynamic> data,
+  }) async {
+    if (!_hasRequiredPlaceData(data)) {
+      throw ArgumentError('incomplete-place-request');
+    }
+    final cleanId = requestId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('place-request-id-required');
+
+    final firestore = FirebaseFirestore.instance;
+    var user = await _ensurePublicUser();
+    var accountKey = await _currentAccountKey(user);
+    final request = firestore.collection('place_requests').doc(cleanId);
+    final snapshot = await request.get();
+    final existing = snapshot.data();
+    if (!snapshot.exists || existing == null) {
+      throw StateError('place-request-not-found');
+    }
+
+    final requestAccountKey =
+        (existing['accountKey'] ?? '').toString().trim();
+    if (requestAccountKey.isNotEmpty && requestAccountKey != accountKey) {
+      user = await _ensureOwnerSessionForAccountKey(requestAccountKey);
+      accountKey = await _currentAccountKey(user);
+    }
+
+    final sameOwner = existing['ownerUid'] == user.uid ||
+        (requestAccountKey.isNotEmpty && requestAccountKey == accountKey);
+    if (!sameOwner) throw StateError('not-place-owner');
+    if ((existing['status'] ?? '').toString() != 'needs_changes') {
+      throw StateError('place-request-not-awaiting-owner-changes');
+    }
+
+    await registerOwnerNotifications();
+    await request.update(<String, dynamic>{
+      ...data,
+      'status': 'pending',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'resubmittedAt': FieldValue.serverTimestamp(),
+    });
+    return cleanId;
+  }
+
   static Future<Map<String, dynamic>?> ownerRequestById(String id) async {
     final user = await _ensurePublicUser();
     final accountKey = await _currentAccountKey(user);
@@ -1718,9 +1763,8 @@ class DedaBackend {
             'The request for “' + placeName +
             '” needs changes before it can be approved.' +
             (cleanNote.isEmpty ? '' : ' Administration note: ' + cleanNote);
-        final notification = firestore
-            .collection('owner_place_notifications')
-            .doc('needs_changes_' + id);
+        final notification =
+            firestore.collection('owner_place_notifications').doc();
         final batch = firestore.batch();
         batch.update(request, statusUpdate);
         batch.set(
