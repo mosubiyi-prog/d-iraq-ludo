@@ -503,14 +503,33 @@ class DedaBackend {
   }) async {
     final cleanId = placeId.trim();
     if (cleanId.isEmpty) return null;
+
+    final firestore = FirebaseFirestore.instance;
     final override = accountKeyOverride?.trim() ?? '';
     var user = await _ensurePublicUser();
-    final accountKey =
-        override.isNotEmpty ? override : await _currentAccountKey(user);
-    if (override.isNotEmpty) {
+
+    // Prefer the ownership data stored on the approved place itself. This
+    // avoids needlessly replacing a valid legacy owner UID with a restored
+    // session just because a phone-derived account key was supplied.
+    String placeOwnerUid = '';
+    String placeAccountKey = '';
+    try {
+      final placeSnapshot =
+          await firestore.collection('published_places').doc(cleanId).get();
+      final place = placeSnapshot.data();
+      placeOwnerUid = (place?['ownerUid'] ?? '').toString().trim();
+      placeAccountKey = (place?['accountKey'] ?? '').toString().trim();
+    } catch (_) {}
+
+    var accountKey = placeAccountKey.isNotEmpty
+        ? placeAccountKey
+        : (override.isNotEmpty ? override : await _currentAccountKey(user));
+
+    if (placeOwnerUid != user.uid && accountKey.isNotEmpty) {
       user = await _ensureOwnerSessionForAccountKey(accountKey);
     }
-    final snapshot = await FirebaseFirestore.instance
+
+    final snapshot = await firestore
         .collection('place_deletion_requests')
         .doc(cleanId)
         .get();
@@ -531,13 +550,11 @@ class DedaBackend {
     if (cleanId.isEmpty) throw ArgumentError('place-id-required');
 
     final firestore = FirebaseFirestore.instance;
-    final override = accountKeyOverride?.trim() ?? '';
     var user = await _ensurePublicUser();
-    final accountKey =
-        override.isNotEmpty ? override : await _currentAccountKey(user);
-    if (override.isNotEmpty) {
-      user = await _ensureOwnerSessionForAccountKey(accountKey);
-    }
+
+    // Read the approved place first. If this Firebase UID is still the
+    // original owner, keep it; forcing a session restore here can break older
+    // approved places that predate the trusted-install account migration.
     final placeRef = firestore.collection('published_places').doc(cleanId);
     final placeSnapshot = await placeRef.get();
     final place = placeSnapshot.data();
@@ -545,8 +562,23 @@ class DedaBackend {
       throw StateError('published-place-not-found');
     }
 
-    final sameOwner = place['ownerUid'] == user.uid ||
-        place['accountKey']?.toString() == accountKey;
+    final placeOwnerUid = (place['ownerUid'] ?? '').toString().trim();
+    final placeAccountKey = (place['accountKey'] ?? '').toString().trim();
+    final override = accountKeyOverride?.trim() ?? '';
+    var accountKey = placeAccountKey.isNotEmpty
+        ? placeAccountKey
+        : (override.isNotEmpty ? override : await _currentAccountKey(user));
+
+    if (placeOwnerUid != user.uid) {
+      if (placeAccountKey.isEmpty) {
+        throw StateError('not-place-owner');
+      }
+      user = await _ensureOwnerSessionForAccountKey(placeAccountKey);
+      accountKey = placeAccountKey;
+    }
+
+    final sameOwner = placeOwnerUid == user.uid ||
+        (placeAccountKey.isNotEmpty && placeAccountKey == accountKey);
     if (!sameOwner) throw StateError('not-place-owner');
 
     final requestRef =
@@ -560,7 +592,9 @@ class DedaBackend {
       if (status == 'deleted') {
         throw StateError('place-already-deleted');
       }
-      if (status == 'rejected' || status == 'cancelled') {
+      if (status == 'rejected' ||
+          status == 'cancelled' ||
+          status == 'pending') {
         await requestRef.update(<String, dynamic>{
           'status': 'new',
           'reason': reason.trim(),
@@ -580,8 +614,8 @@ class DedaBackend {
       'governorate': (place['governorate'] ?? '').toString(),
       'address': (place['address'] ?? '').toString(),
       'phone': (place['phone'] ?? '').toString(),
-      'latitude': place['latitude'],
-      'longitude': place['longitude'],
+      if (place['latitude'] is num) 'latitude': place['latitude'],
+      if (place['longitude'] is num) 'longitude': place['longitude'],
       'reason': reason.trim(),
       'status': 'new',
       'createdAt': FieldValue.serverTimestamp(),

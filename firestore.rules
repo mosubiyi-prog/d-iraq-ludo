@@ -513,8 +513,14 @@ service cloud.firestore {
         && request.resource.data.governorate is string
         && request.resource.data.address is string
         && request.resource.data.phone is string
-        && request.resource.data.latitude is number
-        && request.resource.data.longitude is number
+        && (
+          !request.resource.data.keys().hasAny(['latitude'])
+          || request.resource.data.latitude is number
+        )
+        && (
+          !request.resource.data.keys().hasAny(['longitude'])
+          || request.resource.data.longitude is number
+        )
         && request.resource.data.reason is string
         && request.resource.data.status == 'new'
         && request.resource.data.createdAt == request.time
@@ -605,7 +611,7 @@ service cloud.firestore {
             resource.data.requesterUid == request.auth.uid
             || sameAccount(resource.data.accountKey)
           )
-          && resource.data.status in ['rejected', 'cancelled']
+          && resource.data.status in ['rejected', 'cancelled', 'pending']
           && request.resource.data.status == 'new'
           && request.resource.data.updatedAt == request.time
           && request.resource.data.resubmittedAt == request.time
