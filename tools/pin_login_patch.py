@@ -26,15 +26,31 @@ replace_once(
 
 replace_once(
     """  static Future<void> logout() async {
-    isLoggedIn = false;
     final prefs = await SharedPreferences.getInstance();
+    isLoggedIn = false;
+    userName = '';
+    phone = '';
+    accountPhone = '';
+    accountType = null;
     await prefs.setBool(_loggedInKey, false);
+    await prefs.remove(_userNameKey);
+    await prefs.remove(_phoneKey);
+    await prefs.remove(_accountPhoneKey);
+    await prefs.remove(_accountTypeKey);
   }
 """,
     """  static Future<void> logout() async {
-    isLoggedIn = false;
     final prefs = await SharedPreferences.getInstance();
+    isLoggedIn = false;
+    userName = '';
+    phone = '';
+    accountPhone = '';
+    accountType = null;
     await prefs.setBool(_loggedInKey, false);
+    await prefs.remove(_userNameKey);
+    await prefs.remove(_phoneKey);
+    await prefs.remove(_accountPhoneKey);
+    await prefs.remove(_accountTypeKey);
     try {
       await DedaPinAuth.signOutFirebase();
     } catch (_) {

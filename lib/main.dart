@@ -206,9 +206,17 @@ class DedaPreferences {
   }
 
   static Future<void> logout() async {
-    isLoggedIn = false;
     final prefs = await SharedPreferences.getInstance();
+    isLoggedIn = false;
+    userName = '';
+    phone = '';
+    accountPhone = '';
+    accountType = null;
     await prefs.setBool(_loggedInKey, false);
+    await prefs.remove(_userNameKey);
+    await prefs.remove(_phoneKey);
+    await prefs.remove(_accountPhoneKey);
+    await prefs.remove(_accountTypeKey);
   }
 }
 
@@ -2372,10 +2380,41 @@ class OwnerPlacePage extends StatefulWidget {
 }
 
 class _OwnerPlacePageState extends State<OwnerPlacePage> {
-  static const String _draftKey = 'deda_owner_place_draft_v1';
-  static const String _placeIdKey = 'deda_owner_place_id_v2';
-  static const String _pendingEditIdKey = 'deda_owner_pending_edit_id_v2';
-  static const String _submittedSnapshotKey = 'deda_owner_submitted_snapshot_v2';
+  static const String _draftKeyBase = 'deda_owner_place_draft_v1';
+  static const String _placeIdKeyBase = 'deda_owner_place_id_v2';
+  static const String _pendingEditIdKeyBase = 'deda_owner_pending_edit_id_v2';
+  static const String _submittedSnapshotKeyBase =
+      'deda_owner_submitted_snapshot_v2';
+
+  // Legacy unscoped keys from builds before account isolation. They are kept
+  // only for a verified one-time migration to the account that actually owns
+  // the stored place. They are never read directly as current-account data.
+  static const String _legacyDraftKey = 'deda_owner_place_draft_v1';
+  static const String _legacyPlaceIdKey = 'deda_owner_place_id_v2';
+  static const String _legacyPendingEditIdKey =
+      'deda_owner_pending_edit_id_v2';
+  static const String _legacySubmittedSnapshotKey =
+      'deda_owner_submitted_snapshot_v2';
+
+  String get _ownerStorageAccountKey {
+    final rawPhone = DedaPreferences.accountPhone.isNotEmpty
+        ? DedaPreferences.accountPhone
+        : DedaPreferences.phone;
+    return DedaBackend.accountKeyForPhone(rawPhone);
+  }
+
+  String _ownerScopedKey(String base) {
+    final accountKey = _ownerStorageAccountKey;
+    return accountKey.isEmpty
+        ? '${base}_no_account'
+        : '${base}_${accountKey}';
+  }
+
+  String get _draftKey => _ownerScopedKey(_draftKeyBase);
+  String get _placeIdKey => _ownerScopedKey(_placeIdKeyBase);
+  String get _pendingEditIdKey => _ownerScopedKey(_pendingEditIdKeyBase);
+  String get _submittedSnapshotKey =>
+      _ownerScopedKey(_submittedSnapshotKeyBase);
 
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -2477,6 +2516,63 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     _decisionNote = data['decisionNote']?.toString();
   }
 
+  Future<bool> _legacyPlaceBelongsToCurrentAccount(
+    String legacyPlaceId,
+  ) async {
+    final accountKey = _ownerStorageAccountKey;
+    if (accountKey.isEmpty || legacyPlaceId.trim().isEmpty) return false;
+
+    try {
+      final published = await DedaBackend.publishedPlaceById(legacyPlaceId);
+      if (published != null &&
+          (published['accountKey'] ?? '').toString().trim() == accountKey) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      final request = await DedaBackend.ownerRequestById(legacyPlaceId);
+      if (request != null &&
+          (request['accountKey'] ?? '').toString().trim() == accountKey) {
+        return true;
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
+  Future<void> _migrateLegacyOwnerStorageIfOwned(
+    SharedPreferences prefs,
+  ) async {
+    // Once this account has its own scoped place key, never consult legacy
+    // storage again. This prevents account B from inheriting account A data.
+    if (prefs.getString(_placeIdKey)?.trim().isNotEmpty == true) return;
+
+    final legacyPlaceId = prefs.getString(_legacyPlaceIdKey)?.trim() ?? '';
+    if (legacyPlaceId.isEmpty) return;
+
+    final belongs = await _legacyPlaceBelongsToCurrentAccount(legacyPlaceId);
+    if (!belongs) return;
+
+    await prefs.setString(_placeIdKey, legacyPlaceId);
+
+    final legacyPending =
+        prefs.getString(_legacyPendingEditIdKey)?.trim() ?? '';
+    if (legacyPending.isNotEmpty) {
+      await prefs.setString(_pendingEditIdKey, legacyPending);
+    }
+
+    final legacySnapshot = prefs.getString(_legacySubmittedSnapshotKey);
+    if (legacySnapshot != null && legacySnapshot.isNotEmpty) {
+      await prefs.setString(_submittedSnapshotKey, legacySnapshot);
+    }
+
+    final legacyDraft = prefs.getString(_legacyDraftKey);
+    if (legacyDraft != null && legacyDraft.isNotEmpty) {
+      await prefs.setString(_draftKey, legacyDraft);
+    }
+  }
+
   Future<void> _loadState() async {
     if (mounted) setState(() => _loading = true);
     try {
@@ -2485,6 +2581,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       } catch (_) {}
 
       final prefs = await SharedPreferences.getInstance();
+      await _migrateLegacyOwnerStorageIfOwned(prefs);
       _placeId = prefs.getString(_placeIdKey);
       _pendingEditId = prefs.getString(_pendingEditIdKey);
       final snapshotRaw = prefs.getString(_submittedSnapshotKey);
