@@ -1522,7 +1522,31 @@ class DedaBackend {
 
       var approvalNumber = (data['approvalNumber'] ?? '').toString().trim();
       var approvalDate = (data['approvalDate'] ?? '').toString().trim();
-      if (approvalNumber.isEmpty) {
+      final requestType = (data['requestType'] ?? '').toString().trim();
+      final originalPlaceId =
+          (data['originalPlaceId'] ?? '').toString().trim();
+
+      // An edit to an already approved place never receives a new DEDA
+      // approval number. Always recover the immutable approval identity from
+      // the original published place, even if this edit request previously
+      // cached an incorrect prepared number.
+      if (requestType == 'update' && originalPlaceId.isNotEmpty) {
+        final original = firestore
+            .collection('published_places')
+            .doc(originalPlaceId);
+        final originalSnapshot = await transaction.get(original);
+        final originalData = originalSnapshot.data();
+        if (!originalSnapshot.exists || originalData == null) {
+          throw StateError('original-published-place-not-found');
+        }
+        approvalNumber =
+            (originalData['approvalNumber'] ?? '').toString().trim();
+        approvalDate =
+            (originalData['approvalDate'] ?? '').toString().trim();
+        if (approvalNumber.isEmpty || approvalDate.isEmpty) {
+          throw StateError('original-place-approval-missing');
+        }
+      } else if (approvalNumber.isEmpty) {
         final counterSnapshot = await transaction.get(counter);
         final current = (counterSnapshot.data()?['value'] as num?)?.toInt() ?? 0;
         final next = current + 1;
@@ -1580,25 +1604,45 @@ class DedaBackend {
       if (!_hasRequiredPlaceData(data)) {
         throw StateError('incomplete-place-request');
       }
-      final approvalNumber = (data['approvalNumber'] ?? '').toString().trim();
-      final approvalDate = (data['approvalDate'] ?? '').toString().trim();
-      if (approvalNumber.isEmpty || approvalDate.isEmpty) {
-        throw StateError('approval-not-prepared');
-      }
-      final cleanMessage = message.trim().isEmpty
-          ? _approvalMessage(
-              placeName: (data['placeName'] ?? '').toString(),
-              approvalNumber: approvalNumber,
-              approvalDate: approvalDate,
-            )
-          : message.trim();
-
+      var approvalNumber = (data['approvalNumber'] ?? '').toString().trim();
+      var approvalDate = (data['approvalDate'] ?? '').toString().trim();
+      final requestType = (data['requestType'] ?? '').toString().trim();
       final originalPlaceId = (data['originalPlaceId'] ?? '').toString().trim();
       final publishedId = originalPlaceId.isNotEmpty ? originalPlaceId : id;
       final published = firestore.collection('published_places').doc(publishedId);
 
+      // Defense in depth: final approval of an edit must use the original
+      // published place identity even if a stale preview/message carried a
+      // different approval number.
+      if (requestType == 'update' && originalPlaceId.isNotEmpty) {
+        final originalSnapshot = await transaction.get(published);
+        final originalData = originalSnapshot.data();
+        if (!originalSnapshot.exists || originalData == null) {
+          throw StateError('original-published-place-not-found');
+        }
+        approvalNumber =
+            (originalData['approvalNumber'] ?? '').toString().trim();
+        approvalDate =
+            (originalData['approvalDate'] ?? '').toString().trim();
+      }
+      if (approvalNumber.isEmpty || approvalDate.isEmpty) {
+        throw StateError('approval-not-prepared');
+      }
+
+      final generatedMessage = _approvalMessage(
+        placeName: (data['placeName'] ?? '').toString(),
+        approvalNumber: approvalNumber,
+        approvalDate: approvalDate,
+      );
+      final cleanMessage =
+          requestType == 'update' ? generatedMessage : (
+            message.trim().isEmpty ? generatedMessage : message.trim()
+          );
+
       transaction.update(request, {
         'status': 'approved',
+        'approvalNumber': approvalNumber,
+        'approvalDate': approvalDate,
         'updatedAt': FieldValue.serverTimestamp(),
         'reviewedBy': actor['uid'],
         'reviewedByName': actor['name'],
@@ -1634,8 +1678,7 @@ class DedaBackend {
       );
 
       final accountKey = (data['accountKey'] ?? '').toString().trim();
-      if ((data['requestType'] ?? '').toString() == 'update' &&
-          accountKey.isNotEmpty) {
+      if (requestType == 'update' && accountKey.isNotEmpty) {
         final ownerUid = (data['ownerUid'] ?? '').toString().trim();
         final placeName = (data['placeName'] ?? '').toString().trim();
         final governorate = (data['governorate'] ?? '').toString().trim();
