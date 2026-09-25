@@ -7875,6 +7875,13 @@ class DedaRouteResult {
 class DedaRouteService {
   static const Duration _timeout = Duration(seconds: 14);
 
+  bool _routeIsUsable(DedaRouteResult route) {
+    return route.points.length >= 2 &&
+        route.distanceMeters.isFinite &&
+        route.distanceMeters > 0 &&
+        route.durationSeconds.isFinite;
+  }
+
   Future<DedaRouteResult> getDrivingRoute({
     required LatLng start,
     required LatLng destination,
@@ -7884,11 +7891,15 @@ class DedaRouteService {
     // endpoints used below do not provide equivalent profiles for them.
     if (travelMode == DedaTravelMode.motorcycle ||
         travelMode == DedaTravelMode.truck) {
-      return _getValhallaRoute(
+      final result = await _getValhallaRoute(
         start: start,
         destination: destination,
         travelMode: travelMode,
       );
+      if (!_routeIsUsable(result)) {
+        throw const FormatException('Routing result invalid.');
+      }
+      return result;
     }
 
     DedaRouteResult primary;
@@ -7898,6 +7909,9 @@ class DedaRouteService {
         destination: destination,
         travelMode: travelMode,
       );
+      if (!_routeIsUsable(primary)) {
+        throw const FormatException('Routing result invalid.');
+      }
     } catch (_) {
       return _getOsrmFallback(
         start: start,
@@ -7984,9 +7998,8 @@ class DedaRouteService {
     required DedaTravelMode travelMode,
   }) {
     final straight = _straightRouteDistance(start, destination);
-    if (straight <= 250) return false;
-
-    final detourRatio = route.distanceMeters / straight;
+    final detourRatio =
+        route.distanceMeters / math.max(straight, 25.0);
     final endpointDrift = _routeEndpointDrift(
       route,
       start: start,
@@ -8209,7 +8222,12 @@ class DedaRouteService {
     }
     final distance = route['distance'];
     final duration = route['duration'];
-    if (distance is! num || duration is! num || points.length < 2) {
+    if (distance is! num ||
+        duration is! num ||
+        points.length < 2 ||
+        !distance.toDouble().isFinite ||
+        distance.toDouble() <= 0 ||
+        !duration.toDouble().isFinite) {
       throw const FormatException('Route summary invalid.');
     }
     final steps = <DedaRouteStep>[];
@@ -8722,7 +8740,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     _initTts();
     _startCompassTracking();
     final initialRoute = widget.initialRoute;
-    if (initialRoute != null) {
+    final initialRouteUsable = initialRoute != null &&
+        initialRoute.points.length >= 2 &&
+        initialRoute.distanceMeters.isFinite &&
+        initialRoute.distanceMeters > 0 &&
+        initialRoute.durationSeconds.isFinite;
+    if (initialRouteUsable) {
       route = initialRoute;
       isLoading = false;
       _liveRemainingMeters = initialRoute.distanceMeters;
@@ -10143,14 +10166,37 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   Future<void> startTrip() async {
-    if (tripStarted || route == null) return;
+    if (tripStarted) return;
+    final currentRoute = route;
+    final routeUsable = currentRoute != null &&
+        currentRoute.points.length >= 2 &&
+        currentRoute.distanceMeters.isFinite &&
+        currentRoute.distanceMeters > 0 &&
+        currentRoute.durationSeconds.isFinite;
+    if (!routeUsable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'تعذر حساب طريق صالح إلى هذه الوجهة. جاري إعادة المحاولة.',
+                'A valid route could not be calculated. Retrying now.',
+              ),
+            ),
+          ),
+        );
+      }
+      await loadRoute();
+      return;
+    }
+
     await DedaPlacesStore.addRecent(widget.destination);
     if (!mounted) return;
 
     setState(() {
       tripStarted = true;
       _autoFollowMap = true;
-      _liveRemainingMeters = route!.distanceMeters;
+      _liveRemainingMeters = currentRoute.distanceMeters;
       _previousLivePoint = startPoint;
       _navigationToolsOpen = false;
       navigationStatus =
@@ -10669,7 +10715,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                       ),
                       children: [
                         ...dedaNavigationMapLayers(mapStyle),
-                        if (routePoints.isNotEmpty)
+                        if (routePoints.length >= 2)
                           PolylineLayer(
                             polylines: [
                               Polyline(
