@@ -1231,3 +1231,5 @@ service cloud.firestore {
     }
   }
 }
+
+// DEDA location sharing v1 deployment marker
