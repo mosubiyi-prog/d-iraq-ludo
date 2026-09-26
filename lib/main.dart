@@ -7105,6 +7105,19 @@ class _DedaReceivedLocationsPageState
   }
 
   Future<void> _openShare(Map<String, dynamic> item) async {
+    if (_isExpired(item)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'انتهت مدة هذه المشاركة.',
+              'This location share has expired.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     final status = (item['status'] ?? 'pending').toString();
     final id = (item['id'] ?? '').toString();
     if (status == 'pending') {
@@ -7323,7 +7336,7 @@ class _DedaReceivedLocationsPageState
                 Text(
                   placeShare
                       ? dedaText('مكان ثابت', 'Fixed place')
-                      : dedaText('موقع مباشر', 'Live location'),
+                      : dedaText('موقع حالي', 'Current location'),
                   style: const TextStyle(
                     color: Color(0xFF17652F),
                     fontWeight: FontWeight.w800,
