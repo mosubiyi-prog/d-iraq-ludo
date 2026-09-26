@@ -5417,25 +5417,166 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = filteredCategories;
-    DedaCategoryData? mapCategory;
-    for (final category in categories) {
-      if (category.title == 'الخريطة') {
-        mapCategory = category;
-        break;
-      }
-    }
-    final gridCategories = categories
-        .where((category) => category.title != 'الخريطة')
-        .toList();
     final media = MediaQuery.of(context);
     final isLandscape = media.orientation == Orientation.landscape;
-    final crossAxisCount = isLandscape ? 4 : 2;
+
+    DedaCategoryData category(String title) =>
+        allCategories.firstWhere((item) => item.title == title);
+
+    void showStageMessage(String ar, String en) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(ar, en),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    void openBottomDestination(int index) {
+      switch (index) {
+        case 0:
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DedaAccountHubPage()),
+          ).then((_) {
+            if (mounted) setState(() {});
+          });
+          break;
+        case 1:
+          openSavedPlaces(favorites: true);
+          break;
+        case 2:
+          break;
+        case 3:
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DedaMyRequestsPage()),
+          );
+          break;
+        case 4:
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DedaContactPage(
+                initialName: DedaPreferences.userName,
+                initialPhone: DedaPreferences.phone,
+              ),
+            ),
+          );
+          break;
+      }
+    }
+
+    Widget topAction({
+      required IconData icon,
+      required String label,
+      required VoidCallback onPressed,
+      bool filled = false,
+    }) {
+      final child = FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          maxLines: 1,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      );
+      if (filled) {
+        return SizedBox(
+          height: 60,
+          child: FilledButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 25),
+            label: child,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF17652F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+        );
+      }
+      return SizedBox(
+        height: 60,
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 25),
+          label: child,
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white.withOpacity(0.82),
+            foregroundColor: const Color(0xFF17652F),
+            side: const BorderSide(color: Color(0xFF5F8066), width: 1.2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget compactAction({
+      required IconData icon,
+      required String label,
+      required VoidCallback onPressed,
+    }) {
+      return SizedBox(
+        height: 54,
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, color: const Color(0xFF17652F)),
+          label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Color(0xFF244D30),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white.withOpacity(0.72),
+            side: const BorderSide(color: Color(0xFF6F8A74)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget categoryCard(DedaCategoryData item, {double height = 132}) {
+      return SizedBox(
+        height: height,
+        child: DedaCategory(
+          icon: item.icon,
+          title: dedaCategoryLabel(item.title),
+          onTap: () => openCategory(item),
+        ),
+      );
+    }
+
+    final restaurant = category('مطاعم');
+    final hotel = category('فنادق');
+    final mall = category('مولات');
+    final fuel = category('محطات وقود');
+    final pharmacy = category('صيدليات');
+    final parking = category('مواقف');
+    final park = category('حدائق');
+    final map = category('الخريطة');
+
+    final mainCategoryHeight = isLandscape ? 108.0 : 142.0;
+    final smallCategoryHeight = isLandscape ? 100.0 : 130.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        backgroundColor: Colors.white.withOpacity(0.72),
+        backgroundColor: Colors.white.withOpacity(0.82),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -5479,10 +5620,10 @@ class _HomePageState extends State<HomePage> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
-              isLandscape ? 24 : 18,
+              isLandscape ? 24 : 16,
               14,
-              isLandscape ? 24 : 18,
-              28,
+              isLandscape ? 24 : 16,
+              22,
             ),
             child: Center(
               child: ConstrainedBox(
@@ -5499,241 +5640,390 @@ class _HomePageState extends State<HomePage> {
                           ? TextAlign.right
                           : TextAlign.left,
                       style: TextStyle(
-                        fontSize: isLandscape ? 23 : 25,
-                        fontWeight: FontWeight.bold,
+                        fontSize: isLandscape ? 23 : 27,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 14),
                     Row(
                       children: [
                         Expanded(
-                          child: SizedBox(
-                            height: 58,
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      dedaText(
-                                        'المواقع المستلمة ستُفعّل في المرحلة التالية.',
-                                        'Received locations will be enabled in the next stage.',
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.location_searching),
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  dedaText(
-                                    'المواقع المستلمة',
-                                    'Received locations',
-                                  ),
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white.withOpacity(0.80),
-                                foregroundColor: const Color(0xFF17652F),
-                                side: const BorderSide(
-                                  color: Color(0xFF6F8A74),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
+                          child: topAction(
+                            icon: Icons.location_on_outlined,
+                            label: dedaText(
+                              'المواقع المستلمة',
+                              'Received locations',
+                            ),
+                            onPressed: () => showStageMessage(
+                              'المواقع المستلمة جاهزة في الواجهة، وسيتم ربط الاستلام في المرحلة التالية.',
+                              'Received locations are staged in the interface; receiving logic comes next.',
                             ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: SizedBox(
-                            height: 58,
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      dedaText(
-                                        'مشاركة الموقع ستُفعّل في المرحلة التالية.',
-                                        'Location sharing will be enabled in the next stage.',
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.share_location),
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  dedaText('شارك موقعك', 'Share your location'),
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF17652F),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 58,
-                            child: TextField(
-                              controller: searchController,
-                              textDirection: DedaLanguageState.direction,
-                              textInputAction: TextInputAction.search,
-                              onSubmitted: (_) => openPlaceSearch(),
-                              onChanged: (_) => setState(() {}),
-                              decoration: InputDecoration(
-                                hintText: dedaText('بحث...', 'Search...'),
-                                filled: true,
-                                fillColor: Colors.white.withOpacity(0.78),
-                                prefixIcon: IconButton(
-                                  tooltip: dedaText('بحث بالاسم', 'Search by name'),
-                                  onPressed: openPlaceSearch,
-                                  icon: const Icon(Icons.search),
-                                ),
-                                suffixIcon: searchController.text.isEmpty
-                                    ? null
-                                    : IconButton(
-                                        onPressed: () {
-                                          searchController.clear();
-                                          setState(() {});
-                                        },
-                                        icon: const Icon(Icons.clear),
-                                      ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SizedBox(
-                            height: 58,
-                            child: OutlinedButton.icon(
-                              onPressed: openDedaAssistant,
-                              icon: const Icon(Icons.assistant_outlined),
-                              label: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  dedaText('مساعد DEDA', 'DEDA Assistant'),
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white.withOpacity(0.74),
-                                side: const BorderSide(
-                                  color: Color(0xFF6F8A74),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                              ),
+                          child: topAction(
+                            icon: Icons.share_location,
+                            label: dedaText('شارك موقعك', 'Share your location'),
+                            filled: true,
+                            onPressed: () => showStageMessage(
+                              'واجهة مشاركة الموقع جاهزة، وسيتم ربط المعرفات والإرسال في المرحلة التالية.',
+                              'Location sharing is staged; IDs and sending logic come next.',
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    SizedBox(
-                      height: 48,
-                      child: FilledButton.icon(
-                        onPressed: openPlaceSearch,
-                        icon: const Icon(Icons.travel_explore),
-                        label: Text(
-                          dedaText(
-                            'بحث حقيقي عن المكان بالاسم',
-                            'Search by exact place name',
-                          ),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => openSavedPlaces(favorites: true),
-                            icon: const Icon(Icons.favorite),
-                            label: Text(dedaText('المفضلة', 'Favorites')),
+                          child: compactAction(
+                            icon: Icons.history,
+                            label: dedaText(
+                              'الأماكن الأخيرة',
+                              'Recent places',
+                            ),
+                            onPressed: () =>
+                                openSavedPlaces(favorites: false),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => openSavedPlaces(favorites: false),
-                            icon: const Icon(Icons.history),
-                            label: Text(dedaText('الأماكن الأخيرة', 'Recent places')),
+                          child: compactAction(
+                            icon: Icons.assistant_outlined,
+                            label: dedaText('مساعد DEDA', 'DEDA Assistant'),
+                            onPressed: openDedaAssistant,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (mapCategory != null) ...[
-                      _DedaMapHeroCard(
-                        onTap: () => openCategory(mapCategory!),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (mapCategory == null && gridCategories.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 36),
-                        child: Text(
-                          dedaText(
-                            'لا توجد فئة مطابقة. استخدم زر البحث للبحث عن ${searchController.text.trim()} بالاسم.',
-                            'No matching category. Use Search to look for ${searchController.text.trim()} by name.',
+                    Row(
+                      textDirection: TextDirection.ltr,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: categoryCard(
+                            restaurant,
+                            height: mainCategoryHeight,
                           ),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 18),
                         ),
-                      )
-                    else if (gridCategories.isNotEmpty)
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: gridCategories.length,
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: isLandscape ? 1.18 : 1.0,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: SizedBox(
+                            height: mainCategoryHeight,
+                            child: _DedaMapHeroCard(
+                              onTap: () => openCategory(map),
+                            ),
+                          ),
                         ),
-                        itemBuilder: (context, index) {
-                          final category = gridCategories[index];
-                          return DedaCategory(
-                            icon: category.icon,
-                            title: dedaCategoryLabel(category.title),
-                            onTap: () => openCategory(category),
-                          );
-                        },
-                      ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      textDirection: TextDirection.ltr,
+                      children: [
+                        Expanded(
+                          child: categoryCard(
+                            fuel,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: categoryCard(
+                            pharmacy,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: categoryCard(
+                            parking,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      textDirection: TextDirection.ltr,
+                      children: [
+                        Expanded(
+                          child: categoryCard(
+                            park,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: categoryCard(
+                            hotel,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: categoryCard(
+                            mall,
+                            height: smallCategoryHeight,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 2,
+        height: 72,
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFFD9EEDB),
+        onDestinationSelected: openBottomDestination,
+        destinations: [
+          NavigationDestination(
+            icon: const Icon(Icons.person_outline),
+            selectedIcon: const Icon(Icons.person),
+            label: dedaText('حسابي', 'Account'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.favorite_border),
+            selectedIcon: const Icon(Icons.favorite),
+            label: dedaText('المفضلة', 'Favorites'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(
+              Icons.home,
+              color: Color(0xFF11823B),
+            ),
+            label: dedaText('الرئيسية', 'Home'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.assignment_outlined),
+            selectedIcon: const Icon(Icons.assignment),
+            label: dedaText('طلباتي', 'Requests'),
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.chat_bubble_outline),
+            selectedIcon: const Icon(Icons.chat_bubble),
+            label: dedaText('الرسائل', 'Messages'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DedaAccountHubPage extends StatefulWidget {
+  const DedaAccountHubPage({super.key});
+
+  @override
+  State<DedaAccountHubPage> createState() => _DedaAccountHubPageState();
+}
+
+class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
+  @override
+  Widget build(BuildContext context) {
+    final type = DedaPreferences.accountType ?? DedaAccountType.user;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('حسابي', 'My account')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+          children: [
+            Card(
+              elevation: 0,
+              color: const Color(0xFFEAF4E7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Color(0xFF17652F),
+                      child: Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            DedaPreferences.userName,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            DedaPreferences.phone,
+                            textDirection: TextDirection.ltr,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            dedaAccountTypeLabel(type),
+                            style: const TextStyle(
+                              color: Color(0xFF17652F),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PersonalPlacesPage(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.person_pin_circle_outlined),
+              label: Text(
+                dedaText('أماكني الشخصية', 'My personal places'),
+              ),
+            ),
+            if (type == DedaAccountType.placeOwner) ...[
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OwnerPlacePage()),
+                  );
+                },
+                icon: const Icon(Icons.storefront),
+                label: Text(dedaText('إدارة مكاني', 'Manage my place')),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF17652F),
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
+                );
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(Icons.settings_outlined),
+              label: Text(dedaText('الإعدادات', 'Settings')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DedaMyRequestsPage extends StatelessWidget {
+  const DedaMyRequestsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isOwner =
+        DedaPreferences.accountType == DedaAccountType.placeOwner;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('طلباتي', 'My requests')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Card(
+                elevation: 0,
+                color: Colors.white.withOpacity(0.90),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isOwner
+                            ? Icons.storefront_outlined
+                            : Icons.assignment_outlined,
+                        size: 52,
+                        color: const Color(0xFF17652F),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        isOwner
+                            ? dedaText(
+                                'طلبات مكانك وحالته موجودة في إدارة مكاني.',
+                                'Your place requests and status are available in Manage my place.',
+                              )
+                            : dedaText(
+                                'لا توجد طلبات مكان مرتبطة بهذا الحساب حالياً.',
+                                'There are no place requests linked to this account yet.',
+                              ),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.45,
+                        ),
+                      ),
+                      if (isOwner) ...[
+                        const SizedBox(height: 18),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerPlacePage(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.open_in_new),
+                          label: Text(
+                            dedaText('فتح إدارة مكاني', 'Open Manage my place'),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF17652F),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -5743,7 +6033,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
-
 class _DedaMapHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
