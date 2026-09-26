@@ -340,6 +340,14 @@ String dedaMapAttribution(DedaMapStyle style) {
 }
 
 List<Widget> dedaNavigationMapLayers(DedaMapStyle style) {
+  if (style == DedaMapStyle.normal) {
+    return [
+      TileLayer(
+        urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+        userAgentPackageName: 'com.diraq.ludo',
+      ),
+    ];
+  }
   return dedaBaseMapLayers(style);
 }
 
@@ -9911,27 +9919,9 @@ class DedaRouteService {
     DedaRouteResult? best;
     Object? lastError;
 
-    try {
-      final primary = await _getValhallaRoute(
-        start: start,
-        destination: destination,
-        travelMode: travelMode,
-      );
-      if (_routeIsUsable(primary)) {
-        best = primary;
-        if (!_routeNeedsCrossCheck(
-          primary,
-          start: start,
-          destination: destination,
-          travelMode: travelMode,
-        )) {
-          return primary;
-        }
-      }
-    } catch (e) {
-      lastError = e;
-    }
-
+    // For car/walking, try OSRM first. It is fast for normal road routing and
+    // now has two independent public endpoints below. Only cross-check with
+    // Valhalla when the first valid route looks suspicious.
     try {
       final alternate = await _getOsrmFallback(
         start: start,
@@ -9939,11 +9929,32 @@ class DedaRouteService {
         travelMode: travelMode,
       );
       if (_routeIsUsable(alternate)) {
+        best = alternate;
+        if (!_routeNeedsCrossCheck(
+          alternate,
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        )) {
+          return alternate;
+        }
+      }
+    } catch (e) {
+      lastError = e;
+    }
+
+    try {
+      final primary = await _getValhallaRoute(
+        start: start,
+        destination: destination,
+        travelMode: travelMode,
+      );
+      if (_routeIsUsable(primary)) {
         best = best == null
-            ? alternate
+            ? primary
             : _chooseSaferRoute(
                 best!,
-                alternate,
+                primary,
                 start: start,
                 destination: destination,
                 travelMode: travelMode,
@@ -9990,10 +10001,16 @@ class DedaRouteService {
     throw const FormatException('No usable route found.');
   }
 
-  String _osrmRootForMode(DedaTravelMode mode) {
-    return mode == DedaTravelMode.walking
-        ? 'https://routing.openstreetmap.de/routed-foot/'
-        : 'https://routing.openstreetmap.de/routed-car/';
+  List<String> _osrmRootsForMode(DedaTravelMode mode) {
+    if (mode == DedaTravelMode.walking) {
+      return const <String>[
+        'https://routing.openstreetmap.de/routed-foot/',
+      ];
+    }
+    return const <String>[
+      'https://router.project-osrm.org/',
+      'https://routing.openstreetmap.de/routed-car/',
+    ];
   }
 
   Future<List<({LatLng point, double accessMeters})>>
@@ -10001,7 +10018,26 @@ class DedaRouteService {
     LatLng original, {
     required DedaTravelMode travelMode,
   }) async {
-    final root = _osrmRootForMode(travelMode);
+    Object? lastError;
+    for (final root in _osrmRootsForMode(travelMode)) {
+      try {
+        return await _nearestRoadCandidatesFromRoot(
+          original,
+          root: root,
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError != null) throw lastError;
+    throw const FormatException('No routing provider available.');
+  }
+
+  Future<List<({LatLng point, double accessMeters})>>
+      _nearestRoadCandidatesFromRoot(
+    LatLng original, {
+    required String root,
+  }) async {
     final uri = Uri.parse(
       '${root}nearest/v1/driving/'
       '${original.longitude},${original.latitude}?number=3',
@@ -10360,7 +10396,28 @@ class DedaRouteService {
     required LatLng destination,
     required DedaTravelMode travelMode,
   }) async {
-    final base = '${_osrmRootForMode(travelMode)}route/v1/driving/';
+    Object? lastError;
+    for (final root in _osrmRootsForMode(travelMode)) {
+      try {
+        return await _getOsrmRouteFromRoot(
+          root: root,
+          start: start,
+          destination: destination,
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError != null) throw lastError;
+    throw const FormatException('No OSRM routing provider available.');
+  }
+
+  Future<DedaRouteResult> _getOsrmRouteFromRoot({
+    required String root,
+    required LatLng start,
+    required LatLng destination,
+  }) async {
+    final base = '${root}route/v1/driving/';
     final uri = Uri.parse(
       '$base${start.longitude},${start.latitude};'
       '${destination.longitude},${destination.latitude}'
