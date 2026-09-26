@@ -5501,7 +5501,7 @@ class _HomePageState extends State<HomePage> {
       required VoidCallback onPressed,
       bool filled = false,
     }) {
-      final buttonHeight = isLandscape ? 44.0 : 58.0;
+      const buttonHeight = 58.0;
       final child = FittedBox(
         fit: BoxFit.scaleDown,
         child: Text(
@@ -5515,7 +5515,7 @@ class _HomePageState extends State<HomePage> {
           height: buttonHeight,
           child: FilledButton.icon(
             onPressed: onPressed,
-            icon: Icon(icon, size: isLandscape ? 20 : 25),
+            icon: Icon(icon, size: 25),
             label: child,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF17652F),
@@ -5531,7 +5531,7 @@ class _HomePageState extends State<HomePage> {
         height: buttonHeight,
         child: OutlinedButton.icon(
           onPressed: onPressed,
-          icon: Icon(icon, size: isLandscape ? 20 : 25),
+          icon: Icon(icon, size: 25),
           label: child,
           style: OutlinedButton.styleFrom(
             backgroundColor: Colors.white.withOpacity(0.82),
@@ -5551,12 +5551,12 @@ class _HomePageState extends State<HomePage> {
       required VoidCallback onPressed,
     }) {
       return SizedBox(
-        height: isLandscape ? 40 : 50,
+        height: 50,
         child: OutlinedButton.icon(
           onPressed: onPressed,
           icon: Icon(
             icon,
-            size: isLandscape ? 19 : 23,
+            size: 23,
             color: const Color(0xFF17652F),
           ),
           label: FittedBox(
