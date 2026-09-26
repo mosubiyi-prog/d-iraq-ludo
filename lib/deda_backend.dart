@@ -3351,31 +3351,35 @@ class DedaBackend {
   // DEDA in-app location sharing v1.
   static const String _shareAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-  static String _shareCode(String seed) {
-    var hash = 2166136261;
-    for (final unit in utf8.encode(seed)) {
-      hash ^= unit;
-      hash = (hash * 16777619) & 0xFFFFFFFF;
+  // DEDA accounts use Iraqi mobile numbers. The final nine digits contain
+  // exactly 1,000,000,000 possible values, while six base-32 characters hold
+  // 1,073,741,824 values. A modular offset therefore gives every valid phone
+  // a collision-free six-character public code without exposing the phone.
+  static String _shareCodeForPhone(String phone, int offset) {
+    final key = accountKeyForPhone(phone);
+    if (key.length < 9) return '';
+    final tail = key.substring(key.length - 9);
+    final raw = int.tryParse(tail);
+    if (raw == null) return '';
+    var value = (raw + offset) % 1000000000;
+    final chars = List<String>.filled(6, _shareAlphabet[0]);
+    for (var index = 5; index >= 0; index--) {
+      chars[index] = _shareAlphabet[value % 32];
+      value ~/= 32;
     }
-    var value = hash & 0x3FFFFFFF;
-    final chars = <String>[];
-    for (var i = 0; i < 6; i++) {
-      chars.add(_shareAlphabet[value & 31]);
-      value = (value >> 5) ^ ((hash >> ((i + 3) % 16)) & 31);
-    }
-    return chars.reversed.join();
+    return chars.join();
   }
 
   static String personalShareIdForPhone(String phone) {
-    final key = accountKeyForPhone(phone);
-    if (key.isEmpty) return '';
-    return '@DEDA-${_shareCode('person|$key')}';
+    final code = _shareCodeForPhone(phone, 314159265);
+    if (code.isEmpty) return '';
+    return '@DEDA-$code';
   }
 
   static String placeShareIdForPhone(String phone) {
-    final key = accountKeyForPhone(phone);
-    if (key.isEmpty) return '';
-    return '@DEDA-P-${_shareCode('place|$key')}';
+    final code = _shareCodeForPhone(phone, 271828182);
+    if (code.isEmpty) return '';
+    return '@DEDA-P-$code';
   }
 
   static String normalizeSharePublicId(String value) {
