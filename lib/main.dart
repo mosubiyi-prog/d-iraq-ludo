@@ -157,20 +157,23 @@ class DedaPreferences {
     accountType = type;
     isLoggedIn = true;
 
-    await prefs.setString(_userNameKey, resolvedName);
-    await prefs.setString(_phoneKey, normalizedPhone);
-    await prefs.setString(_accountPhoneKey, normalizedPhone);
-    await prefs.setString(_accountTypeKey, type.name);
-    await prefs.setBool(_loggedInKey, true);
-    try {
-      await DedaBackend.syncCurrentUserProfile(
+    await Future.wait([
+      prefs.setString(_userNameKey, resolvedName),
+      prefs.setString(_phoneKey, normalizedPhone),
+      prefs.setString(_accountPhoneKey, normalizedPhone),
+      prefs.setString(_accountTypeKey, type.name),
+      prefs.setBool(_loggedInKey, true),
+    ]);
+
+    // Do not hold the login screen open while Firebase/network profile syncs.
+    // Local account state is already complete, so the user can enter DEDA now.
+    unawaited(
+      DedaBackend.syncCurrentUserProfile(
         name: resolvedName,
         phone: normalizedPhone,
         accountType: type.name,
-      );
-    } catch (_) {
-      // Local sign-in remains usable if the network is temporarily unavailable.
-    }
+      ).catchError((_) {}),
+    );
   }
 
   static Future<void> setAccountType(DedaAccountType type) async {
@@ -212,11 +215,13 @@ class DedaPreferences {
     phone = '';
     accountPhone = '';
     accountType = null;
-    await prefs.setBool(_loggedInKey, false);
-    await prefs.remove(_userNameKey);
-    await prefs.remove(_phoneKey);
-    await prefs.remove(_accountPhoneKey);
-    await prefs.remove(_accountTypeKey);
+    await Future.wait([
+      prefs.setBool(_loggedInKey, false),
+      prefs.remove(_userNameKey),
+      prefs.remove(_phoneKey),
+      prefs.remove(_accountPhoneKey),
+      prefs.remove(_accountTypeKey),
+    ]);
   }
 }
 
@@ -6319,7 +6324,9 @@ class DedaShareLocationPage extends StatefulWidget {
 class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
   final TextEditingController _recipientController = TextEditingController();
 
-  bool _loading = true;
+  // Personal ID is deterministic from the signed-in phone, so the page can
+  // render immediately while Firebase refreshes place/share identity.
+  bool _loading = false;
   bool _sending = false;
   String _personalId = '';
   String _placeId = '';
@@ -7075,7 +7082,9 @@ class DedaReceivedLocationsPage extends StatefulWidget {
 class _DedaReceivedLocationsPageState
     extends State<DedaReceivedLocationsPage> {
   String _personalId = '';
-  bool _loading = true;
+  // The local personal ID is ready immediately; refresh the remote identity
+  // without blocking the received-locations screen.
+  bool _loading = false;
   int _filter = 0;
 
   @override
@@ -7170,34 +7179,72 @@ class _DedaReceivedLocationsPageState
       );
       return;
     }
-    final status = (item['status'] ?? 'pending').toString();
-    final id = (item['id'] ?? '').toString();
-    if (status == 'pending') {
-      try {
-        await DedaBackend.decideLocationShare(
-          shareId: id,
-          accept: true,
-        );
-      } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'تعذر قبول المشاركة الآن.',
-                'Could not accept the share right now.',
-              ),
+
+    final lat = (item['latitude'] as num?)?.toDouble();
+    final lng = (item['longitude'] as num?)?.toDouble();
+    if (lat == null || lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'إحداثيات الموقع المستلم غير مكتملة.',
+              'The received location coordinates are incomplete.',
             ),
           ),
-        );
-        return;
-      }
+        ),
+      );
+      return;
     }
+
+    final placeShare = item['shareType'] == 'place';
+    final senderName = (item['senderName'] ?? '').toString().trim();
+    final placeName = (item['placeName'] ?? '').toString().trim();
+    final title = placeShare && placeName.isNotEmpty
+        ? placeName
+        : senderName.isNotEmpty
+            ? senderName
+            : dedaText('الموقع المشترك', 'Shared location');
+
+    // Accept in the background so opening the map is not held up by Firebase.
+    final status = (item['status'] ?? 'pending').toString();
+    final id = (item['id'] ?? '').toString();
+    if (status == 'pending' && id.isNotEmpty) {
+      unawaited(
+        DedaBackend.decideLocationShare(
+          shareId: id,
+          accept: true,
+        ).catchError((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  dedaText(
+                    'فتحنا الموقع، لكن تعذر تحديث حالة القبول الآن.',
+                    'The location opened, but its accepted state could not be updated.',
+                  ),
+                ),
+              ),
+            );
+          }
+        }),
+      );
+    }
+
+    final destination = PlaceInfo(
+      name: title,
+      type: placeShare
+          ? dedaText('مكان مشترك', 'Shared place')
+          : dedaText('موقع مشترك', 'Shared location'),
+      location: LatLng(lat, lng),
+    );
+
     if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DedaSharedLocationMapPage(share: item),
+        builder: (_) => MapReadyPage(
+          initialDestination: destination,
+        ),
       ),
     );
   }
@@ -7557,232 +7604,6 @@ class _DedaReceivedLocationsPageState
                   ],
                 ),
         ),
-      ),
-    );
-  }
-}
-
-class DedaSharedLocationMapPage extends StatelessWidget {
-  final Map<String, dynamic> share;
-
-  const DedaSharedLocationMapPage({
-    super.key,
-    required this.share,
-  });
-
-  Future<void> _startDedaNavigation(
-    BuildContext context, {
-    required LatLng point,
-    required String title,
-    required bool placeShare,
-  }) async {
-    try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'فعّل GPS أولاً لبدء الملاحة.',
-                'Enable GPS first to start navigation.',
-              ),
-            ),
-          ),
-        );
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'نحتاج إذن الموقع لبدء الملاحة.',
-                'Location permission is required to start navigation.',
-              ),
-            ),
-          ),
-        );
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      if (!context.mounted) return;
-
-      final destination = PlaceInfo(
-        name: title.isEmpty
-            ? dedaText('الموقع المشترك', 'Shared location')
-            : title,
-        type: placeShare
-            ? dedaText('مكان مشترك', 'Shared place')
-            : dedaText('موقع مشترك', 'Shared location'),
-        location: point,
-      );
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => DedaRoutePage(
-            startPosition: position,
-            destination: destination,
-            categoryIcon:
-                placeShare ? Icons.location_pin : Icons.person_pin_circle,
-            initialStyle: DedaPreferences.defaultMapStyle,
-            travelMode: DedaPreferences.defaultTravelMode,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'تعذر بدء الملاحة الآن. حاول مجددًا.',
-              'Could not start navigation right now. Try again.',
-            ),
-          ),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lat = (share['latitude'] as num?)?.toDouble();
-    final lng = (share['longitude'] as num?)?.toDouble();
-    final point = LatLng(lat ?? 0, lng ?? 0);
-    final placeShare = share['shareType'] == 'place';
-    final title = placeShare
-        ? (share['placeName'] ?? share['senderName'] ?? '').toString()
-        : (share['senderName'] ?? '').toString();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          title.isEmpty
-              ? dedaText('الموقع المستلم', 'Received location')
-              : title,
-        ),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: FlutterMap(
-              options: MapOptions(
-                initialCenter: point,
-                initialZoom: 15,
-              ),
-              children: [
-                ...dedaBaseMapLayers(DedaMapStyle.normal),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: point,
-                      width: 64,
-                      height: 64,
-                      child: Icon(
-                        placeShare
-                            ? Icons.location_pin
-                            : Icons.my_location,
-                        size: 54,
-                        color: placeShare
-                            ? const Color(0xFFE53935)
-                            : const Color(0xFF1565C0),
-                      ),
-                    ),
-                  ],
-                ),
-                RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution(
-                      dedaMapAttribution(DedaMapStyle.normal),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          PositionedDirectional(
-            top: 14,
-            start: 14,
-            end: 14,
-            child: Card(
-              color: Colors.white.withOpacity(0.94),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      placeShare ? Icons.storefront : Icons.person,
-                      color: const Color(0xFF17652F),
-                    ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        placeShare
-                            ? dedaText(
-                                'مكان ثابت تمت مشاركته داخل DEDA',
-                                'Fixed place shared inside DEDA',
-                              )
-                            : dedaText(
-                                'الموقع الذي شاركه $title',
-                                'Location shared by $title',
-                              ),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          PositionedDirectional(
-            start: 24,
-            end: 24,
-            bottom: 72,
-            child: FilledButton.icon(
-              onPressed: lat == null || lng == null
-                  ? null
-                  : () => _startDedaNavigation(
-                        context,
-                        point: point,
-                        title: title,
-                        placeShare: placeShare,
-                      ),
-              icon: const Icon(Icons.navigation),
-              label: Text(
-                dedaText('انطلاق', 'Start'),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(56),
-                backgroundColor: const Color(0xFF17652F),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -13712,7 +13533,12 @@ class _DedaLegendRow extends StatelessWidget {
 }
 
 class MapReadyPage extends StatefulWidget {
-  const MapReadyPage({super.key});
+  final PlaceInfo? initialDestination;
+
+  const MapReadyPage({
+    super.key,
+    this.initialDestination,
+  });
 
   @override
   State<MapReadyPage> createState() => _MapReadyPageState();
@@ -13724,6 +13550,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
   final TextEditingController _mapSearchController = TextEditingController();
   Position? currentPosition;
   LatLng? selectedDestination;
+  PlaceInfo? selectedDestinationPlace;
   DedaRouteResult? mapRoutePreview;
   bool isRoutePreviewLoading = false;
   int _routePreviewGeneration = 0;
@@ -13745,6 +13572,25 @@ class _MapReadyPageState extends State<MapReadyPage> {
           .where((place) => place.isDedaRegistered && place.isAvailableNow)
           .toList()
       : mapSearchResults;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialDestination;
+    if (initial != null) {
+      selectedDestination = initial.location;
+      selectedDestinationPlace = initial;
+      statusMessage = dedaText(
+        'تم استلام الوجهة. جاري تحديد موقعك على خريطة DEDA...',
+        'Shared destination received. Locating you on the DEDA map...',
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(determinePosition());
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -13799,12 +13645,23 @@ class _MapReadyPageState extends State<MapReadyPage> {
       );
       if (!mounted) return;
       final dedaPlaces = await DedaRegisteredPlacesStore.readAll();
+      final destination = selectedDestination;
       setState(() {
         currentPosition = position;
         registeredPlaces = dedaPlaces;
-        statusMessage =
-            dedaText('تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.', 'Location found. Long-press anywhere on the map to choose a destination.');
+        statusMessage = destination == null
+            ? dedaText(
+                'تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.',
+                'Location found. Long-press anywhere on the map to choose a destination.',
+              )
+            : dedaText(
+                'تم تحديد موقعك والوجهة. جاري رسم الطريق الأخضر على خريطة DEDA...',
+                'Your location and destination are ready. Drawing the green route on the DEDA map...',
+              );
       });
+      if (destination != null) {
+        unawaited(_previewRouteTo(destination));
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -13962,6 +13819,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
     _routePreviewGeneration += 1;
     setState(() {
       selectedDestination = null;
+      selectedDestinationPlace = null;
       mapRoutePreview = null;
       mapSearchResults = <PlaceInfo>[];
       isRoutePreviewLoading = false;
@@ -14067,6 +13925,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
         mapSearchResults = results;
         selectedDestination =
             results.isNotEmpty ? results.first.location : null;
+        selectedDestinationPlace =
+            results.isNotEmpty ? results.first : null;
         mapRoutePreview = null;
         statusMessage = results.isEmpty
             ? dedaText(
@@ -14097,6 +13957,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
   void selectMapPlace(PlaceInfo place) {
     setState(() {
       selectedDestination = place.location;
+      selectedDestinationPlace = place;
       mapRoutePreview = null;
       statusMessage = dedaText(
         'تم اختيار ${place.name}. جاري رسم الطريق الأخضر...',
@@ -14111,11 +13972,15 @@ class _MapReadyPageState extends State<MapReadyPage> {
     final destination = selectedDestination;
     if (position == null || destination == null) return;
 
-    final place = PlaceInfo(
-      name: dedaText('وجهة محددة على الخريطة', 'Selected map destination'),
-      type: dedaText('وجهة', 'Destination'),
-      location: destination,
-    );
+    final place = selectedDestinationPlace ??
+        PlaceInfo(
+          name: dedaText(
+            'وجهة محددة على الخريطة',
+            'Selected map destination',
+          ),
+          type: dedaText('وجهة', 'Destination'),
+          location: destination,
+        );
     DedaPlacesStore.addRecent(place);
     Navigator.push(
       context,
@@ -14192,11 +14057,12 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       : CameraFit.coordinates(
                           coordinates: fitPoints,
                           padding: const EdgeInsets.fromLTRB(38, 58, 38, 72),
-                          maxZoom: 15,
+                          maxZoom: widget.initialDestination != null ? 11.8 : 15,
                         ),
                   onLongPress: (_, destination) {
                     setState(() {
                       selectedDestination = destination;
+                      selectedDestinationPlace = null;
                       mapRoutePreview = null;
                       statusMessage = dedaText(
                         'تم اختيار الوجهة. جاري رسم الطريق الأخضر...',
@@ -14495,6 +14361,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                         showAvailableOnly = value;
                         if (value) {
                           selectedDestination = null;
+                          selectedDestinationPlace = null;
                           mapRoutePreview = null;
                           _routePreviewGeneration += 1;
                         }
