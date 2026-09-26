@@ -5434,6 +5434,14 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
+    Future<void> openSettings() async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
+      );
+      if (mounted) setState(() {});
+    }
+
     void openBottomDestination(int index) {
       switch (index) {
         case 0:
@@ -5445,7 +5453,7 @@ class _HomePageState extends State<HomePage> {
           });
           break;
         case 1:
-          openSavedPlaces(favorites: true);
+          openSettings();
           break;
         case 2:
           break;
@@ -5475,6 +5483,7 @@ class _HomePageState extends State<HomePage> {
       required VoidCallback onPressed,
       bool filled = false,
     }) {
+      final buttonHeight = isLandscape ? 44.0 : 58.0;
       final child = FittedBox(
         fit: BoxFit.scaleDown,
         child: Text(
@@ -5485,10 +5494,10 @@ class _HomePageState extends State<HomePage> {
       );
       if (filled) {
         return SizedBox(
-          height: 60,
+          height: buttonHeight,
           child: FilledButton.icon(
             onPressed: onPressed,
-            icon: Icon(icon, size: 25),
+            icon: Icon(icon, size: isLandscape ? 20 : 25),
             label: child,
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF17652F),
@@ -5501,10 +5510,10 @@ class _HomePageState extends State<HomePage> {
         );
       }
       return SizedBox(
-        height: 60,
+        height: buttonHeight,
         child: OutlinedButton.icon(
           onPressed: onPressed,
-          icon: Icon(icon, size: 25),
+          icon: Icon(icon, size: isLandscape ? 20 : 25),
           label: child,
           style: OutlinedButton.styleFrom(
             backgroundColor: Colors.white.withOpacity(0.82),
@@ -5524,10 +5533,14 @@ class _HomePageState extends State<HomePage> {
       required VoidCallback onPressed,
     }) {
       return SizedBox(
-        height: 54,
+        height: isLandscape ? 40 : 50,
         child: OutlinedButton.icon(
           onPressed: onPressed,
-          icon: Icon(icon, color: const Color(0xFF17652F)),
+          icon: Icon(
+            icon,
+            size: isLandscape ? 19 : 23,
+            color: const Color(0xFF17652F),
+          ),
           label: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
@@ -5550,14 +5563,11 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    Widget categoryCard(DedaCategoryData item, {double height = 132}) {
-      return SizedBox(
-        height: height,
-        child: DedaCategory(
-          icon: item.icon,
-          title: dedaCategoryLabel(item.title),
-          onTap: () => openCategory(item),
-        ),
+    Widget categoryCard(DedaCategoryData item) {
+      return DedaCategory(
+        icon: item.icon,
+        title: dedaCategoryLabel(item.title),
+        onTap: () => openCategory(item),
       );
     }
 
@@ -5569,9 +5579,6 @@ class _HomePageState extends State<HomePage> {
     final parking = category('مواقف');
     final park = category('حدائق');
     final map = category('الخريطة');
-
-    final mainCategoryHeight = isLandscape ? 108.0 : 142.0;
-    final smallCategoryHeight = isLandscape ? 100.0 : 130.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
@@ -5596,19 +5603,6 @@ class _HomePageState extends State<HomePage> {
         ),
         title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: dedaText('الإعدادات', 'Settings'),
-            icon: const Icon(Icons.settings),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
-              );
-              if (mounted) setState(() {});
-            },
-          ),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -5618,166 +5612,162 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-              isLandscape ? 24 : 16,
-              14,
-              isLandscape ? 24 : 16,
-              22,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      dedaText(
-                        'هلا بك ${widget.userName}',
-                        'Welcome ${widget.userName}',
-                      ),
-                      textAlign: DedaLanguageState.isArabic
-                          ? TextAlign.right
-                          : TextAlign.left,
-                      style: TextStyle(
-                        fontSize: isLandscape ? 23 : 27,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: topAction(
-                            icon: Icons.location_on_outlined,
-                            label: dedaText(
-                              'المواقع المستلمة',
-                              'Received locations',
-                            ),
-                            onPressed: () => showStageMessage(
-                              'المواقع المستلمة جاهزة في الواجهة، وسيتم ربط الاستلام في المرحلة التالية.',
-                              'Received locations are staged in the interface; receiving logic comes next.',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: topAction(
-                            icon: Icons.share_location,
-                            label: dedaText('شارك موقعك', 'Share your location'),
-                            filled: true,
-                            onPressed: () => showStageMessage(
-                              'واجهة مشاركة الموقع جاهزة، وسيتم ربط المعرفات والإرسال في المرحلة التالية.',
-                              'Location sharing is staged; IDs and sending logic come next.',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: compactAction(
-                            icon: Icons.history,
-                            label: dedaText(
-                              'الأماكن الأخيرة',
-                              'Recent places',
-                            ),
-                            onPressed: () =>
-                                openSavedPlaces(favorites: false),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: compactAction(
-                            icon: Icons.assistant_outlined,
-                            label: dedaText('مساعد DEDA', 'DEDA Assistant'),
-                            onPressed: openDedaAssistant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      textDirection: TextDirection.ltr,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: categoryCard(
-                            restaurant,
-                            height: mainCategoryHeight,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: SizedBox(
-                            height: mainCategoryHeight,
-                            child: _DedaMapHeroCard(
-                              onTap: () => openCategory(map),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      textDirection: TextDirection.ltr,
-                      children: [
-                        Expanded(
-                          child: categoryCard(
-                            fuel,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: categoryCard(
-                            pharmacy,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: categoryCard(
-                            parking,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      textDirection: TextDirection.ltr,
-                      children: [
-                        Expanded(
-                          child: categoryCard(
-                            park,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: categoryCard(
-                            hotel,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: categoryCard(
-                            mall,
-                            height: smallCategoryHeight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontalPadding = isLandscape ? 20.0 : 16.0;
+              final topPadding = isLandscape ? 6.0 : 10.0;
+              final sectionGap = isLandscape ? 5.0 : 8.0;
+              final greetingGap = isLandscape ? 6.0 : 10.0;
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  topPadding,
+                  horizontalPadding,
+                  isLandscape ? 6 : 8,
                 ),
-              ),
-            ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          dedaText(
+                            'هلا بك ${widget.userName}',
+                            'Welcome ${widget.userName}',
+                          ),
+                          textAlign: DedaLanguageState.isArabic
+                              ? TextAlign.right
+                              : TextAlign.left,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: isLandscape ? 19 : 25,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: greetingGap),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: topAction(
+                                icon: Icons.location_on_outlined,
+                                label: dedaText(
+                                  'المواقع المستلمة',
+                                  'Received locations',
+                                ),
+                                onPressed: () => showStageMessage(
+                                  'المواقع المستلمة جاهزة في الواجهة، وسيتم ربط الاستلام في المرحلة التالية.',
+                                  'Received locations are staged in the interface; receiving logic comes next.',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: topAction(
+                                icon: Icons.share_location,
+                                label: dedaText(
+                                  'شارك موقعك',
+                                  'Share your location',
+                                ),
+                                filled: true,
+                                onPressed: () => showStageMessage(
+                                  'واجهة مشاركة الموقع جاهزة، وسيتم ربط المعرفات والإرسال في المرحلة التالية.',
+                                  'Location sharing is staged; IDs and sending logic come next.',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: sectionGap),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: compactAction(
+                                icon: Icons.history,
+                                label: dedaText(
+                                  'الأماكن الأخيرة',
+                                  'Recent places',
+                                ),
+                                onPressed: () =>
+                                    openSavedPlaces(favorites: false),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: compactAction(
+                                icon: Icons.assistant_outlined,
+                                label: dedaText(
+                                  'مساعد DEDA',
+                                  'DEDA Assistant',
+                                ),
+                                onPressed: openDedaAssistant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: sectionGap),
+
+                        // The main screen is intentionally fixed: the category
+                        // area expands/shrinks with the device height, so the
+                        // home page itself never scrolls.
+                        Expanded(
+                          flex: isLandscape ? 9 : 13,
+                          child: Row(
+                            textDirection: TextDirection.ltr,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 1,
+                                child: categoryCard(restaurant),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 2,
+                                child: _DedaMapHeroCard(
+                                  onTap: () => openCategory(map),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: sectionGap),
+                        Expanded(
+                          flex: isLandscape ? 7 : 9,
+                          child: Row(
+                            textDirection: TextDirection.ltr,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: categoryCard(fuel)),
+                              const SizedBox(width: 8),
+                              Expanded(child: categoryCard(pharmacy)),
+                              const SizedBox(width: 8),
+                              Expanded(child: categoryCard(parking)),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: sectionGap),
+                        Expanded(
+                          flex: isLandscape ? 7 : 9,
+                          child: Row(
+                            textDirection: TextDirection.ltr,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: categoryCard(park)),
+                              const SizedBox(width: 8),
+                              Expanded(child: categoryCard(hotel)),
+                              const SizedBox(width: 8),
+                              Expanded(child: categoryCard(mall)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -5794,9 +5784,9 @@ class _HomePageState extends State<HomePage> {
             label: dedaText('حسابي', 'Account'),
           ),
           NavigationDestination(
-            icon: const Icon(Icons.favorite_border),
-            selectedIcon: const Icon(Icons.favorite),
-            label: dedaText('المفضلة', 'Favorites'),
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings),
+            label: dedaText('الإعدادات', 'Settings'),
           ),
           NavigationDestination(
             icon: const Icon(Icons.home_outlined),
@@ -5898,6 +5888,24 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               ),
             ),
             const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const SavedPlacesPage(showFavorites: true),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.favorite),
+              label: Text(dedaText('المفضلة', 'Favorites')),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF17652F),
+                minimumSize: const Size.fromHeight(52),
+              ),
+            ),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.push(
@@ -5914,7 +5922,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             ),
             if (type == DedaAccountType.placeOwner) ...[
               const SizedBox(height: 10),
-              FilledButton.icon(
+              OutlinedButton.icon(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -5923,23 +5931,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 },
                 icon: const Icon(Icons.storefront),
                 label: Text(dedaText('إدارة مكاني', 'Manage my place')),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF17652F),
-                ),
               ),
             ],
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
-                );
-                if (mounted) setState(() {});
-              },
-              icon: const Icon(Icons.settings_outlined),
-              label: Text(dedaText('الإعدادات', 'Settings')),
-            ),
           ],
         ),
       ),
@@ -6040,56 +6033,75 @@ class _DedaMapHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-    return SizedBox(
-      height: isLandscape ? 108 : 142,
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 6,
-        color: const Color(0xFF0B9DB2).withOpacity(0.90),
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: Colors.white.withOpacity(0.82)),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-            child: Row(
-              textDirection: DedaLanguageState.direction,
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 6,
+      color: const Color(0xFF0B9DB2).withOpacity(0.90),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: Colors.white.withOpacity(0.82)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final h = constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : 130.0;
+            final circleSize = (h * 0.50).clamp(42.0, 76.0).toDouble();
+            final iconSize = (circleSize * 0.60).clamp(28.0, 46.0).toDouble();
+            final titleSize = (h * 0.22).clamp(18.0, 28.0).toDouble();
+
+            return Stack(
+              alignment: Alignment.center,
               children: [
-                Container(
-                  width: isLandscape ? 64 : 76,
-                  height: isLandscape ? 64 : 76,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.20),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.map_outlined,
-                    size: isLandscape ? 38 : 46,
-                    color: Colors.white,
+                Positioned(
+                  right: 14,
+                  child: Container(
+                    width: circleSize,
+                    height: circleSize,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.20),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.map_outlined,
+                      size: iconSize,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: DedaLanguageState.isArabic
-                        ? CrossAxisAlignment.end
-                        : CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Positioned(
+                  left: 12,
+                  child: Icon(
+                    DedaLanguageState.isArabic
+                        ? Icons.chevron_left
+                        : Icons.chevron_right,
+                    color: Colors.white,
+                    size: (h * 0.27).clamp(24.0, 34.0).toDouble(),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 52,
+                    right: circleSize + 28,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
                         dedaText('الخريطة', 'Map'),
-                        style: const TextStyle(
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 27,
+                          fontSize: titleSize,
                           fontWeight: FontWeight.w900,
-                          shadows: [
+                          shadows: const [
                             Shadow(
                               color: Color(0x55000000),
                               blurRadius: 4,
@@ -6097,34 +6109,12 @@ class _DedaMapHeroCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        dedaText(
-                          'استكشف الأماكن والطريق من هنا',
-                          'Explore places and routes from here',
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.95),
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Icon(
-                  DedaLanguageState.isArabic
-                      ? Icons.chevron_left
-                      : Icons.chevron_right,
-                  color: Colors.white,
-                  size: 34,
-                ),
               ],
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -6153,52 +6143,91 @@ class DedaCategory extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = _accentForTitle(title);
-    return Card(
-      elevation: 5,
-      color: accent.withOpacity(0.78),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: Colors.white.withOpacity(0.75)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 50,
-              color: Colors.white,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                shadows: [Shadow(color: Color(0x66000000), blurRadius: 4)],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 128.0;
+        final iconSize = (h * 0.34).clamp(28.0, 50.0).toDouble();
+        final fontSize = (h * 0.155).clamp(13.5, 20.0).toDouble();
+        final gap = (h * 0.055).clamp(4.0, 10.0).toDouble();
+
+        return Card(
+          margin: EdgeInsets.zero,
+          elevation: 5,
+          color: accent.withOpacity(0.78),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: Colors.white.withOpacity(0.75)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: iconSize,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: gap),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.bold,
+                        shadows: const [
+                          Shadow(color: Color(0x66000000), blurRadius: 4),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Color _accentForTitle(String value) {
-    if (value.contains('مطاعم') || value.contains('Restaurant')) return const Color(0xFFF59E0B);
-    if (value.contains('فنادق') || value.contains('Hotel')) return const Color(0xFF2563EB);
-    if (value.contains('مول') || value.contains('Mall')) return const Color(0xFF8B3FD6);
-    if (value.contains('وقود') || value.contains('Fuel')) return const Color(0xFF16834A);
-    if (value.contains('صيدل') || value.contains('Pharmac')) return const Color(0xFFE2343F);
-    if (value.contains('مواقف') || value.contains('Parking')) return const Color(0xFF2596E8);
-    if (value.contains('حدائق') || value.contains('Park')) return const Color(0xFF42A93B);
-    if (value.contains('الخريطة') || value.contains('Map')) return const Color(0xFF08A1B9);
-    if (value.contains('الشخصية') || value.contains('personal')) return const Color(0xFF149E91);
+    if (value.contains('مطاعم') || value.contains('Restaurant')) {
+      return const Color(0xFFF59E0B);
+    }
+    if (value.contains('فنادق') || value.contains('Hotel')) {
+      return const Color(0xFF2563EB);
+    }
+    if (value.contains('مول') || value.contains('Mall')) {
+      return const Color(0xFF8B3FD6);
+    }
+    if (value.contains('وقود') || value.contains('Fuel')) {
+      return const Color(0xFF16834A);
+    }
+    if (value.contains('صيدل') || value.contains('Pharmac')) {
+      return const Color(0xFFE2343F);
+    }
+    if (value.contains('مواقف') || value.contains('Parking')) {
+      return const Color(0xFF2596E8);
+    }
+    if (value.contains('حدائق') || value.contains('Park')) {
+      return const Color(0xFF42A93B);
+    }
+    if (value.contains('الخريطة') || value.contains('Map')) {
+      return const Color(0xFF08A1B9);
+    }
+    if (value.contains('الشخصية') || value.contains('personal')) {
+      return const Color(0xFF149E91);
+    }
     return const Color(0xFFB98918);
   }
 }
