@@ -7750,6 +7750,7 @@ class DedaSharedLocationMapPage extends StatelessWidget {
                 ),
               ),
             ),
+          ),
           PositionedDirectional(
             start: 24,
             end: 24,
@@ -7780,7 +7781,6 @@ class DedaSharedLocationMapPage extends StatelessWidget {
                 ),
               ),
             ),
-          ),
           ),
         ],
       ),
