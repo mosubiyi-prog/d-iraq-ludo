@@ -5410,6 +5410,35 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeShareIdentity();
+    });
+  }
+
+  Future<void> _initializeShareIdentity() async {
+    try {
+      Map<String, dynamic>? place;
+      if (DedaPreferences.accountType == DedaAccountType.placeOwner) {
+        place = await DedaBackend.currentOwnerPublishedPlace(
+          DedaPreferences.phone,
+        );
+      }
+      await DedaBackend.ensureLocationShareIdentity(
+        name: DedaPreferences.userName,
+        phone: DedaPreferences.phone,
+        hasApprovedPlace: place != null,
+        placeName: (place?['placeName'] ?? '').toString(),
+      );
+      if (mounted) setState(() {});
+    } catch (_) {
+      // The home page must remain usable even if sharing initialization
+      // is temporarily unavailable.
+    }
+  }
+
+  @override
   void dispose() {
     searchController.dispose();
     super.dispose();
