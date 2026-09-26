@@ -5661,23 +5661,21 @@ class _HomePageState extends State<HomePage> {
                                 child: Stack(
                                   clipBehavior: Clip.none,
                                   children: [
-                                    Positioned.fill(
-                                      child: topAction(
-                                        icon: Icons.location_on_outlined,
-                                        label: dedaText(
-                                          'المواقع المستلمة',
-                                          'Received locations',
-                                        ),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const DedaReceivedLocationsPage(),
-                                            ),
-                                          );
-                                        },
+                                    topAction(
+                                      icon: Icons.location_on_outlined,
+                                      label: dedaText(
+                                        'المواقع المستلمة',
+                                        'Received locations',
                                       ),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const DedaReceivedLocationsPage(),
+                                          ),
+                                        );
+                                      },
                                     ),
                                     StreamBuilder<int>(
                                       stream: DedaBackend
@@ -5866,23 +5864,21 @@ class _HomePageState extends State<HomePage> {
                                     child: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
-                                        Positioned.fill(
-                                          child: topAction(
-                                            icon: Icons.location_on_outlined,
-                                            label: dedaText(
-                                              'المواقع المستلمة',
-                                              'Received locations',
-                                            ),
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      const DedaReceivedLocationsPage(),
-                                                ),
-                                              );
-                                            },
+                                        topAction(
+                                          icon: Icons.location_on_outlined,
+                                          label: dedaText(
+                                            'المواقع المستلمة',
+                                            'Received locations',
                                           ),
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const DedaReceivedLocationsPage(),
+                                              ),
+                                            );
+                                          },
                                         ),
                                         StreamBuilder<int>(
                                           stream: DedaBackend
