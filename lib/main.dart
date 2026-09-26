@@ -7887,50 +7887,57 @@ class DedaRouteService {
     required LatLng destination,
     DedaTravelMode travelMode = DedaTravelMode.car,
   }) async {
-    // Motorcycle and truck stay mode-specific because the public OSRM
-    // endpoints used below do not provide equivalent profiles for them.
+    // Keep mode-specific Valhalla routing for motorcycle/truck. If the exact
+    // endpoint cannot be routed, snap only the routing endpoint to a nearby
+    // road while preserving the real user/place coordinates in the UI.
     if (travelMode == DedaTravelMode.motorcycle ||
         travelMode == DedaTravelMode.truck) {
-      final result = await _getValhallaRoute(
-        start: start,
-        destination: destination,
-        travelMode: travelMode,
-      );
-      if (!_routeIsUsable(result)) {
-        throw const FormatException('Routing result invalid.');
+      Object? exactError;
+      try {
+        final exact = await _getValhallaRoute(
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        );
+        if (_routeIsUsable(exact)) return exact;
+      } catch (e) {
+        exactError = e;
       }
-      return result;
+
+      try {
+        return await _getRoadAccessFallback(
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        );
+      } catch (_) {
+        if (exactError != null) throw exactError;
+        rethrow;
+      }
     }
 
-    DedaRouteResult primary;
+    DedaRouteResult? best;
+    Object? lastError;
+
     try {
-      primary = await _getValhallaRoute(
+      final primary = await _getValhallaRoute(
         start: start,
         destination: destination,
         travelMode: travelMode,
       );
-      if (!_routeIsUsable(primary)) {
-        throw const FormatException('Routing result invalid.');
+      if (_routeIsUsable(primary)) {
+        best = primary;
+        if (!_routeNeedsCrossCheck(
+          primary,
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        )) {
+          return primary;
+        }
       }
-    } catch (_) {
-      return _getOsrmFallback(
-        start: start,
-        destination: destination,
-        travelMode: travelMode,
-      );
-    }
-
-    // Do not blindly trust a route that is much longer than the direct
-    // distance, snaps far away from either endpoint, or has an implausible
-    // static average speed. Cross-check only suspicious cases so normal
-    // searches keep the existing response time.
-    if (!_routeNeedsCrossCheck(
-      primary,
-      start: start,
-      destination: destination,
-      travelMode: travelMode,
-    )) {
-      return primary;
+    } catch (e) {
+      lastError = e;
     }
 
     try {
@@ -7939,16 +7946,189 @@ class DedaRouteService {
         destination: destination,
         travelMode: travelMode,
       );
-      return _chooseSaferRoute(
-        primary,
-        alternate,
+      if (_routeIsUsable(alternate)) {
+        best = best == null
+            ? alternate
+            : _chooseSaferRoute(
+                best!,
+                alternate,
+                start: start,
+                destination: destination,
+                travelMode: travelMode,
+              );
+        if (!_routeNeedsCrossCheck(
+          best!,
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        )) {
+          return best!;
+        }
+      }
+    } catch (e) {
+      lastError ??= e;
+    }
+
+    // If the exact coordinate is outside the routable road network, try a
+    // few nearby road access points for BOTH the start and destination.
+    // The real coordinates are never changed; this affects route geometry only.
+    try {
+      final snapped = await _getRoadAccessFallback(
         start: start,
         destination: destination,
         travelMode: travelMode,
       );
-    } catch (_) {
-      return primary;
+      if (_routeIsUsable(snapped)) {
+        return best == null
+            ? snapped
+            : _chooseSaferRoute(
+                best!,
+                snapped,
+                start: start,
+                destination: destination,
+                travelMode: travelMode,
+              );
+      }
+    } catch (e) {
+      lastError ??= e;
     }
+
+    if (best != null) return best!;
+    if (lastError != null) throw lastError;
+    throw const FormatException('No usable route found.');
+  }
+
+  String _osrmRootForMode(DedaTravelMode mode) {
+    return mode == DedaTravelMode.walking
+        ? 'https://routing.openstreetmap.de/routed-foot/'
+        : 'https://routing.openstreetmap.de/routed-car/';
+  }
+
+  Future<List<({LatLng point, double accessMeters})>>
+      _nearestRoadCandidates(
+    LatLng original, {
+    required DedaTravelMode travelMode,
+  }) async {
+    final root = _osrmRootForMode(travelMode);
+    final uri = Uri.parse(
+      '${root}nearest/v1/driving/'
+      '${original.longitude},${original.latitude}?number=3',
+    );
+    final data = await _getJson(uri);
+    if (data['code'] != 'Ok' || data['waypoints'] is! List) {
+      throw const FormatException('Nearest road lookup failed.');
+    }
+
+    const maxAccessMeters = 2000.0;
+    final result = <({LatLng point, double accessMeters})>[];
+    for (final raw in data['waypoints'] as List) {
+      if (raw is! Map || raw['location'] is! List) continue;
+      final location = raw['location'] as List;
+      if (location.length < 2 ||
+          location[0] is! num ||
+          location[1] is! num) {
+        continue;
+      }
+      final candidate = LatLng(
+        (location[1] as num).toDouble(),
+        (location[0] as num).toDouble(),
+      );
+      final accessMeters = _straightRouteDistance(original, candidate);
+      if (!accessMeters.isFinite || accessMeters > maxAccessMeters) continue;
+      final duplicate = result.any(
+        (item) => _straightRouteDistance(item.point, candidate) < 8,
+      );
+      if (!duplicate) {
+        result.add((point: candidate, accessMeters: accessMeters));
+      }
+    }
+    result.sort((a, b) => a.accessMeters.compareTo(b.accessMeters));
+    if (result.isEmpty) {
+      throw const FormatException('No nearby routable road found.');
+    }
+    return result;
+  }
+
+  Future<DedaRouteResult> _getRoadAccessFallback({
+    required LatLng start,
+    required LatLng destination,
+    required DedaTravelMode travelMode,
+  }) async {
+    // Start both nearest-road lookups together to keep the fallback quick.
+    final startFuture = _nearestRoadCandidates(
+      start,
+      travelMode: travelMode,
+    );
+    final destinationFuture = _nearestRoadCandidates(
+      destination,
+      travelMode: travelMode,
+    );
+    final startCandidates = await startFuture;
+    final destinationCandidates = await destinationFuture;
+
+    final pairs = <
+        ({
+          LatLng startPoint,
+          LatLng destinationPoint,
+          double accessMeters,
+        })>[];
+    for (final startCandidate in startCandidates) {
+      for (final destinationCandidate in destinationCandidates) {
+        pairs.add((
+          startPoint: startCandidate.point,
+          destinationPoint: destinationCandidate.point,
+          accessMeters:
+              startCandidate.accessMeters + destinationCandidate.accessMeters,
+        ));
+      }
+    }
+    pairs.sort((a, b) => a.accessMeters.compareTo(b.accessMeters));
+
+    DedaRouteResult? best;
+    final limit = math.min(5, pairs.length);
+    for (var i = 0; i < limit; i++) {
+      final pair = pairs[i];
+      try {
+        final candidate =
+            travelMode == DedaTravelMode.motorcycle ||
+                    travelMode == DedaTravelMode.truck
+                ? await _getValhallaRoute(
+                    start: pair.startPoint,
+                    destination: pair.destinationPoint,
+                    travelMode: travelMode,
+                  )
+                : await _getOsrmFallback(
+                    start: pair.startPoint,
+                    destination: pair.destinationPoint,
+                    travelMode: travelMode,
+                  );
+        if (!_routeIsUsable(candidate)) continue;
+
+        best = best == null
+            ? candidate
+            : _chooseSaferRoute(
+                best,
+                candidate,
+                start: start,
+                destination: destination,
+                travelMode: travelMode,
+              );
+
+        if (!_routeNeedsCrossCheck(
+          candidate,
+          start: start,
+          destination: destination,
+          travelMode: travelMode,
+        )) {
+          return candidate;
+        }
+      } catch (_) {
+        // Try the next nearby-road pair.
+      }
+    }
+
+    if (best != null) return best;
+    throw const FormatException('No connected nearby road route found.');
   }
 
   double _straightRouteDistance(LatLng a, LatLng b) {
@@ -8188,9 +8368,7 @@ class DedaRouteService {
     required LatLng destination,
     required DedaTravelMode travelMode,
   }) async {
-    final base = travelMode == DedaTravelMode.walking
-        ? 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/'
-        : 'https://routing.openstreetmap.de/routed-car/route/v1/driving/';
+    final base = '${_osrmRootForMode(travelMode)}route/v1/driving/';
     final uri = Uri.parse(
       '$base${start.longitude},${start.latitude};'
       '${destination.longitude},${destination.latitude}'
@@ -8751,6 +8929,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       isLoading = false;
       _liveRemainingMeters = validInitialRoute.distanceMeters;
       _lastRouteOrigin = startPoint;
+      navigationStatus = _roadAccessStatus(validInitialRoute, startPoint);
       _fitRouteOnMap();
     } else {
       loadRoute();
@@ -8793,8 +8972,13 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         _lastRouteOrigin = origin;
         _liveRemainingMeters = result.distanceMeters;
         errorMessage = null;
-        if (tripStarted) {
+        final accessStatus = _roadAccessStatus(result, origin);
+        if (accessStatus.isNotEmpty) {
+          navigationStatus = accessStatus;
+        } else if (tripStarted) {
           navigationStatus = dedaText('الملاحة نشطة — يتم تحديث الطريق حسب موقعك.', 'Navigation is active — the route is updating with your location.');
+        } else {
+          navigationStatus = '';
         }
       });
       if (tripStarted) {
@@ -9005,6 +9189,37 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       b.latitude,
       b.longitude,
     );
+  }
+
+  String _roadAccessStatus(DedaRouteResult currentRoute, LatLng origin) {
+    if (currentRoute.points.length < 2) return '';
+    final startGap = _metersBetween(origin, currentRoute.points.first);
+    final destinationGap = _metersBetween(
+      currentRoute.points.last,
+      widget.destination.location,
+    );
+    final startNeedsAccess = startGap > 35;
+    final destinationNeedsAccess = destinationGap > 35;
+
+    if (startNeedsAccess && destinationNeedsAccess) {
+      return dedaText(
+        'أنت خارج الطريق بحوالي ${formatRouteDistance(startGap)}. اتجه إلى بداية الخط الأخضر. وينتهي المسار عند أقرب طريق للمكان، ثم يتبقى حوالي ${formatRouteDistance(destinationGap)}.',
+        'You are about ${formatRouteDistance(startGap)} from the road. Head to the start of the green route. It ends at the nearest road to the place, leaving about ${formatRouteDistance(destinationGap)}.',
+      );
+    }
+    if (startNeedsAccess) {
+      return dedaText(
+        'أنت خارج الطريق بحوالي ${formatRouteDistance(startGap)}. اتجه إلى بداية الخط الأخضر.',
+        'You are about ${formatRouteDistance(startGap)} from the road. Head to the start of the green route.',
+      );
+    }
+    if (destinationNeedsAccess) {
+      return dedaText(
+        'المسار ينتهي عند أقرب طريق قابل للوصول، ومنه يتبقى حوالي ${formatRouteDistance(destinationGap)} إلى المكان الحقيقي.',
+        'The route ends at the nearest reachable road, leaving about ${formatRouteDistance(destinationGap)} to the real place location.',
+      );
+    }
+    return '';
   }
 
   double _bearingBetween(LatLng from, LatLng to) {
@@ -10201,8 +10416,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       _liveRemainingMeters = validRoute.distanceMeters;
       _previousLivePoint = startPoint;
       _navigationToolsOpen = false;
-      navigationStatus =
-          dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
+      final accessStatus = _roadAccessStatus(validRoute, startPoint);
+      navigationStatus = accessStatus.isNotEmpty
+          ? accessStatus
+          : dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
     _focusNavigationPosition();
     _startCompassTracking();
@@ -10243,6 +10460,19 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         }
 
         final currentRoute = route;
+        if (currentRoute != null && currentRoute.points.length >= 2) {
+          final roadEnd = currentRoute.points.last;
+          final roadEndGap =
+              _metersBetween(roadEnd, widget.destination.location);
+          final distanceToRoadEnd = _metersBetween(current, roadEnd);
+          if (roadEndGap > 35 && distanceToRoadEnd <= 35) {
+            stopTrip(
+              reachedRoadAccess: true,
+              remainingToDestination: roadEndGap,
+            );
+            return;
+          }
+        }
         final gpsAccurateEnough =
             !position.accuracy.isNaN && position.accuracy <= 40;
         final offRoute = currentRoute != null &&
@@ -10275,7 +10505,11 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 
-  Future<void> stopTrip({bool reached = false}) async {
+  Future<void> stopTrip({
+    bool reached = false,
+    bool reachedRoadAccess = false,
+    double? remainingToDestination,
+  }) async {
     await _positionSubscription?.cancel();
     _positionSubscription = null;
     await _compassSubscription?.cancel();
@@ -10283,6 +10517,14 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (!mounted) return;
     if (reached) {
       await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
+    } else if (reachedRoadAccess) {
+      final remaining = remainingToDestination ?? 0;
+      await _speakText(
+        dedaText(
+          'وصلت إلى أقرب نقطة طريق. المكان يبعد حوالي ${formatRouteDistance(remaining)}.',
+          'You reached the nearest road access point. The place is about ${formatRouteDistance(remaining)} away.',
+        ),
+      );
     }
     _toolsAutoHideTimer?.cancel();
     _positionAnimationTimer?.cancel();
@@ -10296,7 +10538,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       _activeHazard = null;
       navigationStatus = reached
           ? dedaText('وصلت إلى الوجهة.', 'You have arrived.')
-          : dedaText('تم إيقاف متابعة الرحلة.', 'Trip tracking stopped.');
+          : reachedRoadAccess
+              ? dedaText(
+                  'وصلت إلى أقرب نقطة طريق. المكان الحقيقي يبعد حوالي ${formatRouteDistance(remainingToDestination ?? 0)}.',
+                  'You reached the nearest road access point. The real place is about ${formatRouteDistance(remainingToDestination ?? 0)} away.',
+                )
+              : dedaText('تم إيقاف متابعة الرحلة.', 'Trip tracking stopped.');
     });
   }
 
@@ -10564,12 +10811,25 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final routePoints = route?.points ?? const <LatLng>[];
     final routeOrigin =
         tripStarted ? (_displayPosition ?? startPoint) : startPoint;
-    final displayRoutePoints = <LatLng>[
+    final hasRoadRoute = routePoints.length >= 2;
+    final startAccessMeters = hasRoadRoute
+        ? _metersBetween(routeOrigin, routePoints.first)
+        : 0.0;
+    final destinationAccessMeters = hasRoadRoute
+        ? _metersBetween(routePoints.last, destinationPoint)
+        : 0.0;
+    final startAccessPoints = hasRoadRoute && startAccessMeters > 12
+        ? <LatLng>[routeOrigin, routePoints.first]
+        : const <LatLng>[];
+    final destinationAccessPoints =
+        hasRoadRoute && destinationAccessMeters > 12
+            ? <LatLng>[routePoints.last, destinationPoint]
+            : const <LatLng>[];
+    final fitCoordinates = <LatLng>[
       routeOrigin,
       ...routePoints,
       destinationPoint,
     ];
-    final fitCoordinates = displayRoutePoints;
 
     final markers = <Marker>[
       // Road alerts are drawn first so they never cover the live navigation
@@ -10720,19 +10980,31 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                         if (routePoints.length >= 2)
                           PolylineLayer(
                             polylines: [
+                              if (startAccessPoints.isNotEmpty)
+                                Polyline(
+                                  points: startAccessPoints,
+                                  strokeWidth: tripStarted ? 4 : 3,
+                                  color: const Color(0xFF7D9A83).withOpacity(0.82),
+                                ),
+                              if (destinationAccessPoints.isNotEmpty)
+                                Polyline(
+                                  points: destinationAccessPoints,
+                                  strokeWidth: tripStarted ? 4 : 3,
+                                  color: const Color(0xFF7D9A83).withOpacity(0.82),
+                                ),
                               Polyline(
-                                points: displayRoutePoints,
+                                points: routePoints,
                                 strokeWidth: tripStarted ? 13 : 10,
                                 color: Colors.white.withOpacity(0.96),
                               ),
                               Polyline(
-                                points: displayRoutePoints,
+                                points: routePoints,
                                 strokeWidth: tripStarted ? 9 : 7,
                                 color: const Color(0xFF0A5426),
                               ),
                               if (tripStarted)
                                 Polyline(
-                                  points: displayRoutePoints,
+                                  points: routePoints,
                                   strokeWidth: 5,
                                   color: const Color(0xFF2CCB66),
                                 ),
@@ -11643,6 +11915,28 @@ class _MapReadyPageState extends State<MapReadyPage> {
   Widget buildMap(Position position) {
     final point = LatLng(position.latitude, position.longitude);
     final previewPoints = mapRoutePreview?.points ?? const <LatLng>[];
+    final previewDestination = selectedDestination;
+    final previewStartAccess = previewPoints.length >= 2 &&
+            Geolocator.distanceBetween(
+                  point.latitude,
+                  point.longitude,
+                  previewPoints.first.latitude,
+                  previewPoints.first.longitude,
+                ) >
+                12
+        ? <LatLng>[point, previewPoints.first]
+        : const <LatLng>[];
+    final previewEndAccess = previewPoints.length >= 2 &&
+            previewDestination != null &&
+            Geolocator.distanceBetween(
+                  previewPoints.last.latitude,
+                  previewPoints.last.longitude,
+                  previewDestination.latitude,
+                  previewDestination.longitude,
+                ) >
+                12
+        ? <LatLng>[previewPoints.last, previewDestination]
+        : const <LatLng>[];
     final fitPoints = previewPoints.length >= 2
         ? <LatLng>[
             point,
@@ -11694,9 +11988,21 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 ),
                 children: [
                   ...dedaBaseMapLayers(mapStyle),
-                  if (previewPoints.isNotEmpty)
+                  if (previewPoints.length >= 2)
                     PolylineLayer(
                       polylines: [
+                        if (previewStartAccess.isNotEmpty)
+                          Polyline(
+                            points: previewStartAccess,
+                            strokeWidth: 3,
+                            color: const Color(0xFF7D9A83).withOpacity(0.82),
+                          ),
+                        if (previewEndAccess.isNotEmpty)
+                          Polyline(
+                            points: previewEndAccess,
+                            strokeWidth: 3,
+                            color: const Color(0xFF7D9A83).withOpacity(0.82),
+                          ),
                         Polyline(
                           points: previewPoints,
                           strokeWidth: 9,
