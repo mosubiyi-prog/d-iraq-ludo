@@ -3488,6 +3488,7 @@ class DedaBackend {
     required double longitude,
     required int durationMinutes,
     String placeName = '',
+    String placeDocumentId = '',
   }) async {
     if (!isReady) throw StateError('firebase-not-ready');
     if (durationMinutes != 15 &&
@@ -3523,6 +3524,7 @@ class DedaBackend {
       'recipientPublicId': recipientId,
       'shareType': shareType,
       'placeName': placeName.trim(),
+      'placeId': placeDocumentId.trim(),
       'latitude': latitude,
       'longitude': longitude,
       'durationMinutes': durationMinutes,
