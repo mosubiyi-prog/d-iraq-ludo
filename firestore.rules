@@ -642,6 +642,8 @@ service cloud.firestore {
 
       allow update: if signedIn()
         && currentUserHasShareId(resource.data.recipientPublicId)
+        && resource.data.expiresAt is timestamp
+        && resource.data.expiresAt > request.time
         && resource.data.status in ['pending', 'accepted']
         && request.resource.data.status in ['accepted', 'rejected']
         && request.resource.data.updatedAt == request.time
