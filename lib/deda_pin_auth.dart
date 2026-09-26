@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -80,10 +81,33 @@ class DedaPinAuth {
         .doc(accountKey);
   }
 
+  static String _knownAccountKey(String phone) =>
+      'deda_known_account_${accountKeyForPhone(phone)}';
+
+  static Future<void> rememberKnownAccount(String phone) async {
+    final clean = accountKeyForPhone(phone);
+    if (clean.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_knownAccountKey(phone), true);
+  }
+
   static Future<bool> accountExists(String phone) async {
+    // Previously used accounts on this device must not wait for Firestore
+    // just to open the PIN screen.
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_knownAccountKey(phone)) == true) {
+      return true;
+    }
+
     await _ensureAnonymousSession();
-    final snapshot = await _directoryRef(phone).get();
-    return snapshot.exists && snapshot.data()?['active'] == true;
+    final snapshot = await _directoryRef(phone)
+        .get()
+        .timeout(const Duration(seconds: 8));
+    final exists = snapshot.exists && snapshot.data()?['active'] == true;
+    if (exists) {
+      await rememberKnownAccount(phone);
+    }
+    return exists;
   }
 
   static Future<void> _provePin({
@@ -220,6 +244,7 @@ class DedaPinAuth {
       SetOptions(merge: true),
     );
 
+    await rememberKnownAccount(phone);
     return <String, dynamic>{
       'uid': user.uid,
       'name': cleanName,
@@ -273,6 +298,7 @@ class DedaPinAuth {
       SetOptions(merge: true),
     );
 
+    await rememberKnownAccount(phone);
     return <String, dynamic>{
       'uid': user.uid,
       'name': name,
@@ -406,18 +432,21 @@ class DedaPinAuth {
   static Future<void> signOutFirebase() async {
     final auth = FirebaseAuth.instance;
     final current = auth.currentUser;
-    if (current != null && current.isAnonymous) {
-      final firestore = FirebaseFirestore.instance;
-      try {
-        await firestore.collection('deda_sessions').doc(current.uid).delete();
-      } catch (_) {}
-      try {
-        await firestore
-            .collection('deda_auth_attempts')
-            .doc(current.uid)
-            .delete();
-      } catch (_) {}
-    }
+    final anonymousUid =
+        current != null && current.isAnonymous ? current.uid : null;
+
+    // End the local Firebase session immediately. Remote housekeeping is
+    // best-effort and must never hold the logout screen open.
     await auth.signOut();
+
+    if (anonymousUid != null) {
+      final firestore = FirebaseFirestore.instance;
+      unawaited(
+        Future.wait([
+          firestore.collection('deda_sessions').doc(anonymousUid).delete(),
+          firestore.collection('deda_auth_attempts').doc(anonymousUid).delete(),
+        ]).catchError((_) => <void>[]),
+      );
+    }
   }
 }
