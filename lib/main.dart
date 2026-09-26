@@ -5607,7 +5607,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        toolbarHeight: isLandscape ? 46 : kToolbarHeight,
+        toolbarHeight: isLandscape ? 42 : kToolbarHeight,
         backgroundColor: Colors.white.withOpacity(0.82),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -6055,7 +6055,7 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 2,
-        height: isLandscape ? 58 : 72,
+        height: isLandscape ? 52 : 72,
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFFD9EEDB),
         onDestinationSelected: openBottomDestination,
@@ -6717,7 +6717,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 720),
@@ -6763,6 +6763,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                         TextCapitalization.characters,
                                     decoration: InputDecoration(
                                       hintText: '@DEDA-3R8X6P',
+                                      hintTextDirection: TextDirection.ltr,
                                       suffixIcon: IconButton(
                                         tooltip: dedaText('مسح', 'Clear'),
                                         onPressed: _recipientController.clear,
@@ -6956,6 +6957,11 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                             visualDensity:
                                                 VisualDensity.compact,
                                             selected: selected,
+                                            showCheckmark: false,
+                                            labelStyle: const TextStyle(
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                             onSelected: (_) => setState(
                                               () => _durationMinutes =
                                                   minutes,
@@ -7564,6 +7570,94 @@ class DedaSharedLocationMapPage extends StatelessWidget {
     required this.share,
   });
 
+  Future<void> _startDedaNavigation(
+    BuildContext context, {
+    required LatLng point,
+    required String title,
+    required bool placeShare,
+  }) async {
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'فعّل GPS أولاً لبدء الملاحة.',
+                'Enable GPS first to start navigation.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'نحتاج إذن الموقع لبدء الملاحة.',
+                'Location permission is required to start navigation.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!context.mounted) return;
+
+      final destination = PlaceInfo(
+        name: title.isEmpty
+            ? dedaText('الموقع المشترك', 'Shared location')
+            : title,
+        type: placeShare
+            ? dedaText('مكان مشترك', 'Shared place')
+            : dedaText('موقع مشترك', 'Shared location'),
+        location: point,
+      );
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DedaRoutePage(
+            startPosition: position,
+            destination: destination,
+            categoryIcon:
+                placeShare ? Icons.location_pin : Icons.person_pin_circle,
+            initialStyle: DedaPreferences.defaultMapStyle,
+            travelMode: DedaPreferences.defaultTravelMode,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر بدء الملاحة الآن. حاول مجددًا.',
+              'Could not start navigation right now. Try again.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lat = (share['latitude'] as num?)?.toDouble();
@@ -7656,6 +7750,37 @@ class DedaSharedLocationMapPage extends StatelessWidget {
                 ),
               ),
             ),
+          PositionedDirectional(
+            start: 24,
+            end: 24,
+            bottom: 72,
+            child: FilledButton.icon(
+              onPressed: lat == null || lng == null
+                  ? null
+                  : () => _startDedaNavigation(
+                        context,
+                        point: point,
+                        title: title,
+                        placeShare: placeShare,
+                      ),
+              icon: const Icon(Icons.navigation),
+              label: Text(
+                dedaText('انطلاق', 'Start'),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+                backgroundColor: const Color(0xFF17652F),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
           ),
         ],
       ),
