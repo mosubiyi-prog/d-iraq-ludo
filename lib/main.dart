@@ -3933,12 +3933,12 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 ? dedaText('اكتب عنوان المكان.', 'Enter the place address.')
                                 : null,
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 7),
                           Card(
                             elevation: 0,
                             color: const Color(0xFFEAF4E7),
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(10),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -4045,7 +4045,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                     : dedaText('إرسال الطلب للمراجعة', 'Submit for review'),
                               ),
                               style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(58),
+                                minimumSize: const Size.fromHeight(50),
                                 backgroundColor: const Color(0xFF17652F),
                               ),
                             ),
@@ -5607,6 +5607,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
+        toolbarHeight: isLandscape ? 46 : kToolbarHeight,
         backgroundColor: Colors.white.withOpacity(0.82),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -6054,7 +6055,7 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: 2,
-        height: 72,
+        height: isLandscape ? 58 : 72,
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFFD9EEDB),
         onDestinationSelected: openBottomDestination,
@@ -6329,6 +6330,8 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
   @override
   void initState() {
     super.initState();
+    _personalId =
+        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
     _loadIdentity();
   }
 
@@ -6573,15 +6576,16 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
         side: const BorderSide(color: Color(0xFFCFD9D0)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         child: Row(
           children: [
             CircleAvatar(
+              radius: 18,
               backgroundColor: const Color(0xFFE1F2E3),
               foregroundColor: const Color(0xFF17652F),
-              child: Icon(icon),
+              child: Icon(icon, size: 20),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -6590,16 +6594,21 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                     title,
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                      fontSize: 13.5,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  SelectableText(
-                    id,
-                    textDirection: TextDirection.ltr,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      id,
+                      textDirection: TextDirection.ltr,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                      ),
                     ),
                   ),
                 ],
@@ -6607,8 +6616,15 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
             ),
             OutlinedButton.icon(
               onPressed: id.isEmpty ? null : () => _copy(id),
-              icon: const Icon(Icons.copy_outlined, size: 19),
-              label: Text(dedaText('نسخ', 'Copy')),
+              icon: const Icon(Icons.copy_outlined, size: 17),
+              label: Text(
+                dedaText('نسخ', 'Copy'),
+                maxLines: 1,
+              ),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
             ),
           ],
         ),
@@ -6628,7 +6644,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
           decoration: BoxDecoration(
             color: selected
                 ? const Color(0xFFE4F4E6)
@@ -6652,15 +6668,20 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                     ? const Color(0xFF17652F)
                     : const Color(0xFF6C736D),
               ),
-              const SizedBox(width: 7),
-              Icon(icon, size: 20),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              const SizedBox(width: 5),
+              Icon(icon, size: 18),
+              const SizedBox(width: 5),
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight:
+                          selected ? FontWeight.w900 : FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -6696,7 +6717,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 720),
@@ -6707,7 +6728,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                             elevation: 0,
                             color: Colors.white.withOpacity(0.88),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
@@ -6727,13 +6748,13 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                           'Recipient ID',
                                         ),
                                         style: const TextStyle(
-                                          fontSize: 19,
+                                          fontSize: 16.5,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 7),
                                   TextField(
                                     controller: _recipientController,
                                     textDirection: TextDirection.ltr,
@@ -6747,37 +6768,46 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                         onPressed: _recipientController.clear,
                                         icon: const Icon(Icons.close),
                                       ),
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 11,
+                                      ),
                                       border: OutlineInputBorder(
                                         borderRadius:
-                                            BorderRadius.circular(18),
+                                            BorderRadius.circular(16),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 6),
                                   Text(
                                     dedaText(
-                                      'أدخل معرف الشخص الذي تريد إرسال موقعك إليه. يمكن استلام المعرف من رسالة أو من أي وسيلة تواصل.',
-                                      'Enter the DEDA ID of the person you want to share with. You can receive the ID through any communication method.',
+                                      'أدخل معرف الشخص الذي تريد إرسال موقعك إليه. يمكن استلام المعرف من رسالة أو أي وسيلة تواصل.',
+                                      'Enter the recipient’s DEDA ID. You can receive it through a message or any communication method.',
                                     ),
                                     textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Color(0xFF4F5851),
-                                      height: 1.45,
+                                      fontSize: 12.5,
+                                      height: 1.25,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 4),
                           Text(
                             dedaText('معرفاتي', 'My IDs'),
                             style: const TextStyle(
-                              fontSize: 21,
+                              fontSize: 18,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 3),
                           _idCard(
                             title: dedaText(
                               'معرفي الشخصي',
@@ -6787,7 +6817,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                             icon: Icons.person,
                           ),
                           if (_placeId.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 4),
                             _idCard(
                               title:
                                   dedaText('معرف مكاني', 'My place ID'),
@@ -6806,9 +6836,12 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                   : 'Your personal ID is for your current location. A place ID appears automatically after an owner’s place is approved.',
                             ),
                             textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF5A625B),
-                              height: 1.4,
+                              fontSize: 12,
+                              height: 1.25,
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -6816,10 +6849,10 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                             elevation: 0,
                             color: Colors.white.withOpacity(0.88),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(9),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -6836,13 +6869,13 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                           'Share type',
                                         ),
                                         style: const TextStyle(
-                                          fontSize: 19,
+                                          fontSize: 16.5,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 7),
                                   Row(
                                     children: [
                                       _choice(
@@ -6878,15 +6911,15 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 7),
                           Card(
                             elevation: 0,
                             color: Colors.white.withOpacity(0.88),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(22),
+                              borderRadius: BorderRadius.circular(18),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(9),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -6903,13 +6936,13 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                           'Share duration',
                                         ),
                                         style: const TextStyle(
-                                          fontSize: 19,
+                                          fontSize: 16.5,
                                           fontWeight: FontWeight.w900,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 7),
                                   Row(
                                     children: [15, 30, 60].map((minutes) {
                                       final selected =
@@ -6920,6 +6953,8 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                             end: minutes == 60 ? 0 : 7,
                                           ),
                                           child: ChoiceChip(
+                                            visualDensity:
+                                                VisualDensity.compact,
                                             selected: selected,
                                             onSelected: (_) => setState(
                                               () => _durationMinutes =
@@ -6927,12 +6962,16 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                             ),
                                             label: SizedBox(
                                               width: double.infinity,
-                                              child: Text(
-                                                dedaText(
-                                                  '$minutes دقيقة',
-                                                  '$minutes min',
+                                              child: FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Text(
+                                                  dedaText(
+                                                    '$minutes دقيقة',
+                                                    '$minutes min',
+                                                  ),
+                                                  maxLines: 1,
+                                                  textAlign: TextAlign.center,
                                                 ),
-                                                textAlign: TextAlign.center,
                                               ),
                                             ),
                                           ),
@@ -6944,7 +6983,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 8),
                           FilledButton.icon(
                             onPressed: _sending ? null : _send,
                             icon: _sending
@@ -6968,7 +7007,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                       'Send share',
                                     ),
                               style: const TextStyle(
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
@@ -6977,26 +7016,31 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                               backgroundColor: const Color(0xFF17652F),
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 6),
                           Card(
                             elevation: 0,
                             color: Colors.white.withOpacity(0.82),
                             child: Padding(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(8),
                               child: Row(
                                 children: [
                                   const Icon(
                                     Icons.pin_drop_outlined,
                                     color: Color(0xFF17652F),
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 7),
                                   Expanded(
                                     child: Text(
                                       dedaText(
                                         'لن يحتاج الطرف الآخر إلى أي تطبيق خارجي. ستصل المشاركة داخل DEDA ويمكنه قبولها وفتحها على الخريطة.',
                                         'No external app is required. The share arrives inside DEDA, where the recipient can accept it and open it on the map.',
                                       ),
-                                      style: const TextStyle(height: 1.4),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        height: 1.25,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -7031,6 +7075,8 @@ class _DedaReceivedLocationsPageState
   @override
   void initState() {
     super.initState();
+    _personalId =
+        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
     _loadIdentity();
   }
 
