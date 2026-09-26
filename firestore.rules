@@ -571,6 +571,52 @@ service cloud.firestore {
           /databases/$(database)/documents/deda_share_ids/$(request.resource.data.recipientPublicId)
         ).data.kind == 'personal'
         && request.resource.data.shareType in ['current', 'place']
+        && request.resource.data.placeId is string
+        && (
+          (
+            request.resource.data.shareType == 'current'
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId
+              == request.resource.data.senderPublicId
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+              == request.resource.data.senderName
+            && request.resource.data.placeId == ''
+            && request.resource.data.placeName == ''
+          )
+          || (
+            request.resource.data.shareType == 'place'
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePlaceId
+              == request.resource.data.senderPublicId
+            && request.resource.data.placeId.size() > 0
+            && exists(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            )
+            && get(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            ).data.published == true
+            && (
+              get(
+                /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+              ).data.ownerUid == request.auth.uid
+              || sameAccount(
+                get(
+                  /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+                ).data.accountKey
+              )
+            )
+            && get(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            ).data.placeName == request.resource.data.placeName
+            && request.resource.data.senderName == request.resource.data.placeName
+            && get(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            ).data.latitude == request.resource.data.latitude
+            && get(
+              /databases/$(database)/documents/published_places/$(request.resource.data.placeId)
+            ).data.longitude == request.resource.data.longitude
+          )
+        )
         && request.resource.data.latitude is number
         && request.resource.data.latitude >= -90
         && request.resource.data.latitude <= 90
@@ -589,7 +635,7 @@ service cloud.firestore {
         && request.resource.data.placeName is string
         && request.resource.data.keys().hasOnly([
           'senderUid', 'senderPublicId', 'senderName',
-          'recipientPublicId', 'shareType', 'placeName',
+          'recipientPublicId', 'shareType', 'placeName', 'placeId',
           'latitude', 'longitude', 'durationMinutes', 'status',
           'createdAt', 'updatedAt', 'expiresAt'
         ]);
