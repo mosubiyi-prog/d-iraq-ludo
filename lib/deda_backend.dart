@@ -3347,4 +3347,275 @@ class DedaBackend {
     _clearAdminProfileCache();
     await FirebaseAuth.instance.signOut();
   }
+
+  // DEDA in-app location sharing v1.
+  static const String _shareAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  static String _shareCode(String seed) {
+    var hash = 2166136261;
+    for (final unit in utf8.encode(seed)) {
+      hash ^= unit;
+      hash = (hash * 16777619) & 0xFFFFFFFF;
+    }
+    var value = hash & 0x3FFFFFFF;
+    final chars = <String>[];
+    for (var i = 0; i < 6; i++) {
+      chars.add(_shareAlphabet[value & 31]);
+      value = (value >> 5) ^ ((hash >> ((i + 3) % 16)) & 31);
+    }
+    return chars.reversed.join();
+  }
+
+  static String personalShareIdForPhone(String phone) {
+    final key = accountKeyForPhone(phone);
+    if (key.isEmpty) return '';
+    return '@DEDA-${_shareCode('person|$key')}';
+  }
+
+  static String placeShareIdForPhone(String phone) {
+    final key = accountKeyForPhone(phone);
+    if (key.isEmpty) return '';
+    return '@DEDA-P-${_shareCode('place|$key')}';
+  }
+
+  static String normalizeSharePublicId(String value) {
+    var id = value.trim().toUpperCase().replaceAll(' ', '');
+    if (id.isEmpty) return '';
+    if (!id.startsWith('@')) id = '@$id';
+    return id;
+  }
+
+  static bool isValidPersonalShareId(String value) {
+    final id = normalizeSharePublicId(value);
+    return RegExp(r'^@DEDA-[A-Z2-9]{6}$').hasMatch(id);
+  }
+
+  static Future<Map<String, dynamic>?> currentOwnerPublishedPlace(
+    String phone,
+  ) async {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) return null;
+    final all = await publishedPlaces();
+    for (final item in all) {
+      if ((item['accountKey'] ?? '').toString() == accountKey &&
+          item['published'] == true) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static Future<Map<String, String>> ensureLocationShareIdentity({
+    required String name,
+    required String phone,
+    required bool hasApprovedPlace,
+    String placeName = '',
+  }) async {
+    final user = await _ensurePublicUser();
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) throw StateError('share-account-missing');
+
+    final personalId = personalShareIdForPhone(phone);
+    final placeId = hasApprovedPlace ? placeShareIdForPhone(phone) : '';
+    final firestore = FirebaseFirestore.instance;
+
+    await firestore.collection('users').doc(user.uid).set({
+      'sharePersonalId': personalId,
+      'sharePlaceId': placeId,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    Future<void> claim({
+      required String publicId,
+      required String kind,
+      required String displayName,
+    }) async {
+      if (publicId.isEmpty) return;
+      final ref = firestore.collection('deda_share_ids').doc(publicId);
+      final existing = await ref.get();
+      if (existing.exists) return;
+      await ref.set({
+        'publicId': publicId,
+        'kind': kind,
+        'displayName': displayName.trim(),
+        'ownerUid': user.uid,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await claim(
+      publicId: personalId,
+      kind: 'personal',
+      displayName: name,
+    );
+    if (placeId.isNotEmpty) {
+      await claim(
+        publicId: placeId,
+        kind: 'place',
+        displayName: placeName.isEmpty ? name : placeName,
+      );
+    }
+
+    return <String, String>{
+      'personalId': personalId,
+      'placeId': placeId,
+    };
+  }
+
+  static Future<Map<String, dynamic>?> locationShareIdInfo(String value) async {
+    final id = normalizeSharePublicId(value);
+    if (id.isEmpty || !isReady) return null;
+    final snapshot =
+        await FirebaseFirestore.instance.collection('deda_share_ids').doc(id).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null || data['active'] != true) return null;
+    return <String, dynamic>{'id': snapshot.id, ...data};
+  }
+
+  static Future<String> createLocationShare({
+    required String recipientPublicId,
+    required String senderPublicId,
+    required String senderName,
+    required String shareType,
+    required double latitude,
+    required double longitude,
+    required int durationMinutes,
+    String placeName = '',
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    if (durationMinutes != 15 &&
+        durationMinutes != 30 &&
+        durationMinutes != 60) {
+      throw ArgumentError('invalid-share-duration');
+    }
+    if (shareType != 'current' && shareType != 'place') {
+      throw ArgumentError('invalid-share-type');
+    }
+
+    final recipientId = normalizeSharePublicId(recipientPublicId);
+    final senderId = normalizeSharePublicId(senderPublicId);
+    if (!isValidPersonalShareId(recipientId)) {
+      throw ArgumentError('invalid-recipient-share-id');
+    }
+
+    final recipient = await locationShareIdInfo(recipientId);
+    if (recipient == null ||
+        (recipient['kind'] ?? '').toString() != 'personal') {
+      throw StateError('recipient-share-id-not-found');
+    }
+
+    final user = await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final ref = firestore.collection('deda_location_shares').doc();
+    final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
+
+    await ref.set({
+      'senderUid': user.uid,
+      'senderPublicId': senderId,
+      'senderName': senderName.trim(),
+      'recipientPublicId': recipientId,
+      'shareType': shareType,
+      'placeName': placeName.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'durationMinutes': durationMinutes,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expiresAt),
+    });
+    return ref.id;
+  }
+
+  static Map<String, dynamic> _locationShareMap(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    String? asIso(dynamic value) {
+      if (value is Timestamp) return value.toDate().toIso8601String();
+      if (value is DateTime) return value.toIso8601String();
+      return null;
+    }
+
+    return <String, dynamic>{
+      'id': document.id,
+      ...data,
+      'createdAtIso': asIso(data['createdAt']),
+      'updatedAtIso': asIso(data['updatedAt']),
+      'expiresAtIso': asIso(data['expiresAt']),
+      'acceptedAtIso': asIso(data['acceptedAt']),
+      'rejectedAtIso': asIso(data['rejectedAt']),
+    };
+  }
+
+  static Stream<List<Map<String, dynamic>>> locationSharesStream(
+    String recipientPublicId,
+  ) {
+    final id = normalizeSharePublicId(recipientPublicId);
+    if (!isReady || id.isEmpty) {
+      return Stream<List<Map<String, dynamic>>>.value(
+        const <Map<String, dynamic>>[],
+      );
+    }
+
+    return FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .where('recipientPublicId', isEqualTo: id)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      final items = snapshot.docs.map(_locationShareMap).toList();
+      items.sort((a, b) {
+        final ad = DateTime.tryParse((a['createdAtIso'] ?? '').toString());
+        final bd = DateTime.tryParse((b['createdAtIso'] ?? '').toString());
+        return (bd ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(ad ?? DateTime.fromMillisecondsSinceEpoch(0));
+      });
+      return items;
+    });
+  }
+
+  static Stream<int> pendingLocationSharesCountStream(
+    String recipientPublicId,
+  ) {
+    return locationSharesStream(recipientPublicId).map((items) {
+      final now = DateTime.now();
+      var count = 0;
+      for (final item in items) {
+        final status = (item['status'] ?? 'pending').toString();
+        final expires =
+            DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
+        if (status == 'pending' &&
+            expires != null &&
+            expires.isAfter(now)) {
+          count++;
+        }
+      }
+      return count;
+    });
+  }
+
+  static Future<void> decideLocationShare({
+    required String shareId,
+    required bool accept,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final cleanId = shareId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('share-id-required');
+    final update = <String, dynamic>{
+      'status': accept ? 'accepted' : 'rejected',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'readAt': FieldValue.serverTimestamp(),
+      if (accept) 'acceptedAt': FieldValue.serverTimestamp(),
+      if (!accept) 'rejectedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .doc(cleanId)
+        .update(update);
+  }
+
 }
