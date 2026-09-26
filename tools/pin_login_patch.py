@@ -41,6 +41,12 @@ replace_once(
 """,
     """  static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
+    final signedOutPhone = phone;
+    try {
+      await DedaPinAuth.rememberKnownAccount(signedOutPhone);
+    } catch (_) {
+      // Remembering a local account hint must never block logout.
+    }
     isLoggedIn = false;
     userName = '';
     phone = '';
