@@ -6487,6 +6487,8 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
         longitude: longitude,
         durationMinutes: _durationMinutes,
         placeName: placeName,
+        placeDocumentId:
+            _shareType == 'place' ? (_approvedPlace?['id'] ?? '').toString() : '',
       );
 
       if (!mounted) return;
