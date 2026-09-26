@@ -5144,6 +5144,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final searchController = TextEditingController();
+  bool _shareIdentityReady = false;
 
   final List<DedaCategoryData> _baseCategories = const [
     DedaCategoryData(Icons.restaurant, 'مطاعم'),
@@ -5431,7 +5432,9 @@ class _HomePageState extends State<HomePage> {
         hasApprovedPlace: place != null,
         placeName: (place?['placeName'] ?? '').toString(),
       );
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() => _shareIdentityReady = true);
+      }
     } catch (_) {
       // The home page must remain usable even if sharing initialization
       // is temporarily unavailable.
@@ -5457,7 +5460,10 @@ class _HomePageState extends State<HomePage> {
         context,
         MaterialPageRoute(builder: (_) => const DedaSettingsPage()),
       );
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        await _initializeShareIdentity();
+      }
     }
 
     void openBottomDestination(int index) {
@@ -5678,12 +5684,15 @@ class _HomePageState extends State<HomePage> {
                                       },
                                     ),
                                     StreamBuilder<int>(
-                                      stream: DedaBackend
-                                          .pendingLocationSharesCountStream(
-                                        DedaBackend.personalShareIdForPhone(
-                                          DedaPreferences.phone,
-                                        ),
-                                      ),
+                                      stream: _shareIdentityReady
+                                          ? DedaBackend
+                                              .pendingLocationSharesCountStream(
+                                              DedaBackend
+                                                  .personalShareIdForPhone(
+                                                DedaPreferences.phone,
+                                              ),
+                                            )
+                                          : Stream<int>.value(0),
                                       builder: (context, snapshot) {
                                         final count = snapshot.data ?? 0;
                                         if (count <= 0) {
@@ -5881,13 +5890,15 @@ class _HomePageState extends State<HomePage> {
                                           },
                                         ),
                                         StreamBuilder<int>(
-                                          stream: DedaBackend
-                                              .pendingLocationSharesCountStream(
-                                            DedaBackend
-                                                .personalShareIdForPhone(
-                                              DedaPreferences.phone,
-                                            ),
-                                          ),
+                                          stream: _shareIdentityReady
+                                              ? DedaBackend
+                                                  .pendingLocationSharesCountStream(
+                                                  DedaBackend
+                                                      .personalShareIdForPhone(
+                                                    DedaPreferences.phone,
+                                                  ),
+                                                )
+                                              : Stream<int>.value(0),
                                           builder: (context, snapshot) {
                                             final count = snapshot.data ?? 0;
                                             if (count <= 0) {
