@@ -215,13 +215,11 @@ class DedaPreferences {
     phone = '';
     accountPhone = '';
     accountType = null;
-    await Future.wait([
-      prefs.setBool(_loggedInKey, false),
-      prefs.remove(_userNameKey),
-      prefs.remove(_phoneKey),
-      prefs.remove(_accountPhoneKey),
-      prefs.remove(_accountTypeKey),
-    ]);
+    await prefs.setBool(_loggedInKey, false);
+    await prefs.remove(_userNameKey);
+    await prefs.remove(_phoneKey);
+    await prefs.remove(_accountPhoneKey);
+    await prefs.remove(_accountTypeKey);
   }
 }
 
