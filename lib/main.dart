@@ -5509,6 +5509,95 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: SizedBox(
                             height: 58,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      dedaText(
+                                        'المواقع المستلمة ستُفعّل في المرحلة التالية.',
+                                        'Received locations will be enabled in the next stage.',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.location_searching),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  dedaText(
+                                    'المواقع المستلمة',
+                                    'Received locations',
+                                  ),
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white.withOpacity(0.80),
+                                foregroundColor: const Color(0xFF17652F),
+                                side: const BorderSide(
+                                  color: Color(0xFF6F8A74),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 58,
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      dedaText(
+                                        'مشاركة الموقع ستُفعّل في المرحلة التالية.',
+                                        'Location sharing will be enabled in the next stage.',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.share_location),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  dedaText('شارك موقعك', 'Share your location'),
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF17652F),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 58,
                             child: TextField(
                               controller: searchController,
                               textDirection: DedaLanguageState.direction,
