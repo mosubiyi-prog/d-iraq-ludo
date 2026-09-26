@@ -90,49 +90,17 @@ new_login = r"""  Future<void> login() async {
       return;
     }
 
+    // Never block the first login screen on a Firebase account lookup.
+    // Existing users go straight to PIN entry; new users can create an
+    // account from that page. This keeps account switching responsive.
     setState(() => _loginBusy = true);
-    try {
-      final exists = await DedaPinAuth.accountExists(normalizedPhone);
-      if (!mounted) return;
-      if (exists) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DedaPinSignInPage(phone: normalizedPhone),
-          ),
-        );
-      } else {
-        final pin = DedaPinAuth.generatePin();
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DedaPinCreatePage(
-              phone: normalizedPhone,
-              generatedPin: pin,
-            ),
-          ),
-        );
-      }
-    } on FirebaseAuthException catch (error) {
-      if (error.code == 'operation-not-allowed') {
-        _showLoginMessage(
-          'تعذر بدء جلسة DEDA. تأكد من تفعيل تسجيل الدخول المجهول في Firebase.',
-          'Could not start the DEDA session. Ensure Anonymous sign-in is enabled in Firebase.',
-        );
-      } else {
-        _showLoginMessage(
-          'تعذر فحص الحساب الآن. تحقق من الإنترنت وحاول مجددًا.',
-          'Could not check the account now. Check the internet and try again.',
-        );
-      }
-    } catch (_) {
-      _showLoginMessage(
-        'تعذر فحص الحساب الآن. تحقق من الإنترنت وحاول مجددًا.',
-        'Could not check the account now. Check the internet and try again.',
-      );
-    } finally {
-      if (mounted) setState(() => _loginBusy = false);
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaPinSignInPage(phone: normalizedPhone),
+      ),
+    );
+    if (mounted) setState(() => _loginBusy = false);
   }
 
 """
@@ -575,6 +543,30 @@ class _DedaPinSignInPageState extends State<DedaPinSignInPage> {
                             ),
                     icon: const Icon(Icons.lock_reset),
                     label: Text(dedaText('نسيت رمز الدخول', 'Forgot sign-in code')),
+                  ),
+                  const SizedBox(height: 4),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DedaPinCreatePage(
+                                  phone: widget.phone,
+                                  generatedPin: DedaPinAuth.generatePin(),
+                                ),
+                              ),
+                            ),
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: Text(
+                      dedaText(
+                        'ليس لدي رمز - إنشاء حساب جديد',
+                        'No code - Create a new account',
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(52),
+                    ),
                   ),
                 ],
               ),
