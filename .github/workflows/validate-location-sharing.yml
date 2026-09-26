@@ -1,0 +1,46 @@
+name: Validate DEDA location sharing
+
+on:
+  push:
+    branches:
+      - location-sharing-v1-work-2026-09-26
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp lib/deda_backend.dart /tmp/deda_backend.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+
+      - name: Create Flutter project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/deda_backend.dart lib/deda_backend.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+
+      - name: Apply DEDA compatibility patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed DEDA sources
+        run: flutter analyze lib/main.dart lib/deda_backend.dart
