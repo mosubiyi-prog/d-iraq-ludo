@@ -6444,10 +6444,16 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                     secondary: const Icon(Icons.online_prediction),
                     title: Text(
                       dedaText(
-                        'إظهار المتواجدين الآن فقط',
-                        'Show available now only',
+                        'إظهار المتواجدين فقط',
+                        'Show available places only',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      dedaText(
+                        'عند الإيقاف تظهر جميع الأماكن، وتبقى علامة المتواجد باللون الأخضر.',
+                        'When off, all places are shown; available places stay green.',
+                      ),
                     ),
                     onChanged: (value) => setState(
                       () => showAvailableOnly = value,
@@ -11725,12 +11731,50 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
   int _mapSearchRelevance(PlaceInfo place, String needle) {
     final name = _normalizeDedaSearchText(place.name);
-    // Search source must never decide the winner. First require the best
-    // name match, then searchInsideMap sorts equal matches by user distance.
+    final address = _normalizeDedaSearchText(place.address ?? '');
+
+    // Exact/strong name matches always come first.
     if (name == needle) return 0;
     if (name.startsWith(needle)) return 1;
     if (name.contains(needle)) return 2;
-    return 20;
+
+    final tokens = needle
+        .split(' ')
+        .map((token) => token.trim())
+        .where((token) => token.length >= 2)
+        .toList();
+    if (tokens.isEmpty) return 20;
+
+    final combined = '$name $address'.trim();
+    final allTokensCovered = tokens.every(combined.contains);
+    if (!allTokensCovered) return 20;
+
+    // Allow natural searches such as "كركوك حي العسكري": the district name
+    // may be in place.name while "كركوك" appears only in the address.
+    // Still require a meaningful token in the actual place name so an
+    // address-only hit can never become the automatic destination.
+    const genericLocationWords = <String>{
+      'حي',
+      'شارع',
+      'منطقه',
+      'منطقة',
+      'محافظه',
+      'محافظة',
+      'قضاء',
+      'ناحيه',
+      'ناحية',
+      'العراق',
+    };
+    final meaningfulTokens = tokens
+        .where((token) => !genericLocationWords.contains(token))
+        .toList();
+    final nameHasMeaningfulToken = meaningfulTokens.isEmpty
+        ? tokens.any(name.contains)
+        : meaningfulTokens.any(name.contains);
+    if (!nameHasMeaningfulToken) return 20;
+
+    final matchedInName = tokens.where(name.contains).length;
+    return matchedInName >= 2 ? 3 : 4;
   }
 
   Future<void> searchInsideMap() async {
@@ -11745,18 +11789,29 @@ class _MapReadyPageState extends State<MapReadyPage> {
       });
       return;
     }
-    if (position == null) {
-      await determinePosition();
-      if (currentPosition == null) return;
-    }
 
+    // A new search must never inherit a destination, route or result from
+    // the previous search. Invalidate any route preview that is still running.
+    _routePreviewGeneration += 1;
     setState(() {
+      selectedDestination = null;
+      mapRoutePreview = null;
+      mapSearchResults = <PlaceInfo>[];
+      isRoutePreviewLoading = false;
       isMapSearching = true;
       statusMessage = dedaText(
         'جاري البحث عن "$query" في جميع أنحاء العراق...',
         'Searching for "$query" across Iraq...',
       );
     });
+
+    if (position == null) {
+      await determinePosition();
+      if (currentPosition == null) {
+        if (mounted) setState(() => isMapSearching = false);
+        return;
+      }
+    }
     try {
       final activePosition = currentPosition!;
 
@@ -11801,8 +11856,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       final dedaNameResults = <PlaceInfo>[];
       for (final place in mergedRegistered) {
-        final normalizedName = _normalizeDedaSearchText(place.name);
-        if (normalizedName.contains(needle)) {
+        if (_mapSearchRelevance(place, needle) < 20) {
           dedaNameResults.add(place);
         }
       }
@@ -11844,10 +11898,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
       if (!mounted) return;
       setState(() {
         mapSearchResults = results;
-        if (results.isNotEmpty) {
-          selectedDestination = results.first.location;
-          mapRoutePreview = null;
-        }
+        selectedDestination =
+            results.isNotEmpty ? results.first.location : null;
+        mapRoutePreview = null;
         statusMessage = results.isEmpty
             ? dedaText(
                 'لم نعثر على مكان بهذا الاسم داخل العراق.',
@@ -12263,10 +12316,16 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     secondary: const Icon(Icons.online_prediction),
                     title: Text(
                       dedaText(
-                        'إظهار المتواجدين الآن فقط',
-                        'Show available now only',
+                        'إظهار المتواجدين فقط',
+                        'Show available places only',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      dedaText(
+                        'عند الإيقاف تظهر جميع الأماكن، وتبقى علامة المتواجد باللون الأخضر.',
+                        'When off, all places are shown; available places stay green.',
+                      ),
                     ),
                     onChanged: (value) {
                       setState(() {
@@ -12282,8 +12341,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
                                 'Only DEDA places whose owners are available now are shown.',
                               )
                             : dedaText(
-                                'عادت جميع الأماكن ونتائج البحث للظهور.',
-                                'All places and search results are visible again.',
+                                'تظهر جميع الأماكن الآن، وتبقى علامة المتواجد باللون الأخضر.',
+                                'All places are shown now; available places remain green.',
                               );
                       });
                     },
