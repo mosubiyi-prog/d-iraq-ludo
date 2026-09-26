@@ -5452,17 +5452,6 @@ class _HomePageState extends State<HomePage> {
     DedaCategoryData category(String title) =>
         allCategories.firstWhere((item) => item.title == title);
 
-    void showStageMessage(String ar, String en) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(ar, en),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
     Future<void> openSettings() async {
       await Navigator.push(
         context,
@@ -5641,163 +5630,419 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final horizontalPadding = isLandscape ? 20.0 : 16.0;
-              final topPadding = isLandscape ? 6.0 : 10.0;
-              final sectionGap = isLandscape ? 5.0 : 8.0;
-              final greetingGap = isLandscape ? 6.0 : 10.0;
-
-              return Padding(
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  topPadding,
-                  horizontalPadding,
-                  isLandscape ? 6 : 8,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1100),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          dedaText(
-                            'هلا بك ${widget.userName}',
-                            'Welcome ${widget.userName}',
+          child: isLandscape
+              ? SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            dedaText(
+                              'هلا بك ${widget.userName}',
+                              'Welcome ${widget.userName}',
+                            ),
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                          textAlign: DedaLanguageState.isArabic
-                              ? TextAlign.right
-                              : TextAlign.left,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: isLandscape ? 19 : 25,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        SizedBox(height: greetingGap),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: topAction(
-                                icon: Icons.location_on_outlined,
-                                label: dedaText(
-                                  'المواقع المستلمة',
-                                  'Received locations',
-                                ),
-                                onPressed: () => showStageMessage(
-                                  'المواقع المستلمة جاهزة في الواجهة، وسيتم ربط الاستلام في المرحلة التالية.',
-                                  'Received locations are staged in the interface; receiving logic comes next.',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: topAction(
-                                icon: Icons.share_location,
-                                label: dedaText(
-                                  'شارك موقعك',
-                                  'Share your location',
-                                ),
-                                filled: true,
-                                onPressed: () => showStageMessage(
-                                  'واجهة مشاركة الموقع جاهزة، وسيتم ربط المعرفات والإرسال في المرحلة التالية.',
-                                  'Location sharing is staged; IDs and sending logic come next.',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: sectionGap),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: compactAction(
-                                icon: Icons.history,
-                                label: dedaText(
-                                  'الأماكن الأخيرة',
-                                  'Recent places',
-                                ),
-                                onPressed: () =>
-                                    openSavedPlaces(favorites: false),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: compactAction(
-                                icon: Icons.assistant_outlined,
-                                label: dedaText(
-                                  'مساعد DEDA',
-                                  'DEDA Assistant',
-                                ),
-                                onPressed: openDedaAssistant,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: sectionGap),
-
-                        // The main screen is intentionally fixed: the category
-                        // area expands/shrinks with the device height, so the
-                        // home page itself never scrolls.
-                        Expanded(
-                          flex: isLandscape ? 9 : 13,
-                          child: Row(
-                            textDirection: TextDirection.ltr,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                          const SizedBox(height: 12),
+                          Row(
                             children: [
                               Expanded(
-                                flex: 1,
-                                child: categoryCard(restaurant),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned.fill(
+                                      child: topAction(
+                                        icon: Icons.location_on_outlined,
+                                        label: dedaText(
+                                          'المواقع المستلمة',
+                                          'Received locations',
+                                        ),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  const DedaReceivedLocationsPage(),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    StreamBuilder<int>(
+                                      stream: DedaBackend
+                                          .pendingLocationSharesCountStream(
+                                        DedaBackend.personalShareIdForPhone(
+                                          DedaPreferences.phone,
+                                        ),
+                                      ),
+                                      builder: (context, snapshot) {
+                                        final count = snapshot.data ?? 0;
+                                        if (count <= 0) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return PositionedDirectional(
+                                          top: -6,
+                                          end: -4,
+                                          child: Container(
+                                            constraints: const BoxConstraints(
+                                              minWidth: 23,
+                                              minHeight: 23,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                            ),
+                                            alignment: Alignment.center,
+                                            decoration: const BoxDecoration(
+                                              color: Color(0xFFE53935),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              count > 99 ? '99+' : '$count',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                flex: 2,
-                                child: _DedaMapHeroCard(
-                                  onTap: () => openCategory(map),
+                                child: topAction(
+                                  icon: Icons.share_location,
+                                  label: dedaText(
+                                    'شارك موقعك',
+                                    'Share your location',
+                                  ),
+                                  filled: true,
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const DedaShareLocationPage(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: compactAction(
+                                  icon: Icons.history,
+                                  label: dedaText(
+                                    'الأماكن الأخيرة',
+                                    'Recent places',
+                                  ),
+                                  onPressed: () =>
+                                      openSavedPlaces(favorites: false),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: compactAction(
+                                  icon: Icons.assistant_outlined,
+                                  label: dedaText(
+                                    'مساعد DEDA',
+                                    'DEDA Assistant',
+                                  ),
+                                  onPressed: openDedaAssistant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 150,
+                            child: Row(
+                              textDirection: TextDirection.ltr,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: categoryCard(restaurant)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 2,
+                                  child: _DedaMapHeroCard(
+                                    onTap: () => openCategory(map),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 140,
+                            child: Row(
+                              textDirection: TextDirection.ltr,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: categoryCard(fuel)),
+                                const SizedBox(width: 8),
+                                Expanded(child: categoryCard(pharmacy)),
+                                const SizedBox(width: 8),
+                                Expanded(child: categoryCard(parking)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 140,
+                            child: Row(
+                              textDirection: TextDirection.ltr,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(child: categoryCard(park)),
+                                const SizedBox(width: 8),
+                                Expanded(child: categoryCard(hotel)),
+                                const SizedBox(width: 8),
+                                Expanded(child: categoryCard(mall)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    const horizontalPadding = 16.0;
+                    const topPadding = 10.0;
+                    const sectionGap = 8.0;
+                    const greetingGap = 10.0;
+
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        topPadding,
+                        horizontalPadding,
+                        8,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1100),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                dedaText(
+                                  'هلا بك ${widget.userName}',
+                                  'Welcome ${widget.userName}',
+                                ),
+                                textAlign: DedaLanguageState.isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 25,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: greetingGap),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Positioned.fill(
+                                          child: topAction(
+                                            icon: Icons.location_on_outlined,
+                                            label: dedaText(
+                                              'المواقع المستلمة',
+                                              'Received locations',
+                                            ),
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const DedaReceivedLocationsPage(),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        StreamBuilder<int>(
+                                          stream: DedaBackend
+                                              .pendingLocationSharesCountStream(
+                                            DedaBackend
+                                                .personalShareIdForPhone(
+                                              DedaPreferences.phone,
+                                            ),
+                                          ),
+                                          builder: (context, snapshot) {
+                                            final count = snapshot.data ?? 0;
+                                            if (count <= 0) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return PositionedDirectional(
+                                              top: -6,
+                                              end: -4,
+                                              child: Container(
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  minWidth: 23,
+                                                  minHeight: 23,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                ),
+                                                alignment: Alignment.center,
+                                                decoration:
+                                                    const BoxDecoration(
+                                                  color: Color(0xFFE53935),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Text(
+                                                  count > 99
+                                                      ? '99+'
+                                                      : '$count',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: topAction(
+                                      icon: Icons.share_location,
+                                      label: dedaText(
+                                        'شارك موقعك',
+                                        'Share your location',
+                                      ),
+                                      filled: true,
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const DedaShareLocationPage(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: sectionGap),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: compactAction(
+                                      icon: Icons.history,
+                                      label: dedaText(
+                                        'الأماكن الأخيرة',
+                                        'Recent places',
+                                      ),
+                                      onPressed: () =>
+                                          openSavedPlaces(favorites: false),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: compactAction(
+                                      icon: Icons.assistant_outlined,
+                                      label: dedaText(
+                                        'مساعد DEDA',
+                                        'DEDA Assistant',
+                                      ),
+                                      onPressed: openDedaAssistant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: sectionGap),
+                              Expanded(
+                                flex: 13,
+                                child: Row(
+                                  textDirection: TextDirection.ltr,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: categoryCard(restaurant),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _DedaMapHeroCard(
+                                        onTap: () => openCategory(map),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: sectionGap),
+                              Expanded(
+                                flex: 9,
+                                child: Row(
+                                  textDirection: TextDirection.ltr,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(child: categoryCard(fuel)),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: categoryCard(pharmacy)),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: categoryCard(parking)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: sectionGap),
+                              Expanded(
+                                flex: 9,
+                                child: Row(
+                                  textDirection: TextDirection.ltr,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(child: categoryCard(park)),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: categoryCard(hotel)),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: categoryCard(mall)),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        SizedBox(height: sectionGap),
-                        Expanded(
-                          flex: isLandscape ? 7 : 9,
-                          child: Row(
-                            textDirection: TextDirection.ltr,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: categoryCard(fuel)),
-                              const SizedBox(width: 8),
-                              Expanded(child: categoryCard(pharmacy)),
-                              const SizedBox(width: 8),
-                              Expanded(child: categoryCard(parking)),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: sectionGap),
-                        Expanded(
-                          flex: isLandscape ? 7 : 9,
-                          child: Row(
-                            textDirection: TextDirection.ltr,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: categoryCard(park)),
-                              const SizedBox(width: 8),
-                              Expanded(child: categoryCard(hotel)),
-                              const SizedBox(width: 8),
-                              Expanded(child: categoryCard(mall)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ),
       bottomNavigationBar: NavigationBar(
