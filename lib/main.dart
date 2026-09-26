@@ -6300,6 +6300,1301 @@ class DedaMyRequestsPage extends StatelessWidget {
     );
   }
 }
+
+class DedaShareLocationPage extends StatefulWidget {
+  const DedaShareLocationPage({super.key});
+
+  @override
+  State<DedaShareLocationPage> createState() => _DedaShareLocationPageState();
+}
+
+class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
+  final TextEditingController _recipientController = TextEditingController();
+
+  bool _loading = true;
+  bool _sending = false;
+  String _personalId = '';
+  String _placeId = '';
+  String _shareType = 'current';
+  int _durationMinutes = 30;
+  Map<String, dynamic>? _approvedPlace;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIdentity();
+  }
+
+  @override
+  void dispose() {
+    _recipientController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadIdentity() async {
+    try {
+      Map<String, dynamic>? place;
+      if (DedaPreferences.accountType == DedaAccountType.placeOwner) {
+        place = await DedaBackend.currentOwnerPublishedPlace(
+          DedaPreferences.phone,
+        );
+      }
+      final ids = await DedaBackend.ensureLocationShareIdentity(
+        name: DedaPreferences.userName,
+        phone: DedaPreferences.phone,
+        hasApprovedPlace: place != null,
+        placeName: (place?['placeName'] ?? '').toString(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _approvedPlace = place;
+        _personalId = ids['personalId'] ?? '';
+        _placeId = ids['placeId'] ?? '';
+        if (_placeId.isEmpty && _shareType == 'place') {
+          _shareType = 'current';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تجهيز معرفات المشاركة الآن. تحقق من الإنترنت وحاول مجددًا.',
+              'Could not prepare sharing IDs. Check your connection and try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _copy(String value) async {
+    if (value.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(dedaText('تم نسخ المعرف.', 'ID copied.')),
+      ),
+    );
+  }
+
+  Future<Position?> _currentPosition() async {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(dedaText('فعّل GPS أولاً.', 'Enable GPS first.')),
+          ),
+        );
+      }
+      return null;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'نحتاج إذن الموقع لإرسال موقعك الحالي.',
+                'Location permission is required to share your current location.',
+              ),
+            ),
+          ),
+        );
+      }
+      return null;
+    }
+
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
+    );
+  }
+
+  Future<void> _send() async {
+    if (_sending) return;
+    final recipient =
+        DedaBackend.normalizeSharePublicId(_recipientController.text);
+    if (!DedaBackend.isValidPersonalShareId(recipient)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'أدخل معرف DEDA صحيحًا للمستلم.',
+              'Enter a valid DEDA recipient ID.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (recipient == _personalId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'لا يمكن إرسال الموقع إلى معرفك الشخصي نفسه.',
+              'You cannot send a location to your own personal ID.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
+      double latitude;
+      double longitude;
+      String senderId;
+      String placeName = '';
+
+      if (_shareType == 'place') {
+        final place = _approvedPlace;
+        final lat = (place?['latitude'] as num?)?.toDouble();
+        final lng = (place?['longitude'] as num?)?.toDouble();
+        if (place == null || lat == null || lng == null || _placeId.isEmpty) {
+          throw StateError('approved-place-unavailable');
+        }
+        latitude = lat;
+        longitude = lng;
+        senderId = _placeId;
+        placeName = (place['placeName'] ?? '').toString();
+      } else {
+        final position = await _currentPosition();
+        if (position == null) return;
+        latitude = position.latitude;
+        longitude = position.longitude;
+        senderId = _personalId;
+      }
+
+      await DedaBackend.createLocationShare(
+        recipientPublicId: recipient,
+        senderPublicId: senderId,
+        senderName: _shareType == 'place' && placeName.isNotEmpty
+            ? placeName
+            : DedaPreferences.userName,
+        shareType: _shareType,
+        latitude: latitude,
+        longitude: longitude,
+        durationMinutes: _durationMinutes,
+        placeName: placeName,
+      );
+
+      if (!mounted) return;
+      _recipientController.clear();
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(
+            Icons.check_circle,
+            color: Color(0xFF17652F),
+            size: 48,
+          ),
+          title: Text(dedaText('تم إرسال المشاركة', 'Location shared')),
+          content: Text(
+            dedaText(
+              'وصلت المشاركة إلى صندوق المواقع المستلمة داخل DEDA.',
+              'The share was sent to the recipient’s DEDA received-locations inbox.',
+            ),
+            textAlign: TextAlign.center,
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(dedaText('حسنًا', 'OK')),
+            ),
+          ],
+        ),
+      );
+    } on StateError catch (error) {
+      if (!mounted) return;
+      final message = error.message == 'recipient-share-id-not-found'
+          ? dedaText(
+              'لم نعثر على هذا المعرف داخل DEDA. تأكد منه ثم حاول مجددًا.',
+              'This DEDA ID was not found. Check it and try again.',
+            )
+          : dedaText(
+              'تعذر إرسال المشاركة الآن. حاول مرة أخرى.',
+              'Could not send the share right now. Try again.',
+            );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر إرسال المشاركة الآن. تحقق من الإنترنت وحاول مجددًا.',
+              'Could not send the share. Check your connection and try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Widget _idCard({
+    required String title,
+    required String id,
+    required IconData icon,
+  }) {
+    return Card(
+      elevation: 0,
+      color: Colors.white.withOpacity(0.88),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: Color(0xFFCFD9D0)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFFE1F2E3),
+              foregroundColor: const Color(0xFF17652F),
+              child: Icon(icon),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  SelectableText(
+                    id,
+                    textDirection: TextDirection.ltr,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: id.isEmpty ? null : () => _copy(id),
+              icon: const Icon(Icons.copy_outlined, size: 19),
+              label: Text(dedaText('نسخ', 'Copy')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _choice({
+    required bool selected,
+    required String label,
+    required IconData icon,
+    required VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xFFE4F4E6)
+                : Colors.white.withOpacity(0.72),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF17652F)
+                  : const Color(0xFFB7BEB8),
+              width: selected ? 1.8 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_off,
+                color: selected
+                    ? const Color(0xFF17652F)
+                    : const Color(0xFF6C736D),
+              ),
+              const SizedBox(width: 7),
+              Icon(icon, size: 20),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('شارك موقعك', 'Share your location')),
+        centerTitle: true,
+        actions: const [
+          Padding(
+            padding: EdgeInsetsDirectional.only(end: 14),
+            child: Icon(Icons.share, color: Color(0xFF17652F)),
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/deda_home_bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Card(
+                            elevation: 0,
+                            color: Colors.white.withOpacity(0.88),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.person,
+                                        color: Color(0xFF17652F),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        dedaText(
+                                          'معرف الشخص المستلم',
+                                          'Recipient ID',
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _recipientController,
+                                    textDirection: TextDirection.ltr,
+                                    textAlign: TextAlign.center,
+                                    textCapitalization:
+                                        TextCapitalization.characters,
+                                    decoration: InputDecoration(
+                                      hintText: '@DEDA-3R8X6P',
+                                      suffixIcon: IconButton(
+                                        tooltip: dedaText('مسح', 'Clear'),
+                                        onPressed: _recipientController.clear,
+                                        icon: const Icon(Icons.close),
+                                      ),
+                                      border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    dedaText(
+                                      'أدخل معرف الشخص الذي تريد إرسال موقعك إليه. يمكن استلام المعرف من رسالة أو من أي وسيلة تواصل.',
+                                      'Enter the DEDA ID of the person you want to share with. You can receive the ID through any communication method.',
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFF4F5851),
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            dedaText('معرفاتي', 'My IDs'),
+                            style: const TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          _idCard(
+                            title: dedaText(
+                              'معرفي الشخصي',
+                              'My personal ID',
+                            ),
+                            id: _personalId,
+                            icon: Icons.person,
+                          ),
+                          if (_placeId.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _idCard(
+                              title:
+                                  dedaText('معرف مكاني', 'My place ID'),
+                              id: _placeId,
+                              icon: Icons.location_on,
+                            ),
+                          ],
+                          const SizedBox(height: 7),
+                          Text(
+                            dedaText(
+                              _placeId.isNotEmpty
+                                  ? 'المعرف الشخصي لمشاركة موقعك الحالي، ومعرف مكاني خاص بمكانك المسجل في DEDA.'
+                                  : 'المعرف الشخصي مخصص لمشاركة موقعك الحالي. يظهر معرف المكان تلقائيًا لصاحب المكان بعد اعتماد مكانه.',
+                              _placeId.isNotEmpty
+                                  ? 'Use your personal ID for your current location and your place ID for your approved DEDA place.'
+                                  : 'Your personal ID is for your current location. A place ID appears automatically after an owner’s place is approved.',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFF5A625B),
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Card(
+                            elevation: 0,
+                            color: Colors.white.withOpacity(0.88),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.location_on,
+                                        color: Color(0xFF17652F),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        dedaText(
+                                          'نوع المشاركة',
+                                          'Share type',
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      _choice(
+                                        selected:
+                                            _shareType == 'current',
+                                        label: dedaText(
+                                          'موقعي الحالي',
+                                          'Current location',
+                                        ),
+                                        icon: Icons.near_me,
+                                        onTap: () => setState(
+                                          () => _shareType = 'current',
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      _choice(
+                                        selected: _shareType == 'place',
+                                        label: dedaText(
+                                          'مكاني المسجل',
+                                          'Registered place',
+                                        ),
+                                        icon: Icons.map_outlined,
+                                        onTap: _placeId.isEmpty
+                                            ? null
+                                            : () => setState(
+                                                  () =>
+                                                      _shareType = 'place',
+                                                ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            elevation: 0,
+                            color: Colors.white.withOpacity(0.88),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.schedule,
+                                        color: Color(0xFF17652F),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        dedaText(
+                                          'مدة المشاركة',
+                                          'Share duration',
+                                        ),
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [15, 30, 60].map((minutes) {
+                                      final selected =
+                                          _durationMinutes == minutes;
+                                      return Expanded(
+                                        child: Padding(
+                                          padding: EdgeInsetsDirectional.only(
+                                            end: minutes == 60 ? 0 : 7,
+                                          ),
+                                          child: ChoiceChip(
+                                            selected: selected,
+                                            onSelected: (_) => setState(
+                                              () => _durationMinutes =
+                                                  minutes,
+                                            ),
+                                            label: SizedBox(
+                                              width: double.infinity,
+                                              child: Text(
+                                                dedaText(
+                                                  '$minutes دقيقة',
+                                                  '$minutes min',
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            onPressed: _sending ? null : _send,
+                            icon: _sending
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.send),
+                            label: Text(
+                              _sending
+                                  ? dedaText(
+                                      'جاري الإرسال...',
+                                      'Sending...',
+                                    )
+                                  : dedaText(
+                                      'إرسال المشاركة',
+                                      'Send share',
+                                    ),
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(58),
+                              backgroundColor: const Color(0xFF17652F),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Card(
+                            elevation: 0,
+                            color: Colors.white.withOpacity(0.82),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.pin_drop_outlined,
+                                    color: Color(0xFF17652F),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      dedaText(
+                                        'لن يحتاج الطرف الآخر إلى أي تطبيق خارجي. ستصل المشاركة داخل DEDA ويمكنه قبولها وفتحها على الخريطة.',
+                                        'No external app is required. The share arrives inside DEDA, where the recipient can accept it and open it on the map.',
+                                      ),
+                                      style: const TextStyle(height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class DedaReceivedLocationsPage extends StatefulWidget {
+  const DedaReceivedLocationsPage({super.key});
+
+  @override
+  State<DedaReceivedLocationsPage> createState() =>
+      _DedaReceivedLocationsPageState();
+}
+
+class _DedaReceivedLocationsPageState
+    extends State<DedaReceivedLocationsPage> {
+  String _personalId = '';
+  bool _loading = true;
+  int _filter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIdentity();
+  }
+
+  Future<void> _loadIdentity() async {
+    try {
+      Map<String, dynamic>? place;
+      if (DedaPreferences.accountType == DedaAccountType.placeOwner) {
+        place = await DedaBackend.currentOwnerPublishedPlace(
+          DedaPreferences.phone,
+        );
+      }
+      final ids = await DedaBackend.ensureLocationShareIdentity(
+        name: DedaPreferences.userName,
+        phone: DedaPreferences.phone,
+        hasApprovedPlace: place != null,
+        placeName: (place?['placeName'] ?? '').toString(),
+      );
+      if (!mounted) return;
+      setState(() => _personalId = ids['personalId'] ?? '');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تحميل المواقع المستلمة الآن.',
+              'Could not load received locations right now.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  bool _isExpired(Map<String, dynamic> item) {
+    final expires =
+        DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
+    return expires == null || !expires.isAfter(DateTime.now());
+  }
+
+  bool _isEnded(Map<String, dynamic> item) {
+    final status = (item['status'] ?? 'pending').toString();
+    return _isExpired(item) || status == 'rejected';
+  }
+
+  String _timeAgo(Map<String, dynamic> item) {
+    final created =
+        DateTime.tryParse((item['createdAtIso'] ?? '').toString());
+    if (created == null) return '';
+    final diff = DateTime.now().difference(created);
+    if (diff.inMinutes < 1) {
+      return dedaText('الآن', 'Now');
+    }
+    if (diff.inMinutes < 60) {
+      return dedaText(
+        'منذ ' + diff.inMinutes.toString() + ' دقيقة',
+        diff.inMinutes.toString() + ' min ago',
+      );
+    }
+    if (diff.inHours < 24) {
+      return dedaText(
+        'منذ ' + diff.inHours.toString() + ' ساعة',
+        diff.inHours.toString() + ' h ago',
+      );
+    }
+    return dedaText(
+      'منذ ' + diff.inDays.toString() + ' يوم',
+      diff.inDays.toString() + ' d ago',
+    );
+  }
+
+  Future<void> _openShare(Map<String, dynamic> item) async {
+    final status = (item['status'] ?? 'pending').toString();
+    final id = (item['id'] ?? '').toString();
+    if (status == 'pending') {
+      try {
+        await DedaBackend.decideLocationShare(
+          shareId: id,
+          accept: true,
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'تعذر قبول المشاركة الآن.',
+                'Could not accept the share right now.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DedaSharedLocationMapPage(share: item),
+      ),
+    );
+  }
+
+  Future<void> _rejectShare(Map<String, dynamic> item) async {
+    try {
+      await DedaBackend.decideLocationShare(
+        shareId: (item['id'] ?? '').toString(),
+        accept: false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر رفض المشاركة الآن.',
+              'Could not reject the share right now.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _mapPreview(Map<String, dynamic> item) {
+    final lat = (item['latitude'] as num?)?.toDouble();
+    final lng = (item['longitude'] as num?)?.toDouble();
+    if (lat == null || lng == null) {
+      return const SizedBox.shrink();
+    }
+    final point = LatLng(lat, lng);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 118,
+        child: IgnorePointer(
+          child: FlutterMap(
+            options: MapOptions(
+              initialCenter: point,
+              initialZoom: 13.5,
+            ),
+            children: [
+              ...dedaBaseMapLayers(DedaMapStyle.normal),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: point,
+                    width: 48,
+                    height: 48,
+                    child: Icon(
+                      item['shareType'] == 'place'
+                          ? Icons.location_pin
+                          : Icons.my_location,
+                      color: item['shareType'] == 'place'
+                          ? const Color(0xFFE53935)
+                          : const Color(0xFF1565C0),
+                      size: 42,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _shareCard(Map<String, dynamic> item) {
+    final pending = (item['status'] ?? 'pending').toString() == 'pending';
+    final accepted = (item['status'] ?? '').toString() == 'accepted';
+    final ended = _isEnded(item);
+    final placeShare = item['shareType'] == 'place';
+    final senderName = (item['senderName'] ?? '').toString();
+    final senderId = (item['senderPublicId'] ?? '').toString();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 3,
+      color: Colors.white.withOpacity(0.94),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: placeShare
+                      ? const Color(0xFFF0E1FA)
+                      : const Color(0xFFE0F0FF),
+                  child: Icon(
+                    placeShare ? Icons.storefront : Icons.person,
+                    color: placeShare
+                        ? const Color(0xFF8B3FD6)
+                        : const Color(0xFF1565C0),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        senderName.isEmpty
+                            ? dedaText('مستخدم DEDA', 'DEDA user')
+                            : senderName,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        senderId,
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(
+                          color: Color(0xFF5C635D),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (pending && !ended)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE53935),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      dedaText('جديد', 'New'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  )
+                else if (accepted && !ended)
+                  Chip(
+                    label: Text(dedaText('حالية', 'Active')),
+                  )
+                else
+                  Chip(
+                    label: Text(dedaText('انتهت', 'Ended')),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              placeShare
+                  ? dedaText(
+                      'شارك معك موقعه المسجل',
+                      'Shared a registered place with you',
+                    )
+                  : dedaText(
+                      'يريد مشاركة موقعه الحالي معك',
+                      'Wants to share a current location with you',
+                    ),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                const Icon(
+                  Icons.schedule,
+                  size: 18,
+                  color: Color(0xFF676E68),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  _timeAgo(item),
+                  style: const TextStyle(color: Color(0xFF676E68)),
+                ),
+                const Spacer(),
+                Text(
+                  placeShare
+                      ? dedaText('مكان ثابت', 'Fixed place')
+                      : dedaText('موقع مباشر', 'Live location'),
+                  style: const TextStyle(
+                    color: Color(0xFF17652F),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _mapPreview(item),
+            if (!ended) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: () => _openShare(item),
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(
+                        dedaText('فتح على الخريطة', 'Open on map'),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF158A3D),
+                        minimumSize: const Size.fromHeight(48),
+                      ),
+                    ),
+                  ),
+                  if (pending) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _rejectShare(item),
+                        icon: const Icon(Icons.close),
+                        label: Text(dedaText('رفض', 'Reject')),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFD32F2F),
+                          side: const BorderSide(
+                            color: Color(0xFFD32F2F),
+                          ),
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(
+          dedaText('المواقع المستلمة', 'Received locations'),
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/deda_home_bg.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                      child: SegmentedButton<int>(
+                        segments: [
+                          ButtonSegment<int>(
+                            value: 0,
+                            label: Text(dedaText('الكل', 'All')),
+                          ),
+                          ButtonSegment<int>(
+                            value: 1,
+                            label: Text(dedaText('الحالية', 'Active')),
+                          ),
+                          ButtonSegment<int>(
+                            value: 2,
+                            label: Text(dedaText('المنتهية', 'Ended')),
+                          ),
+                        ],
+                        selected: <int>{_filter},
+                        onSelectionChanged: (value) {
+                          setState(() => _filter = value.first);
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: StreamBuilder<List<Map<String, dynamic>>>(
+                        stream: DedaBackend.locationSharesStream(
+                          _personalId,
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              !snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          final all =
+                              snapshot.data ?? const <Map<String, dynamic>>[];
+                          final items = all.where((item) {
+                            final ended = _isEnded(item);
+                            if (_filter == 1) return !ended;
+                            if (_filter == 2) return ended;
+                            return true;
+                          }).toList();
+
+                          if (items.isEmpty) {
+                            return Center(
+                              child: Card(
+                                color: Colors.white.withOpacity(0.90),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(22),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.inbox_outlined,
+                                        size: 52,
+                                        color: Color(0xFF17652F),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        dedaText(
+                                          'لا توجد مشاركات في هذا القسم.',
+                                          'There are no shares in this section.',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          return ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(
+                              14,
+                              4,
+                              14,
+                              26,
+                            ),
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, index) =>
+                                _shareCard(items[index]),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class DedaSharedLocationMapPage extends StatelessWidget {
+  final Map<String, dynamic> share;
+
+  const DedaSharedLocationMapPage({
+    super.key,
+    required this.share,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final lat = (share['latitude'] as num?)?.toDouble();
+    final lng = (share['longitude'] as num?)?.toDouble();
+    final point = LatLng(lat ?? 0, lng ?? 0);
+    final placeShare = share['shareType'] == 'place';
+    final title = placeShare
+        ? (share['placeName'] ?? share['senderName'] ?? '').toString()
+        : (share['senderName'] ?? '').toString();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          title.isEmpty
+              ? dedaText('الموقع المستلم', 'Received location')
+              : title,
+        ),
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 15,
+              ),
+              children: [
+                ...dedaBaseMapLayers(DedaMapStyle.normal),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 64,
+                      height: 64,
+                      child: Icon(
+                        placeShare
+                            ? Icons.location_pin
+                            : Icons.my_location,
+                        size: 54,
+                        color: placeShare
+                            ? const Color(0xFFE53935)
+                            : const Color(0xFF1565C0),
+                      ),
+                    ),
+                  ],
+                ),
+                RichAttributionWidget(
+                  attributions: [
+                    TextSourceAttribution(
+                      dedaMapAttribution(DedaMapStyle.normal),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          PositionedDirectional(
+            top: 14,
+            start: 14,
+            end: 14,
+            child: Card(
+              color: Colors.white.withOpacity(0.94),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(
+                      placeShare ? Icons.storefront : Icons.person,
+                      color: const Color(0xFF17652F),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        placeShare
+                            ? dedaText(
+                                'مكان ثابت تمت مشاركته داخل DEDA',
+                                'Fixed place shared inside DEDA',
+                              )
+                            : dedaText(
+                                'الموقع الذي شاركه $title',
+                                'Location shared by $title',
+                              ),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DedaMapHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
