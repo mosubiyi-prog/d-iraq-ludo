@@ -6439,21 +6439,20 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                 Card(
                   elevation: 0,
                   child: SwitchListTile(
+                    dense: true,
+                    visualDensity:
+                        const VisualDensity(horizontal: -1, vertical: -1),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12),
                     value: showAvailableOnly,
                     activeColor: const Color(0xFF159447),
                     secondary: const Icon(Icons.online_prediction),
                     title: Text(
                       dedaText(
-                        'إظهار المتواجدين فقط',
-                        'Show available places only',
+                        'إظهار المتواجدين',
+                        'Show available',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      dedaText(
-                        'عند الإيقاف تظهر جميع الأماكن، وتبقى علامة المتواجد باللون الأخضر.',
-                        'When off, all places are shown; available places stay green.',
-                      ),
                     ),
                     onChanged: (value) => setState(
                       () => showAvailableOnly = value,
@@ -12308,24 +12307,20 @@ class _MapReadyPageState extends State<MapReadyPage> {
                 Card(
                   elevation: 0,
                   child: SwitchListTile(
-                    dense: isLandscape,
+                    dense: true,
                     visualDensity:
-                        isLandscape ? VisualDensity.compact : VisualDensity.standard,
+                        const VisualDensity(horizontal: -1, vertical: -1),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12),
                     value: showAvailableOnly,
                     activeColor: const Color(0xFF159447),
                     secondary: const Icon(Icons.online_prediction),
                     title: Text(
                       dedaText(
-                        'إظهار المتواجدين فقط',
-                        'Show available places only',
+                        'إظهار المتواجدين',
+                        'Show available',
                       ),
                       style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      dedaText(
-                        'عند الإيقاف تظهر جميع الأماكن، وتبقى علامة المتواجد باللون الأخضر.',
-                        'When off, all places are shown; available places stay green.',
-                      ),
                     ),
                     onChanged: (value) {
                       setState(() {
