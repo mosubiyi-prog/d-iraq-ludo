@@ -3415,9 +3415,14 @@ class DedaBackend {
     required bool hasApprovedPlace,
     String placeName = '',
   }) async {
-    final user = await _ensurePublicUser();
     final accountKey = accountKeyForPhone(phone);
     if (accountKey.isEmpty) throw StateError('share-account-missing');
+
+    // A locally remembered DEDA login can outlive Firebase's anonymous
+    // session. Restore the trusted DEDA session for this installation before
+    // writing the public sharing identity, otherwise Firestore correctly
+    // rejects the share-ID registration.
+    final user = await _ensureOwnerSessionForAccountKey(accountKey);
 
     final personalId = personalShareIdForPhone(phone);
     final placeId = hasApprovedPlace ? placeShareIdForPhone(phone) : '';
