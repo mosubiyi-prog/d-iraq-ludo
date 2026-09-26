@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -406,18 +407,21 @@ class DedaPinAuth {
   static Future<void> signOutFirebase() async {
     final auth = FirebaseAuth.instance;
     final current = auth.currentUser;
-    if (current != null && current.isAnonymous) {
-      final firestore = FirebaseFirestore.instance;
-      try {
-        await firestore.collection('deda_sessions').doc(current.uid).delete();
-      } catch (_) {}
-      try {
-        await firestore
-            .collection('deda_auth_attempts')
-            .doc(current.uid)
-            .delete();
-      } catch (_) {}
-    }
+    final anonymousUid =
+        current != null && current.isAnonymous ? current.uid : null;
+
+    // End the local Firebase session first so logout/account switching is
+    // immediate. Remote cleanup is best-effort and must never block the UI.
     await auth.signOut();
+
+    if (anonymousUid != null) {
+      final firestore = FirebaseFirestore.instance;
+      unawaited(
+        Future.wait([
+          firestore.collection('deda_sessions').doc(anonymousUid).delete(),
+          firestore.collection('deda_auth_attempts').doc(anonymousUid).delete(),
+        ]).catchError((_) => <void>[]),
+      );
+    }
   }
 }
