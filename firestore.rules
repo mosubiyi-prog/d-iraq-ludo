@@ -226,7 +226,19 @@ service cloud.firestore {
     // all real admin access still depends on Firebase Auth + /admins/{uid}.
     match /admin_entry_access/{accountKey} {
       allow read: if sameAccount(accountKey) || isAdmin();
-      allow create, update, delete: if isGeneralManager();
+
+      allow create, update: if isGeneralManager()
+        || (
+          isAdmin()
+          && adminData().keys().hasAny(['phone'])
+          && adminData().phone == accountKey
+          && request.resource.data.accountKey == accountKey
+          && request.resource.data.adminUid == request.auth.uid
+          && request.resource.data.active == true
+          && request.resource.data.status == 'active'
+        );
+
+      allow delete: if isGeneralManager();
     }
 
     match /admins/{uid} {
