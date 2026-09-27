@@ -158,6 +158,16 @@ String dedaFriendlyAdminError(bool ar, Object error) {
         ? 'توجد دعوة إدارية معلقة لهذا البريد بالفعل.'
         : 'There is already a pending admin invitation for this email.';
   }
+  if (raw.contains('admin-deda-phone-required')) {
+    return ar
+        ? 'أدخل رقم حساب DEDA الصحيح للعضو، مثل 07XXXXXXXXX.'
+        : 'Enter the member\'s valid DEDA account phone, such as 07XXXXXXXXX.';
+  }
+  if (raw.contains('admin-phone-already-authorized')) {
+    return ar
+        ? 'رقم حساب DEDA هذا مخول للإدارة بالفعل.'
+        : 'This DEDA account phone is already authorized for administration.';
+  }
   if (raw.contains('cannot-change-current-admin-access')) {
     return ar
         ? 'لا يمكنك تغيير دور أو حالة حسابك الإداري الحالي من نفس الجلسة.'
@@ -1264,13 +1274,20 @@ class _DedaAdminMemberEditorPageState
     final department = _department.text.trim();
     if (name.isEmpty ||
         department.isEmpty ||
-        (!editing && (email.isEmpty || !email.contains('@')))) {
+        (!editing &&
+            (email.isEmpty ||
+                !email.contains('@') ||
+                _phone.text.trim().isEmpty))) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             t(
-              'أكمل الاسم والبريد والقسم.',
-              'Complete name, email and department.',
+              editing
+                  ? 'أكمل الاسم والقسم.'
+                  : 'أكمل الاسم والبريد ورقم حساب DEDA والقسم.',
+              editing
+                  ? 'Complete name and department.'
+                  : 'Complete name, email, DEDA account phone and department.',
             ),
           ),
         ),
@@ -1630,10 +1647,15 @@ class _DedaAdminMemberEditorPageState
             controller: _phone,
             keyboardType: TextInputType.phone,
             decoration: InputDecoration(
-              labelText: t(
-                'رقم الهاتف (اختياري)',
-                'Phone (optional)',
-              ),
+              labelText: editing
+                  ? t('رقم الهاتف', 'Phone')
+                  : t('رقم حساب DEDA (مطلوب)', 'DEDA account phone (required)'),
+              helperText: editing
+                  ? null
+                  : t(
+                      'يحدد الحساب الذي ستظهر له أيقونة الإدارة.',
+                      'This identifies the DEDA account that may see the admin entry.',
+                    ),
               prefixIcon: const Icon(Icons.phone_outlined),
               border: const OutlineInputBorder(),
             ),
