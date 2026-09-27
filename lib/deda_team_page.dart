@@ -8,46 +8,74 @@ class DedaTeamPage extends StatelessWidget {
 
   static const List<_DedaTeamMember> _members = [
     _DedaTeamMember(
+      number: 1,
+      role: 'المدير والمنفذ للتطبيق',
+      name: 'سالم حسن',
+      icon: Icons.engineering_rounded,
+      avatarIcon: Icons.face_6_rounded,
+      color: Color(0xFF188848),
+      darkColor: Color(0xFF106A37),
+      softColor: Color(0xFFE9F6EC),
+    ),
+    _DedaTeamMember(
+      number: 2,
       role: 'المدقق والمراقب',
       name: 'امجد صالح',
       icon: Icons.fact_check_rounded,
-      color: Color(0xFF2F73B9),
-      softColor: Color(0xFFE7F1FB),
+      avatarIcon: Icons.face_rounded,
+      color: Color(0xFF2F8FE5),
+      darkColor: Color(0xFF216EB5),
+      softColor: Color(0xFFEAF4FE),
     ),
     _DedaTeamMember(
+      number: 3,
       role: 'المصمم التنفيذي',
       name: 'امير جاسم',
       icon: Icons.design_services_rounded,
-      color: Color(0xFFE89A2F),
-      softColor: Color(0xFFFFF1DC),
+      avatarIcon: Icons.face_2_rounded,
+      color: Color(0xFFF2A21F),
+      darkColor: Color(0xFFD48300),
+      softColor: Color(0xFFFFF4DF),
     ),
     _DedaTeamMember(
+      number: 4,
       role: 'الإداري الأول',
       name: 'حسين نجاح',
       icon: Icons.admin_panel_settings_rounded,
-      color: Color(0xFF7759B8),
-      softColor: Color(0xFFF0EBFB),
+      avatarIcon: Icons.face_4_rounded,
+      color: Color(0xFF8453D6),
+      darkColor: Color(0xFF6439AD),
+      softColor: Color(0xFFF2ECFC),
     ),
     _DedaTeamMember(
+      number: 5,
       role: 'المختبر الأول',
       name: 'ماجد حميد',
       icon: Icons.science_rounded,
-      color: Color(0xFFC95757),
-      softColor: Color(0xFFFBEAEA),
+      avatarIcon: Icons.face_3_rounded,
+      color: Color(0xFFE64B4F),
+      darkColor: Color(0xFFB83135),
+      softColor: Color(0xFFFDEBEC),
     ),
     _DedaTeamMember(
+      number: 6,
       role: 'المختبر الثاني',
       name: 'يونس ادريس',
       icon: Icons.biotech_rounded,
-      color: Color(0xFF3B8996),
-      softColor: Color(0xFFE5F4F6),
+      avatarIcon: Icons.face_5_rounded,
+      color: Color(0xFF22A9C7),
+      darkColor: Color(0xFF16849D),
+      softColor: Color(0xFFE7F7FB),
     ),
     _DedaTeamMember(
+      number: 7,
       role: 'منفذ الألوان',
       name: 'سكرتيرة هيام',
       icon: Icons.palette_rounded,
-      color: Color(0xFF4B8F62),
-      softColor: Color(0xFFE8F5EB),
+      avatarIcon: Icons.face_3_rounded,
+      color: Color(0xFF45A844),
+      darkColor: Color(0xFF337F33),
+      softColor: Color(0xFFEBF7EA),
     ),
   ];
 
@@ -58,17 +86,28 @@ class DedaTeamPage extends StatelessWidget {
       child: Scaffold(
         backgroundColor: _cream,
         appBar: AppBar(
-          backgroundColor: Colors.white.withOpacity(0.96),
+          backgroundColor: Colors.white.withOpacity(0.97),
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
           title: const Text(
-            'فريق تطبيق DEDA',
+            'فريق DEDA',
             style: TextStyle(
               fontWeight: FontWeight.w900,
               color: Color(0xFF1F2A22),
+              fontSize: 25,
             ),
           ),
+          actions: const [
+            Padding(
+              padding: EdgeInsetsDirectional.only(end: 14),
+              child: Icon(
+                Icons.groups_2_rounded,
+                color: _green,
+                size: 30,
+              ),
+            ),
+          ],
         ),
         body: Stack(
           children: [
@@ -80,7 +119,7 @@ class DedaTeamPage extends StatelessWidget {
             ),
             Positioned.fill(
               child: ColoredBox(
-                color: _cream.withOpacity(0.91),
+                color: _cream.withOpacity(0.88),
               ),
             ),
             SafeArea(
@@ -88,32 +127,58 @@ class DedaTeamPage extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final horizontalPadding =
-                      constraints.maxWidth >= 700 ? 28.0 : 16.0;
+                      constraints.maxWidth >= 700 ? 28.0 : 12.0;
                   return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
-                      18,
+                      14,
                       horizontalPadding,
                       30,
                     ),
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
+                        constraints: const BoxConstraints(maxWidth: 780),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildIntro(),
-                            const SizedBox(height: 14),
-                            _buildManagerCard(),
-                            const SizedBox(height: 14),
-                            _buildMembersGrid(),
-                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 11,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.91),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFFD9E5DA),
+                                ),
+                              ),
+                              child: const Text(
+                                'معًا نصنع تجربة أفضل لمدينة أجمل',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF5D685F),
+                                  fontSize: 15,
+                                  height: 1.3,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 13),
+                            ..._members.map(
+                              (member) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _TeamRowCard(member: member),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
                             const Text(
                               'معًا العراق أجمل',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Color(0xFF55715D),
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w900,
                                 fontSize: 15,
                               ),
                             ),
@@ -130,272 +195,197 @@ class DedaTeamPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildIntro() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.90),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD6E4D7)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: const Row(
-        children: [
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: Color(0xFFE1F0E2),
-            child: Icon(
-              Icons.groups_2_rounded,
-              color: _green,
-              size: 30,
-            ),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'فريق DEDA',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF223127),
-                  ),
-                ),
-                SizedBox(height: 3),
-                Text(
-                  'طاقم العمل الذي ساهم في تنفيذ ومراجعة واختبار التطبيق',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    height: 1.35,
-                    color: Color(0xFF607064),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _TeamRowCard extends StatelessWidget {
+  final _DedaTeamMember member;
 
-  Widget _buildManagerCard() {
+  const _TeamRowCard({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = width < 380;
+
     return Container(
-      padding: const EdgeInsets.all(18),
+      constraints: BoxConstraints(
+        minHeight: compact ? 126 : 138,
+      ),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF17652F), Color(0xFF2F8148)],
+        gradient: LinearGradient(
+          colors: [member.color, member.darkColor],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.82),
+          width: 1.4,
+        ),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x2A17652F),
-            blurRadius: 22,
-            offset: Offset(0, 9),
+            color: member.darkColor.withOpacity(0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 66,
-            height: 66,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.18),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withOpacity(0.38),
-                width: 1.4,
+            width: compact ? 49 : 56,
+            constraints: const BoxConstraints(minHeight: 138),
+            alignment: Alignment.center,
+            color: Colors.black.withOpacity(0.09),
+            child: Text(
+              '${member.number}',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: compact ? 34 : 40,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            child: const Icon(
-              Icons.engineering_rounded,
-              color: Colors.white,
-              size: 37,
-            ),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: compact ? 8 : 11),
+          _AvatarBadge(
+            member: member,
+            compact: compact,
+          ),
+          SizedBox(width: compact ? 8 : 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'المدير والمنفذ للتطبيق',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    height: 1.2,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 11),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.94),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Text(
-                    'سالم حسن',
-                    textAlign: TextAlign.center,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: compact ? 12 : 14,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    member.role,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
                     style: TextStyle(
-                      color: Color(0xFF17652F),
-                      fontSize: 17,
+                      color: Colors.white,
+                      fontSize: compact ? 16.5 : 19,
+                      height: 1.18,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
-              ],
+                  SizedBox(height: compact ? 10 : 12),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 9 : 12,
+                      vertical: compact ? 8 : 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: member.softColor.withOpacity(0.97),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.75),
+                      ),
+                    ),
+                    child: Text(
+                      member.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: const Color(0xFF183725),
+                        fontSize: compact ? 15 : 16.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 10),
-          const Icon(
-            Icons.workspace_premium_rounded,
-            color: Color(0xFFFFE7A6),
-            size: 31,
+          SizedBox(width: compact ? 7 : 10),
+          Container(
+            width: compact ? 48 : 56,
+            height: compact ? 48 : 56,
+            margin: EdgeInsetsDirectional.only(
+              end: compact ? 9 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.12),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withOpacity(0.20),
+              ),
+            ),
+            child: Icon(
+              member.icon,
+              color: Colors.white,
+              size: compact ? 27 : 31,
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMembersGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 12.0;
-        final twoColumns = constraints.maxWidth >= 340;
-        final cardWidth = twoColumns
-            ? (constraints.maxWidth - gap) / 2
-            : constraints.maxWidth;
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: _members
-              .map(
-                (member) => SizedBox(
-                  width: cardWidth,
-                  child: _TeamMemberCard(member: member),
-                ),
-              )
-              .toList(),
-        );
-      },
     );
   }
 }
 
-class _TeamMemberCard extends StatelessWidget {
+class _AvatarBadge extends StatelessWidget {
   final _DedaTeamMember member;
+  final bool compact;
 
-  const _TeamMemberCard({required this.member});
+  const _AvatarBadge({
+    required this.member,
+    required this.compact,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final size = compact ? 64.0 : 75.0;
     return Container(
-      constraints: const BoxConstraints(minHeight: 214),
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 13),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: member.softColor.withOpacity(0.97),
-        borderRadius: BorderRadius.circular(23),
-        border: Border.all(color: member.color.withOpacity(0.24)),
+        color: member.softColor,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white,
+          width: 3,
+        ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 14,
-            offset: Offset(0, 6),
+            color: Color(0x22000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
+      alignment: Alignment.center,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 45,
-                height: 45,
-                decoration: BoxDecoration(
-                  color: member.color,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: member.color.withOpacity(0.26),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  member.icon,
+          Icon(
+            member.avatarIcon,
+            color: member.darkColor,
+            size: compact ? 42 : 49,
+          ),
+          Positioned(
+            bottom: compact ? 2 : 4,
+            right: compact ? 1 : 3,
+            child: Container(
+              width: compact ? 23 : 27,
+              height: compact ? 23 : 27,
+              decoration: BoxDecoration(
+                color: member.darkColor,
+                shape: BoxShape.circle,
+                border: Border.all(
                   color: Colors.white,
-                  size: 26,
+                  width: 1.5,
                 ),
               ),
-              const Spacer(),
-              Container(
-                width: 41,
-                height: 41,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.72),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: member.color,
-                  size: 25,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 54,
-            child: Center(
-              child: Text(
-                member.role,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: member.color,
-                  fontSize: 16.5,
-                  height: 1.25,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 11),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.92),
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: member.color.withOpacity(0.12)),
-            ),
-            child: Text(
-              member.name,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: member.color,
-                fontSize: 15.5,
-                fontWeight: FontWeight.w900,
+              child: Icon(
+                member.icon,
+                color: Colors.white,
+                size: compact ? 13 : 15,
               ),
             ),
           ),
@@ -406,17 +396,23 @@ class _TeamMemberCard extends StatelessWidget {
 }
 
 class _DedaTeamMember {
+  final int number;
   final String role;
   final String name;
   final IconData icon;
+  final IconData avatarIcon;
   final Color color;
+  final Color darkColor;
   final Color softColor;
 
   const _DedaTeamMember({
+    required this.number,
     required this.role,
     required this.name,
     required this.icon,
+    required this.avatarIcon,
     required this.color,
+    required this.darkColor,
     required this.softColor,
   });
 }
