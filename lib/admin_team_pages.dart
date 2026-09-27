@@ -3936,7 +3936,7 @@ class _DedaAdminEntryPhonesPageState
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _busy ? null : _addPhone,
-        icon: const Icon(Icons.add_shield_outlined),
+        icon: const Icon(Icons.add_moderator_outlined),
         label: Text(t('إضافة رقم', 'Add phone')),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
