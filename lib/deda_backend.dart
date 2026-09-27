@@ -42,7 +42,16 @@ class DedaBackend {
     } else if (digits.startsWith('7') && digits.length == 10) {
       digits = '964$digits';
     }
-    return RegExp(r'^9647\d{9}
+
+    final numeric = int.tryParse(digits);
+    if (digits.length == 13 &&
+        digits.startsWith('9647') &&
+        numeric != null) {
+      return digits;
+    }
+    return '';
+  }
+
   static Future<String> _currentAccountKey(User user) async {
     try {
       final snapshot = await FirebaseFirestore.instance
