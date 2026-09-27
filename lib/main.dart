@@ -2014,6 +2014,32 @@ class DedaSettingsPage extends StatefulWidget {
 }
 
 class _DedaSettingsPageState extends State<DedaSettingsPage> {
+  bool _adminEntryVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_refreshAdminEntryVisibility());
+  }
+
+  Future<void> _refreshAdminEntryVisibility() async {
+    final phone = DedaPreferences.accountPhone.trim().isNotEmpty
+        ? DedaPreferences.accountPhone
+        : DedaPreferences.phone;
+
+    var allowed = false;
+    try {
+      allowed = await DedaBackend.currentDedaAccountCanSeeAdminEntry(
+        phone: phone,
+      );
+    } catch (_) {
+      allowed = false;
+    }
+
+    if (!mounted) return;
+    setState(() => _adminEntryVisible = allowed);
+  }
+
   Future<void> _setLanguage(DedaLanguage language) async {
     await DedaPreferences.setLanguage(language);
     if (mounted) setState(() {});
@@ -2302,111 +2328,116 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                     ),
                   ),
 
-                  _sectionTitle(dedaText('الإدارة', 'Administration')),
-                  Card(
-                    color: const Color(0xFFF1F6EF),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      side: const BorderSide(
-                        color: Color(0xFFB8CCB6),
+                  // Fail closed: ordinary users see no administration
+                  // heading, card, button, or reserved blank space.
+                  if (_adminEntryVisible) ...[
+                    _sectionTitle(dedaText('الإدارة', 'Administration')),
+                    Card(
+                      color: const Color(0xFFF1F6EF),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        side: const BorderSide(
+                          color: Color(0xFFB8CCB6),
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFDDEDDD),
-                                  shape: BoxShape.circle,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFDDEDDD),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.admin_panel_settings_outlined,
+                                    color: Color(0xFF17652F),
+                                    size: 27,
+                                  ),
                                 ),
-                                alignment: Alignment.center,
-                                child: const Icon(
-                                  Icons.admin_panel_settings_outlined,
-                                  color: Color(0xFF17652F),
-                                  size: 27,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      dedaText(
-                                        'إدارة DEDA',
-                                        'DEDA administration',
-                                      ),
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      dedaText(
-                                        'للمخولين فقط',
-                                        'Authorized personnel only',
-                                      ),
-                                      style: const TextStyle(
-                                        color: Color(0xFF5A655D),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              final isAdmin =
-                                  await DedaBackend.currentUserIsAdmin();
-                              if (!context.mounted) return;
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => isAdmin
-                                      ? DedaAdminDashboardPage(
-                                          isArabic:
-                                              DedaLanguageState.isArabic,
-                                        )
-                                      : DedaAdminLoginPage(
-                                          isArabic:
-                                              DedaLanguageState.isArabic,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        dedaText(
+                                          'إدارة DEDA',
+                                          'DEDA administration',
                                         ),
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        dedaText(
+                                          'للمخولين فقط',
+                                          'Authorized personnel only',
+                                        ),
+                                        style: const TextStyle(
+                                          color: Color(0xFF5A655D),
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.shield_outlined,
+                              ],
                             ),
-                            label: Text(
-                              dedaText(
-                                'دخول الإدارة',
-                                'Admin sign-in',
+                            const SizedBox(height: 14),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final isAdmin =
+                                    await DedaBackend.currentUserIsAdmin();
+                                if (!context.mounted) return;
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => isAdmin
+                                        ? DedaAdminDashboardPage(
+                                            isArabic:
+                                                DedaLanguageState.isArabic,
+                                          )
+                                        : DedaAdminLoginPage(
+                                            isArabic:
+                                                DedaLanguageState.isArabic,
+                                          ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.shield_outlined,
+                              ),
+                              label: Text(
+                                dedaText(
+                                  'دخول الإدارة',
+                                  'Admin sign-in',
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                foregroundColor: const Color(0xFF17652F),
+                                side: const BorderSide(
+                                  color: Color(0xFF7FA486),
+                                ),
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(50),
-                              foregroundColor: const Color(0xFF17652F),
-                              side: const BorderSide(
-                                color: Color(0xFF7FA486),
-                              ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+
+                  ],
 
                   const SizedBox(height: 24),
                   const Divider(),
