@@ -284,8 +284,13 @@ Future<void> showDedaOwnerNotificationComposer({
 
 class DedaAdminLoginPage extends StatefulWidget {
   final bool isArabic;
+  final String dedaPhone;
 
-  const DedaAdminLoginPage({super.key, required this.isArabic});
+  const DedaAdminLoginPage({
+    super.key,
+    required this.isArabic,
+    required this.dedaPhone,
+  });
 
   @override
   State<DedaAdminLoginPage> createState() => _DedaAdminLoginPageState();
@@ -362,6 +367,19 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
       }
       await _saveIdentity();
       final profile = await DedaBackend.currentAdminProfile();
+      final gateMatches =
+          await DedaBackend.currentAdminSessionMatchesDedaEntry(
+        phone: widget.dedaPhone,
+      );
+      if (!gateMatches) {
+        await DedaBackend.signOutAdmin();
+        if (!mounted) return;
+        setState(() => _error = t(
+              'هذا الحساب الإداري غير مخول من رقم DEDA الحالي.',
+              'This admin account is not authorized from the current DEDA phone.',
+            ));
+        return;
+      }
       if (profile['mustChangePassword'] == true) {
         final changed = await _forcePasswordChange();
         if (!changed) {
@@ -583,6 +601,7 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                             MaterialPageRoute(
                               builder: (_) => DedaAdminInviteActivationPage(
                                 isArabic: widget.isArabic,
+                                dedaPhone: widget.dedaPhone,
                               ),
                             ),
                           );
@@ -607,10 +626,12 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
 
 class DedaAdminInviteActivationPage extends StatefulWidget {
   final bool isArabic;
+  final String dedaPhone;
 
   const DedaAdminInviteActivationPage({
     super.key,
     required this.isArabic,
+    required this.dedaPhone,
   });
 
   @override
@@ -717,6 +738,21 @@ class _DedaAdminInviteActivationPageState
         email: email,
         password: password,
       );
+      final gateMatches =
+          await DedaBackend.currentAdminSessionMatchesDedaEntry(
+        phone: widget.dedaPhone,
+      );
+      if (!gateMatches) {
+        await DedaBackend.signOutAdmin();
+        if (!mounted) return;
+        setState(() {
+          _error = t(
+            'تم إنشاء الحساب الإداري، لكن رقم DEDA الحالي غير مخول لهذا الحساب. راجع المدير العام.',
+            'The admin account was created, but the current DEDA phone is not authorized for it. Contact the general manager.',
+          );
+        });
+        return;
+      }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
@@ -1193,6 +1229,24 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             isArabic: ar,
                             currentAdmin: profile,
                           )),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.phonelink_lock_outlined,
+                          accentColor: const Color(0xFF6A4C93),
+                          backgroundColor: const Color(0xD9F1EAF8),
+                          title: t(
+                            'أرقام الدخول للإدارة',
+                            'Administration access phones',
+                          ),
+                          subtitle: t(
+                            'إدارة أرقام DEDA الموثوقة للمدير العام',
+                            'Manage trusted DEDA phones for the general manager',
+                          ),
+                          onTap: () => _open(
+                            DedaAdminEntryPhonesPage(isArabic: ar),
+                          ),
                         ),
                       if (DedaBackend.adminHasPermission(
                         profile,
