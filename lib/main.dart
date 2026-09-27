@@ -2397,9 +2397,44 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                             const SizedBox(height: 14),
                             OutlinedButton.icon(
                               onPressed: () async {
+                                final phone =
+                                    DedaPreferences.accountPhone.trim().isNotEmpty
+                                        ? DedaPreferences.accountPhone
+                                        : DedaPreferences.phone;
+                                final gateAllowed = await DedaBackend
+                                    .currentDedaAccountCanSeeAdminEntry(
+                                  phone: phone,
+                                );
+                                if (!context.mounted) return;
+                                if (!gateAllowed) {
+                                  setState(() => _adminEntryVisible = false);
+                                  return;
+                                }
+
                                 final isAdmin =
                                     await DedaBackend.currentUserIsAdmin();
+                                var adminSessionMatches = false;
+                                if (isAdmin) {
+                                  adminSessionMatches = await DedaBackend
+                                      .currentAdminSessionMatchesDedaEntry(
+                                    phone: phone,
+                                  );
+                                }
                                 if (!context.mounted) return;
+                                if (isAdmin && !adminSessionMatches) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        dedaText(
+                                          'الجلسة الإدارية الحالية غير مرتبطة برقم DEDA هذا. لم يتم تسجيل خروج أي حساب.',
+                                          'The current admin session is not linked to this DEDA phone. No account was signed out.',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -2411,6 +2446,7 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                                         : DedaAdminLoginPage(
                                             isArabic:
                                                 DedaLanguageState.isArabic,
+                                            dedaPhone: phone,
                                           ),
                                   ),
                                 );
