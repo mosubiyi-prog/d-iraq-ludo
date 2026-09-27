@@ -16,6 +16,7 @@ on:
       - map-unify-performance-work-2026-09-26
       - build170-route-map-fix-2026-09-26
       - admin-entry-visibility-work-2026-09-27
+      - team-page-ui-2026-09-27
 
 jobs:
   build:
