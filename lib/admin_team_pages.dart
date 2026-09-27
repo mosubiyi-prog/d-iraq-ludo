@@ -168,6 +168,26 @@ String dedaFriendlyAdminError(bool ar, Object error) {
         ? 'رقم حساب DEDA هذا مخول للإدارة بالفعل.'
         : 'This DEDA account phone is already authorized for administration.';
   }
+  if (raw.contains('deda-account-not-found')) {
+    return ar
+        ? 'هذا الرقم ليس حساب DEDA نشطًا. سجّل الدخول به في DEDA أولًا ثم حاول مجددًا.'
+        : 'This phone is not an active DEDA account. Sign in to DEDA with it first, then try again.';
+  }
+  if (raw.contains('invalid-deda-phone')) {
+    return ar
+        ? 'أدخل رقم هاتف عراقي صحيح مثل 07XXXXXXXXX.'
+        : 'Enter a valid Iraqi mobile number such as 07XXXXXXXXX.';
+  }
+  if (raw.contains('admin-entry-phone-already-assigned')) {
+    return ar
+        ? 'هذا الرقم مرتبط أصلًا ببوابة إدارية أخرى.'
+        : 'This phone is already assigned to another admin gateway.';
+  }
+  if (raw.contains('last-general-manager-entry-phone')) {
+    return ar
+        ? 'لا يمكن حذف آخر رقم موثوق للمدير العام. أضف رقمًا بديلًا أولًا.'
+        : 'The last trusted general-manager phone cannot be removed. Add a replacement first.';
+  }
   if (raw.contains('cannot-change-current-admin-access')) {
     return ar
         ? 'لا يمكنك تغيير دور أو حالة حسابك الإداري الحالي من نفس الجلسة.'
@@ -1272,22 +1292,27 @@ class _DedaAdminMemberEditorPageState
     final name = _name.text.trim();
     final email = _email.text.trim();
     final department = _department.text.trim();
+    final needsDedaPhone = !editing && _role != 'general_manager';
     if (name.isEmpty ||
         department.isEmpty ||
         (!editing &&
             (email.isEmpty ||
                 !email.contains('@') ||
-                _phone.text.trim().isEmpty))) {
+                (needsDedaPhone && _phone.text.trim().isEmpty)))) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             t(
               editing
                   ? 'أكمل الاسم والقسم.'
-                  : 'أكمل الاسم والبريد ورقم حساب DEDA والقسم.',
+                  : (_role == 'general_manager'
+                      ? 'أكمل الاسم والبريد والقسم.'
+                      : 'أكمل الاسم والبريد ورقم حساب DEDA والقسم.'),
               editing
                   ? 'Complete name and department.'
-                  : 'Complete name, email, DEDA account phone and department.',
+                  : (_role == 'general_manager'
+                      ? 'Complete name, email and department.'
+                      : 'Complete name, email, DEDA account phone and department.'),
             ),
           ),
         ),
@@ -1649,13 +1674,26 @@ class _DedaAdminMemberEditorPageState
             decoration: InputDecoration(
               labelText: editing
                   ? t('رقم الهاتف', 'Phone')
-                  : t('رقم حساب DEDA (مطلوب)', 'DEDA account phone (required)'),
+                  : (_role == 'general_manager'
+                      ? t(
+                          'رقم حساب DEDA (غير مطلوب للمدير العام)',
+                          'DEDA account phone (not required for general manager)',
+                        )
+                      : t(
+                          'رقم حساب DEDA (مطلوب)',
+                          'DEDA account phone (required)',
+                        )),
               helperText: editing
                   ? null
-                  : t(
-                      'يحدد الحساب الذي ستظهر له أيقونة الإدارة.',
-                      'This identifies the DEDA account that may see the admin entry.',
-                    ),
+                  : (_role == 'general_manager'
+                      ? t(
+                          'المدير العام يستخدم أرقام بوابة الإدارة الموثوقة المشتركة.',
+                          'General managers use the shared trusted administration gateway phones.',
+                        )
+                      : t(
+                          'يحدد حساب DEDA الوحيد الذي ستظهر له أيقونة الإدارة لهذا العضو.',
+                          'This identifies the only DEDA account that may see the admin entry for this member.',
+                        )),
               prefixIcon: const Icon(Icons.phone_outlined),
               border: const OutlineInputBorder(),
             ),
@@ -3733,6 +3771,272 @@ class _DedaAdminSettingsPageState extends State<DedaAdminSettingsPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+class DedaAdminEntryPhonesPage extends StatefulWidget {
+  final bool isArabic;
+
+  const DedaAdminEntryPhonesPage({
+    super.key,
+    required this.isArabic,
+  });
+
+  @override
+  State<DedaAdminEntryPhonesPage> createState() =>
+      _DedaAdminEntryPhonesPageState();
+}
+
+class _DedaAdminEntryPhonesPageState
+    extends State<DedaAdminEntryPhonesPage> {
+  bool _busy = false;
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  Future<void> _addPhone() async {
+    if (_busy) return;
+    final controller = TextEditingController();
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t(
+          'إضافة رقم موثوق',
+          'Add trusted phone',
+        )),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              t(
+                'يجب أن يكون الرقم حساب DEDA نشطًا. بعد إضافته ستظهر له بوابة الإدارة، ثم يبقى دخول المدير العام بحاجة إلى البريد وكلمة المرور.',
+                'The phone must be an active DEDA account. After it is added, the administration gateway will appear; general-manager sign-in still requires admin email and password.',
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.phone,
+              textDirection: TextDirection.ltr,
+              decoration: InputDecoration(
+                labelText: t('رقم حساب DEDA', 'DEDA account phone'),
+                hintText: '07XXXXXXXXX',
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.phone_android_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              controller.text.trim(),
+            ),
+            child: Text(t('إضافة', 'Add')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (phone == null || phone.trim().isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      await DedaBackend.addGeneralManagerAdminEntryPhone(phone: phone);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(t(
+            'تمت إضافة الرقم إلى بوابة المدير العام.',
+            'The phone was added to the general-manager gateway.',
+          )),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaFriendlyAdminError(widget.isArabic, error))),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _removePhone(Map<String, dynamic> data) async {
+    if (_busy) return;
+    final accountKey = (data['accountKey'] ?? '').toString();
+    final display = DedaBackend.adminEntryPhoneDisplay(
+      (data['phone'] ?? accountKey).toString(),
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('حذف الرقم الموثوق', 'Remove trusted phone')),
+        content: Text(
+          t(
+            'هل تريد إزالة $display من بوابة الإدارة؟ لن يُحذف حساب DEDA نفسه ولن تتغير حسابات المدير العام.',
+            'Remove $display from the administration gateway? The DEDA account itself and general-manager accounts will not be changed.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('حذف', 'Remove')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await DedaBackend.removeGeneralManagerAdminEntryPhone(
+        phoneOrAccountKey: accountKey,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(t(
+            'تمت إزالة الرقم من بوابة الإدارة فقط.',
+            'The phone was removed from the administration gateway only.',
+          )),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(dedaFriendlyAdminError(widget.isArabic, error))),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(t(
+          'أرقام الدخول للإدارة',
+          'Administration access phones',
+        )),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _busy ? null : _addPhone,
+        icon: const Icon(Icons.add_shield_outlined),
+        label: Text(t('إضافة رقم', 'Add phone')),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: DedaBackend.generalManagerAdminEntryPhones(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Text(
+                  t(
+                    'تعذر تحميل الأرقام الموثوقة.',
+                    'Could not load trusted phones.',
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = snapshot.data!.docs.toList()
+            ..sort((a, b) {
+              final ap = DedaBackend.adminEntryPhoneDisplay(
+                (a.data()['phone'] ?? a.id).toString(),
+              );
+              final bp = DedaBackend.adminEntryPhoneDisplay(
+                (b.data()['phone'] ?? b.id).toString(),
+              );
+              return ap.compareTo(bp);
+            });
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            children: [
+              Card(
+                color: const Color(0xFFEAF5EC),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Text(
+                    t(
+                      'هذه القائمة تخص بوابة المدير العام فقط. الرقم المضاف لا يمنح صلاحية إدارية وحده؛ بعده يبقى البريد الإداري وكلمة المرور إلزاميين. لا يمكن حذف آخر رقم موثوق.',
+                      'This list controls the general-manager gateway only. A listed phone does not grant admin rights by itself; admin email and password are still required. The last trusted phone cannot be removed.',
+                    ),
+                    style: const TextStyle(height: 1.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (docs.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      t(
+                        'لا يوجد رقم موثوق بعد. يجب تهيئة الرقم الأول بأمان قبل الاعتماد على الإخفاء.',
+                        'No trusted phone exists yet. The first phone must be securely bootstrapped before relying on hidden administration access.',
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              else
+                ...docs.map((doc) {
+                  final data = doc.data();
+                  final display = DedaBackend.adminEntryPhoneDisplay(
+                    (data['phone'] ?? doc.id).toString(),
+                  );
+                  return Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.verified_user_outlined),
+                      ),
+                      title: Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Text(
+                          display,
+                          textAlign: TextAlign.left,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      subtitle: Text(t(
+                        'مخول لفتح بوابة المدير العام',
+                        'Authorized for the general-manager gateway',
+                      )),
+                      trailing: IconButton(
+                        tooltip: t('إزالة', 'Remove'),
+                        onPressed: _busy ? null : () => _removePhone(data),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          );
+        },
       ),
     );
   }
