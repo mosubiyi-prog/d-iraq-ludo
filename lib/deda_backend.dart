@@ -3767,6 +3767,7 @@ class DedaBackend {
     required String name,
     required String phone,
     required bool hasApprovedPlace,
+    String accountType = 'user',
     String placeName = '',
   }) async {
     final accountKey = accountKeyForPhone(phone);
@@ -3782,9 +3783,24 @@ class DedaBackend {
     final placeId = hasApprovedPlace ? placeShareIdForPhone(phone) : '';
     final firestore = FirebaseFirestore.instance;
 
-    await firestore.collection('users').doc(user.uid).set({
+    // The stable DEDA ID is derived from the phone and never regenerated here.
+    // After an admin session or an app/auth refresh Firebase may give the app a
+    // new anonymous UID. In that case users/{uid} does not exist yet, so writing
+    // only the share fields is rejected by the Firestore create rule because
+    // accountKey is missing. Seed the complete public-user identity first while
+    // preserving the same deterministic DEDA ID.
+    final userRef = firestore.collection('users').doc(user.uid);
+    final userSnapshot = await userRef.get();
+    final cleanAccountType = accountType.trim();
+    await userRef.set({
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'accountKey': accountKey,
+      'accountType': cleanAccountType.isEmpty ? 'user' : cleanAccountType,
+      'authMethod': 'deda_pin_firestore_v1',
       'sharePersonalId': personalId,
       'sharePlaceId': placeId,
+      if (!userSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'lastSeenAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
