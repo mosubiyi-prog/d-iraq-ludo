@@ -221,22 +221,59 @@ service cloud.firestore {
       allow delete: if isGeneralManager();
     }
 
-    // DEDA admin-entry visibility registry v1.
-    // Presence of this document controls whether the matching DEDA account may
-    // discover the administration entry. It grants no administration rights:
-    // all real admin access still depends on Firebase Auth + /admins/{uid}.
+    // DEDA administration-entry phone gateway v2.
+    // A DEDA account may read only its own gateway document. Only an active
+    // general manager may list or manage the complete registry.
     match /admin_entry_access/{accountKey} {
-      allow read: if sameAccount(accountKey) || isAdmin();
+      allow get: if sameAccount(accountKey) || isAdmin();
+      allow list: if isGeneralManager();
 
-      allow create, update: if isGeneralManager()
+      allow create: if isGeneralManager()
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.active == true
+        && request.resource.data.status in ['active', 'invited']
+        && request.resource.data.accessType in [
+          'general_manager_gateway', 'member'
+        ]
+        && request.resource.data.allowedRole is string
+        && validAdminRole(request.resource.data.allowedRole)
+        && request.resource.data.managedByUid == request.auth.uid
+        && (
+          (
+            request.resource.data.accessType == 'general_manager_gateway'
+            && request.resource.data.allowedRole == 'general_manager'
+            && request.resource.data.status == 'active'
+          )
+          || (
+            request.resource.data.accessType == 'member'
+            && request.resource.data.allowedRole != 'general_manager'
+            && request.resource.data.allowedAdminEmail is string
+            && request.resource.data.allowedAdminEmail.size() > 3
+          )
+        );
+
+      allow update: if isGeneralManager()
         || (
           isAdmin()
+          && resource.data.accessType == 'member'
+          && resource.data.accountKey == accountKey
           && adminData().keys().hasAny(['phone'])
           && adminData().phone == accountKey
-          && request.resource.data.accountKey == accountKey
+          && resource.data.allowedAdminEmail ==
+            request.auth.token.email
+          && resource.data.allowedRole == adminData().role
+          && request.resource.data.accountKey == resource.data.accountKey
+          && request.resource.data.accessType == resource.data.accessType
+          && request.resource.data.allowedAdminEmail ==
+            resource.data.allowedAdminEmail
+          && request.resource.data.allowedRole == resource.data.allowedRole
           && request.resource.data.adminUid == request.auth.uid
           && request.resource.data.active == true
           && request.resource.data.status == 'active'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'adminUid', 'adminId', 'status', 'active', 'updatedAt'
+          ])
         );
 
       allow delete: if isGeneralManager();
