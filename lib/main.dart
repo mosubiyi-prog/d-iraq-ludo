@@ -20,6 +20,7 @@ import 'package:image_picker/image_picker.dart';
 import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'places_service.dart';
+import 'deda_team_page.dart';
 
 enum DedaMapStyle {
   normal,
@@ -5706,6 +5707,40 @@ class _HomePageState extends State<HomePage> {
         ),
         title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: dedaText('فريق DEDA', 'DEDA team'),
+            icon: const Icon(Icons.groups_2_rounded),
+            onPressed: () {
+              Navigator.of(context).push(
+                PageRouteBuilder<void>(
+                  transitionDuration: const Duration(milliseconds: 300),
+                  reverseTransitionDuration: const Duration(milliseconds: 240),
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      const DedaTeamPage(),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                    final curved = CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                      reverseCurve: Curves.easeInCubic,
+                    );
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(-0.04, 0),
+                          end: Offset.zero,
+                        ).animate(curved),
+                        child: child,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
