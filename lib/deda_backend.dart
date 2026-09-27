@@ -3102,7 +3102,10 @@ class DedaBackend {
     final cleanRole = normalizeAdminRole(role);
     final cleanGovernorate =
         cleanRole == 'province_agent' ? governorate.trim() : '';
-    final entryAccountKey = _adminEntryAccountKeyForPhone(phone);
+    final needsDedicatedDedaPhone = cleanRole != 'general_manager';
+    final entryAccountKey = needsDedicatedDedaPhone
+        ? _adminEntryAccountKeyForPhone(phone)
+        : '';
 
     if (cleanName.isEmpty) throw ArgumentError('display-name-required');
     if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
@@ -3120,11 +3123,21 @@ class DedaBackend {
     if (cleanRole == 'province_agent' && cleanGovernorate.isEmpty) {
       throw ArgumentError('governorate-required');
     }
-    if (entryAccountKey.isEmpty) {
+    if (needsDedicatedDedaPhone && entryAccountKey.isEmpty) {
       throw ArgumentError('admin-deda-phone-required');
     }
 
     final firestore = FirebaseFirestore.instance;
+
+    if (needsDedicatedDedaPhone) {
+      final directory = await firestore
+          .collection('deda_account_directory')
+          .doc(entryAccountKey)
+          .get();
+      if (!directory.exists || directory.data()?['active'] != true) {
+        throw StateError('deda-account-not-found');
+      }
+    }
 
     final existingAdmin = await firestore
         .collection('admins')
@@ -3148,8 +3161,10 @@ class DedaBackend {
     }
 
     final inviteRef = firestore.collection('admin_invites').doc();
-    final entryAccessRef =
-        firestore.collection('admin_entry_access').doc(entryAccountKey);
+    final DocumentReference<Map<String, dynamic>>? entryAccessRef =
+        needsDedicatedDedaPhone
+            ? firestore.collection('admin_entry_access').doc(entryAccountKey)
+            : null;
     final counterRef =
         firestore.collection('system_counters').doc('admin_members');
     final code = _newAdminInviteCode();
@@ -3160,10 +3175,12 @@ class DedaBackend {
 
     late String adminId;
     await firestore.runTransaction((transaction) async {
-      final existingEntryAccess = await transaction.get(entryAccessRef);
-      if (existingEntryAccess.exists &&
-          existingEntryAccess.data()?['active'] == true) {
-        throw StateError('admin-phone-already-authorized');
+      if (entryAccessRef != null) {
+        final existingEntryAccess = await transaction.get(entryAccessRef);
+        if (existingEntryAccess.exists &&
+            existingEntryAccess.data()?['active'] == true) {
+          throw StateError('admin-phone-already-authorized');
+        }
       }
 
       final counter = await transaction.get(counterRef);
@@ -3196,18 +3213,25 @@ class DedaBackend {
         'updatedAt': FieldValue.serverTimestamp(),
         'expiresAt': expiresAt,
       });
-      transaction.set(entryAccessRef, <String, dynamic>{
-        'accountKey': entryAccountKey,
-        'inviteId': inviteRef.id,
-        'adminUid': '',
-        'adminId': adminId,
-        'email': cleanEmail,
-        'role': cleanRole,
-        'status': 'invited',
-        'active': true,
-        'expiresAt': expiresAt,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      if (entryAccessRef != null) {
+        transaction.set(entryAccessRef, <String, dynamic>{
+          'accountKey': entryAccountKey,
+          'phone': adminEntryPhoneDisplay(entryAccountKey),
+          'accessType': 'member',
+          'allowedRole': cleanRole,
+          'allowedAdminEmail': cleanEmail,
+          'inviteId': inviteRef.id,
+          'adminUid': '',
+          'adminId': adminId,
+          'status': 'invited',
+          'active': true,
+          'expiresAt': expiresAt,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'managedByUid': actor['uid'].toString(),
+          'managedByName': actor['displayName'].toString(),
+        });
+      }
     });
 
     await _writeAdminAudit(
