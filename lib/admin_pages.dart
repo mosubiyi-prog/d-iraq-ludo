@@ -1233,7 +1233,7 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
                         _dashboardCard(
-                          icon: Icons.phonelink_lock_outlined,
+                          icon: Icons.phonelink_lock,
                           accentColor: const Color(0xFF6A4C93),
                           backgroundColor: const Color(0xD9F1EAF8),
                           title: t(
