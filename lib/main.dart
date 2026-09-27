@@ -5508,6 +5508,7 @@ class _HomePageState extends State<HomePage> {
       await DedaBackend.ensureLocationShareIdentity(
         name: DedaPreferences.userName,
         phone: DedaPreferences.phone,
+        accountType: DedaPreferences.accountType?.name ?? 'user',
         hasApprovedPlace: place != null,
         placeName: (place?['placeName'] ?? '').toString(),
       );
@@ -6467,6 +6468,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
       final ids = await DedaBackend.ensureLocationShareIdentity(
         name: DedaPreferences.userName,
         phone: DedaPreferences.phone,
+        accountType: DedaPreferences.accountType?.name ?? 'user',
         hasApprovedPlace: place != null,
         placeName: (place?['placeName'] ?? '').toString(),
       );
@@ -7214,6 +7216,7 @@ class _DedaReceivedLocationsPageState
       final ids = await DedaBackend.ensureLocationShareIdentity(
         name: DedaPreferences.userName,
         phone: DedaPreferences.phone,
+        accountType: DedaPreferences.accountType?.name ?? 'user',
         hasApprovedPlace: place != null,
         placeName: (place?['placeName'] ?? '').toString(),
       );
