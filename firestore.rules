@@ -225,7 +225,13 @@ service cloud.firestore {
     // A DEDA account may read only its own gateway document. Only an active
     // general manager may list or manage the complete registry.
     match /admin_entry_access/{accountKey} {
-      allow get: if sameAccount(accountKey) || isAdmin();
+      allow get: if sameAccount(accountKey)
+        || isGeneralManager()
+        || (
+          isAdmin()
+          && adminData().keys().hasAny(['phone'])
+          && adminData().phone == accountKey
+        );
       allow list: if isGeneralManager();
 
       allow create: if isGeneralManager()
