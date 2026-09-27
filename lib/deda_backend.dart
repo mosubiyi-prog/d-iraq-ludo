@@ -1191,6 +1191,44 @@ class DedaBackend {
         normalizeAdminStatus(data) == 'active';
   }
 
+  // Admin-entry visibility is deliberately separate from admin authentication.
+  // It never signs a Firebase user in or out. A live admin session is allowed
+  // immediately; otherwise the current DEDA account may only see the entry
+  // when the general-manager-maintained access registry marks it active.
+  static Future<bool> currentDedaAccountCanSeeAdminEntry({
+    required String phone,
+  }) async {
+    if (!isReady) return false;
+
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser != null && !authUser.isAnonymous) {
+      try {
+        if (await currentUserIsAdmin()) return true;
+      } catch (_) {
+        // Fall through to the independent DEDA-account visibility check.
+      }
+    }
+
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty || authUser == null) return false;
+
+    try {
+      final access = await FirebaseFirestore.instance
+          .collection('admin_entry_access')
+          .doc(accountKey)
+          .get();
+      final data = access.data();
+      if (!access.exists || data == null) return false;
+
+      final status = (data['status'] ?? '').toString().trim().toLowerCase();
+      return data['active'] == true && status == 'active';
+    } catch (_) {
+      // Fail closed: a missing/unauthorized/offline lookup must never expose
+      // the administration entry to an ordinary DEDA account.
+      return false;
+    }
+  }
+
   static Future<void> registerAdminNotifications() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) return;
