@@ -3008,7 +3008,7 @@ class DedaBackend {
         'adminId': adminId,
         'displayName': cleanName,
         'email': cleanEmail,
-        'phone': phone.trim(),
+        'phone': entryAccountKey,
         'department': cleanDepartment,
         'role': cleanRole,
         'governorate': cleanGovernorate,
