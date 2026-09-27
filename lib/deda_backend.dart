@@ -1192,27 +1192,77 @@ class DedaBackend {
   }
 
   // Admin-entry visibility is deliberately separate from admin authentication.
-  // It never signs a Firebase user in or out. A live admin session is allowed
-  // immediately; otherwise the current DEDA account may only see the entry
-  // when the general-manager-maintained access registry marks it active.
+  // A live, active administrator can always see the entry. When that happens
+  // we also seed the protected DEDA-account registry, without touching the
+  // administrator record, password, role, or authentication session.
+  static Future<void> syncCurrentAdminEntryAccessForDedaAccount({
+    required String phone,
+  }) async {
+    if (!isReady) return;
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) return;
+
+    final profile = await currentAdminProfile(forceRefresh: true);
+    final status = normalizeAdminStatus(profile);
+    if (profile['active'] != true || status != 'active') return;
+
+    final role = normalizeAdminRole(profile['role']);
+    final profilePhone = accountKeyForPhone(
+      (profile['phone'] ?? '').toString(),
+    );
+
+    // General managers may safely register the DEDA account currently in use.
+    // Other roles can only self-register when their stored admin phone matches
+    // the DEDA account, so an administrator cannot expose the entry to an
+    // unrelated ordinary account.
+    if (role != 'general_manager' && profilePhone != accountKey) return;
+
+    await FirebaseFirestore.instance
+        .collection('admin_entry_access')
+        .doc(accountKey)
+        .set(<String, dynamic>{
+      'accountKey': accountKey,
+      'adminUid': profile['uid'].toString(),
+      'adminId': (profile['adminId'] ?? '').toString(),
+      'email': (profile['email'] ?? '').toString().trim().toLowerCase(),
+      'role': role,
+      'status': 'active',
+      'active': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
   static Future<bool> currentDedaAccountCanSeeAdminEntry({
     required String phone,
   }) async {
     if (!isReady) return false;
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) return false;
 
     final authUser = FirebaseAuth.instance.currentUser;
     if (authUser != null && !authUser.isAnonymous) {
       try {
-        if (await currentUserIsAdmin()) return true;
-      } catch (_) {
-        // Fall through to the independent DEDA-account visibility check.
-      }
+        if (await currentUserIsAdmin()) {
+          // Best-effort migration for already-authorized administrators.
+          // A registry write failure must never sign them out or hide a live
+          // valid admin session.
+          try {
+            await syncCurrentAdminEntryAccessForDedaAccount(phone: phone);
+          } catch (_) {}
+          return true;
+        }
+      } catch (_) {}
+      // Never replace or sign out a non-anonymous non-admin Firebase session
+      // just to decide whether a UI entry should be visible.
+      return false;
     }
 
-    final accountKey = accountKeyForPhone(phone);
-    if (accountKey.isEmpty || authUser == null) return false;
-
     try {
+      // DEDA's local login can outlive the anonymous Firebase session. Restore
+      // only that trusted public-account session; this path is never used for
+      // a live administrator session and therefore cannot sign an admin out.
+      await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+
       final access = await FirebaseFirestore.instance
           .collection('admin_entry_access')
           .doc(accountKey)
@@ -1221,10 +1271,12 @@ class DedaBackend {
       if (!access.exists || data == null) return false;
 
       final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      return data['active'] == true && status == 'active';
+      return data['accountKey'] == accountKey &&
+          data['active'] == true &&
+          status == 'active';
     } catch (_) {
-      // Fail closed: a missing/unauthorized/offline lookup must never expose
-      // the administration entry to an ordinary DEDA account.
+      // Fail closed: until authorization is positively verified, no title,
+      // card, button, or empty administration placeholder is rendered.
       return false;
     }
   }
