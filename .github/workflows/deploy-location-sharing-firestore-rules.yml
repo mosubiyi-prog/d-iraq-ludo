@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - location-sharing-v1-work-2026-09-26
+      - admin-entry-visibility-work-2026-09-27
     paths:
       - firestore.rules
 
