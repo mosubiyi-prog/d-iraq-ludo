@@ -1210,10 +1210,34 @@ class DedaBackend {
         normalizeAdminStatus(data) == 'active';
   }
 
-  // Admin-entry visibility is deliberately separate from admin authentication.
-  // A live, active administrator can always see the entry. When that happens
-  // we also seed the protected DEDA-account registry, without touching the
-  // administrator record, password, role, or authentication session.
+  // Administration entry visibility is separate from admin authentication.
+  // The current DEDA account must be explicitly authorized in the protected
+  // admin_entry_access registry. A live admin session never auto-grants a
+  // phone number; general-manager gateway phones are added deliberately.
+  static bool _adminEntryAccessVisible(Map<String, dynamic>? data) {
+    if (data == null ||
+        data['active'] != true ||
+        (data['status'] ?? '').toString().trim().toLowerCase().isEmpty) {
+      return false;
+    }
+    final status = (data['status'] ?? '').toString().trim().toLowerCase();
+    if (status == 'active') return true;
+    if (status != 'invited') return false;
+    final expiresAt = data['expiresAt'];
+    return expiresAt is Timestamp &&
+        expiresAt.toDate().isAfter(DateTime.now());
+  }
+
+  static String adminEntryPhoneDisplay(String value) {
+    final key = _adminEntryAccountKeyForPhone(value);
+    if (key.startsWith('9647') && key.length == 13) {
+      return '0${key.substring(3)}';
+    }
+    return value.trim();
+  }
+
+  // Invited non-general-manager accounts keep a one-to-one DEDA-phone binding.
+  // General-manager gateway phones are never created here automatically.
   static Future<void> syncCurrentAdminEntryAccessForDedaAccount({
     required String phone,
   }) async {
@@ -1226,27 +1250,45 @@ class DedaBackend {
     if (profile['active'] != true || status != 'active') return;
 
     final role = normalizeAdminRole(profile['role']);
-    final inviteId = (profile['inviteId'] ?? '').toString().trim();
+    if (role == 'general_manager') return;
 
-    // A general manager can seed the current trusted DEDA account directly.
-    // Every other role may only update the registry record that was created by
-    // the general manager for that role's own invitation.
-    if (role != 'general_manager' && inviteId.isEmpty) return;
+    final profilePhoneKey =
+        _adminEntryAccountKeyForPhone((profile['phone'] ?? '').toString());
+    if (profilePhoneKey != accountKey) return;
 
-    await FirebaseFirestore.instance
+    final ref = FirebaseFirestore.instance
         .collection('admin_entry_access')
-        .doc(accountKey)
-        .set(<String, dynamic>{
-      'accountKey': accountKey,
+        .doc(accountKey);
+    final snapshot = await ref.get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+
+    final allowedEmail =
+        (data['allowedAdminEmail'] ?? data['email'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+    final profileEmail =
+        (profile['email'] ?? '').toString().trim().toLowerCase();
+    final allowedRole = normalizeAdminRole(
+      data['allowedRole'] ?? data['role'],
+    );
+    if (allowedEmail.isEmpty ||
+        allowedEmail != profileEmail ||
+        allowedRole != role) {
+      return;
+    }
+
+    await ref.update(<String, dynamic>{
+      'accessType': 'member',
+      'allowedRole': role,
+      'allowedAdminEmail': profileEmail,
       'adminUid': profile['uid'].toString(),
       'adminId': (profile['adminId'] ?? '').toString(),
-      'email': (profile['email'] ?? '').toString().trim().toLowerCase(),
-      'role': role,
       'status': 'active',
       'active': true,
-      if (inviteId.isNotEmpty) 'inviteId': inviteId,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   static Future<bool> currentDedaAccountCanSeeAdminEntry({
@@ -1256,52 +1298,185 @@ class DedaBackend {
     final accountKey = _adminEntryAccountKeyForPhone(phone);
     if (accountKey.isEmpty) return false;
 
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser != null && !authUser.isAnonymous) {
-      try {
-        if (await currentUserIsAdmin()) {
-          // Best-effort migration for already-authorized administrators.
-          // A registry write failure must never sign them out or hide a live
-          // valid admin session.
-          try {
-            await syncCurrentAdminEntryAccessForDedaAccount(phone: phone);
-          } catch (_) {}
-          return true;
-        }
-      } catch (_) {}
-      // Never replace or sign out a non-anonymous non-admin Firebase session
-      // just to decide whether a UI entry should be visible.
-      return false;
-    }
-
     try {
-      // DEDA's local login can outlive the anonymous Firebase session. Restore
-      // only that trusted public-account session; this path is never used for
-      // a live administrator session and therefore cannot sign an admin out.
-      await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null || authUser.isAnonymous) {
+        // Restore only the already trusted DEDA account session. Firestore
+        // rules then allow this account to read its own gateway document.
+        await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+      } else if (!await currentUserIsAdmin()) {
+        // Never replace or sign out a non-anonymous non-admin session merely
+        // to decide whether an administration UI element should be visible.
+        return false;
+      }
 
       final access = await FirebaseFirestore.instance
           .collection('admin_entry_access')
           .doc(accountKey)
           .get();
       final data = access.data();
-      if (!access.exists || data == null) return false;
-
-      final status = (data['status'] ?? '').toString().trim().toLowerCase();
-      if (data['accountKey'] != accountKey || data['active'] != true) {
-        return false;
-      }
-      if (status == 'active') return true;
-      if (status != 'invited') return false;
-
-      final expiresAt = data['expiresAt'];
-      return expiresAt is Timestamp &&
-          expiresAt.toDate().isAfter(DateTime.now());
+      return access.exists &&
+          data?['accountKey'] == accountKey &&
+          _adminEntryAccessVisible(data);
     } catch (_) {
-      // Fail closed: until authorization is positively verified, no title,
-      // card, button, or empty administration placeholder is rendered.
+      // Fail closed: no authorization means no heading, card, button or gap.
       return false;
     }
+  }
+
+  // After an admin signs in, verify that the DEDA phone which opened the
+  // gateway is allowed to use this specific admin identity.
+  static Future<bool> currentAdminSessionMatchesDedaEntry({
+    required String phone,
+  }) async {
+    if (!isReady) return false;
+    final accountKey = _adminEntryAccountKeyForPhone(phone);
+    if (accountKey.isEmpty) return false;
+
+    try {
+      final profile = await currentAdminProfile(forceRefresh: true);
+      final access = await FirebaseFirestore.instance
+          .collection('admin_entry_access')
+          .doc(accountKey)
+          .get();
+      final data = access.data();
+      if (!access.exists ||
+          data == null ||
+          data['accountKey'] != accountKey ||
+          !_adminEntryAccessVisible(data)) {
+        return false;
+      }
+
+      final role = normalizeAdminRole(profile['role']);
+      final accessType =
+          (data['accessType'] ?? '').toString().trim().toLowerCase();
+      if (accessType == 'general_manager_gateway') {
+        return role == 'general_manager' &&
+            (data['allowedRole'] ?? 'general_manager').toString() ==
+                'general_manager';
+      }
+
+      final allowedUid = (data['adminUid'] ?? '').toString().trim();
+      final allowedEmail =
+          (data['allowedAdminEmail'] ?? data['email'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+      final profileEmail =
+          (profile['email'] ?? '').toString().trim().toLowerCase();
+      final allowedRole =
+          normalizeAdminRole(data['allowedRole'] ?? data['role']);
+
+      if (allowedRole != role) return false;
+      if (allowedUid.isNotEmpty) {
+        return allowedUid == profile['uid'].toString();
+      }
+      return allowedEmail.isNotEmpty && allowedEmail == profileEmail;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      generalManagerAdminEntryPhones() {
+    return FirebaseFirestore.instance
+        .collection('admin_entry_access')
+        .where('accessType', isEqualTo: 'general_manager_gateway')
+        .snapshots();
+  }
+
+  static Future<void> addGeneralManagerAdminEntryPhone({
+    required String phone,
+  }) async {
+    final actor = await currentAdminProfile(forceRefresh: true);
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+
+    final accountKey = _adminEntryAccountKeyForPhone(phone);
+    if (accountKey.isEmpty) {
+      throw ArgumentError('invalid-deda-phone');
+    }
+
+    final directory = await FirebaseFirestore.instance
+        .collection('deda_account_directory')
+        .doc(accountKey)
+        .get();
+    if (!directory.exists || directory.data()?['active'] != true) {
+      throw StateError('deda-account-not-found');
+    }
+
+    final ref = FirebaseFirestore.instance
+        .collection('admin_entry_access')
+        .doc(accountKey);
+    final existing = await ref.get();
+    final existingData = existing.data();
+    if (existing.exists &&
+        (existingData?['accessType'] ?? '').toString() !=
+            'general_manager_gateway') {
+      throw StateError('admin-entry-phone-already-assigned');
+    }
+
+    await ref.set(<String, dynamic>{
+      'accountKey': accountKey,
+      'phone': adminEntryPhoneDisplay(accountKey),
+      'accessType': 'general_manager_gateway',
+      'allowedRole': 'general_manager',
+      'status': 'active',
+      'active': true,
+      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'managedByUid': actor['uid'].toString(),
+      'managedByName': actor['displayName'].toString(),
+    }, SetOptions(merge: true));
+
+    await _writeAdminAudit(
+      'general_manager_entry_phone_added',
+      details: <String, dynamic>{
+        'targetAccountKey': accountKey,
+      },
+    );
+  }
+
+  static Future<void> removeGeneralManagerAdminEntryPhone({
+    required String phoneOrAccountKey,
+  }) async {
+    final actor = await currentAdminProfile(forceRefresh: true);
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+
+    final accountKey = _adminEntryAccountKeyForPhone(phoneOrAccountKey);
+    if (accountKey.isEmpty) throw ArgumentError('invalid-deda-phone');
+
+    final collection =
+        FirebaseFirestore.instance.collection('admin_entry_access');
+    final ref = collection.doc(accountKey);
+    final snapshot = await ref.get();
+    final data = snapshot.data();
+    if (!snapshot.exists ||
+        data == null ||
+        (data['accessType'] ?? '').toString() !=
+            'general_manager_gateway') {
+      throw StateError('admin-entry-phone-not-found');
+    }
+
+    final gateways = await collection
+        .where('accessType', isEqualTo: 'general_manager_gateway')
+        .get();
+    final activeCount =
+        gateways.docs.where((doc) => doc.data()['active'] == true).length;
+    if (data['active'] == true && activeCount <= 1) {
+      throw StateError('last-general-manager-entry-phone');
+    }
+
+    await ref.delete();
+    await _writeAdminAudit(
+      'general_manager_entry_phone_removed',
+      details: <String, dynamic>{
+        'targetAccountKey': accountKey,
+      },
+    );
   }
 
   static Future<void> registerAdminNotifications() async {
