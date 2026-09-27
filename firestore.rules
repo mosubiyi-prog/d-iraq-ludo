@@ -221,6 +221,7 @@ service cloud.firestore {
       allow delete: if isGeneralManager();
     }
 
+    // DEDA admin-entry visibility registry v1.
     // Presence of this document controls whether the matching DEDA account may
     // discover the administration entry. It grants no administration rights:
     // all real admin access still depends on Firebase Auth + /admins/{uid}.
