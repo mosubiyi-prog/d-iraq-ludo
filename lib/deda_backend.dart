@@ -265,7 +265,7 @@ class DedaBackend {
     final existing = await ref.get();
     await ref.set({
       'name': name.trim(),
-      'phone': entryAccountKey,
+      'phone': phone.trim(),
       'accountKey': accountKeyForPhone(phone),
       'accountType': accountType.trim(),
       if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
