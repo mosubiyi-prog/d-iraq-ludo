@@ -46,4 +46,4 @@ jobs:
         run: flutter pub get
 
       - name: Analyze changed DEDA sources
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart lib/deda_backend.dart
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart lib/deda_backend.dart lib/admin_pages.dart lib/admin_team_pages.dart
