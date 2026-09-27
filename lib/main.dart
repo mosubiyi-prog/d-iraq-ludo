@@ -309,27 +309,45 @@ String dedaMapStyleLabel(DedaMapStyle style) {
   }
 }
 
+TileLayer dedaFastTileLayer(String urlTemplate) {
+  return TileLayer(
+    urlTemplate: urlTemplate,
+    userAgentPackageName: 'com.diraq.ludo',
+    tileProvider: NetworkTileProvider(
+      cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(),
+      abortObsoleteRequests: true,
+    ),
+    // Preload one tile ring around the visible viewport and retain a wider
+    // buffer while panning. This keeps motion smooth without bulk downloading.
+    panBuffer: 1,
+    keepBuffer: 4,
+    // Keep a very short fade so loaded tiles feel immediate while avoiding
+    // harsh visual popping during zoom changes.
+    tileDisplay: const TileDisplay.fadeIn(
+      duration: Duration(milliseconds: 55),
+      startOpacity: 0.45,
+      reloadStartOpacity: 1,
+    ),
+    // Failed tiles are not allowed to stay stuck in Flutter's image cache.
+    // They are retried naturally when the user returns to that area.
+    evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
+  );
+}
+
 List<Widget> dedaBaseMapLayers(DedaMapStyle style) {
   if (style == DedaMapStyle.normal) {
     return [
-      TileLayer(
-        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        userAgentPackageName: 'com.diraq.ludo',
-      ),
+      dedaFastTileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
     ];
   }
 
   return [
-    TileLayer(
-      urlTemplate:
-          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      userAgentPackageName: 'com.diraq.ludo',
+    dedaFastTileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     ),
     if (style == DedaMapStyle.hybrid)
-      TileLayer(
-        urlTemplate:
-            'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        userAgentPackageName: 'com.diraq.ludo',
+      dedaFastTileLayer(
+        'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
       ),
   ];
 }
@@ -342,11 +360,10 @@ String dedaMapAttribution(DedaMapStyle style) {
 
 List<Widget> dedaNavigationMapLayers(DedaMapStyle style) {
   if (style == DedaMapStyle.normal) {
+    // Use the same source as the preview/base map so already cached tiles are
+    // reused immediately when the user starts navigation.
     return [
-      TileLayer(
-        urlTemplate: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
-        userAgentPackageName: 'com.diraq.ludo',
-      ),
+      dedaFastTileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
     ];
   }
   return dedaBaseMapLayers(style);
@@ -358,6 +375,14 @@ String dedaNavigationMapAttribution(DedaMapStyle style) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // flutter_map 8.x provides a native on-device tile cache. Configure it before
+  // the first map opens so DEDA reuses recently viewed tiles across screens and
+  // app launches without any paid API or extra service.
+  BuiltInMapCachingProvider.getOrCreateInstance(
+    maxCacheSize: 128 * 1024 * 1024,
+  );
+
   try {
     await Firebase.initializeApp();
   } catch (_) {
