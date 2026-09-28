@@ -1149,7 +1149,12 @@ class DedaBackend {
           .collection('admins')
           .doc(uid)
           .set(update, SetOptions(merge: true));
-      await registerAdminNotifications();
+      // Notification registration is secondary. A temporary FCM / Play
+      // Services failure must never turn a valid admin authentication into a
+      // false "sign-in failed" result.
+      try {
+        await registerAdminNotifications();
+      } catch (_) {}
       await _writeAdminAudit('admin_signed_in');
       return true;
     }
@@ -1368,10 +1373,36 @@ class DedaBackend {
           normalizeAdminRole(data['allowedRole'] ?? data['role']);
 
       if (allowedRole != role) return false;
-      if (allowedUid.isNotEmpty) {
-        return allowedUid == profile['uid'].toString();
+
+      final profileUid = profile['uid'].toString();
+      final uidMatches =
+          allowedUid.isNotEmpty && allowedUid == profileUid;
+      final emailMatches =
+          allowedEmail.isNotEmpty && allowedEmail == profileEmail;
+
+      // Email is a stable Firebase Auth identity while a UID can become stale
+      // after an administrative account is recreated. Accept either identity
+      // only after the active admin profile and role already matched above.
+      if (!uidMatches && !emailMatches) return false;
+
+      // Best-effort self-heal for an older member gateway whose UID predates
+      // the current Firebase Auth account. Security rules still decide whether
+      // this repair is allowed; failure here must not block a valid login.
+      if (!uidMatches && emailMatches && accessType == 'member') {
+        try {
+          await FirebaseFirestore.instance
+              .collection('admin_entry_access')
+              .doc(accountKey)
+              .update(<String, dynamic>{
+            'adminUid': profileUid,
+            'adminId': (profile['adminId'] ?? '').toString(),
+            'status': 'active',
+            'active': true,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } catch (_) {}
       }
-      return allowedEmail.isNotEmpty && allowedEmail == profileEmail;
+      return true;
     } catch (_) {
       return false;
     }
