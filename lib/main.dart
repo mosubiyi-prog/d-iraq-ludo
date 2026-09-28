@@ -566,8 +566,8 @@ class _DedaLuxuryFramePainter extends CustomPainter {
     final count = style == 2 ? 8 : (style == 1 ? 6 : 5);
     for (var i = 0; i < count; i++) {
       final angle = (i / count) * 6.283185307179586;
-      final x = center.dx + radius * 0.92 * Math.cos(angle);
-      final y = center.dy + radius * 0.92 * Math.sin(angle);
+      final x = center.dx + radius * 0.92 * math.cos(angle);
+      final y = center.dy + radius * 0.92 * math.sin(angle);
       canvas.drawCircle(
         Offset(x, y),
         size.width * (style == 2 ? 0.030 : 0.025),
@@ -728,10 +728,13 @@ class DedaPreferences {
   static DedaTravelMode defaultTravelMode = DedaTravelMode.car;
   static DedaMapStyle defaultMapStyle = DedaMapStyle.normal;
   static int profileAvatarStyle = 0;
+  static int profileFrameStyle = 0;
   static int profileBackgroundStyle = 0;
 
   static String _profileAvatarKey(String phoneValue) =>
       'deda_profile_avatar_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
+  static String _profileFrameKey(String phoneValue) =>
+      'deda_profile_frame_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
   static String _profileBackgroundKey(String phoneValue) =>
       'deda_profile_background_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
 
@@ -756,6 +759,8 @@ class DedaPreferences {
 
     profileAvatarStyle =
         prefs.getInt(_profileAvatarKey(phone)) ?? 0;
+    profileFrameStyle =
+        (prefs.getInt(_profileFrameKey(phone)) ?? 0).clamp(0, 2).toInt();
     profileBackgroundStyle =
         prefs.getInt(_profileBackgroundKey(phone)) ?? 0;
 
@@ -808,6 +813,10 @@ class DedaPreferences {
     isLoggedIn = true;
     profileAvatarStyle =
         prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
+    profileFrameStyle =
+        (prefs.getInt(_profileFrameKey(normalizedPhone)) ?? 0)
+            .clamp(0, 2)
+            .toInt();
     profileBackgroundStyle =
         prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
 
@@ -857,13 +866,16 @@ class DedaPreferences {
 
   static Future<void> setProfileAppearance({
     required int avatarStyle,
+    required int frameStyle,
     required int backgroundStyle,
   }) async {
     profileAvatarStyle = avatarStyle.clamp(0, 5).toInt();
+    profileFrameStyle = frameStyle.clamp(0, 2).toInt();
     profileBackgroundStyle = backgroundStyle.clamp(0, 5).toInt();
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
       prefs.setInt(_profileAvatarKey(phone), profileAvatarStyle),
+      prefs.setInt(_profileFrameKey(phone), profileFrameStyle),
       prefs.setInt(
         _profileBackgroundKey(phone),
         profileBackgroundStyle,
@@ -903,6 +915,7 @@ class DedaPreferences {
     accountPhone = '';
     accountType = null;
     profileAvatarStyle = 0;
+    profileFrameStyle = 0;
     profileBackgroundStyle = 0;
     await prefs.setBool(_loggedInKey, false);
     await prefs.remove(_userNameKey);
