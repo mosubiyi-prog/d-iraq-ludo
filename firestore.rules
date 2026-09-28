@@ -349,18 +349,48 @@ service cloud.firestore {
           && sameAccount(resource.data.accountKey)
         );
 
-      allow update: if isGeneralManager()
+      allow update: if (
+        isGeneralManager()
         && resource.data.status == 'new'
-        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.status in ['ready', 'rejected']
         && request.resource.data.decisionByUid == request.auth.uid
         && request.resource.data.decisionByName is string
         && request.resource.data.decisionAt == request.time
         && request.resource.data.rejectionReason is string
         && request.resource.data.updatedAt == request.time
+        && (
+          (
+            request.resource.data.status == 'rejected'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'decisionByUid', 'decisionByName', 'decisionAt',
+              'rejectionReason', 'updatedAt'
+            ])
+          )
+          || (
+            request.resource.data.status == 'ready'
+            && request.resource.data.recoveryPin is string
+            && request.resource.data.recoveryPin.size() == 6
+            && request.resource.data.recoveryPinIssuedAt == request.time
+            && request.resource.data.recoveryPinExpiresAt is timestamp
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'decisionByUid', 'decisionByName', 'decisionAt',
+              'rejectionReason', 'recoveryPin', 'recoveryPinIssuedAt',
+              'recoveryPinExpiresAt', 'updatedAt'
+            ])
+          )
+        )
+      ) || (
+        signedIn()
+        && resource.data.status == 'ready'
+        && resource.data.accountKey is string
+        && sameAccount(resource.data.accountKey)
+        && request.resource.data.status == 'reset_link_sent'
+        && request.resource.data.resetLinkSentAt == request.time
+        && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'decisionByUid', 'decisionByName', 'decisionAt',
-          'rejectionReason', 'updatedAt'
-        ]);
+          'status', 'resetLinkSentAt', 'updatedAt'
+        ])
+      );
 
       allow delete: if false;
     }
