@@ -407,10 +407,34 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                     'هذا الحساب معطّل. تواصل مع المدير العام.',
                     'This account is disabled. Contact the general manager.',
                   )
-                : t(
-                    'تعذر تسجيل الدخول. تحقق من البيانات واتصال الإنترنت.',
-                    'Sign-in failed. Check the details and internet connection.',
-                  );
+                : raw.contains('wrong-password') ||
+                        raw.contains('invalid-credential') ||
+                        raw.contains('user-not-found')
+                    ? t(
+                        'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+                        'The email or password is incorrect.',
+                      )
+                    : raw.contains('network-request-failed') ||
+                            raw.contains('unavailable') ||
+                            raw.contains('timeout')
+                        ? t(
+                            'تعذر الاتصال بالخدمة الآن. تحقق من الإنترنت ثم حاول مرة أخرى.',
+                            'Could not reach the service. Check your internet connection and try again.',
+                          )
+                        : raw.contains('too-many-requests')
+                            ? t(
+                                'محاولات دخول كثيرة خلال وقت قصير. انتظر قليلًا ثم حاول مجددًا.',
+                                'Too many sign-in attempts. Wait a little and try again.',
+                              )
+                            : raw.contains('permission-denied')
+                                ? t(
+                                    'تم الوصول للحساب، لكن تعذر التحقق من صلاحية الإدارة الآن.',
+                                    'The account was reached, but admin authorization could not be verified.',
+                                  )
+                                : t(
+                                    'تعذر تسجيل الدخول الآن. حاول مرة أخرى بعد قليل.',
+                                    'Sign-in could not be completed right now. Try again shortly.',
+                                  );
         setState(() => _error = message);
       }
     } finally {
