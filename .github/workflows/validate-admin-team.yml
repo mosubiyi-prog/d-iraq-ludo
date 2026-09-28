@@ -14,9 +14,11 @@ on:
       - admin-note21-work-2026-09-24
       - build118-admin-privacy-delete-work-2026-09-24
       - fix-admin-entry-role-2026-09-28
+      - account-reorg-v1-2026-09-28
     paths:
       - lib/main.dart
       - lib/admin_pages.dart
+      - lib/admin_recovery_pages.dart
       - lib/admin_team_pages.dart
       - lib/deda_backend.dart
       - lib/deda_recovery_admin.dart
@@ -65,6 +67,7 @@ jobs:
           flutter analyze \
             lib/main.dart \
             lib/admin_pages.dart \
+            lib/admin_recovery_pages.dart \
             lib/admin_team_pages.dart \
             lib/deda_backend.dart \
             lib/deda_recovery_admin.dart \
