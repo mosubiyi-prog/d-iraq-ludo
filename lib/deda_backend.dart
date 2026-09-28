@@ -3854,9 +3854,17 @@ class DedaBackend {
           .limit(20)
           .get();
       for (final doc in existing.docs) {
-        final status = (doc.data()['status'] ?? '').toString();
-        if (<String>{'new', 'approved', 'ready'}.contains(status)) {
+        final data = doc.data();
+        final status = (data['status'] ?? '').toString();
+        if (status == 'new' || status == 'approved') {
           return doc.id;
+        }
+        if (status == 'ready') {
+          final expiresAt = data['recoveryPinExpiresAt'];
+          if (expiresAt is Timestamp &&
+              expiresAt.toDate().isAfter(DateTime.now())) {
+            return doc.id;
+          }
         }
       }
     } catch (_) {
