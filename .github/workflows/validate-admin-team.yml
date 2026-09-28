@@ -16,6 +16,7 @@ on:
       - fix-admin-entry-role-2026-09-28
       - account-reorg-v1-2026-09-28
       - profile-luxury-ui-2026-09-28
+      - profile-avatar-frame-v2-2026-09-28
     paths:
       - lib/main.dart
       - lib/admin_pages.dart
