@@ -622,8 +622,7 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                   onPressed: _loading
                       ? null
                       : () async {
-                          final recovered = await Navigator.of(context)
-                              .push<bool>(
+                          await Navigator.of(context).push<void>(
                             MaterialPageRoute(
                               builder: (_) => DedaAdminRecoveryRequestPage(
                                 isArabic: widget.isArabic,
@@ -633,18 +632,6 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                               ),
                             ),
                           );
-                          if (recovered == true && mounted) {
-                            await _saveIdentity();
-                            if (!mounted) return;
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => DedaAdminDashboardPage(
-                                  isArabic: widget.isArabic,
-                                ),
-                              ),
-                            );
-                          }
                         },
                   icon: const Icon(Icons.lock_reset_outlined),
                   label: Text(
