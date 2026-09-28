@@ -229,8 +229,19 @@ service cloud.firestore {
         || isGeneralManager()
         || (
           isAdmin()
-          && adminData().keys().hasAny(['phone'])
-          && adminData().phone == accountKey
+          && resource.data.accountKey == accountKey
+          && resource.data.accessType == 'member'
+          && resource.data.allowedRole == adminData().role
+          && (
+            (
+              resource.data.keys().hasAny(['adminUid'])
+              && resource.data.adminUid == request.auth.uid
+            )
+            || (
+              resource.data.keys().hasAny(['allowedAdminEmail'])
+              && resource.data.allowedAdminEmail == request.auth.token.email
+            )
+          )
         );
       allow list: if isGeneralManager();
 
@@ -263,8 +274,6 @@ service cloud.firestore {
           isAdmin()
           && resource.data.accessType == 'member'
           && resource.data.accountKey == accountKey
-          && adminData().keys().hasAny(['phone'])
-          && adminData().phone == accountKey
           && resource.data.allowedAdminEmail ==
             request.auth.token.email
           && resource.data.allowedRole == adminData().role
