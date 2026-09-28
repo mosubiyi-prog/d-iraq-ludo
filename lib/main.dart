@@ -70,6 +70,47 @@ String dedaAccountTypeLabel(DedaAccountType type) {
   }
 }
 
+IconData dedaProfileAvatarIcon(int style) {
+  switch (style % 6) {
+    case 1:
+      return Icons.face;
+    case 2:
+      return Icons.account_circle;
+    case 3:
+      return Icons.sentiment_satisfied_alt;
+    case 4:
+      return Icons.emoji_emotions_outlined;
+    case 5:
+      return Icons.tag_faces;
+    default:
+      return Icons.person;
+  }
+}
+
+Color dedaProfileAvatarColor(int style) {
+  const colors = <Color>[
+    Color(0xFF17652F),
+    Color(0xFF2F6B8A),
+    Color(0xFF7A5A2B),
+    Color(0xFF6A4C93),
+    Color(0xFF00796B),
+    Color(0xFF9A4E57),
+  ];
+  return colors[style.abs() % colors.length];
+}
+
+List<Color> dedaProfileBackgroundColors(int style) {
+  const backgrounds = <List<Color>>[
+    [Color(0xFFEAF4E7), Color(0xFFD8ECDC)],
+    [Color(0xFFE7F2F5), Color(0xFFD7E9F0)],
+    [Color(0xFFF4EEE3), Color(0xFFECE0C9)],
+    [Color(0xFFF0EAF6), Color(0xFFE5DCF0)],
+    [Color(0xFFE4F3EF), Color(0xFFD4EAE3)],
+    [Color(0xFFF6E9EA), Color(0xFFEFD9DC)],
+  ];
+  return backgrounds[style.abs() % backgrounds.length];
+}
+
 class DedaPreferences {
   static const String _loggedInKey = 'deda_logged_in_v1';
   static const String _userNameKey = 'deda_user_name_v1';
@@ -90,6 +131,13 @@ class DedaPreferences {
   static double speechRate = 0.45;
   static DedaTravelMode defaultTravelMode = DedaTravelMode.car;
   static DedaMapStyle defaultMapStyle = DedaMapStyle.normal;
+  static int profileAvatarStyle = 0;
+  static int profileBackgroundStyle = 0;
+
+  static String _profileAvatarKey(String phoneValue) =>
+      'deda_profile_avatar_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
+  static String _profileBackgroundKey(String phoneValue) =>
+      'deda_profile_background_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
 
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -109,6 +157,11 @@ class DedaPreferences {
       'user' => DedaAccountType.user,
       _ => null,
     };
+
+    profileAvatarStyle =
+        prefs.getInt(_profileAvatarKey(phone)) ?? 0;
+    profileBackgroundStyle =
+        prefs.getInt(_profileBackgroundKey(phone)) ?? 0;
 
     navigationVoiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
     speechRate = prefs.getDouble(_speechRateKey) ?? 0.45;
@@ -157,6 +210,10 @@ class DedaPreferences {
     accountPhone = normalizedPhone;
     accountType = type;
     isLoggedIn = true;
+    profileAvatarStyle =
+        prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
+    profileBackgroundStyle =
+        prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
 
     await Future.wait([
       prefs.setString(_userNameKey, resolvedName),
@@ -202,6 +259,22 @@ class DedaPreferences {
     );
   }
 
+  static Future<void> setProfileAppearance({
+    required int avatarStyle,
+    required int backgroundStyle,
+  }) async {
+    profileAvatarStyle = avatarStyle.clamp(0, 5);
+    profileBackgroundStyle = backgroundStyle.clamp(0, 5);
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.setInt(_profileAvatarKey(phone), profileAvatarStyle),
+      prefs.setInt(
+        _profileBackgroundKey(phone),
+        profileBackgroundStyle,
+      ),
+    ]);
+  }
+
   static Future<void> setVoiceEnabled(bool enabled) async {
     navigationVoiceEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
@@ -233,6 +306,8 @@ class DedaPreferences {
     phone = '';
     accountPhone = '';
     accountType = null;
+    profileAvatarStyle = 0;
+    profileBackgroundStyle = 0;
     await prefs.setBool(_loggedInKey, false);
     await prefs.remove(_userNameKey);
     await prefs.remove(_phoneKey);
@@ -6133,6 +6208,8 @@ class DedaEditProfilePage extends StatefulWidget {
 
 class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
   late final TextEditingController _name;
+  late int _avatarStyle;
+  late int _backgroundStyle;
   bool _saving = false;
   String? _error;
 
@@ -6140,6 +6217,8 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
   void initState() {
     super.initState();
     _name = TextEditingController(text: DedaPreferences.userName);
+    _avatarStyle = DedaPreferences.profileAvatarStyle;
+    _backgroundStyle = DedaPreferences.profileBackgroundStyle;
   }
 
   @override
@@ -6166,6 +6245,10 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
     });
     try {
       await DedaPreferences.setUserName(cleanName);
+      await DedaPreferences.setProfileAppearance(
+        avatarStyle: _avatarStyle,
+        backgroundStyle: _backgroundStyle,
+      );
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (_) {
@@ -6193,16 +6276,119 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const CircleAvatar(
-              radius: 42,
-              backgroundColor: Color(0xFFE0EFE0),
-              child: Icon(
-                Icons.person,
-                size: 48,
-                color: Color(0xFF17652F),
+            Container(
+              height: 150,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: dedaProfileBackgroundColors(_backgroundStyle),
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              alignment: Alignment.center,
+              child: CircleAvatar(
+                radius: 44,
+                backgroundColor:
+                    dedaProfileAvatarColor(_avatarStyle).withOpacity(0.14),
+                child: Icon(
+                  dedaProfileAvatarIcon(_avatarStyle),
+                  size: 54,
+                  color: dedaProfileAvatarColor(_avatarStyle),
+                ),
               ),
             ),
+            const SizedBox(height: 16),
+            Text(
+              dedaText(
+                'الصورة الشخصية من داخل DEDA',
+                'Built-in DEDA profile image',
+              ),
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 10,
+              children: List<Widget>.generate(6, (index) {
+                final selected = _avatarStyle == index;
+                return InkWell(
+                  onTap: () => setState(() => _avatarStyle = index),
+                  borderRadius: BorderRadius.circular(40),
+                  child: Container(
+                    width: 62,
+                    height: 62,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: dedaProfileAvatarColor(index).withOpacity(0.12),
+                      border: Border.all(
+                        color: selected
+                            ? dedaProfileAvatarColor(index)
+                            : const Color(0xFFC8D2C9),
+                        width: selected ? 3 : 1,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      dedaProfileAvatarIcon(index),
+                      size: 34,
+                      color: dedaProfileAvatarColor(index),
+                    ),
+                  ),
+                );
+              }),
+            ),
             const SizedBox(height: 18),
+            Text(
+              dedaText(
+                'الخلفية من داخل DEDA',
+                'Built-in DEDA background',
+              ),
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 10,
+              children: List<Widget>.generate(6, (index) {
+                final selected = _backgroundStyle == index;
+                return InkWell(
+                  onTap: () => setState(() => _backgroundStyle = index),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: 78,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: dedaProfileBackgroundColors(index),
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selected
+                            ? const Color(0xFF17652F)
+                            : const Color(0xFFC8D2C9),
+                        width: selected ? 3 : 1,
+                      ),
+                    ),
+                    child: selected
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF17652F),
+                          )
+                        : null,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: _name,
               textInputAction: TextInputAction.done,
@@ -6216,8 +6402,8 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
             const SizedBox(height: 10),
             Text(
               dedaText(
-                'الصورة الشخصية والخلفية تُختاران من مكتبة DEDA الداخلية فقط.',
-                'Profile image and background are selected only from DEDA built-in choices.',
+                'لا يوجد رفع من المعرض أو الكاميرا للملف الشخصي. الخيارات أعلاه محفوظة داخل التطبيق.',
+                'Profile uploads from the gallery or camera are disabled. The choices above are built into the app.',
               ),
               style: const TextStyle(
                 color: Color(0xFF687169),
@@ -6496,21 +6682,38 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           children: [
             Card(
               elevation: 0,
-              color: const Color(0xFFEAF4E7),
+              color: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: Padding(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: dedaProfileBackgroundColors(
+                      DedaPreferences.profileBackgroundStyle,
+                    ),
+                    begin: AlignmentDirectional.topStart,
+                    end: AlignmentDirectional.bottomEnd,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 34,
-                      backgroundColor: Color(0xFF17652F),
+                      backgroundColor: dedaProfileAvatarColor(
+                        DedaPreferences.profileAvatarStyle,
+                      ).withOpacity(0.14),
                       child: Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 38,
+                        dedaProfileAvatarIcon(
+                          DedaPreferences.profileAvatarStyle,
+                        ),
+                        color: dedaProfileAvatarColor(
+                          DedaPreferences.profileAvatarStyle,
+                        ),
+                        size: 40,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -6569,6 +6772,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                     ),
                   ],
                 ),
+              ),
               ),
             ),
             const SizedBox(height: 12),
