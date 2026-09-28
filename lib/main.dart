@@ -6818,6 +6818,7 @@ class DedaEditProfilePage extends StatefulWidget {
 class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
   late final TextEditingController _name;
   late int _avatarStyle;
+  late int _frameStyle;
   late int _backgroundStyle;
   bool _saving = false;
   String? _error;
@@ -6827,6 +6828,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
     super.initState();
     _name = TextEditingController(text: DedaPreferences.userName);
     _avatarStyle = DedaPreferences.profileAvatarStyle;
+    _frameStyle = DedaPreferences.profileFrameStyle;
     _backgroundStyle = DedaPreferences.profileBackgroundStyle;
   }
 
@@ -6856,6 +6858,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
       await DedaPreferences.setUserName(cleanName);
       await DedaPreferences.setProfileAppearance(
         avatarStyle: _avatarStyle,
+        frameStyle: _frameStyle,
         backgroundStyle: _backgroundStyle,
       );
       if (!mounted) return;
@@ -6886,6 +6889,34 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
     );
   }
 
+  Widget _sectionTitle(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF6D756E),
+            fontSize: 14,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -6896,11 +6927,11 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
           children: [
             Container(
-              constraints: const BoxConstraints(minHeight: 180),
-              padding: const EdgeInsets.all(18),
+              constraints: const BoxConstraints(minHeight: 166),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: dedaProfileBackgroundColors(_backgroundStyle),
@@ -6909,50 +6940,32 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 ),
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(color: const Color(0xFFDDE7DB)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x12000000),
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
+                  ),
+                ],
               ),
               child: Center(
-                child: Container(
-                  width: 122,
-                  height: 122,
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.88),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x22000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: DedaAvatarPortrait(
-                    style: _avatarStyle,
-                    size: 108,
-                  ),
+                child: DedaFramedAvatar(
+                  avatarStyle: _avatarStyle,
+                  frameStyle: _frameStyle,
+                  size: 142,
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text(
+
+            const SizedBox(height: 18),
+            _sectionTitle(
               dedaText(
                 'الصورة الشخصية من داخل DEDA',
                 'Built-in DEDA profile image',
               ),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
               dedaText(
-                'اختر واحدة من الشخصيات الجاهزة.',
-                'Choose one of the built-in portraits.',
-              ),
-              style: const TextStyle(
-                color: Color(0xFF6D756E),
-                fontSize: 14,
+                '3 شخصيات ذكورية و3 أنثوية بألوان شعر وملامح مختلفة.',
+                'Three male and three female portraits with different hair and features.',
               ),
             ),
             const SizedBox(height: 12),
@@ -6973,11 +6986,11 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
                         width: itemWidth,
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: selected
                               ? const Color(0xFFEAF5EA)
-                              : Colors.white.withOpacity(0.82),
+                              : Colors.white.withOpacity(0.88),
                           borderRadius: BorderRadius.circular(22),
                           border: Border.all(
                             color: selected
@@ -6985,25 +6998,55 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                                 : const Color(0xFFD4DDD3),
                             width: selected ? 2.5 : 1,
                           ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x0D000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
                             DedaAvatarPortrait(
                               style: index,
-                              size: itemWidth - 18,
+                              size: itemWidth - 16,
+                            ),
+                            PositionedDirectional(
+                              bottom: 2,
+                              start: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.91),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  index < 3
+                                      ? dedaText('ذكوري', 'Male')
+                                      : dedaText('أنثوي', 'Female'),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: index < 3
+                                        ? const Color(0xFF2F6B8A)
+                                        : const Color(0xFFA84F68),
+                                  ),
+                                ),
+                              ),
                             ),
                             if (selected)
-                              PositionedDirectional(
-                                top: 2,
-                                end: 2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF17652F),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
+                              const PositionedDirectional(
+                                top: 3,
+                                end: 3,
+                                child: CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: Color(0xFF17652F),
+                                  child: Icon(
                                     Icons.check,
                                     color: Colors.white,
                                     size: 15,
@@ -7025,6 +7068,8 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 Expanded(
                   child: Text(
                     dedaText('إطارات DEDA', 'DEDA frames'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
@@ -7035,28 +7080,17 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF5D6),
+                    color: const Color(0xFFEAF5EA),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE6C764)),
+                    border: Border.all(color: const Color(0xFFB9D9BD)),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.lock_rounded,
-                        size: 15,
-                        color: Color(0xFF8A6811),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        dedaText('مقفولة حاليًا', 'Locked for now'),
-                        style: const TextStyle(
-                          color: Color(0xFF7A5A0B),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    dedaText('3 مجانية', '3 free'),
+                    style: const TextStyle(
+                      color: Color(0xFF17652F),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ],
@@ -7064,14 +7098,15 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
             const SizedBox(height: 6),
             Text(
               dedaText(
-                '6 إطارات فخمة بألوان وأحجام مختلفة، ظاهرة الآن كتجهيز مستقبلي.',
-                'Six luxury frames in different colors and sizes, shown now as future options.',
+                'جرّب 3 إطارات مجانية الآن: ذهبي، زمردي، ووردي أنثوي. والبقية مقفولة للمستقبل.',
+                'Try three free frames now: gold, emerald, and a feminine rose frame. The rest stay locked for later.',
               ),
-              maxLines: 2,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Color(0xFF6D756E),
                 fontSize: 14,
+                height: 1.3,
               ),
             ),
             const SizedBox(height: 12),
@@ -7083,18 +7118,48 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 return Wrap(
                   alignment: WrapAlignment.center,
                   spacing: 12,
-                  runSpacing: 14,
+                  runSpacing: 12,
                   children: List<Widget>.generate(6, (index) {
+                    final free = dedaProfileFrameIsFree(index);
+                    final selected = free && _frameStyle == index;
                     return InkWell(
-                      onTap: _lockedFrameMessage,
+                      onTap: free
+                          ? () => setState(() => _frameStyle = index)
+                          : _lockedFrameMessage,
                       borderRadius: BorderRadius.circular(22),
-                      child: SizedBox(
-                        width: cell,
-                        height: cell,
-                        child: DedaLockedFramePreview(
-                          style: index,
-                          size: cell,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          DedaProfileFramePreview(
+                            style: index,
+                            avatarStyle: _avatarStyle,
+                            size: cell,
+                            selected: selected,
+                          ),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            width: cell,
+                            child: Text(
+                              free
+                                  ? (index == 0
+                                      ? dedaText('ذهبي', 'Gold')
+                                      : index == 1
+                                          ? dedaText('زمردي', 'Emerald')
+                                          : dedaText('وردي', 'Rose'))
+                                  : dedaText('مقفول', 'Locked'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: free
+                                    ? dedaProfileFrameColors(index)[1]
+                                    : const Color(0xFF7A817A),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   }),
@@ -7103,14 +7168,14 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
             ),
 
             const SizedBox(height: 24),
-            Text(
+            _sectionTitle(
               dedaText(
                 'الخلفية من داخل DEDA',
                 'Built-in DEDA background',
               ),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+              dedaText(
+                'اختر الخلفية الهادئة التي تناسب الشخصية والإطار.',
+                'Choose the background that best matches the portrait and frame.',
               ),
             ),
             const SizedBox(height: 12),
@@ -7132,7 +7197,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
                         width: itemWidth,
-                        height: 72,
+                        height: 68,
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: dedaProfileBackgroundColors(index),
@@ -7144,13 +7209,20 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                                 : const Color(0xFFD4DDD3),
                             width: selected ? 3 : 1,
                           ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x0C000000),
+                              blurRadius: 7,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
                         ),
                         alignment: Alignment.center,
                         child: selected
                             ? const Icon(
                                 Icons.check_circle,
                                 color: Color(0xFF17652F),
-                                size: 28,
+                                size: 27,
                               )
                             : null,
                       ),
@@ -7160,7 +7232,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
               },
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             TextField(
               controller: _name,
               textInputAction: TextInputAction.done,
@@ -7175,8 +7247,8 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
             const SizedBox(height: 10),
             Text(
               dedaText(
-                'لا يوجد رفع من المعرض أو الكاميرا. الصورة والخلفية من خيارات DEDA الداخلية فقط.',
-                'There are no gallery or camera uploads. Profile image and background use only DEDA built-in options.',
+                'لا يوجد رفع من المعرض أو الكاميرا. الشخصية والإطار والخلفية من خيارات DEDA الداخلية فقط.',
+                'There are no gallery or camera uploads. Portraits, frames, and backgrounds use DEDA built-in options only.',
               ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
