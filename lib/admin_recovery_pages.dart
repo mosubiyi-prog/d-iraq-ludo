@@ -28,8 +28,6 @@ class _DedaAdminRecoveryRequestPageState
   late final TextEditingController _name;
   late final TextEditingController _email;
   final _code = TextEditingController();
-  final _newPassword = TextEditingController();
-  final _confirmPassword = TextEditingController();
 
   String? _requestId;
   String? _error;
@@ -50,8 +48,6 @@ class _DedaAdminRecoveryRequestPageState
     _name.dispose();
     _email.dispose();
     _code.dispose();
-    _newPassword.dispose();
-    _confirmPassword.dispose();
     super.dispose();
   }
 
@@ -125,32 +121,13 @@ class _DedaAdminRecoveryRequestPageState
     }
   }
 
-  Future<void> _complete(String requestId) async {
+  Future<void> _verifyCodeAndSendResetLink(String requestId) async {
     final code = _code.text.trim();
-    final password = _newPassword.text;
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       setState(() {
         _error = t(
           'أدخل رمز الاسترجاع المكوّن من 6 أرقام.',
           'Enter the 6-digit recovery code.',
-        );
-      });
-      return;
-    }
-    if (password.length < 8) {
-      setState(() {
-        _error = t(
-          'كلمة المرور الجديدة يجب أن تكون 8 أحرف/أرقام على الأقل.',
-          'The new password must be at least 8 characters.',
-        );
-      });
-      return;
-    }
-    if (password != _confirmPassword.text) {
-      setState(() {
-        _error = t(
-          'كلمتا المرور غير متطابقتين.',
-          'Passwords do not match.',
         );
       });
       return;
@@ -164,33 +141,21 @@ class _DedaAdminRecoveryRequestPageState
       await DedaBackend.completeAdminPasswordRecovery(
         requestId: requestId,
         recoveryCode: code,
-        newPassword: password,
       );
-
-      final signedIn = await DedaBackend.signInAdmin(
-        email: _email.text.trim(),
-        password: password,
-        displayName: _name.text.trim(),
-      );
-      if (!signedIn) throw StateError('admin-not-authorized');
-
-      final gateMatches =
-          await DedaBackend.currentAdminSessionMatchesDedaEntry(
-        phone: widget.dedaPhone,
-      );
-      if (!gateMatches) {
-        await DedaBackend.signOutAdmin();
-        throw StateError('admin-recovery-gateway-mismatch');
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = _friendlyError(error));
     } finally {
       if (mounted) setState(() => _completing = false);
     }
+  }
+
+  void _restart() {
+    setState(() {
+      _requestId = null;
+      _error = null;
+      _code.clear();
+    });
   }
 
   Widget _requestStatus(Map<String, dynamic> data) {
@@ -202,7 +167,11 @@ class _DedaAdminRecoveryRequestPageState
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.cancel_outlined, size: 54, color: Color(0xFFB3261E)),
+          const Icon(
+            Icons.cancel_outlined,
+            size: 54,
+            color: Color(0xFFB3261E),
+          ),
           const SizedBox(height: 10),
           Text(
             t('تم رفض طلب الاسترجاع', 'Recovery request rejected'),
@@ -219,43 +188,45 @@ class _DedaAdminRecoveryRequestPageState
           ],
           const SizedBox(height: 14),
           OutlinedButton(
-            onPressed: () {
-              setState(() {
-                _requestId = null;
-                _error = null;
-              });
-            },
+            onPressed: _restart,
             child: Text(t('إرسال طلب جديد', 'Send a new request')),
           ),
         ],
       );
     }
 
-    if (status == 'error') {
+    if (status == 'reset_link_sent') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.error_outline, size: 54, color: Color(0xFFB3261E)),
+          const Icon(
+            Icons.mark_email_read_outlined,
+            size: 60,
+            color: Color(0xFF17652F),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            t(
+              'تم التحقق من رمز DEDA وإرسال رابط تغيير كلمة المرور',
+              'DEDA code verified and password reset link sent',
+            ),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 10),
           Text(
             t(
-              'تعذر إصدار الرمز. راجع المدير العام ثم أعد المحاولة.',
-              'The code could not be issued. Contact the general manager and try again.',
+              'افتح البريد الإلكتروني الإداري، عيّن كلمة المرور الجديدة من رابط Firebase الآمن، ثم ارجع إلى DEDA وسجّل الدخول بها.',
+              'Open the administration email, set the new password from the secure Firebase link, then return to DEDA and sign in with it.',
             ),
             textAlign: TextAlign.center,
+            style: const TextStyle(height: 1.45),
           ),
-          const SizedBox(height: 14),
-          OutlinedButton(
-            onPressed: () {
-              setState(() {
-                _requestId = null;
-                _error = null;
-                _code.clear();
-                _newPassword.clear();
-                _confirmPassword.clear();
-              });
-            },
-            child: Text(t('إرسال طلب جديد', 'Send a new request')),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.login),
+            label: Text(t('العودة إلى شاشة الدخول', 'Back to sign in')),
           ),
         ],
       );
@@ -267,7 +238,7 @@ class _DedaAdminRecoveryRequestPageState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Icon(
-            Icons.mark_email_read_outlined,
+            Icons.verified_user_outlined,
             size: 54,
             color: Color(0xFF17652F),
           ),
@@ -303,7 +274,16 @@ class _DedaAdminRecoveryRequestPageState
               ),
             ),
           ],
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+          Text(
+            t(
+              'أدخل الرمز نفسه أدناه للتأكيد. بعد نجاح التحقق سيرسل DEDA رابط تغيير كلمة المرور إلى بريدك الإداري.',
+              'Enter the same code below to confirm. After verification, DEDA will send a password reset link to your administration email.',
+            ),
+            textAlign: TextAlign.center,
+            style: const TextStyle(height: 1.4, color: Color(0xFF5A655D)),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _code,
             keyboardType: TextInputType.number,
@@ -317,28 +297,6 @@ class _DedaAdminRecoveryRequestPageState
               counterText: '',
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _newPassword,
-            obscureText: true,
-            textDirection: TextDirection.ltr,
-            decoration: InputDecoration(
-              labelText: t('كلمة المرور الجديدة', 'New password'),
-              prefixIcon: const Icon(Icons.lock_outline),
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _confirmPassword,
-            obscureText: true,
-            textDirection: TextDirection.ltr,
-            decoration: InputDecoration(
-              labelText: t('تأكيد كلمة المرور الجديدة', 'Confirm new password'),
-              prefixIcon: const Icon(Icons.lock_reset_outlined),
-              border: const OutlineInputBorder(),
-            ),
-          ),
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -349,35 +307,26 @@ class _DedaAdminRecoveryRequestPageState
           ],
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed:
-                _completing ? null : () => _complete(requestId),
+            onPressed: _completing
+                ? null
+                : () => _verifyCodeAndSendResetLink(requestId),
             icon: _completing
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.verified_user_outlined),
+                : const Icon(Icons.email_outlined),
             label: Text(
               t(
-                'حفظ كلمة المرور والدخول',
-                'Save password and sign in',
+                'تحقق وأرسل رابط تغيير كلمة المرور',
+                'Verify and send password reset link',
               ),
             ),
           ),
           const SizedBox(height: 6),
           TextButton(
-            onPressed: _completing
-                ? null
-                : () {
-                    setState(() {
-                      _requestId = null;
-                      _error = null;
-                      _code.clear();
-                      _newPassword.clear();
-                      _confirmPassword.clear();
-                    });
-                  },
+            onPressed: _completing ? null : _restart,
             child: Text(
               t(
                 'الرمز منتهي أو أحتاج طلبًا جديدًا',
@@ -389,21 +338,15 @@ class _DedaAdminRecoveryRequestPageState
       );
     }
 
-    final waitingForCode = status == 'approved';
     return Column(
       children: [
         const CircularProgressIndicator(),
         const SizedBox(height: 16),
         Text(
-          waitingForCode
-              ? t(
-                  'تمت الموافقة. جارٍ إصدار رمز الاسترجاع...',
-                  'Approved. The recovery code is being issued...',
-                )
-              : t(
-                  'تم إرسال الطلب إلى المدير العام. ستتحدث هذه الصفحة تلقائيًا عند الرد.',
-                  'The request was sent to the general manager. This page will update automatically when a decision arrives.',
-                ),
+          t(
+            'تم إرسال الطلب إلى المدير العام. ستتحدث هذه الصفحة تلقائيًا عند الرد.',
+            'The request was sent to the general manager. This page will update automatically when a decision arrives.',
+          ),
           textAlign: TextAlign.center,
           style: const TextStyle(height: 1.45, fontWeight: FontWeight.w600),
         ),
@@ -571,6 +514,8 @@ class DedaAdminRecoveryInboxPage extends StatelessWidget {
         return t('تمت الموافقة', 'Approved');
       case 'ready':
         return t('تم إصدار الرمز', 'Code issued');
+      case 'reset_link_sent':
+        return t('أُرسل رابط التغيير', 'Reset link sent');
       case 'completed':
         return t('مكتمل', 'Completed');
       case 'rejected':
