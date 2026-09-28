@@ -6534,13 +6534,26 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
       if (!mounted) return;
       setState(() {
         _error = dedaText(
-          'تعذر حفظ الاسم الآن.',
-          'Could not save the name right now.',
+          'تعذر حفظ التعديلات الآن.',
+          'Could not save the changes right now.',
         );
       });
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  void _lockedFrameMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dedaText(
+            'هذا الإطار مقفول حاليًا وسيتم تفعيله لاحقًا.',
+            'This frame is currently locked and will be enabled later.',
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -6553,124 +6566,275 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
           children: [
             Container(
-              height: 150,
+              constraints: const BoxConstraints(minHeight: 180),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: dedaProfileBackgroundColors(_backgroundStyle),
                   begin: AlignmentDirectional.topStart,
                   end: AlignmentDirectional.bottomEnd,
                 ),
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: const Color(0xFFDDE7DB)),
               ),
-              alignment: Alignment.center,
-              child: CircleAvatar(
-                radius: 44,
-                backgroundColor:
-                    dedaProfileAvatarColor(_avatarStyle).withOpacity(0.14),
-                child: Icon(
-                  dedaProfileAvatarIcon(_avatarStyle),
-                  size: 54,
-                  color: dedaProfileAvatarColor(_avatarStyle),
+              child: Center(
+                child: Container(
+                  width: 122,
+                  height: 122,
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.88),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 16,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: DedaAvatarPortrait(
+                    style: _avatarStyle,
+                    size: 108,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               dedaText(
                 'الصورة الشخصية من داخل DEDA',
                 'Built-in DEDA profile image',
               ),
               style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 10,
-              children: List<Widget>.generate(6, (index) {
-                final selected = _avatarStyle == index;
-                return InkWell(
-                  onTap: () => setState(() => _avatarStyle = index),
-                  borderRadius: BorderRadius.circular(40),
-                  child: Container(
-                    width: 62,
-                    height: 62,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: dedaProfileAvatarColor(index).withOpacity(0.12),
-                      border: Border.all(
-                        color: selected
-                            ? dedaProfileAvatarColor(index)
-                            : const Color(0xFFC8D2C9),
-                        width: selected ? 3 : 1,
+            const SizedBox(height: 6),
+            Text(
+              dedaText(
+                'اختر واحدة من الشخصيات الجاهزة.',
+                'Choose one of the built-in portraits.',
+              ),
+              style: const TextStyle(
+                color: Color(0xFF6D756E),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = ((constraints.maxWidth - 24) / 3)
+                    .clamp(88.0, 124.0)
+                    .toDouble();
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: List<Widget>.generate(6, (index) {
+                    final selected = _avatarStyle == index;
+                    return InkWell(
+                      onTap: () => setState(() => _avatarStyle = index),
+                      borderRadius: BorderRadius.circular(22),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: itemWidth,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? const Color(0xFFEAF5EA)
+                              : Colors.white.withOpacity(0.82),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: selected
+                                ? const Color(0xFF17652F)
+                                : const Color(0xFFD4DDD3),
+                            width: selected ? 2.5 : 1,
+                          ),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            DedaAvatarPortrait(
+                              style: index,
+                              size: itemWidth - 18,
+                            ),
+                            if (selected)
+                              PositionedDirectional(
+                                top: 2,
+                                end: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF17652F),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 15,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      dedaProfileAvatarIcon(index),
-                      size: 34,
-                      color: dedaProfileAvatarColor(index),
+                    );
+                  }),
+                );
+              },
+            ),
+
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    dedaText('إطارات DEDA', 'DEDA frames'),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                );
-              }),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF5D6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE6C764)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.lock_rounded,
+                        size: 15,
+                        color: Color(0xFF8A6811),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        dedaText('مقفولة حاليًا', 'Locked for now'),
+                        style: const TextStyle(
+                          color: Color(0xFF7A5A0B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 6),
+            Text(
+              dedaText(
+                '6 إطارات فخمة بألوان وأحجام مختلفة، ظاهرة الآن كتجهيز مستقبلي.',
+                'Six luxury frames in different colors and sizes, shown now as future options.',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF6D756E),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cell = ((constraints.maxWidth - 24) / 3)
+                    .clamp(96.0, 128.0)
+                    .toDouble();
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 14,
+                  children: List<Widget>.generate(6, (index) {
+                    return InkWell(
+                      onTap: _lockedFrameMessage,
+                      borderRadius: BorderRadius.circular(22),
+                      child: SizedBox(
+                        width: cell,
+                        height: cell,
+                        child: DedaLockedFramePreview(
+                          style: index,
+                          size: cell,
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              },
+            ),
+
+            const SizedBox(height: 24),
             Text(
               dedaText(
                 'الخلفية من داخل DEDA',
                 'Built-in DEDA background',
               ),
               style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 10,
-              children: List<Widget>.generate(6, (index) {
-                final selected = _backgroundStyle == index;
-                return InkWell(
-                  onTap: () => setState(() => _backgroundStyle = index),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: 78,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: dedaProfileBackgroundColors(index),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final itemWidth = ((constraints.maxWidth - 12) / 2)
+                    .clamp(120.0, 200.0)
+                    .toDouble();
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: List<Widget>.generate(6, (index) {
+                    final selected = _backgroundStyle == index;
+                    return InkWell(
+                      onTap: () =>
+                          setState(() => _backgroundStyle = index),
+                      borderRadius: BorderRadius.circular(18),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: itemWidth,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: dedaProfileBackgroundColors(index),
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selected
+                                ? const Color(0xFF17652F)
+                                : const Color(0xFFD4DDD3),
+                            width: selected ? 3 : 1,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: selected
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Color(0xFF17652F),
+                                size: 28,
+                              )
+                            : null,
                       ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: selected
-                            ? const Color(0xFF17652F)
-                            : const Color(0xFFC8D2C9),
-                        width: selected ? 3 : 1,
-                      ),
-                    ),
-                    child: selected
-                        ? const Icon(
-                            Icons.check_circle,
-                            color: Color(0xFF17652F),
-                          )
-                        : null,
-                  ),
+                    );
+                  }),
                 );
-              }),
+              },
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 24),
             TextField(
               controller: _name,
               textInputAction: TextInputAction.done,
+              maxLines: 1,
               decoration: InputDecoration(
                 labelText: dedaText('الاسم', 'Name'),
                 prefixIcon: const Icon(Icons.person_outline),
@@ -6681,9 +6845,11 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
             const SizedBox(height: 10),
             Text(
               dedaText(
-                'لا يوجد رفع من المعرض أو الكاميرا للملف الشخصي. الخيارات أعلاه محفوظة داخل التطبيق.',
-                'Profile uploads from the gallery or camera are disabled. The choices above are built into the app.',
+                'لا يوجد رفع من المعرض أو الكاميرا. الصورة والخلفية من خيارات DEDA الداخلية فقط.',
+                'There are no gallery or camera uploads. Profile image and background use only DEDA built-in options.',
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Color(0xFF687169),
                 height: 1.35,
@@ -6693,12 +6859,17 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
               const SizedBox(height: 10),
               Text(
                 _error!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Color(0xFFB3261E)),
               ),
             ],
             const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+              ),
               icon: _saving
                   ? const SizedBox(
                       width: 18,
@@ -6706,7 +6877,104 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
-              label: Text(dedaText('حفظ', 'Save')),
+              label: Text(dedaText('حفظ التعديلات', 'Save changes')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DedaAccountInfoPage extends StatefulWidget {
+  const DedaAccountInfoPage({super.key});
+
+  @override
+  State<DedaAccountInfoPage> createState() => _DedaAccountInfoPageState();
+}
+
+class _DedaAccountInfoPageState extends State<DedaAccountInfoPage> {
+  Future<void> _setType(DedaAccountType type) async {
+    await DedaPreferences.setAccountType(type);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = DedaPreferences.accountType ?? DedaAccountType.user;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('معلومات الحساب', 'Account information')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(18),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFE1E7DE)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    dedaText('رقم الهاتف', 'Phone number'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF6E766F),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Text(
+                      DedaPreferences.phone,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.left,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    dedaText('نوع الحساب', 'Account type'),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<DedaAccountType>(
+                    segments: [
+                      ButtonSegment(
+                        value: DedaAccountType.user,
+                        icon: const Icon(Icons.person_outline),
+                        label: Text(dedaText('مستخدم', 'User')),
+                      ),
+                      ButtonSegment(
+                        value: DedaAccountType.placeOwner,
+                        icon: const Icon(Icons.storefront_outlined),
+                        label: Text(dedaText('صاحب مكان', 'Place owner')),
+                      ),
+                    ],
+                    selected: {type},
+                    onSelectionChanged: (selection) {
+                      if (selection.isNotEmpty) {
+                        _setType(selection.first);
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -6829,6 +7097,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 'Share this ID inside DEDA without exposing your phone number.',
               ),
               textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Color(0xFF687169)),
             ),
           ],
@@ -6859,8 +7129,19 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _setAccountType(DedaAccountType type) async {
-    await DedaPreferences.setAccountType(type);
+  Future<void> _openEditProfile() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const DedaEditProfilePage()),
+    );
+    if (changed == true && mounted) setState(() {});
+  }
+
+  Future<void> _openAccountInfo() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => const DedaAccountInfoPage()),
+    );
     if (mounted) setState(() {});
   }
 
@@ -6903,36 +7184,289 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     required String subtitle,
     required VoidCallback onTap,
     Color iconColor = const Color(0xFF17652F),
+    String? badgeText,
   }) {
-    return Card(
-      elevation: 0,
-      color: Colors.white.withOpacity(0.92),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: Color(0xFFE1E7DE)),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-        leading: Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(14),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.white.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 96),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFFE1E7DE)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: iconColor, size: 27),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF707871),
+                          fontSize: 13.5,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (badgeText != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 82),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEAF5EA),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      badgeText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF17652F),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.chevron_left_rounded,
+                  color: Color(0xFF59635B),
+                ),
+              ],
+            ),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: iconColor),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+
+  Widget _profileHero(DedaAccountType type) {
+    final colors = dedaProfileBackgroundColors(
+      DedaPreferences.profileBackgroundStyle,
+    );
+    return Container(
+      constraints: const BoxConstraints(minHeight: 345),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: colors,
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
         ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(color: Color(0xFF687169)),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFDDE7DB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 18,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Stack(
+          children: [
+            PositionedDirectional(
+              start: -42,
+              top: 32,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.28),
+                ),
+              ),
+            ),
+            PositionedDirectional(
+              end: -50,
+              bottom: 18,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.24),
+                ),
+              ),
+            ),
+            PositionedDirectional(
+              end: 14,
+              top: 14,
+              child: Material(
+                color: Colors.white.withOpacity(0.78),
+                borderRadius: BorderRadius.circular(16),
+                child: IconButton(
+                  tooltip: dedaText('تعديل الملف', 'Edit profile'),
+                  onPressed: _openEditProfile,
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: Color(0xFF17652F),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 34, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 126,
+                      height: 126,
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.90),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFFFFFFF),
+                          width: 2,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x22000000),
+                            blurRadius: 16,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: DedaAvatarPortrait(
+                        style: DedaPreferences.profileAvatarStyle,
+                        size: 112,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    dedaText('الاسم', 'Name'),
+                    style: const TextStyle(
+                      color: Color(0xFF687169),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    child: Text(
+                      DedaPreferences.userName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    dedaText('المعرف', 'ID'),
+                    style: const TextStyle(
+                      color: Color(0xFF687169),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 285),
+                      child: Text(
+                        _personalDedaId,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF25382A),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.68),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFFBED9C0),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          type == DedaAccountType.placeOwner
+                              ? Icons.storefront_outlined
+                              : Icons.person_outline,
+                          color: const Color(0xFF17652F),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            dedaAccountTypeLabel(type),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF17652F),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        trailing: const Icon(Icons.chevron_left),
       ),
     );
   }
@@ -6945,7 +7479,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(dedaText('حسابي', 'My account')),
+        title: Text(dedaText('الملف الشخصي', 'Profile')),
         centerTitle: true,
         actions: [
           IconButton(
@@ -6957,205 +7491,39 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
           children: [
-            Card(
-              elevation: 0,
-              color: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: dedaProfileBackgroundColors(
-                      DedaPreferences.profileBackgroundStyle,
-                    ),
-                    begin: AlignmentDirectional.topStart,
-                    end: AlignmentDirectional.bottomEnd,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundColor: dedaProfileAvatarColor(
-                        DedaPreferences.profileAvatarStyle,
-                      ).withOpacity(0.14),
-                      child: Icon(
-                        dedaProfileAvatarIcon(
-                          DedaPreferences.profileAvatarStyle,
-                        ),
-                        color: dedaProfileAvatarColor(
-                          DedaPreferences.profileAvatarStyle,
-                        ),
-                        size: 40,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            DedaPreferences.userName,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: Text(
-                              _personalDedaId,
-                              textAlign: DedaLanguageState.isArabic
-                                  ? TextAlign.right
-                                  : TextAlign.left,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF33483A),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 7),
-                          Align(
-                            alignment: DedaLanguageState.isArabic
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDCEEDC),
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                child: Text(
-                                  dedaAccountTypeLabel(type),
-                                  style: const TextStyle(
-                                    color: Color(0xFF17652F),
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ),
-            ),
-            const SizedBox(height: 12),
+            _profileHero(type),
+            const SizedBox(height: 14),
 
             _sectionCard(
               icon: Icons.edit_outlined,
               title: dedaText('تعديل الملف', 'Edit profile'),
               subtitle: dedaText(
-                'تحديث معلوماتك الشخصية',
-                'Update your personal information',
+                'تحديث معلوماتك الشخصية وصورتك',
+                'Update your personal information and image',
               ),
-              onTap: () async {
-                final changed = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DedaEditProfilePage(),
-                  ),
-                );
-                if (changed == true && mounted) setState(() {});
-              },
+              onTap: _openEditProfile,
             ),
-
-            Card(
-              elevation: 0,
-              color: Colors.white.withOpacity(0.92),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: const BorderSide(color: Color(0xFFE1E7DE)),
+            _sectionCard(
+              icon: Icons.manage_accounts_outlined,
+              iconColor: const Color(0xFF2F6B8A),
+              title: dedaText('معلومات الحساب', 'Account information'),
+              subtitle: dedaText(
+                'عرض تفاصيل حسابك وإعداداته',
+                'View your account details and settings',
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.manage_accounts_outlined,
-                          color: Color(0xFF17652F),
-                        ),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            dedaText('معلومات الحساب', 'Account information'),
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Directionality(
-                      textDirection: TextDirection.ltr,
-                      child: Text(
-                        DedaPreferences.phone,
-                        textAlign: TextAlign.left,
-                        style: const TextStyle(
-                          color: Color(0xFF536057),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      dedaText('نوع الحساب', 'Account type'),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 9),
-                    SegmentedButton<DedaAccountType>(
-                      segments: [
-                        ButtonSegment(
-                          value: DedaAccountType.user,
-                          icon: const Icon(Icons.person),
-                          label: Text(dedaText('مستخدم', 'User')),
-                        ),
-                        ButtonSegment(
-                          value: DedaAccountType.placeOwner,
-                          icon: const Icon(Icons.storefront),
-                          label: Text(dedaText('صاحب مكان', 'Place owner')),
-                        ),
-                      ],
-                      selected: {type},
-                      onSelectionChanged: (selection) {
-                        if (selection.isNotEmpty) {
-                          _setAccountType(selection.first);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
+              onTap: _openAccountInfo,
             ),
-            const SizedBox(height: 8),
-
             _sectionCard(
               icon: Icons.star_rounded,
               iconColor: const Color(0xFFE2A400),
               title: dedaText('النقاط', 'Points'),
               subtitle: dedaText(
-                'نظام النقاط والمكافآت محفوظ لهذا القسم',
-                'Points and rewards are reserved for this section',
+                'عرض نقاطك والمكافآت المتاحة',
+                'View your points and available rewards',
               ),
+              badgeText: dedaText('قريبًا', 'Soon'),
               onTap: () {
                 showDialog<void>(
                   context: context,
@@ -7163,8 +7531,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                     title: Text(dedaText('النقاط', 'Points')),
                     content: Text(
                       dedaText(
-                        'هذا القسم موجود ضمن ترتيب الملف الشخصي، ولن نضع رصيدًا وهميًا قبل اعتماد نظام النقاط.',
-                        'This section is part of the profile layout. No fake balance is shown before the points system is defined.',
+                        'هذا القسم جاهز ضمن ترتيب الملف الشخصي، ولن نعرض رصيدًا وهميًا قبل اعتماد نظام النقاط.',
+                        'This section is ready in the profile layout. No fake balance will be shown before the points system is approved.',
                       ),
                     ),
                     actions: [
@@ -7177,9 +7545,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 );
               },
             ),
-
             _sectionCard(
-              icon: Icons.favorite,
+              icon: Icons.favorite_rounded,
               iconColor: const Color(0xFFC73A4C),
               title: dedaText('المفضلة', 'Favorites'),
               subtitle: dedaText(
@@ -7197,6 +7564,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             ),
             _sectionCard(
               icon: Icons.person_pin_circle_outlined,
+              iconColor: const Color(0xFF15996D),
               title: dedaText('أماكني الشخصية', 'My personal places'),
               subtitle: dedaText(
                 'إدارة الأماكن المحفوظة الخاصة بك',
@@ -7213,7 +7581,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             ),
             if (type == DedaAccountType.placeOwner)
               _sectionCard(
-                icon: Icons.storefront,
+                icon: Icons.storefront_outlined,
                 title: dedaText('إدارة مكاني', 'Manage my place'),
                 subtitle: dedaText(
                   'متابعة مكانك وطلباته',
@@ -7227,37 +7595,45 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 },
               ),
 
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: Colors.white.withOpacity(0.92),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: const BorderSide(color: Color(0xFFE1E7DE)),
+            const SizedBox(height: 2),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE1E7DE)),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.language,
-                          color: Color(0xFF17652F),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          dedaText('اللغة', 'Language'),
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2F6B8A).withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    const SizedBox(height: 10),
-                    SegmentedButton<DedaLanguage>(
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.language_rounded,
+                      color: Color(0xFF2F6B8A),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      dedaText('اللغة', 'Language'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    flex: 2,
+                    child: SegmentedButton<DedaLanguage>(
                       segments: const [
                         ButtonSegment(
                           value: DedaLanguage.ar,
@@ -7269,33 +7645,37 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                         ),
                       ],
                       selected: {language},
+                      showSelectedIcon: false,
                       onSelectionChanged: (selection) {
                         if (selection.isNotEmpty) {
                           _setLanguage(selection.first);
                         }
                       },
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
-            const SizedBox(height: 18),
-            const Divider(),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: _logout,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFB3261E),
                 side: const BorderSide(color: Color(0xFFB3261E)),
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                minimumSize: const Size.fromHeight(56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
               ),
               icon: const Icon(Icons.logout),
               label: Text(
                 dedaText('تسجيل الخروج', 'Sign out'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
