@@ -3561,6 +3561,91 @@ class DedaBackend {
       'statusUpdatedByName': actor['displayName'].toString(),
     });
 
+    // Keep the protected administration-entry registry in sync with the
+    // member record. Older members can predate admin_entry_access, so saving
+    // their details once from the general-manager screen also repairs the
+    // missing gateway without deleting/re-inviting the member.
+    final oldEntryAccountKey =
+        _adminEntryAccountKeyForPhone((current['phone'] ?? '').toString());
+    final newEntryAccountKey = _adminEntryAccountKeyForPhone(phone);
+    final memberEmail =
+        (current['email'] ?? '').toString().trim().toLowerCase();
+
+    if (newRole == 'general_manager') {
+      // General-manager entry phones are managed only through the dedicated
+      // gateway list. Remove an old member gateway when a role is promoted.
+      if (oldEntryAccountKey.isNotEmpty) {
+        final oldEntryRef = FirebaseFirestore.instance
+            .collection('admin_entry_access')
+            .doc(oldEntryAccountKey);
+        final oldEntry = await oldEntryRef.get();
+        final oldData = oldEntry.data();
+        final belongsToMember = oldEntry.exists &&
+            oldData != null &&
+            (oldData['accessType'] ?? '').toString() == 'member' &&
+            ((oldData['adminUid'] ?? '').toString() == uid ||
+                (oldData['adminId'] ?? '').toString() ==
+                    (current['adminId'] ?? '').toString() ||
+                ((oldData['allowedAdminEmail'] ?? oldData['email'] ?? '')
+                        .toString()
+                        .trim()
+                        .toLowerCase() ==
+                    memberEmail));
+        if (belongsToMember) {
+          await oldEntryRef.delete();
+        }
+      }
+    } else if (newEntryAccountKey.isNotEmpty) {
+      final directory = await FirebaseFirestore.instance
+          .collection('deda_account_directory')
+          .doc(newEntryAccountKey)
+          .get();
+      if (!directory.exists || directory.data()?['active'] != true) {
+        throw StateError('deda-account-not-found');
+      }
+
+      if (oldEntryAccountKey.isNotEmpty &&
+          oldEntryAccountKey != newEntryAccountKey) {
+        final oldEntryRef = FirebaseFirestore.instance
+            .collection('admin_entry_access')
+            .doc(oldEntryAccountKey);
+        final oldEntry = await oldEntryRef.get();
+        final oldData = oldEntry.data();
+        final belongsToMember = oldEntry.exists &&
+            oldData != null &&
+            (oldData['accessType'] ?? '').toString() == 'member' &&
+            ((oldData['adminUid'] ?? '').toString() == uid ||
+                (oldData['adminId'] ?? '').toString() ==
+                    (current['adminId'] ?? '').toString() ||
+                ((oldData['allowedAdminEmail'] ?? oldData['email'] ?? '')
+                        .toString()
+                        .trim()
+                        .toLowerCase() ==
+                    memberEmail));
+        if (belongsToMember) {
+          await oldEntryRef.delete();
+        }
+      }
+
+      await FirebaseFirestore.instance
+          .collection('admin_entry_access')
+          .doc(newEntryAccountKey)
+          .set(<String, dynamic>{
+        'accountKey': newEntryAccountKey,
+        'phone': adminEntryPhoneDisplay(newEntryAccountKey),
+        'accessType': 'member',
+        'allowedRole': newRole,
+        'allowedAdminEmail': memberEmail,
+        'adminUid': uid,
+        'adminId': (current['adminId'] ?? '').toString(),
+        'status': newStatus,
+        'active': newStatus == 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'managedByUid': actor['uid'].toString(),
+        'managedByName': actor['displayName'].toString(),
+      }, SetOptions(merge: true));
+    }
+
     await _writeAdminAudit(
       'admin_member_updated',
       details: <String, dynamic>{
