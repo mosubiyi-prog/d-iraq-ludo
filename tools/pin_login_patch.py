@@ -33,6 +33,7 @@ replace_once(
     accountPhone = '';
     accountType = null;
     profileAvatarStyle = 0;
+    profileFrameStyle = 0;
     profileBackgroundStyle = 0;
     await prefs.setBool(_loggedInKey, false);
     await prefs.remove(_userNameKey);
@@ -55,6 +56,7 @@ replace_once(
     accountPhone = '';
     accountType = null;
     profileAvatarStyle = 0;
+    profileFrameStyle = 0;
     profileBackgroundStyle = 0;
     await prefs.setBool(_loggedInKey, false);
     await prefs.remove(_userNameKey);
