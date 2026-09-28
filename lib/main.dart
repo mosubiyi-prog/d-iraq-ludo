@@ -70,28 +70,11 @@ String dedaAccountTypeLabel(DedaAccountType type) {
   }
 }
 
-IconData dedaProfileAvatarIcon(int style) {
-  switch (style % 6) {
-    case 1:
-      return Icons.face;
-    case 2:
-      return Icons.account_circle;
-    case 3:
-      return Icons.sentiment_satisfied_alt;
-    case 4:
-      return Icons.emoji_emotions_outlined;
-    case 5:
-      return Icons.tag_faces;
-    default:
-      return Icons.person;
-  }
-}
-
 Color dedaProfileAvatarColor(int style) {
   const colors = <Color>[
     Color(0xFF17652F),
     Color(0xFF2F6B8A),
-    Color(0xFF7A5A2B),
+    Color(0xFF8A5B2F),
     Color(0xFF6A4C93),
     Color(0xFF00796B),
     Color(0xFF9A4E57),
@@ -101,14 +84,310 @@ Color dedaProfileAvatarColor(int style) {
 
 List<Color> dedaProfileBackgroundColors(int style) {
   const backgrounds = <List<Color>>[
-    [Color(0xFFEAF4E7), Color(0xFFD8ECDC)],
-    [Color(0xFFE7F2F5), Color(0xFFD7E9F0)],
-    [Color(0xFFF4EEE3), Color(0xFFECE0C9)],
-    [Color(0xFFF0EAF6), Color(0xFFE5DCF0)],
-    [Color(0xFFE4F3EF), Color(0xFFD4EAE3)],
-    [Color(0xFFF6E9EA), Color(0xFFEFD9DC)],
+    [Color(0xFFF4FBF2), Color(0xFFDCEEDD)],
+    [Color(0xFFF2FAFC), Color(0xFFDCEEF3)],
+    [Color(0xFFFFF9EF), Color(0xFFF0E1C9)],
+    [Color(0xFFFAF6FD), Color(0xFFE7DDF1)],
+    [Color(0xFFF1FBF8), Color(0xFFD6ECE5)],
+    [Color(0xFFFFF5F6), Color(0xFFF0DBDE)],
   ];
   return backgrounds[style.abs() % backgrounds.length];
+}
+
+class DedaAvatarPortrait extends StatelessWidget {
+  final int style;
+  final double size;
+
+  const DedaAvatarPortrait({
+    super.key,
+    required this.style,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: size,
+      child: ClipOval(
+        child: CustomPaint(
+          painter: _DedaAvatarPainter(style),
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaAvatarPainter extends CustomPainter {
+  final int style;
+
+  const _DedaAvatarPainter(this.style);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = style.abs() % 6;
+    const skin = <Color>[
+      Color(0xFFF2C39D),
+      Color(0xFFEAB98F),
+      Color(0xFFDDA87E),
+      Color(0xFFF0C5A5),
+      Color(0xFFE3B087),
+      Color(0xFFF1C8A4),
+    ];
+    const hair = <Color>[
+      Color(0xFF33231F),
+      Color(0xFF1F2C35),
+      Color(0xFF4A2F22),
+      Color(0xFF2B242E),
+      Color(0xFF2E2822),
+      Color(0xFF422628),
+    ];
+    const shirt = <Color>[
+      Color(0xFF17652F),
+      Color(0xFF2F6B8A),
+      Color(0xFF8A5B2F),
+      Color(0xFF6A4C93),
+      Color(0xFF00796B),
+      Color(0xFF9A4E57),
+    ];
+
+    final w = size.width;
+    final h = size.height;
+    final bg = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          shirt[s].withOpacity(0.12),
+          const Color(0xFFFFFFFF),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, bg);
+
+    final bodyPaint = Paint()..color = shirt[s];
+    final body = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.94),
+        width: w * 0.72,
+        height: h * 0.44,
+      ),
+      Radius.circular(w * 0.18),
+    );
+    canvas.drawRRect(body, bodyPaint);
+
+    final neckPaint = Paint()..color = skin[s];
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(w * 0.5, h * 0.69),
+          width: w * 0.19,
+          height: h * 0.21,
+        ),
+        Radius.circular(w * 0.07),
+      ),
+      neckPaint,
+    );
+
+    final earPaint = Paint()..color = skin[s];
+    canvas.drawCircle(Offset(w * 0.285, h * 0.46), w * 0.065, earPaint);
+    canvas.drawCircle(Offset(w * 0.715, h * 0.46), w * 0.065, earPaint);
+
+    final facePaint = Paint()..color = skin[s];
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.5, h * 0.44),
+        width: w * 0.43,
+        height: h * 0.50,
+      ),
+      facePaint,
+    );
+
+    final hairPaint = Paint()..color = hair[s];
+    final hairPath = Path()
+      ..moveTo(w * 0.30, h * 0.39)
+      ..quadraticBezierTo(w * 0.28, h * 0.16, w * 0.48, h * 0.14)
+      ..quadraticBezierTo(w * 0.68, h * 0.12, w * 0.72, h * 0.33)
+      ..quadraticBezierTo(w * 0.63, h * 0.25, w * 0.55, h * 0.25)
+      ..quadraticBezierTo(w * 0.45, h * 0.30, w * 0.30, h * 0.24)
+      ..close();
+    canvas.drawPath(hairPath, hairPaint);
+    if (s.isOdd) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(w * 0.60, h * 0.20),
+          width: w * 0.25,
+          height: h * 0.13,
+        ),
+        hairPaint,
+      );
+    }
+
+    final eyePaint = Paint()..color = const Color(0xFF292421);
+    canvas.drawCircle(Offset(w * 0.42, h * 0.45), w * 0.018, eyePaint);
+    canvas.drawCircle(Offset(w * 0.58, h * 0.45), w * 0.018, eyePaint);
+
+    final browPaint = Paint()
+      ..color = hair[s]
+      ..strokeWidth = w * 0.018
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(w * 0.385, h * 0.405),
+      Offset(w * 0.455, h * 0.395),
+      browPaint,
+    );
+    canvas.drawLine(
+      Offset(w * 0.545, h * 0.395),
+      Offset(w * 0.615, h * 0.405),
+      browPaint,
+    );
+
+    final nosePaint = Paint()
+      ..color = const Color(0xFFBD806E)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.012
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(w * 0.50, h * 0.47),
+      Offset(w * 0.49, h * 0.53),
+      nosePaint,
+    );
+
+    final smilePaint = Paint()
+      ..color = const Color(0xFF9B4B4A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.014
+      ..strokeCap = StrokeCap.round;
+    final smile = Path()
+      ..moveTo(w * 0.44, h * 0.57)
+      ..quadraticBezierTo(w * 0.50, h * 0.62, w * 0.56, h * 0.57);
+    canvas.drawPath(smile, smilePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DedaAvatarPainter oldDelegate) =>
+      oldDelegate.style != style;
+}
+
+List<Color> dedaProfileFrameColors(int style) {
+  const frames = <List<Color>>[
+    [Color(0xFFFFE6A3), Color(0xFFD89A18), Color(0xFFFFF1B9)],
+    [Color(0xFFDFF6FF), Color(0xFF2E8BC0), Color(0xFFBFEFFF)],
+    [Color(0xFFFFD7B3), Color(0xFFC36A18), Color(0xFFFFE3C7)],
+    [Color(0xFFE9D8FF), Color(0xFF7D4BB3), Color(0xFFF6ECFF)],
+    [Color(0xFFD5FFF1), Color(0xFF14856C), Color(0xFFBFF2E5)],
+    [Color(0xFFFFD8DF), Color(0xFFA74759), Color(0xFFFFEEF1)],
+  ];
+  return frames[style.abs() % frames.length];
+}
+
+IconData dedaProfileFrameOrnament(int style) {
+  const ornaments = <IconData>[
+    Icons.workspace_premium_rounded,
+    Icons.ac_unit_rounded,
+    Icons.local_fire_department_rounded,
+    Icons.diamond_rounded,
+    Icons.eco_rounded,
+    Icons.auto_awesome_rounded,
+  ];
+  return ornaments[style.abs() % ornaments.length];
+}
+
+double dedaProfileFrameScale(int style) {
+  const scales = <double>[1.00, 0.92, 1.06, 0.96, 1.03, 0.90];
+  return scales[style.abs() % scales.length];
+}
+
+class DedaLockedFramePreview extends StatelessWidget {
+  final int style;
+  final double size;
+
+  const DedaLockedFramePreview({
+    super.key,
+    required this.style,
+    required this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = dedaProfileFrameColors(style);
+    return SizedBox.square(
+      dimension: size,
+      child: Center(
+        child: Transform.scale(
+          scale: dedaProfileFrameScale(style),
+          child: SizedBox.square(
+            dimension: size * 0.88,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: SweepGradient(colors: colors),
+                    boxShadow: [
+                      BoxShadow(
+                        color: colors[1].withOpacity(0.30),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: size * 0.69,
+                  height: size * 0.69,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFF7F9F5),
+                    border: Border.all(
+                      color: colors.first.withOpacity(0.90),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: -size * 0.05,
+                  child: Container(
+                    padding: EdgeInsets.all(size * 0.055),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(colors: colors),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors[1].withOpacity(0.22),
+                          blurRadius: 7,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      dedaProfileFrameOrnament(style),
+                      color: const Color(0xFF5B4515),
+                      size: size * 0.18,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: EdgeInsets.all(size * 0.075),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.88),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colors[1].withOpacity(0.55),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.lock_rounded,
+                    color: colors[1],
+                    size: size * 0.20,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class DedaPreferences {
