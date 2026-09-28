@@ -244,6 +244,19 @@ class _DedaAdminRecoveryRequestPageState
             ),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 14),
+          OutlinedButton(
+            onPressed: () {
+              setState(() {
+                _requestId = null;
+                _error = null;
+                _code.clear();
+                _newPassword.clear();
+                _confirmPassword.clear();
+              });
+            },
+            child: Text(t('إرسال طلب جديد', 'Send a new request')),
+          ),
         ],
       );
     }
@@ -349,6 +362,26 @@ class _DedaAdminRecoveryRequestPageState
               t(
                 'حفظ كلمة المرور والدخول',
                 'Save password and sign in',
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: _completing
+                ? null
+                : () {
+                    setState(() {
+                      _requestId = null;
+                      _error = null;
+                      _code.clear();
+                      _newPassword.clear();
+                      _confirmPassword.clear();
+                    });
+                  },
+            child: Text(
+              t(
+                'الرمز منتهي أو أحتاج طلبًا جديدًا',
+                'Code expired or I need a new request',
               ),
             ),
           ),
