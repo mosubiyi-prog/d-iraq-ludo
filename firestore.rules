@@ -294,6 +294,77 @@ service cloud.firestore {
       allow delete: if isGeneralManager();
     }
 
+    // Password-recovery channel for administration members. The request can
+    // be created only from the DEDA phone already bound to that member. Only
+    // the general manager may approve or reject it. Cloud Functions use the
+    // Admin SDK to issue and consume the six-digit recovery code.
+    match /admin_recovery_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.status == 'new'
+        && request.resource.data.accountKey is string
+        && request.resource.data.phone is string
+        && request.resource.data.fullName is string
+        && request.resource.data.fullName.size() >= 2
+        && request.resource.data.email is string
+        && request.resource.data.targetAdminUid is string
+        && request.resource.data.targetAdminUid.size() > 0
+        && request.resource.data.targetAdminId is string
+        && request.resource.data.targetRole is string
+        && request.resource.data.targetRole != 'general_manager'
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'requesterUid', 'accountKey', 'phone', 'fullName', 'email',
+          'targetAdminUid', 'targetAdminId', 'targetRole', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && sameAccount(request.resource.data.accountKey)
+        && exists(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        )
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.active == true
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.status == 'active'
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.accessType == 'member'
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.allowedAdminEmail == request.resource.data.email
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.adminUid == request.resource.data.targetAdminUid
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(request.resource.data.accountKey)
+        ).data.allowedRole == request.resource.data.targetRole;
+
+      allow read: if isGeneralManager()
+        || (
+          signedIn()
+          && resource.data.accountKey is string
+          && sameAccount(resource.data.accountKey)
+        );
+
+      allow update: if isGeneralManager()
+        && resource.data.status == 'new'
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.decisionByUid == request.auth.uid
+        && request.resource.data.decisionByName is string
+        && request.resource.data.decisionAt == request.time
+        && request.resource.data.rejectionReason is string
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'decisionByUid', 'decisionByName', 'decisionAt',
+          'rejectionReason', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
     match /admins/{uid} {
       allow read: if (signedIn() && request.auth.uid == uid)
         || isGeneralManager();
