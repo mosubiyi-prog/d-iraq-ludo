@@ -2066,44 +2066,6 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
     setState(() => _adminEntryVisible = allowed);
   }
 
-  Future<void> _setLanguage(DedaLanguage language) async {
-    await DedaPreferences.setLanguage(language);
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(dedaText('تسجيل الخروج', 'Sign out')),
-        content: Text(
-          dedaText(
-            'هل تريد تسجيل الخروج؟ إغلاق التطبيق أو زر الرجوع لا يسجل خروجك.',
-            'Do you want to sign out? Closing the app or pressing Back does not sign you out.',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(dedaText('إلغاء', 'Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(dedaText('تسجيل الخروج', 'Sign out')),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await DedaPreferences.logout();
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (_) => false,
-    );
-  }
-
   Widget _sectionTitle(String text) {
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 8),
@@ -2120,9 +2082,6 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final language = DedaLanguageState.current;
-    final accountType = DedaPreferences.accountType ?? DedaAccountType.user;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -2138,76 +2097,6 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _sectionTitle(dedaText('الحساب', 'Account')),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.person, color: Color(0xFF17652F)),
-                            title: Text(DedaPreferences.userName),
-                            subtitle: Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Text(
-                                DedaPreferences.phone,
-                                textAlign: TextAlign.left,
-                              ),
-                            ),
-                          ),
-                          const Divider(),
-                          Text(
-                            dedaText('نوع الحساب', 'Account type'),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 10),
-                          SegmentedButton<DedaAccountType>(
-                            segments: [
-                              ButtonSegment(
-                                value: DedaAccountType.user,
-                                icon: const Icon(Icons.person),
-                                label: Text(dedaText('مستخدم', 'User')),
-                              ),
-                              ButtonSegment(
-                                value: DedaAccountType.placeOwner,
-                                icon: const Icon(Icons.storefront),
-                                label: Text(dedaText('صاحب مكان', 'Place owner')),
-                              ),
-                            ],
-                            selected: {accountType},
-                            onSelectionChanged: (selection) async {
-                              if (selection.isEmpty) return;
-                              await DedaPreferences.setAccountType(selection.first);
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  _sectionTitle(dedaText('اللغة', 'Language')),
-                  SegmentedButton<DedaLanguage>(
-                    segments: const [
-                      ButtonSegment(
-                        value: DedaLanguage.ar,
-                        icon: Icon(Icons.language),
-                        label: Text('العربية'),
-                      ),
-                      ButtonSegment(
-                        value: DedaLanguage.en,
-                        icon: Icon(Icons.language),
-                        label: Text('English'),
-                      ),
-                    ],
-                    selected: {language},
-                    onSelectionChanged: (selection) {
-                      if (selection.isNotEmpty) _setLanguage(selection.first);
-                    },
-                  ),
-
                   _sectionTitle(dedaText('الصوت والملاحة', 'Voice & navigation')),
                   Card(
                     child: Column(
@@ -2501,22 +2390,7 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
 
                   ],
 
-                  const SizedBox(height: 24),
-                  const Divider(),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _logout,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFB3261E),
-                      side: const BorderSide(color: Color(0xFFB3261E)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    icon: const Icon(Icons.logout),
-                    label: Text(
-                      dedaText('تسجيل الخروج', 'Sign out'),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -6241,9 +6115,94 @@ class DedaAccountHubPage extends StatefulWidget {
 }
 
 class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
+  Future<void> _setLanguage(DedaLanguage language) async {
+    await DedaPreferences.setLanguage(language);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _setAccountType(DedaAccountType type) async {
+    await DedaPreferences.setAccountType(type);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(dedaText('تسجيل الخروج', 'Sign out')),
+        content: Text(
+          dedaText(
+            'هل تريد تسجيل الخروج؟ إغلاق التطبيق أو زر الرجوع لا يسجل خروجك.',
+            'Do you want to sign out? Closing the app or pressing Back does not sign you out.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(dedaText('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(dedaText('تسجيل الخروج', 'Sign out')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await DedaPreferences.logout();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false,
+    );
+  }
+
+  Widget _sectionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color iconColor = const Color(0xFF17652F),
+  }) {
+    return Card(
+      elevation: 0,
+      color: Colors.white.withOpacity(0.92),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: Color(0xFFE1E7DE)),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        leading: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: iconColor),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: Color(0xFF687169)),
+        ),
+        trailing: const Icon(Icons.chevron_left),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final type = DedaPreferences.accountType ?? DedaAccountType.user;
+    final language = DedaLanguageState.current;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -6258,19 +6217,19 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               elevation: 0,
               color: const Color(0xFFEAF4E7),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Row(
                   children: [
                     const CircleAvatar(
-                      radius: 30,
+                      radius: 34,
                       backgroundColor: Color(0xFF17652F),
                       child: Icon(
                         Icons.person,
                         color: Colors.white,
-                        size: 34,
+                        size: 38,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -6281,24 +6240,43 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                           Text(
                             DedaPreferences.userName,
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 21,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            DedaPreferences.phone,
+                          const SizedBox(height: 5),
+                          Directionality(
                             textDirection: TextDirection.ltr,
-                            textAlign: DedaLanguageState.isArabic
-                                ? TextAlign.right
-                                : TextAlign.left,
+                            child: Text(
+                              DedaPreferences.phone,
+                              textAlign: DedaLanguageState.isArabic
+                                  ? TextAlign.right
+                                  : TextAlign.left,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            dedaAccountTypeLabel(type),
-                            style: const TextStyle(
-                              color: Color(0xFF17652F),
-                              fontWeight: FontWeight.w800,
+                          const SizedBox(height: 7),
+                          Align(
+                            alignment: DedaLanguageState.isArabic
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCEEDC),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                child: Text(
+                                  dedaAccountTypeLabel(type),
+                                  style: const TextStyle(
+                                    color: Color(0xFF17652F),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -6308,27 +6286,95 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: () {
+            const SizedBox(height: 12),
+
+            Card(
+              elevation: 0,
+              color: Colors.white.withOpacity(0.92),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(color: Color(0xFFE1E7DE)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.manage_accounts_outlined,
+                          color: Color(0xFF17652F),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            dedaText('معلومات الحساب', 'Account information'),
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      dedaText('نوع الحساب', 'Account type'),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 9),
+                    SegmentedButton<DedaAccountType>(
+                      segments: [
+                        ButtonSegment(
+                          value: DedaAccountType.user,
+                          icon: const Icon(Icons.person),
+                          label: Text(dedaText('مستخدم', 'User')),
+                        ),
+                        ButtonSegment(
+                          value: DedaAccountType.placeOwner,
+                          icon: const Icon(Icons.storefront),
+                          label: Text(dedaText('صاحب مكان', 'Place owner')),
+                        ),
+                      ],
+                      selected: {type},
+                      onSelectionChanged: (selection) {
+                        if (selection.isNotEmpty) {
+                          _setAccountType(selection.first);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            _sectionCard(
+              icon: Icons.favorite,
+              iconColor: const Color(0xFFC73A4C),
+              title: dedaText('المفضلة', 'Favorites'),
+              subtitle: dedaText(
+                'المواقع والأماكن المفضلة لديك',
+                'Your favorite places and locations',
+              ),
+              onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        const SavedPlacesPage(showFavorites: true),
+                    builder: (_) => const SavedPlacesPage(showFavorites: true),
                   ),
                 );
               },
-              icon: const Icon(Icons.favorite),
-              label: Text(dedaText('المفضلة', 'Favorites')),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF17652F),
-                minimumSize: const Size.fromHeight(52),
-              ),
             ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () {
+            _sectionCard(
+              icon: Icons.person_pin_circle_outlined,
+              title: dedaText('أماكني الشخصية', 'My personal places'),
+              subtitle: dedaText(
+                'إدارة الأماكن المحفوظة الخاصة بك',
+                'Manage your personal saved places',
+              ),
+              onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -6336,24 +6382,95 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                   ),
                 );
               },
-              icon: const Icon(Icons.person_pin_circle_outlined),
-              label: Text(
-                dedaText('أماكني الشخصية', 'My personal places'),
-              ),
             ),
-            if (type == DedaAccountType.placeOwner) ...[
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () {
+            if (type == DedaAccountType.placeOwner)
+              _sectionCard(
+                icon: Icons.storefront,
+                title: dedaText('إدارة مكاني', 'Manage my place'),
+                subtitle: dedaText(
+                  'متابعة مكانك وطلباته',
+                  'Manage your place and its requests',
+                ),
+                onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const OwnerPlacePage()),
                   );
                 },
-                icon: const Icon(Icons.storefront),
-                label: Text(dedaText('إدارة مكاني', 'Manage my place')),
               ),
-            ],
+
+            const SizedBox(height: 8),
+            Card(
+              elevation: 0,
+              color: Colors.white.withOpacity(0.92),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(color: Color(0xFFE1E7DE)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.language,
+                          color: Color(0xFF17652F),
+                        ),
+                        const SizedBox(width: 9),
+                        Text(
+                          dedaText('اللغة', 'Language'),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SegmentedButton<DedaLanguage>(
+                      segments: const [
+                        ButtonSegment(
+                          value: DedaLanguage.ar,
+                          label: Text('العربية'),
+                        ),
+                        ButtonSegment(
+                          value: DedaLanguage.en,
+                          label: Text('English'),
+                        ),
+                      ],
+                      selected: {language},
+                      onSelectionChanged: (selection) {
+                        if (selection.isNotEmpty) {
+                          _setLanguage(selection.first);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 18),
+            const Divider(),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _logout,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB3261E),
+                side: const BorderSide(color: Color(0xFFB3261E)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              icon: const Icon(Icons.logout),
+              label: Text(
+                dedaText('تسجيل الخروج', 'Sign out'),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ],
         ),
       ),
