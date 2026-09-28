@@ -185,6 +185,23 @@ class DedaPreferences {
     await prefs.setString(_accountPhoneKey, phone);
   }
 
+  static Future<void> setUserName(String name) async {
+    final cleanName = name.trim().replaceAll(RegExp(r'\\s+'), ' ');
+    if (cleanName.length < 2) {
+      throw ArgumentError('invalid-user-name');
+    }
+    userName = cleanName;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userNameKey, cleanName);
+    unawaited(
+      DedaBackend.syncCurrentUserProfile(
+        name: cleanName,
+        phone: phone,
+        accountType: accountType?.name ?? 'user',
+      ).catchError((_) {}),
+    );
+  }
+
   static Future<void> setVoiceEnabled(bool enabled) async {
     navigationVoiceEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
@@ -6107,6 +6124,132 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+class DedaEditProfilePage extends StatefulWidget {
+  const DedaEditProfilePage({super.key});
+
+  @override
+  State<DedaEditProfilePage> createState() => _DedaEditProfilePageState();
+}
+
+class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
+  late final TextEditingController _name;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: DedaPreferences.userName);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final cleanName = _name.text.trim().replaceAll(RegExp(r'\\s+'), ' ');
+    if (cleanName.length < 2) {
+      setState(() {
+        _error = dedaText(
+          'اكتب الاسم الكامل بشكل صحيح.',
+          'Enter a valid full name.',
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await DedaPreferences.setUserName(cleanName);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = dedaText(
+          'تعذر حفظ الاسم الآن.',
+          'Could not save the name right now.',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF2),
+      appBar: AppBar(
+        title: Text(dedaText('تعديل الملف', 'Edit profile')),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const CircleAvatar(
+              radius: 42,
+              backgroundColor: Color(0xFFE0EFE0),
+              child: Icon(
+                Icons.person,
+                size: 48,
+                color: Color(0xFF17652F),
+              ),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _name,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: dedaText('الاسم', 'Name'),
+                prefixIcon: const Icon(Icons.person_outline),
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _saving ? null : _save(),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              dedaText(
+                'الصورة الشخصية والخلفية تُختاران من مكتبة DEDA الداخلية فقط.',
+                'Profile image and background are selected only from DEDA built-in choices.',
+              ),
+              style: const TextStyle(
+                color: Color(0xFF687169),
+                height: 1.35,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(color: Color(0xFFB3261E)),
+              ),
+            ],
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(dedaText('حفظ', 'Save')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class DedaAccountHubPage extends StatefulWidget {
   const DedaAccountHubPage({super.key});
 
@@ -6288,6 +6431,24 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             ),
             const SizedBox(height: 12),
 
+            _sectionCard(
+              icon: Icons.edit_outlined,
+              title: dedaText('تعديل الملف', 'Edit profile'),
+              subtitle: dedaText(
+                'تحديث معلوماتك الشخصية',
+                'Update your personal information',
+              ),
+              onTap: () async {
+                final changed = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DedaEditProfilePage(),
+                  ),
+                );
+                if (changed == true && mounted) setState(() {});
+              },
+            ),
+
             Card(
               elevation: 0,
               color: Colors.white.withOpacity(0.92),
@@ -6349,6 +6510,36 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               ),
             ),
             const SizedBox(height: 8),
+
+            _sectionCard(
+              icon: Icons.star_rounded,
+              iconColor: const Color(0xFFE2A400),
+              title: dedaText('النقاط', 'Points'),
+              subtitle: dedaText(
+                'نظام النقاط والمكافآت محفوظ لهذا القسم',
+                'Points and rewards are reserved for this section',
+              ),
+              onTap: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: Text(dedaText('النقاط', 'Points')),
+                    content: Text(
+                      dedaText(
+                        'هذا القسم موجود ضمن ترتيب الملف الشخصي، ولن نضع رصيدًا وهميًا قبل اعتماد نظام النقاط.',
+                        'This section is part of the profile layout. No fake balance is shown before the points system is defined.',
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: Text(dedaText('حسنًا', 'OK')),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
 
             _sectionCard(
               icon: Icons.favorite,
