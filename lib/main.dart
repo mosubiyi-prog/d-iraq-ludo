@@ -7187,7 +7187,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     String? badgeText,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: Colors.white.withOpacity(0.95),
         borderRadius: BorderRadius.circular(20),
@@ -7195,8 +7195,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 96),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            constraints: const BoxConstraints(minHeight: 86),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE1E7DE)),
@@ -7204,14 +7204,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             child: Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: iconColor.withOpacity(0.10),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 27),
+                  child: Icon(icon, color: iconColor, size: 25),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -7235,8 +7235,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF707871),
-                          fontSize: 13.5,
-                          height: 1.25,
+                          fontSize: 13,
+                          height: 1.20,
                         ),
                       ),
                     ],
@@ -7283,7 +7283,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       DedaPreferences.profileBackgroundStyle,
     );
     return Container(
-      constraints: const BoxConstraints(minHeight: 345),
+      constraints: const BoxConstraints(minHeight: 312),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: colors,
@@ -7328,31 +7328,37 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 ),
               ),
             ),
-            PositionedDirectional(
-              end: 14,
-              top: 14,
+            Positioned(
+              right: 12,
+              top: 12,
               child: Material(
-                color: Colors.white.withOpacity(0.78),
-                borderRadius: BorderRadius.circular(16),
-                child: IconButton(
-                  tooltip: dedaText('تعديل الملف', 'Edit profile'),
-                  onPressed: _openEditProfile,
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    color: Color(0xFF17652F),
+                color: Colors.white.withOpacity(0.82),
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: IconButton(
+                    tooltip: dedaText('تعديل الملف', 'Edit profile'),
+                    onPressed: _openEditProfile,
+                    padding: const EdgeInsets.all(8),
+                    iconSize: 21,
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      color: Color(0xFF17652F),
+                    ),
                   ),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 34, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Center(
                     child: Container(
-                      width: 126,
-                      height: 126,
+                      width: 116,
+                      height: 116,
                       padding: const EdgeInsets.all(7),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.90),
@@ -7371,11 +7377,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       ),
                       child: DedaAvatarPortrait(
                         style: DedaPreferences.profileAvatarStyle,
-                        size: 112,
+                        size: 102,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 9),
                   Text(
                     dedaText('الاسم', 'Name'),
                     style: const TextStyle(
@@ -7398,7 +7404,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 9),
+                  const SizedBox(height: 6),
                   Text(
                     dedaText('المعرف', 'ID'),
                     style: const TextStyle(
@@ -7425,11 +7431,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Container(
                     constraints: const BoxConstraints(maxWidth: 180),
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+                        const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.68),
                       borderRadius: BorderRadius.circular(18),
@@ -7494,7 +7500,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 30),
           children: [
             _profileHero(type),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
 
             _sectionCard(
               icon: Icons.edit_outlined,
