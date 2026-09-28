@@ -1,4 +1,4 @@
-name: Deploy DEDA account reorg backend
+name: Deploy DEDA account reorg Firestore rules
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
     branches:
       - account-reorg-v1-2026-09-28
     paths:
-      - functions/**
       - firestore.rules
       - firebase.json
       - .github/workflows/deploy-account-reorg-backend.yml
@@ -41,17 +40,14 @@ jobs:
             exit 2
           fi
 
-      - name: Install Functions dependencies
-        run: npm --prefix functions install --no-audit --no-fund
-
-      - name: Deploy Functions and Firestore rules with service account
+      - name: Deploy Firestore rules with service account
         if: steps.auth.outputs.mode == 'service'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.path }}
         run: |
-          npx --yes firebase-tools@latest deploy             --only functions,firestore:rules             --project deda-25b88             --non-interactive
+          npx --yes firebase-tools@latest deploy             --only firestore:rules             --project deda-25b88             --non-interactive
 
-      - name: Deploy Functions and Firestore rules with CI token
+      - name: Deploy Firestore rules with CI token
         if: steps.auth.outputs.mode == 'token'
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
