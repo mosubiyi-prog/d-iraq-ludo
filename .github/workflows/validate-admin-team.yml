@@ -13,6 +13,7 @@ on:
       - admin-final-polish-work-2026-09-24
       - admin-note21-work-2026-09-24
       - build118-admin-privacy-delete-work-2026-09-24
+      - fix-admin-entry-role-2026-09-28
     paths:
       - lib/main.dart
       - lib/admin_pages.dart
