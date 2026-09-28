@@ -263,8 +263,8 @@ class DedaPreferences {
     required int avatarStyle,
     required int backgroundStyle,
   }) async {
-    profileAvatarStyle = avatarStyle.clamp(0, 5);
-    profileBackgroundStyle = backgroundStyle.clamp(0, 5);
+    profileAvatarStyle = avatarStyle.clamp(0, 5).toInt();
+    profileBackgroundStyle = backgroundStyle.clamp(0, 5).toInt();
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
       prefs.setInt(_profileAvatarKey(phone), profileAvatarStyle),
