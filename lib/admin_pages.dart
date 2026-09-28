@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'admin_place_map.dart';
+import 'admin_recovery_pages.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 import 'deda_recovery_admin.dart';
@@ -616,7 +617,44 @@ class _DedaAdminLoginPageState extends State<DedaAdminLoginPage> {
                     backgroundColor: const Color(0xFF17652F),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () async {
+                          final recovered = await Navigator.of(context)
+                              .push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => DedaAdminRecoveryRequestPage(
+                                isArabic: widget.isArabic,
+                                dedaPhone: widget.dedaPhone,
+                                initialName: _name.text.trim(),
+                                initialEmail: _email.text.trim(),
+                              ),
+                            ),
+                          );
+                          if (recovered == true && mounted) {
+                            await _saveIdentity();
+                            if (!mounted) return;
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DedaAdminDashboardPage(
+                                  isArabic: widget.isArabic,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.lock_reset_outlined),
+                  label: Text(
+                    t(
+                      'نسيت رمز الدخول / كلمة المرور؟',
+                      'Forgot access code / password?',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 TextButton.icon(
                   onPressed: _loading
                       ? null
@@ -1079,6 +1117,55 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
       appBar: AppBar(
         title: Text(t('إدارة DEDA', 'DEDA administration')),
         actions: [
+          if (profile != null &&
+              DedaBackend.normalizeAdminRole(profile['role']) ==
+                  'general_manager')
+            StreamBuilder<int>(
+              stream: DedaBackend.pendingAdminRecoveryCountStream(),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      tooltip: t(
+                        'طلبات استرجاع دخول الموظفين',
+                        'Staff sign-in recovery requests',
+                      ),
+                      onPressed: () => _open(
+                        DedaAdminRecoveryInboxPage(isArabic: ar),
+                      ),
+                      icon: const Icon(Icons.mail_outline),
+                    ),
+                    if (count > 0)
+                      PositionedDirectional(
+                        top: 5,
+                        end: 4,
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 18,
+                            minHeight: 18,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFB3261E),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            count > 99 ? '99+' : count.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           IconButton(
             tooltip: t('تحديث', 'Refresh'),
             onPressed: () => _load(forceRefresh: true),
