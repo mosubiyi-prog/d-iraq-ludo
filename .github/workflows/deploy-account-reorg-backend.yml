@@ -42,7 +42,7 @@ jobs:
           fi
 
       - name: Install Functions dependencies
-        run: npm --prefix functions ci
+        run: npm --prefix functions install --no-audit --no-fund
 
       - name: Deploy Functions and Firestore rules with service account
         if: steps.auth.outputs.mode == 'service'
