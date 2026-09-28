@@ -243,7 +243,7 @@ class DedaPreferences {
   }
 
   static Future<void> setUserName(String name) async {
-    final cleanName = name.trim().replaceAll(RegExp(r'\\s+'), ' ');
+    final cleanName = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (cleanName.length < 2) {
       throw ArgumentError('invalid-user-name');
     }
@@ -6228,7 +6228,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
   }
 
   Future<void> _save() async {
-    final cleanName = _name.text.trim().replaceAll(RegExp(r'\\s+'), ' ');
+    final cleanName = _name.text.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (cleanName.length < 2) {
       setState(() {
         _error = dedaText(
