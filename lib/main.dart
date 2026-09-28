@@ -125,141 +125,270 @@ class _DedaAvatarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final s = style.abs() % 6;
+    final female = s >= 3;
+
     const skin = <Color>[
-      Color(0xFFF2C39D),
-      Color(0xFFEAB98F),
-      Color(0xFFDDA87E),
-      Color(0xFFF0C5A5),
-      Color(0xFFE3B087),
-      Color(0xFFF1C8A4),
+      Color(0xFFE9B184),
+      Color(0xFFF0C19A),
+      Color(0xFFCF916B),
+      Color(0xFFF1C3A1),
+      Color(0xFFDFA57D),
+      Color(0xFFF2C7A8),
     ];
     const hair = <Color>[
-      Color(0xFF33231F),
-      Color(0xFF1F2C35),
-      Color(0xFF4A2F22),
-      Color(0xFF2B242E),
-      Color(0xFF2E2822),
-      Color(0xFF422628),
+      Color(0xFF2D211D),
+      Color(0xFF15191E),
+      Color(0xFF8A5A2B),
+      Color(0xFF4A2C27),
+      Color(0xFF202126),
+      Color(0xFFB06F36),
     ];
     const shirt = <Color>[
       Color(0xFF17652F),
       Color(0xFF2F6B8A),
-      Color(0xFF8A5B2F),
       Color(0xFF6A4C93),
+      Color(0xFFA84F68),
       Color(0xFF00796B),
-      Color(0xFF9A4E57),
+      Color(0xFF8A5B2F),
+    ];
+    const accent = <Color>[
+      Color(0xFF3E9A62),
+      Color(0xFF65A9CD),
+      Color(0xFF9B7AC1),
+      Color(0xFFE68AA4),
+      Color(0xFF4BBDA8),
+      Color(0xFFD89A5A),
     ];
 
     final w = size.width;
     final h = size.height;
-    final bg = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          shirt[s].withOpacity(0.12),
-          const Color(0xFFFFFFFF),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, bg);
+    final rect = Offset.zero & size;
 
-    final bodyPaint = Paint()..color = shirt[s];
-    final body = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.94),
-        width: w * 0.72,
-        height: h * 0.44,
-      ),
-      Radius.circular(w * 0.18),
-    );
-    canvas.drawRRect(body, bodyPaint);
+    final bg = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.25, -0.35),
+        radius: 1.05,
+        colors: [
+          Colors.white,
+          accent[s].withOpacity(0.22),
+          shirt[s].withOpacity(0.10),
+        ],
+      ).createShader(rect);
+    canvas.drawRect(rect, bg);
+
+    final halo = Paint()
+      ..color = Colors.white.withOpacity(0.42)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.045);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.43), w * 0.30, halo);
+
+    final body = Path()
+      ..moveTo(w * 0.18, h)
+      ..quadraticBezierTo(w * 0.24, h * 0.75, w * 0.40, h * 0.73)
+      ..lineTo(w * 0.60, h * 0.73)
+      ..quadraticBezierTo(w * 0.76, h * 0.75, w * 0.82, h)
+      ..close();
+    canvas.drawShadow(body, Colors.black.withOpacity(0.24), w * 0.035, true);
+    canvas.drawPath(body, Paint()..color = shirt[s]);
+
+    if (female) {
+      final collar = Path()
+        ..moveTo(w * 0.38, h * 0.77)
+        ..quadraticBezierTo(w * 0.50, h * 0.87, w * 0.62, h * 0.77)
+        ..lineTo(w * 0.58, h * 0.72)
+        ..quadraticBezierTo(w * 0.50, h * 0.78, w * 0.42, h * 0.72)
+        ..close();
+      canvas.drawPath(collar, Paint()..color = accent[s].withOpacity(0.72));
+    }
 
     final neckPaint = Paint()..color = skin[s];
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(
-          center: Offset(w * 0.5, h * 0.69),
-          width: w * 0.19,
-          height: h * 0.21,
+          center: Offset(w * 0.50, h * 0.69),
+          width: w * 0.18,
+          height: h * 0.20,
         ),
         Radius.circular(w * 0.07),
       ),
       neckPaint,
     );
 
-    final earPaint = Paint()..color = skin[s];
-    canvas.drawCircle(Offset(w * 0.285, h * 0.46), w * 0.065, earPaint);
-    canvas.drawCircle(Offset(w * 0.715, h * 0.46), w * 0.065, earPaint);
-
-    final facePaint = Paint()..color = skin[s];
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.5, h * 0.44),
-        width: w * 0.43,
-        height: h * 0.50,
-      ),
-      facePaint,
-    );
-
-    final hairPaint = Paint()..color = hair[s];
-    final hairPath = Path()
-      ..moveTo(w * 0.30, h * 0.39)
-      ..quadraticBezierTo(w * 0.28, h * 0.16, w * 0.48, h * 0.14)
-      ..quadraticBezierTo(w * 0.68, h * 0.12, w * 0.72, h * 0.33)
-      ..quadraticBezierTo(w * 0.63, h * 0.25, w * 0.55, h * 0.25)
-      ..quadraticBezierTo(w * 0.45, h * 0.30, w * 0.30, h * 0.24)
-      ..close();
-    canvas.drawPath(hairPath, hairPaint);
-    if (s.isOdd) {
+    if (female) {
+      final backHair = Paint()..color = hair[s];
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(w * 0.60, h * 0.20),
-          width: w * 0.25,
-          height: h * 0.13,
+          center: Offset(w * 0.50, h * 0.43),
+          width: w * 0.54,
+          height: h * 0.62,
         ),
-        hairPaint,
+        backHair,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.24, h * 0.36, w * 0.12, h * 0.43),
+          Radius.circular(w * 0.06),
+        ),
+        backHair,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.64, h * 0.36, w * 0.12, h * 0.43),
+          Radius.circular(w * 0.06),
+        ),
+        backHair,
       );
     }
 
-    final eyePaint = Paint()..color = const Color(0xFF292421);
-    canvas.drawCircle(Offset(w * 0.42, h * 0.45), w * 0.018, eyePaint);
-    canvas.drawCircle(Offset(w * 0.58, h * 0.45), w * 0.018, eyePaint);
+    final earPaint = Paint()..color = skin[s];
+    canvas.drawCircle(Offset(w * 0.285, h * 0.46), w * 0.060, earPaint);
+    canvas.drawCircle(Offset(w * 0.715, h * 0.46), w * 0.060, earPaint);
+
+    final faceRect = Rect.fromCenter(
+      center: Offset(w * 0.50, h * 0.44),
+      width: w * 0.42,
+      height: h * 0.50,
+    );
+    canvas.drawShadow(
+      Path()..addOval(faceRect),
+      Colors.black.withOpacity(0.18),
+      w * 0.025,
+      true,
+    );
+    canvas.drawOval(faceRect, Paint()..color = skin[s]);
+
+    final hairPaint = Paint()..color = hair[s];
+    if (!female) {
+      final topHair = Path();
+      if (s == 0) {
+        topHair
+          ..moveTo(w * 0.30, h * 0.39)
+          ..quadraticBezierTo(w * 0.31, h * 0.17, w * 0.49, h * 0.15)
+          ..quadraticBezierTo(w * 0.70, h * 0.15, w * 0.71, h * 0.36)
+          ..quadraticBezierTo(w * 0.59, h * 0.27, w * 0.45, h * 0.28)
+          ..quadraticBezierTo(w * 0.38, h * 0.31, w * 0.30, h * 0.29)
+          ..close();
+      } else if (s == 1) {
+        topHair
+          ..moveTo(w * 0.29, h * 0.37)
+          ..quadraticBezierTo(w * 0.34, h * 0.14, w * 0.53, h * 0.15)
+          ..quadraticBezierTo(w * 0.69, h * 0.16, w * 0.72, h * 0.34)
+          ..lineTo(w * 0.61, h * 0.30)
+          ..lineTo(w * 0.56, h * 0.20)
+          ..lineTo(w * 0.49, h * 0.30)
+          ..lineTo(w * 0.41, h * 0.21)
+          ..lineTo(w * 0.36, h * 0.31)
+          ..close();
+      } else {
+        topHair
+          ..moveTo(w * 0.30, h * 0.38)
+          ..quadraticBezierTo(w * 0.32, h * 0.18, w * 0.48, h * 0.16)
+          ..quadraticBezierTo(w * 0.66, h * 0.14, w * 0.72, h * 0.34)
+          ..quadraticBezierTo(w * 0.60, h * 0.26, w * 0.48, h * 0.26)
+          ..quadraticBezierTo(w * 0.39, h * 0.29, w * 0.30, h * 0.25)
+          ..close();
+      }
+      canvas.drawPath(topHair, hairPaint);
+    } else {
+      final topHair = Path()
+        ..moveTo(w * 0.29, h * 0.40)
+        ..quadraticBezierTo(w * 0.29, h * 0.17, w * 0.49, h * 0.14)
+        ..quadraticBezierTo(w * 0.70, h * 0.15, w * 0.72, h * 0.39)
+        ..quadraticBezierTo(w * 0.60, h * 0.27, w * 0.50, h * 0.26)
+        ..quadraticBezierTo(w * 0.39, h * 0.27, w * 0.29, h * 0.40)
+        ..close();
+      canvas.drawPath(topHair, hairPaint);
+      if (s == 3) {
+        canvas.drawCircle(
+          Offset(w * 0.67, h * 0.23),
+          w * 0.09,
+          hairPaint,
+        );
+      } else if (s == 5) {
+        final braidPaint = Paint()
+          ..color = hair[s]
+          ..strokeWidth = w * 0.07
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(
+          Offset(w * 0.70, h * 0.48),
+          Offset(w * 0.73, h * 0.72),
+          braidPaint,
+        );
+        canvas.drawCircle(
+          Offset(w * 0.73, h * 0.72),
+          w * 0.045,
+          hairPaint,
+        );
+      }
+    }
+
+    final eyePaint = Paint()..color = const Color(0xFF2A2523);
+    canvas.drawCircle(Offset(w * 0.42, h * 0.46), w * 0.017, eyePaint);
+    canvas.drawCircle(Offset(w * 0.58, h * 0.46), w * 0.017, eyePaint);
 
     final browPaint = Paint()
       ..color = hair[s]
-      ..strokeWidth = w * 0.018
+      ..strokeWidth = w * 0.017
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
       Offset(w * 0.385, h * 0.405),
-      Offset(w * 0.455, h * 0.395),
+      Offset(w * 0.455, h * 0.397),
       browPaint,
     );
     canvas.drawLine(
-      Offset(w * 0.545, h * 0.395),
+      Offset(w * 0.545, h * 0.397),
       Offset(w * 0.615, h * 0.405),
       browPaint,
     );
 
+    if (female) {
+      final lashPaint = Paint()
+        ..color = const Color(0xFF34272A)
+        ..strokeWidth = w * 0.010
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        Offset(w * 0.393, h * 0.455),
+        Offset(w * 0.372, h * 0.445),
+        lashPaint,
+      );
+      canvas.drawLine(
+        Offset(w * 0.607, h * 0.455),
+        Offset(w * 0.628, h * 0.445),
+        lashPaint,
+      );
+    }
+
     final nosePaint = Paint()
-      ..color = const Color(0xFFBD806E)
+      ..color = const Color(0xFFB97867)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = w * 0.012
+      ..strokeWidth = w * 0.011
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-      Offset(w * 0.50, h * 0.47),
-      Offset(w * 0.49, h * 0.53),
+      Offset(w * 0.50, h * 0.48),
+      Offset(w * 0.49, h * 0.54),
       nosePaint,
     );
 
     final smilePaint = Paint()
-      ..color = const Color(0xFF9B4B4A)
+      ..color = female ? const Color(0xFFA6495F) : const Color(0xFF974A44)
       ..style = PaintingStyle.stroke
       ..strokeWidth = w * 0.014
       ..strokeCap = StrokeCap.round;
     final smile = Path()
-      ..moveTo(w * 0.44, h * 0.57)
-      ..quadraticBezierTo(w * 0.50, h * 0.62, w * 0.56, h * 0.57);
+      ..moveTo(w * 0.44, h * 0.575)
+      ..quadraticBezierTo(w * 0.50, h * 0.625, w * 0.56, h * 0.575);
     canvas.drawPath(smile, smilePaint);
+
+    final shine = Paint()
+      ..color = Colors.white.withOpacity(0.24)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, w * 0.016);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.43, h * 0.34),
+        width: w * 0.12,
+        height: h * 0.05,
+      ),
+      shine,
+    );
   }
 
   @override
@@ -269,12 +398,12 @@ class _DedaAvatarPainter extends CustomPainter {
 
 List<Color> dedaProfileFrameColors(int style) {
   const frames = <List<Color>>[
-    [Color(0xFFFFE6A3), Color(0xFFD89A18), Color(0xFFFFF1B9)],
-    [Color(0xFFDFF6FF), Color(0xFF2E8BC0), Color(0xFFBFEFFF)],
-    [Color(0xFFFFD7B3), Color(0xFFC36A18), Color(0xFFFFE3C7)],
-    [Color(0xFFE9D8FF), Color(0xFF7D4BB3), Color(0xFFF6ECFF)],
-    [Color(0xFFD5FFF1), Color(0xFF14856C), Color(0xFFBFF2E5)],
-    [Color(0xFFFFD8DF), Color(0xFFA74759), Color(0xFFFFEEF1)],
+    [Color(0xFFFFF1AE), Color(0xFFD59A17), Color(0xFF8B5B08)],
+    [Color(0xFFBFF9E9), Color(0xFF0C9B7A), Color(0xFF075B4A)],
+    [Color(0xFFFFD6E4), Color(0xFFD65D89), Color(0xFF8A294F)],
+    [Color(0xFFEAD7FF), Color(0xFF7B4CC2), Color(0xFF442783)],
+    [Color(0xFFCFF1FF), Color(0xFF2E8BC0), Color(0xFF195C83)],
+    [Color(0xFFFFD5C3), Color(0xFFC65B32), Color(0xFF7E301A)],
   ];
   return frames[style.abs() % frames.length];
 }
@@ -282,109 +411,297 @@ List<Color> dedaProfileFrameColors(int style) {
 IconData dedaProfileFrameOrnament(int style) {
   const ornaments = <IconData>[
     Icons.workspace_premium_rounded,
+    Icons.diamond_rounded,
+    Icons.local_florist_rounded,
+    Icons.auto_awesome_rounded,
     Icons.ac_unit_rounded,
     Icons.local_fire_department_rounded,
-    Icons.diamond_rounded,
-    Icons.eco_rounded,
-    Icons.auto_awesome_rounded,
   ];
   return ornaments[style.abs() % ornaments.length];
 }
 
-double dedaProfileFrameScale(int style) {
-  const scales = <double>[1.00, 0.92, 1.06, 0.96, 1.03, 0.90];
-  return scales[style.abs() % scales.length];
-}
+bool dedaProfileFrameIsFree(int style) => style >= 0 && style < 3;
 
-class DedaLockedFramePreview extends StatelessWidget {
-  final int style;
+class DedaFramedAvatar extends StatelessWidget {
+  final int avatarStyle;
+  final int frameStyle;
   final double size;
 
-  const DedaLockedFramePreview({
+  const DedaFramedAvatar({
     super.key,
-    required this.style,
+    required this.avatarStyle,
+    required this.frameStyle,
     required this.size,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colors = dedaProfileFrameColors(style);
+    final portraitSize = size * 0.74;
     return SizedBox.square(
       dimension: size,
-      child: Center(
-        child: Transform.scale(
-          scale: dedaProfileFrameScale(style),
-          child: SizedBox.square(
-            dimension: size * 0.88,
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: SweepGradient(colors: colors),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors[1].withOpacity(0.30),
-                        blurRadius: 12,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: portraitSize,
+            height: portraitSize,
+            padding: EdgeInsets.all(size * 0.025),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.93),
+              boxShadow: [
+                BoxShadow(
+                  color: dedaProfileFrameColors(frameStyle)[1].withOpacity(0.22),
+                  blurRadius: size * 0.13,
+                  spreadRadius: size * 0.012,
+                  offset: Offset(0, size * 0.045),
                 ),
-                Container(
-                  width: size * 0.69,
-                  height: size * 0.69,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFF7F9F5),
-                    border: Border.all(
-                      color: colors.first.withOpacity(0.90),
-                      width: 2,
-                    ),
-                  ),
+              ],
+            ),
+            child: DedaAvatarPortrait(
+              style: avatarStyle,
+              size: portraitSize - size * 0.05,
+            ),
+          ),
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _DedaLuxuryFramePainter(frameStyle),
+            ),
+          ),
+          Positioned(
+            top: size * 0.005,
+            child: Container(
+              width: size * 0.26,
+              height: size * 0.26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: dedaProfileFrameColors(frameStyle),
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                Positioned(
-                  top: -size * 0.05,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.92),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        dedaProfileFrameColors(frameStyle)[1].withOpacity(0.34),
+                    blurRadius: size * 0.07,
+                  ),
+                ],
+              ),
+              child: Icon(
+                dedaProfileFrameOrnament(frameStyle),
+                size: size * 0.145,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DedaLuxuryFramePainter extends CustomPainter {
+  final int style;
+
+  const _DedaLuxuryFramePainter(this.style);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final colors = dedaProfileFrameColors(style);
+    final center = size.center(Offset.zero);
+    final radius = size.width * 0.405;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.055
+      ..color = colors[1].withOpacity(0.24)
+      ..maskFilter = MaskFilter.blur(
+        BlurStyle.normal,
+        size.width * 0.035,
+      );
+    canvas.drawCircle(center, radius, glow);
+
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.065
+      ..shader = SweepGradient(
+        colors: [
+          colors[2],
+          colors[0],
+          Colors.white.withOpacity(0.96),
+          colors[1],
+          colors[2],
+        ],
+        stops: const [0.0, 0.22, 0.46, 0.72, 1.0],
+      ).createShader(rect);
+    canvas.drawCircle(center, radius, ring);
+
+    final inner = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.012
+      ..color = Colors.white.withOpacity(0.88);
+    canvas.drawCircle(center, radius - size.width * 0.044, inner);
+
+    final jewelPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white,
+          colors[0],
+          colors[1],
+        ],
+      ).createShader(
+        Rect.fromCircle(
+          center: center,
+          radius: size.width * 0.08,
+        ),
+      );
+
+    final count = style == 2 ? 8 : (style == 1 ? 6 : 5);
+    for (var i = 0; i < count; i++) {
+      final angle = (i / count) * 6.283185307179586;
+      final x = center.dx + radius * 0.92 * Math.cos(angle);
+      final y = center.dy + radius * 0.92 * Math.sin(angle);
+      canvas.drawCircle(
+        Offset(x, y),
+        size.width * (style == 2 ? 0.030 : 0.025),
+        jewelPaint,
+      );
+    }
+
+    if (style == 0) {
+      final wingPaint = Paint()
+        ..color = colors[1].withOpacity(0.92)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.025
+        ..strokeCap = StrokeCap.round;
+      for (var i = 0; i < 3; i++) {
+        final dy = size.height * (0.60 + i * 0.055);
+        canvas.drawLine(
+          Offset(size.width * 0.16, dy),
+          Offset(size.width * (0.03 + i * 0.02), dy + size.height * 0.06),
+          wingPaint,
+        );
+        canvas.drawLine(
+          Offset(size.width * 0.84, dy),
+          Offset(size.width * (0.97 - i * 0.02), dy + size.height * 0.06),
+          wingPaint,
+        );
+      }
+    } else if (style == 2) {
+      final petal = Paint()..color = colors[1].withOpacity(0.90);
+      for (final dx in <double>[0.19, 0.81]) {
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(size.width * dx, size.height * 0.67),
+            width: size.width * 0.12,
+            height: size.height * 0.055,
+          ),
+          petal,
+        );
+        canvas.drawOval(
+          Rect.fromCenter(
+            center: Offset(size.width * dx, size.height * 0.76),
+            width: size.width * 0.105,
+            height: size.height * 0.05,
+          ),
+          petal,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DedaLuxuryFramePainter oldDelegate) =>
+      oldDelegate.style != style;
+}
+
+class DedaProfileFramePreview extends StatelessWidget {
+  final int style;
+  final int avatarStyle;
+  final double size;
+  final bool selected;
+
+  const DedaProfileFramePreview({
+    super.key,
+    required this.style,
+    required this.avatarStyle,
+    required this.size,
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final free = dedaProfileFrameIsFree(style);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        color: selected
+            ? const Color(0xFFEAF5EA)
+            : Colors.white.withOpacity(0.72),
+        border: Border.all(
+          color: selected
+              ? const Color(0xFF17652F)
+              : const Color(0xFFD8E0D7),
+          width: selected ? 2.5 : 1,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          DedaFramedAvatar(
+            avatarStyle: avatarStyle,
+            frameStyle: style,
+            size: size * 0.82,
+          ),
+          if (selected)
+            const PositionedDirectional(
+              top: 6,
+              end: 6,
+              child: CircleAvatar(
+                radius: 12,
+                backgroundColor: Color(0xFF17652F),
+                child: Icon(Icons.check, color: Colors.white, size: 15),
+              ),
+            ),
+          if (!free)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  color: Colors.white.withOpacity(0.52),
+                ),
+                child: Center(
                   child: Container(
-                    padding: EdgeInsets.all(size * 0.055),
+                    padding: EdgeInsets.all(size * 0.07),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(colors: colors),
-                      boxShadow: [
+                      color: Colors.white.withOpacity(0.94),
+                      boxShadow: const [
                         BoxShadow(
-                          color: colors[1].withOpacity(0.22),
-                          blurRadius: 7,
+                          color: Color(0x22000000),
+                          blurRadius: 10,
                         ),
                       ],
                     ),
                     child: Icon(
-                      dedaProfileFrameOrnament(style),
-                      color: const Color(0xFF5B4515),
-                      size: size * 0.18,
+                      Icons.lock_rounded,
+                      color: dedaProfileFrameColors(style)[1],
+                      size: size * 0.20,
                     ),
                   ),
                 ),
-                Container(
-                  padding: EdgeInsets.all(size * 0.075),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.88),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: colors[1].withOpacity(0.55),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.lock_rounded,
-                    color: colors[1],
-                    size: size * 0.20,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+        ],
       ),
     );
   }
