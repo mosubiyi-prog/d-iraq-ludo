@@ -7685,7 +7685,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       DedaPreferences.profileBackgroundStyle,
     );
     return Container(
-      constraints: const BoxConstraints(minHeight: 312),
+      constraints: const BoxConstraints(minHeight: 278),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: colors,
@@ -7707,83 +7707,42 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         child: Stack(
           children: [
             PositionedDirectional(
-              start: -42,
-              top: 32,
+              start: -48,
+              top: 20,
               child: Container(
-                width: 120,
-                height: 120,
+                width: 112,
+                height: 112,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.28),
+                  color: Colors.white.withOpacity(0.25),
                 ),
               ),
             ),
             PositionedDirectional(
-              end: -50,
-              bottom: 18,
+              end: -54,
+              bottom: 10,
               child: Container(
-                width: 150,
-                height: 150,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.24),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Material(
-                color: Colors.white.withOpacity(0.82),
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  width: 42,
-                  height: 42,
-                  child: IconButton(
-                    tooltip: dedaText('تعديل الملف', 'Edit profile'),
-                    onPressed: _openEditProfile,
-                    padding: const EdgeInsets.all(8),
-                    iconSize: 21,
-                    icon: const Icon(
-                      Icons.edit_outlined,
-                      color: Color(0xFF17652F),
-                    ),
-                  ),
+                  color: Colors.white.withOpacity(0.22),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Center(
-                    child: Container(
-                      width: 116,
-                      height: 116,
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.90),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFFFFFF),
-                          width: 2,
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x22000000),
-                            blurRadius: 16,
-                            offset: Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: DedaAvatarPortrait(
-                        style: DedaPreferences.profileAvatarStyle,
-                        size: 102,
-                      ),
+                    child: DedaFramedAvatar(
+                      avatarStyle: DedaPreferences.profileAvatarStyle,
+                      frameStyle: DedaPreferences.profileFrameStyle,
+                      size: 122,
                     ),
                   ),
-                  const SizedBox(height: 9),
+                  const SizedBox(height: 3),
                   Text(
                     dedaText('الاسم', 'Name'),
                     style: const TextStyle(
@@ -7792,7 +7751,6 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 280),
                     child: Text(
@@ -7801,12 +7759,13 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 23,
+                        height: 1.12,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 3),
                   Text(
                     dedaText('المعرف', 'ID'),
                     style: const TextStyle(
@@ -7815,7 +7774,6 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Directionality(
                     textDirection: TextDirection.ltr,
                     child: ConstrainedBox(
@@ -7828,22 +7786,30 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                         style: const TextStyle(
                           color: Color(0xFF25382A),
                           fontSize: 18,
+                          height: 1.15,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   Container(
                     constraints: const BoxConstraints(maxWidth: 180),
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.68),
+                      color: Colors.white.withOpacity(0.70),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: const Color(0xFFBED9C0),
                       ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 7,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
