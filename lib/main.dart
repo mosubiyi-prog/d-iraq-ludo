@@ -6258,6 +6258,137 @@ class DedaAccountHubPage extends StatefulWidget {
 }
 
 class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
+  String get _personalDedaId =>
+      DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
+
+  Future<void> _ensureDedaIdRegistered() async {
+    try {
+      Map<String, dynamic>? place;
+      if (DedaPreferences.accountType == DedaAccountType.placeOwner) {
+        place = await DedaBackend.currentOwnerPublishedPlace(
+          DedaPreferences.phone,
+        );
+      }
+      await DedaBackend.ensureLocationShareIdentity(
+        name: DedaPreferences.userName,
+        phone: DedaPreferences.phone,
+        accountType: DedaPreferences.accountType?.name ?? 'user',
+        hasApprovedPlace: place != null,
+        placeName: (place?['placeName'] ?? '').toString(),
+      );
+    } catch (_) {
+      // The deterministic ID can still be displayed and copied offline.
+    }
+  }
+
+  Future<void> _copyDedaId() async {
+    final id = _personalDedaId;
+    if (id.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: id));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(dedaText('تم نسخ معرف DEDA.', 'DEDA ID copied.')),
+      ),
+    );
+  }
+
+  Future<void> _shareDedaId() async {
+    final id = _personalDedaId;
+    if (id.isEmpty) return;
+    final message = dedaText(
+      'معرفي في DEDA: $id',
+      'My DEDA ID: $id',
+    );
+    final uri = Uri.parse(
+      'https://wa.me/?text=${Uri.encodeComponent(message)}',
+    );
+    final opened = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) {
+      await _copyDedaId();
+    }
+  }
+
+  Future<void> _showDedaIdCard() async {
+    final id = _personalDedaId;
+    if (id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر تجهيز معرف DEDA لهذا الحساب.',
+              'Could not prepare a DEDA ID for this account.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    unawaited(_ensureDedaIdRegistered());
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(dedaText('معرف DEDA', 'DEDA ID')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: QrImageView(
+                data: id,
+                version: QrVersions.auto,
+                size: 210,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: SelectableText(
+                id,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              dedaText(
+                'شارك هذا المعرف داخل DEDA بدون كشف رقم هاتفك.',
+                'Share this ID inside DEDA without exposing your phone number.',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF687169)),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          OutlinedButton.icon(
+            onPressed: _copyDedaId,
+            icon: const Icon(Icons.copy_outlined),
+            label: Text(dedaText('نسخ', 'Copy')),
+          ),
+          FilledButton.icon(
+            onPressed: _shareDedaId,
+            icon: const Icon(Icons.share_outlined),
+            label: Text(dedaText('مشاركة', 'Share')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(dedaText('إغلاق', 'Close')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _setLanguage(DedaLanguage language) async {
     await DedaPreferences.setLanguage(language);
     if (mounted) setState(() {});
@@ -6351,6 +6482,13 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       appBar: AppBar(
         title: Text(dedaText('حسابي', 'My account')),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: dedaText('معرف DEDA', 'DEDA ID'),
+            onPressed: _showDedaIdCard,
+            icon: const Icon(Icons.qr_code_2_rounded),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -6391,10 +6529,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                           Directionality(
                             textDirection: TextDirection.ltr,
                             child: Text(
-                              DedaPreferences.phone,
+                              _personalDedaId,
                               textAlign: DedaLanguageState.isArabic
                                   ? TextAlign.right
                                   : TextAlign.left,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF33483A),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 7),
@@ -6478,6 +6620,18 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: Text(
+                        DedaPreferences.phone,
+                        textAlign: TextAlign.left,
+                        style: const TextStyle(
+                          color: Color(0xFF536057),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text(
