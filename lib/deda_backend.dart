@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -3788,6 +3789,515 @@ class DedaBackend {
       'updatedAt': FieldValue.serverTimestamp(),
     });
     _clearAdminProfileCache();
+  }
+
+  // Administration member password recovery. Requests are opened only from
+  // the already-authorized DEDA phone. The general manager decides, while a
+  // callable Cloud Function performs the sensitive Firebase Auth password
+  // update after the member supplies the six-digit recovery code.
+  static Future<String> requestAdminPasswordRecovery({
+    required String phone,
+    required String fullName,
+    required String email,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final accountKey = _adminEntryAccountKeyForPhone(phone);
+    final cleanName = fullName.trim().replaceAll(RegExp(r'\\s+'), ' ');
+    final cleanEmail = email.trim().toLowerCase();
+    if (accountKey.isEmpty) throw ArgumentError('recovery-account-missing');
+    if (cleanName.length < 2) throw ArgumentError('recovery-name-required');
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+      throw ArgumentError('recovery-email-required');
+    }
+
+    final auth = FirebaseAuth.instance;
+    var current = auth.currentUser;
+    if (current == null || !current.isAnonymous) {
+      try {
+        await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+      } catch (_) {}
+      current = auth.currentUser;
+    }
+    if (current == null) throw StateError('deda-session-required');
+
+    final firestore = FirebaseFirestore.instance;
+    final accessRef = firestore.collection('admin_entry_access').doc(accountKey);
+    final accessSnapshot = await accessRef.get();
+    final access = accessSnapshot.data();
+    if (!accessSnapshot.exists ||
+        access == null ||
+        access['active'] != true ||
+        (access['status'] ?? '').toString() != 'active' ||
+        (access['accessType'] ?? '').toString() != 'member') {
+      throw StateError('admin-recovery-not-authorized');
+    }
+
+    final allowedEmail =
+        (access['allowedAdminEmail'] ?? '').toString().trim().toLowerCase();
+    final targetAdminUid = (access['adminUid'] ?? '').toString().trim();
+    final targetAdminId = (access['adminId'] ?? '').toString().trim();
+    final targetRole = normalizeAdminRole(access['allowedRole']);
+    if (allowedEmail.isEmpty ||
+        allowedEmail != cleanEmail ||
+        targetAdminUid.isEmpty ||
+        targetRole == 'general_manager') {
+      throw StateError('admin-recovery-identity-mismatch');
+    }
+
+    // Reuse an unresolved request instead of creating duplicates when the
+    // member taps the action twice because of a slow connection.
+    try {
+      final existing = await firestore
+          .collection('admin_recovery_requests')
+          .where('accountKey', isEqualTo: accountKey)
+          .limit(20)
+          .get();
+      for (final doc in existing.docs) {
+        final status = (doc.data()['status'] ?? '').toString();
+        if (<String>{'new', 'approved', 'ready'}.contains(status)) {
+          return doc.id;
+        }
+      }
+    } catch (_) {
+      // Creation below remains authoritative if the duplicate check cannot run.
+    }
+
+    final ref = firestore.collection('admin_recovery_requests').doc();
+    await ref.set(<String, dynamic>{
+      'requesterUid': current.uid,
+      'accountKey': accountKey,
+      'phone': adminEntryPhoneDisplay(accountKey),
+      'fullName': cleanName,
+      'email': cleanEmail,
+      'targetAdminUid': targetAdminUid,
+      'targetAdminId': targetAdminId,
+      'targetRole': targetRole,
+      'status': 'new',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  static Stream<Map<String, dynamic>?> adminRecoveryRequestStream(
+    String requestId,
+  ) {
+    final cleanId = requestId.trim();
+    if (cleanId.isEmpty || !isReady) {
+      return Stream<Map<String, dynamic>?>.value(null);
+    }
+    return FirebaseFirestore.instance
+        .collection('admin_recovery_requests')
+        .doc(cleanId)
+        .snapshots()
+        .map((snapshot) {
+      final data = snapshot.data();
+      if (!snapshot.exists || data == null) return null;
+      return <String, dynamic>{'id': snapshot.id, ...data};
+    });
+  }
+
+  static Stream<int> pendingAdminRecoveryCountStream() {
+    if (!isReady) return Stream<int>.value(0);
+    return FirebaseFirestore.instance
+        .collection('admin_recovery_requests')
+        .where('status', isEqualTo: 'new')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  static Stream<List<Map<String, dynamic>>> adminRecoveryRequestsStream() {
+    if (!isReady) return Stream<List<Map<String, dynamic>>>.value(const []);
+    return FirebaseFirestore.instance
+        .collection('admin_recovery_requests')
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList());
+  }
+
+  static Future<void> decideAdminPasswordRecovery({
+    required String requestId,
+    required bool approve,
+    String rejectionReason = '',
+  }) async {
+    final actor = await currentAdminProfile(forceRefresh: true);
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+
+    final cleanId = requestId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('request-id-required');
+    final reason = rejectionReason.trim();
+    if (!approve && reason.isEmpty) {
+      throw ArgumentError('rejection-reason-required');
+    }
+
+    await FirebaseFirestore.instance
+        .collection('admin_recovery_requests')
+        .doc(cleanId)
+        .update(<String, dynamic>{
+      'status': approve ? 'approved' : 'rejected',
+      'decisionByUid': actor['uid'].toString(),
+      'decisionByName': actor['displayName'].toString(),
+      'decisionAt': FieldValue.serverTimestamp(),
+      'rejectionReason': approve ? '' : reason,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> completeAdminPasswordRecovery({
+    required String requestId,
+    required String recoveryCode,
+    required String newPassword,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final cleanId = requestId.trim();
+    final cleanCode = recoveryCode.trim();
+    if (cleanId.isEmpty) throw ArgumentError('request-id-required');
+    if (!RegExp(r'^\\d{6}  static Future<void> deleteRoadHazardAsAdmin({
+    required String id,
+    required String reason,
+  }) async {
+    final actor = await _adminIdentity();
+    final ref = FirebaseFirestore.instance.collection('road_hazards').doc(id);
+    final snapshot = await ref.get();
+    if (!snapshot.exists) return;
+    await ref.delete();
+    await _writeAdminAudit(
+      'road_hazard_deleted',
+      details: <String, dynamic>{
+        'targetId': id,
+        'reason': reason.trim(),
+        'hazardType': snapshot.data()?['type'],
+        'adminUid': actor['uid'],
+      },
+    );
+  }
+
+  static Future<void> signOutAdmin() async {
+    try {
+      await _writeAdminAudit('admin_signed_out');
+    } catch (_) {}
+    _clearAdminProfileCache();
+    await FirebaseAuth.instance.signOut();
+  }
+
+  // DEDA in-app location sharing v1.
+  static const String _shareAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  // DEDA accounts use Iraqi mobile numbers. The final nine digits contain
+  // exactly 1,000,000,000 possible values, while six base-32 characters hold
+  // 1,073,741,824 values. A modular offset therefore gives every valid phone
+  // a collision-free six-character public code without exposing the phone.
+  static String _shareCodeForPhone(String phone, int offset) {
+    final key = accountKeyForPhone(phone);
+    if (key.length < 9) return '';
+    final tail = key.substring(key.length - 9);
+    final raw = int.tryParse(tail);
+    if (raw == null) return '';
+    var value = (raw + offset) % 1000000000;
+    final chars = List<String>.filled(6, _shareAlphabet[0]);
+    for (var index = 5; index >= 0; index--) {
+      chars[index] = _shareAlphabet[value % 32];
+      value ~/= 32;
+    }
+    return chars.join();
+  }
+
+  static String personalShareIdForPhone(String phone) {
+    final code = _shareCodeForPhone(phone, 314159265);
+    if (code.isEmpty) return '';
+    return '@DEDA-$code';
+  }
+
+  static String placeShareIdForPhone(String phone) {
+    final code = _shareCodeForPhone(phone, 271828182);
+    if (code.isEmpty) return '';
+    return '@DEDA-P-$code';
+  }
+
+  static String normalizeSharePublicId(String value) {
+    var id = value.trim().toUpperCase().replaceAll(' ', '');
+    if (id.isEmpty) return '';
+    if (!id.startsWith('@')) id = '@$id';
+    return id;
+  }
+
+  static bool isValidPersonalShareId(String value) {
+    final id = normalizeSharePublicId(value);
+    return RegExp(r'^@DEDA-[A-Z2-9]{6}$').hasMatch(id);
+  }
+
+  static Future<Map<String, dynamic>?> currentOwnerPublishedPlace(
+    String phone,
+  ) async {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) return null;
+    final all = await publishedPlaces();
+    for (final item in all) {
+      if ((item['accountKey'] ?? '').toString() == accountKey &&
+          item['published'] == true) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static Future<Map<String, String>> ensureLocationShareIdentity({
+    required String name,
+    required String phone,
+    required bool hasApprovedPlace,
+    String accountType = 'user',
+    String placeName = '',
+  }) async {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) throw StateError('share-account-missing');
+
+    // A locally remembered DEDA login can outlive Firebase's anonymous
+    // session. Restore the trusted DEDA session for this installation before
+    // writing the public sharing identity, otherwise Firestore correctly
+    // rejects the share-ID registration.
+    final user = await _ensureOwnerSessionForAccountKey(accountKey);
+
+    final personalId = personalShareIdForPhone(phone);
+    final placeId = hasApprovedPlace ? placeShareIdForPhone(phone) : '';
+    final firestore = FirebaseFirestore.instance;
+
+    // The stable DEDA ID is derived from the phone and never regenerated here.
+    // After an admin session or an app/auth refresh Firebase may give the app a
+    // new anonymous UID. In that case users/{uid} does not exist yet, so writing
+    // only the share fields is rejected by the Firestore create rule because
+    // accountKey is missing. Seed the complete public-user identity first while
+    // preserving the same deterministic DEDA ID.
+    final userRef = firestore.collection('users').doc(user.uid);
+    final userSnapshot = await userRef.get();
+    final cleanAccountType = accountType.trim();
+    await userRef.set({
+      'name': name.trim(),
+      'phone': phone.trim(),
+      'accountKey': accountKey,
+      'accountType': cleanAccountType.isEmpty ? 'user' : cleanAccountType,
+      'authMethod': 'deda_pin_firestore_v1',
+      'sharePersonalId': personalId,
+      'sharePlaceId': placeId,
+      if (!userSnapshot.exists) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastSeenAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    Future<void> claim({
+      required String publicId,
+      required String kind,
+      required String displayName,
+    }) async {
+      if (publicId.isEmpty) return;
+      final ref = firestore.collection('deda_share_ids').doc(publicId);
+      final existing = await ref.get();
+      if (existing.exists) return;
+      await ref.set({
+        'publicId': publicId,
+        'kind': kind,
+        'displayName': displayName.trim(),
+        'ownerUid': user.uid,
+        'active': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await claim(
+      publicId: personalId,
+      kind: 'personal',
+      displayName: name,
+    );
+    if (placeId.isNotEmpty) {
+      await claim(
+        publicId: placeId,
+        kind: 'place',
+        displayName: placeName.isEmpty ? name : placeName,
+      );
+    }
+
+    return <String, String>{
+      'personalId': personalId,
+      'placeId': placeId,
+    };
+  }
+
+  static Future<Map<String, dynamic>?> locationShareIdInfo(String value) async {
+    final id = normalizeSharePublicId(value);
+    if (id.isEmpty || !isReady) return null;
+    final snapshot =
+        await FirebaseFirestore.instance.collection('deda_share_ids').doc(id).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null || data['active'] != true) return null;
+    return <String, dynamic>{'id': snapshot.id, ...data};
+  }
+
+  static Future<String> createLocationShare({
+    required String recipientPublicId,
+    required String senderPublicId,
+    required String senderName,
+    required String shareType,
+    required double latitude,
+    required double longitude,
+    required int durationMinutes,
+    String placeName = '',
+    String placeDocumentId = '',
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    if (durationMinutes != 15 &&
+        durationMinutes != 30 &&
+        durationMinutes != 60) {
+      throw ArgumentError('invalid-share-duration');
+    }
+    if (shareType != 'current' && shareType != 'place') {
+      throw ArgumentError('invalid-share-type');
+    }
+
+    final recipientId = normalizeSharePublicId(recipientPublicId);
+    final senderId = normalizeSharePublicId(senderPublicId);
+    if (!isValidPersonalShareId(recipientId)) {
+      throw ArgumentError('invalid-recipient-share-id');
+    }
+
+    final recipient = await locationShareIdInfo(recipientId);
+    if (recipient == null ||
+        (recipient['kind'] ?? '').toString() != 'personal') {
+      throw StateError('recipient-share-id-not-found');
+    }
+
+    final user = await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final ref = firestore.collection('deda_location_shares').doc();
+    final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
+
+    await ref.set({
+      'senderUid': user.uid,
+      'senderPublicId': senderId,
+      'senderName': senderName.trim(),
+      'recipientPublicId': recipientId,
+      'shareType': shareType,
+      'placeName': placeName.trim(),
+      'placeId': placeDocumentId.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'durationMinutes': durationMinutes,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expiresAt),
+    });
+    return ref.id;
+  }
+
+  static Map<String, dynamic> _locationShareMap(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    String? asIso(dynamic value) {
+      if (value is Timestamp) return value.toDate().toIso8601String();
+      if (value is DateTime) return value.toIso8601String();
+      return null;
+    }
+
+    return <String, dynamic>{
+      'id': document.id,
+      ...data,
+      'createdAtIso': asIso(data['createdAt']),
+      'updatedAtIso': asIso(data['updatedAt']),
+      'expiresAtIso': asIso(data['expiresAt']),
+      'acceptedAtIso': asIso(data['acceptedAt']),
+      'rejectedAtIso': asIso(data['rejectedAt']),
+    };
+  }
+
+  static Stream<List<Map<String, dynamic>>> locationSharesStream(
+    String recipientPublicId,
+  ) {
+    final id = normalizeSharePublicId(recipientPublicId);
+    if (!isReady || id.isEmpty) {
+      return Stream<List<Map<String, dynamic>>>.value(
+        const <Map<String, dynamic>>[],
+      );
+    }
+
+    return FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .where('recipientPublicId', isEqualTo: id)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      final items = snapshot.docs.map(_locationShareMap).toList();
+      items.sort((a, b) {
+        final ad = DateTime.tryParse((a['createdAtIso'] ?? '').toString());
+        final bd = DateTime.tryParse((b['createdAtIso'] ?? '').toString());
+        return (bd ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(ad ?? DateTime.fromMillisecondsSinceEpoch(0));
+      });
+      return items;
+    });
+  }
+
+  static Stream<int> pendingLocationSharesCountStream(
+    String recipientPublicId,
+  ) {
+    return locationSharesStream(recipientPublicId).map((items) {
+      final now = DateTime.now();
+      var count = 0;
+      for (final item in items) {
+        final status = (item['status'] ?? 'pending').toString();
+        final expires =
+            DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
+        if (status == 'pending' &&
+            expires != null &&
+            expires.isAfter(now)) {
+          count++;
+        }
+      }
+      return count;
+    });
+  }
+
+  static Future<void> decideLocationShare({
+    required String shareId,
+    required bool accept,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final cleanId = shareId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('share-id-required');
+    final update = <String, dynamic>{
+      'status': accept ? 'accepted' : 'rejected',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'readAt': FieldValue.serverTimestamp(),
+      if (accept) 'acceptedAt': FieldValue.serverTimestamp(),
+      if (!accept) 'rejectedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .doc(cleanId)
+        .update(update);
+  }
+
+}
+).hasMatch(cleanCode)) {
+      throw ArgumentError('invalid-recovery-code');
+    }
+    if (newPassword.length < 8) throw ArgumentError('weak-password');
+
+    final callable =
+        FirebaseFunctions.instance.httpsCallable('completeAdminRecovery');
+    final result = await callable.call(<String, dynamic>{
+      'requestId': cleanId,
+      'recoveryCode': cleanCode,
+      'newPassword': newPassword,
+    });
+    final data = result.data;
+    if (data is Map && data['success'] == true) return;
+    throw StateError('admin-recovery-completion-failed');
   }
 
   static Future<void> deleteRoadHazardAsAdmin({
