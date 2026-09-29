@@ -1523,7 +1523,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 7),
                       SizedBox(
                         height: 310,
                         child: Column(
@@ -1558,7 +1558,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 7),
                             Align(
                               alignment: Alignment.centerRight,
                               child: Text(
@@ -1619,7 +1619,7 @@ class _LoginPageState extends State<LoginPage> {
                                 icon: Icons.person,
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 7),
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
@@ -1653,7 +1653,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 icon: const Icon(
                                   Icons.login,
-                                  size: 27,
+                                  size: 25,
                                 ),
                                 label: Text(
                                   dedaText('تسجيل الدخول', 'Sign in'),
@@ -1695,9 +1695,9 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 7),
                       _DedaCategoryPreviewStrip(),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 7),
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: _DedaRinadSignature(),
@@ -2361,7 +2361,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
                         ),
                       ),
                       if (_attachedImagePaths.isNotEmpty) ...[
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 7),
                         Text(
                           dedaText(
                             'يمكن إرفاق صورة واحدة فقط مع كل طلب.',
@@ -4631,7 +4631,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                         ? dedaText('لم يتم تثبيت الموقع بعد.', 'Location has not been captured yet.')
                                         : '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
                                   ),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 7),
                                   OutlinedButton.icon(
                                     onPressed: !_formEditable || _gettingLocation
                                         ? null
@@ -5086,7 +5086,7 @@ class _PersonalPlaceEditorPageState extends State<PersonalPlaceEditorPage> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 7),
                             Text(
                               _latitude == null || _longitude == null
                                   ? dedaText(
@@ -6704,7 +6704,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 7),
                           Row(
                             children: [
                               Expanded(
@@ -6759,7 +6759,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 7),
                           SizedBox(
                             height: 140,
                             child: Row(
@@ -6776,7 +6776,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 7),
                           SizedBox(
                             height: 140,
                             child: Row(
@@ -9720,7 +9720,7 @@ class _DedaReceivedLocationsPageState
                                         size: 52,
                                         color: Color(0xFF17652F),
                                       ),
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 7),
                                       Text(
                                         dedaText(
                                           'لا توجد مشاركات في هذا القسم.',
@@ -9903,32 +9903,35 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   Widget _dailyLoginCard() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-        final iconBox = compact ? 60.0 : 70.0;
-        final rewardWidth = compact ? 82.0 : 94.0;
+        final compact = constraints.maxWidth < 390;
+        final iconBox = compact ? 52.0 : 58.0;
+        final rewardWidth = compact ? 74.0 : 82.0;
 
         return Container(
-          padding: EdgeInsets.all(compact ? 11 : 13),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 9 : 11,
+            vertical: compact ? 8 : 9,
+          ),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [
-                Color(0xFF0B3F72),
-                Color(0xFF082C55),
+                Color(0xFF0D4778),
+                Color(0xFF082E59),
                 Color(0xFF061F3E),
               ],
               begin: AlignmentDirectional.topStart,
               end: AlignmentDirectional.bottomEnd,
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: const Color(0xFFFFD76A),
-              width: 1.4,
+              width: 1.35,
             ),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x36000000),
-                blurRadius: 15,
-                offset: Offset(0, 7),
+                blurRadius: 13,
+                offset: Offset(0, 5),
               ),
             ],
           ),
@@ -9943,77 +9946,77 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   gradient: const LinearGradient(
                     colors: [
                       Color(0xFFFFE9A8),
-                      Color(0xFFE3AE34),
+                      Color(0xFFE0AE39),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(19),
+                  borderRadius: BorderRadius.circular(17),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x44E5B74C),
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
+                      blurRadius: 9,
+                      offset: Offset(0, 3),
                     ),
                   ],
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   Icons.calendar_month_rounded,
-                  size: compact ? 35 : 41,
+                  size: compact ? 30 : 34,
                   color: const Color(0xFF0A3B68),
                 ),
               ),
-              SizedBox(width: compact ? 9 : 12),
+              SizedBox(width: compact ? 8 : 10),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: AlignmentDirectional.centerEnd,
                       child: Text(
-                        dedaText(
-                          'تسجيل الدخول اليومي',
-                          'Daily login',
-                        ),
+                        dedaText('تسجيل الدخول اليومي', 'Daily login'),
                         maxLines: 1,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: compact ? 17 : 19,
+                          fontSize: compact ? 16.0 : 17.5,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         const Icon(
                           Icons.check_circle_rounded,
                           color: Color(0xFF68E389),
-                          size: 19,
+                          size: 17,
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 4),
                         Flexible(
-                          child: Text(
-                            dedaText(
-                              'تم تسجيل الدخول بنجاح',
-                              'Daily login completed',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: const Color(0xFFFFE7A5),
-                              fontSize: compact ? 11.5 : 12.5,
-                              fontWeight: FontWeight.w800,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Text(
+                              dedaText(
+                                'تم تسجيل الدخول بنجاح',
+                                'Daily login completed',
+                              ),
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: const Color(0xFFFFE7A5),
+                                fontSize: compact ? 10.6 : 11.5,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 5),
                     Row(
                       children: [
                         Expanded(
@@ -10021,7 +10024,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             borderRadius: BorderRadius.circular(20),
                             child: const LinearProgressIndicator(
                               value: 1,
-                              minHeight: 8,
+                              minHeight: 7,
                               backgroundColor: Color(0x33FFFFFF),
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 Color(0xFFFFD76A),
@@ -10029,39 +10032,42 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 7),
+                        const SizedBox(width: 6),
                         const Text(
                           '1/1',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
-                            fontSize: 13,
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         const Icon(
                           Icons.schedule_rounded,
-                          size: 16,
+                          size: 14,
                           color: Color(0xFFD8E3EF),
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 4),
                         Flexible(
-                          child: Text(
-                            dedaText(
-                              'يتجدد تلقائيًا بعد الساعة 12:00 ليلًا',
-                              'Refreshes automatically after 12:00 AM',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: const Color(0xFFD8E3EF),
-                              fontSize: compact ? 10.2 : 11.2,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Text(
+                              dedaText(
+                                'يتجدد بعد 12:00 ليلًا',
+                                'Refreshes after 12:00 AM',
+                              ),
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: const Color(0xFFD8E3EF),
+                                fontSize: compact ? 9.4 : 10.2,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -10070,17 +10076,17 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   ],
                 ),
               ),
-              SizedBox(width: compact ? 8 : 10),
+              SizedBox(width: compact ? 7 : 9),
               SizedBox(
                 width: rewardWidth,
-                height: compact ? 46 : 50,
+                height: compact ? 42 : 44,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: _loginRewardClaimed
                         ? const LinearGradient(
                             colors: [
-                              Color(0xFF8C98A2),
-                              Color(0xFF66737E),
+                              Color(0xFF89949D),
+                              Color(0xFF68747E),
                             ],
                           )
                         : const LinearGradient(
@@ -10089,13 +10095,13 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                               Color(0xFFE4AE32),
                             ],
                           ),
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(14),
                     boxShadow: _loginRewardClaimed
                         ? const []
                         : const [
                             BoxShadow(
                               color: Color(0x44E0AE39),
-                              blurRadius: 8,
+                              blurRadius: 7,
                               offset: Offset(0, 3),
                             ),
                           ],
@@ -10103,42 +10109,45 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   child: Material(
                     color: Colors.transparent,
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(14),
                       onTap: _loginRewardClaimed || _loadingRewardState
                           ? null
                           : _claimLoginReward,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _loginRewardClaimed
-                                ? Icons.check_circle_rounded
-                                : Icons.card_giftcard_rounded,
-                            size: 20,
-                            color: _loginRewardClaimed
-                                ? Colors.white
-                                : const Color(0xFF493300),
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                _loginRewardClaimed
-                                    ? dedaText('تم', 'Done')
-                                    : dedaText('استلام', 'Claim'),
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: _loginRewardClaimed
-                                      ? Colors.white
-                                      : const Color(0xFF493300),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 14,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _loginRewardClaimed
+                                  ? Icons.check_circle_rounded
+                                  : Icons.card_giftcard_rounded,
+                              size: 17,
+                              color: _loginRewardClaimed
+                                  ? Colors.white
+                                  : const Color(0xFF493300),
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  _loginRewardClaimed
+                                      ? dedaText('تم', 'Done')
+                                      : dedaText('استلام', 'Claim'),
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    color: _loginRewardClaimed
+                                        ? Colors.white
+                                        : const Color(0xFF493300),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -10156,8 +10165,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required VoidCallback onTap,
   }) {
     return SizedBox(
-      width: 86,
-      height: 50,
+      width: 74,
+      height: 42,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -10169,26 +10178,26 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(13),
           border: Border.all(
             color: const Color(0xFFD9E8F4),
-            width: 0.7,
+            width: 0.6,
           ),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x33061F3E),
-              blurRadius: 8,
-              offset: Offset(0, 4),
+              color: Color(0x2B061F3E),
+              blurRadius: 7,
+              offset: Offset(0, 3),
             ),
           ],
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(13),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 5),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -10200,19 +10209,19 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                         maxLines: 1,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 15,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 2),
                   Icon(
                     DedaLanguageState.isArabic
                         ? Icons.chevron_left_rounded
                         : Icons.chevron_right_rounded,
                     color: Colors.white,
-                    size: 21,
+                    size: 18,
                   ),
                 ],
               ),
@@ -10231,7 +10240,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required String action,
   }) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 104),
+      constraints: const BoxConstraints(minHeight: 84),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
@@ -10241,39 +10250,39 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFE6E1D6),
-          width: 0.9,
+          color: const Color(0xFFE7E1D5),
+          width: 0.8,
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x16061F3E),
-            blurRadius: 9,
-            offset: Offset(0, 4),
+            color: Color(0x13061F3E),
+            blurRadius: 7,
+            offset: Offset(0, 3),
           ),
         ],
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: () => _openTask(index),
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 9,
+            horizontal: 8,
+            vertical: 7,
           ),
           child: Row(
             textDirection: TextDirection.ltr,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 58,
-                height: 58,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
-                      Color(0xFFF5FAFE),
-                      Color(0xFFE3F0FA),
+                      Color(0xFFF7FBFE),
+                      Color(0xFFE5F1F9),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -10281,19 +10290,20 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: const Color(0xFFD3E5F2),
+                    width: 0.8,
                   ),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   icon,
-                  size: 31,
+                  size: 26,
                   color: const Color(0xFF0A4D80),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
@@ -10303,25 +10313,25 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Color(0xFF082F58),
-                        fontSize: 15.6,
-                        height: 1.15,
+                        fontSize: 13.8,
+                        height: 1.10,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Color(0xFF71859A),
-                        fontSize: 11.7,
-                        height: 1.25,
+                        fontSize: 10.2,
+                        height: 1.15,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 7),
+                    const SizedBox(height: 5),
                     Row(
                       children: [
                         Expanded(
@@ -10329,7 +10339,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             borderRadius: BorderRadius.circular(20),
                             child: const LinearProgressIndicator(
                               value: 0,
-                              minHeight: 8,
+                              minHeight: 6,
                               backgroundColor: Color(0xFFE4E9EE),
                               valueColor: AlwaysStoppedAnimation<Color>(
                                 Color(0xFF1C7EBC),
@@ -10337,12 +10347,12 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 7),
+                        const SizedBox(width: 6),
                         const Text(
                           '0/1',
                           style: TextStyle(
                             color: Color(0xFF183E62),
-                            fontSize: 12.5,
+                            fontSize: 11.2,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
@@ -10351,7 +10361,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 7),
               _taskActionButton(
                 label: action,
                 onTap: () => _openTask(index),
@@ -10452,7 +10462,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF061F3E),
       appBar: AppBar(
-        toolbarHeight: 78,
+        toolbarHeight: 72,
         backgroundColor: const Color(0xFF07325D),
         surfaceTintColor: Colors.transparent,
         foregroundColor: Colors.white,
@@ -10470,17 +10480,20 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              dedaText(
-                'أنجز مهامك اليومية واحصل على مكافآت مميزة',
-                'Complete daily tasks and earn rewards',
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFFFFD76A),
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                dedaText(
+                  'أنجز مهامك اليومية واحصل على مكافآت مميزة',
+                  'Complete daily tasks and earn rewards',
+                ),
+                maxLines: 1,
+                softWrap: false,
+                style: const TextStyle(
+                  color: Color(0xFFFFD76A),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -10490,8 +10503,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 10),
             child: Container(
-              width: 48,
-              height: 48,
+              width: 44,
+              height: 44,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -10531,10 +10544,10 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         child: SafeArea(
           top: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(11, 10, 11, 22),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
             children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(9, 10, 9, 12),
+                padding: const EdgeInsets.fromLTRB(7, 8, 7, 10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
@@ -10560,12 +10573,12 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                 child: Column(
                   children: [
                     _dailyLoginCard(),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 7),
                     ...List<Widget>.generate(tasks.length, (index) {
                       final task = tasks[index];
                       return Padding(
                         padding: EdgeInsets.only(
-                          bottom: index == tasks.length - 1 ? 0 : 8,
+                          bottom: index == tasks.length - 1 ? 0 : 6,
                         ),
                         child: _taskCard(
                           index: index,
@@ -10576,11 +10589,11 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                         ),
                       );
                     }),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 7),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
-                        vertical: 9,
+                        vertical: 7,
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFEAF3FA),
@@ -10595,19 +10608,19 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                           const Icon(
                             Icons.info_rounded,
                             color: Color(0xFF0B4E7D),
-                            size: 22,
+                            size: 20,
                           ),
                           const SizedBox(width: 7),
                           Expanded(
                             child: Text(
                               dedaText(
-                                'توضيح: بعض المهام المرتبطة بالخريطة يمكن إنجازها ضمن مسار واحد، وسيحتسبها DEDA تلقائيًا عند تحقق شروطها دون الرجوع لكل مهمة على حدة.',
-                                'Some map-related tasks can be completed in one route and DEDA will count them automatically when their conditions are met.',
+                                'توضيح: يمكن إنجاز بعض مهام الخريطة ضمن مسار واحد، وسيحتسبها DEDA تلقائيًا عند تحقق شروطها.',
+                                'Some map tasks can be completed in one route and DEDA will count them automatically.',
                               ),
                               textAlign: TextAlign.right,
                               style: const TextStyle(
                                 color: Color(0xFF244C6B),
-                                fontSize: 11.4,
+                                fontSize: 10.6,
                                 height: 1.4,
                                 fontWeight: FontWeight.w700,
                               ),
