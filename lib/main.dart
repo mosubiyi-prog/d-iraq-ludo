@@ -1523,7 +1523,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 10),
                       SizedBox(
                         height: 310,
                         child: Column(
@@ -1558,7 +1558,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 10),
                             Align(
                               alignment: Alignment.centerRight,
                               child: Text(
@@ -1619,7 +1619,7 @@ class _LoginPageState extends State<LoginPage> {
                                 icon: Icons.person,
                               ),
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 10),
                             TextField(
                               controller: phoneController,
                               keyboardType: TextInputType.phone,
@@ -1653,7 +1653,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 icon: const Icon(
                                   Icons.login,
-                                  size: 25,
+                                  size: 27,
                                 ),
                                 label: Text(
                                   dedaText('تسجيل الدخول', 'Sign in'),
@@ -1695,9 +1695,9 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 10),
                       _DedaCategoryPreviewStrip(),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 10),
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: _DedaRinadSignature(),
@@ -2361,7 +2361,7 @@ class _DedaContactPageState extends State<DedaContactPage> {
                         ),
                       ),
                       if (_attachedImagePaths.isNotEmpty) ...[
-                        const SizedBox(height: 7),
+                        const SizedBox(height: 10),
                         Text(
                           dedaText(
                             'يمكن إرفاق صورة واحدة فقط مع كل طلب.',
@@ -4631,7 +4631,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                         ? dedaText('لم يتم تثبيت الموقع بعد.', 'Location has not been captured yet.')
                                         : '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
                                   ),
-                                  const SizedBox(height: 7),
+                                  const SizedBox(height: 10),
                                   OutlinedButton.icon(
                                     onPressed: !_formEditable || _gettingLocation
                                         ? null
@@ -5086,7 +5086,7 @@ class _PersonalPlaceEditorPageState extends State<PersonalPlaceEditorPage> {
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 7),
+                            const SizedBox(height: 10),
                             Text(
                               _latitude == null || _longitude == null
                                   ? dedaText(
@@ -6704,7 +6704,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 10),
                           Row(
                             children: [
                               Expanded(
@@ -6759,7 +6759,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 10),
                           SizedBox(
                             height: 140,
                             child: Row(
@@ -6776,7 +6776,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 7),
+                          const SizedBox(height: 10),
                           SizedBox(
                             height: 140,
                             child: Row(
@@ -9720,7 +9720,7 @@ class _DedaReceivedLocationsPageState
                                         size: 52,
                                         color: Color(0xFF17652F),
                                       ),
-                                      const SizedBox(height: 7),
+                                      const SizedBox(height: 10),
                                       Text(
                                         dedaText(
                                           'لا توجد مشاركات في هذا القسم.',
