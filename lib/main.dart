@@ -1004,6 +1004,7 @@ class DedaTaskEventResult {
 class DedaTaskEngine {
   static const int pointsPerTask = 5;
   static const int pointsPerTrafficAnswer = 5;
+  static const int pointsPerDailyLogin = 10;
   static const int _storeVersion = 1;
   static const int _maxLedgerEntries = 600;
 
@@ -1257,6 +1258,91 @@ class DedaTaskEngine {
       pointsDelta: pointsDelta,
       totalPoints: total,
       taskId: taskId,
+      cycleId: cycle,
+    );
+  }
+
+  static String currentLocalDayId([DateTime? value]) {
+    final now = (value ?? DateTime.now()).toLocal();
+    final y = now.year.toString().padLeft(4, '0');
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  static Future<bool> hasDailyLoginRewardClaimed({
+    DateTime? day,
+  }) async {
+    final accountKey = _accountKey();
+    if (accountKey.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final awards = Map<String, dynamic>.from(state['awards'] as Map);
+    final dayId = currentLocalDayId(day);
+    return awards.containsKey('daily_login|$dayId');
+  }
+
+  static Future<DedaTaskEventResult> claimDailyLoginReward({
+    DateTime? occurredAt,
+  }) async {
+    final accountKey = _accountKey();
+    final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+    final dayId = currentLocalDayId(nowLocal);
+    final cycle = currentLocalCycleId(nowLocal);
+
+    if (accountKey.isEmpty) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: 0,
+        taskId: null,
+        cycleId: cycle,
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final awards = Map<String, dynamic>.from(state['awards'] as Map);
+    final ledger = List<dynamic>.from(state['ledger'] as List);
+    final awardId = 'daily_login|$dayId';
+    final alreadyAwarded = awards.containsKey(awardId);
+
+    var pointsDelta = 0;
+    if (!alreadyAwarded) {
+      pointsDelta = pointsPerDailyLogin;
+      final award = <String, dynamic>{
+        'id': awardId,
+        'points': pointsDelta,
+        'type': 'daily_login',
+        'event': 'daily_login_claimed',
+        'cycleId': cycle,
+        'dayId': dayId,
+        'createdAt': nowLocal.toUtc().toIso8601String(),
+      };
+      awards[awardId] = award;
+      ledger.add(award);
+      if (ledger.length > _maxLedgerEntries) {
+        ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+      }
+      state['awards'] = awards;
+      state['ledger'] = ledger;
+      await _writeState(prefs, accountKey, state);
+    }
+
+    final total = _totalFromState(state);
+    _loadedAccountKey = accountKey;
+    totalPointsNotifier.value = total;
+    revisionNotifier.value++;
+
+    return DedaTaskEventResult(
+      accepted: true,
+      completedNow: !alreadyAwarded,
+      pointsAwarded: !alreadyAwarded,
+      pointsDelta: pointsDelta,
+      totalPoints: total,
+      taskId: null,
       cycleId: cycle,
     );
   }
@@ -10144,22 +10230,6 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   bool _loginRewardClaimed = false;
   bool _loadingRewardState = true;
 
-  String get _todayKey {
-    final now = DateTime.now();
-    final y = now.year.toString().padLeft(4, '0');
-    final m = now.month.toString().padLeft(2, '0');
-    final d = now.day.toString().padLeft(2, '0');
-    final phone = DedaPreferences.phone.replaceAll(RegExp(r'[^0-9]'), '');
-    return 'deda_daily_login_claim_v1_' +
-        phone +
-        '_' +
-        y +
-        '_' +
-        m +
-        '_' +
-        d;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -10167,27 +10237,38 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   }
 
   Future<void> _loadRewardState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final claimed = await DedaTaskEngine.hasDailyLoginRewardClaimed();
     if (!mounted) return;
     setState(() {
-      _loginRewardClaimed = prefs.getBool(_todayKey) ?? false;
+      _loginRewardClaimed = claimed;
       _loadingRewardState = false;
     });
   }
 
   Future<void> _claimLoginReward() async {
     if (_loginRewardClaimed || _loadingRewardState) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_todayKey, true);
+    setState(() => _loadingRewardState = true);
+
+    final result = await DedaTaskEngine.claimDailyLoginReward();
     if (!mounted) return;
-    setState(() => _loginRewardClaimed = true);
+
+    setState(() {
+      _loginRewardClaimed = result.accepted;
+      _loadingRewardState = false;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          dedaText(
-            'تم استلام مكافأة تسجيل الدخول اليومية.',
-            'Daily login reward claimed.',
-          ),
+          result.pointsAwarded
+              ? dedaText(
+                  'تم استلام 10 نقاط وإضافتها إلى رصيدك.',
+                  '10 points were claimed and added to your balance.',
+                )
+              : dedaText(
+                  'تم استلام مكافأة تسجيل الدخول لهذا اليوم مسبقًا.',
+                  'Today\'s daily login reward was already claimed.',
+                ),
           textAlign: TextAlign.center,
         ),
       ),
@@ -10277,7 +10358,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 390;
         final iconBox = compact ? 52.0 : 58.0;
-        final rewardWidth = compact ? 74.0 : 82.0;
+        final rewardWidth = compact ? 58.0 : 64.0;
 
         return Container(
           padding: EdgeInsets.symmetric(
@@ -10405,12 +10486,27 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Text(
-                          '1/1',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0x22FFD76A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0x88FFD76A),
+                              width: 0.7,
+                            ),
+                          ),
+                          child: Text(
+                            dedaText('+10 نقاط', '+10 pts'),
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: Color(0xFFFFE7A5),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10.5,
+                            ),
                           ),
                         ),
                       ],
@@ -10451,7 +10547,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
               SizedBox(width: compact ? 7 : 9),
               SizedBox(
                 width: rewardWidth,
-                height: compact ? 42 : 44,
+                height: compact ? 34 : 36,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: _loginRewardClaimed
@@ -10494,7 +10590,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                               _loginRewardClaimed
                                   ? Icons.check_circle_rounded
                                   : Icons.card_giftcard_rounded,
-                              size: 17,
+                              size: 15,
                               color: _loginRewardClaimed
                                   ? Colors.white
                                   : const Color(0xFF493300),
@@ -10513,7 +10609,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                         ? Colors.white
                                         : const Color(0xFF493300),
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 13,
+                                    fontSize: 11.4,
                                   ),
                                 ),
                               ),
@@ -10537,8 +10633,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required VoidCallback onTap,
   }) {
     return SizedBox(
-      width: 74,
-      height: 42,
+      width: 68,
+      height: 40,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -10581,7 +10677,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                         maxLines: 1,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 13.5,
+                          fontSize: 13.0,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -10613,7 +10709,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required bool completed,
   }) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 84),
+      constraints: const BoxConstraints(minHeight: 94),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
@@ -10649,8 +10745,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [
@@ -10669,7 +10765,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                 alignment: Alignment.center,
                 child: Icon(
                   icon,
-                  size: 26,
+                  size: 25,
                   color: const Color(0xFF0A4D80),
                 ),
               ),
@@ -10686,7 +10782,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Color(0xFF082F58),
-                        fontSize: 13.8,
+                        fontSize: 13.6,
                         height: 1.10,
                         fontWeight: FontWeight.w900,
                       ),
@@ -10694,13 +10790,13 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Color(0xFF71859A),
-                        fontSize: 10.2,
-                        height: 1.15,
+                        fontSize: 10.4,
+                        height: 1.18,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -10738,7 +10834,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 5),
               _taskActionButton(
                 label: action,
                 onTap: () => _openTask(index),
