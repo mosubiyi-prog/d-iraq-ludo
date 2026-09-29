@@ -6187,44 +6187,93 @@ class _HomePageState extends State<HomePage> {
       required VoidCallback onPressed,
       bool filled = false,
     }) {
-      const buttonHeight = 58.0;
-      final child = FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          label,
-          maxLines: 1,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-      );
-      if (filled) {
-        return SizedBox(
-          height: buttonHeight,
-          child: FilledButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 25),
-            label: child,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF17652F),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-        );
-      }
-      return SizedBox(
+      const buttonHeight = 60.0;
+      final foreground =
+          filled ? Colors.white : const Color(0xFF0B355E);
+      return Container(
         height: buttonHeight,
-        child: OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 25),
-          label: child,
-          style: OutlinedButton.styleFrom(
-            backgroundColor: Colors.white.withOpacity(0.82),
-            foregroundColor: const Color(0xFF17652F),
-            side: const BorderSide(color: Color(0xFF5F8066), width: 1.2),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+        decoration: BoxDecoration(
+          gradient: filled
+              ? const LinearGradient(
+                  colors: [Color(0xFF0B8553), Color(0xFF075C3B)],
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                )
+              : LinearGradient(
+                  colors: [
+                    Colors.white.withOpacity(0.96),
+                    const Color(0xFFFFF3D9).withOpacity(0.93),
+                  ],
+                  begin: AlignmentDirectional.topStart,
+                  end: AlignmentDirectional.bottomEnd,
+                ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: filled
+                ? const Color(0xFFF0CF72)
+                : const Color(0xFFD8BD73),
+            width: filled ? 1.35 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: filled
+                  ? const Color(0x4404452C)
+                  : const Color(0x26061F3E),
+              blurRadius: 13,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: filled
+                          ? Colors.white.withOpacity(0.16)
+                          : const Color(0xFF0B355E),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: filled
+                            ? const Color(0x77FFFFFF)
+                            : const Color(0xFFE8C56C),
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      icon,
+                      size: 22,
+                      color: filled
+                          ? Colors.white
+                          : const Color(0xFFFFD76A),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: foreground,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -6236,31 +6285,73 @@ class _HomePageState extends State<HomePage> {
       required String label,
       required VoidCallback onPressed,
     }) {
-      return SizedBox(
-        height: 50,
-        child: OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: Icon(
-            icon,
-            size: 23,
-            color: const Color(0xFF17652F),
+      return Container(
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.95),
+              const Color(0xFFFFF5E2).withOpacity(0.90),
+            ],
+            begin: AlignmentDirectional.topStart,
+            end: AlignmentDirectional.bottomEnd,
           ),
-          label: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              maxLines: 1,
-              style: const TextStyle(
-                color: Color(0xFF244D30),
-                fontWeight: FontWeight.w800,
-              ),
+          borderRadius: BorderRadius.circular(19),
+          border: Border.all(
+            color: const Color(0xFFD8BD73),
+            width: 0.9,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1F061F3E),
+              blurRadius: 10,
+              offset: Offset(0, 4),
             ),
-          ),
-          style: OutlinedButton.styleFrom(
-            backgroundColor: Colors.white.withOpacity(0.72),
-            side: const BorderSide(color: Color(0xFF6F8A74)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(19),
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 31,
+                    height: 31,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF0B3B6F), Color(0xFF061F3E)],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      icon,
+                      size: 19,
+                      color: const Color(0xFFFFD76A),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Color(0xFF0B355E),
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -6272,6 +6363,81 @@ class _HomePageState extends State<HomePage> {
         icon: item.icon,
         title: dedaCategoryLabel(item.title),
         onTap: () => openCategory(item),
+      );
+    }
+
+    Widget premiumBottomItem({
+      required int index,
+      required IconData icon,
+      required IconData selectedIcon,
+      required String label,
+      required bool selected,
+    }) {
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => openBottomDestination(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 7),
+            padding: EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: isLandscape ? 2 : 6,
+            ),
+            decoration: selected
+                ? BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFFE49A), Color(0xFFE5B74C)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFFFEDAE),
+                      width: 1.0,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x55E4B33F),
+                        blurRadius: 13,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  )
+                : null,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  selected ? selectedIcon : icon,
+                  size: isLandscape ? 22 : 25,
+                  color: selected
+                      ? const Color(0xFF082B55)
+                      : Colors.white,
+                ),
+                if (!isLandscape) ...[
+                  const SizedBox(height: 3),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: selected
+                            ? const Color(0xFF082B55)
+                            : const Color(0xFFF8F3E4),
+                        fontSize: 11.5,
+                        fontWeight: selected
+                            ? FontWeight.w900
+                            : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -6287,59 +6453,127 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        toolbarHeight: isLandscape ? 42 : kToolbarHeight,
-        backgroundColor: Colors.white.withOpacity(0.82),
+        toolbarHeight: isLandscape ? 44 : 58,
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        foregroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          tooltip: dedaText('مركز المساعدة', 'Help center'),
-          icon: const Icon(Icons.support_agent),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => DedaContactPage(
-                  initialName: DedaPreferences.userName,
-                  initialPhone: DedaPreferences.phone,
-                ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xF2061F3E), Color(0xE60B3B6F)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0x99E8C56C),
+                width: 0.8,
               ),
-            );
-          },
+            ),
+          ),
         ),
-        title: Text(dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide')),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: dedaText('فريق DEDA', 'DEDA team'),
-            icon: const Icon(Icons.groups_2_rounded),
-            onPressed: () {
-              Navigator.of(context).push(
-                PageRouteBuilder<void>(
-                  transitionDuration: const Duration(milliseconds: 300),
-                  reverseTransitionDuration: const Duration(milliseconds: 240),
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      const DedaTeamPage(),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                    final curved = CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                      reverseCurve: Curves.easeInCubic,
-                    );
-                    return FadeTransition(
-                      opacity: curved,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(-0.04, 0),
-                          end: Offset.zero,
-                        ).animate(curved),
-                        child: child,
-                      ),
-                    );
-                  },
+        leading: Padding(
+          padding: const EdgeInsets.all(7),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => DedaContactPage(
+                    initialName: DedaPreferences.userName,
+                    initialPhone: DedaPreferences.phone,
+                  ),
                 ),
               );
             },
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF061F3E).withOpacity(0.62),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFE8C56C),
+                  width: 1.0,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.support_agent,
+                color: Color(0xFFFFD76A),
+                size: 23,
+              ),
+            ),
+          ),
+        ),
+        title: Text(
+          dedaText('DEDA - الدليل الدقيق', 'DEDA - Accurate Guide'),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.2,
+            shadows: [
+              Shadow(
+                color: Color(0x66000000),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 7),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: () {
+                Navigator.of(context).push(
+                  PageRouteBuilder<void>(
+                    transitionDuration: const Duration(milliseconds: 300),
+                    reverseTransitionDuration:
+                        const Duration(milliseconds: 240),
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                        const DedaTeamPage(),
+                    transitionsBuilder:
+                        (context, animation, secondaryAnimation, child) {
+                      final curved = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                        reverseCurve: Curves.easeInCubic,
+                      );
+                      return FadeTransition(
+                        opacity: curved,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(-0.04, 0),
+                            end: Offset.zero,
+                          ).animate(curved),
+                          child: child,
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF061F3E).withOpacity(0.62),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFE8C56C),
+                    width: 1.0,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.groups_2_rounded,
+                  color: Color(0xFFFFD76A),
+                  size: 23,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -6348,6 +6582,10 @@ class _HomePageState extends State<HomePage> {
           image: DecorationImage(
             image: AssetImage('assets/deda_home_bg.jpg'),
             fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Color(0x22061F3E),
+              BlendMode.multiply,
+            ),
           ),
         ),
         child: SafeArea(
@@ -6589,8 +6827,15 @@ class _HomePageState extends State<HomePage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 25,
+                                  color: Color(0xFF082B55),
+                                  fontSize: 27,
                                   fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                      color: Color(0xAAFFFFFF),
+                                      blurRadius: 5,
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: greetingGap),
@@ -6726,17 +6971,29 @@ class _HomePageState extends State<HomePage> {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      child: _DedaTasksHeroCard(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const DedaDailyTasksPage(),
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: _DedaTasksHeroCard(
+                                              onTap: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const DedaDailyTasksPage(),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Expanded(
+                                            child: categoryCard(restaurant),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
@@ -6756,9 +7013,7 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    Expanded(child: categoryCard(restaurant)),
-                                const SizedBox(width: 8),
-                                Expanded(child: categoryCard(fuel)),
+                                    Expanded(child: categoryCard(fuel)),
                                     const SizedBox(width: 8),
                                     Expanded(child: categoryCard(pharmacy)),
                                     const SizedBox(width: 8),
@@ -6791,42 +7046,70 @@ class _HomePageState extends State<HomePage> {
                 ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 2,
-        height: isLandscape ? 52 : 72,
-        backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFD9EEDB),
-        onDestinationSelected: openBottomDestination,
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: dedaText('حسابي', 'Account'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
-            label: dedaText('الإعدادات', 'Settings'),
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(
-              Icons.home,
-              color: Color(0xFF11823B),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: isLandscape ? 58 : 80,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF0B3B6F), Color(0xFF061F3E)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-            label: dedaText('الرئيسية', 'Home'),
+            border: Border(
+              top: BorderSide(
+                color: Color(0xFFE8C56C),
+                width: 1.1,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 16,
+                offset: Offset(0, -4),
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.assignment_outlined),
-            selectedIcon: const Icon(Icons.assignment),
-            label: dedaText('طلباتي', 'Requests'),
+          child: Row(
+            children: [
+              premiumBottomItem(
+                index: 0,
+                icon: Icons.person_outline,
+                selectedIcon: Icons.person,
+                label: dedaText('حسابي', 'Account'),
+                selected: false,
+              ),
+              premiumBottomItem(
+                index: 1,
+                icon: Icons.settings_outlined,
+                selectedIcon: Icons.settings,
+                label: dedaText('الإعدادات', 'Settings'),
+                selected: false,
+              ),
+              premiumBottomItem(
+                index: 2,
+                icon: Icons.home_outlined,
+                selectedIcon: Icons.home_rounded,
+                label: dedaText('الرئيسية', 'Home'),
+                selected: true,
+              ),
+              premiumBottomItem(
+                index: 3,
+                icon: Icons.assignment_outlined,
+                selectedIcon: Icons.assignment,
+                label: dedaText('طلباتي', 'Requests'),
+                selected: false,
+              ),
+              premiumBottomItem(
+                index: 4,
+                icon: Icons.chat_bubble_outline,
+                selectedIcon: Icons.chat_bubble,
+                label: dedaText('الرسائل', 'Messages'),
+                selected: false,
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.chat_bubble_outline),
-            selectedIcon: const Icon(Icons.chat_bubble),
-            label: dedaText('الرسائل', 'Messages'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -8576,6 +8859,10 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
           image: DecorationImage(
             image: AssetImage('assets/deda_home_bg.jpg'),
             fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Color(0x22061F3E),
+              BlendMode.multiply,
+            ),
           ),
         ),
         child: SafeArea(
@@ -9363,6 +9650,10 @@ class _DedaReceivedLocationsPageState
           image: DecorationImage(
             image: AssetImage('assets/deda_home_bg.jpg'),
             fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Color(0x22061F3E),
+              BlendMode.multiply,
+            ),
           ),
         ),
         child: SafeArea(
@@ -10125,88 +10416,158 @@ class _DedaMapHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 6,
-      color: const Color(0xFF0B9DB2).withOpacity(0.90),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: Colors.white.withOpacity(0.82)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF0D8DA6),
+            Color(0xFF086C8B),
+            Color(0xFF073F6E),
+          ],
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+        ),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(
+          color: const Color(0xFFE7C76F),
+          width: 1.15,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x3A063B53),
+            blurRadius: 16,
+            offset: Offset(0, 7),
+          ),
+        ],
       ),
-      child: InkWell(
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final h = constraints.maxHeight.isFinite
-                ? constraints.maxHeight
-                : 130.0;
-            final circleSize = (h * 0.50).clamp(42.0, 76.0).toDouble();
-            final iconSize = (circleSize * 0.60).clamp(28.0, 46.0).toDouble();
-            final titleSize = (h * 0.22).clamp(18.0, 28.0).toDouble();
-
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned(
-                  right: 14,
-                  child: Container(
-                    width: circleSize,
-                    height: circleSize,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.20),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.map_outlined,
-                      size: iconSize,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 12,
-                  child: Icon(
-                    DedaLanguageState.isArabic
-                        ? Icons.chevron_left
-                        : Icons.chevron_right,
-                    color: Colors.white,
-                    size: (h * 0.27).clamp(24.0, 34.0).toDouble(),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: 52,
-                    right: circleSize + 28,
-                  ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        dedaText('الخريطة', 'Map'),
-                        maxLines: 1,
-                        softWrap: false,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: titleSize,
-                          fontWeight: FontWeight.w900,
-                          shadows: const [
-                            Shadow(
-                              color: Color(0x55000000),
-                              blurRadius: 4,
-                            ),
-                          ],
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final h = constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : 180.0;
+                final circleSize =
+                    (h * 0.36).clamp(58.0, 92.0).toDouble();
+                return Stack(
+                  children: [
+                    PositionedDirectional(
+                      top: -28,
+                      end: -24,
+                      child: Container(
+                        width: h * 0.92,
+                        height: h * 0.92,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.07),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            );
-          },
+                    PositionedDirectional(
+                      bottom: -34,
+                      start: -30,
+                      child: Icon(
+                        Icons.map_rounded,
+                        size: h * 0.92,
+                        color: const Color(0x18FFFFFF),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15,
+                        vertical: 13,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            DedaLanguageState.isArabic
+                                ? Icons.chevron_left_rounded
+                                : Icons.chevron_right_rounded,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  dedaText('الخريطة', 'Map'),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 27,
+                                    fontWeight: FontWeight.w900,
+                                    shadows: [
+                                      Shadow(
+                                        color: Color(0x66000000),
+                                        blurRadius: 6,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  dedaText(
+                                    'استكشف الأماكن من حولك',
+                                    'Explore places around you',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  style: const TextStyle(
+                                    color: Color(0xFFE6F7FB),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: circleSize,
+                            height: circleSize,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color(0xFF20C5D4),
+                                  Color(0xFF0A6A8B),
+                                ],
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.45),
+                                width: 1.2,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x33000000),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.map_outlined,
+                              size: circleSize * 0.56,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -10235,55 +10596,137 @@ class DedaCategory extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = _accentForTitle(title);
+    final deep = Color.lerp(accent, Colors.black, 0.24)!;
+    final light = Color.lerp(accent, Colors.white, 0.08)!;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : 128.0;
-        final iconSize = (h * 0.34).clamp(28.0, 50.0).toDouble();
-        final fontSize = (h * 0.155).clamp(13.5, 20.0).toDouble();
-        final gap = (h * 0.055).clamp(4.0, 10.0).toDouble();
+        final iconBubble =
+            (h * 0.40).clamp(42.0, 64.0).toDouble();
+        final iconSize =
+            (iconBubble * 0.58).clamp(25.0, 38.0).toDouble();
+        final fontSize =
+            (h * 0.165).clamp(13.5, 20.0).toDouble();
 
-        return Card(
-          margin: EdgeInsets.zero,
-          elevation: 5,
-          color: accent.withOpacity(0.78),
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [light, accent, deep],
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+            ),
             borderRadius: BorderRadius.circular(22),
-            side: BorderSide(color: Colors.white.withOpacity(0.75)),
+            border: Border.all(
+              color: const Color(0xCCFFF4D1),
+              width: 0.9,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+              const BoxShadow(
+                color: Color(0x26000000),
+                blurRadius: 8,
+                offset: Offset(0, 4),
+              ),
+            ],
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: iconSize,
-                    color: Colors.white,
-                  ),
-                  SizedBox(height: gap),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      title,
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: fontSize,
-                        fontWeight: FontWeight.bold,
-                        shadows: const [
-                          Shadow(color: Color(0x66000000), blurRadius: 4),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(21),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                child: Stack(
+                  children: [
+                    PositionedDirectional(
+                      top: -20,
+                      end: -16,
+                      child: Container(
+                        width: h * 0.72,
+                        height: h * 0.72,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      bottom: 9,
+                      start: 7,
+                      child: Icon(
+                        DedaLanguageState.isArabic
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
+                        color: Colors.white.withOpacity(0.95),
+                        size: 24,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: iconBubble,
+                            height: iconBubble,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.16),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.30),
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x22000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              icon,
+                              size: iconSize,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(
+                            height:
+                                (h * 0.055).clamp(4.0, 9.0).toDouble(),
+                          ),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              title,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x77000000),
+                                    blurRadius: 5,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -10294,31 +10737,31 @@ class DedaCategory extends StatelessWidget {
 
   Color _accentForTitle(String value) {
     if (value.contains('مطاعم') || value.contains('Restaurant')) {
-      return const Color(0xFFF59E0B);
+      return const Color(0xFFF28B16);
     }
     if (value.contains('فنادق') || value.contains('Hotel')) {
-      return const Color(0xFF2563EB);
+      return const Color(0xFF315FDB);
     }
     if (value.contains('مول') || value.contains('Mall')) {
-      return const Color(0xFF8B3FD6);
+      return const Color(0xFF8434C8);
     }
     if (value.contains('وقود') || value.contains('Fuel')) {
-      return const Color(0xFF16834A);
+      return const Color(0xFF0A8A4B);
     }
     if (value.contains('صيدل') || value.contains('Pharmac')) {
-      return const Color(0xFFE2343F);
+      return const Color(0xFFD9364B);
     }
     if (value.contains('مواقف') || value.contains('Parking')) {
-      return const Color(0xFF2596E8);
+      return const Color(0xFF176FD0);
     }
     if (value.contains('حدائق') || value.contains('Park')) {
-      return const Color(0xFF42A93B);
+      return const Color(0xFF2B9B43);
     }
     if (value.contains('الخريطة') || value.contains('Map')) {
-      return const Color(0xFF08A1B9);
+      return const Color(0xFF0D8DA6);
     }
     if (value.contains('الشخصية') || value.contains('personal')) {
-      return const Color(0xFF149E91);
+      return const Color(0xFF138B80);
     }
     return const Color(0xFFB98918);
   }
