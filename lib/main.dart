@@ -9760,6 +9760,7 @@ class _DedaReceivedLocationsPageState
 }
 
 
+
 class DedaDailyTasksPage extends StatefulWidget {
   const DedaDailyTasksPage({super.key});
 
@@ -9900,121 +9901,464 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   }
 
   Widget _dailyLoginCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+        final iconBox = compact ? 60.0 : 70.0;
+        final rewardWidth = compact ? 82.0 : 94.0;
+
+        return Container(
+          padding: EdgeInsets.all(compact ? 11 : 13),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF0B3F72),
+                Color(0xFF082C55),
+                Color(0xFF061F3E),
+              ],
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: const Color(0xFFFFD76A),
+              width: 1.4,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x36000000),
+                blurRadius: 15,
+                offset: Offset(0, 7),
+              ),
+            ],
+          ),
+          child: Row(
+            textDirection: TextDirection.ltr,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: iconBox,
+                height: iconBox,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFFFE9A8),
+                      Color(0xFFE3AE34),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(19),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x44E5B74C),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  size: compact ? 35 : 41,
+                  color: const Color(0xFF0A3B68),
+                ),
+              ),
+              SizedBox(width: compact ? 9 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Text(
+                        dedaText(
+                          'تسجيل الدخول اليومي',
+                          'Daily login',
+                        ),
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: compact ? 17 : 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF68E389),
+                          size: 19,
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            dedaText(
+                              'تم تسجيل الدخول بنجاح',
+                              'Daily login completed',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: const Color(0xFFFFE7A5),
+                              fontSize: compact ? 11.5 : 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: const LinearProgressIndicator(
+                              value: 1,
+                              minHeight: 8,
+                              backgroundColor: Color(0x33FFFFFF),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFFFD76A),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        const Text(
+                          '1/1',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          size: 16,
+                          color: Color(0xFFD8E3EF),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            dedaText(
+                              'يتجدد تلقائيًا بعد الساعة 12:00 ليلًا',
+                              'Refreshes automatically after 12:00 AM',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              color: const Color(0xFFD8E3EF),
+                              fontSize: compact ? 10.2 : 11.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: compact ? 8 : 10),
+              SizedBox(
+                width: rewardWidth,
+                height: compact ? 46 : 50,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: _loginRewardClaimed
+                        ? const LinearGradient(
+                            colors: [
+                              Color(0xFF8C98A2),
+                              Color(0xFF66737E),
+                            ],
+                          )
+                        : const LinearGradient(
+                            colors: [
+                              Color(0xFFFFE590),
+                              Color(0xFFE4AE32),
+                            ],
+                          ),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: _loginRewardClaimed
+                        ? const []
+                        : const [
+                            BoxShadow(
+                              color: Color(0x44E0AE39),
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(15),
+                      onTap: _loginRewardClaimed || _loadingRewardState
+                          ? null
+                          : _claimLoginReward,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _loginRewardClaimed
+                                ? Icons.check_circle_rounded
+                                : Icons.card_giftcard_rounded,
+                            size: 20,
+                            color: _loginRewardClaimed
+                                ? Colors.white
+                                : const Color(0xFF493300),
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                _loginRewardClaimed
+                                    ? dedaText('تم', 'Done')
+                                    : dedaText('استلام', 'Claim'),
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: _loginRewardClaimed
+                                      ? Colors.white
+                                      : const Color(0xFF493300),
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _taskActionButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: 86,
+      height: 50,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF0D5A92),
+              Color(0xFF073D6B),
+              Color(0xFF062D54),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: const Color(0xFFD9E8F4),
+            width: 0.7,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33061F3E),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(15),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    DedaLanguageState.isArabic
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    color: Colors.white,
+                    size: 21,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _taskCard({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String action,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(minHeight: 104),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF073A6B), Color(0xFF0B2447)],
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
+          colors: [
+            Color(0xFFFFFFFF),
+            Color(0xFFFFFCF6),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE8C56C),
-          width: 1.6,
+          color: const Color(0xFFE6E1D6),
+          width: 0.9,
         ),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            color: Color(0x16061F3E),
+            blurRadius: 9,
+            offset: Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFE49A), Color(0xFFD4A63B)],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _openTask(index),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 9,
+          ),
+          child: Row(
+            textDirection: TextDirection.ltr,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFF5FAFE),
+                      Color(0xFFE3F0FA),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFD3E5F2),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 31,
+                  color: const Color(0xFF0A4D80),
+                ),
               ),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.calendar_month_rounded,
-              size: 42,
-              color: Color(0xFF0B3157),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  dedaText('تسجيل الدخول اليومي', 'Daily login'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                  ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF082F58),
+                        fontSize: 15.6,
+                        height: 1.15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF71859A),
+                        fontSize: 11.7,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: const LinearProgressIndicator(
+                              value: 0,
+                              minHeight: 8,
+                              backgroundColor: Color(0xFFE4E9EE),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF1C7EBC),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        const Text(
+                          '0/1',
+                          style: TextStyle(
+                            color: Color(0xFF183E62),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  dedaText(
-                    'تم تسجيل الدخول بنجاح',
-                    'Daily login completed',
-                  ),
-                  style: const TextStyle(
-                    color: Color(0xFFFFDE83),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: const LinearProgressIndicator(
-                    value: 1,
-                    minHeight: 10,
-                    backgroundColor: Color(0x44FFFFFF),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(Color(0xFFFFD866)),
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  dedaText(
-                    'يتجدد تلقائيًا بعد الساعة 12:00 ليلًا',
-                    'Refreshes automatically after 12:00 AM',
-                  ),
-                  style: const TextStyle(
-                    color: Color(0xFFD7E5F5),
-                    fontSize: 12.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.icon(
-            onPressed: _loginRewardClaimed || _loadingRewardState
-                ? null
-                : _claimLoginReward,
-            icon: Icon(
-              _loginRewardClaimed
-                  ? Icons.check_circle_rounded
-                  : Icons.card_giftcard_rounded,
-            ),
-            label: Text(
-              _loginRewardClaimed
-                  ? dedaText('تم', 'Done')
-                  : dedaText('استلام', 'Claim'),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE6B94E),
-              foregroundColor: const Color(0xFF4A3300),
-              disabledBackgroundColor: const Color(0xFF8B969F),
-              disabledForegroundColor: Colors.white,
-              minimumSize: const Size(96, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
               ),
-            ),
+              const SizedBox(width: 9),
+              _taskActionButton(
+                label: action,
+                onTap: () => _openTask(index),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -10027,7 +10371,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         dedaText('شارك مكانك الشخصي', 'Share your location'),
         dedaText(
           'شارك موقعك الحالي مع من تريد',
-          'Share your current location',
+          'Share your current location with someone',
         ),
         dedaText('شارك', 'Share'),
       ),
@@ -10041,19 +10385,19 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         dedaText('افتح', 'Open'),
       ),
       (
-        Icons.storefront_rounded,
+        Icons.manage_accounts_rounded,
         dedaText(
           'شارك إدارة مكانك إن وجد',
           'Share place management if available',
         ),
         dedaText(
-          'مهمة خاصة بصاحب المكان',
-          'A task for place owners',
+          'إن وجد، شارك إدارة مكانك بصفتك صاحب المكان',
+          'If available, share management of your place',
         ),
         dedaText('شارك', 'Share'),
       ),
       (
-        Icons.bookmark_rounded,
+        Icons.map_outlined,
         dedaText('زيارة مكان محفوظ', 'Visit a saved place'),
         dedaText(
           'قم بزيارة أحد الأماكن المحفوظة لديك',
@@ -10062,14 +10406,14 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         dedaText('اذهب', 'Go'),
       ),
       (
-        Icons.move_to_inbox_rounded,
+        Icons.outbox_rounded,
         dedaText(
           'افتح أي مكان تمت مشاركته معك',
           'Open a place shared with you',
         ),
         dedaText(
-          'افتح مكانًا تمت مشاركته معك',
-          'Open a place someone shared with you',
+          'افتح وتصفح مكانًا تمت مشاركته معك',
+          'Open and view a place shared with you',
         ),
         dedaText('افتح', 'Open'),
       ),
@@ -10077,8 +10421,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         Icons.fact_check_rounded,
         dedaText('مراجعة مكان مضاف', 'Review an added place'),
         dedaText(
-          'راجع تفاصيل أحد الأماكن التي أضفتها',
-          'Review a place you added',
+          'راجع تفاصيل مكان قمت بإضافته سابقًا',
+          'Review a place you previously added',
         ),
         dedaText('راجع', 'Review'),
       ),
@@ -10086,8 +10430,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         Icons.traffic_rounded,
         dedaText('اختبر مهاراتك', 'Test your skills'),
         dedaText(
-          '5 أسئلة مرورية، كل إجابة صحيحة = 5 نقاط',
-          '5 traffic questions, each correct answer = 5 points',
+          '5 أسئلة مرورية • 5 نقاط لكل إجابة صحيحة',
+          '5 traffic questions • 5 points per correct answer',
         ),
         dedaText('ابدأ', 'Start'),
       ),
@@ -10098,304 +10442,178 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
           'Use a road service on a long trip',
         ),
         dedaText(
-          'استفد من خدمات الطريق أثناء رحلتك',
-          'Use road services during your trip',
+          'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة',
+          'Use a road service during your long trip',
         ),
         dedaText('استفد', 'Use'),
       ),
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F3EA),
+      backgroundColor: const Color(0xFF061F3E),
       appBar: AppBar(
-        title: Text(dedaText('المهام', 'Tasks')),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF08345F),
-        foregroundColor: Colors.white,
+        toolbarHeight: 78,
+        backgroundColor: const Color(0xFF07325D),
         surfaceTintColor: Colors.transparent,
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/deda_home_bg.jpg'),
-            fit: BoxFit.cover,
-            opacity: 0.17,
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            Text(
+              dedaText('المهام', 'Tasks'),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 27,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 2),
             Text(
               dedaText(
                 'أنجز مهامك اليومية واحصل على مكافآت مميزة',
-                'Complete your daily tasks and earn rewards',
+                'Complete daily tasks and earn rewards',
               ),
-              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF173D63),
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _dailyLoginCard(),
-            const SizedBox(height: 14),
-            ...List<Widget>.generate(tasks.length, (index) {
-              final task = tasks[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.93),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: const Color(0xFFE4D5AA),
-                    ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x17000000),
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => _openTask(index),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 11,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEAF2F8),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              task.$1,
-                              size: 30,
-                              color: const Color(0xFF0B4E7D),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  task.$2,
-                                  style: const TextStyle(
-                                    color: Color(0xFF0C3157),
-                                    fontSize: 16.5,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  task.$3,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF66768A),
-                                    fontSize: 12.5,
-                                    height: 1.3,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: const LinearProgressIndicator(
-                                    value: 0,
-                                    minHeight: 7,
-                                    backgroundColor: Color(0xFFE1E6EB),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          FilledButton(
-                            onPressed: () => _openTask(index),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF0B4E7D),
-                              minimumSize: const Size(82, 46),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                            ),
-                            child: Text(
-                              task.$4,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE9F1F7).withOpacity(0.95),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFBDD0DF)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: Color(0xFF0B4E7D),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      dedaText(
-                        'يمكنك إكمال بعض مهامك اليومية ذات الصلة بخطوة واحدة أو بمسار واحد. إذا كانت مهامك خاصة بالخريطة فسيتم احتسابها تلقائيًا عند تنفيذ شروطها دون الحاجة للرجوع لكل مهمة على حدة.',
-                        'Some related daily tasks can be completed in one step or one route. Map-related tasks will be counted automatically when their conditions are met, without returning to each task separately.',
-                      ),
-                      style: const TextStyle(
-                        color: Color(0xFF234B68),
-                        fontSize: 12.5,
-                        height: 1.45,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+                color: Color(0xFFFFD76A),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _DedaTasksHeroCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _DedaTasksHeroCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF082B55), Color(0xFF124D7B)],
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFFE4C36A),
-          width: 1.4,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 14,
-            offset: Offset(0, 7),
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFFFFE89E),
+                    Color(0xFFD7A838),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.assignment_turned_in_rounded,
+                color: Color(0xFF0B355E),
+                size: 27,
+              ),
+            ),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(23),
-        child: InkWell(
-          onTap: onTap,
-          child: Stack(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF0A4775),
+              Color(0xFF082E56),
+              Color(0xFF061F3E),
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          image: DecorationImage(
+            image: AssetImage('assets/deda_home_bg.jpg'),
+            fit: BoxFit.cover,
+            opacity: 0.10,
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(11, 10, 11, 22),
             children: [
-              PositionedDirectional(
-                bottom: -28,
-                start: -20,
-                end: -20,
-                child: Container(
-                  height: 58,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0x00FFD96B), Color(0xFFFFD66B)],
-                    ),
-                    borderRadius: BorderRadius.circular(60),
+              Container(
+                padding: const EdgeInsets.fromLTRB(9, 10, 9, 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFFFFFBF2),
+                      Color(0xFFF9F3E8),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      DedaLanguageState.isArabic
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
-                      color: Colors.white,
-                      size: 30,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(
+                    color: const Color(0xFFE8C56C),
+                    width: 1.5,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x55000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
                     ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _dailyLoginCard(),
+                    const SizedBox(height: 10),
+                    ...List<Widget>.generate(tasks.length, (index) {
+                      final task = tasks[index];
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == tasks.length - 1 ? 0 : 8,
+                        ),
+                        child: _taskCard(
+                          index: index,
+                          icon: task.$1,
+                          title: task.$2,
+                          subtitle: task.$3,
+                          action: task.$4,
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF3FA),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFBCD4E6),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            dedaText('المهام', 'Tasks'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 25,
-                              fontWeight: FontWeight.w900,
-                              shadows: [
-                                Shadow(
-                                  color: Color(0x66000000),
-                                  blurRadius: 6,
-                                ),
-                              ],
-                            ),
+                          const Icon(
+                            Icons.info_rounded,
+                            color: Color(0xFF0B4E7D),
+                            size: 22,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            dedaText(
-                              'أنجز مهامك اليومية',
-                              'Complete your daily tasks',
-                            ),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Color(0xFFFFE19A),
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              dedaText(
+                                'توضيح: بعض المهام المرتبطة بالخريطة يمكن إنجازها ضمن مسار واحد، وسيحتسبها DEDA تلقائيًا عند تحقق شروطها دون الرجوع لكل مهمة على حدة.',
+                                'Some map-related tasks can be completed in one route and DEDA will count them automatically when their conditions are met.',
+                              ),
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Color(0xFF244C6B),
+                                fontSize: 11.4,
+                                height: 1.4,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      width: 66,
-                      height: 66,
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFFFFE39A), Color(0xFFB98A2D)],
-                        ),
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.assignment_turned_in_rounded,
-                        color: Colors.white,
-                        size: 37,
                       ),
                     ),
                   ],
@@ -10409,6 +10627,176 @@ class _DedaTasksHeroCard extends StatelessWidget {
   }
 }
 
+
+class _DedaTasksHeroCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _DedaTasksHeroCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 90.0;
+        final w = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 150.0;
+        final compact = h < 105 || w < 175;
+        final circleSize = compact
+            ? (h * 0.46).clamp(34.0, 44.0).toDouble()
+            : (h * 0.42).clamp(46.0, 64.0).toDouble();
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF0D4778),
+                Color(0xFF082E59),
+                Color(0xFF061F3E),
+              ],
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+            ),
+            borderRadius: BorderRadius.circular(23),
+            border: Border.all(
+              color: const Color(0xFFE8C56C),
+              width: 1.3,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x38000000),
+                blurRadius: 13,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                child: Stack(
+                  children: [
+                    PositionedDirectional(
+                      bottom: -24,
+                      start: -18,
+                      end: -18,
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0x00FFD76A),
+                              Color(0xA6FFD76A),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(60),
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      end: 7,
+                      top: (h - circleSize) / 2,
+                      child: Container(
+                        width: circleSize,
+                        height: circleSize,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFFFFE9A5),
+                              Color(0xFFD5A637),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.assignment_turned_in_rounded,
+                          color: const Color(0xFF0A355F),
+                          size: circleSize * 0.56,
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      start: 6,
+                      top: (h - 26) / 2,
+                      child: Icon(
+                        DedaLanguageState.isArabic
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsetsDirectional.only(
+                        start: 27,
+                        end: circleSize + 13,
+                        top: compact ? 7 : 10,
+                        bottom: compact ? 7 : 10,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Text(
+                              dedaText('المهام', 'Tasks'),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: compact ? 18 : 24,
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    blurRadius: 5,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: compact ? 2 : 4),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Text(
+                              dedaText(
+                                'أنجز مهامك اليومية',
+                                'Complete daily tasks',
+                              ),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: const Color(0xFFFFE09A),
+                                fontSize: compact ? 10.5 : 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+
 class _DedaMapHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -10416,160 +10804,176 @@ class _DedaMapHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFF0D8DA6),
-            Color(0xFF086C8B),
-            Color(0xFF073F6E),
-          ],
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-        ),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: const Color(0xFFE7C76F),
-          width: 1.15,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x3A063B53),
-            blurRadius: 16,
-            offset: Offset(0, 7),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 170.0;
+        final w = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 240.0;
+        final compact = h < 125 || w < 210;
+        final circleSize = compact
+            ? (h * 0.36).clamp(46.0, 58.0).toDouble()
+            : (h * 0.34).clamp(58.0, 82.0).toDouble();
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF18A8B7),
+                Color(0xFF0D7894),
+                Color(0xFF07577D),
+              ],
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
+            ),
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: const Color(0xFFE8C56C),
+              width: 1.15,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x3A063B53),
+                blurRadius: 16,
+                offset: Offset(0, 7),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final h = constraints.maxHeight.isFinite
-                    ? constraints.maxHeight
-                    : 180.0;
-                final circleSize =
-                    (h * 0.36).clamp(58.0, 92.0).toDouble();
-                return Stack(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                child: Stack(
                   children: [
                     PositionedDirectional(
-                      top: -28,
-                      end: -24,
+                      top: -24,
+                      end: -20,
                       child: Container(
-                        width: h * 0.92,
-                        height: h * 0.92,
+                        width: h * 0.82,
+                        height: h * 0.82,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.07),
+                          color: Colors.white.withOpacity(0.08),
                         ),
                       ),
                     ),
                     PositionedDirectional(
-                      bottom: -34,
-                      start: -30,
+                      bottom: -30,
+                      start: -18,
                       child: Icon(
                         Icons.map_rounded,
-                        size: h * 0.92,
-                        color: const Color(0x18FFFFFF),
+                        size: h * 0.82,
+                        color: const Color(0x14FFFFFF),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      end: compact ? 10 : 14,
+                      top: (h - circleSize) / 2,
+                      child: Container(
+                        width: circleSize,
+                        height: circleSize,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF27CAD4),
+                              Color(0xFF0B7892),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.48),
+                            width: 1.2,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x33000000),
+                              blurRadius: 9,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.map_outlined,
+                          size: circleSize * 0.55,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      start: compact ? 6 : 9,
+                      top: (h - 30) / 2,
+                      child: Icon(
+                        DedaLanguageState.isArabic
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
+                        color: Colors.white,
+                        size: 30,
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 15,
-                        vertical: 13,
+                      padding: EdgeInsetsDirectional.only(
+                        start: compact ? 30 : 36,
+                        end: circleSize + (compact ? 18 : 28),
+                        top: compact ? 10 : 15,
+                        bottom: compact ? 10 : 15,
                       ),
-                      child: Row(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Icon(
-                            DedaLanguageState.isArabic
-                                ? Icons.chevron_left_rounded
-                                : Icons.chevron_right_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  dedaText('الخريطة', 'Map'),
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 27,
-                                    fontWeight: FontWeight.w900,
-                                    shadows: [
-                                      Shadow(
-                                        color: Color(0x66000000),
-                                        blurRadius: 6,
-                                      ),
-                                    ],
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Text(
+                              dedaText('الخريطة', 'Map'),
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: compact ? 21 : 27,
+                                fontWeight: FontWeight.w900,
+                                shadows: const [
+                                  Shadow(
+                                    color: Color(0x66000000),
+                                    blurRadius: 5,
                                   ),
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  dedaText(
-                                    'استكشف الأماكن من حولك',
-                                    'Explore places around you',
-                                  ),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  style: const TextStyle(
-                                    color: Color(0xFFE6F7FB),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            width: circleSize,
-                            height: circleSize,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color(0xFF20C5D4),
-                                  Color(0xFF0A6A8B),
                                 ],
                               ),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.45),
-                                width: 1.2,
-                              ),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Color(0x33000000),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 4),
-                                ),
-                              ],
                             ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.map_outlined,
-                              size: circleSize * 0.56,
-                              color: Colors.white,
+                          ),
+                          SizedBox(height: compact ? 3 : 6),
+                          Text(
+                            dedaText(
+                              'استكشف الأماكن من حولك',
+                              'Explore places around you',
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: const Color(0xFFE7F8FB),
+                              fontSize: compact ? 10.5 : 12.5,
+                              height: 1.25,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
