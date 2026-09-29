@@ -923,7 +923,6 @@ class DedaPreferences {
     await prefs.remove(_phoneKey);
     await prefs.remove(_accountPhoneKey);
     await prefs.remove(_accountTypeKey);
-    DedaTaskEngine.clearSessionView();
   }
 }
 
