@@ -6500,7 +6500,17 @@ class _HomePageState extends State<HomePage> {
                               textDirection: TextDirection.ltr,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: categoryCard(restaurant)),
+                                Expanded(child: _DedaTasksHeroCard(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const DedaDailyTasksPage(),
+                                        ),
+                                      );
+                                    },
+                                  )),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   flex: 2,
@@ -6518,6 +6528,8 @@ class _HomePageState extends State<HomePage> {
                               textDirection: TextDirection.ltr,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                Expanded(child: categoryCard(restaurant)),
+                                const SizedBox(width: 8),
                                 Expanded(child: categoryCard(fuel)),
                                 const SizedBox(width: 8),
                                 Expanded(child: categoryCard(pharmacy)),
@@ -6714,7 +6726,17 @@ class _HomePageState extends State<HomePage> {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
-                                      child: categoryCard(restaurant),
+                                      child: _DedaTasksHeroCard(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const DedaDailyTasksPage(),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
@@ -6734,7 +6756,9 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    Expanded(child: categoryCard(fuel)),
+                                    Expanded(child: categoryCard(restaurant)),
+                                const SizedBox(width: 8),
+                                Expanded(child: categoryCard(fuel)),
                                     const SizedBox(width: 8),
                                     Expanded(child: categoryCard(pharmacy)),
                                     const SizedBox(width: 8),
@@ -9438,6 +9462,656 @@ class _DedaReceivedLocationsPageState
                     ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DedaDailyTasksPage extends StatefulWidget {
+  const DedaDailyTasksPage({super.key});
+
+  @override
+  State<DedaDailyTasksPage> createState() => _DedaDailyTasksPageState();
+}
+
+class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
+  bool _loginRewardClaimed = false;
+  bool _loadingRewardState = true;
+
+  String get _todayKey {
+    final now = DateTime.now();
+    final y = now.year.toString().padLeft(4, '0');
+    final m = now.month.toString().padLeft(2, '0');
+    final d = now.day.toString().padLeft(2, '0');
+    final phone = DedaPreferences.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    return 'deda_daily_login_claim_v1_' +
+        phone +
+        '_' +
+        y +
+        '_' +
+        m +
+        '_' +
+        d;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRewardState();
+  }
+
+  Future<void> _loadRewardState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _loginRewardClaimed = prefs.getBool(_todayKey) ?? false;
+      _loadingRewardState = false;
+    });
+  }
+
+  Future<void> _claimLoginReward() async {
+    if (_loginRewardClaimed || _loadingRewardState) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_todayKey, true);
+    if (!mounted) return;
+    setState(() => _loginRewardClaimed = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dedaText(
+            'تم استلام مكافأة تسجيل الدخول اليومية.',
+            'Daily login reward claimed.',
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+
+  void _openTask(int index) {
+    switch (index) {
+      case 0:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DedaShareLocationPage()),
+        );
+        break;
+      case 1:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MapReadyPage()),
+        );
+        break;
+      case 2:
+        if (DedaPreferences.accountType == DedaAccountType.placeOwner) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const OwnerPlacePage()),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                dedaText(
+                  'هذه المهمة خاصة بصاحب المكان عند وجود مكان.',
+                  'This task is for place owners when a place is available.',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+        break;
+      case 3:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const SavedPlacesPage(showFavorites: true),
+          ),
+        );
+        break;
+      case 4:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const DedaReceivedLocationsPage(),
+          ),
+        );
+        break;
+      case 5:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PersonalPlacesPage()),
+        );
+        break;
+      case 6:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'اختبار المهارات المرورية هو الخطوة التالية في التنفيذ.',
+                'The traffic-skills quiz is the next implementation step.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+        break;
+      case 7:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MapReadyPage()),
+        );
+        break;
+    }
+  }
+
+  Widget _dailyLoginCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF073A6B), Color(0xFF0B2447)],
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: const Color(0xFFE8C56C),
+          width: 1.6,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFE49A), Color(0xFFD4A63B)],
+              ),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.calendar_month_rounded,
+              size: 42,
+              color: Color(0xFF0B3157),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  dedaText('تسجيل الدخول اليومي', 'Daily login'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  dedaText(
+                    'تم تسجيل الدخول بنجاح',
+                    'Daily login completed',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFFFFDE83),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: const LinearProgressIndicator(
+                    value: 1,
+                    minHeight: 10,
+                    backgroundColor: Color(0x44FFFFFF),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFFFFD866)),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  dedaText(
+                    'يتجدد تلقائيًا بعد الساعة 12:00 ليلًا',
+                    'Refreshes automatically after 12:00 AM',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFFD7E5F5),
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: _loginRewardClaimed || _loadingRewardState
+                ? null
+                : _claimLoginReward,
+            icon: Icon(
+              _loginRewardClaimed
+                  ? Icons.check_circle_rounded
+                  : Icons.card_giftcard_rounded,
+            ),
+            label: Text(
+              _loginRewardClaimed
+                  ? dedaText('تم', 'Done')
+                  : dedaText('استلام', 'Claim'),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFE6B94E),
+              foregroundColor: const Color(0xFF4A3300),
+              disabledBackgroundColor: const Color(0xFF8B969F),
+              disabledForegroundColor: Colors.white,
+              minimumSize: const Size(96, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = <(IconData, String, String, String)>[
+      (
+        Icons.share_location_rounded,
+        dedaText('شارك مكانك الشخصي', 'Share your location'),
+        dedaText(
+          'شارك موقعك الحالي مع من تريد',
+          'Share your current location',
+        ),
+        dedaText('شارك', 'Share'),
+      ),
+      (
+        Icons.map_rounded,
+        dedaText('افتح الخريطة', 'Open the map'),
+        dedaText(
+          'حدد أو ابحث عن أي مكان على الخريطة',
+          'Pick or search for any place on the map',
+        ),
+        dedaText('افتح', 'Open'),
+      ),
+      (
+        Icons.storefront_rounded,
+        dedaText(
+          'شارك إدارة مكانك إن وجد',
+          'Share place management if available',
+        ),
+        dedaText(
+          'مهمة خاصة بصاحب المكان',
+          'A task for place owners',
+        ),
+        dedaText('شارك', 'Share'),
+      ),
+      (
+        Icons.bookmark_rounded,
+        dedaText('زيارة مكان محفوظ', 'Visit a saved place'),
+        dedaText(
+          'قم بزيارة أحد الأماكن المحفوظة لديك',
+          'Visit one of your saved places',
+        ),
+        dedaText('اذهب', 'Go'),
+      ),
+      (
+        Icons.move_to_inbox_rounded,
+        dedaText(
+          'افتح أي مكان تمت مشاركته معك',
+          'Open a place shared with you',
+        ),
+        dedaText(
+          'افتح مكانًا تمت مشاركته معك',
+          'Open a place someone shared with you',
+        ),
+        dedaText('افتح', 'Open'),
+      ),
+      (
+        Icons.fact_check_rounded,
+        dedaText('مراجعة مكان مضاف', 'Review an added place'),
+        dedaText(
+          'راجع تفاصيل أحد الأماكن التي أضفتها',
+          'Review a place you added',
+        ),
+        dedaText('راجع', 'Review'),
+      ),
+      (
+        Icons.traffic_rounded,
+        dedaText('اختبر مهاراتك', 'Test your skills'),
+        dedaText(
+          '5 أسئلة مرورية، كل إجابة صحيحة = 5 نقاط',
+          '5 traffic questions, each correct answer = 5 points',
+        ),
+        dedaText('ابدأ', 'Start'),
+      ),
+      (
+        Icons.route_rounded,
+        dedaText(
+          'استفد من رحلتك الطويلة إن وجدت',
+          'Use a road service on a long trip',
+        ),
+        dedaText(
+          'استفد من خدمات الطريق أثناء رحلتك',
+          'Use road services during your trip',
+        ),
+        dedaText('استفد', 'Use'),
+      ),
+    ];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F3EA),
+      appBar: AppBar(
+        title: Text(dedaText('المهام', 'Tasks')),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF08345F),
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/deda_home_bg.jpg'),
+            fit: BoxFit.cover,
+            opacity: 0.17,
+          ),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+          children: [
+            Text(
+              dedaText(
+                'أنجز مهامك اليومية واحصل على مكافآت مميزة',
+                'Complete your daily tasks and earn rewards',
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF173D63),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _dailyLoginCard(),
+            const SizedBox(height: 14),
+            ...List<Widget>.generate(tasks.length, (index) {
+              final task = tasks[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.93),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFFE4D5AA),
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x17000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => _openTask(index),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF2F8),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              task.$1,
+                              size: 30,
+                              color: const Color(0xFF0B4E7D),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  task.$2,
+                                  style: const TextStyle(
+                                    color: Color(0xFF0C3157),
+                                    fontSize: 16.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  task.$3,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF66768A),
+                                    fontSize: 12.5,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: const LinearProgressIndicator(
+                                    value: 0,
+                                    minHeight: 7,
+                                    backgroundColor: Color(0xFFE1E6EB),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          FilledButton(
+                            onPressed: () => _openTask(index),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF0B4E7D),
+                              minimumSize: const Size(82, 46),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                            child: Text(
+                              task.$4,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9F1F7).withOpacity(0.95),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFBDD0DF)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFF0B4E7D),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      dedaText(
+                        'يمكنك إكمال بعض مهامك اليومية ذات الصلة بخطوة واحدة أو بمسار واحد. إذا كانت مهامك خاصة بالخريطة فسيتم احتسابها تلقائيًا عند تنفيذ شروطها دون الحاجة للرجوع لكل مهمة على حدة.',
+                        'Some related daily tasks can be completed in one step or one route. Map-related tasks will be counted automatically when their conditions are met, without returning to each task separately.',
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF234B68),
+                        fontSize: 12.5,
+                        height: 1.45,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DedaTasksHeroCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _DedaTasksHeroCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF082B55), Color(0xFF124D7B)],
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFE4C36A),
+          width: 1.4,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 14,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(23),
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            children: [
+              PositionedDirectional(
+                bottom: -28,
+                start: -20,
+                end: -20,
+                child: Container(
+                  height: 58,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0x00FFD96B), Color(0xFFFFD66B)],
+                    ),
+                    borderRadius: BorderRadius.circular(60),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      DedaLanguageState.isArabic
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            dedaText('المهام', 'Tasks'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x66000000),
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            dedaText(
+                              'أنجز مهامك اليومية',
+                              'Complete your daily tasks',
+                            ),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Color(0xFFFFE19A),
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 66,
+                      height: 66,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFFE39A), Color(0xFFB98A2D)],
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.assignment_turned_in_rounded,
+                        color: Colors.white,
+                        size: 37,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
