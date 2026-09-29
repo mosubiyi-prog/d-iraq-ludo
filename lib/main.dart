@@ -827,6 +827,7 @@ class DedaPreferences {
       prefs.setString(_accountTypeKey, type.name),
       prefs.setBool(_loggedInKey, true),
     ]);
+    unawaited(DedaTaskEngine.initializeForCurrentAccount());
 
     // Do not hold the login screen open while Firebase/network profile syncs.
     // Local account state is already complete, so the user can enter DEDA now.
@@ -922,6 +923,361 @@ class DedaPreferences {
     await prefs.remove(_phoneKey);
     await prefs.remove(_accountPhoneKey);
     await prefs.remove(_accountTypeKey);
+    DedaTaskEngine.clearSessionView();
+  }
+}
+
+
+enum DedaTaskEvent {
+  mapOpened,
+  currentLocationShared,
+  registeredPlaceShared,
+  receivedPlaceOpened,
+  savedPlaceOpened,
+  addedPlaceReviewed,
+  trafficQuizCompleted,
+  longTripCompleted,
+  trafficQuizCorrectAnswer,
+}
+
+extension DedaTaskEventKey on DedaTaskEvent {
+  String get key => switch (this) {
+        DedaTaskEvent.mapOpened => 'map_opened',
+        DedaTaskEvent.currentLocationShared => 'current_location_shared',
+        DedaTaskEvent.registeredPlaceShared => 'registered_place_shared',
+        DedaTaskEvent.receivedPlaceOpened => 'received_place_opened',
+        DedaTaskEvent.savedPlaceOpened => 'saved_place_opened',
+        DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
+        DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
+        DedaTaskEvent.longTripCompleted => 'long_trip_completed',
+        DedaTaskEvent.trafficQuizCorrectAnswer =>
+          'traffic_quiz_correct_answer',
+      };
+}
+
+class DedaTaskIds {
+  static const String sharePersonalLocation = 'share_personal_location';
+  static const String openMap = 'open_map';
+  static const String shareRegisteredPlace = 'share_registered_place';
+  static const String openSavedPlace = 'open_saved_place';
+  static const String openReceivedPlace = 'open_received_place';
+  static const String reviewAddedPlace = 'review_added_place';
+  static const String trafficSkills = 'traffic_skills';
+  static const String longTrip = 'long_trip';
+
+  static const List<String> weekly = <String>[
+    sharePersonalLocation,
+    openMap,
+    shareRegisteredPlace,
+    openSavedPlace,
+    openReceivedPlace,
+    reviewAddedPlace,
+    trafficSkills,
+    longTrip,
+  ];
+}
+
+class DedaTaskEventResult {
+  final bool accepted;
+  final bool completedNow;
+  final bool pointsAwarded;
+  final int pointsDelta;
+  final int totalPoints;
+  final String? taskId;
+  final String cycleId;
+
+  const DedaTaskEventResult({
+    required this.accepted,
+    required this.completedNow,
+    required this.pointsAwarded,
+    required this.pointsDelta,
+    required this.totalPoints,
+    required this.taskId,
+    required this.cycleId,
+  });
+}
+
+/// Central local task/points state for the first implementation stage.
+///
+/// The UI never decides completion by itself. Screens report only successful
+/// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+/// the next backend stage; this local store keeps the engine testable offline.
+class DedaTaskEngine {
+  static const int pointsPerTask = 5;
+  static const int pointsPerTrafficAnswer = 5;
+  static const int _storeVersion = 1;
+  static const int _maxLedgerEntries = 600;
+
+  static final ValueNotifier<int> totalPointsNotifier =
+      ValueNotifier<int>(0);
+  static final ValueNotifier<int> revisionNotifier =
+      ValueNotifier<int>(0);
+
+  static String _loadedAccountKey = '';
+
+  static String _accountKey() =>
+      DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+
+  static String _statePrefsKey(String accountKey) =>
+      'deda_task_points_state_v1_$accountKey';
+
+  static Map<String, dynamic> _emptyState() => <String, dynamic>{
+        'version': _storeVersion,
+        'completions': <String, dynamic>{},
+        'awards': <String, dynamic>{},
+        'ledger': <dynamic>[],
+      };
+
+  static Map<String, dynamic> _decodeState(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return _emptyState();
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return _emptyState();
+      final state = Map<String, dynamic>.from(decoded);
+      if (state['completions'] is! Map) {
+        state['completions'] = <String, dynamic>{};
+      }
+      if (state['awards'] is! Map) {
+        state['awards'] = <String, dynamic>{};
+      }
+      if (state['ledger'] is! List) {
+        state['ledger'] = <dynamic>[];
+      }
+      state['version'] = _storeVersion;
+      return state;
+    } catch (_) {
+      return _emptyState();
+    }
+  }
+
+  static int _totalFromState(Map<String, dynamic> state) {
+    final awardsRaw = state['awards'];
+    if (awardsRaw is! Map) return 0;
+    var total = 0;
+    for (final value in awardsRaw.values) {
+      if (value is Map) {
+        final points = value['points'];
+        if (points is num) total += points.toInt();
+      }
+    }
+    return total;
+  }
+
+  /// Development cycle id. Weekly definitions will later supply their own
+  /// Firestore weekId, so changing rollover policy will not change task IDs.
+  static String currentLocalCycleId([DateTime? value]) {
+    final now = (value ?? DateTime.now()).toLocal();
+    final monday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - DateTime.monday));
+    final y = monday.year.toString().padLeft(4, '0');
+    final m = monday.month.toString().padLeft(2, '0');
+    final d = monday.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  static String? taskIdForEvent(DedaTaskEvent event) => switch (event) {
+        DedaTaskEvent.mapOpened => DedaTaskIds.openMap,
+        DedaTaskEvent.currentLocationShared =>
+          DedaTaskIds.sharePersonalLocation,
+        DedaTaskEvent.registeredPlaceShared =>
+          DedaTaskIds.shareRegisteredPlace,
+        DedaTaskEvent.receivedPlaceOpened =>
+          DedaTaskIds.openReceivedPlace,
+        DedaTaskEvent.savedPlaceOpened => DedaTaskIds.openSavedPlace,
+        DedaTaskEvent.addedPlaceReviewed => DedaTaskIds.reviewAddedPlace,
+        DedaTaskEvent.trafficQuizCompleted => DedaTaskIds.trafficSkills,
+        DedaTaskEvent.longTripCompleted => DedaTaskIds.longTrip,
+        DedaTaskEvent.trafficQuizCorrectAnswer => null,
+      };
+
+  static Future<Map<String, dynamic>> _readState(
+    SharedPreferences prefs,
+    String accountKey,
+  ) async {
+    return _decodeState(prefs.getString(_statePrefsKey(accountKey)));
+  }
+
+  static Future<void> _writeState(
+    SharedPreferences prefs,
+    String accountKey,
+    Map<String, dynamic> state,
+  ) async {
+    await prefs.setString(_statePrefsKey(accountKey), jsonEncode(state));
+  }
+
+  static Future<void> initializeForCurrentAccount() async {
+    final accountKey = _accountKey();
+    _loadedAccountKey = accountKey;
+    if (accountKey.isEmpty) {
+      totalPointsNotifier.value = 0;
+      revisionNotifier.value++;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    if (_loadedAccountKey != accountKey) return;
+    totalPointsNotifier.value = _totalFromState(state);
+    revisionNotifier.value++;
+  }
+
+  static void clearSessionView() {
+    _loadedAccountKey = '';
+    totalPointsNotifier.value = 0;
+    revisionNotifier.value++;
+  }
+
+  static Future<int> totalPoints() async {
+    final accountKey = _accountKey();
+    if (accountKey.isEmpty) return 0;
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final total = _totalFromState(state);
+    if (_loadedAccountKey == accountKey) {
+      totalPointsNotifier.value = total;
+    }
+    return total;
+  }
+
+  static Future<bool> isTaskCompleted(
+    String taskId, {
+    String? cycleId,
+  }) async {
+    final accountKey = _accountKey();
+    if (accountKey.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final completions = Map<String, dynamic>.from(
+      state['completions'] as Map,
+    );
+    final cycle = cycleId ?? currentLocalCycleId();
+    return completions.containsKey('$cycle|$taskId');
+  }
+
+  static Future<DedaTaskEventResult> recordSuccessfulEvent(
+    DedaTaskEvent event, {
+    String? dedupeId,
+    DateTime? occurredAt,
+    String? cycleId,
+  }) async {
+    final accountKey = _accountKey();
+    final cycle = cycleId ?? currentLocalCycleId(occurredAt);
+    if (accountKey.isEmpty) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: 0,
+        taskId: taskIdForEvent(event),
+        cycleId: cycle,
+      );
+    }
+
+    final taskId = taskIdForEvent(event);
+    final cleanDedupe = dedupeId?.trim() ?? '';
+    if (event == DedaTaskEvent.trafficQuizCorrectAnswer &&
+        cleanDedupe.isEmpty) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: await totalPoints(),
+        taskId: null,
+        cycleId: cycle,
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final completions = Map<String, dynamic>.from(
+      state['completions'] as Map,
+    );
+    final awards = Map<String, dynamic>.from(state['awards'] as Map);
+    final ledger = List<dynamic>.from(state['ledger'] as List);
+
+    final completionKey =
+        taskId == null ? null : '$cycle|$taskId';
+    final awardId = taskId != null
+        ? 'task|$cycle|$taskId'
+        : 'traffic_answer|$cycle|$cleanDedupe';
+
+    final wasCompleted =
+        completionKey != null && completions.containsKey(completionKey);
+    final alreadyAwarded = awards.containsKey(awardId);
+    final now = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
+
+    if (completionKey != null && !wasCompleted) {
+      completions[completionKey] = <String, dynamic>{
+        'taskId': taskId,
+        'cycleId': cycle,
+        'event': event.key,
+        'completedAt': now,
+      };
+    }
+
+    var pointsDelta = 0;
+    if (!alreadyAwarded) {
+      pointsDelta = taskId != null
+          ? pointsPerTask
+          : pointsPerTrafficAnswer;
+      final award = <String, dynamic>{
+        'id': awardId,
+        'points': pointsDelta,
+        'type': taskId != null ? 'task' : 'traffic_answer',
+        'event': event.key,
+        'cycleId': cycle,
+        if (taskId != null) 'taskId': taskId,
+        if (taskId == null) 'dedupeId': cleanDedupe,
+        'createdAt': now,
+      };
+      awards[awardId] = award;
+      ledger.add(award);
+      if (ledger.length > _maxLedgerEntries) {
+        ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+      }
+    }
+
+    state['completions'] = completions;
+    state['awards'] = awards;
+    state['ledger'] = ledger;
+    await _writeState(prefs, accountKey, state);
+
+    final total = _totalFromState(state);
+    _loadedAccountKey = accountKey;
+    totalPointsNotifier.value = total;
+    revisionNotifier.value++;
+
+    return DedaTaskEventResult(
+      accepted: true,
+      completedNow: completionKey != null && !wasCompleted,
+      pointsAwarded: !alreadyAwarded,
+      pointsDelta: pointsDelta,
+      totalPoints: total,
+      taskId: taskId,
+      cycleId: cycle,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> recentLedger({
+    int limit = 30,
+  }) async {
+    final accountKey = _accountKey();
+    if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final raw = List<dynamic>.from(state['ledger'] as List);
+    final entries = raw
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList()
+        .reversed
+        .take(limit.clamp(1, 100))
+        .toList();
+    return entries;
   }
 }
 
@@ -1090,6 +1446,7 @@ Future<void> main() async {
     // Keep DEDA usable while Firebase platform configuration is being connected.
   }
   await DedaPreferences.load();
+  await DedaTaskEngine.initializeForCurrentAccount();
   runApp(const DedaApp());
 }
 
