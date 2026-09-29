@@ -8552,33 +8552,38 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               ),
               onTap: _openAccountInfo,
             ),
-            _sectionCard(
-              icon: Icons.star_rounded,
-              iconColor: const Color(0xFFE2A400),
-              title: dedaText('النقاط', 'Points'),
-              subtitle: dedaText(
-                'عرض نقاطك والمكافآت المتاحة',
-                'View your points and available rewards',
-              ),
-              badgeText: dedaText('قريبًا', 'Soon'),
-              onTap: () {
-                showDialog<void>(
-                  context: context,
-                  builder: (dialogContext) => AlertDialog(
-                    title: Text(dedaText('النقاط', 'Points')),
-                    content: Text(
-                      dedaText(
-                        'هذا القسم جاهز ضمن ترتيب الملف الشخصي، ولن نعرض رصيدًا وهميًا قبل اعتماد نظام النقاط.',
-                        'This section is ready in the profile layout. No fake balance will be shown before the points system is approved.',
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        child: Text(dedaText('حسنًا', 'OK')),
-                      ),
-                    ],
+            ValueListenableBuilder<int>(
+              valueListenable: DedaTaskEngine.totalPointsNotifier,
+              builder: (context, totalPoints, _) {
+                return _sectionCard(
+                  icon: Icons.star_rounded,
+                  iconColor: const Color(0xFFE2A400),
+                  title: dedaText('النقاط', 'Points'),
+                  subtitle: dedaText(
+                    'رصيدك الحالي: $totalPoints نقطة',
+                    'Current balance: $totalPoints points',
                   ),
+                  badgeText: totalPoints.toString(),
+                  onTap: () {
+                    showDialog<void>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(dedaText('النقاط', 'Points')),
+                        content: Text(
+                          dedaText(
+                            'رصيدك الحالي هو $totalPoints نقطة. تضاف 5 نقاط لكل مهمة مكتملة و5 نقاط لكل إجابة مرورية صحيحة.',
+                            'Your current balance is $totalPoints points. You earn 5 points per completed task and 5 points per correct traffic answer.',
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: Text(dedaText('حسنًا', 'OK')),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -9008,6 +9013,12 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
         placeDocumentId:
             _shareType == 'place' ? (_approvedPlace?['id'] ?? '').toString() : '',
       );
+
+      if (_shareType == 'current') {
+        await DedaTaskEngine.recordSuccessfulEvent(
+          DedaTaskEvent.currentLocationShared,
+        );
+      }
 
       if (!mounted) return;
       _recipientController.clear();
@@ -9747,6 +9758,11 @@ class _DedaReceivedLocationsPageState
         builder: (_) => MapReadyPage(
           initialDestination: destination,
         ),
+      ),
+    );
+    unawaited(
+      DedaTaskEngine.recordSuccessfulEvent(
+        DedaTaskEvent.receivedPlaceOpened,
       ),
     );
   }
@@ -10594,6 +10610,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required String title,
     required String subtitle,
     required String action,
+    required bool completed,
   }) {
     return Container(
       constraints: const BoxConstraints(minHeight: 84),
@@ -10693,21 +10710,25 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                         Expanded(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(20),
-                            child: const LinearProgressIndicator(
-                              value: 0,
+                            child: LinearProgressIndicator(
+                              value: completed ? 1 : 0,
                               minHeight: 6,
-                              backgroundColor: Color(0xFFE4E9EE),
+                              backgroundColor: const Color(0xFFE4E9EE),
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFF1C7EBC),
+                                completed
+                                    ? const Color(0xFF15996D)
+                                    : const Color(0xFF1C7EBC),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Text(
-                          '0/1',
+                        Text(
+                          completed ? '1/1' : '0/1',
                           style: TextStyle(
-                            color: Color(0xFF183E62),
+                            color: completed
+                                ? const Color(0xFF0A7A4B)
+                                : const Color(0xFF183E62),
                             fontSize: 11.2,
                             fontWeight: FontWeight.w900,
                           ),
@@ -10930,21 +10951,39 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   children: [
                     _dailyLoginCard(),
                     const SizedBox(height: 7),
-                    ...List<Widget>.generate(tasks.length, (index) {
-                      final task = tasks[index];
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom: index == tasks.length - 1 ? 0 : 6,
-                        ),
-                        child: _taskCard(
-                          index: index,
-                          icon: task.$1,
-                          title: task.$2,
-                          subtitle: task.$3,
-                          action: task.$4,
-                        ),
-                      );
-                    }),
+                    ValueListenableBuilder<int>(
+                      valueListenable: DedaTaskEngine.revisionNotifier,
+                      builder: (context, _, __) {
+                        return Column(
+                          children: List<Widget>.generate(
+                            tasks.length,
+                            (index) {
+                              final task = tasks[index];
+                              final taskId = DedaTaskIds.weekly[index];
+                              return FutureBuilder<bool>(
+                                future: DedaTaskEngine.isTaskCompleted(taskId),
+                                builder: (context, snapshot) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom:
+                                          index == tasks.length - 1 ? 0 : 6,
+                                    ),
+                                    child: _taskCard(
+                                      index: index,
+                                      icon: task.$1,
+                                      title: task.$2,
+                                      subtitle: task.$3,
+                                      action: task.$4,
+                                      completed: snapshot.data ?? false,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 7),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -17350,6 +17389,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(
+      DedaTaskEngine.recordSuccessfulEvent(DedaTaskEvent.mapOpened),
+    );
     final initial = widget.initialDestination;
     if (initial != null) {
       selectedDestination = initial.location;
