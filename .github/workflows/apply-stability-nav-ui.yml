@@ -1,0 +1,63 @@
+name: Apply DEDA combined stability fixes
+on:
+  push:
+    branches:
+      - stability-nav-ui-fixes-2026-09-30
+permissions:
+  contents: write
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout stability branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-nav-ui-fixes-2026-09-30
+          fetch-depth: 0
+      - name: Apply combined stability patch
+        run: python3 tools/stability_nav_ui_patch_2026_09_30.py
+      - name: Setup Flutter 3.47.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Analyze app source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+      - name: Restore dependency metadata
+        run: |
+          git checkout -- pubspec.lock 2>/dev/null || true
+          git checkout -- pubspec.yaml 2>/dev/null || true
+      - name: Validate exact fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('lib/main.dart').read_text()
+          required = [
+              'class _DedaCleanPageTransitionsBuilder extends PageTransitionsBuilder',
+              'pageTransitionsTheme: const PageTransitionsTheme(',
+              'distanceFilter: 0',
+              'intervalDuration: const Duration(milliseconds: 500)',
+              'setState(() => _autoFollowMap = false);',
+              "dedaText('تم الفتح', 'Opened')",
+              'استرد نقاطك 5,000 +50',
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f'Missing marker: {marker}')
+          if "'3 / 16'" in text:
+              raise SystemExit('3/16 disclosure returned')
+          print('All combined stability invariants verified')
+          PY
+          git diff --check
+      - name: Commit validated app fix
+        run: |
+          if git diff --quiet -- lib/main.dart; then
+            echo 'No main.dart changes to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/main.dart
+          git commit -m 'Fix navigation follow lag gestures and page transition ghosting'
+          git push origin HEAD:stability-nav-ui-fixes-2026-09-30
