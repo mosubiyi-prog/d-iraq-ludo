@@ -24,7 +24,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply first reward card patch
-        run: python3 tools/points_stage1_code_patch_2026_09_30.py
+        run: |
+          python3 tools/points_stage1_code_patch_2026_09_30.py
+          git checkout -- .github/workflows/build.yml
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -33,9 +35,6 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Format changed Dart source
-        run: dart format lib/main.dart
 
       - name: Analyze changed Dart source
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
@@ -46,16 +45,16 @@ jobs:
           git diff --stat
           grep -q "String _rewardCode16()" lib/main.dart
           grep -q "'3 / 16'" lib/main.dart
-          grep -q "points-stage1-code-2026-09-30" .github/workflows/build.yml
+          grep -q "_rewardStageOneBackFace()" lib/main.dart
 
       - name: Commit validated stage 1 changes
         run: |
-          if git diff --quiet; then
-            echo "No patch changes to commit"
+          if git diff --quiet lib/main.dart; then
+            echo "No main.dart changes to commit"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/main.dart .github/workflows/build.yml
+          git add lib/main.dart
           git commit -m "Add first 5000 point reward card reveal"
           git push origin HEAD:points-stage1-code-2026-09-30
