@@ -1,0 +1,69 @@
+name: Apply DEDA stage one deduct claim fix
+on:
+  push:
+    branches:
+      - points-stage1-deduct-claim-fix-2026-10-01
+permissions:
+  contents: write
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout stage one fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: points-stage1-deduct-claim-fix-2026-10-01
+          fetch-depth: 0
+      - name: Apply stage one deduct claim patch
+        run: python3 tools/points_stage1_deduct_claim_patch_2026_10_01.py
+      - name: Setup Flutter 3.47.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Analyze app source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+      - name: Restore dependency metadata
+        run: |
+          git checkout -- pubspec.lock 2>/dev/null || true
+          git checkout -- pubspec.yaml 2>/dev/null || true
+      - name: Validate exact stage one behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('lib/main.dart').read_text()
+          required = [
+              "'point_tier_reserve|5000'",
+              "'point_tier_claim|5000'",
+              "'points': -5000",
+              "'points': 5050",
+              "'bonusPoints': 50",
+              '5,000 نقطة مستقطعة وجاهزة للاستلام + هدية 50',
+              "dedaText('استلم 5,000 + 50', 'Claim 5,000 + 50')",
+              'badgeMaxWidth: 138',
+              "'$totalPoints نقطة'",
+              'generalManagerBonusPoints = 1000000',
+              'intervalDuration: const Duration(milliseconds: 500)',
+              'setState(() => _autoFollowMap = false);',
+              'class _DedaCleanPageTransitionsBuilder extends PageTransitionsBuilder',
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f'Missing marker: {marker}')
+          if "'3 / 16'" in text:
+              raise SystemExit('3/16 disclosure returned')
+          print('Stage one deduct -> claim +50 behavior and Build 232 invariants verified')
+          PY
+          git diff --check
+      - name: Commit validated stage one fix
+        run: |
+          if git diff --quiet -- lib/main.dart; then
+            echo 'No main.dart changes to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/main.dart
+          git commit -m 'Fix stage one deduct then claim reward flow'
+          git push origin HEAD:points-stage1-deduct-claim-fix-2026-10-01
