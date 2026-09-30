@@ -1,0 +1,86 @@
+name: Apply All Points Tiers Engine
+
+on:
+  push:
+    branches:
+      - points-all-tiers-engine-2026-10-01
+    paths:
+      - .github/workflows/apply-all-tiers-engine.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout all tiers branch
+        uses: actions/checkout@v4
+        with:
+          ref: points-all-tiers-engine-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply shared points tiers engine
+        run: python3 tools/points_all_tiers_engine_patch_2026_10_01.py
+
+      - name: Setup Flutter 3.47.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze app source
+        run: flutter analyze lib/main.dart
+
+      - name: Validate exact tier invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('lib/main.dart').read_text(encoding='utf-8')
+          must = [
+              "static const List<int> _pointTierThresholds = <int>[",
+              "5000: 50",
+              "10000: 100",
+              "15000: 150",
+              "20000: 200",
+              "25000: 250",
+              "final previousThreshold = index == 0 ? null : _pointTierThresholds[index - 1];",
+              "'points': -threshold",
+              "'points': threshold + bonus",
+              "point_tier_reserve|$threshold",
+              "point_tier_claim|$threshold",
+              "_rewardPartForTier(threshold)",
+              "_claimPointTierReward(threshold)",
+              "_rewardTierBackFace(threshold: threshold, index: index)",
+              "اكتملت مراحل بطاقات النقاط",
+          ]
+          for x in must:
+              assert x in s, x
+          forbidden = [
+              "if (threshold != 5000)",
+              "bool _stageOneRewardClaimed",
+              "bool _stageOneRewardClaiming",
+              "Widget _rewardStageOneBackFace()",
+          ]
+          for x in forbidden:
+              assert x not in s, x
+
+          # Ensure all five thresholds are present once in the shared definition.
+          shared = s[s.index('static const List<int> _pointTierThresholds'):s.index('static const Map<int, int> _pointTierBonuses')]
+          for n in (5000, 10000, 15000, 20000, 25000):
+              assert str(n) in shared, n
+          print('all tier invariants validated')
+          PY
+
+      - name: Commit validated all tiers engine
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "Generalize points cards to all five tiers"
+          git push origin HEAD:points-all-tiers-engine-2026-10-01
