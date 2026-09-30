@@ -1156,6 +1156,105 @@ class DedaTaskEngine {
     return completions.containsKey('$cycle|$taskId');
   }
 
+  static Future<bool> isTaskRewardClaimed(
+    String taskId, {
+    String? cycleId,
+  }) async {
+    final accountKey = _accountKey();
+    if (accountKey.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final awards = Map<String, dynamic>.from(state['awards'] as Map);
+    final cycle = cycleId ?? currentLocalCycleId();
+    return awards.containsKey('task|$cycle|$taskId');
+  }
+
+  static Future<DedaTaskEventResult> claimTaskReward(
+    String taskId, {
+    DateTime? occurredAt,
+    String? cycleId,
+  }) async {
+    final accountKey = _accountKey();
+    final cycle = cycleId ?? currentLocalCycleId(occurredAt);
+    if (accountKey.isEmpty) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: 0,
+        taskId: taskId,
+        cycleId: cycle,
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    final completions = Map<String, dynamic>.from(
+      state['completions'] as Map,
+    );
+    final awards = Map<String, dynamic>.from(state['awards'] as Map);
+    final ledger = List<dynamic>.from(state['ledger'] as List);
+    final completionKey = '$cycle|$taskId';
+    final awardId = 'task|$cycle|$taskId';
+    final completed = completions.containsKey(completionKey);
+    final alreadyAwarded = awards.containsKey(awardId);
+
+    if (!completed) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: _totalFromState(state),
+        taskId: taskId,
+        cycleId: cycle,
+      );
+    }
+
+    var pointsDelta = 0;
+    if (!alreadyAwarded) {
+      pointsDelta = pointsPerTask;
+      final completion = completions[completionKey];
+      final sourceEvent = completion is Map
+          ? completion['event']?.toString()
+          : null;
+      final now = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
+      final award = <String, dynamic>{
+        'id': awardId,
+        'points': pointsDelta,
+        'type': 'task',
+        'event': sourceEvent ?? 'task_claimed',
+        'cycleId': cycle,
+        'taskId': taskId,
+        'createdAt': now,
+      };
+      awards[awardId] = award;
+      ledger.add(award);
+      if (ledger.length > _maxLedgerEntries) {
+        ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+      }
+      state['awards'] = awards;
+      state['ledger'] = ledger;
+      await _writeState(prefs, accountKey, state);
+    }
+
+    final total = _totalFromState(state);
+    _loadedAccountKey = accountKey;
+    totalPointsNotifier.value = total;
+    revisionNotifier.value++;
+
+    return DedaTaskEventResult(
+      accepted: true,
+      completedNow: false,
+      pointsAwarded: !alreadyAwarded,
+      pointsDelta: pointsDelta,
+      totalPoints: total,
+      taskId: taskId,
+      cycleId: cycle,
+    );
+  }
+
   static Future<DedaTaskEventResult> recordSuccessfulEvent(
     DedaTaskEvent event, {
     String? dedupeId,
@@ -1201,13 +1300,13 @@ class DedaTaskEngine {
 
     final completionKey =
         taskId == null ? null : '$cycle|$taskId';
-    final awardId = taskId != null
-        ? 'task|$cycle|$taskId'
-        : 'traffic_answer|$cycle|$cleanDedupe';
+    final String? awardId = taskId == null
+        ? 'traffic_answer|$cycle|$cleanDedupe'
+        : null;
 
     final wasCompleted =
         completionKey != null && completions.containsKey(completionKey);
-    final alreadyAwarded = awards.containsKey(awardId);
+    final alreadyAwarded = awardId != null && awards.containsKey(awardId);
     final now = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
 
     if (completionKey != null && !wasCompleted) {
@@ -1220,18 +1319,15 @@ class DedaTaskEngine {
     }
 
     var pointsDelta = 0;
-    if (!alreadyAwarded) {
-      pointsDelta = taskId != null
-          ? pointsPerTask
-          : pointsPerTrafficAnswer;
+    if (taskId == null && !alreadyAwarded && awardId != null) {
+      pointsDelta = pointsPerTrafficAnswer;
       final award = <String, dynamic>{
         'id': awardId,
         'points': pointsDelta,
-        'type': taskId != null ? 'task' : 'traffic_answer',
+        'type': 'traffic_answer',
         'event': event.key,
         'cycleId': cycle,
-        if (taskId != null) 'taskId': taskId,
-        if (taskId == null) 'dedupeId': cleanDedupe,
+        'dedupeId': cleanDedupe,
         'createdAt': now,
       };
       awards[awardId] = award;
@@ -1254,7 +1350,7 @@ class DedaTaskEngine {
     return DedaTaskEventResult(
       accepted: true,
       completedNow: completionKey != null && !wasCompleted,
-      pointsAwarded: !alreadyAwarded,
+      pointsAwarded: taskId == null && !alreadyAwarded,
       pointsDelta: pointsDelta,
       totalPoints: total,
       taskId: taskId,
@@ -10229,6 +10325,7 @@ class DedaDailyTasksPage extends StatefulWidget {
 class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   bool _loginRewardClaimed = false;
   bool _loadingRewardState = true;
+  final Set<String> _claimingTaskIds = <String>{};
 
   @override
   void initState() {
@@ -10269,6 +10366,39 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   'تم استلام مكافأة تسجيل الدخول لهذا اليوم مسبقًا.',
                   'Today\'s daily login reward was already claimed.',
                 ),
+          textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _claimTaskReward(String taskId) async {
+    if (_claimingTaskIds.contains(taskId)) return;
+    setState(() => _claimingTaskIds.add(taskId));
+
+    final result = await DedaTaskEngine.claimTaskReward(taskId);
+    if (!mounted) return;
+    setState(() => _claimingTaskIds.remove(taskId));
+
+    final message = !result.accepted
+        ? dedaText(
+            'أكمل المهمة أولًا حتى يتفعّل الاستلام.',
+            'Complete the task first to enable claiming.',
+          )
+        : result.pointsAwarded
+            ? dedaText(
+                'تم استلام 5 نقاط وإضافتها إلى رصيدك في الملف الشخصي.',
+                '5 points were claimed and added to your profile balance.',
+              )
+            : dedaText(
+                'تم استلام نقاط هذه المهمة مسبقًا.',
+                'This task reward was already claimed.',
+              );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
           textAlign: TextAlign.center,
         ),
       ),
@@ -10700,13 +10830,101 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     );
   }
 
+  Widget _taskClaimButton({
+    required String taskId,
+    required bool completed,
+    required bool rewardClaimed,
+    required bool claiming,
+  }) {
+    final canClaim = completed && !rewardClaimed && !claiming;
+    final background = rewardClaimed
+        ? const Color(0xFFE2F1E8)
+        : canClaim
+            ? const Color(0xFFFFE7A0)
+            : const Color(0xFFE7EBEF);
+    final border = rewardClaimed
+        ? const Color(0xFF8EC5A6)
+        : canClaim
+            ? const Color(0xFFE0B74C)
+            : const Color(0xFFC9D0D6);
+    final foreground = rewardClaimed
+        ? const Color(0xFF0A7A4B)
+        : canClaim
+            ? const Color(0xFF6A4A00)
+            : const Color(0xFF88949E);
+
+    return SizedBox(
+      width: 58,
+      height: 27,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: border, width: 0.8),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: canClaim ? () => _claimTaskReward(taskId) : () {},
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (claiming)
+                    SizedBox(
+                      width: 11,
+                      height: 11,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.6,
+                        color: foreground,
+                      ),
+                    )
+                  else
+                    Icon(
+                      rewardClaimed
+                          ? Icons.check_circle_rounded
+                          : Icons.card_giftcard_rounded,
+                      size: 13,
+                      color: foreground,
+                    ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        rewardClaimed
+                            ? dedaText('تم', 'Done')
+                            : dedaText('استلام', 'Claim'),
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 9.7,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _taskCard({
     required int index,
+    required String taskId,
     required IconData icon,
     required String title,
     required String subtitle,
     required String action,
     required bool completed,
+    required bool rewardClaimed,
+    required bool claiming,
   }) {
     return Container(
       constraints: const BoxConstraints(minHeight: 94),
@@ -10818,16 +11036,23 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Text(
                           completed ? '1/1' : '0/1',
                           style: TextStyle(
                             color: completed
                                 ? const Color(0xFF0A7A4B)
                                 : const Color(0xFF183E62),
-                            fontSize: 11.2,
+                            fontSize: 10.7,
                             fontWeight: FontWeight.w900,
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        _taskClaimButton(
+                          taskId: taskId,
+                          completed: completed,
+                          rewardClaimed: rewardClaimed,
+                          claiming: claiming,
                         ),
                       ],
                     ),
@@ -11056,9 +11281,21 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             (index) {
                               final task = tasks[index];
                               final taskId = DedaTaskIds.weekly[index];
-                              return FutureBuilder<bool>(
-                                future: DedaTaskEngine.isTaskCompleted(taskId),
+                              return FutureBuilder<List<bool>>(
+                                future: Future.wait<bool>([
+                                  DedaTaskEngine.isTaskCompleted(taskId),
+                                  DedaTaskEngine.isTaskRewardClaimed(taskId),
+                                ]),
                                 builder: (context, snapshot) {
+                                  final values = snapshot.data;
+                                  final completed =
+                                      values != null && values.isNotEmpty
+                                          ? values[0]
+                                          : false;
+                                  final rewardClaimed =
+                                      values != null && values.length > 1
+                                          ? values[1]
+                                          : false;
                                   return Padding(
                                     padding: EdgeInsets.only(
                                       bottom:
@@ -11066,11 +11303,15 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                     ),
                                     child: _taskCard(
                                       index: index,
+                                      taskId: taskId,
                                       icon: task.$1,
                                       title: task.$2,
                                       subtitle: task.$3,
                                       action: task.$4,
-                                      completed: snapshot.data ?? false,
+                                      completed: completed,
+                                      rewardClaimed: rewardClaimed,
+                                      claiming:
+                                          _claimingTaskIds.contains(taskId),
                                     ),
                                   );
                                 },
