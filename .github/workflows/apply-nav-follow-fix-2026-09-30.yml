@@ -20,46 +20,25 @@ jobs:
           ref: nav-follow-fix-2026-09-30
           fetch-depth: 0
 
-      - name: Keep camera following live vehicle position
+      - name: Keep navigation camera following live position
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path('lib/main.dart')
           text = path.read_text(encoding='utf-8')
-
-          old = """                        onPositionChanged: (camera, hasGesture) {
-                          if (tripStarted &&
-                              hasGesture &&
-                              _autoFollowMap &&
-                              mounted) {
-                            setState(() => _autoFollowMap = false);
-                          }
-                        },
-"""
-
-          new = """                        onPositionChanged: (camera, hasGesture) {
-                          // During active navigation the live vehicle position owns
-                          // the camera. A map gesture must not turn follow mode off.
-                          if (tripStarted && !_autoFollowMap && mounted) {
-                            setState(() => _autoFollowMap = true);
-                          }
-                        },
-"""
-
+          old = 'setState(() => _autoFollowMap = false);'
+          new = 'setState(() => _autoFollowMap = true);'
           count = text.count(old)
           if count != 1:
-              raise SystemExit(f'Expected exactly one navigation follow block, found {count}')
-
+              raise SystemExit(f'Expected one auto-follow disable statement, found {count}')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          print('Navigation auto-follow block patched successfully.')
+          print('Navigation auto-follow fix applied.')
           PY
 
       - name: Enable APK build for navigation fix branch
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path('.github/workflows/build.yml')
           text = path.read_text(encoding='utf-8')
           branch_line = '      - nav-follow-fix-2026-09-30\n'
@@ -69,21 +48,23 @@ jobs:
                   raise SystemExit('Build branch anchor not found')
               text = text.replace(anchor, anchor + branch_line, 1)
               path.write_text(text, encoding='utf-8')
-              print('Build workflow enabled for navigation fix branch.')
-          else:
-              print('Build workflow already enabled for navigation fix branch.')
+          print('Build workflow ready for navigation fix branch.')
           PY
 
-      - name: Verify source change
+      - name: Verify patch
         run: |
-          grep -n -A8 -B2 "During active navigation the live vehicle position owns" lib/main.dart
+          if grep -q "_autoFollowMap = false" lib/main.dart; then
+            echo "Old auto-follow disable is still present"
+            exit 1
+          fi
+          grep -n "setState(() => _autoFollowMap = true);" lib/main.dart
           grep -n "nav-follow-fix-2026-09-30" .github/workflows/build.yml
 
-      - name: Remove one-shot workflow and commit source fix
+      - name: Commit source fix
         run: |
           rm -f .github/workflows/apply-nav-follow-fix-2026-09-30.yml
           git config user.name "DEDA Build Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add lib/main.dart .github/workflows/build.yml .github/workflows/apply-nav-follow-fix-2026-09-30.yml
+          git add -A
           git commit -m "Keep navigation camera following live position"
           git push origin HEAD:nav-follow-fix-2026-09-30
