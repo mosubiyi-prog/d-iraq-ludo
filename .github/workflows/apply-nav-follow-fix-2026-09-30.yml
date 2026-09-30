@@ -35,22 +35,6 @@ jobs:
           print('Navigation auto-follow fix applied.')
           PY
 
-      - name: Enable APK build for navigation fix branch
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/build.yml')
-          text = path.read_text(encoding='utf-8')
-          branch_line = '      - nav-follow-fix-2026-09-30\n'
-          if branch_line not in text:
-              anchor = '      - task-engine-points-2026-09-29\n'
-              if anchor not in text:
-                  raise SystemExit('Build branch anchor not found')
-              text = text.replace(anchor, anchor + branch_line, 1)
-              path.write_text(text, encoding='utf-8')
-          print('Build workflow ready for navigation fix branch.')
-          PY
-
       - name: Verify patch
         run: |
           if grep -q "_autoFollowMap = false" lib/main.dart; then
@@ -58,13 +42,11 @@ jobs:
             exit 1
           fi
           grep -n "setState(() => _autoFollowMap = true);" lib/main.dart
-          grep -n "nav-follow-fix-2026-09-30" .github/workflows/build.yml
 
-      - name: Commit source fix
+      - name: Commit source fix only
         run: |
-          rm -f .github/workflows/apply-nav-follow-fix-2026-09-30.yml
           git config user.name "DEDA Build Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A
+          git add lib/main.dart
           git commit -m "Keep navigation camera following live position"
           git push origin HEAD:nav-follow-fix-2026-09-30
