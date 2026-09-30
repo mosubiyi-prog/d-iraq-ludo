@@ -1,0 +1,32 @@
+name: Validate next map smoothing
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - next-points-map-profile-2026-09-30
+    paths:
+      - lib/main.dart
+      - pubspec.yaml
+      - .github/workflows/validate-next-map-smoothing.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze DEDA main source
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart
