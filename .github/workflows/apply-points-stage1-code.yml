@@ -1,0 +1,61 @@
+name: Apply points stage 1 code
+
+on:
+  push:
+    branches:
+      - points-stage1-code-2026-09-30
+    paths:
+      - tools/points_stage1_code_patch_2026_09_30.py
+      - .github/workflows/apply-points-stage1-code.yml
+      - tools/points_stage1_build_trigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: points-stage1-code-2026-09-30
+          fetch-depth: 0
+
+      - name: Apply first reward card patch
+        run: python3 tools/points_stage1_code_patch_2026_09_30.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Format changed Dart source
+        run: dart format lib/main.dart
+
+      - name: Analyze changed Dart source
+        run: flutter analyze lib/main.dart
+
+      - name: Validate patch diff
+        run: |
+          git diff --check
+          git diff --stat
+          grep -q "String _rewardCode16()" lib/main.dart
+          grep -q "'3 / 16'" lib/main.dart
+          grep -q "points-stage1-code-2026-09-30" .github/workflows/build.yml
+
+      - name: Commit validated stage 1 changes
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart .github/workflows/build.yml
+          git commit -m "Add first 5000 point reward card reveal"
+          git push origin HEAD:points-stage1-code-2026-09-30
