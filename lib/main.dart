@@ -16874,7 +16874,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               hasGesture &&
                               _autoFollowMap &&
                               mounted) {
-                            setState(() => _autoFollowMap = false);
+                            setState(() => _autoFollowMap = true);
                           }
                         },
                       ),
