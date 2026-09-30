@@ -1,0 +1,38 @@
+name: Apply DEDA profile points cards
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - next-points-map-profile-2026-09-30
+    paths:
+      - tools/deda_profile_points_cards_2026_09_30.py
+      - .github/workflows/apply-deda-profile-points-cards.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout next DEDA branch
+        uses: actions/checkout@v4
+        with:
+          ref: next-points-map-profile-2026-09-30
+          fetch-depth: 0
+
+      - name: Apply profile points cards patch
+        run: python3 tools/deda_profile_points_cards_2026_09_30.py
+
+      - name: Commit profile source change
+        run: |
+          if git diff --quiet -- lib/main.dart; then
+            echo "No source changes were needed."
+            exit 0
+          fi
+          git config user.name "DEDA Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add lib/main.dart
+          git commit -m "Add expandable horizontal point milestone cards"
+          git push origin HEAD:next-points-map-profile-2026-09-30
