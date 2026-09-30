@@ -1,0 +1,38 @@
+name: Enable next DEDA branch build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - next-points-map-profile-2026-09-30
+    paths:
+      - tools/enable_next_branch_build_2026_09_30.py
+      - .github/workflows/enable-next-branch-build.yml
+
+permissions:
+  contents: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout next DEDA branch
+        uses: actions/checkout@v4
+        with:
+          ref: next-points-map-profile-2026-09-30
+          fetch-depth: 0
+
+      - name: Enable branch in APK/AAB build workflow
+        run: python3 tools/enable_next_branch_build_2026_09_30.py
+
+      - name: Commit build workflow update
+        run: |
+          if git diff --quiet -- .github/workflows/build.yml; then
+            echo "No build workflow changes were needed."
+            exit 0
+          fi
+          git config user.name "DEDA Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/build.yml
+          git commit -m "Enable build for next points map profile branch"
+          git push origin HEAD:next-points-map-profile-2026-09-30
