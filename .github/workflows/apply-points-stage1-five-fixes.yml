@@ -1,0 +1,68 @@
+name: Apply points stage 1 five fixes
+
+on:
+  push:
+    branches:
+      - points-stage1-5-fixes-2026-09-30
+    paths:
+      - tools/points_stage1_five_fixes_patch_2026_09_30.py
+      - .github/workflows/apply-points-stage1-five-fixes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: points-stage1-5-fixes-2026-09-30
+          fetch-depth: 0
+
+      - name: Apply five points fixes
+        run: python3 tools/points_stage1_five_fixes_patch_2026_09_30.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed Dart source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+
+      - name: Restore dependency metadata
+        run: |
+          git restore pubspec.lock .dart_tool 2>/dev/null || true
+
+      - name: Validate five fixes and minimal diff
+        run: |
+          git diff --check
+          test "$(git diff --name-only)" = "lib/main.dart"
+          grep -q "استرد نقاطك 5,000 + 50" lib/main.dart
+          grep -q "تم الفتح" lib/main.dart
+          grep -q "رصيدك: \$totalPoints نقطة" lib/main.dart
+          grep -q "layoutBuilder: (currentChild, previousChildren)" lib/main.dart
+          grep -q "height: 270" lib/main.dart
+          grep -q "point_tier|5000" lib/main.dart
+          if grep -q "'3 / 16'" lib/main.dart; then
+            echo "Visible total-code-length clue still exists"
+            exit 1
+          fi
+
+      - name: Commit validated five fixes
+        run: |
+          if git diff --quiet -- lib/main.dart; then
+            echo "No main.dart changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart
+          git commit -m "Fix first points card five review issues"
+          git push origin HEAD:points-stage1-5-fixes-2026-09-30
