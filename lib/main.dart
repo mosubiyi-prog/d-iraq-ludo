@@ -15572,11 +15572,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final fromHeading = _displayHeading;
     final rawDelta = (targetHeading - fromHeading + 540) % 360 - 180;
     final distance = _metersBetween(from, target);
-    // Keep the marker moving continuously between GPS fixes. A ~60 Hz
-    // interpolation avoids visible jumps while restarting cleanly from the
-    // current displayed point when a newer fix arrives.
+    // Keep the marker and camera moving continuously between GPS fixes.
+    // Navigation fixes are requested at a high cadence; a near-one-second
+    // linear bridge prevents the ease-in/ease-out stop that was visible as
+    // "freeze for a few seconds, then jump" during real driving.
     final durationMs =
-        (560 + math.min(distance, 30) * 16).round().clamp(560, 1050);
+        (620 + math.min(distance, 30) * 14).round().clamp(620, 1080);
     const frameMs = 16;
     final totalFrames = math.max(1, (durationMs / frameMs).ceil());
     var frame = 0;
@@ -15590,7 +15591,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         }
         frame += 1;
         final linear = (frame / totalFrames).clamp(0.0, 1.0);
-        final eased = Curves.easeInOutCubic.transform(linear);
+        // Linear interpolation avoids decelerating to zero at every GPS fix.
+        final eased = linear;
         final point = LatLng(
           from.latitude + (target.latitude - from.latitude) * eased,
           from.longitude + (target.longitude - from.longitude) * eased,
@@ -16570,10 +16572,20 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     _speakCurrentInstruction(force: true);
     _refreshRoadHazards(force: true);
 
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 1,
-    );
+    // Navigation needs frequent foreground fixes. The generic Android
+    // location settings may deliver fixes several seconds apart, which makes
+    // the camera stop and then catch up in a visible jump. Request a tighter
+    // cadence only while an active trip is running.
+    final LocationSettings settings = Platform.isAndroid
+        ? AndroidSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 0,
+            intervalDuration: const Duration(milliseconds: 500),
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 0,
+          );
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: settings,
