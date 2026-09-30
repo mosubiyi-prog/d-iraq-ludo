@@ -1,0 +1,49 @@
+name: Apply DEDA profile color system
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - next-points-map-profile-2026-09-30
+    paths:
+      - tools/deda_profile_color_system_2026_09_30.py
+      - .github/workflows/apply-deda-profile-color-system.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout next DEDA branch
+        uses: actions/checkout@v4
+        with:
+          ref: next-points-map-profile-2026-09-30
+          fetch-depth: 0
+
+      - name: Apply profile color-system patch
+        run: python3 tools/deda_profile_color_system_2026_09_30.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze profile source
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart
+
+      - name: Commit validated source changes
+        run: |
+          if git diff --quiet -- lib/main.dart; then
+            echo "No source changes were needed."
+            exit 0
+          fi
+          git config user.name "DEDA Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add lib/main.dart
+          git commit -m "Apply cohesive profile color system"
+          git push origin HEAD:next-points-map-profile-2026-09-30
