@@ -8360,14 +8360,56 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     final loaded = raw.map(int.tryParse).whereType<int>().toSet();
 
     var rewardClaimed = false;
+    var pointsReserved = false;
+    var migratedLegacyStageOne = false;
     final accountKey = DedaTaskEngine._accountKey();
     if (accountKey.isNotEmpty) {
       final state = await DedaTaskEngine._readState(prefs, accountKey);
-      final awardsRaw = state['awards'];
-      if (awardsRaw is Map) {
-        rewardClaimed = awardsRaw.containsKey('point_tier|5000');
+      final awards = Map<String, dynamic>.from(state['awards'] as Map);
+      final ledger = List<dynamic>.from(state['ledger'] as List);
+      const reserveId = 'point_tier_reserve|5000';
+      const claimId = 'point_tier_claim|5000';
+      const legacyId = 'point_tier|5000';
+
+      final hasNewReserve = awards.containsKey(reserveId);
+      final hasNewClaim = awards.containsKey(claimId);
+      if (!hasNewReserve && !hasNewClaim && awards.containsKey(legacyId)) {
+        // Build 232 awarded only +50. Remove that temporary test award once so
+        // this account can run the agreed deduct -> claim 5,000 + 50 flow.
+        awards.remove(legacyId);
+        ledger.removeWhere((entry) {
+          if (entry is! Map) return false;
+          return entry['id']?.toString() == legacyId;
+        });
+        state['awards'] = awards;
+        state['ledger'] = ledger;
+        await DedaTaskEngine._writeState(prefs, accountKey, state);
+        migratedLegacyStageOne = true;
+      }
+
+      pointsReserved = awards.containsKey(reserveId);
+      rewardClaimed = awards.containsKey(claimId);
+
+      if (migratedLegacyStageOne) {
+        final total = DedaTaskEngine._effectiveTotalFromState(state);
+        DedaTaskEngine._loadedAccountKey = accountKey;
+        DedaTaskEngine.totalPointsNotifier.value = total;
+        DedaTaskEngine.revisionNotifier.value++;
       }
     }
+
+    // The points ledger is now the source of truth for whether the first card
+    // is actually opened. Old Build 232 visual-only state is reset safely.
+    if (pointsReserved || rewardClaimed) {
+      loaded.add(5000);
+    } else {
+      loaded.remove(5000);
+    }
+    final ordered = loaded.toList()..sort();
+    await prefs.setStringList(
+      _pointTierPrefsKey,
+      ordered.map((value) => value.toString()).toList(),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -8386,7 +8428,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     }
 
     setState(() => _stageOneRewardClaiming = true);
-    var awardedNow = false;
+    var claimedNow = false;
     try {
       final accountKey = DedaTaskEngine._accountKey();
       if (accountKey.isEmpty) {
@@ -8397,19 +8439,27 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       final state = await DedaTaskEngine._readState(prefs, accountKey);
       final awards = Map<String, dynamic>.from(state['awards'] as Map);
       final ledger = List<dynamic>.from(state['ledger'] as List);
-      const awardId = 'point_tier|5000';
+      const reserveId = 'point_tier_reserve|5000';
+      const claimId = 'point_tier_claim|5000';
 
-      if (!awards.containsKey(awardId)) {
-        final award = <String, dynamic>{
-          'id': awardId,
-          'points': 50,
-          'type': 'point_tier',
-          'event': 'stage_one_reward_claimed',
+      if (!awards.containsKey(reserveId)) {
+        throw StateError('stage-one-points-not-reserved');
+      }
+
+      if (!awards.containsKey(claimId)) {
+        final now = DateTime.now().toUtc().toIso8601String();
+        final claim = <String, dynamic>{
+          'id': claimId,
+          'points': 5050,
+          'type': 'point_tier_claim',
+          'event': 'stage_one_points_claimed',
           'threshold': 5000,
-          'createdAt': DateTime.now().toUtc().toIso8601String(),
+          'reservedPoints': 5000,
+          'bonusPoints': 50,
+          'createdAt': now,
         };
-        awards[awardId] = award;
-        ledger.add(award);
+        awards[claimId] = claim;
+        ledger.add(claim);
         if (ledger.length > DedaTaskEngine._maxLedgerEntries) {
           ledger.removeRange(
             0,
@@ -8419,7 +8469,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         state['awards'] = awards;
         state['ledger'] = ledger;
         await DedaTaskEngine._writeState(prefs, accountKey, state);
-        awardedNow = true;
+        claimedNow = true;
       }
 
       final total = DedaTaskEngine._effectiveTotalFromState(state);
@@ -8435,14 +8485,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            awardedNow
+            claimedNow
                 ? dedaText(
-                    'تم استرداد نقاطك وإضافة 50 نقطة مكافأة إلى رصيدك.',
-                    'Your points were restored and 50 bonus points were added.',
+                    'تم استلام 5,000 نقطة وإضافة هدية 50 نقطة إلى رصيدك.',
+                    '5,000 points were returned and the 50-point bonus was added.',
                   )
                 : dedaText(
-                    'تم استرداد مكافأة هذه البطاقة مسبقًا.',
-                    'This card reward was already claimed.',
+                    'تم استلام نقاط هذه البطاقة مسبقًا.',
+                    'This card was already claimed.',
                   ),
             textAlign: TextAlign.center,
           ),
@@ -8455,7 +8505,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         SnackBar(
           content: Text(
             dedaText(
-              'تعذر استرداد النقاط الآن. حاول مرة أخرى.',
+              'تعذر استلام النقاط الآن. حاول مرة أخرى.',
               'Could not claim the points right now. Please try again.',
             ),
             textAlign: TextAlign.center,
@@ -8480,43 +8530,108 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       );
       return;
     }
+    if (_openedPointTiers.contains(threshold)) return;
 
-    if (totalPoints < threshold) {
-      final remaining = threshold - totalPoints;
+    try {
+      final accountKey = DedaTaskEngine._accountKey();
+      if (accountKey.isEmpty) {
+        throw StateError('points-account-not-ready');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final state = await DedaTaskEngine._readState(prefs, accountKey);
+      final awards = Map<String, dynamic>.from(state['awards'] as Map);
+      final ledger = List<dynamic>.from(state['ledger'] as List);
+      const reserveId = 'point_tier_reserve|5000';
+      const claimId = 'point_tier_claim|5000';
+
+      if (awards.containsKey(claimId) || awards.containsKey(reserveId)) {
+        setState(() => _openedPointTiers.add(threshold));
+        final ordered = _openedPointTiers.toList()..sort();
+        await prefs.setStringList(
+          _pointTierPrefsKey,
+          ordered.map((value) => value.toString()).toList(),
+        );
+        return;
+      }
+
+      final currentTotal = DedaTaskEngine._effectiveTotalFromState(state);
+      if (currentTotal < threshold) {
+        final remaining = threshold - currentTotal;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              dedaText(
+                'تحتاج $remaining نقطة إضافية لفتح هذه البطاقة.',
+                'You need $remaining more points to open this card.',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+        return;
+      }
+
+      final now = DateTime.now().toUtc().toIso8601String();
+      final reserve = <String, dynamic>{
+        'id': reserveId,
+        'points': -5000,
+        'type': 'point_tier_reserve',
+        'event': 'stage_one_points_reserved',
+        'threshold': 5000,
+        'reservedPoints': 5000,
+        'bonusPoints': 50,
+        'createdAt': now,
+      };
+      awards[reserveId] = reserve;
+      ledger.add(reserve);
+      if (ledger.length > DedaTaskEngine._maxLedgerEntries) {
+        ledger.removeRange(
+          0,
+          ledger.length - DedaTaskEngine._maxLedgerEntries,
+        );
+      }
+      state['awards'] = awards;
+      state['ledger'] = ledger;
+      await DedaTaskEngine._writeState(prefs, accountKey, state);
+
+      final afterReserve = DedaTaskEngine._effectiveTotalFromState(state);
+      DedaTaskEngine._loadedAccountKey = accountKey;
+      DedaTaskEngine.totalPointsNotifier.value = afterReserve;
+      DedaTaskEngine.revisionNotifier.value++;
+
+      _openedPointTiers.add(threshold);
+      final ordered = _openedPointTiers.toList()..sort();
+      await prefs.setStringList(
+        _pointTierPrefsKey,
+        ordered.map((value) => value.toString()).toList(),
+      );
+      if (!mounted) return;
+      setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             dedaText(
-              'تحتاج $remaining نقطة إضافية لفتح هذه البطاقة.',
-              'You need $remaining more points to open this card.',
+              'تم خصم 5,000 نقطة وحجزها داخل البطاقة. استلمها مع هدية 50 نقطة.',
+              '5,000 points were reserved in the card. Claim them with the 50-point bonus.',
             ),
             textAlign: TextAlign.center,
           ),
         ),
       );
-      return;
-    }
-    if (_openedPointTiers.contains(threshold)) return;
-
-    setState(() => _openedPointTiers.add(threshold));
-    final prefs = await SharedPreferences.getInstance();
-    final ordered = _openedPointTiers.toList()..sort();
-    await prefs.setStringList(
-      _pointTierPrefsKey,
-      ordered.map((value) => value.toString()).toList(),
-    );
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          dedaText(
-            'تم كشف أول 3 خانات من رمزك الخاص.',
-            'The first 3 characters of your private code were revealed.',
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر فتح البطاقة الآن. حاول مرة أخرى.',
+              'Could not open the card right now. Please try again.',
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
         ),
-      ),
-    );
+      );
+    }
   }
 
   String _formatPointTier(int value) {
@@ -8730,6 +8845,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     Color badgeTextColor = const Color(0xFF17652F),
     Color trailingColor = const Color(0xFF59635B),
     String? badgeText,
+    double badgeMaxWidth = 96,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -8798,7 +8914,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 if (badgeText != null) ...[
                   const SizedBox(width: 8),
                   Container(
-                    constraints: const BoxConstraints(maxWidth: 96),
+                    constraints: BoxConstraints(maxWidth: badgeMaxWidth),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                     decoration: BoxDecoration(
@@ -8835,8 +8951,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     const gold = Color(0xFFFFD76A);
     const deep = Color(0xFF020914);
     final claimLabel = _stageOneRewardClaimed
-        ? dedaText('تم الاسترداد +50', 'Claimed +50')
-        : dedaText('استرد نقاطك 5,000 + 50', 'Restore 5,000 + 50');
+        ? dedaText('تم استلام 5,000 + 50', 'Claimed 5,000 + 50')
+        : dedaText('استلم 5,000 + 50', 'Claim 5,000 + 50');
 
     return Stack(
       key: const ValueKey<String>('reward-stage1-back'),
@@ -8920,7 +9036,35 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 height: 1.18,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0x55173F31),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: gold.withOpacity(0.72)),
+              ),
+              child: Text(
+                _stageOneRewardClaimed
+                    ? dedaText(
+                        'تم استلام 5,000 نقطة + هدية 50',
+                        '5,000 points + 50 bonus claimed',
+                      )
+                    : dedaText(
+                        '5,000 نقطة مستقطعة وجاهزة للاستلام + هدية 50',
+                        '5,000 points reserved and ready + 50 bonus',
+                      ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: const TextStyle(
+                  color: gold,
+                  fontSize: 9.2,
+                  fontWeight: FontWeight.w900,
+                  height: 1.15,
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
             SizedBox(
               height: 35,
               child: Material(
@@ -9347,7 +9491,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                   ),
                   const SizedBox(height: 9),
                   SizedBox(
-                    height: 270,
+                    height: 292,
                     child: Directionality(
                       textDirection: TextDirection.ltr,
                       child: ListView.separated(
@@ -9602,10 +9746,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       trailingColor: const Color(0xFFFFD76A),
                       title: dedaText('النقاط', 'Points'),
                       subtitle: dedaText(
-                        'رصيدك: $totalPoints نقطة',
-                        'Current balance: $totalPoints points',
+                        'الرصيد الحالي',
+                        'Current balance',
                       ),
-                      badgeText: totalPoints.toString(),
+                      badgeText: dedaText(
+                        '$totalPoints نقطة',
+                        '$totalPoints points',
+                      ),
+                      badgeMaxWidth: 138,
                       onTap: () {
                         setState(() => _pointsExpanded = !_pointsExpanded);
                       },
