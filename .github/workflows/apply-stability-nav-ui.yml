@@ -40,7 +40,7 @@ jobs:
               'intervalDuration: const Duration(milliseconds: 500)',
               'setState(() => _autoFollowMap = false);',
               "dedaText('تم الفتح', 'Opened')",
-              'استرد نقاطك 5,000 +50',
+              'استرد نقاطك 5,000 + 50',
           ]
           for marker in required:
               if marker not in text:
