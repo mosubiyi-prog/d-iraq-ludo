@@ -8274,6 +8274,53 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
   String get _pointTierPrefsKey =>
       'deda_opened_point_tiers_${DedaPreferences.phone.trim()}';
 
+  String _rewardAccountDigits() {
+    var digits = DedaBackend.accountKeyForPhone(DedaPreferences.phone);
+    if (digits.startsWith('00964')) {
+      digits = digits.substring(2);
+    } else if (digits.startsWith('07') && digits.length == 11) {
+      digits = '964${digits.substring(1)}';
+    } else if (digits.startsWith('7') && digits.length == 10) {
+      digits = '964$digits';
+    }
+    return digits;
+  }
+
+  // Stage 1 uses a deterministic one-to-one transformation of the stable
+  // DEDA account phone key. The 14-character base62 body is injective for
+  // the supported phone-number domain; the two-character prefix guarantees
+  // every reward code visibly mixes letters and digits. The full 16
+  // characters are never shown at stage 1.
+  String _rewardCode16() {
+    const alphabet =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    final digits = _rewardAccountDigits();
+    final value = BigInt.tryParse(digits) ?? BigInt.zero;
+    final base = BigInt.from(alphabet.length);
+    final modulus = base.pow(14);
+    final multiplier = BigInt.parse('6364136223846793005');
+    final increment = BigInt.parse('1442695040888963407');
+    final mixed = (value * multiplier + increment) % modulus;
+
+    var cursor = mixed;
+    final encoded = List<String>.filled(14, '0');
+    for (var i = encoded.length - 1; i >= 0; i--) {
+      encoded[i] = alphabet[(cursor % base).toInt()];
+      cursor ~/= base;
+    }
+
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    final prefixLetter = letters[(mixed % BigInt.from(26)).toInt()];
+    final prefixDigit =
+        ((mixed ~/ BigInt.from(26)) % BigInt.from(10)).toString();
+    return '$prefixLetter$prefixDigit${encoded.join()}';
+  }
+
+  String get _rewardStageOnePart {
+    final code = _rewardCode16();
+    return code.length >= 3 ? code.substring(0, 3) : '---';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -8293,6 +8340,21 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
   }
 
   Future<void> _openPointTier(int threshold, int totalPoints) async {
+    if (threshold != 5000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'نثبت المرحلة الأولى أولاً، وبعد نجاحها نفعّل هذه البطاقة بالتسلسل.',
+              'Stage one is being completed first; this card will unlock in sequence.',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+      return;
+    }
+
     if (totalPoints < threshold) {
       final remaining = threshold - totalPoints;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -8309,6 +8371,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       return;
     }
     if (_openedPointTiers.contains(threshold)) return;
+
     setState(() => _openedPointTiers.add(threshold));
     final prefs = await SharedPreferences.getInstance();
     final ordered = _openedPointTiers.toList()..sort();
@@ -8321,8 +8384,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       SnackBar(
         content: Text(
           dedaText(
-            'تم فتح بطاقة ${_formatPointTier(threshold)} نقطة بنجاح.',
-            '${_formatPointTier(threshold)} point card opened successfully.',
+            'تم كشف أول 3 خانات من رمزك الخاص.',
+            'The first 3 characters of your private code were revealed.',
           ),
           textAlign: TextAlign.center,
         ),
@@ -8642,6 +8705,337 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     );
   }
 
+  Widget _rewardStageOneBackFace() {
+    const gold = Color(0xFFFFD76A);
+    return Stack(
+      key: const ValueKey<String>('reward-stage1-back'),
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          child: Icon(
+            Icons.diamond_outlined,
+            size: 13,
+            color: gold.withOpacity(0.90),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Icon(
+            Icons.diamond_outlined,
+            size: 13,
+            color: gold.withOpacity(0.90),
+          ),
+        ),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'DEDA',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.1,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              dedaText('الجزء الأول من الرمز', 'First code part'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: gold,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xCC020914),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: gold, width: 1.5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x44E8C56C),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(
+                  _rewardStageOnePart,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4.2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              dedaText(
+                'تم كشف الجزء الأول من رمزك',
+                'The first part of your code is revealed',
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xAA020914),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: gold.withOpacity(0.84)),
+              ),
+              child: const Text(
+                '3 / 16',
+                style: TextStyle(
+                  color: gold,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.check_circle_rounded, color: gold, size: 17),
+                const SizedBox(width: 5),
+                Text(
+                  dedaText('تم الفتح', 'Opened'),
+                  style: const TextStyle(
+                    color: gold,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    color: gold,
+                    size: 17,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    dedaText(
+                      'واصل جمع النقاط وافتح البطاقة التالية لإكمال الرمز',
+                      'Keep collecting points and open the next card to complete the code',
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _pointTierFrontFace({
+    required int threshold,
+    required int index,
+    required bool available,
+  }) {
+    const gold = Color(0xFFFFD76A);
+    const deepGold = Color(0xFFB88418);
+    final stageAr = <String>[
+      'الأولى',
+      'الثانية',
+      'الثالثة',
+      'الرابعة',
+      'الخامسة',
+    ][index];
+    return Stack(
+      key: ValueKey<String>('reward-front-$threshold'),
+      children: [
+        Positioned(
+          top: 0,
+          left: 0,
+          child: Icon(
+            Icons.diamond_outlined,
+            size: 13,
+            color: gold.withOpacity(0.90),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Icon(
+            Icons.diamond_outlined,
+            size: 13,
+            color: gold.withOpacity(0.90),
+          ),
+        ),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'DEDA',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.1,
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xAA020914),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: deepGold.withOpacity(0.9)),
+              ),
+              child: Text(
+                dedaText('بطاقة النقاط', 'POINT CARD'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [gold.withOpacity(0.36), Colors.transparent],
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(Icons.shield_rounded, size: 70, color: gold),
+                  Container(
+                    width: 37,
+                    height: 37,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF081B31),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.82)),
+                    ),
+                    child: Icon(
+                      available ? Icons.lock_open_rounded : Icons.lock_rounded,
+                      size: 23,
+                      color: gold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _formatPointTier(threshold),
+              maxLines: 1,
+              style: const TextStyle(
+                color: gold,
+                fontSize: 25,
+                height: 1.0,
+                fontWeight: FontWeight.w900,
+                shadows: [Shadow(color: Colors.black54, blurRadius: 5)],
+              ),
+            ),
+            Text(
+              dedaText('نقطة', 'points'),
+              style: const TextStyle(
+                color: gold,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0x88000000),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: gold.withOpacity(0.68)),
+              ),
+              child: Text(
+                available
+                    ? dedaText('اضغط للفتح', 'Tap to open')
+                    : threshold == 5000
+                        ? dedaText(
+                            'تفتح عند ${_formatPointTier(threshold)}',
+                            'Unlocks at ${_formatPointTier(threshold)}',
+                          )
+                        : dedaText('بانتظار المرحلة السابقة', 'Previous stage required'),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xAA020914),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: gold.withOpacity(0.82)),
+              ),
+              child: Text(
+                DedaLanguageState.isArabic
+                    ? 'المرحلة $stageAr'
+                    : 'Stage ${index + 1}',
+                maxLines: 1,
+                style: const TextStyle(
+                  color: gold,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _pointsTierCard({
     required int threshold,
     required int index,
@@ -8661,17 +9055,16 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       Color(0xFF41050B),
       Color(0xFF050505),
     ];
-    final stageAr = <String>['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'][index];
-    final locked = totalPoints < threshold;
-    final opened = _openedPointTiers.contains(threshold);
-    final available = !locked && !opened;
     const gold = Color(0xFFFFD76A);
-    const deepGold = Color(0xFFB88418);
+    final firstTier = threshold == 5000;
+    final opened = firstTier && _openedPointTiers.contains(5000);
+    final lockedByPoints = totalPoints < threshold;
+    final available = firstTier && !opened && !lockedByPoints;
 
     return Semantics(
       button: true,
       label: dedaText(
-        'بطاقة ${_formatPointTier(threshold)} نقطة، المرحلة $stageAr',
+        'بطاقة ${_formatPointTier(threshold)} نقطة، المرحلة ${index + 1}',
         '${_formatPointTier(threshold)} point reward card, stage ${index + 1}',
       ),
       child: InkWell(
@@ -8705,166 +9098,37 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               ),
             ],
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                child: Icon(Icons.diamond_outlined, size: 13, color: gold.withOpacity(0.90)),
-              ),
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Icon(Icons.diamond_outlined, size: 13, color: gold.withOpacity(0.90)),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'DEDA',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 2.1,
-                    ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 520),
+            switchInCurve: Curves.easeInOutCubic,
+            switchOutCurve: Curves.easeInOutCubic,
+            transitionBuilder: (child, animation) {
+              final turn = Tween<double>(
+                begin: math.pi / 2,
+                end: 0,
+              ).animate(animation);
+              return AnimatedBuilder(
+                animation: turn,
+                child: child,
+                builder: (context, child) {
+                  final matrix = Matrix4.identity()
+                    ..setEntry(3, 2, 0.0012)
+                    ..rotateY(turn.value);
+                  return Transform(
+                    alignment: Alignment.center,
+                    transform: matrix,
+                    child: child,
+                  );
+                },
+              );
+            },
+            child: opened
+                ? _rewardStageOneBackFace()
+                : _pointTierFrontFace(
+                    threshold: threshold,
+                    index: index,
+                    available: available,
                   ),
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(top: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xAA020914),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: deepGold.withOpacity(0.9)),
-                    ),
-                    child: Text(
-                      dedaText('بطاقة النقاط', 'POINT CARD'),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: gold,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          gold.withOpacity(0.36),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(
-                          Icons.shield_rounded,
-                          size: 70,
-                          color: gold,
-                        ),
-                        Container(
-                          width: 37,
-                          height: 37,
-                          decoration: BoxDecoration(
-                            color: opened
-                                ? const Color(0xFFFFF1A8)
-                                : const Color(0xFF081B31),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withOpacity(0.82)),
-                          ),
-                          child: Icon(
-                            opened
-                                ? Icons.workspace_premium_rounded
-                                : available
-                                    ? Icons.lock_open_rounded
-                                    : Icons.lock_rounded,
-                            size: 23,
-                            color: opened
-                                ? const Color(0xFF8A5D00)
-                                : gold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Text(
-                    _formatPointTier(threshold),
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: gold,
-                      fontSize: 25,
-                      height: 1.0,
-                      fontWeight: FontWeight.w900,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 5)],
-                    ),
-                  ),
-                  Text(
-                    dedaText('نقطة', 'points'),
-                    style: const TextStyle(
-                      color: gold,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0x88000000),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: gold.withOpacity(0.68)),
-                    ),
-                    child: Text(
-                      opened
-                          ? dedaText('تم فتح البطاقة', 'Card opened')
-                          : available
-                              ? dedaText('اضغط للفتح', 'Tap to open')
-                              : dedaText(
-                                  'تفتح عند ${_formatPointTier(threshold)}',
-                                  'Unlocks at ${_formatPointTier(threshold)}',
-                                ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xAA020914),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: gold.withOpacity(0.82)),
-                    ),
-                    child: Text(
-                      DedaLanguageState.isArabic
-                          ? 'المرحلة $stageAr'
-                          : 'Stage ${index + 1}',
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: gold,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ),
         ),
       ),
