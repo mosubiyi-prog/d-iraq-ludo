@@ -46,7 +46,7 @@ checks = {
     'gps_zero_filter': 'distanceFilter: 0',
     'gesture_pauses_follow': 'setState(() => _autoFollowMap = false);',
     'recenter_resumes_follow': 'setState(() {\n        _autoFollowMap = true;',
-    'points_claim_text': 'استرد نقاطك 5,000 +50',
+    'points_claim_text': 'استرد نقاطك 5,000 + 50',
     'opened_text': "dedaText('تم الفتح', 'Opened')",
 }
 missing = [name for name, marker in checks.items() if marker not in final]
