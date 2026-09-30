@@ -16013,12 +16013,25 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final fromHeading = _displayHeading;
     final rawDelta = (targetHeading - fromHeading + 540) % 360 - 180;
     final distance = _metersBetween(from, target);
-    // Keep the marker and camera moving continuously between GPS fixes.
-    // Navigation fixes are requested at a high cadence; a near-one-second
-    // linear bridge prevents the ease-in/ease-out stop that was visible as
-    // "freeze for a few seconds, then jump" during real driving.
+    // Build 227 could restart a 620-1080 ms animation every ~500 ms,
+    // keeping the displayed marker/camera permanently behind the real GPS fix.
+    // Finish each bridge well before the next expected fix. If Android delivers
+    // a very large jump after a delayed fix, snap to the real point instead of
+    // visually dragging the vehicle through an outdated position.
+    if (distance >= 65) {
+      setState(() {
+        _displayPosition = target;
+        final movingByGps = (livePosition?.speed ?? 0) >= 0.8;
+        if (movingByGps || !_compassHeadingIsFresh) {
+          _displayHeading = targetHeading % 360;
+        }
+      });
+      if (tripStarted) _followLivePosition(target);
+      return;
+    }
+
     final durationMs =
-        (620 + math.min(distance, 30) * 14).round().clamp(620, 1080);
+        (190 + math.min(distance, 22) * 5).round().clamp(190, 300);
     const frameMs = 16;
     final totalFrames = math.max(1, (durationMs / frameMs).ceil());
     var frame = 0;
@@ -17020,12 +17033,12 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final LocationSettings settings = Platform.isAndroid
         ? AndroidSettings(
             accuracy: LocationAccuracy.best,
-            distanceFilter: 0,
-            intervalDuration: const Duration(milliseconds: 500),
+            distanceFilter: 1,
+            intervalDuration: const Duration(milliseconds: 700),
           )
         : const LocationSettings(
             accuracy: LocationAccuracy.best,
-            distanceFilter: 0,
+            distanceFilter: 1,
           );
 
     _positionSubscription = Geolocator.getPositionStream(
@@ -17071,10 +17084,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           }
         }
         final gpsAccurateEnough =
-            !position.accuracy.isNaN && position.accuracy <= 40;
+            !position.accuracy.isNaN && position.accuracy <= 30;
         final offRoute = currentRoute != null &&
             !currentRoute.isDirectFallback &&
-            _distanceToRoute(current) >= 90;
+            _distanceToRoute(current) >= 45;
 
         if (gpsAccurateEnough && offRoute) {
           _offRouteFixes += 1;
@@ -17085,8 +17098,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         final now = DateTime.now();
         final rerouteAllowed = _lastRerouteAttemptAt == null ||
             now.difference(_lastRerouteAttemptAt!) >=
-                const Duration(seconds: 20);
-        if (_offRouteFixes >= 3 && rerouteAllowed && !isRerouting) {
+                const Duration(seconds: 10);
+        if (_offRouteFixes >= 2 && rerouteAllowed && !isRerouting) {
           _offRouteFixes = 0;
           _lastRerouteAttemptAt = now;
           loadRoute(background: true);
