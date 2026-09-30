@@ -1005,6 +1005,7 @@ class DedaTaskEngine {
   static const int pointsPerTask = 5;
   static const int pointsPerTrafficAnswer = 5;
   static const int pointsPerDailyLogin = 10;
+  static const int generalManagerBonusPoints = 1000000;
   static const int _storeVersion = 1;
   static const int _maxLedgerEntries = 600;
 
@@ -1014,6 +1015,7 @@ class DedaTaskEngine {
       ValueNotifier<int>(0);
 
   static String _loadedAccountKey = '';
+  static bool _generalManagerBonusActive = false;
 
   static String _accountKey() =>
       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
@@ -1061,6 +1063,27 @@ class DedaTaskEngine {
       }
     }
     return total;
+  }
+
+  static int _effectiveTotalFromState(Map<String, dynamic> state) {
+    final earned = _totalFromState(state);
+    return earned +
+        (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+  }
+
+  static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+    final isGeneralManager =
+        await DedaBackend.currentDedaAccountIsGeneralManager(
+      phone: DedaPreferences.phone,
+    );
+    if (_loadedAccountKey != accountKey) return;
+
+    _generalManagerBonusActive = isGeneralManager;
+    final prefs = await SharedPreferences.getInstance();
+    final state = await _readState(prefs, accountKey);
+    if (_loadedAccountKey != accountKey) return;
+    totalPointsNotifier.value = _effectiveTotalFromState(state);
+    revisionNotifier.value++;
   }
 
   /// Development cycle id. Weekly definitions will later supply their own
@@ -1111,6 +1134,7 @@ class DedaTaskEngine {
   static Future<void> initializeForCurrentAccount() async {
     final accountKey = _accountKey();
     _loadedAccountKey = accountKey;
+    _generalManagerBonusActive = false;
     if (accountKey.isEmpty) {
       totalPointsNotifier.value = 0;
       revisionNotifier.value++;
@@ -1119,12 +1143,18 @@ class DedaTaskEngine {
     final prefs = await SharedPreferences.getInstance();
     final state = await _readState(prefs, accountKey);
     if (_loadedAccountKey != accountKey) return;
-    totalPointsNotifier.value = _totalFromState(state);
+    totalPointsNotifier.value = _effectiveTotalFromState(state);
     revisionNotifier.value++;
+
+    // Do not hold app startup on a network role lookup. The protected admin
+    // gateway is checked immediately after the local balance is available,
+    // then the notifier refreshes to include the manager-only 1,000,000 bonus.
+    unawaited(_refreshGeneralManagerBonus(accountKey));
   }
 
   static void clearSessionView() {
     _loadedAccountKey = '';
+    _generalManagerBonusActive = false;
     totalPointsNotifier.value = 0;
     revisionNotifier.value++;
   }
@@ -1134,7 +1164,7 @@ class DedaTaskEngine {
     if (accountKey.isEmpty) return 0;
     final prefs = await SharedPreferences.getInstance();
     final state = await _readState(prefs, accountKey);
-    final total = _totalFromState(state);
+    final total = _effectiveTotalFromState(state);
     if (_loadedAccountKey == accountKey) {
       totalPointsNotifier.value = total;
     }
@@ -1206,7 +1236,7 @@ class DedaTaskEngine {
         completedNow: false,
         pointsAwarded: false,
         pointsDelta: 0,
-        totalPoints: _totalFromState(state),
+        totalPoints: _effectiveTotalFromState(state),
         taskId: taskId,
         cycleId: cycle,
       );
@@ -1239,7 +1269,7 @@ class DedaTaskEngine {
       await _writeState(prefs, accountKey, state);
     }
 
-    final total = _totalFromState(state);
+    final total = _effectiveTotalFromState(state);
     _loadedAccountKey = accountKey;
     totalPointsNotifier.value = total;
     revisionNotifier.value++;
@@ -1342,7 +1372,7 @@ class DedaTaskEngine {
     state['ledger'] = ledger;
     await _writeState(prefs, accountKey, state);
 
-    final total = _totalFromState(state);
+    final total = _effectiveTotalFromState(state);
     _loadedAccountKey = accountKey;
     totalPointsNotifier.value = total;
     revisionNotifier.value++;
@@ -1427,7 +1457,7 @@ class DedaTaskEngine {
       await _writeState(prefs, accountKey, state);
     }
 
-    final total = _totalFromState(state);
+    final total = _effectiveTotalFromState(state);
     _loadedAccountKey = accountKey;
     totalPointsNotifier.value = total;
     revisionNotifier.value++;

@@ -1329,6 +1329,48 @@ class DedaBackend {
     }
   }
 
+  /// Returns true only when the current DEDA phone is explicitly tied to
+  /// an active general-manager gateway/member record. This intentionally
+  /// fails closed; profile names or local UI state never grant the privilege.
+  static Future<bool> currentDedaAccountIsGeneralManager({
+    required String phone,
+  }) async {
+    if (!isReady) return false;
+    final accountKey = _adminEntryAccountKeyForPhone(phone);
+    if (accountKey.isEmpty) return false;
+
+    try {
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null || authUser.isAnonymous) {
+        await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+      } else if (!await currentUserIsAdmin()) {
+        return false;
+      }
+
+      final access = await FirebaseFirestore.instance
+          .collection('admin_entry_access')
+          .doc(accountKey)
+          .get();
+      final data = access.data();
+      if (!access.exists ||
+          data == null ||
+          data['accountKey'] != accountKey ||
+          !_adminEntryAccessVisible(data)) {
+        return false;
+      }
+
+      final accessType =
+          (data['accessType'] ?? '').toString().trim().toLowerCase();
+      final allowedRole = normalizeAdminRole(
+        data['allowedRole'] ?? data['role'],
+      );
+      return accessType == 'general_manager_gateway' ||
+          allowedRole == 'general_manager';
+    } catch (_) {
+      return false;
+    }
+  }
+
   // After an admin signs in, verify that the DEDA phone which opened the
   // gateway is allowed to use this specific admin identity.
   static Future<bool> currentAdminSessionMatchesDedaEntry({
