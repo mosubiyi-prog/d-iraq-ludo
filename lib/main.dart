@@ -1661,6 +1661,21 @@ Future<void> main() async {
   runApp(const DedaApp());
 }
 
+class _DedaCleanPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _DedaCleanPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return child;
+  }
+}
+
 class DedaApp extends StatelessWidget {
   const DedaApp({super.key});
 
@@ -1680,6 +1695,16 @@ class DedaApp extends StatelessWidget {
               seedColor: const Color(0xFF39733D),
             ),
             useMaterial3: true,
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: <TargetPlatform, PageTransitionsBuilder>{
+                TargetPlatform.android: _DedaCleanPageTransitionsBuilder(),
+                TargetPlatform.iOS: _DedaCleanPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: _DedaCleanPageTransitionsBuilder(),
+                TargetPlatform.linux: _DedaCleanPageTransitionsBuilder(),
+                TargetPlatform.macOS: _DedaCleanPageTransitionsBuilder(),
+                TargetPlatform.windows: _DedaCleanPageTransitionsBuilder(),
+              },
+            ),
           ),
           home: DedaPreferences.isLoggedIn
               ? HomePage(userName: DedaPreferences.userName)
@@ -17427,8 +17452,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final LocationSettings settings = Platform.isAndroid
         ? AndroidSettings(
             accuracy: LocationAccuracy.best,
-            distanceFilter: 1,
-            intervalDuration: const Duration(milliseconds: 700),
+            distanceFilter: 0,
+            intervalDuration: const Duration(milliseconds: 500),
           )
         : const LocationSettings(
             accuracy: LocationAccuracy.best,
@@ -17975,7 +18000,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               hasGesture &&
                               _autoFollowMap &&
                               mounted) {
-                            setState(() => _autoFollowMap = true);
+                            // A deliberate map gesture temporarily pauses live
+                            // camera following. The existing recenter button is
+                            // then shown; pressing it resumes automatic follow.
+                            setState(() => _autoFollowMap = false);
                           }
                         },
                       ),
