@@ -8270,6 +8270,8 @@ class DedaAccountHubPage extends StatefulWidget {
 class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
   bool _pointsExpanded = false;
   final Set<int> _openedPointTiers = <int>{};
+  bool _stageOneRewardClaimed = false;
+  bool _stageOneRewardClaiming = false;
 
   String get _pointTierPrefsKey =>
       'deda_opened_point_tiers_${DedaPreferences.phone.trim()}';
@@ -8331,12 +8333,111 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_pointTierPrefsKey) ?? const <String>[];
     final loaded = raw.map(int.tryParse).whereType<int>().toSet();
+
+    var rewardClaimed = false;
+    final accountKey = DedaTaskEngine._accountKey();
+    if (accountKey.isNotEmpty) {
+      final state = await DedaTaskEngine._readState(prefs, accountKey);
+      final awardsRaw = state['awards'];
+      if (awardsRaw is Map) {
+        rewardClaimed = awardsRaw.containsKey('point_tier|5000');
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _openedPointTiers
         ..clear()
         ..addAll(loaded);
+      _stageOneRewardClaimed = rewardClaimed;
     });
+  }
+
+  Future<void> _claimStageOneReward() async {
+    if (_stageOneRewardClaimed ||
+        _stageOneRewardClaiming ||
+        !_openedPointTiers.contains(5000)) {
+      return;
+    }
+
+    setState(() => _stageOneRewardClaiming = true);
+    var awardedNow = false;
+    try {
+      final accountKey = DedaTaskEngine._accountKey();
+      if (accountKey.isEmpty) {
+        throw StateError('points-account-not-ready');
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final state = await DedaTaskEngine._readState(prefs, accountKey);
+      final awards = Map<String, dynamic>.from(state['awards'] as Map);
+      final ledger = List<dynamic>.from(state['ledger'] as List);
+      const awardId = 'point_tier|5000';
+
+      if (!awards.containsKey(awardId)) {
+        final award = <String, dynamic>{
+          'id': awardId,
+          'points': 50,
+          'type': 'point_tier',
+          'event': 'stage_one_reward_claimed',
+          'threshold': 5000,
+          'createdAt': DateTime.now().toUtc().toIso8601String(),
+        };
+        awards[awardId] = award;
+        ledger.add(award);
+        if (ledger.length > DedaTaskEngine._maxLedgerEntries) {
+          ledger.removeRange(
+            0,
+            ledger.length - DedaTaskEngine._maxLedgerEntries,
+          );
+        }
+        state['awards'] = awards;
+        state['ledger'] = ledger;
+        await DedaTaskEngine._writeState(prefs, accountKey, state);
+        awardedNow = true;
+      }
+
+      final total = DedaTaskEngine._effectiveTotalFromState(state);
+      DedaTaskEngine._loadedAccountKey = accountKey;
+      DedaTaskEngine.totalPointsNotifier.value = total;
+      DedaTaskEngine.revisionNotifier.value++;
+
+      if (!mounted) return;
+      setState(() {
+        _stageOneRewardClaimed = true;
+        _stageOneRewardClaiming = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            awardedNow
+                ? dedaText(
+                    'تم استرداد نقاطك وإضافة 50 نقطة مكافأة إلى رصيدك.',
+                    'Your points were restored and 50 bonus points were added.',
+                  )
+                : dedaText(
+                    'تم استرداد مكافأة هذه البطاقة مسبقًا.',
+                    'This card reward was already claimed.',
+                  ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _stageOneRewardClaiming = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            dedaText(
+              'تعذر استرداد النقاط الآن. حاول مرة أخرى.',
+              'Could not claim the points right now. Please try again.',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openPointTier(int threshold, int totalPoints) async {
@@ -8707,6 +8808,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
 
   Widget _rewardStageOneBackFace() {
     const gold = Color(0xFFFFD76A);
+    const deep = Color(0xFF020914);
+    final claimLabel = _stageOneRewardClaimed
+        ? dedaText('تم الاسترداد +50', 'Claimed +50')
+        : dedaText('استرد نقاطك 5,000 + 50', 'Restore 5,000 + 50');
+
     return Stack(
       key: const ValueKey<String>('reward-stage1-back'),
       children: [
@@ -8729,10 +8835,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           ),
         ),
         Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
               'DEDA',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 11,
@@ -8740,7 +8847,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 letterSpacing: 2.1,
               ),
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 4),
             Text(
               dedaText('الجزء الأول من الرمز', 'First code part'),
               textAlign: TextAlign.center,
@@ -8750,20 +8857,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xCC020914),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: gold, width: 1.5),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x44E8C56C),
-                    blurRadius: 8,
-                  ),
-                ],
               ),
               child: Directionality(
                 textDirection: TextDirection.ltr,
@@ -8772,14 +8873,14 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 27,
+                    fontSize: 25,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 4.2,
+                    letterSpacing: 4.0,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             Text(
               dedaText(
                 'تم كشف الجزء الأول من رمزك',
@@ -8789,34 +8890,62 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               maxLines: 2,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 10.5,
+                fontSize: 10,
                 fontWeight: FontWeight.w800,
-                height: 1.25,
+                height: 1.18,
               ),
             ),
-            const SizedBox(height: 7),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xAA020914),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: gold.withOpacity(0.84)),
-              ),
-              child: const Text(
-                '3 / 16',
-                style: TextStyle(
-                  color: gold,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 35,
+              child: Material(
+                color: _stageOneRewardClaimed
+                    ? const Color(0xFF173F31)
+                    : deep,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _stageOneRewardClaimed || _stageOneRewardClaiming
+                      ? null
+                      : _claimStageOneReward,
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: gold, width: 1.2),
+                    ),
+                    child: _stageOneRewardClaiming
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: gold,
+                            ),
+                          )
+                        : FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              claimLabel,
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: gold,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.check_circle_rounded, color: gold, size: 17),
-                const SizedBox(width: 5),
+                const Icon(Icons.check_circle_rounded, color: gold, size: 16),
+                const SizedBox(width: 4),
                 Text(
                   dedaText('تم الفتح', 'Opened'),
                   style: const TextStyle(
@@ -8827,19 +8956,19 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 7),
+            const SizedBox(height: 5),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Padding(
-                  padding: EdgeInsets.only(top: 2),
+                  padding: EdgeInsets.only(top: 1),
                   child: Icon(
                     Icons.arrow_forward_rounded,
                     color: gold,
-                    size: 17,
+                    size: 15,
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 3),
                 Expanded(
                   child: Text(
                     dedaText(
@@ -8847,13 +8976,12 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       'Keep collecting points and open the next card to complete the code',
                     ),
                     textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 9.5,
+                      fontSize: 8.6,
                       fontWeight: FontWeight.w700,
-                      height: 1.25,
+                      height: 1.15,
                     ),
                   ),
                 ),
@@ -9099,9 +9227,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
             ],
           ),
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 520),
-            switchInCurve: Curves.easeInOutCubic,
-            switchOutCurve: Curves.easeInOutCubic,
+            duration: const Duration(milliseconds: 420),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (currentChild, previousChildren) =>
+                currentChild ?? const SizedBox.shrink(),
             transitionBuilder: (child, animation) {
               final turn = Tween<double>(
                 begin: math.pi / 2,
@@ -9192,7 +9322,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                   ),
                   const SizedBox(height: 9),
                   SizedBox(
-                    height: 237,
+                    height: 270,
                     child: Directionality(
                       textDirection: TextDirection.ltr,
                       child: ListView.separated(
@@ -9447,7 +9577,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                       trailingColor: const Color(0xFFFFD76A),
                       title: dedaText('النقاط', 'Points'),
                       subtitle: dedaText(
-                        'رصيدك الحالي: $totalPoints نقطة',
+                        'رصيدك: $totalPoints نقطة',
                         'Current balance: $totalPoints points',
                       ),
                       badgeText: totalPoints.toString(),
