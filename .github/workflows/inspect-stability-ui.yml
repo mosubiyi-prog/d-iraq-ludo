@@ -1,0 +1,23 @@
+name: Inspect stability UI
+on:
+  push:
+    branches:
+      - inspect-stability-ui-2026-09-30-run
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect navigation and transition code
+        run: |
+          echo '=== map follow ==='
+          grep -n -A18 -B8 "onPositionChanged: (camera, hasGesture)" lib/main.dart || true
+          echo '=== auto follow functions ==='
+          grep -n -A20 -B8 "void _followLivePosition" lib/main.dart || true
+          grep -n -A20 -B8 "void _recenterNavigation" lib/main.dart || true
+          echo '=== animated switchers ==='
+          grep -n -A20 -B12 "AnimatedSwitcher" lib/main.dart || true
+          echo '=== navigation bars ==='
+          grep -n -A45 -B20 -E "NavigationBar\(|BottomNavigationBar\(|bottomNavigationBar:" lib/main.dart || true
+          echo '=== task page launches ==='
+          grep -n -A20 -B15 -E "DedaDailyTasksPage|Navigator\.push\(" lib/main.dart | head -n 600 || true
