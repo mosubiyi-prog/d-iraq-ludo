@@ -1,0 +1,96 @@
+name: Validate clean traffic quiz UI fixes
+
+on:
+  push:
+    branches:
+      - traffic-quiz-ui-clean-2026-10-01
+    paths:
+      - tools/patch_traffic_quiz_ui_fixes_2026_10_01.py
+      - .github/workflows/apply-traffic-quiz-ui-clean.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout clean UI branch
+        uses: actions/checkout@v4
+        with:
+          ref: traffic-quiz-ui-clean-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply only the four approved UI fixes
+        run: |
+          python3 tools/patch_traffic_quiz_ui_fixes_2026_10_01.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/traffic_quiz_page.dart')
+          text = p.read_text(encoding='utf-8')
+          marker = 'BorderRadius.circular(isPortrait ? 14 : 17)'
+          mini_anchor = 'class _MiniSign extends StatelessWidget'
+          if mini_anchor not in text:
+              raise SystemExit('mini sign anchor missing')
+          before, after = text.split(mini_anchor, 1)
+          # The patcher may hit an earlier radius first. Keep unrelated widgets unchanged.
+          if marker in before:
+              before = before.replace(marker, 'BorderRadius.circular(17)', 1)
+          if marker not in after:
+              if 'BorderRadius.circular(17)' not in after:
+                  raise SystemExit('mini sign radius anchor missing')
+              after = after.replace('BorderRadius.circular(17)', marker, 1)
+          text = before + mini_anchor + after
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Format quiz page only
+        run: dart format lib/traffic_quiz_page.dart
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Analyze without failing on legacy warnings
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Validate logic and approved scope markers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main = Path('lib/main.dart').read_text(encoding='utf-8')
+          quiz = Path('lib/traffic_quiz_page.dart').read_text(encoding='utf-8')
+          checks = [
+              ('portrait intro no-scroll', 'NeverScrollableScrollPhysics' in quiz),
+              ('portrait sign card compact', 'height: isPortrait ? 150 : 225' in quiz),
+              ('gold reward line preserved', 'حتى 25 نقطة من الأسئلة + مكافأة المهمة' in quiz),
+              ('daily five questions preserved', 'static const int _dailyQuestionCount = 5;' in quiz),
+              ('question bank unchanged', quiz.count('  _TrafficQuestion(\n') == 20),
+              ('correct-answer callback preserved', 'pointAwarded = await widget.onCorrectAnswer(q.id);' in quiz),
+              ('completion callback preserved', 'await widget.onCompleted();' in quiz),
+              ('traffic task done state', 'final trafficDone = index == 6 && completed;' in main),
+              ('traffic task done label', "trafficDone ? dedaText('تم', 'Done') : action" in main),
+              ('traffic correct points event', 'DedaTaskEvent.trafficQuizCorrectAnswer' in main),
+              ('traffic completion event', 'DedaTaskEvent.trafficQuizCompleted' in main),
+          ]
+          failed = [name for name, ok in checks if not ok]
+          if failed:
+              raise SystemExit('Validation failed: ' + ', '.join(failed))
+          print('Clean traffic quiz UI fixes validated.')
+          PY
+
+      - name: Commit validated app files only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/traffic_quiz_page.dart
+          if git diff --cached --quiet; then
+            echo "No UI changes to commit"
+            exit 0
+          fi
+          git commit -m "Apply final traffic quiz UI fixes"
+          git push origin HEAD:traffic-quiz-ui-clean-2026-10-01
