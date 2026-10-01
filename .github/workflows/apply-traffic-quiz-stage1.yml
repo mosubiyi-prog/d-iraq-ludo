@@ -1,0 +1,60 @@
+name: Apply traffic quiz stage 1
+
+on:
+  push:
+    branches:
+      - traffic-quiz-work-2026-10-01
+    paths:
+      - tools/patch_traffic_quiz_stage1_2026_10_01.py
+      - .github/workflows/apply-traffic-quiz-stage1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout traffic quiz work branch
+        uses: actions/checkout@v4
+        with:
+          ref: traffic-quiz-work-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply traffic quiz integration
+        run: python3 tools/patch_traffic_quiz_stage1_2026_10_01.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Format new quiz source
+        run: dart format lib/traffic_quiz_page.dart
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Analyze quiz integration
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Validate source markers and diff
+        run: |
+          python3 tools/patch_traffic_quiz_stage1_2026_10_01.py
+          git diff --check
+          grep -q "DedaTrafficQuizPage(" lib/main.dart
+          grep -q "trafficQuizCorrectAnswer" lib/main.dart
+          grep -q "trafficQuizCompleted" lib/main.dart
+          test "$(grep -c "^  _TrafficQuestion(" lib/traffic_quiz_page.dart)" -eq 20
+
+      - name: Commit traffic quiz integration
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No patch changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/traffic_quiz_page.dart
+          git commit -m "Integrate daily traffic skills quiz with points engine"
+          git push origin HEAD:traffic-quiz-work-2026-10-01
