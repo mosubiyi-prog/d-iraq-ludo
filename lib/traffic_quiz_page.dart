@@ -96,7 +96,10 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
         if (decoded is Map<String, dynamic>) {
           final rawIndex = decoded['index'];
           if (rawIndex is num) {
-            index = rawIndex.toInt().clamp(0, _dailyQuestionCount - 1);
+            index = math.max(
+              0,
+              math.min(_dailyQuestionCount - 1, rawIndex.toInt()),
+            );
           }
           final rawAnswers = decoded['answers'];
           if (rawAnswers is Map) {
@@ -376,7 +379,11 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
             width: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: <Color>[Color(0xFF1683C8), Color(0xFF0A4F83), _navyDeep],
+                colors: <Color>[
+                  Color(0xFF1683C8),
+                  Color(0xFF0A4F83),
+                  _navyDeep
+                ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -729,8 +736,9 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                   : _confirmAnswer,
                       style: FilledButton.styleFrom(
                         backgroundColor: _answerLocked ? _gold : _navy,
-                        foregroundColor:
-                            _answerLocked ? const Color(0xFF18304A) : Colors.white,
+                        foregroundColor: _answerLocked
+                            ? const Color(0xFF18304A)
+                            : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -1509,11 +1517,23 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     visual: _TrafficVisual.pedestrian,
     questionAr: 'ماذا تعني هذه العلامة؟',
     questionEn: 'What does this sign mean?',
-    answersAr: ['ممر للمشاة', 'منطقة مدارس', 'ممنوع عبور المشاة', 'موقف سيارات'],
-    answersEn: ['Pedestrian crossing', 'School zone', 'No pedestrians', 'Parking'],
+    answersAr: [
+      'ممر للمشاة',
+      'منطقة مدارس',
+      'ممنوع عبور المشاة',
+      'موقف سيارات'
+    ],
+    answersEn: [
+      'Pedestrian crossing',
+      'School zone',
+      'No pedestrians',
+      'Parking'
+    ],
     correctIndex: 0,
-    explanationAr: 'تحذر العلامة من وجود عبور أو ممر للمشاة، لذلك يجب الانتباه وتهدئة السرعة وإعطاء الأولوية عند الحاجة.',
-    explanationEn: 'The sign warns of a pedestrian crossing. Slow down, watch carefully and yield when required.',
+    explanationAr:
+        'تحذر العلامة من وجود عبور أو ممر للمشاة، لذلك يجب الانتباه وتهدئة السرعة وإعطاء الأولوية عند الحاجة.',
+    explanationEn:
+        'The sign warns of a pedestrian crossing. Slow down, watch carefully and yield when required.',
   ),
   _TrafficQuestion(
     id: 'sign_no_entry',
@@ -1523,30 +1543,56 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     answersAr: ['ممنوع الدخول', 'نهاية الطريق', 'اتجاه واحد', 'ممنوع الوقوف'],
     answersEn: ['No entry', 'End of road', 'One way', 'No parking'],
     correctIndex: 0,
-    explanationAr: 'الدائرة الحمراء وبداخلها شريط أبيض أفقي تعني أن الدخول من هذا الاتجاه ممنوع.',
-    explanationEn: 'A red circle with a white horizontal bar means entry from this direction is prohibited.',
+    explanationAr:
+        'الدائرة الحمراء وبداخلها شريط أبيض أفقي تعني أن الدخول من هذا الاتجاه ممنوع.',
+    explanationEn:
+        'A red circle with a white horizontal bar means entry from this direction is prohibited.',
   ),
   _TrafficQuestion(
     id: 'sign_stop',
     visual: _TrafficVisual.stop,
     questionAr: 'ما التصرف المطلوب عند هذه العلامة؟',
     questionEn: 'What must you do at this sign?',
-    answersAr: ['التوقف التام ثم المتابعة بأمان', 'تخفيف السرعة فقط', 'زيادة السرعة', 'استعمال المنبه فقط'],
-    answersEn: ['Come to a full stop, then proceed safely', 'Only slow down', 'Speed up', 'Only use the horn'],
+    answersAr: [
+      'التوقف التام ثم المتابعة بأمان',
+      'تخفيف السرعة فقط',
+      'زيادة السرعة',
+      'استعمال المنبه فقط'
+    ],
+    answersEn: [
+      'Come to a full stop, then proceed safely',
+      'Only slow down',
+      'Speed up',
+      'Only use the horn'
+    ],
     correctIndex: 0,
-    explanationAr: 'علامة STOP تتطلب توقفًا كاملًا عند خط التوقف أو قبل التقاطع ثم التأكد من أن المرور آمن.',
-    explanationEn: 'A STOP sign requires a complete stop at the stop line or before the intersection, then proceeding only when safe.',
+    explanationAr:
+        'علامة STOP تتطلب توقفًا كاملًا عند خط التوقف أو قبل التقاطع ثم التأكد من أن المرور آمن.',
+    explanationEn:
+        'A STOP sign requires a complete stop at the stop line or before the intersection, then proceeding only when safe.',
   ),
   _TrafficQuestion(
     id: 'sign_speed_60',
     visual: _TrafficVisual.speed60,
     questionAr: 'ماذا يشير الرقم 60 داخل الدائرة؟',
     questionEn: 'What does 60 inside the circle indicate?',
-    answersAr: ['الحد الأقصى للسرعة 60', 'الحد الأدنى للسرعة 60', 'المسافة 60 مترًا', 'طريق رقم 60'],
-    answersEn: ['Maximum speed 60', 'Minimum speed 60', 'Distance 60 metres', 'Road number 60'],
+    answersAr: [
+      'الحد الأقصى للسرعة 60',
+      'الحد الأدنى للسرعة 60',
+      'المسافة 60 مترًا',
+      'طريق رقم 60'
+    ],
+    answersEn: [
+      'Maximum speed 60',
+      'Minimum speed 60',
+      'Distance 60 metres',
+      'Road number 60'
+    ],
     correctIndex: 0,
-    explanationAr: 'الدائرة ذات الحافة الحمراء والرقم بداخلها تحدد الحد الأقصى للسرعة المسموح بها.',
-    explanationEn: 'A red-bordered circle with a number sets the maximum permitted speed.',
+    explanationAr:
+        'الدائرة ذات الحافة الحمراء والرقم بداخلها تحدد الحد الأقصى للسرعة المسموح بها.',
+    explanationEn:
+        'A red-bordered circle with a number sets the maximum permitted speed.',
   ),
   _TrafficQuestion(
     id: 'sign_yield',
@@ -1554,32 +1600,58 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     questionAr: 'ما معنى هذه العلامة المثلثة المقلوبة؟',
     questionEn: 'What does this inverted triangular sign mean?',
     answersAr: ['أعطِ الأولوية', 'توقف إلزامي', 'طريق مغلق', 'ممنوع التجاوز'],
-    answersEn: ['Give way / yield', 'Mandatory stop', 'Road closed', 'No overtaking'],
+    answersEn: [
+      'Give way / yield',
+      'Mandatory stop',
+      'Road closed',
+      'No overtaking'
+    ],
     correctIndex: 0,
-    explanationAr: 'علامة إعطاء الأولوية تطلب منك تهدئة السرعة وإفساح الطريق للمركبات التي لها أولوية المرور.',
-    explanationEn: 'A yield sign tells you to slow down and give way to traffic that has priority.',
+    explanationAr:
+        'علامة إعطاء الأولوية تطلب منك تهدئة السرعة وإفساح الطريق للمركبات التي لها أولوية المرور.',
+    explanationEn:
+        'A yield sign tells you to slow down and give way to traffic that has priority.',
   ),
   _TrafficQuestion(
     id: 'sign_traffic_light',
     visual: _TrafficVisual.trafficLight,
     questionAr: 'عند ظهور الضوء الأحمر في الإشارة الضوئية، ماذا تفعل؟',
     questionEn: 'What should you do when the traffic light is red?',
-    answersAr: ['أتوقف قبل خط التوقف', 'أعبر بسرعة', 'أستمر إذا لم توجد سيارات', 'أتوقف فقط ليلًا'],
-    answersEn: ['Stop before the stop line', 'Cross quickly', 'Continue if no cars are present', 'Stop only at night'],
+    answersAr: [
+      'أتوقف قبل خط التوقف',
+      'أعبر بسرعة',
+      'أستمر إذا لم توجد سيارات',
+      'أتوقف فقط ليلًا'
+    ],
+    answersEn: [
+      'Stop before the stop line',
+      'Cross quickly',
+      'Continue if no cars are present',
+      'Stop only at night'
+    ],
     correctIndex: 0,
-    explanationAr: 'الضوء الأحمر يعني التوقف وعدم تجاوز خط التوقف حتى تسمح الإشارة بالحركة.',
-    explanationEn: 'A red light means stop and do not cross the stop line until the signal permits movement.',
+    explanationAr:
+        'الضوء الأحمر يعني التوقف وعدم تجاوز خط التوقف حتى تسمح الإشارة بالحركة.',
+    explanationEn:
+        'A red light means stop and do not cross the stop line until the signal permits movement.',
   ),
   _TrafficQuestion(
     id: 'sign_no_parking',
     visual: _TrafficVisual.noParking,
     questionAr: 'ماذا تعني هذه العلامة؟',
     questionEn: 'What does this sign mean?',
-    answersAr: ['ممنوع الوقوف/الركن', 'موقف سيارات', 'طريق خاص', 'نقطة استراحة'],
+    answersAr: [
+      'ممنوع الوقوف/الركن',
+      'موقف سيارات',
+      'طريق خاص',
+      'نقطة استراحة'
+    ],
     answersEn: ['No parking', 'Parking area', 'Private road', 'Rest area'],
     correctIndex: 0,
-    explanationAr: 'الحرف P المشطوب داخل دائرة المنع يدل على منع ركن المركبة في المكان المحدد.',
-    explanationEn: 'A crossed parking symbol inside a prohibition sign means parking is not allowed there.',
+    explanationAr:
+        'الحرف P المشطوب داخل دائرة المنع يدل على منع ركن المركبة في المكان المحدد.',
+    explanationEn:
+        'A crossed parking symbol inside a prohibition sign means parking is not allowed there.',
   ),
   _TrafficQuestion(
     id: 'sign_no_stopping',
@@ -1587,10 +1659,17 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     questionAr: 'ما معنى الدائرة الزرقاء ذات الخطين الأحمرين المتقاطعين؟',
     questionEn: 'What does the blue circle with two crossed red lines mean?',
     answersAr: ['ممنوع التوقف', 'ممنوع الدخول', 'نهاية المنع', 'موقف مؤقت'],
-    answersEn: ['No stopping', 'No entry', 'End of restriction', 'Temporary parking'],
+    answersEn: [
+      'No stopping',
+      'No entry',
+      'End of restriction',
+      'Temporary parking'
+    ],
     correctIndex: 0,
-    explanationAr: 'الخطّان الأحمران المتقاطعان على خلفية زرقاء يدلان على منع التوقف في المنطقة المحددة.',
-    explanationEn: 'Two crossed red lines on a blue background indicate that stopping is prohibited.',
+    explanationAr:
+        'الخطّان الأحمران المتقاطعان على خلفية زرقاء يدلان على منع التوقف في المنطقة المحددة.',
+    explanationEn:
+        'Two crossed red lines on a blue background indicate that stopping is prohibited.',
   ),
   _TrafficQuestion(
     id: 'sign_roundabout',
@@ -1600,19 +1679,28 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     answersAr: ['دوّار', 'انعطاف للخلف', 'طريق مسدود', 'تجاوز مسموح'],
     answersEn: ['Roundabout', 'U-turn', 'Dead end', 'Overtaking permitted'],
     correctIndex: 0,
-    explanationAr: 'الأسهم الدائرية تشير إلى وجود دوّار، ويجب اتباع اتجاه الحركة والانتباه للأولوية.',
-    explanationEn: 'Circular arrows indicate a roundabout. Follow the traffic direction and observe priority rules.',
+    explanationAr:
+        'الأسهم الدائرية تشير إلى وجود دوّار، ويجب اتباع اتجاه الحركة والانتباه للأولوية.',
+    explanationEn:
+        'Circular arrows indicate a roundabout. Follow the traffic direction and observe priority rules.',
   ),
   _TrafficQuestion(
     id: 'sign_turn_right',
     visual: _TrafficVisual.turnRight,
     questionAr: 'ماذا تطلب منك هذه العلامة الزرقاء؟',
     questionEn: 'What does this blue sign require?',
-    answersAr: ['الاتجاه إلى اليمين', 'ممنوع الانعطاف يمينًا', 'طريق متعرج', 'نهاية الطريق'],
+    answersAr: [
+      'الاتجاه إلى اليمين',
+      'ممنوع الانعطاف يمينًا',
+      'طريق متعرج',
+      'نهاية الطريق'
+    ],
     answersEn: ['Turn right', 'No right turn', 'Winding road', 'End of road'],
     correctIndex: 0,
-    explanationAr: 'العلامة الدائرية الزرقاء ذات السهم تعني اتجاهًا إلزاميًا يجب اتباعه.',
-    explanationEn: 'A blue circular sign with an arrow indicates a mandatory direction to follow.',
+    explanationAr:
+        'العلامة الدائرية الزرقاء ذات السهم تعني اتجاهًا إلزاميًا يجب اتباعه.',
+    explanationEn:
+        'A blue circular sign with an arrow indicates a mandatory direction to follow.',
   ),
   _TrafficQuestion(
     id: 'sign_school',
@@ -1620,10 +1708,17 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     questionAr: 'ماذا تحذرك هذه العلامة؟',
     questionEn: 'What does this warning sign indicate?',
     answersAr: ['أطفال أو منطقة مدارس', 'ممنوع المشاة', 'حديقة عامة', 'مستشفى'],
-    answersEn: ['Children or school area', 'No pedestrians', 'Public park', 'Hospital'],
+    answersEn: [
+      'Children or school area',
+      'No pedestrians',
+      'Public park',
+      'Hospital'
+    ],
     correctIndex: 0,
-    explanationAr: 'علامة الأطفال تحذر من منطقة مدارس أو مكان يكثر فيه عبور الأطفال، لذلك يلزم الحذر وتهدئة السرعة.',
-    explanationEn: 'The children warning sign indicates a school area or frequent child crossings, so slow down and be alert.',
+    explanationAr:
+        'علامة الأطفال تحذر من منطقة مدارس أو مكان يكثر فيه عبور الأطفال، لذلك يلزم الحذر وتهدئة السرعة.',
+    explanationEn:
+        'The children warning sign indicates a school area or frequent child crossings, so slow down and be alert.',
   ),
   _TrafficQuestion(
     id: 'sign_road_works',
@@ -1633,8 +1728,10 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     answersAr: ['أعمال طريق', 'موقف شاحنات', 'طريق سريع', 'منطقة صناعية'],
     answersEn: ['Road works', 'Truck parking', 'Motorway', 'Industrial area'],
     correctIndex: 0,
-    explanationAr: 'علامة أعمال الطريق تنبه إلى وجود صيانة أو عمال ومعدات على الطريق، ويجب خفض السرعة والانتباه.',
-    explanationEn: 'A road-works sign warns of maintenance, workers or equipment ahead. Slow down and take care.',
+    explanationAr:
+        'علامة أعمال الطريق تنبه إلى وجود صيانة أو عمال ومعدات على الطريق، ويجب خفض السرعة والانتباه.',
+    explanationEn:
+        'A road-works sign warns of maintenance, workers or equipment ahead. Slow down and take care.',
   ),
   _TrafficQuestion(
     id: 'sign_slippery',
@@ -1642,21 +1739,40 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     questionAr: 'ما الذي تحذر منه هذه العلامة؟',
     questionEn: 'What hazard does this sign warn about?',
     answersAr: ['طريق زلق', 'طريق مستقيم', 'ممنوع التجاوز', 'رياح جانبية'],
-    answersEn: ['Slippery road', 'Straight road', 'No overtaking', 'Side winds'],
+    answersEn: [
+      'Slippery road',
+      'Straight road',
+      'No overtaking',
+      'Side winds'
+    ],
     correctIndex: 0,
-    explanationAr: 'العلامة تحذر من احتمال انزلاق المركبة، خصوصًا عند البلل، لذلك خفف السرعة وتجنب الحركات المفاجئة.',
-    explanationEn: 'The sign warns that the road may be slippery, especially when wet. Slow down and avoid sudden manoeuvres.',
+    explanationAr:
+        'العلامة تحذر من احتمال انزلاق المركبة، خصوصًا عند البلل، لذلك خفف السرعة وتجنب الحركات المفاجئة.',
+    explanationEn:
+        'The sign warns that the road may be slippery, especially when wet. Slow down and avoid sudden manoeuvres.',
   ),
   _TrafficQuestion(
     id: 'sign_bend_right',
     visual: _TrafficVisual.bendRight,
     questionAr: 'ماذا تعني هذه العلامة؟',
     questionEn: 'What does this sign indicate?',
-    answersAr: ['منعطف خطِر إلى اليمين', 'انعطاف إلزامي يمينًا', 'دوّار', 'طريق ذو اتجاه واحد'],
-    answersEn: ['Dangerous bend to the right', 'Mandatory right turn', 'Roundabout', 'One-way road'],
+    answersAr: [
+      'منعطف خطِر إلى اليمين',
+      'انعطاف إلزامي يمينًا',
+      'دوّار',
+      'طريق ذو اتجاه واحد'
+    ],
+    answersEn: [
+      'Dangerous bend to the right',
+      'Mandatory right turn',
+      'Roundabout',
+      'One-way road'
+    ],
     correctIndex: 0,
-    explanationAr: 'العلامة التحذيرية للمُنحنى تنبه إلى منعطف أمامك وتدعو إلى ضبط السرعة قبل دخوله.',
-    explanationEn: 'A bend warning sign alerts you to a curve ahead so you can adjust speed before entering it.',
+    explanationAr:
+        'العلامة التحذيرية للمُنحنى تنبه إلى منعطف أمامك وتدعو إلى ضبط السرعة قبل دخوله.',
+    explanationEn:
+        'A bend warning sign alerts you to a curve ahead so you can adjust speed before entering it.',
   ),
   _TrafficQuestion(
     id: 'sign_crossroad',
@@ -1666,19 +1782,33 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     answersAr: ['تقاطع طرق أمامك', 'نهاية الطريق', 'جسر', 'نفق'],
     answersEn: ['Crossroads ahead', 'End of road', 'Bridge', 'Tunnel'],
     correctIndex: 0,
-    explanationAr: 'علامة التقاطع تحذر من التقاء طرق أمامك، فاستعد لحركة قادمة من اتجاهات مختلفة.',
-    explanationEn: 'The crossroads sign warns of intersecting roads ahead. Be prepared for traffic from different directions.',
+    explanationAr:
+        'علامة التقاطع تحذر من التقاء طرق أمامك، فاستعد لحركة قادمة من اتجاهات مختلفة.',
+    explanationEn:
+        'The crossroads sign warns of intersecting roads ahead. Be prepared for traffic from different directions.',
   ),
   _TrafficQuestion(
     id: 'sign_one_way',
     visual: _TrafficVisual.oneWay,
     questionAr: 'ماذا يعني السهم الأبيض على اللوحة الزرقاء؟',
     questionEn: 'What does the white arrow on the blue sign mean?',
-    answersAr: ['الطريق باتجاه واحد', 'ممنوع الدخول', 'الأولوية للقادم', 'طريق سريع'],
-    answersEn: ['One-way road', 'No entry', 'Priority to oncoming traffic', 'Motorway'],
+    answersAr: [
+      'الطريق باتجاه واحد',
+      'ممنوع الدخول',
+      'الأولوية للقادم',
+      'طريق سريع'
+    ],
+    answersEn: [
+      'One-way road',
+      'No entry',
+      'Priority to oncoming traffic',
+      'Motorway'
+    ],
     correctIndex: 0,
-    explanationAr: 'السهم على لوحة الاتجاه الواحد يبين اتجاه حركة السير المسموح به على الطريق.',
-    explanationEn: 'The one-way arrow shows the permitted direction of travel on that road.',
+    explanationAr:
+        'السهم على لوحة الاتجاه الواحد يبين اتجاه حركة السير المسموح به على الطريق.',
+    explanationEn:
+        'The one-way arrow shows the permitted direction of travel on that road.',
   ),
   _TrafficQuestion(
     id: 'sign_priority_road',
@@ -1686,32 +1816,58 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     questionAr: 'ما معنى العلامة الماسية الصفراء؟',
     questionEn: 'What does the yellow diamond sign mean?',
     answersAr: ['طريق ذو أولوية', 'طريق غير معبد', 'نهاية السرعة', 'خطر عام'],
-    answersEn: ['Priority road', 'Unpaved road', 'End of speed limit', 'General danger'],
+    answersEn: [
+      'Priority road',
+      'Unpaved road',
+      'End of speed limit',
+      'General danger'
+    ],
     correctIndex: 0,
-    explanationAr: 'العلامة الماسية الصفراء تدل على أنك تسير في طريق له أولوية عند التقاطعات إلى أن تنتهي هذه الأولوية.',
-    explanationEn: 'The yellow diamond indicates a priority road at intersections until that priority ends.',
+    explanationAr:
+        'العلامة الماسية الصفراء تدل على أنك تسير في طريق له أولوية عند التقاطعات إلى أن تنتهي هذه الأولوية.',
+    explanationEn:
+        'The yellow diamond indicates a priority road at intersections until that priority ends.',
   ),
   _TrafficQuestion(
     id: 'sign_horn_prohibited',
     visual: _TrafficVisual.hornProhibited,
     questionAr: 'ماذا تعني هذه العلامة؟',
     questionEn: 'What does this sign mean?',
-    answersAr: ['ممنوع استعمال المنبه الصوتي', 'استخدم المنبه', 'مركز إسعاف', 'خطر ضوضاء'],
+    answersAr: [
+      'ممنوع استعمال المنبه الصوتي',
+      'استخدم المنبه',
+      'مركز إسعاف',
+      'خطر ضوضاء'
+    ],
     answersEn: ['No horn', 'Use the horn', 'First-aid station', 'Noise hazard'],
     correctIndex: 0,
-    explanationAr: 'رمز المنبه داخل علامة المنع يعني عدم استعمال البوق في المنطقة إلا عند ضرورة السلامة.',
-    explanationEn: 'A horn symbol inside a prohibition sign means horn use is restricted except when necessary for safety.',
+    explanationAr:
+        'رمز المنبه داخل علامة المنع يعني عدم استعمال البوق في المنطقة إلا عند ضرورة السلامة.',
+    explanationEn:
+        'A horn symbol inside a prohibition sign means horn use is restricted except when necessary for safety.',
   ),
   _TrafficQuestion(
     id: 'sign_bicycle_path',
     visual: _TrafficVisual.bicycle,
     questionAr: 'إلى ماذا تشير هذه العلامة الزرقاء؟',
     questionEn: 'What does this blue sign indicate?',
-    answersAr: ['مسار مخصص للدراجات', 'ممنوع الدراجات', 'موقف دراجات فقط', 'طريق سيارات'],
-    answersEn: ['Cycle path', 'No bicycles', 'Bicycle parking only', 'Motor-vehicle road'],
+    answersAr: [
+      'مسار مخصص للدراجات',
+      'ممنوع الدراجات',
+      'موقف دراجات فقط',
+      'طريق سيارات'
+    ],
+    answersEn: [
+      'Cycle path',
+      'No bicycles',
+      'Bicycle parking only',
+      'Motor-vehicle road'
+    ],
     correctIndex: 0,
-    explanationAr: 'رمز الدراجة داخل علامة زرقاء يدل على مسار مخصص أو إلزامي للدراجات بحسب تنظيم الطريق.',
-    explanationEn: 'A bicycle symbol on a blue sign indicates a designated or mandatory cycle path according to road layout.',
+    explanationAr:
+        'رمز الدراجة داخل علامة زرقاء يدل على مسار مخصص أو إلزامي للدراجات بحسب تنظيم الطريق.',
+    explanationEn:
+        'A bicycle symbol on a blue sign indicates a designated or mandatory cycle path according to road layout.',
   ),
   _TrafficQuestion(
     id: 'sign_parking',
@@ -1721,7 +1877,9 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
     answersAr: ['موقف سيارات', 'ممنوع الوقوف', 'شرطة مرور', 'محطة وقود'],
     answersEn: ['Parking area', 'No parking', 'Traffic police', 'Fuel station'],
     correctIndex: 0,
-    explanationAr: 'حرف P الأبيض على خلفية زرقاء يحدد مكانًا مخصصًا لوقوف أو ركن المركبات.',
-    explanationEn: 'A white P on a blue background marks an area designated for vehicle parking.',
+    explanationAr:
+        'حرف P الأبيض على خلفية زرقاء يحدد مكانًا مخصصًا لوقوف أو ركن المركبات.',
+    explanationEn:
+        'A white P on a blue background marks an area designated for vehicle parking.',
   ),
 ];
