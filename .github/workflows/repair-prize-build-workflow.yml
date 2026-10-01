@@ -22,8 +22,39 @@ jobs:
           ref: prize-cycle-complete-2026-10-01
           fetch-depth: 0
 
-      - name: Apply complete prize cycle patch
-        run: python3 tools/patch_prize_cycle_complete_2026_10_01.py
+      - name: Scope cycle-id insertion and apply patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/patch_prize_cycle_complete_2026_10_01.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''if "'cycleId': prizeWinnerCycleId," not in b:
+              b = replace_once(
+                  b,
+                  "      'ownerUid': user.uid,\\n",
+                  "      'ownerUid': user.uid,\\n      'cycleId': prizeWinnerCycleId,\\n",
+                  'persist prize cycle id',
+              )
+          '''
+          new = '''if "'cycleId': prizeWinnerCycleId," not in b:
+              submit_start = b.find('  static Future<String> submitPrizeWinnerRequest({')
+              submit_end = b.find('  static Future<void> replyToPrizeWinnerRequestFromUser({', submit_start)
+              if submit_start < 0 or submit_end < 0:
+                  raise SystemExit('submit prize request block not found')
+              submit_block = b[submit_start:submit_end]
+              submit_block = replace_once(
+                  submit_block,
+                  "      'ownerUid': user.uid,\\n",
+                  "      'ownerUid': user.uid,\\n      'cycleId': prizeWinnerCycleId,\\n",
+                  'persist prize cycle id',
+              )
+              b = b[:submit_start] + submit_block + b[submit_end:]
+          '''
+          if old not in text:
+              raise SystemExit('runtime cycle-id patch anchor not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python3 tools/patch_prize_cycle_complete_2026_10_01.py
 
       - name: Validate complete prize cycle before commit
         run: |
