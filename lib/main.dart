@@ -60,8 +60,7 @@ class DedaLanguageState {
   static String get ttsLocale => isArabic ? 'ar-IQ' : 'en-US';
 }
 
-String dedaText(String ar, String en) =>
-    DedaLanguageState.isArabic ? ar : en;
+String dedaText(String ar, String en) => DedaLanguageState.isArabic ? ar : en;
 
 String dedaAccountTypeLabel(DedaAccountType type) {
   switch (type) {
@@ -454,7 +453,8 @@ class DedaFramedAvatar extends StatelessWidget {
               color: Colors.white.withOpacity(0.93),
               boxShadow: [
                 BoxShadow(
-                  color: dedaProfileFrameColors(frameStyle)[1].withOpacity(0.22),
+                  color:
+                      dedaProfileFrameColors(frameStyle)[1].withOpacity(0.22),
                   blurRadius: size * 0.13,
                   spreadRadius: size * 0.012,
                   offset: Offset(0, size * 0.045),
@@ -646,13 +646,10 @@ class DedaProfileFramePreview extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        color: selected
-            ? const Color(0xFFEAF5EA)
-            : Colors.white.withOpacity(0.72),
+        color:
+            selected ? const Color(0xFFEAF5EA) : Colors.white.withOpacity(0.72),
         border: Border.all(
-          color: selected
-              ? const Color(0xFF17652F)
-              : const Color(0xFFD8E0D7),
+          color: selected ? const Color(0xFF17652F) : const Color(0xFFD8E0D7),
           width: selected ? 2.5 : 1,
         ),
       ),
@@ -759,12 +756,10 @@ class DedaPreferences {
       _ => null,
     };
 
-    profileAvatarStyle =
-        prefs.getInt(_profileAvatarKey(phone)) ?? 0;
+    profileAvatarStyle = prefs.getInt(_profileAvatarKey(phone)) ?? 0;
     profileFrameStyle =
         (prefs.getInt(_profileFrameKey(phone)) ?? 0).clamp(0, 2).toInt();
-    profileBackgroundStyle =
-        prefs.getInt(_profileBackgroundKey(phone)) ?? 0;
+    profileBackgroundStyle = prefs.getInt(_profileBackgroundKey(phone)) ?? 0;
 
     navigationVoiceEnabled = prefs.getBool(_voiceEnabledKey) ?? true;
     speechRate = prefs.getDouble(_speechRateKey) ?? 0.45;
@@ -781,7 +776,9 @@ class DedaPreferences {
       orElse: () => DedaMapStyle.normal,
     );
 
-    if (userName.trim().isEmpty || phone.trim().isEmpty || accountType == null) {
+    if (userName.trim().isEmpty ||
+        phone.trim().isEmpty ||
+        accountType == null) {
       isLoggedIn = false;
     }
   }
@@ -803,22 +800,20 @@ class DedaPreferences {
     final prefs = await SharedPreferences.getInstance();
     final previousPhone = prefs.getString(_phoneKey) ?? '';
     final previousName = prefs.getString(_userNameKey) ?? '';
-    final resolvedName = previousPhone == normalizedPhone &&
-            previousName.trim().isNotEmpty
-        ? previousName.trim()
-        : name.trim();
+    final resolvedName =
+        previousPhone == normalizedPhone && previousName.trim().isNotEmpty
+            ? previousName.trim()
+            : name.trim();
 
     userName = resolvedName;
     phone = normalizedPhone;
     accountPhone = normalizedPhone;
     accountType = type;
     isLoggedIn = true;
-    profileAvatarStyle =
-        prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
-    profileFrameStyle =
-        (prefs.getInt(_profileFrameKey(normalizedPhone)) ?? 0)
-            .clamp(0, 2)
-            .toInt();
+    profileAvatarStyle = prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
+    profileFrameStyle = (prefs.getInt(_profileFrameKey(normalizedPhone)) ?? 0)
+        .clamp(0, 2)
+        .toInt();
     profileBackgroundStyle =
         prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
 
@@ -928,7 +923,6 @@ class DedaPreferences {
   }
 }
 
-
 enum DedaTaskEvent {
   mapOpened,
   currentLocationShared,
@@ -951,8 +945,7 @@ extension DedaTaskEventKey on DedaTaskEvent {
         DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
         DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
         DedaTaskEvent.longTripCompleted => 'long_trip_completed',
-        DedaTaskEvent.trafficQuizCorrectAnswer =>
-          'traffic_quiz_correct_answer',
+        DedaTaskEvent.trafficQuizCorrectAnswer => 'traffic_quiz_correct_answer',
       };
 }
 
@@ -1011,10 +1004,8 @@ class DedaTaskEngine {
   static const int _storeVersion = 1;
   static const int _maxLedgerEntries = 600;
 
-  static final ValueNotifier<int> totalPointsNotifier =
-      ValueNotifier<int>(0);
-  static final ValueNotifier<int> revisionNotifier =
-      ValueNotifier<int>(0);
+  static final ValueNotifier<int> totalPointsNotifier = ValueNotifier<int>(0);
+  static final ValueNotifier<int> revisionNotifier = ValueNotifier<int>(0);
 
   static String _loadedAccountKey = '';
   static bool _generalManagerBonusActive = false;
@@ -1099,10 +1090,8 @@ class DedaTaskEngine {
         DedaTaskEvent.mapOpened => DedaTaskIds.openMap,
         DedaTaskEvent.currentLocationShared =>
           DedaTaskIds.sharePersonalLocation,
-        DedaTaskEvent.registeredPlaceShared =>
-          DedaTaskIds.shareRegisteredPlace,
-        DedaTaskEvent.receivedPlaceOpened =>
-          DedaTaskIds.openReceivedPlace,
+        DedaTaskEvent.registeredPlaceShared => DedaTaskIds.shareRegisteredPlace,
+        DedaTaskEvent.receivedPlaceOpened => DedaTaskIds.openReceivedPlace,
         DedaTaskEvent.savedPlaceOpened => DedaTaskIds.openSavedPlace,
         DedaTaskEvent.addedPlaceReviewed => DedaTaskIds.reviewAddedPlace,
         DedaTaskEvent.trafficQuizCompleted => DedaTaskIds.trafficSkills,
@@ -1240,9 +1229,8 @@ class DedaTaskEngine {
     if (!alreadyAwarded) {
       pointsDelta = pointsPerTask;
       final completion = completions[completionKey];
-      final sourceEvent = completion is Map
-          ? completion['event']?.toString()
-          : null;
+      final sourceEvent =
+          completion is Map ? completion['event']?.toString() : null;
       final now = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
       final award = <String, dynamic>{
         'id': awardId,
@@ -1322,11 +1310,9 @@ class DedaTaskEngine {
     final awards = Map<String, dynamic>.from(state['awards'] as Map);
     final ledger = List<dynamic>.from(state['ledger'] as List);
 
-    final completionKey =
-        taskId == null ? null : '$cycle|$taskId';
-    final String? awardId = taskId == null
-        ? 'traffic_answer|$cycle|$cleanDedupe'
-        : null;
+    final completionKey = taskId == null ? null : '$cycle|$taskId';
+    final String? awardId =
+        taskId == null ? 'traffic_answer|$cycle|$cleanDedupe' : null;
 
     final wasCompleted =
         completionKey != null && completions.containsKey(completionKey);
@@ -1924,10 +1910,10 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final savedType = DedaPreferences.accountType;
-    final type = savedType != null &&
-            DedaPreferences.accountPhone == normalizedPhone
-        ? savedType
-        : (savedType ?? DedaAccountType.user);
+    final type =
+        savedType != null && DedaPreferences.accountPhone == normalizedPhone
+            ? savedType
+            : (savedType ?? DedaAccountType.user);
 
     await DedaPreferences.saveLogin(
       name: name,
@@ -2029,292 +2015,303 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: Column(
-                    children: [
-                      Row(
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.92),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: const Color(0xFF9CAF9F),
-                                  ),
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<DedaLanguage>(
-                                    value: _language,
-                                    icon: const Icon(Icons.language),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: DedaLanguage.ar,
-                                        child: Text('العربية'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: DedaLanguage.en,
-                                        child: Text('English'),
-                                      ),
-                                    ],
-                                    onChanged: (language) {
-                                      if (language != null) {
-                                        _setLanguage(language);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: _openContact,
-                                icon: const Icon(Icons.support_agent, size: 21),
-                                label: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    dedaText(
-                                      'التواصل مع الشركة',
-                                      'Contact company',
-                                    ),
-                                    maxLines: 1,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: _dedaGreen,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 8,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 310,
-                        child: Column(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      children: [
+                        Row(
+                          textDirection: TextDirection.rtl,
                           children: [
-                            const SizedBox(height: 8),
-                            const Icon(
-                              Icons.location_on,
-                              color: Color(0xFFD51628),
-                              size: 74,
-                            ),
-                            const Text(
-                              'DEDA',
-                              style: TextStyle(
-                                color: Color(0xFF075B31),
-                                fontSize: 52,
-                                height: 0.95,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
-                                shadows: [
-                                  Shadow(color: Colors.white, blurRadius: 8),
-                                ],
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.92),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: const Color(0xFF9CAF9F),
+                                    ),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<DedaLanguage>(
+                                      value: _language,
+                                      icon: const Icon(Icons.language),
+                                      items: const [
+                                        DropdownMenuItem(
+                                          value: DedaLanguage.ar,
+                                          child: Text('العربية'),
+                                        ),
+                                        DropdownMenuItem(
+                                          value: DedaLanguage.en,
+                                          child: Text('English'),
+                                        ),
+                                      ],
+                                      onChanged: (language) {
+                                        if (language != null) {
+                                          _setLanguage(language);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            const Text(
-                              'الدليل الدقيق',
-                              style: TextStyle(
-                                color: Color(0xFFC91525),
-                                fontSize: 25,
-                                fontWeight: FontWeight.w900,
-                                shadows: [
-                                  Shadow(color: Colors.white, blurRadius: 7),
-                                ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _openContact,
+                                  icon:
+                                      const Icon(Icons.support_agent, size: 21),
+                                  label: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      dedaText(
+                                        'التواصل مع الشركة',
+                                        'Contact company',
+                                      ),
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: _dedaGreen,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                dedaText('معًا… لعراق أجمل', 'Together… for a more beautiful Iraq'),
-                                textAlign: TextAlign.right,
-                                style: const TextStyle(
-                                  color: Color(0xFF073F25),
-                                  fontSize: 20,
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 310,
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 8),
+                              const Icon(
+                                Icons.location_on,
+                                color: Color(0xFFD51628),
+                                size: 74,
+                              ),
+                              const Text(
+                                'DEDA',
+                                style: TextStyle(
+                                  color: Color(0xFF075B31),
+                                  fontSize: 52,
+                                  height: 0.95,
                                   fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
                                   shadows: [
                                     Shadow(color: Colors.white, blurRadius: 8),
                                   ],
                                 ),
                               ),
-                            ),
-                            const Spacer(),
-                            Text(
-                              dedaText(
-                                'هلا بك في تطبيق DEDA\nالدليل الدقيق',
-                                'Welcome to DEDA\nAccurate Guide',
-                              ),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFF073F25),
-                                fontSize: 21,
-                                height: 1.25,
-                                fontWeight: FontWeight.w900,
-                                shadows: [
-                                  Shadow(color: Colors.white, blurRadius: 9),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.72),
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x12000000),
-                              blurRadius: 22,
-                              offset: Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: nameController,
-                              textDirection: DedaLanguageState.direction,
-                              textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
-                              decoration: _fieldDecoration(
-                                hint: dedaText('الاسم الكامل', 'Full name'),
-                                icon: Icons.person,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: phoneController,
-                              keyboardType: TextInputType.phone,
-                              textDirection: TextDirection.ltr,
-                              textAlign: TextAlign.left,
-                              decoration: _fieldDecoration(
-                                hint: '07XXXXXXXXX',
-                                icon: Icons.phone,
-                              ).copyWith(
-                                prefixText: '+964  ',
-                                prefixStyle: const TextStyle(
-                                  color: Color(0xFF1F2D23),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
+                              const Text(
+                                'الدليل الدقيق',
+                                style: TextStyle(
+                                  color: Color(0xFFC91525),
+                                  fontSize: 25,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(color: Colors.white, blurRadius: 7),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 56,
-                              child: FilledButton.icon(
-                                onPressed: login,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: _dedaGreen,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(31),
-                                  ),
-                                  elevation: 3,
-                                ),
-                                icon: const Icon(
-                                  Icons.login,
-                                  size: 27,
-                                ),
-                                label: Text(
-                                  dedaText('تسجيل الدخول', 'Sign in'),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  dedaText('معًا… لعراق أجمل',
+                                      'Together… for a more beautiful Iraq'),
+                                  textAlign: TextAlign.right,
                                   style: const TextStyle(
-                                    fontSize: 24,
+                                    color: Color(0xFF073F25),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    shadows: [
+                                      Shadow(
+                                          color: Colors.white, blurRadius: 8),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                dedaText(
+                                  'هلا بك في تطبيق DEDA\nالدليل الدقيق',
+                                  'Welcome to DEDA\nAccurate Guide',
+                                ),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Color(0xFF073F25),
+                                  fontSize: 21,
+                                  height: 1.25,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(color: Colors.white, blurRadius: 9),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.72),
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x12000000),
+                                blurRadius: 22,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              TextField(
+                                controller: nameController,
+                                textDirection: DedaLanguageState.direction,
+                                textAlign: DedaLanguageState.isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                decoration: _fieldDecoration(
+                                  hint: dedaText('الاسم الكامل', 'Full name'),
+                                  icon: Icons.person,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.left,
+                                decoration: _fieldDecoration(
+                                  hint: '07XXXXXXXXX',
+                                  icon: Icons.phone,
+                                ).copyWith(
+                                  prefixText: '+964  ',
+                                  prefixStyle: const TextStyle(
+                                    color: Color(0xFF1F2D23),
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 56,
+                                child: FilledButton.icon(
+                                  onPressed: login,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: _dedaGreen,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(31),
+                                    ),
+                                    elevation: 3,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.login,
+                                    size: 27,
+                                  ),
+                                  label: Text(
+                                    dedaText('تسجيل الدخول', 'Sign in'),
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: Color(0xFF8CA28F),
+                                thickness: 1,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                dedaText('اكتشف ما يحيط بك',
+                                    'Discover what is around you'),
+                                style: TextStyle(
+                                  color: Color(0xFF294D34),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: Color(0xFF8CA28F),
+                                thickness: 1,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Divider(
-                              color: Color(0xFF8CA28F),
-                              thickness: 1,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              dedaText('اكتشف ما يحيط بك', 'Discover what is around you'),
-                              style: TextStyle(
-                                color: Color(0xFF294D34),
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
+                        const SizedBox(height: 10),
+                        _DedaCategoryPreviewStrip(),
+                        const SizedBox(height: 10),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: _DedaRinadSignature(),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Expanded(
+                                child: Divider(color: Color(0xFF315B3B))),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                dedaText(
+                                    'معك في كل مكان', 'With you everywhere'),
+                                style: const TextStyle(
+                                  color: Color(0xFF173C27),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                          ),
-                          Expanded(
-                            child: Divider(
-                              color: Color(0xFF8CA28F),
-                              thickness: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _DedaCategoryPreviewStrip(),
-                      const SizedBox(height: 10),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: _DedaRinadSignature(),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Expanded(child: Divider(color: Color(0xFF315B3B))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              dedaText('معك في كل مكان', 'With you everywhere'),
-                              style: const TextStyle(
-                                color: Color(0xFF173C27),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          const Expanded(child: Divider(color: Color(0xFF315B3B))),
-                        ],
-                      ),
-                    ],
+                            const Expanded(
+                                child: Divider(color: Color(0xFF315B3B))),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
       ),
     );
   }
@@ -2326,12 +2323,28 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      (Icons.restaurant, dedaText('مطاعم', 'Restaurants'), const Color(0xFFF59E0B)),
+      (
+        Icons.restaurant,
+        dedaText('مطاعم', 'Restaurants'),
+        const Color(0xFFF59E0B)
+      ),
       (Icons.hotel, dedaText('فنادق', 'Hotels'), const Color(0xFF2563EB)),
       (Icons.local_mall, dedaText('مولات', 'Malls'), const Color(0xFF8B3FD6)),
-      (Icons.local_gas_station, dedaText('محطات وقود', 'Fuel'), const Color(0xFF16834A)),
-      (Icons.local_pharmacy, dedaText('صيدليات', 'Pharmacies'), const Color(0xFFE2343F)),
-      (Icons.local_parking, dedaText('مواقف', 'Parking'), const Color(0xFF2596E8)),
+      (
+        Icons.local_gas_station,
+        dedaText('محطات وقود', 'Fuel'),
+        const Color(0xFF16834A)
+      ),
+      (
+        Icons.local_pharmacy,
+        dedaText('صيدليات', 'Pharmacies'),
+        const Color(0xFFE2343F)
+      ),
+      (
+        Icons.local_parking,
+        dedaText('مواقف', 'Parking'),
+        const Color(0xFF2596E8)
+      ),
       (Icons.park, dedaText('حدائق', 'Parks'), const Color(0xFF42A93B)),
       (Icons.map_outlined, dedaText('الخريطة', 'Map'), const Color(0xFF08A1B9)),
     ];
@@ -2415,7 +2428,7 @@ class _DedaCategoryPreviewStrip extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                    color: Colors.white,
+                      color: Colors.white,
                       fontSize: 11.8,
                       height: 1.15,
                       fontWeight: FontWeight.w700,
@@ -2471,7 +2484,6 @@ class _DedaRinadSignature extends StatelessWidget {
   }
 }
 
-
 class DedaContactPage extends StatefulWidget {
   final String initialName;
   final String initialPhone;
@@ -2515,12 +2527,10 @@ class _DedaContactPageState extends State<DedaContactPage> {
   @override
   void initState() {
     super.initState();
-    final loggedInName = DedaPreferences.isLoggedIn
-        ? DedaPreferences.userName.trim()
-        : '';
-    final loggedInPhone = DedaPreferences.isLoggedIn
-        ? DedaPreferences.phone.trim()
-        : '';
+    final loggedInName =
+        DedaPreferences.isLoggedIn ? DedaPreferences.userName.trim() : '';
+    final loggedInPhone =
+        DedaPreferences.isLoggedIn ? DedaPreferences.phone.trim() : '';
     _nameController = TextEditingController(
       text: loggedInName.isNotEmpty ? loggedInName : widget.initialName,
     );
@@ -2586,28 +2596,35 @@ class _DedaContactPageState extends State<DedaContactPage> {
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
                   child: Text(
                     dedaText('رسائلي مع دعم DEDA', 'My DEDA support messages'),
-                    style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 21, fontWeight: FontWeight.bold),
                   ),
                 ),
                 Expanded(
                   child: items.isEmpty
-                      ? Center(child: Text(dedaText('لا توجد رسائل دعم بعد.', 'No support messages yet.')))
+                      ? Center(
+                          child: Text(dedaText('لا توجد رسائل دعم بعد.',
+                              'No support messages yet.')))
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 18),
                           itemCount: items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
                           itemBuilder: (_, index) {
                             final item = items[index];
-                            final reply = (item['adminReply'] ?? '').toString().trim();
+                            final reply =
+                                (item['adminReply'] ?? '').toString().trim();
                             return Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(14),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Text(
                                       '${dedaText('الحالة', 'Status')}: ${_supportStatusLabel((item['status'] ?? 'new').toString())}',
-                                      style: const TextStyle(fontWeight: FontWeight.w800),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800),
                                     ),
                                     const SizedBox(height: 8),
                                     Text((item['message'] ?? '').toString()),
@@ -2638,7 +2655,9 @@ class _DedaContactPageState extends State<DedaContactPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(dedaText('تعذر تحميل رسائل الدعم الآن.', 'Could not load support messages now.'))),
+        SnackBar(
+            content: Text(dedaText('تعذر تحميل رسائل الدعم الآن.',
+                'Could not load support messages now.'))),
       );
     }
   }
@@ -2812,14 +2831,19 @@ class _DedaContactPageState extends State<DedaContactPage> {
             ),
           ),
           actions: [
-            FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(dedaText('حسناً', 'OK'))),
+            FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(dedaText('حسناً', 'OK'))),
           ],
         ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(dedaText('تعذر الإرسال الآن. بقيت بياناتك على الهاتف ويمكنك المحاولة مجددًا.', 'Could not send now. Your data remains on this phone; please try again.'))),
+        SnackBar(
+            content: Text(dedaText(
+                'تعذر الإرسال الآن. بقيت بياناتك على الهاتف ويمكنك المحاولة مجددًا.',
+                'Could not send now. Your data remains on this phone; please try again.'))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -2859,7 +2883,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
         actions: [
           if (DedaPreferences.isLoggedIn)
             IconButton(
-              tooltip: dedaText('رسائلي وردود الإدارة', 'My messages and replies'),
+              tooltip:
+                  dedaText('رسائلي وردود الإدارة', 'My messages and replies'),
               onPressed: _showMySupportHistory,
               icon: const Icon(Icons.mark_chat_read_outlined),
             ),
@@ -3080,7 +3105,8 @@ class _DedaContactPageState extends State<DedaContactPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.save_outlined),
-                      label: Text(dedaText('حفظ الرسالة كمسودة', 'Save message draft')),
+                      label: Text(
+                          dedaText('حفظ الرسالة كمسودة', 'Save message draft')),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(54),
                       ),
@@ -3089,7 +3115,10 @@ class _DedaContactPageState extends State<DedaContactPage> {
                     FilledButton.icon(
                       onPressed: _submitting ? null : _prepareMessage,
                       icon: _submitting
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.send_outlined),
                       label: Text(
                         _submitting
@@ -3128,7 +3157,6 @@ class _DedaContactPageState extends State<DedaContactPage> {
     );
   }
 }
-
 
 class AccountTypePage extends StatefulWidget {
   final String userName;
@@ -3270,7 +3298,8 @@ class _AccountTypePageState extends State<AccountTypePage> {
                       'This appears only on first sign-in and can be changed later in Settings.',
                     ),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 15.5, color: Color(0xFF667069)),
+                    style: const TextStyle(
+                        fontSize: 15.5, color: Color(0xFF667069)),
                   ),
                   const SizedBox(height: 20),
                   _typeCard(
@@ -3296,7 +3325,8 @@ class _AccountTypePageState extends State<AccountTypePage> {
                   SizedBox(
                     height: 56,
                     child: FilledButton.icon(
-                      onPressed: selectedType == null || saving ? null : _continue,
+                      onPressed:
+                          selectedType == null || saving ? null : _continue,
                       icon: saving
                           ? const SizedBox(
                               width: 20,
@@ -3306,7 +3336,8 @@ class _AccountTypePageState extends State<AccountTypePage> {
                           : const Icon(Icons.arrow_forward),
                       label: Text(
                         dedaText('متابعة', 'Continue'),
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -3385,7 +3416,8 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _sectionTitle(dedaText('الصوت والملاحة', 'Voice & navigation')),
+                  _sectionTitle(
+                      dedaText('الصوت والملاحة', 'Voice & navigation')),
                   Card(
                     child: Column(
                       children: [
@@ -3396,18 +3428,24 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.record_voice_over, color: Color(0xFF17652F)),
+                                  const Icon(Icons.record_voice_over,
+                                      color: Color(0xFF17652F)),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      dedaText('النطق الصوتي للملاحة', 'Navigation voice'),
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                      dedaText('النطق الصوتي للملاحة',
+                                          'Navigation voice'),
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600),
                                     ),
                                   ),
                                   Switch(
-                                    value: DedaPreferences.navigationVoiceEnabled,
+                                    value:
+                                        DedaPreferences.navigationVoiceEnabled,
                                     onChanged: (value) async {
-                                      await DedaPreferences.setVoiceEnabled(value);
+                                      await DedaPreferences.setVoiceEnabled(
+                                          value);
                                       if (mounted) setState(() {});
                                     },
                                   ),
@@ -3419,23 +3457,29 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                                   'يفضّل تطبيق DEDA صوتًا نسائيًا تلقائيًا إذا كان متوفرًا على الهاتف.',
                                   'DEDA automatically prefers a female voice when one is available on the phone.',
                                 ),
-                                style: const TextStyle(color: Color(0xFF5A655D), height: 1.35),
+                                style: const TextStyle(
+                                    color: Color(0xFF5A655D), height: 1.35),
                               ),
                             ],
                           ),
                         ),
                         const Divider(height: 1),
                         ListTile(
-                          leading: const Icon(Icons.speed, color: Color(0xFF17652F)),
+                          leading:
+                              const Icon(Icons.speed, color: Color(0xFF17652F)),
                           title: Text(dedaText('سرعة النطق', 'Speech rate')),
                           subtitle: Slider(
-                            value: DedaPreferences.speechRate.clamp(0.35, 0.65).toDouble(),
+                            value: DedaPreferences.speechRate
+                                .clamp(0.35, 0.65)
+                                .toDouble(),
                             min: 0.35,
                             max: 0.65,
                             divisions: 6,
-                            label: DedaPreferences.speechRate.toStringAsFixed(2),
+                            label:
+                                DedaPreferences.speechRate.toStringAsFixed(2),
                             onChanged: (value) {
-                              setState(() => DedaPreferences.speechRate = value);
+                              setState(
+                                  () => DedaPreferences.speechRate = value);
                             },
                             onChangeEnd: (value) {
                               DedaPreferences.setSpeechRate(value);
@@ -3446,7 +3490,8 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                     ),
                   ),
 
-                  _sectionTitle(dedaText('وسيلة التنقل الافتراضية', 'Default travel mode')),
+                  _sectionTitle(dedaText(
+                      'وسيلة التنقل الافتراضية', 'Default travel mode')),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(14),
@@ -3469,7 +3514,8 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                     ),
                   ),
 
-                  _sectionTitle(dedaText('نوع الخريطة الافتراضي', 'Default map style')),
+                  _sectionTitle(
+                      dedaText('نوع الخريطة الافتراضي', 'Default map style')),
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(14),
@@ -3506,12 +3552,16 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.location_on, color: Color(0xFF17652F)),
+                                const Icon(Icons.location_on,
+                                    color: Color(0xFF17652F)),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    dedaText('إعدادات إذن الموقع', 'Location permission settings'),
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    dedaText('إعدادات إذن الموقع',
+                                        'Location permission settings'),
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600),
                                   ),
                                 ),
                                 const Icon(Icons.open_in_new),
@@ -3523,7 +3573,8 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                                 'افتح إعدادات الهاتف إذا احتجت تغيير إذن GPS للتطبيق.',
                                 'Open phone settings if you need to change DEDA GPS permission.',
                               ),
-                              style: const TextStyle(color: Color(0xFF5A655D), height: 1.35),
+                              style: const TextStyle(
+                                  color: Color(0xFF5A655D), height: 1.35),
                             ),
                           ],
                         ),
@@ -3600,10 +3651,11 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                             const SizedBox(height: 14),
                             OutlinedButton.icon(
                               onPressed: () async {
-                                final phone =
-                                    DedaPreferences.accountPhone.trim().isNotEmpty
-                                        ? DedaPreferences.accountPhone
-                                        : DedaPreferences.phone;
+                                final phone = DedaPreferences.accountPhone
+                                        .trim()
+                                        .isNotEmpty
+                                    ? DedaPreferences.accountPhone
+                                    : DedaPreferences.phone;
                                 final gateAllowed = await DedaBackend
                                     .currentDedaAccountCanSeeAdminEntry(
                                   phone: phone,
@@ -3675,7 +3727,6 @@ class _DedaSettingsPageState extends State<DedaSettingsPage> {
                         ),
                       ),
                     ),
-
                   ],
 
                   const SizedBox(height: 12),
@@ -3708,8 +3759,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   // the stored place. They are never read directly as current-account data.
   static const String _legacyDraftKey = 'deda_owner_place_draft_v1';
   static const String _legacyPlaceIdKey = 'deda_owner_place_id_v2';
-  static const String _legacyPendingEditIdKey =
-      'deda_owner_pending_edit_id_v2';
+  static const String _legacyPendingEditIdKey = 'deda_owner_pending_edit_id_v2';
   static const String _legacySubmittedSnapshotKey =
       'deda_owner_submitted_snapshot_v2';
 
@@ -3722,9 +3772,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
 
   String _ownerScopedKey(String base) {
     final accountKey = _ownerStorageAccountKey;
-    return accountKey.isEmpty
-        ? '${base}_no_account'
-        : '${base}_${accountKey}';
+    return accountKey.isEmpty ? '${base}_no_account' : '${base}_${accountKey}';
   }
 
   String get _draftKey => _ownerScopedKey(_draftKeyBase);
@@ -3816,7 +3864,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     _phoneController.text = (data['phone'] ?? _phoneController.text).toString();
     _governorateController.text = (data['governorate'] ?? '').toString();
     _addressController.text = (data['address'] ?? '').toString();
-    _hoursController.text = (data['openingHours'] ?? data['hours'] ?? '').toString();
+    _hoursController.text =
+        (data['openingHours'] ?? data['hours'] ?? '').toString();
     _descriptionController.text = (data['description'] ?? '').toString();
     final category = (data['category'] ?? 'restaurant').toString();
     if (_categories.any((item) => item['code'] == category)) {
@@ -3919,8 +3968,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       // into "Approved / Edit place" after the published place was removed.
       if (_placeId != null && _placeId!.isNotEmpty) {
         try {
-          final deletion =
-              await DedaBackend.ownerPlaceDeletionRequestForPlace(
+          final deletion = await DedaBackend.ownerPlaceDeletionRequestForPlace(
             _placeId!,
             accountKeyOverride: DedaBackend.accountKeyForPhone(
               DedaPreferences.accountPhone.isNotEmpty
@@ -3965,7 +4013,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         } else {
           final published = await DedaBackend.publishedPlaceById(_placeId!);
           if (published != null) {
-            final lastSource = (published['lastSourceRequestId'] ?? '').toString();
+            final lastSource =
+                (published['lastSourceRequestId'] ?? '').toString();
             if (_pendingEditId != null && lastSource != _pendingEditId) {
               _status = 'reviewing';
               if (localSnapshot != null) _applyData(localSnapshot);
@@ -4003,7 +4052,6 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       }
     } catch (_) {}
   }
-
 
   Future<void> _resetOwnerAfterDeletedPlace(
     SharedPreferences prefs,
@@ -4119,7 +4167,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
               Text(
                 dedaText('مسوداتي', 'My drafts'),
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 14),
               if (draft == null)
@@ -4136,9 +4185,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
               else ...[
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.drafts_outlined, color: Color(0xFF17652F)),
+                    leading: const Icon(Icons.drafts_outlined,
+                        color: Color(0xFF17652F)),
                     title: Text(
-                      (draft['placeName'] ?? draft['name'] ?? dedaText('مسودة مكان', 'Place draft')).toString(),
+                      (draft['placeName'] ??
+                              draft['name'] ??
+                              dedaText('مسودة مكان', 'Place draft'))
+                          .toString(),
                     ),
                     subtitle: Text(
                       draft['savedAt'] == null
@@ -4341,8 +4394,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                         children: [
                                           Icon(
                                             wasUnread
-                                                ? Icons.notifications_active_outlined
-                                                : Icons.notifications_none_outlined,
+                                                ? Icons
+                                                    .notifications_active_outlined
+                                                : Icons
+                                                    .notifications_none_outlined,
                                             color: const Color(0xFF17652F),
                                           ),
                                           const SizedBox(width: 8),
@@ -4471,7 +4526,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       if (!enabled) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(dedaText('فعّل GPS أولاً.', 'Enable GPS first.'))),
+          SnackBar(
+              content: Text(dedaText('فعّل GPS أولاً.', 'Enable GPS first.'))),
         );
         return;
       }
@@ -4485,14 +4541,16 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              dedaText('نحتاج إذن الموقع لتثبيت مكانك.', 'Location permission is required.'),
+              dedaText('نحتاج إذن الموقع لتثبيت مكانك.',
+                  'Location permission is required.'),
             ),
           ),
         );
         return;
       }
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (!mounted) return;
       setState(() {
@@ -4647,8 +4705,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
   }
 
   Widget _placeDeletionCard() {
-    if (_placeId == null ||
-        (_status != 'approved' && _status != 'deleted')) {
+    if (_placeId == null || (_status != 'approved' && _status != 'deleted')) {
       return const SizedBox.shrink();
     }
 
@@ -4661,11 +4718,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     if (deleted) {
       statusText = dedaText('تم حذف المكان', 'Place deleted');
     } else if (status == 'reviewing') {
-      statusText = dedaText('طلب الحذف قيد المراجعة', 'Deletion request under review');
+      statusText =
+          dedaText('طلب الحذف قيد المراجعة', 'Deletion request under review');
     } else if (status == 'new') {
       statusText = dedaText('طلب الحذف مرسل للإدارة', 'Deletion request sent');
     } else if (rejected) {
-      statusText = dedaText('تم رفض/إغلاق طلب الحذف', 'Deletion request rejected/closed');
+      statusText = dedaText(
+          'تم رفض/إغلاق طلب الحذف', 'Deletion request rejected/closed');
     } else {
       statusText = dedaText(
         'يمكنك إرسال طلب حذف هذا المكان إلى الإدارة.',
@@ -4679,9 +4738,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: deleted
-              ? const Color(0xFF8A3C32)
-              : const Color(0xFFD5AAA4),
+          color: deleted ? const Color(0xFF8A3C32) : const Color(0xFFD5AAA4),
         ),
       ),
       child: Padding(
@@ -4734,9 +4791,7 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(
-                        pending
-                            ? Icons.hourglass_top
-                            : Icons.delete_outline,
+                        pending ? Icons.hourglass_top : Icons.delete_outline,
                       ),
                 label: Text(
                   pending
@@ -4769,7 +4824,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText('ثبّت موقع المكان أولاً.', 'Capture the place location first.'),
+            dedaText(
+                'ثبّت موقع المكان أولاً.', 'Capture the place location first.'),
           ),
         ),
       );
@@ -4783,10 +4839,10 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       late final String requestId;
 
       if (_status == 'needs_changes') {
-        final resubmitId = (_pendingEditId != null &&
-                _pendingEditId!.trim().isNotEmpty)
-            ? _pendingEditId!
-            : (_placeId ?? '');
+        final resubmitId =
+            (_pendingEditId != null && _pendingEditId!.trim().isNotEmpty)
+                ? _pendingEditId!
+                : (_placeId ?? '');
         requestId = await DedaBackend.resubmitPlaceRequest(
           requestId: resubmitId,
           data: data,
@@ -4948,17 +5004,21 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                 ),
               ],
             ),
-            if (_status == 'approved' && _approvalNumber?.isNotEmpty == true) ...[
+            if (_status == 'approved' &&
+                _approvalNumber?.isNotEmpty == true) ...[
               const SizedBox(height: 10),
-              Text('${dedaText('رقم الاعتماد', 'Approval number')}: $_approvalNumber'),
+              Text(
+                  '${dedaText('رقم الاعتماد', 'Approval number')}: $_approvalNumber'),
               if (_approvalDate?.isNotEmpty == true)
-                Text('${dedaText('تاريخ الاعتماد', 'Approval date')}: $_approvalDate'),
+                Text(
+                    '${dedaText('تاريخ الاعتماد', 'Approval date')}: $_approvalDate'),
             ],
             if (_approvalMessage?.trim().isNotEmpty == true) ...[
               const SizedBox(height: 10),
               SelectableText(
                 _approvalMessage!,
-                style: const TextStyle(height: 1.45, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(height: 1.45, fontWeight: FontWeight.w600),
               ),
             ] else if (_decisionNote?.trim().isNotEmpty == true) ...[
               const SizedBox(height: 10),
@@ -4996,7 +5056,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
               color: selected ? dot.withOpacity(0.16) : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: selected ? dot.withOpacity(0.7) : const Color(0xFFB8C1B9),
+                color:
+                    selected ? dot.withOpacity(0.7) : const Color(0xFFB8C1B9),
               ),
             ),
             child: Column(
@@ -5039,9 +5100,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
             const SizedBox(height: 10),
             Row(
               children: [
-                option(true, 'متواجد الآن', 'Available now', const Color(0xFF159447)),
+                option(true, 'متواجد الآن', 'Available now',
+                    const Color(0xFF159447)),
                 const SizedBox(width: 8),
-                option(false, 'غير متواجد حالياً', 'Not available now', const Color(0xFF777D78)),
+                option(false, 'غير متواجد حالياً', 'Not available now',
+                    const Color(0xFF777D78)),
               ],
             ),
           ],
@@ -5101,9 +5164,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            dedaText('إضافة أو إدارة مكان', 'Add or manage a place'),
+                            dedaText(
+                                'إضافة أو إدارة مكان', 'Add or manage a place'),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 27, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontSize: 27, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 14),
                           _statusCard(),
@@ -5113,20 +5178,25 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             controller: _nameController,
                             enabled: _formEditable,
                             textDirection: DedaLanguageState.direction,
-                            textAlign: DedaLanguageState.isArabic ? TextAlign.right : TextAlign.left,
+                            textAlign: DedaLanguageState.isArabic
+                                ? TextAlign.right
+                                : TextAlign.left,
                             decoration: _fieldDecoration(
                               label: dedaText('اسم المكان', 'Place name'),
                               icon: Icons.storefront_outlined,
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب اسم المكان.', 'Enter the place name.')
+                            validator: (value) => value == null ||
+                                    value.trim().isEmpty
+                                ? dedaText(
+                                    'اكتب اسم المكان.', 'Enter the place name.')
                                 : null,
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
                             value: _categoryCode,
                             decoration: _fieldDecoration(
-                              label: dedaText('الفئة الرئيسية', 'Main category'),
+                              label:
+                                  dedaText('الفئة الرئيسية', 'Main category'),
                               icon: Icons.category_outlined,
                             ),
                             items: _categories
@@ -5139,7 +5209,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 .toList(),
                             onChanged: _formEditable
                                 ? (value) {
-                                    if (value != null) setState(() => _categoryCode = value);
+                                    if (value != null)
+                                      setState(() => _categoryCode = value);
                                   }
                                 : null,
                           ),
@@ -5149,12 +5220,15 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               controller: _otherCategoryTextController,
                               enabled: _formEditable,
                               decoration: _fieldDecoration(
-                                label: dedaText('اكتب نوع المكان', 'Enter place type'),
+                                label: dedaText(
+                                    'اكتب نوع المكان', 'Enter place type'),
                                 icon: Icons.edit_outlined,
                               ),
-                              validator: (value) => value == null || value.trim().isEmpty
-                                  ? dedaText('اكتب نوع المكان.', 'Enter the place type.')
-                                  : null,
+                              validator: (value) =>
+                                  value == null || value.trim().isEmpty
+                                      ? dedaText('اكتب نوع المكان.',
+                                          'Enter the place type.')
+                                      : null,
                             ),
                           ],
                           const SizedBox(height: 14),
@@ -5165,13 +5239,16 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             textAlign: TextAlign.left,
                             keyboardType: TextInputType.phone,
                             decoration: _fieldDecoration(
-                              label: dedaText('رقم هاتف المكان', 'Place phone number'),
+                              label: dedaText(
+                                  'رقم هاتف المكان', 'Place phone number'),
                               icon: Icons.phone_outlined,
                               hint: '+9647XXXXXXXXX',
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب رقم هاتف المكان.', 'Enter the place phone number.')
-                                : null,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? dedaText('اكتب رقم هاتف المكان.',
+                                        'Enter the place phone number.')
+                                    : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -5181,9 +5258,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               label: dedaText('المحافظة', 'Governorate'),
                               icon: Icons.location_city_outlined,
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب اسم المحافظة.', 'Enter the governorate.')
-                                : null,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? dedaText('اكتب اسم المحافظة.',
+                                        'Enter the governorate.')
+                                    : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -5192,12 +5271,15 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             minLines: 2,
                             maxLines: 3,
                             decoration: _fieldDecoration(
-                              label: dedaText('العنوان بالتفصيل', 'Detailed address'),
+                              label: dedaText(
+                                  'العنوان بالتفصيل', 'Detailed address'),
                               icon: Icons.signpost_outlined,
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب عنوان المكان.', 'Enter the place address.')
-                                : null,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? dedaText('اكتب عنوان المكان.',
+                                        'Enter the place address.')
+                                    : null,
                           ),
                           const SizedBox(height: 7),
                           Card(
@@ -5209,29 +5291,36 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
-                                    dedaText('موقع المكان على الخريطة', 'Place location on map'),
-                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                                    dedaText('موقع المكان على الخريطة',
+                                        'Place location on map'),
+                                    style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     _latitude == null || _longitude == null
-                                        ? dedaText('لم يتم تثبيت الموقع بعد.', 'Location has not been captured yet.')
+                                        ? dedaText('لم يتم تثبيت الموقع بعد.',
+                                            'Location has not been captured yet.')
                                         : '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
                                   ),
                                   const SizedBox(height: 10),
                                   OutlinedButton.icon(
-                                    onPressed: !_formEditable || _gettingLocation
-                                        ? null
-                                        : _captureCurrentLocation,
+                                    onPressed:
+                                        !_formEditable || _gettingLocation
+                                            ? null
+                                            : _captureCurrentLocation,
                                     icon: _gettingLocation
                                         ? const SizedBox(
                                             width: 18,
                                             height: 18,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2),
                                           )
                                         : const Icon(Icons.gps_fixed),
                                     label: Text(
-                                      dedaText('استخدام موقعي الحالي', 'Use my current location'),
+                                      dedaText('استخدام موقعي الحالي',
+                                          'Use my current location'),
                                     ),
                                   ),
                                 ],
@@ -5247,10 +5336,13 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             decoration: _fieldDecoration(
                               label: dedaText('أوقات العمل', 'Opening hours'),
                               icon: Icons.schedule_outlined,
-                              hint: dedaText('مثال: 8 صباحاً - 10 مساءً', 'Example: 8 AM - 10 PM'),
+                              hint: dedaText('مثال: 8 صباحاً - 10 مساءً',
+                                  'Example: 8 AM - 10 PM'),
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب أوقات العمل.', 'Enter opening hours.')
+                            validator: (value) => value == null ||
+                                    value.trim().isEmpty
+                                ? dedaText(
+                                    'اكتب أوقات العمل.', 'Enter opening hours.')
                                 : null,
                           ),
                           const SizedBox(height: 14),
@@ -5263,9 +5355,11 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                               label: dedaText('وصف مختصر', 'Short description'),
                               icon: Icons.notes_outlined,
                             ),
-                            validator: (value) => value == null || value.trim().isEmpty
-                                ? dedaText('اكتب وصفاً مختصراً للمكان.', 'Enter a short place description.')
-                                : null,
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? dedaText('اكتب وصفاً مختصراً للمكان.',
+                                        'Enter a short place description.')
+                                    : null,
                           ),
                           const SizedBox(height: 18),
                           if (_savedAt != null && _formEditable)
@@ -5277,7 +5371,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                   'A saved draft is available from “My drafts”.',
                                 ),
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                             ),
                           if (_formEditable) ...[
@@ -5287,7 +5382,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
                                     )
                                   : const Icon(Icons.save_outlined),
                               label: Text(dedaText('حفظ مسودة', 'Save draft')),
@@ -5302,13 +5398,16 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
                                     )
                                   : const Icon(Icons.fact_check_outlined),
                               label: Text(
                                 _status == 'approved' || _editingApproved
-                                    ? dedaText('إرسال التعديل للمراجعة', 'Submit changes for review')
-                                    : dedaText('إرسال الطلب للمراجعة', 'Submit for review'),
+                                    ? dedaText('إرسال التعديل للمراجعة',
+                                        'Submit changes for review')
+                                    : dedaText('إرسال الطلب للمراجعة',
+                                        'Submit for review'),
                               ),
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size.fromHeight(50),
@@ -5317,7 +5416,8 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
                             ),
                           ],
                           if (_placeId != null &&
-                              (_status == 'approved' || _status == 'deleted')) ...[
+                              (_status == 'approved' ||
+                                  _status == 'deleted')) ...[
                             const SizedBox(height: 20),
                             _placeDeletionCard(),
                           ],
@@ -5617,7 +5717,8 @@ class _PersonalPlaceEditorPageState extends State<PersonalPlaceEditorPage> {
                           ? TextAlign.right
                           : TextAlign.left,
                       decoration: _decoration(
-                        label: dedaText('اسم المكان الشخصي', 'Personal place name'),
+                        label: dedaText(
+                            'اسم المكان الشخصي', 'Personal place name'),
                         icon: Icons.bookmark_outline,
                         hint: dedaText(
                           'مثال: المنزل، العمل، المزرعة، بيت الأهل',
@@ -5721,7 +5822,8 @@ class _PersonalPlaceEditorPageState extends State<PersonalPlaceEditorPage> {
                       label: Text(
                         _isEditing
                             ? dedaText('حفظ التعديل', 'Save changes')
-                            : dedaText('حفظ المكان الشخصي', 'Save personal place'),
+                            : dedaText(
+                                'حفظ المكان الشخصي', 'Save personal place'),
                       ),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(56),
@@ -6270,8 +6372,7 @@ class _PersonalPlacesPageState extends State<PersonalPlacesPage> {
                                       Row(
                                         children: [
                                           const CircleAvatar(
-                                            backgroundColor:
-                                                Color(0xFFE2F0DE),
+                                            backgroundColor: Color(0xFFE2F0DE),
                                             child: Icon(
                                               Icons.person_pin_circle_outlined,
                                               color: Color(0xFF17652F),
@@ -6286,7 +6387,8 @@ class _PersonalPlacesPageState extends State<PersonalPlacesPage> {
                                                 Text(
                                                   place.name,
                                                   textDirection:
-                                                      DedaLanguageState.direction,
+                                                      DedaLanguageState
+                                                          .direction,
                                                   style: const TextStyle(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
@@ -6299,7 +6401,8 @@ class _PersonalPlacesPageState extends State<PersonalPlacesPage> {
                                                   Text(
                                                     place.note,
                                                     textDirection:
-                                                        DedaLanguageState.direction,
+                                                        DedaLanguageState
+                                                            .direction,
                                                     style: const TextStyle(
                                                       color: Color(0xFF667067),
                                                     ),
@@ -6775,8 +6878,7 @@ class _HomePageState extends State<HomePage> {
       bool filled = false,
     }) {
       const buttonHeight = 60.0;
-      final foreground =
-          filled ? Colors.white : const Color(0xFF0B355E);
+      final foreground = filled ? Colors.white : const Color(0xFF0B355E);
       return Container(
         height: buttonHeight,
         decoration: BoxDecoration(
@@ -6796,16 +6898,12 @@ class _HomePageState extends State<HomePage> {
                 ),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: filled
-                ? const Color(0xFFF0CF72)
-                : const Color(0xFFD8BD73),
+            color: filled ? const Color(0xFFF0CF72) : const Color(0xFFD8BD73),
             width: filled ? 1.35 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: filled
-                  ? const Color(0x4404452C)
-                  : const Color(0x26061F3E),
+              color: filled ? const Color(0x4404452C) : const Color(0x26061F3E),
               blurRadius: 13,
               offset: const Offset(0, 6),
             ),
@@ -6839,9 +6937,7 @@ class _HomePageState extends State<HomePage> {
                     child: Icon(
                       icon,
                       size: 22,
-                      color: filled
-                          ? Colors.white
-                          : const Color(0xFFFFD76A),
+                      color: filled ? Colors.white : const Color(0xFFFFD76A),
                     ),
                   ),
                   const SizedBox(width: 9),
@@ -6998,9 +7094,7 @@ class _HomePageState extends State<HomePage> {
                 Icon(
                   selected ? selectedIcon : icon,
                   size: isLandscape ? 22 : 25,
-                  color: selected
-                      ? const Color(0xFF082B55)
-                      : Colors.white,
+                  color: selected ? const Color(0xFF082B55) : Colors.white,
                 ),
                 if (!isLandscape) ...[
                   const SizedBox(height: 3),
@@ -7014,9 +7108,8 @@ class _HomePageState extends State<HomePage> {
                             ? const Color(0xFF082B55)
                             : const Color(0xFFF8F3E4),
                         fontSize: 11.5,
-                        fontWeight: selected
-                            ? FontWeight.w900
-                            : FontWeight.w700,
+                        fontWeight:
+                            selected ? FontWeight.w900 : FontWeight.w700,
                       ),
                     ),
                   ),
@@ -7326,16 +7419,16 @@ class _HomePageState extends State<HomePage> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(child: _DedaTasksHeroCard(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              const DedaDailyTasksPage(),
-                                        ),
-                                      );
-                                    },
-                                  )),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const DedaDailyTasksPage(),
+                                      ),
+                                    );
+                                  },
+                                )),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   flex: 2,
@@ -7477,20 +7570,16 @@ class _HomePageState extends State<HomePage> {
                                                   horizontal: 6,
                                                 ),
                                                 alignment: Alignment.center,
-                                                decoration:
-                                                    const BoxDecoration(
+                                                decoration: const BoxDecoration(
                                                   color: Color(0xFFE53935),
                                                   shape: BoxShape.circle,
                                                 ),
                                                 child: Text(
-                                                  count > 99
-                                                      ? '99+'
-                                                      : '$count',
+                                                  count > 99 ? '99+' : '$count',
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 12,
-                                                    fontWeight:
-                                                        FontWeight.w900,
+                                                    fontWeight: FontWeight.w900,
                                                   ),
                                                 ),
                                               ),
@@ -7850,7 +7939,6 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 18),
             _sectionTitle(
               dedaText(
@@ -7955,7 +8043,6 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 );
               },
             ),
-
             const SizedBox(height: 24),
             Row(
               children: [
@@ -8060,7 +8147,6 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 );
               },
             ),
-
             const SizedBox(height: 24),
             _sectionTitle(
               dedaText(
@@ -8085,8 +8171,7 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                   children: List<Widget>.generate(6, (index) {
                     final selected = _backgroundStyle == index;
                     return InkWell(
-                      onTap: () =>
-                          setState(() => _backgroundStyle = index),
+                      onTap: () => setState(() => _backgroundStyle = index),
                       borderRadius: BorderRadius.circular(18),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
@@ -8125,7 +8210,6 @@ class _DedaEditProfilePageState extends State<DedaEditProfilePage> {
                 );
               },
             ),
-
             const SizedBox(height: 22),
             TextField(
               controller: _name,
@@ -8587,7 +8671,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     final index = _pointTierIndex(threshold);
     if (index < 0 || _openedPointTiers.contains(threshold)) return;
 
-    final previousThreshold = index == 0 ? null : _pointTierThresholds[index - 1];
+    final previousThreshold =
+        index == 0 ? null : _pointTierThresholds[index - 1];
 
     // The persisted task-points ledger is authoritative. The in-memory set can
     // be briefly stale after returning to this page, so sequencing is verified
@@ -9701,7 +9786,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     ];
     const gold = Color(0xFFFFD76A);
     final opened = _openedPointTiers.contains(threshold);
-    final previousThreshold = index == 0 ? null : _pointTierThresholds[index - 1];
+    final previousThreshold =
+        index == 0 ? null : _pointTierThresholds[index - 1];
     final waitingForPrevious = previousThreshold != null &&
         !_claimedPointTiers.contains(previousThreshold);
     final lockedByPoints = totalPoints < threshold;
@@ -10061,7 +10147,6 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           children: [
             _profileHero(type),
             const SizedBox(height: 8),
-
             _sectionCard(
               icon: Icons.edit_outlined,
               iconColor: const Color(0xFF17652F),
@@ -10177,7 +10262,6 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                   );
                 },
               ),
-
             const SizedBox(height: 2),
             Container(
               padding: const EdgeInsets.all(14),
@@ -10246,7 +10330,6 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: _logout,
@@ -10281,8 +10364,7 @@ class DedaMyRequestsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOwner =
-        DedaPreferences.accountType == DedaAccountType.placeOwner;
+    final isOwner = DedaPreferences.accountType == DedaAccountType.placeOwner;
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
@@ -10386,8 +10468,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
   @override
   void initState() {
     super.initState();
-    _personalId =
-        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
+    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
     _loadIdentity();
   }
 
@@ -10558,8 +10639,9 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
         longitude: longitude,
         durationMinutes: _durationMinutes,
         placeName: placeName,
-        placeDocumentId:
-            _shareType == 'place' ? (_approvedPlace?['id'] ?? '').toString() : '',
+        placeDocumentId: _shareType == 'place'
+            ? (_approvedPlace?['id'] ?? '').toString()
+            : '',
       );
 
       if (_shareType == 'current') {
@@ -10714,9 +10796,8 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                 : Colors.white.withOpacity(0.72),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected
-                  ? const Color(0xFF17652F)
-                  : const Color(0xFFB7BEB8),
+              color:
+                  selected ? const Color(0xFF17652F) : const Color(0xFFB7BEB8),
               width: selected ? 1.8 : 1,
             ),
           ),
@@ -10724,9 +10805,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
                 color: selected
                     ? const Color(0xFF17652F)
                     : const Color(0xFF6C736D),
@@ -10742,8 +10821,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                     maxLines: 1,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontWeight:
-                          selected ? FontWeight.w900 : FontWeight.w700,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                     ),
                   ),
                 ),
@@ -10843,8 +10921,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                         vertical: 11,
                                       ),
                                       border: OutlineInputBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
                                   ),
@@ -10887,8 +10964,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                           if (_placeId.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             _idCard(
-                              title:
-                                  dedaText('معرف مكاني', 'My place ID'),
+                              title: dedaText('معرف مكاني', 'My place ID'),
                               id: _placeId,
                               icon: Icons.location_on,
                             ),
@@ -10947,8 +11023,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                   Row(
                                     children: [
                                       _choice(
-                                        selected:
-                                            _shareType == 'current',
+                                        selected: _shareType == 'current',
                                         label: dedaText(
                                           'موقعي الحالي',
                                           'Current location',
@@ -10969,8 +11044,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                         onTap: _placeId.isEmpty
                                             ? null
                                             : () => setState(
-                                                  () =>
-                                                      _shareType = 'place',
+                                                  () => _shareType = 'place',
                                                 ),
                                       ),
                                     ],
@@ -11030,8 +11104,7 @@ class _DedaShareLocationPageState extends State<DedaShareLocationPage> {
                                               fontWeight: FontWeight.w700,
                                             ),
                                             onSelected: (_) => setState(
-                                              () => _durationMinutes =
-                                                  minutes,
+                                              () => _durationMinutes = minutes,
                                             ),
                                             label: SizedBox(
                                               width: double.infinity,
@@ -11139,8 +11212,7 @@ class DedaReceivedLocationsPage extends StatefulWidget {
       _DedaReceivedLocationsPageState();
 }
 
-class _DedaReceivedLocationsPageState
-    extends State<DedaReceivedLocationsPage> {
+class _DedaReceivedLocationsPageState extends State<DedaReceivedLocationsPage> {
   String _personalId = '';
   // The local personal ID is ready immediately; refresh the remote identity
   // without blocking the received-locations screen.
@@ -11150,8 +11222,7 @@ class _DedaReceivedLocationsPageState
   @override
   void initState() {
     super.initState();
-    _personalId =
-        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
+    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);
     _loadIdentity();
   }
 
@@ -11190,8 +11261,7 @@ class _DedaReceivedLocationsPageState
   }
 
   bool _isExpired(Map<String, dynamic> item) {
-    final expires =
-        DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
+    final expires = DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
     return expires == null || !expires.isAfter(DateTime.now());
   }
 
@@ -11201,8 +11271,7 @@ class _DedaReceivedLocationsPageState
   }
 
   String _timeAgo(Map<String, dynamic> item) {
-    final created =
-        DateTime.tryParse((item['createdAtIso'] ?? '').toString());
+    final created = DateTime.tryParse((item['createdAtIso'] ?? '').toString());
     if (created == null) return '';
     final diff = DateTime.now().difference(created);
     if (diff.inMinutes < 1) {
@@ -11665,8 +11734,7 @@ class _DedaReceivedLocationsPageState
                             itemCount: items.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 12),
-                            itemBuilder: (_, index) =>
-                                _shareCard(items[index]),
+                            itemBuilder: (_, index) => _shareCard(items[index]),
                           );
                         },
                       ),
@@ -11678,8 +11746,6 @@ class _DedaReceivedLocationsPageState
     );
   }
 }
-
-
 
 class DedaDailyTasksPage extends StatefulWidget {
   const DedaDailyTasksPage({super.key});
@@ -12143,22 +12209,30 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
 
   Widget _taskActionButton({
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool done = false,
   }) {
     return SizedBox(
       width: 68,
       height: 40,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF0D5A92),
-              Color(0xFF073D6B),
-              Color(0xFF062D54),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+          gradient: done
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFF89949D),
+                    Color(0xFF68747E),
+                  ],
+                )
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFF0D5A92),
+                    Color(0xFF073D6B),
+                    Color(0xFF062D54),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
           borderRadius: BorderRadius.circular(13),
           border: Border.all(
             color: const Color(0xFFD9E8F4),
@@ -12198,11 +12272,13 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   ),
                   const SizedBox(width: 2),
                   Icon(
-                    DedaLanguageState.isArabic
-                        ? Icons.chevron_left_rounded
-                        : Icons.chevron_right_rounded,
+                    done
+                        ? Icons.check_circle_rounded
+                        : DedaLanguageState.isArabic
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
                     color: Colors.white,
-                    size: 18,
+                    size: done ? 16 : 18,
                   ),
                 ],
               ),
@@ -12309,6 +12385,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required bool rewardClaimed,
     required bool claiming,
   }) {
+    final trafficDone = index == 6 && completed;
     return Container(
       constraints: const BoxConstraints(minHeight: 94),
       decoration: BoxDecoration(
@@ -12335,7 +12412,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _openTask(index),
+        onTap: trafficDone ? null : () => _openTask(index),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 8,
@@ -12444,8 +12521,9 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
               ),
               const SizedBox(width: 5),
               _taskActionButton(
-                label: action,
-                onTap: () => _openTask(index),
+                label: trafficDone ? dedaText('تم', 'Done') : action,
+                onTap: trafficDone ? null : () => _openTask(index),
+                done: trafficDone,
               ),
             ],
           ),
@@ -12681,8 +12759,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                           : false;
                                   return Padding(
                                     padding: EdgeInsets.only(
-                                      bottom:
-                                          index == tasks.length - 1 ? 0 : 6,
+                                      bottom: index == tasks.length - 1 ? 0 : 6,
                                     ),
                                     child: _taskCard(
                                       index: index,
@@ -12755,7 +12832,6 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   }
 }
 
-
 class _DedaTasksHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -12765,12 +12841,8 @@ class _DedaTasksHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final h = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : 90.0;
-        final w = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : 150.0;
+        final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 90.0;
+        final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 150.0;
         final compact = h < 105 || w < 175;
         final circleSize = compact
             ? (h * 0.46).clamp(34.0, 44.0).toDouble()
@@ -12924,7 +12996,6 @@ class _DedaTasksHeroCard extends StatelessWidget {
   }
 }
 
-
 class _DedaMapHeroCard extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -12934,12 +13005,9 @@ class _DedaMapHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final h = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : 170.0;
-        final w = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : 240.0;
+        final h =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 170.0;
+        final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 240.0;
         final compact = h < 125 || w < 210;
         final circleSize = compact
             ? (h * 0.36).clamp(46.0, 58.0).toDouble()
@@ -13133,15 +13201,11 @@ class DedaCategory extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final h = constraints.maxHeight.isFinite
-            ? constraints.maxHeight
-            : 128.0;
-        final iconBubble =
-            (h * 0.40).clamp(42.0, 64.0).toDouble();
-        final iconSize =
-            (iconBubble * 0.58).clamp(25.0, 38.0).toDouble();
-        final fontSize =
-            (h * 0.165).clamp(13.5, 20.0).toDouble();
+        final h =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 128.0;
+        final iconBubble = (h * 0.40).clamp(42.0, 64.0).toDouble();
+        final iconSize = (iconBubble * 0.58).clamp(25.0, 38.0).toDouble();
+        final fontSize = (h * 0.165).clamp(13.5, 20.0).toDouble();
 
         return DecoratedBox(
           decoration: BoxDecoration(
@@ -13232,8 +13296,7 @@ class DedaCategory extends StatelessWidget {
                             ),
                           ),
                           SizedBox(
-                            height:
-                                (h * 0.055).clamp(4.0, 9.0).toDouble(),
+                            height: (h * 0.055).clamp(4.0, 9.0).toDouble(),
                           ),
                           FittedBox(
                             fit: BoxFit.scaleDown,
@@ -13327,11 +13390,13 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
   int searchedRadiusMeters = 3000;
   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
-  String statusMessage =
-      dedaText('اضغط على الزر للبحث عن الأماكن القريبة منك', 'Tap the button to search for nearby places');
+  String statusMessage = dedaText('اضغط على الزر للبحث عن الأماكن القريبة منك',
+      'Tap the button to search for nearby places');
 
   List<PlaceInfo> get visiblePlaces => showAvailableOnly
-      ? places.where((place) => place.isDedaRegistered && place.isAvailableNow).toList()
+      ? places
+          .where((place) => place.isDedaRegistered && place.isAvailableNow)
+          .toList()
       : places;
 
   bool _matchesCategory(PlaceInfo place) {
@@ -13344,7 +13409,8 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       'مواقف': 'موقف',
       'حدائق': 'حديقة',
     };
-    return place.type == (singular[widget.category.title] ?? widget.category.title);
+    return place.type ==
+        (singular[widget.category.title] ?? widget.category.title);
   }
 
   String radiusLabel(int meters) {
@@ -13366,8 +13432,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       if (!mounted) return null;
 
       setState(() {
-        statusMessage =
-            dedaText('خدمة الموقع GPS غير مفعلة. شغّل الموقع ثم حاول مرة أخرى.', 'GPS is turned off. Enable location and try again.');
+        statusMessage = dedaText(
+            'خدمة الموقع GPS غير مفعلة. شغّل الموقع ثم حاول مرة أخرى.',
+            'GPS is turned off. Enable location and try again.');
       });
       return null;
     }
@@ -13382,8 +13449,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       if (!mounted) return null;
 
       setState(() {
-        statusMessage =
-            dedaText('تم رفض إذن الموقع. نحتاج الإذن لمعرفة الأماكن القريبة.', 'Location permission was denied. DEDA needs it to find nearby places.');
+        statusMessage = dedaText(
+            'تم رفض إذن الموقع. نحتاج الإذن لمعرفة الأماكن القريبة.',
+            'Location permission was denied. DEDA needs it to find nearby places.');
       });
       return null;
     }
@@ -13392,8 +13460,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       if (!mounted) return null;
 
       setState(() {
-        statusMessage =
-            dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
+        statusMessage = dedaText(
+            'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.',
+            'Location permission is permanently denied. Open app settings and allow location access.');
       });
       return null;
     }
@@ -13412,27 +13481,33 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     String message;
 
     if (text.contains('timeout')) {
-      message =
-          dedaText('انتهت مهلة الاتصال بخدمة الأماكن. قد يكون الإنترنت بطيئًا أو الخادم مزدحمًا.', 'The places service timed out. Your connection may be slow or the server may be busy.');
+      message = dedaText(
+          'انتهت مهلة الاتصال بخدمة الأماكن. قد يكون الإنترنت بطيئًا أو الخادم مزدحمًا.',
+          'The places service timed out. Your connection may be slow or the server may be busy.');
     } else if (text.contains('429')) {
-      message =
-          dedaText('خدمة الأماكن مشغولة مؤقتًا بسبب كثرة الطلبات. حاول مرة أخرى بعد قليل.', 'The places service is temporarily busy. Try again shortly.');
+      message = dedaText(
+          'خدمة الأماكن مشغولة مؤقتًا بسبب كثرة الطلبات. حاول مرة أخرى بعد قليل.',
+          'The places service is temporarily busy. Try again shortly.');
     } else if (text.contains('502') ||
         text.contains('503') ||
         text.contains('504')) {
-      message =
-          dedaText('خادم الأماكن غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.', 'The places server is temporarily unavailable. Try again shortly.');
+      message = dedaText(
+          'خادم الأماكن غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.',
+          'The places server is temporarily unavailable. Try again shortly.');
     } else if (text.contains('socketexception') ||
         text.contains('failed host lookup') ||
         text.contains('network is unreachable')) {
-      message =
-          dedaText('تعذر الوصول إلى خادم الأماكن. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.', 'Could not reach the places server. Check your internet connection and try again.');
+      message = dedaText(
+          'تعذر الوصول إلى خادم الأماكن. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.',
+          'Could not reach the places server. Check your internet connection and try again.');
     } else if (text.contains('httpexception')) {
-      message =
-          dedaText('خدمة الأماكن أعادت خطأ اتصال. سنحتاج إلى فحص رمز الخطأ الظاهر أدناه.', 'The places service returned a connection error. The technical details are shown below.');
+      message = dedaText(
+          'خدمة الأماكن أعادت خطأ اتصال. سنحتاج إلى فحص رمز الخطأ الظاهر أدناه.',
+          'The places service returned a connection error. The technical details are shown below.');
     } else {
-      message =
-          dedaText('حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.', 'An error occurred while loading places. Technical details are shown below.');
+      message = dedaText(
+          'حدث خطأ أثناء جلب الأماكن. التفاصيل التقنية ظاهرة أدناه لتحديد السبب بدقة.',
+          'An error occurred while loading places. Technical details are shown below.');
     }
 
     return message;
@@ -13446,9 +13521,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
       places = [];
       searchedRadiusMeters = searchRadiiMeters.first;
       statusMessage = dedaText(
-          'جاري تحديد موقعك والبحث عن ${widget.category.title} قريبة...',
-          'Locating you and searching for nearby ${dedaCategoryLabel(widget.category.title).toLowerCase()}...',
-        );
+        'جاري تحديد موقعك والبحث عن ${widget.category.title} قريبة...',
+        'Locating you and searching for nearby ${dedaCategoryLabel(widget.category.title).toLowerCase()}...',
+      );
     });
 
     try {
@@ -13476,9 +13551,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
         setState(() {
           searchedRadiusMeters = radius;
           statusMessage = dedaText(
-              'جاري البحث عن ${widget.category.title} ضمن ${radiusLabel(radius)}...',
-              'Searching for ${dedaCategoryLabel(widget.category.title).toLowerCase()} within ${radiusLabel(radius)}...',
-            );
+            'جاري البحث عن ${widget.category.title} ضمن ${radiusLabel(radius)}...',
+            'Searching for ${dedaCategoryLabel(widget.category.title).toLowerCase()} within ${radiusLabel(radius)}...',
+          );
         });
 
         results = <PlaceInfo>[];
@@ -13491,7 +13566,9 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
           );
           if (_matchesCategory(place) && distance <= radius) {
             results.removeWhere(
-              (item) => DedaPlacesStore.placeId(item) == DedaPlacesStore.placeId(place),
+              (item) =>
+                  DedaPlacesStore.placeId(item) ==
+                  DedaPlacesStore.placeId(place),
             );
             results.add(place);
           }
@@ -13915,8 +13992,7 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                     dense: true,
                     visualDensity:
                         const VisualDensity(horizontal: -1, vertical: -1),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     value: showAvailableOnly,
                     activeColor: const Color(0xFF159447),
                     secondary: const Icon(Icons.online_prediction),
@@ -13987,7 +14063,8 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
                   Geolocator.openAppSettings();
                 },
                 icon: const Icon(Icons.settings),
-                label: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
+                label: Text(dedaText(
+                    'إعدادات إذن الموقع', 'Location permission settings')),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -14004,7 +14081,6 @@ class _NearbyPlacesPageState extends State<NearbyPlacesPage> {
     );
   }
 }
-
 
 class DedaFullScreenMapPage extends StatefulWidget {
   final Position position;
@@ -14025,12 +14101,10 @@ class DedaFullScreenMapPage extends StatefulWidget {
   });
 
   @override
-  State<DedaFullScreenMapPage> createState() =>
-      _DedaFullScreenMapPageState();
+  State<DedaFullScreenMapPage> createState() => _DedaFullScreenMapPageState();
 }
 
-class _DedaFullScreenMapPageState
-    extends State<DedaFullScreenMapPage> {
+class _DedaFullScreenMapPageState extends State<DedaFullScreenMapPage> {
   late DedaMapStyle mapStyle;
   bool showAvailableOnly = false;
 
@@ -14303,9 +14377,6 @@ class _DedaFullScreenMapPageState
     );
   }
 }
-
-
-
 
 IconData dedaIconForPlaceType(String type) {
   switch (type) {
@@ -14582,7 +14653,8 @@ class DedaMapPlaceMarker extends StatelessWidget {
                     right: -17,
                     bottom: 1,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
                       decoration: BoxDecoration(
                         color: const Color(0xFF17652F),
                         borderRadius: BorderRadius.circular(6),
@@ -14626,7 +14698,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
   Position? _position;
   List<PlaceInfo> _results = [];
   bool _loading = false;
-  String _status = dedaText('اكتب اسم المكان ثم اضغط بحث', 'Type a place name, then tap Search');
+  String _status = dedaText(
+      'اكتب اسم المكان ثم اضغط بحث', 'Type a place name, then tap Search');
 
   @override
   void initState() {
@@ -14644,7 +14717,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
   Future<Position?> _determinePosition() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       if (mounted) {
-        setState(() => _status = dedaText('شغّل GPS ثم أعد البحث.', 'Enable GPS and search again.'));
+        setState(() => _status =
+            dedaText('شغّل GPS ثم أعد البحث.', 'Enable GPS and search again.'));
       }
       return null;
     }
@@ -14656,7 +14730,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       if (mounted) {
-        setState(() => _status = dedaText('يحتاج البحث إلى إذن الموقع.', 'Search requires location permission.'));
+        setState(() => _status = dedaText('يحتاج البحث إلى إذن الموقع.',
+            'Search requires location permission.'));
       }
       return null;
     }
@@ -14693,7 +14768,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     setState(() {
       _loading = true;
       _results = [];
-      _status = dedaText('جاري تحديد موقعك والبحث عن "$query"...', 'Locating you and searching for "$query"...');
+      _status = dedaText('جاري تحديد موقعك والبحث عن "$query"...',
+          'Locating you and searching for "$query"...');
     });
 
     try {
@@ -14791,7 +14867,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(dedaText('البحث عن مكان بالاسم', 'Search for a place by name')),
+        title: Text(
+            dedaText('البحث عن مكان بالاسم', 'Search for a place by name')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -14805,7 +14882,8 @@ class _DedaPlaceSearchPageState extends State<DedaPlaceSearchPage> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
-                  hintText: dedaText('مثال: مستشفى اليرموك', 'Example: Yarmouk Hospital'),
+                  hintText: dedaText(
+                      'مثال: مستشفى اليرموك', 'Example: Yarmouk Hospital'),
                   prefixIcon: IconButton(
                     onPressed: _loading ? null : _search,
                     icon: const Icon(Icons.search),
@@ -14955,7 +15033,8 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText('شغّل GPS واسمح بإذن الموقع لبدء الطريق.', 'Enable GPS and allow location permission to start routing.'),
+            dedaText('شغّل GPS واسمح بإذن الموقع لبدء الطريق.',
+                'Enable GPS and allow location permission to start routing.'),
             textAlign: TextAlign.center,
           ),
         ),
@@ -15032,7 +15111,9 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              dedaText('الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.', 'The number above is straight-line distance only. After choosing a travel mode, DEDA will show route distance and estimated travel time.'),
+              dedaText(
+                  'الرقم أعلاه مسافة مباشرة فقط. بعد اختيار الوسيلة سيعرض DEDA مسافة الطريق والوقت التقريبي للرحلة.',
+                  'The number above is straight-line distance only. After choosing a travel mode, DEDA will show route distance and estimated travel time.'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
@@ -15078,7 +15159,9 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: _favorite ? dedaText('إزالة من المفضلة', 'Remove from favorites') : dedaText('إضافة إلى المفضلة', 'Add to favorites'),
+            tooltip: _favorite
+                ? dedaText('إزالة من المفضلة', 'Remove from favorites')
+                : dedaText('إضافة إلى المفضلة', 'Add to favorites'),
             onPressed: _favoriteLoading ? null : _toggleFavorite,
             icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
           ),
@@ -15104,7 +15187,8 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                 place.name,
                 textAlign: TextAlign.center,
                 textDirection: TextDirection.rtl,
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               Text(
@@ -15139,8 +15223,10 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                         const SizedBox(width: 7),
                         Text(
                           place.isAvailableNow
-                              ? dedaText('صاحب المكان متواجد الآن', 'Place owner is available now')
-                              : dedaText('صاحب المكان غير متواجد حاليًا', 'Place owner is not currently available'),
+                              ? dedaText('صاحب المكان متواجد الآن',
+                                  'Place owner is available now')
+                              : dedaText('صاحب المكان غير متواجد حاليًا',
+                                  'Place owner is not currently available'),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(width: 7),
@@ -15162,16 +15248,28 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      _detailRow(Icons.route, dedaText('المسافة المباشرة تقريبًا', 'Approx. straight-line distance'), _distanceLabel),
-                      _detailRow(Icons.location_on, dedaText('العنوان', 'Address'), place.address),
-                      _detailRow(Icons.schedule, dedaText('ساعات العمل', 'Opening hours'), place.openingHours),
-                      _detailRow(Icons.phone, dedaText('الهاتف', 'Phone'), place.phone),
-                      _detailRow(Icons.language, dedaText('الموقع الإلكتروني', 'Website'), place.website),
+                      _detailRow(
+                          Icons.route,
+                          dedaText('المسافة المباشرة تقريبًا',
+                              'Approx. straight-line distance'),
+                          _distanceLabel),
+                      _detailRow(Icons.location_on,
+                          dedaText('العنوان', 'Address'), place.address),
+                      _detailRow(
+                          Icons.schedule,
+                          dedaText('ساعات العمل', 'Opening hours'),
+                          place.openingHours),
+                      _detailRow(Icons.phone, dedaText('الهاتف', 'Phone'),
+                          place.phone),
+                      _detailRow(
+                          Icons.language,
+                          dedaText('الموقع الإلكتروني', 'Website'),
+                          place.website),
                       _detailRow(
                         Icons.pin_drop,
                         dedaText('الإحداثيات', 'Coordinates'),
                         '${place.location.latitude.toStringAsFixed(6)}, '
-                            '${place.location.longitude.toStringAsFixed(6)}',
+                        '${place.location.longitude.toStringAsFixed(6)}',
                       ),
                     ],
                   ),
@@ -15192,8 +15290,12 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
                         )
                       : const Icon(Icons.navigation),
                   label: Text(
-                    _locating ? dedaText('جاري تحديد موقعك...', 'Locating you...') : dedaText('اختيار كوجهة وعرض الطريق', 'Choose as destination and show route'),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    _locating
+                        ? dedaText('جاري تحديد موقعك...', 'Locating you...')
+                        : dedaText('اختيار كوجهة وعرض الطريق',
+                            'Choose as destination and show route'),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -15201,7 +15303,9 @@ class _PlaceDetailsPageState extends State<PlaceDetailsPage> {
               OutlinedButton.icon(
                 onPressed: _favoriteLoading ? null : _toggleFavorite,
                 icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border),
-                label: Text(_favorite ? dedaText('محفوظ في المفضلة', 'Saved in favorites') : dedaText('إضافة إلى المفضلة', 'Add to favorites')),
+                label: Text(_favorite
+                    ? dedaText('محفوظ في المفضلة', 'Saved in favorites')
+                    : dedaText('إضافة إلى المفضلة', 'Add to favorites')),
               ),
             ],
           ),
@@ -15251,7 +15355,9 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.showFavorites ? dedaText('المفضلة', 'Favorites') : dedaText('الأماكن الأخيرة', 'Recent places');
+    final title = widget.showFavorites
+        ? dedaText('المفضلة', 'Favorites')
+        : dedaText('الأماكن الأخيرة', 'Recent places');
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(title: Text(title), centerTitle: true),
@@ -15261,8 +15367,10 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
               ? Center(
                   child: Text(
                     widget.showFavorites
-                        ? dedaText('لم تحفظ أي مكان في المفضلة بعد.', 'You have not saved any favorite places yet.')
-                        : dedaText('لا توجد أماكن أخيرة بعد.', 'There are no recent places yet.'),
+                        ? dedaText('لم تحفظ أي مكان في المفضلة بعد.',
+                            'You have not saved any favorite places yet.')
+                        : dedaText('لا توجد أماكن أخيرة بعد.',
+                            'There are no recent places yet.'),
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 18),
                   ),
@@ -15290,8 +15398,10 @@ class _SavedPlacesPageState extends State<SavedPlacesPage> {
                         leading: CircleAvatar(
                           child: Icon(dedaIconForPlaceType(place.type)),
                         ),
-                        title: Text(place.name, textDirection: TextDirection.rtl),
-                        subtitle: Text(place.type, textDirection: TextDirection.rtl),
+                        title:
+                            Text(place.name, textDirection: TextDirection.rtl),
+                        subtitle:
+                            Text(place.type, textDirection: TextDirection.rtl),
                         trailing: widget.showFavorites
                             ? IconButton(
                                 onPressed: () => _removeFavorite(place),
@@ -15491,8 +15601,7 @@ class DedaRouteService {
     ];
   }
 
-  Future<List<({LatLng point, double accessMeters})>>
-      _nearestRoadCandidates(
+  Future<List<({LatLng point, double accessMeters})>> _nearestRoadCandidates(
     LatLng original, {
     required DedaTravelMode travelMode,
   }) async {
@@ -15530,9 +15639,7 @@ class DedaRouteService {
     for (final raw in data['waypoints'] as List) {
       if (raw is! Map || raw['location'] is! List) continue;
       final location = raw['location'] as List;
-      if (location.length < 2 ||
-          location[0] is! num ||
-          location[1] is! num) {
+      if (location.length < 2 || location[0] is! num || location[1] is! num) {
         continue;
       }
       final candidate = LatLng(
@@ -15572,12 +15679,11 @@ class DedaRouteService {
     final startCandidates = await startFuture;
     final destinationCandidates = await destinationFuture;
 
-    final pairs = <
-        ({
-          LatLng startPoint,
-          LatLng destinationPoint,
-          double accessMeters,
-        })>[];
+    final pairs = <({
+      LatLng startPoint,
+      LatLng destinationPoint,
+      double accessMeters,
+    })>[];
     for (final startCandidate in startCandidates) {
       for (final destinationCandidate in destinationCandidates) {
         pairs.add((
@@ -15595,19 +15701,18 @@ class DedaRouteService {
     for (var i = 0; i < limit; i++) {
       final pair = pairs[i];
       try {
-        final candidate =
-            travelMode == DedaTravelMode.motorcycle ||
-                    travelMode == DedaTravelMode.truck
-                ? await _getValhallaRoute(
-                    start: pair.startPoint,
-                    destination: pair.destinationPoint,
-                    travelMode: travelMode,
-                  )
-                : await _getOsrmFallback(
-                    start: pair.startPoint,
-                    destination: pair.destinationPoint,
-                    travelMode: travelMode,
-                  );
+        final candidate = travelMode == DedaTravelMode.motorcycle ||
+                travelMode == DedaTravelMode.truck
+            ? await _getValhallaRoute(
+                start: pair.startPoint,
+                destination: pair.destinationPoint,
+                travelMode: travelMode,
+              )
+            : await _getOsrmFallback(
+                start: pair.startPoint,
+                destination: pair.destinationPoint,
+                travelMode: travelMode,
+              );
         if (!_routeIsUsable(candidate)) continue;
 
         best = best == null
@@ -15673,8 +15778,7 @@ class DedaRouteService {
 
   double _routeAverageSpeedKmh(DedaRouteResult route) {
     if (route.durationSeconds <= 0 || route.distanceMeters <= 0) return 0;
-    return (route.distanceMeters / 1000) /
-        (route.durationSeconds / 3600);
+    return (route.distanceMeters / 1000) / (route.durationSeconds / 3600);
   }
 
   bool _routeNeedsCrossCheck(
@@ -15684,8 +15788,7 @@ class DedaRouteService {
     required DedaTravelMode travelMode,
   }) {
     final straight = _straightRouteDistance(start, destination);
-    final detourRatio =
-        route.distanceMeters / math.max(straight, 25.0);
+    final detourRatio = route.distanceMeters / math.max(straight, 25.0);
     final endpointDrift = _routeEndpointDrift(
       route,
       start: start,
@@ -15696,9 +15799,7 @@ class DedaRouteService {
     final speedIsSuspicious = averageSpeed > 0 &&
         (averageSpeed < speedRange.min || averageSpeed > speedRange.max);
 
-    return detourRatio > 1.75 ||
-        endpointDrift > 1600 ||
-        speedIsSuspicious;
+    return detourRatio > 1.75 || endpointDrift > 1600 || speedIsSuspicious;
   }
 
   double _routeQualityScore(
@@ -15712,8 +15813,7 @@ class DedaRouteService {
       _straightRouteDistance(start, destination),
     );
     final detourRatio = route.distanceMeters / straight;
-    final endpointPenalty =
-        _routeEndpointDrift(
+    final endpointPenalty = _routeEndpointDrift(
           route,
           start: start,
           destination: destination,
@@ -15903,7 +16003,8 @@ class DedaRouteService {
     );
     final data = await _getJson(uri);
     if (data['code'] != 'Ok') {
-      throw HttpException('Routing error: ${data['code'] ?? 'Unknown'}', uri: uri);
+      throw HttpException('Routing error: ${data['code'] ?? 'Unknown'}',
+          uri: uri);
     }
     final routes = data['routes'];
     if (routes is! List || routes.isEmpty) {
@@ -15917,8 +16018,10 @@ class DedaRouteService {
     }
     final points = <LatLng>[];
     for (final coordinate in geometry['coordinates'] as List) {
-      if (coordinate is List && coordinate.length >= 2 &&
-          coordinate[0] is num && coordinate[1] is num) {
+      if (coordinate is List &&
+          coordinate.length >= 2 &&
+          coordinate[0] is num &&
+          coordinate[1] is num) {
         points.add(LatLng(
           (coordinate[1] as num).toDouble(),
           (coordinate[0] as num).toDouble(),
@@ -16026,7 +16129,8 @@ class DedaRouteService {
       final response = await request.close().timeout(_timeout);
       final body = await utf8.decoder.bind(response).join().timeout(_timeout);
       if (response.statusCode != HttpStatus.ok) {
-        throw HttpException('Routing error: HTTP ${response.statusCode}', uri: uri);
+        throw HttpException('Routing error: HTTP ${response.statusCode}',
+            uri: uri);
       }
       final decoded = jsonDecode(body);
       if (decoded is! Map) throw const FormatException('Routing JSON invalid.');
@@ -16156,7 +16260,6 @@ class DedaRouteService {
   }
 }
 
-
 class DedaRoadHazard {
   final String id;
   final String type;
@@ -16203,9 +16306,11 @@ class DedaRoadHazard {
       case 'detour':
         return dedaText('تحويلة / غلق طريق', 'Detour / road closure');
       case 'speed_camera':
-        return dedaText('كاميرا سرعة — التزم بالسرعة', 'Speed camera — obey the speed limit');
+        return dedaText('كاميرا سرعة — التزم بالسرعة',
+            'Speed camera — obey the speed limit');
       case 'checkpoint':
-        return dedaText('سيطرة مرورية — اتبع التعليمات', 'Traffic checkpoint — follow instructions');
+        return dedaText('سيطرة مرورية — اتبع التعليمات',
+            'Traffic checkpoint — follow instructions');
       case 'accident':
         return dedaText('حادث', 'Accident');
       case 'congestion':
@@ -16258,8 +16363,7 @@ class DedaRoadHazard {
     'flooded',
   ];
 
-  static String labelForType(String type) =>
-      DedaRoadHazard(
+  static String labelForType(String type) => DedaRoadHazard(
         id: '',
         type: type,
         location: const LatLng(0, 0),
@@ -16268,8 +16372,7 @@ class DedaRoadHazard {
         expiresAtMillis: 0,
       ).label;
 
-  static IconData iconForType(String type) =>
-      DedaRoadHazard(
+  static IconData iconForType(String type) => DedaRoadHazard(
         id: '',
         type: type,
         location: const LatLng(0, 0),
@@ -16399,7 +16502,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final step = firstUsefulStep;
     if (!tripStarted || step == null || !voiceEnabled) return;
     final maneuverPoint = step.maneuverPoint;
-    final key = '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}|'
+    final key =
+        '${step.instruction}|${step.maneuverType}|${step.maneuverModifier}|'
         '${maneuverPoint?.latitude.toStringAsFixed(6)}|'
         '${maneuverPoint?.longitude.toStringAsFixed(6)}';
     if (!force && key == _lastSpokenInstruction) return;
@@ -16490,7 +16594,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     try {
       final result = await routeService.getDrivingRoute(
         start: origin,
- travelMode: widget.travelMode,
+        travelMode: widget.travelMode,
         destination: widget.destination.location,
       );
       if (!mounted) return;
@@ -16503,7 +16607,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         if (accessStatus.isNotEmpty) {
           navigationStatus = accessStatus;
         } else if (tripStarted) {
-          navigationStatus = dedaText('الملاحة نشطة — يتم تحديث الطريق حسب موقعك.', 'Navigation is active — the route is updating with your location.');
+          navigationStatus = dedaText(
+              'الملاحة نشطة — يتم تحديث الطريق حسب موقعك.',
+              'Navigation is active — the route is updating with your location.');
         } else {
           navigationStatus = '';
         }
@@ -16519,8 +16625,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       if (!mounted) return;
       if (background) {
         setState(() {
-          navigationStatus =
-              dedaText('تعذر تحديث الطريق لحظيًا، وسيُعاد المحاولة مع حركة الموقع.', 'Could not refresh the route right now. DEDA will try again as your location changes.');
+          navigationStatus = dedaText(
+              'تعذر تحديث الطريق لحظيًا، وسيُعاد المحاولة مع حركة الموقع.',
+              'Could not refresh the route right now. DEDA will try again as your location changes.');
         });
       } else {
         setState(() {
@@ -16543,17 +16650,22 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   String _friendlyRouteError(Object error) {
     final raw = error.toString().toLowerCase();
     if (raw.contains('timeout')) {
-      return dedaText('انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.', 'Route calculation timed out. Check your internet connection and try again.');
+      return dedaText(
+          'انتهت مهلة حساب الطريق. تحقق من الإنترنت ثم حاول مرة أخرى.',
+          'Route calculation timed out. Check your internet connection and try again.');
     }
     if (raw.contains('socketexception') ||
         raw.contains('failed host lookup') ||
         raw.contains('network')) {
-      return dedaText('تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.', 'Could not connect to the routing service. Check your internet connection.');
+      return dedaText('تعذر الاتصال بخدمة الطريق. تحقق من اتصال الإنترنت.',
+          'Could not connect to the routing service. Check your internet connection.');
     }
     if (raw.contains('noroute')) {
-      return dedaText('لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.', 'The routing service could not find a route to this destination.');
+      return dedaText('لم تتمكن خدمة الطريق من إيجاد مسار إلى هذه الوجهة.',
+          'The routing service could not find a route to this destination.');
     }
-    return dedaText('تعذر حساب الطريق الآن. حاول مرة أخرى.', 'Could not calculate the route right now. Try again.');
+    return dedaText('تعذر حساب الطريق الآن. حاول مرة أخرى.',
+        'Could not calculate the route right now. Try again.');
   }
 
   String formatRouteDistance(double meters) {
@@ -16580,9 +16692,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (!DedaLanguageState.isArabic) {
       return minutes == 0 ? '$hours h' : '$hours h $minutes min';
     }
-    return minutes == 0
-        ? '$hours ساعة'
-        : '$hours ساعة و $minutes دقيقة';
+    return minutes == 0 ? '$hours ساعة' : '$hours ساعة و $minutes دقيقة';
   }
 
   double _averageSpeedKmhForMode() {
@@ -16610,8 +16720,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
 
     final providerAverageKmh = result.distanceMeters <= 0
         ? 0.0
-        : (result.distanceMeters / 1000) /
-              (result.durationSeconds / 3600);
+        : (result.distanceMeters / 1000) / (result.durationSeconds / 3600);
     double minReasonable;
     double maxReasonable;
     switch (widget.travelMode) {
@@ -16665,13 +16774,18 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     }
     switch (widget.travelMode) {
       case DedaTravelMode.walking:
-        return dedaText('المسار والوقت محسوبان لوضع المشي.', 'Route and ETA are calculated for walking.');
+        return dedaText('المسار والوقت محسوبان لوضع المشي.',
+            'Route and ETA are calculated for walking.');
       case DedaTravelMode.motorcycle:
-        return dedaText('المسار والوقت محسوبان للدراجة النارية.', 'Route and ETA are calculated for motorcycle travel.');
+        return dedaText('المسار والوقت محسوبان للدراجة النارية.',
+            'Route and ETA are calculated for motorcycle travel.');
       case DedaTravelMode.car:
-        return dedaText('المسار والوقت محسوبان للسيارة.', 'Route and ETA are calculated for car travel.');
+        return dedaText('المسار والوقت محسوبان للسيارة.',
+            'Route and ETA are calculated for car travel.');
       case DedaTravelMode.truck:
-        return dedaText('المسار والوقت محسوبان للشاحنة مع مراعاة قيود الطرق المتاحة لدى مزود المسار.', 'Route and ETA are calculated for truck travel using the routing provider\'s available road restrictions.');
+        return dedaText(
+            'المسار والوقت محسوبان للشاحنة مع مراعاة قيود الطرق المتاحة لدى مزود المسار.',
+            'Route and ETA are calculated for truck travel using the routing provider\'s available road restrictions.');
     }
   }
 
@@ -16707,7 +16821,6 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       }
     });
   }
-
 
   double _metersBetween(LatLng a, LatLng b) {
     return Geolocator.distanceBetween(
@@ -16841,9 +16954,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final dx = bx - ax;
     final dy = by - ay;
     final lengthSquared = dx * dx + dy * dy;
-    final rawFraction = lengthSquared <= 1e-16
-        ? 0.0
-        : (-(ax * dx + ay * dy) / lengthSquared);
+    final rawFraction =
+        lengthSquared <= 1e-16 ? 0.0 : (-(ax * dx + ay * dy) / lengthSquared);
     final fraction = rawFraction.clamp(0.0, 1.0).toDouble();
     final projected = LatLng(
       a.latitude + (b.latitude - a.latitude) * fraction,
@@ -16905,8 +17017,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       final projection = _projectToSegment(point, points[i], points[i + 1]);
       if (projection.distance < nearestDistance) {
         nearestDistance = projection.distance;
-        nearestProgress =
-            cumulative + segmentLength * projection.fraction;
+        nearestProgress = cumulative + segmentLength * projection.fraction;
       }
       cumulative += segmentLength;
     }
@@ -17115,10 +17226,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     try {
       final raw = await DedaBackend.roadHazards();
       if (!mounted) return;
-      final hazards = raw
-          .map(DedaRoadHazard.fromMap)
-          .where(_hazardIsUsable)
-          .toList();
+      final hazards =
+          raw.map(DedaRoadHazard.fromMap).where(_hazardIsUsable).toList();
       setState(() {
         _roadHazards = hazards;
         _lastHazardFetchAt = now;
@@ -17148,8 +17257,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           !currentRoute.isDirectFallback &&
           currentRoute.points.length >= 2) {
         final hazardProgress = _routeProgress(hazard.location);
-        if (hazardProgress == null ||
-            hazardProgress.distanceToRoute > 140) {
+        if (hazardProgress == null || hazardProgress.distanceToRoute > 140) {
           continue;
         }
         if (currentProgress != null &&
@@ -17227,8 +17335,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
         SnackBar(
           content: Text(
             present
-                ? dedaText('شكرًا، تم تأكيد التنبيه.', 'Thanks, the alert was confirmed.')
-                : dedaText('شكرًا، تم تسجيل أن التنبيه انتهى.', 'Thanks, the alert was marked as ended.'),
+                ? dedaText('شكرًا، تم تأكيد التنبيه.',
+                    'Thanks, the alert was confirmed.')
+                : dedaText('شكرًا، تم تسجيل أن التنبيه انتهى.',
+                    'Thanks, the alert was marked as ended.'),
           ),
         ),
       );
@@ -17554,9 +17664,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 ],
               ),
               child: Icon(
-                _navigationToolsOpen
-                    ? Icons.chevron_left
-                    : Icons.chevron_right,
+                _navigationToolsOpen ? Icons.chevron_left : Icons.chevron_right,
                 size: 30,
                 color: const Color(0xFF17652F),
               ),
@@ -17620,7 +17728,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
               ),
               onPressed: () => _voteRoadHazard(hazard, true),
-              child: Text(dedaText('موجود', 'There'), style: const TextStyle(fontSize: 11)),
+              child: Text(dedaText('موجود', 'There'),
+                  style: const TextStyle(fontSize: 11)),
             ),
             TextButton(
               style: TextButton.styleFrom(
@@ -17628,7 +17737,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
               ),
               onPressed: () => _voteRoadHazard(hazard, false),
-              child: Text(dedaText('انتهى', 'Cleared'), style: const TextStyle(fontSize: 11)),
+              child: Text(dedaText('انتهى', 'Cleared'),
+                  style: const TextStyle(fontSize: 11)),
             ),
           ],
         ),
@@ -17702,9 +17812,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           margin: const EdgeInsetsDirectional.only(start: 1),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: lane.valid
-                ? const Color(0xFFDFF1E3)
-                : const Color(0xFFF0F1F0),
+            color:
+                lane.valid ? const Color(0xFFDFF1E3) : const Color(0xFFF0F1F0),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
@@ -17864,8 +17973,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     final useful = steps
         .where(
           (step) =>
-              step.maneuverType != 'depart' &&
-              step.maneuverType != 'arrive',
+              step.maneuverType != 'depart' && step.maneuverType != 'arrive',
         )
         .toList();
 
@@ -17892,8 +18000,10 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     if (currentRoute != null && currentRoute.distanceMeters > 0) {
       return DedaRouteStep(
         instruction: currentRoute.isDirectFallback
-            ? dedaText('اتجه نحو الوجهة المحددة', 'Head toward the selected destination')
-            : dedaText('تابع المسار إلى الوجهة', 'Continue on the route to the destination'),
+            ? dedaText('اتجه نحو الوجهة المحددة',
+                'Head toward the selected destination')
+            : dedaText('تابع المسار إلى الوجهة',
+                'Continue on the route to the destination'),
         distanceMeters: currentRoute.distanceMeters,
         maneuverType: 'continue',
         maneuverModifier: 'straight',
@@ -17903,8 +18013,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   }
 
   IconData directionIcon(DedaRouteStep step) {
-    if (step.maneuverType == 'roundabout' ||
-        step.maneuverType == 'rotary') {
+    if (step.maneuverType == 'roundabout' || step.maneuverType == 'rotary') {
       return Icons.rotate_left;
     }
     switch (step.maneuverModifier) {
@@ -17961,7 +18070,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       final accessStatus = _roadAccessStatus(validRoute, startPoint);
       navigationStatus = accessStatus.isNotEmpty
           ? accessStatus
-          : dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.', 'Trip started — DEDA is tracking your location and updating the route and instructions.');
+          : dedaText('بدأت الرحلة — DEDA يتابع موقعك ويحدّث المسار والتعليمات.',
+              'Trip started — DEDA is tracking your location and updating the route and instructions.');
     });
     _focusNavigationPosition();
     _startCompassTracking();
@@ -18050,8 +18160,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       onError: (_) {
         if (!mounted) return;
         setState(() {
-          navigationStatus =
-              dedaText('تعذر تحديث GPS مؤقتًا. أبقِ الموقع مفعّلًا وسيستمر DEDA بالمحاولة.', 'GPS could not update temporarily. Keep location enabled and DEDA will keep trying.');
+          navigationStatus = dedaText(
+              'تعذر تحديث GPS مؤقتًا. أبقِ الموقع مفعّلًا وسيستمر DEDA بالمحاولة.',
+              'GPS could not update temporarily. Keep location enabled and DEDA will keep trying.');
         });
       },
     );
@@ -18068,7 +18179,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     _compassSubscription = null;
     if (!mounted) return;
     if (reached) {
-      await _speakText(dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
+      await _speakText(
+          dedaText('وصلت إلى الوجهة', 'You have arrived at your destination'));
     } else if (reachedRoadAccess) {
       final remaining = remainingToDestination ?? 0;
       await _speakText(
@@ -18102,8 +18214,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   Widget _buildCompactNavigationBar() {
     final currentRoute = route;
     final remaining = _liveRemainingMeters ?? currentRoute?.distanceMeters;
-    final distance =
-        remaining == null ? '—' : formatRouteDistance(remaining);
+    final distance = remaining == null ? '—' : formatRouteDistance(remaining);
     var durationSeconds =
         currentRoute == null ? 0.0 : _estimatedDurationSeconds(currentRoute);
     if (currentRoute != null &&
@@ -18113,8 +18224,9 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
           (remaining / currentRoute.distanceMeters).clamp(0.0, 1.5).toDouble();
       durationSeconds *= ratio;
     }
-    final duration =
-        currentRoute == null ? '—' : formatCompactRouteDuration(durationSeconds);
+    final duration = currentRoute == null
+        ? '—'
+        : formatCompactRouteDuration(durationSeconds);
     return Card(
       elevation: 8,
       shape: RoundedRectangleBorder(
@@ -18319,13 +18431,15 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
               children: [
                 Text(
                   dedaText('شرح الخريطة', 'Map guide'),
-                  style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 21, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 14),
                 _DedaLegendRow(
                   icon: Icons.location_pin,
                   iconColor: Colors.red,
-                  text: dedaText('العلامة الحمراء: موقعك الحالي', 'Red marker: your current location'),
+                  text: dedaText('العلامة الحمراء: موقعك الحالي',
+                      'Red marker: your current location'),
                 ),
                 _DedaLegendRow(
                   icon: Icons.flag_outlined,
@@ -18338,12 +18452,15 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                 _DedaLegendRow(
                   icon: Icons.route,
                   iconColor: const Color(0xFF17652F),
-                  text: dedaText('الخط الأخضر: المسار إلى الوجهة', 'Green line: route to destination'),
+                  text: dedaText('الخط الأخضر: المسار إلى الوجهة',
+                      'Green line: route to destination'),
                 ),
                 _DedaLegendRow(
                   icon: Icons.navigation,
                   iconColor: const Color(0xFF17652F),
-                  text: dedaText('بعد بدء الرحلة يتحدث موقعك والمسار والتعليمات تلقائيًا', 'After the trip starts, your position, route and instructions update automatically'),
+                  text: dedaText(
+                      'بعد بدء الرحلة يتحدث موقعك والمسار والتعليمات تلقائيًا',
+                      'After the trip starts, your position, route and instructions update automatically'),
                 ),
               ],
             ),
@@ -18357,26 +18474,22 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final isInsetDrivingMap =
-        isLandscape && tripStarted && !_mapFullscreen;
+    final isInsetDrivingMap = isLandscape && tripStarted && !_mapFullscreen;
     final destinationPoint = widget.destination.location;
     final routePoints = route?.points ?? const <LatLng>[];
     final routeOrigin =
         tripStarted ? (_displayPosition ?? startPoint) : startPoint;
     final hasRoadRoute = routePoints.length >= 2;
-    final startAccessMeters = hasRoadRoute
-        ? _metersBetween(routeOrigin, routePoints.first)
-        : 0.0;
-    final destinationAccessMeters = hasRoadRoute
-        ? _metersBetween(routePoints.last, destinationPoint)
-        : 0.0;
+    final startAccessMeters =
+        hasRoadRoute ? _metersBetween(routeOrigin, routePoints.first) : 0.0;
+    final destinationAccessMeters =
+        hasRoadRoute ? _metersBetween(routePoints.last, destinationPoint) : 0.0;
     final startAccessPoints = hasRoadRoute && startAccessMeters > 12
         ? <LatLng>[routeOrigin, routePoints.first]
         : const <LatLng>[];
-    final destinationAccessPoints =
-        hasRoadRoute && destinationAccessMeters > 12
-            ? <LatLng>[routePoints.last, destinationPoint]
-            : const <LatLng>[];
+    final destinationAccessPoints = hasRoadRoute && destinationAccessMeters > 12
+        ? <LatLng>[routePoints.last, destinationPoint]
+        : const <LatLng>[];
     final fitCoordinates = <LatLng>[
       routeOrigin,
       ...routePoints,
@@ -18389,50 +18502,49 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
       if (tripStarted)
         ..._roadHazards
             .where(
-              (hazard) =>
-                  _hazardIsUsable(hazard) &&
-                  _metersBetween(startPoint, hazard.location) <= 2500,
-            )
+          (hazard) =>
+              _hazardIsUsable(hazard) &&
+              _metersBetween(startPoint, hazard.location) <= 2500,
+        )
             .map((hazard) {
-              final overlapsLiveArrow =
-                  _metersBetween(startPoint, hazard.location) <= 25;
-              return Marker(
-                point: hazard.location,
-                width: overlapsLiveArrow ? 150 : 44,
-                height: overlapsLiveArrow ? 58 : 44,
-                child: Align(
-                  alignment: overlapsLiveArrow
-                      ? Alignment.centerLeft
-                      : Alignment.center,
-                  child: SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showHazardDetails(hazard),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF4E5).withOpacity(0.97),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFFB65A00),
-                            width: 2,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(blurRadius: 4, color: Colors.black26),
-                          ],
-                        ),
-                        child: Icon(
-                          hazard.icon,
-                          size: 24,
-                          color: const Color(0xFFB65A00),
-                        ),
+          final overlapsLiveArrow =
+              _metersBetween(startPoint, hazard.location) <= 25;
+          return Marker(
+            point: hazard.location,
+            width: overlapsLiveArrow ? 150 : 44,
+            height: overlapsLiveArrow ? 58 : 44,
+            child: Align(
+              alignment:
+                  overlapsLiveArrow ? Alignment.centerLeft : Alignment.center,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _showHazardDetails(hazard),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4E5).withOpacity(0.97),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFB65A00),
+                        width: 2,
                       ),
+                      boxShadow: const [
+                        BoxShadow(blurRadius: 4, color: Colors.black26),
+                      ],
+                    ),
+                    child: Icon(
+                      hazard.icon,
+                      size: 24,
+                      color: const Color(0xFFB65A00),
                     ),
                   ),
                 ),
-              );
-            }),
+              ),
+            ),
+          );
+        }),
       Marker(
         point: destinationPoint,
         width: 70,
@@ -18515,7 +18627,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                 coordinates: fitCoordinates,
                                 padding: isLandscape
                                     ? const EdgeInsets.fromLTRB(80, 44, 80, 86)
-                                    : const EdgeInsets.fromLTRB(44, 70, 44, 265),
+                                    : const EdgeInsets.fromLTRB(
+                                        44, 70, 44, 265),
                                 maxZoom: 17,
                               ),
                         onPositionChanged: (camera, hasGesture) {
@@ -18539,13 +18652,15 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                                 Polyline(
                                   points: startAccessPoints,
                                   strokeWidth: tripStarted ? 4 : 3,
-                                  color: const Color(0xFF7D9A83).withOpacity(0.82),
+                                  color:
+                                      const Color(0xFF7D9A83).withOpacity(0.82),
                                 ),
                               if (destinationAccessPoints.isNotEmpty)
                                 Polyline(
                                   points: destinationAccessPoints,
                                   strokeWidth: tripStarted ? 4 : 3,
-                                  color: const Color(0xFF7D9A83).withOpacity(0.82),
+                                  color:
+                                      const Color(0xFF7D9A83).withOpacity(0.82),
                                 ),
                               Polyline(
                                 points: routePoints,
@@ -18654,8 +18769,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                   shape: const CircleBorder(),
                   child: IconButton(
                     tooltip: dedaText('عرض المسار كاملًا', 'Show full route'),
-                    onPressed: () =>
-                        _fitRouteOnMap(navigation: tripStarted),
+                    onPressed: () => _fitRouteOnMap(navigation: tripStarted),
                     icon: const Icon(Icons.fit_screen),
                   ),
                 ),
@@ -18796,7 +18910,8 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                           FilledButton.icon(
                             onPressed: () => loadRoute(),
                             icon: const Icon(Icons.refresh),
-                            label: Text(dedaText('إعادة المحاولة', 'Try again')),
+                            label:
+                                Text(dedaText('إعادة المحاولة', 'Try again')),
                           ),
                         ] else if (route != null) ...[
                           Container(
@@ -18866,7 +18981,6 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
                               ),
                             ],
                           ),
-
                           if (isRerouting) ...[
                             const SizedBox(height: 8),
                             const LinearProgressIndicator(),
@@ -18925,6 +19039,7 @@ class _DedaRoutePageState extends State<DedaRoutePage> {
     );
   }
 }
+
 class _DedaIraqDestinationFlag extends StatelessWidget {
   const _DedaIraqDestinationFlag();
 
@@ -18984,7 +19099,6 @@ class _DedaIraqDestinationFlag extends StatelessWidget {
     );
   }
 }
-
 
 class _DedaRouteStat extends StatelessWidget {
   final IconData icon;
@@ -19122,7 +19236,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
   bool showAvailableOnly = false;
   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
 
-  String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
+  String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي',
+      'Tap the button to get your current location');
 
   List<PlaceInfo> get visibleRegisteredPlaces => showAvailableOnly
       ? registeredPlaces.where((place) => place.isAvailableNow).toList()
@@ -19189,15 +19304,18 @@ class _MapReadyPageState extends State<MapReadyPage> {
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
         setState(() {
-          statusMessage = dedaText('تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.', 'Location permission was denied. DEDA needs it to locate you.');
+          statusMessage = dedaText(
+              'تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.',
+              'Location permission was denied. DEDA needs it to locate you.');
         });
         return;
       }
       if (permission == LocationPermission.deniedForever) {
         if (!mounted) return;
         setState(() {
-          statusMessage =
-              dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
+          statusMessage = dedaText(
+              'إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.',
+              'Location permission is permanently denied. Open app settings and allow location access.');
         });
         return;
       }
@@ -19246,10 +19364,26 @@ class _MapReadyPageState extends State<MapReadyPage> {
   // DEDA 10-point fixes v1: normalize Arabic names and digits for local DEDA search.
   String _normalizeDedaSearchText(String value) {
     const digitMap = <String, String>{
-      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-      '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
-      '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+      '٠': '0',
+      '١': '1',
+      '٢': '2',
+      '٣': '3',
+      '٤': '4',
+      '٥': '5',
+      '٦': '6',
+      '٧': '7',
+      '٨': '8',
+      '٩': '9',
+      '۰': '0',
+      '۱': '1',
+      '۲': '2',
+      '۳': '3',
+      '۴': '4',
+      '۵': '5',
+      '۶': '6',
+      '۷': '7',
+      '۸': '8',
+      '۹': '9',
     };
     var text = value.toLowerCase().trim();
     digitMap.forEach((from, to) => text = text.replaceAll(from, to));
@@ -19353,9 +19487,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
       'ناحية',
       'العراق',
     };
-    final meaningfulTokens = tokens
-        .where((token) => !genericLocationWords.contains(token))
-        .toList();
+    final meaningfulTokens =
+        tokens.where((token) => !genericLocationWords.contains(token)).toList();
     final nameHasMeaningfulToken = meaningfulTokens.isEmpty
         ? tokens.any(name.contains)
         : meaningfulTokens.any(name.contains);
@@ -19426,8 +19559,12 @@ class _MapReadyPageState extends State<MapReadyPage> {
 
       final mergedRegistered = <PlaceInfo>[];
       final seenDeda = <String>{};
-      for (final place in <PlaceInfo>[...registeredPlaces, ...freshRegistered]) {
-        final key = '${place.name}|${place.location.latitude.toStringAsFixed(6)}|${place.location.longitude.toStringAsFixed(6)}';
+      for (final place in <PlaceInfo>[
+        ...registeredPlaces,
+        ...freshRegistered
+      ]) {
+        final key =
+            '${place.name}|${place.location.latitude.toStringAsFixed(6)}|${place.location.longitude.toStringAsFixed(6)}';
         if (seenDeda.add(key)) mergedRegistered.add(place);
       }
       registeredPlaces = mergedRegistered;
@@ -19457,17 +19594,15 @@ class _MapReadyPageState extends State<MapReadyPage> {
         // contain the searched text. Address-only/fuzzy hits caused the
         // long-distance wrong destinations seen during device testing.
         if (_mapSearchRelevance(place, needle) >= 20) continue;
-        final key =
-            '${place.name.toLowerCase()}|'
+        final key = '${place.name.toLowerCase()}|'
             '${place.location.latitude.toStringAsFixed(5)}|'
             '${place.location.longitude.toStringAsFixed(5)}';
         if (seen.add(key)) results.add(place);
       }
       results.sort((a, b) {
-        final relevance =
-            _mapSearchRelevance(a, needle).compareTo(
-              _mapSearchRelevance(b, needle),
-            );
+        final relevance = _mapSearchRelevance(a, needle).compareTo(
+          _mapSearchRelevance(b, needle),
+        );
         if (relevance != 0) return relevance;
         final da = Geolocator.distanceBetween(
           activePosition.latitude,
@@ -19489,8 +19624,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
         mapSearchResults = results;
         selectedDestination =
             results.isNotEmpty ? results.first.location : null;
-        selectedDestinationPlace =
-            results.isNotEmpty ? results.first : null;
+        selectedDestinationPlace = results.isNotEmpty ? results.first : null;
         mapRoutePreview = null;
         statusMessage = results.isEmpty
             ? dedaText(
@@ -19621,7 +19755,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       : CameraFit.coordinates(
                           coordinates: fitPoints,
                           padding: const EdgeInsets.fromLTRB(38, 58, 38, 72),
-                          maxZoom: widget.initialDestination != null ? 11.8 : 15,
+                          maxZoom:
+                              widget.initialDestination != null ? 11.8 : 15,
                         ),
                   onLongPress: (_, destination) {
                     setState(() {
@@ -19847,7 +19982,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(dedaText('الخريطة - موقعي والوجهة', 'Map - My location and destination')),
+        title: Text(dedaText(
+            'الخريطة - موقعي والوجهة', 'Map - My location and destination')),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -19908,8 +20044,7 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     dense: true,
                     visualDensity:
                         const VisualDensity(horizontal: -1, vertical: -1),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                     value: showAvailableOnly,
                     activeColor: const Color(0xFF159447),
                     secondary: const Icon(Icons.online_prediction),
@@ -19958,7 +20093,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          dedaText('جاري رسم الطريق الأخضر...', 'Drawing green route...'),
+                          dedaText('جاري رسم الطريق الأخضر...',
+                              'Drawing green route...'),
                           style: const TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
@@ -19974,8 +20110,10 @@ class _MapReadyPageState extends State<MapReadyPage> {
                       onPressed: openSelectedDestination,
                       icon: const Icon(Icons.navigation),
                       label: Text(
-              dedaText('عرض الطريق إلى الوجهة المحددة', 'Show route to selected destination'),
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        dedaText('عرض الطريق إلى الوجهة المحددة',
+                            'Show route to selected destination'),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),
@@ -19989,7 +20127,9 @@ class _MapReadyPageState extends State<MapReadyPage> {
                     currentPosition == null ? Icons.gps_fixed : Icons.refresh,
                   ),
                   label: Text(
-                    currentPosition == null ? dedaText('تحديد موقعي', 'Locate me') : dedaText('تحديث موقعي', 'Update my location'),
+                    currentPosition == null
+                        ? dedaText('تحديد موقعي', 'Locate me')
+                        : dedaText('تحديث موقعي', 'Update my location'),
                     style: const TextStyle(fontSize: 18),
                   ),
                 ),
@@ -19998,7 +20138,8 @@ class _MapReadyPageState extends State<MapReadyPage> {
               OutlinedButton.icon(
                 onPressed: openSettings,
                 icon: const Icon(Icons.settings),
-                label: Text(dedaText('إعدادات إذن الموقع', 'Location permission settings')),
+                label: Text(dedaText(
+                    'إعدادات إذن الموقع', 'Location permission settings')),
               ),
             ],
           ),

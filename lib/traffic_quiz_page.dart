@@ -309,8 +309,15 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
   }
 
   Widget _topBar({String? subtitle}) {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        isPortrait ? 6 : 10,
+        14,
+        isPortrait ? 8 : 14,
+      ),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[_navy, _navyDeep],
@@ -338,24 +345,24 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                 child: Text(
                   t('اختبر مهاراتك', 'Test your skills'),
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 25,
+                    fontSize: isPortrait ? 23 : 25,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
-              const SizedBox(width: 48),
+              SizedBox(width: isPortrait ? 42 : 48),
             ],
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 4),
+            SizedBox(height: isPortrait ? 2 : 4),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white70,
-                fontSize: 13,
+                fontSize: isPortrait ? 12.2 : 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -366,6 +373,8 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
   }
 
   Widget _buildIntro() {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     return Column(
       children: [
         _topBar(
@@ -389,13 +398,21 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
               ),
             ),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
+              physics: isPortrait
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                isPortrait ? 12 : 20,
+                isPortrait ? 10 : 22,
+                isPortrait ? 12 : 20,
+                isPortrait ? 12 : 24,
+              ),
               child: Column(
                 children: [
                   Wrap(
                     alignment: WrapAlignment.center,
-                    spacing: 12,
-                    runSpacing: 12,
+                    spacing: isPortrait ? 6 : 12,
+                    runSpacing: isPortrait ? 6 : 12,
                     children: const [
                       _MiniSign(kind: _TrafficVisual.stop),
                       _MiniSign(kind: _TrafficVisual.pedestrian),
@@ -404,10 +421,10 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                       _MiniSign(kind: _TrafficVisual.yieldSign),
                     ],
                   ),
-                  const SizedBox(height: 26),
+                  SizedBox(height: isPortrait ? 10 : 26),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(20),
+                    padding: EdgeInsets.all(isPortrait ? 13 : 20),
                     decoration: BoxDecoration(
                       color: _navyDeep.withOpacity(0.88),
                       borderRadius: BorderRadius.circular(24),
@@ -422,52 +439,64 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                     ),
                     child: Column(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.traffic_rounded,
-                          size: 54,
+                          size: isPortrait ? 40 : 54,
                           color: _gold,
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: isPortrait ? 7 : 12),
                         Text(
                           t(
                             'اختبر مهاراتك في العلامات المرورية',
                             'Test your traffic-sign skills',
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 24,
+                            fontSize: isPortrait ? 20.5 : 24,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: isPortrait ? 7 : 14),
                         Text(
                           t(
                             '5 أسئلة يوميًا لزيادة معرفتك بقواعد الطريق والعلامات المرورية. تحصل على 5 نقاط لكل إجابة صحيحة.',
                             'Five daily questions to improve your road-rule knowledge. Earn 5 points for every correct answer.',
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
-                            height: 1.7,
+                            fontSize: isPortrait ? 13.5 : 16,
+                            height: isPortrait ? 1.42 : 1.7,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: isPortrait ? 9 : 18),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.stars_rounded, color: _gold),
-                            const SizedBox(width: 7),
-                            Text(
-                              t(
-                                'حتى 25 نقطة من الأسئلة + مكافأة المهمة',
-                                'Up to 25 quiz points + task reward',
-                              ),
-                              style: const TextStyle(
-                                color: _gold,
-                                fontWeight: FontWeight.w900,
+                            Icon(
+                              Icons.stars_rounded,
+                              color: _gold,
+                              size: isPortrait ? 20 : 24,
+                            ),
+                            SizedBox(width: isPortrait ? 5 : 7),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  t(
+                                    'حتى 25 نقطة من الأسئلة + مكافأة المهمة',
+                                    'Up to 25 quiz points + task reward',
+                                  ),
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: _gold,
+                                    fontSize: isPortrait ? 13.5 : 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -475,10 +504,10 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  SizedBox(height: isPortrait ? 11 : 22),
                   SizedBox(
                     width: double.infinity,
-                    height: 58,
+                    height: isPortrait ? 52 : 58,
                     child: FilledButton.icon(
                       onPressed: _questions.length == _dailyQuestionCount
                           ? () => setState(() => _started = true)
@@ -490,11 +519,14 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                           borderRadius: BorderRadius.circular(18),
                         ),
                       ),
-                      icon: const Icon(Icons.play_arrow_rounded, size: 29),
+                      icon: Icon(
+                        Icons.play_arrow_rounded,
+                        size: isPortrait ? 25 : 29,
+                      ),
                       label: Text(
                         t('ابدأ الاختبار', 'Start quiz'),
-                        style: const TextStyle(
-                          fontSize: 21,
+                        style: TextStyle(
+                          fontSize: isPortrait ? 19 : 21,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -521,6 +553,8 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
   }
 
   Widget _buildQuestion() {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     final q = _questions[_index];
     final answerOrder = _answerOrder(q);
     return Column(
@@ -567,21 +601,27 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
             width: double.infinity,
             color: _paper,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+              padding: EdgeInsets.fromLTRB(
+                isPortrait ? 12 : 18,
+                isPortrait ? 9 : 18,
+                isPortrait ? 12 : 18,
+                isPortrait ? 12 : 24,
+              ),
               child: Column(
                 children: [
                   _TrafficSignCard(kind: q.visual),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isPortrait ? 9 : 16),
                   Text(
                     widget.isArabic ? q.questionAr : q.questionEn,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFF102E4C),
-                      fontSize: 22,
+                    style: TextStyle(
+                      color: const Color(0xFF102E4C),
+                      fontSize: isPortrait ? 19.5 : 22,
+                      height: isPortrait ? 1.18 : 1.0,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: isPortrait ? 9 : 16),
                   ...List.generate(q.answersAr.length, (choiceIndex) {
                     final originalChoiceIndex = answerOrder[choiceIndex];
                     final selected = _selectedIndex == originalChoiceIndex;
@@ -605,7 +645,7 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                       bg = const Color(0xFFE9F8EF);
                     }
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+                      padding: EdgeInsets.only(bottom: isPortrait ? 7 : 10),
                       child: Material(
                         color: bg,
                         borderRadius: BorderRadius.circular(15),
@@ -619,9 +659,9 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 160),
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 14,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isPortrait ? 12 : 14,
+                              vertical: isPortrait ? 9 : 14,
                             ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(15),
@@ -655,9 +695,9 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                     widget.isArabic
                                         ? q.answersAr[originalChoiceIndex]
                                         : q.answersEn[originalChoiceIndex],
-                                    style: const TextStyle(
-                                      color: Color(0xFF142D46),
-                                      fontSize: 17,
+                                    style: TextStyle(
+                                      color: const Color(0xFF142D46),
+                                      fontSize: isPortrait ? 15.5 : 17,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
@@ -670,10 +710,10 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                     );
                   }),
                   if (_answerLocked) ...[
-                    const SizedBox(height: 6),
+                    SizedBox(height: isPortrait ? 4 : 6),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(isPortrait ? 11 : 16),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: _lastWasCorrect
@@ -692,7 +732,7 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                     ? Icons.check_circle_rounded
                                     : Icons.info_rounded,
                                 color: Colors.white,
-                                size: 30,
+                                size: isPortrait ? 26 : 30,
                               ),
                               const SizedBox(width: 9),
                               Flexible(
@@ -712,34 +752,34 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                           'Incorrect answer',
                                         ),
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 20,
+                                    fontSize: isPortrait ? 18 : 20,
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          SizedBox(height: isPortrait ? 7 : 10),
                           Text(
                             widget.isArabic ? q.explanationAr : q.explanationEn,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
-                              height: 1.55,
-                              fontSize: 14,
+                              height: isPortrait ? 1.38 : 1.55,
+                              fontSize: isPortrait ? 12.8 : 14,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: isPortrait ? 9 : 14),
                   ],
                   SizedBox(
                     width: double.infinity,
-                    height: 56,
+                    height: isPortrait ? 50 : 56,
                     child: FilledButton.icon(
                       onPressed: _saving
                           ? null
@@ -778,8 +818,8 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                 ? t('عرض النتيجة', 'Show result')
                                 : t('السؤال التالي', 'Next question'))
                             : t('تأكيد الإجابة', 'Confirm answer'),
-                        style: const TextStyle(
-                          fontSize: 18,
+                        style: TextStyle(
+                          fontSize: isPortrait ? 17 : 18,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -795,6 +835,8 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
   }
 
   Widget _buildResult() {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     final correctCount = _correctIds.length.clamp(0, _dailyQuestionCount);
     final wrongCount = _dailyQuestionCount - correctCount;
     final points = correctCount * 5;
@@ -926,7 +968,7 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                   backgroundColor: _gold,
                   foregroundColor: const Color(0xFF18304A),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(17),
+                    borderRadius: BorderRadius.circular(isPortrait ? 14 : 17),
                   ),
                 ),
                 icon: const Icon(Icons.home_rounded),
@@ -1027,9 +1069,11 @@ class _TrafficSignCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     return Container(
       width: double.infinity,
-      height: 225,
+      height: isPortrait ? 150 : 225,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFFFFFFFF), Color(0xFFF4F8FB)],
@@ -1047,7 +1091,7 @@ class _TrafficSignCard extends StatelessWidget {
         ],
       ),
       alignment: Alignment.center,
-      child: _TrafficSign(kind: kind, size: 165),
+      child: _TrafficSign(kind: kind, size: isPortrait ? 112 : 165),
     );
   }
 }
@@ -1059,10 +1103,12 @@ class _MiniSign extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
     return Container(
-      width: 72,
-      height: 72,
-      padding: const EdgeInsets.all(7),
+      width: isPortrait ? 54 : 72,
+      height: isPortrait ? 54 : 72,
+      padding: EdgeInsets.all(isPortrait ? 5 : 7),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.92),
         borderRadius: BorderRadius.circular(17),
@@ -1074,7 +1120,7 @@ class _MiniSign extends StatelessWidget {
           ),
         ],
       ),
-      child: _TrafficSign(kind: kind, size: 58),
+      child: _TrafficSign(kind: kind, size: isPortrait ? 44 : 58),
     );
   }
 }
