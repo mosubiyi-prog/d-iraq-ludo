@@ -509,8 +509,20 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
     );
   }
 
+  List<int> _answerOrder(_TrafficQuestion q) {
+    final order = List<int>.generate(q.answersAr.length, (i) => i);
+    var seed = 17;
+    final source = '${q.id}|$_dayId|$_safeAccount';
+    for (final code in source.codeUnits) {
+      seed = ((seed * 31) + code) & 0x7fffffff;
+    }
+    order.shuffle(math.Random(seed));
+    return order;
+  }
+
   Widget _buildQuestion() {
     final q = _questions[_index];
+    final answerOrder = _answerOrder(q);
     return Column(
       children: [
         _topBar(
@@ -571,8 +583,10 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                   ),
                   const SizedBox(height: 16),
                   ...List.generate(q.answersAr.length, (choiceIndex) {
-                    final selected = _selectedIndex == choiceIndex;
-                    final isCorrectChoice = choiceIndex == q.correctIndex;
+                    final originalChoiceIndex = answerOrder[choiceIndex];
+                    final selected = _selectedIndex == originalChoiceIndex;
+                    final isCorrectChoice =
+                        originalChoiceIndex == q.correctIndex;
                     Color borderColor = const Color(0xFFD7C9A7);
                     Color bg = Colors.white;
                     if (selected) {
@@ -599,7 +613,7 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                           onTap: _answerLocked || _saving
                               ? null
                               : () => setState(
-                                    () => _selectedIndex = choiceIndex,
+                                    () => _selectedIndex = originalChoiceIndex,
                                   ),
                           borderRadius: BorderRadius.circular(15),
                           child: AnimatedContainer(
@@ -639,8 +653,8 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
                                 Expanded(
                                   child: Text(
                                     widget.isArabic
-                                        ? q.answersAr[choiceIndex]
-                                        : q.answersEn[choiceIndex],
+                                        ? q.answersAr[originalChoiceIndex]
+                                        : q.answersEn[originalChoiceIndex],
                                     style: const TextStyle(
                                       color: Color(0xFF142D46),
                                       fontSize: 17,
