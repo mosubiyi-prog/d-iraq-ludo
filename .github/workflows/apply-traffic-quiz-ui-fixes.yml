@@ -1,0 +1,93 @@
+name: Apply traffic quiz UI fixes
+
+on:
+  push:
+    branches:
+      - traffic-quiz-ui-fixes-2026-10-01
+    paths:
+      - tools/patch_traffic_quiz_ui_fixes_2026_10_01.py
+      - .github/workflows/apply-traffic-quiz-ui-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout UI-fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: traffic-quiz-ui-fixes-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply the four approved UI fixes
+        run: |
+          python3 tools/patch_traffic_quiz_ui_fixes_2026_10_01.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/traffic_quiz_page.dart')
+          text = p.read_text(encoding='utf-8')
+          marker = 'BorderRadius.circular(isPortrait ? 14 : 17)'
+          old = "  Widget _buildResult() {\n    final correctCount ="
+          new = (
+              "  Widget _buildResult() {\n"
+              "    final isPortrait = MediaQuery.orientationOf(context) == Orientation.portrait;\n"
+              "    final correctCount ="
+          )
+          if marker in text and old in text:
+              text = text.replace(old, new, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Format changed Dart files
+        run: dart format lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Analyze UI-fix integration
+        run: flutter analyze lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Validate approved scope and logic guardrails
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main = Path('lib/main.dart').read_text(encoding='utf-8')
+          quiz = Path('lib/traffic_quiz_page.dart').read_text(encoding='utf-8')
+
+          checks = [
+              ('portrait intro no-scroll', 'NeverScrollableScrollPhysics' in quiz),
+              ('portrait sign card compact', 'height: isPortrait ? 150 : 225' in quiz),
+              ('gold reward line preserved', 'حتى 25 نقطة من الأسئلة + مكافأة المهمة' in quiz),
+              ('daily five questions preserved', 'static const int _dailyQuestionCount = 5;' in quiz),
+              ('question bank unchanged', quiz.count('  _TrafficQuestion(\n') == 20),
+              ('correct-answer callback preserved', 'pointAwarded = await widget.onCorrectAnswer(q.id);' in quiz),
+              ('completion callback preserved', 'await widget.onCompleted();' in quiz),
+              ('traffic task done state', 'final trafficDone = index == 6 && completed;' in main),
+              ('traffic task done label', "trafficDone ? dedaText('تم', 'Done') : action" in main),
+              ('traffic correct points event', 'DedaTaskEvent.trafficQuizCorrectAnswer' in main),
+              ('traffic completion event', 'DedaTaskEvent.trafficQuizCompleted' in main),
+          ]
+          failed = [name for name, ok in checks if not ok]
+          if failed:
+              raise SystemExit('Validation failed: ' + ', '.join(failed))
+          print('All approved traffic quiz UI fix guardrails passed.')
+          PY
+
+      - name: Commit validated UI fixes only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/traffic_quiz_page.dart
+          if git diff --cached --quiet; then
+            echo "No UI changes to commit"
+            exit 0
+          fi
+          git commit -m "Polish traffic quiz portrait UI and completed task state"
+          git push origin HEAD:traffic-quiz-ui-fixes-2026-10-01
