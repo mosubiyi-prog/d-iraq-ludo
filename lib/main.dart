@@ -12143,22 +12143,30 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
 
   Widget _taskActionButton({
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    bool done = false,
   }) {
     return SizedBox(
       width: 68,
       height: 40,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF0D5A92),
-              Color(0xFF073D6B),
-              Color(0xFF062D54),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+          gradient: done
+              ? const LinearGradient(
+                  colors: [
+                    Color(0xFF89949D),
+                    Color(0xFF68747E),
+                  ],
+                )
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFF0D5A92),
+                    Color(0xFF073D6B),
+                    Color(0xFF062D54),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
           borderRadius: BorderRadius.circular(13),
           border: Border.all(
             color: const Color(0xFFD9E8F4),
@@ -12198,11 +12206,13 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   ),
                   const SizedBox(width: 2),
                   Icon(
-                    DedaLanguageState.isArabic
-                        ? Icons.chevron_left_rounded
-                        : Icons.chevron_right_rounded,
+                    done
+                        ? Icons.check_circle_rounded
+                        : DedaLanguageState.isArabic
+                            ? Icons.chevron_left_rounded
+                            : Icons.chevron_right_rounded,
                     color: Colors.white,
-                    size: 18,
+                    size: done ? 16 : 18,
                   ),
                 ],
               ),
@@ -12309,6 +12319,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     required bool rewardClaimed,
     required bool claiming,
   }) {
+    final trafficDone = index == 6 && completed;
     return Container(
       constraints: const BoxConstraints(minHeight: 94),
       decoration: BoxDecoration(
@@ -12335,7 +12346,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _openTask(index),
+        onTap: trafficDone ? null : () => _openTask(index),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 8,
@@ -12444,8 +12455,9 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
               ),
               const SizedBox(width: 5),
               _taskActionButton(
-                label: action,
-                onTap: () => _openTask(index),
+                label: trafficDone ? dedaText('تم', 'Done') : action,
+                onTap: trafficDone ? null : () => _openTask(index),
+                done: trafficDone,
               ),
             ],
           ),
