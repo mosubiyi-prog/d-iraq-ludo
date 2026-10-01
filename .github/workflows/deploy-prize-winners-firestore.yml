@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - prize-winners-flow-2026-10-01
+      - prize-cycle-complete-2026-10-01
     paths:
       - firestore.rules
       - .github/workflows/deploy-prize-winners-firestore.yml
@@ -16,7 +17,7 @@ jobs:
       - name: Checkout prize winners branch
         uses: actions/checkout@v4
         with:
-          ref: prize-winners-flow-2026-10-01
+          ref: ${{ github.ref_name }}
 
       - name: Select Firebase credential
         id: auth
@@ -41,8 +42,6 @@ jobs:
             exit 2
           fi
 
-      # This deployment intentionally runs from the isolated prize-flow branch
-      # so the new collection rules are syntax-checked before the test APK ships.
       - name: Deploy Firestore rules with service account
         if: steps.auth.outputs.mode == 'service'
         env:
