@@ -687,22 +687,25 @@ class _DedaAdminPrizeWinnersPageState extends State<DedaAdminPrizeWinnersPage> {
                                                   const SizedBox(height: 3),
                                                   Directionality(
                                                     textDirection: TextDirection.ltr,
-                                                    child: Text(
-                                                      dedaId,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 3),
-                                                  Directionality(
-                                                    textDirection: TextDirection.ltr,
-                                                    child: Text(
-                                                      code,
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: const TextStyle(
-                                                        color: Color(0xFF7A5A10),
-                                                        fontWeight: FontWeight.w800,
+                                                    child: FittedBox(
+                                                      fit: BoxFit.scaleDown,
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text.rich(
+                                                        TextSpan(
+                                                          children: [
+                                                            TextSpan(text: dedaId),
+                                                            const TextSpan(text: '   '),
+                                                            TextSpan(
+                                                              text: code,
+                                                              style: const TextStyle(
+                                                                color: Color(0xFF7A5A10),
+                                                                fontWeight: FontWeight.w800,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        maxLines: 1,
+                                                        softWrap: false,
                                                       ),
                                                     ),
                                                   ),
@@ -745,14 +748,33 @@ class _DedaAdminPrizeWinnersPageState extends State<DedaAdminPrizeWinnersPage> {
                                               borderRadius: BorderRadius.circular(12),
                                             ),
                                             child: Directionality(
-                                              textDirection: TextDirection.ltr,
-                                              child: Text(
-                                                '${t('رقم الفائز', 'Winner')} $serialText',
-                                                style: const TextStyle(
-                                                  color: Color(0xFF6F5715),
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w900,
-                                                ),
+                                              textDirection: widget.isArabic
+                                                  ? TextDirection.rtl
+                                                  : TextDirection.ltr,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    t('رقم الفائز:', 'Winner:'),
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF6F5715),
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Directionality(
+                                                    textDirection: TextDirection.ltr,
+                                                    child: Text(
+                                                      serialText,
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF6F5715),
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w900,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -844,7 +866,8 @@ class _DedaAdminPrizeWinnerDetailPageState
       );
       return;
     }
-    if (_status == 'prize_sent' && _prize.text.trim().isEmpty) {
+    final prizeText = _prize.text.trim();
+    if (_status == 'prize_sent' && prizeText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(t('اكتب تفاصيل الجائزة المخصصة أولًا.',
@@ -855,16 +878,38 @@ class _DedaAdminPrizeWinnerDetailPageState
     }
     setState(() => _saving = true);
     try {
+      var finalStatus = _status;
       await DedaBackend.updatePrizeWinnerRequestFromAdmin(
         requestId: widget.requestId,
         status: _status,
         adminMessage: _message.text,
         prizeDetails: _prize.text,
       );
+      if (_status == 'approved' && prizeText.isNotEmpty) {
+        await DedaBackend.updatePrizeWinnerRequestFromAdmin(
+          requestId: widget.requestId,
+          status: 'prize_sent',
+          adminMessage: _message.text,
+          prizeDetails: _prize.text,
+        );
+        finalStatus = 'prize_sent';
+      }
       if (!mounted) return;
-      setState(() => _savedStatus = _status);
+      setState(() {
+        _status = finalStatus;
+        _savedStatus = finalStatus;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t('تم حفظ تحديث الفائز.', 'Winner updated.'))),
+        SnackBar(
+          content: Text(
+            finalStatus == 'prize_sent'
+                ? t(
+                    'تم اعتماد الفوز وإرسال الجائزة للفائز. بانتظار تأكيد الاستلام.',
+                    'Win approved and prize sent. Waiting for winner confirmation.',
+                  )
+                : t('تم حفظ تحديث الفائز.', 'Winner updated.'),
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
