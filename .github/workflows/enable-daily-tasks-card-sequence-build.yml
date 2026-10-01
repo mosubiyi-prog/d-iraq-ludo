@@ -20,48 +20,8 @@ jobs:
           ref: fix-daily-tasks-card-sequence-2026-10-01
           fetch-depth: 0
 
-      - name: Add branch and final-source guard to Build APK
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('.github/workflows/build.yml')
-          s = p.read_text(encoding='utf-8')
-
-          branch = '      - fix-daily-tasks-card-sequence-2026-10-01\n'
-          anchor = '      - points-stage1-code-2026-09-30\n'
-          if branch not in s:
-              if s.count(anchor) != 1:
-                  raise SystemExit(f'branch anchor count={s.count(anchor)}')
-              s = s.replace(anchor, anchor + branch, 1)
-
-          guard = r'''      - name: Validate DEDA daily tasks and card sequence in final source
-            run: |
-              python3 - <<'PY2'
-              from pathlib import Path
-              s = Path('lib/main.dart').read_text(encoding='utf-8')
-              assert "static String currentLocalCycleId([DateTime? value]) {\n    return currentLocalDayId(value);\n  }" in s
-              assert "final awardId = 'daily_login|$dayId';" in s
-              assert "final awardId = 'task|$cycle|$taskId';" in s
-              assert "!awards.containsKey('point_tier_claim|$previousThreshold')" in s
-              assert "await _loadOpenedPointTiers();\n    if (!mounted) return;\n\n    final index = _pointTierIndex(threshold);" in s
-              stale = "if (previousThreshold != null &&\n        !_claimedPointTiers.contains(previousThreshold))"
-              assert stale not in s
-              for pair in ('5000: 50', '10000: 100', '15000: 150', '20000: 200', '25000: 250'):
-                  assert pair in s
-              assert "'points': -threshold" in s
-              assert "'points': threshold + bonus" in s
-              print('final APK source invariants validated')
-              PY2
-
-'''
-          if 'Validate DEDA daily tasks and card sequence in final source' not in s:
-              marker = '      - name: Build permanently signed APK and AAB\n'
-              if s.count(marker) != 1:
-                  raise SystemExit(f'build marker count={s.count(marker)}')
-              s = s.replace(marker, guard + marker, 1)
-
-          p.write_text(s, encoding='utf-8')
-          PY
+      - name: Enable guarded Build APK
+        run: python3 tools/enable_daily_tasks_card_sequence_build_2026_10_01.py
 
       - name: Verify workflow edits
         run: |
