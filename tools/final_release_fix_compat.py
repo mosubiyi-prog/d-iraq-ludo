@@ -34,4 +34,30 @@ replacement = """# The final owner-place flow already owns availability persiste
 
 text = text[:start] + replacement + text[end:]
 path.write_text(text)
-print("Prepared final_release_fix.py for formatted final DEDA source.")
+
+# The PIN-login patch also has one exact UI anchor that dart format expands
+# across three lines. Update only that anchor; all login behavior stays intact.
+pin_path = Path("tools/pin_login_patch.py")
+pin = pin_path.read_text()
+pin_start = pin.find('old_name_field = r"""')
+pin_end = pin.find('new_phone_intro = r"""', pin_start)
+if pin_start < 0 or pin_end < 0:
+    raise SystemExit("pin_login_patch name-field markers not found")
+formatted_name_field = r'''old_name_field = r"""                              TextField(
+                                controller: nameController,
+                                textDirection: DedaLanguageState.direction,
+                                textAlign: DedaLanguageState.isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                decoration: _fieldDecoration(
+                                  hint: dedaText('الاسم الكامل', 'Full name'),
+                                  icon: Icons.person,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+"""
+'''
+pin = pin[:pin_start] + formatted_name_field + pin[pin_end:]
+pin_path.write_text(pin)
+
+print("Prepared final release and PIN patches for formatted final DEDA source.")
