@@ -21,6 +21,7 @@ on:
       - points-stage1-code-2026-09-30
       - fix-daily-tasks-card-sequence-2026-10-01
       - prize-winners-flow-2026-10-01
+      - prize-cycle-complete-2026-10-01
       - map-nav-9-points-work-2026-09-24
       - home-ui-step12-2026-09-26
       - location-sharing-v1-work-2026-09-26
@@ -295,6 +296,9 @@ jobs:
 
       - name: Validate DEDA prize winner flow in final source
         run: python3 tools/validate_prize_winners_flow_2026_10_01.py
+
+      - name: Validate complete DEDA prize cycle
+        run: python3 tools/validate_prize_cycle_complete_2026_10_01.py
 
       - name: Build permanently signed APK and AAB
         env:
