@@ -2330,7 +2330,7 @@ class DedaBackend {
     return FirebaseFirestore.instance
         .collection('admin_trash_support')
         .orderBy('deletedAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -2489,7 +2489,7 @@ class DedaBackend {
     return FirebaseFirestore.instance
         .collection('admin_trash_place_requests')
         .orderBy('deletedAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -2792,7 +2792,7 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> adminMembers() {
     return FirebaseFirestore.instance
         .collection('admins')
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -2815,7 +2815,7 @@ class DedaBackend {
   static Stream<QuerySnapshot<Map<String, dynamic>>> adminUsers() {
     return FirebaseFirestore.instance
         .collection('users')
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -2824,7 +2824,7 @@ class DedaBackend {
     return FirebaseFirestore.instance
         .collection('place_deletion_requests')
         .orderBy('updatedAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -3054,7 +3054,7 @@ class DedaBackend {
     return FirebaseFirestore.instance
         .collection('account_deletion_requests')
         .orderBy('createdAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -3142,10 +3142,12 @@ class DedaBackend {
     );
   }
 
+  static const String prizeWinnerCycleId = 'prize_v1';
+
   static String _prizeWinnerRequestIdForPhone(String phone) {
     final accountKey = accountKeyForPhone(phone);
     if (accountKey.isEmpty) throw ArgumentError('prize-account-required');
-    return 'prize_v1_$accountKey';
+    return '${prizeWinnerCycleId}_$accountKey';
   }
 
   static Stream<Map<String, dynamic>?> prizeWinnerRequestForUser(String phone) {
@@ -3153,7 +3155,7 @@ class DedaBackend {
     if (accountKey.isEmpty) return Stream<Map<String, dynamic>?>.value(null);
     return FirebaseFirestore.instance
         .collection('prize_winner_requests')
-        .doc('prize_v1_$accountKey')
+        .doc('${prizeWinnerCycleId}_$accountKey')
         .snapshots()
         .map((snapshot) => snapshot.exists && snapshot.data() != null
             ? <String, dynamic>{'id': snapshot.id, ...snapshot.data()!}
@@ -3183,6 +3185,7 @@ class DedaBackend {
 
     await ref.set(<String, dynamic>{
       'ownerUid': user.uid,
+      'cycleId': prizeWinnerCycleId,
       'accountKey': accountKey,
       'name': name.trim(),
       'phone': cleanPhone,
@@ -3235,12 +3238,40 @@ class DedaBackend {
     });
   }
 
+  static Future<void> confirmPrizeReceivedByUser({
+    required String phone,
+  }) async {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) throw ArgumentError('prize-account-required');
+    await _ensureOwnerSessionForAccountKey(accountKey);
+    final ref = FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .doc(_prizeWinnerRequestIdForPhone(phone));
+    final snapshot = await ref.get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      throw StateError('prize-request-not-found');
+    }
+    if ((data['accountKey'] ?? '').toString() != accountKey) {
+      throw StateError('prize-request-owner-mismatch');
+    }
+    if ((data['status'] ?? '').toString() != 'prize_sent') {
+      throw StateError('prize-not-awaiting-confirmation');
+    }
+    await ref.update(<String, dynamic>{
+      'status': 'delivered',
+      'winnerConfirmedAt': FieldValue.serverTimestamp(),
+      'deliveredAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   static Stream<QuerySnapshot<Map<String, dynamic>>>
       prizeWinnerRequestsForAdmin() {
     return FirebaseFirestore.instance
         .collection('prize_winner_requests')
         .orderBy('updatedAt', descending: true)
-        .limit(200)
+        .limit(500)
         .snapshots();
   }
 
@@ -3256,7 +3287,6 @@ class DedaBackend {
       'needs_info',
       'approved',
       'prize_sent',
-      'delivered',
       'rejected',
     };
     if (!allowed.contains(status)) throw ArgumentError('invalid-prize-status');
@@ -3272,6 +3302,22 @@ class DedaBackend {
       throw StateError('prize-request-not-found');
     }
     final before = snapshot.data()!;
+    final beforeStatus = (before['status'] ?? 'new').toString();
+    const transitions = <String, Set<String>>{
+      'new': <String>{'new', 'reviewing', 'needs_info', 'approved', 'rejected'},
+      'reviewing': <String>{'reviewing', 'needs_info', 'approved', 'rejected'},
+      'needs_info': <String>{'needs_info', 'reviewing', 'approved', 'rejected'},
+      'approved': <String>{'approved', 'prize_sent', 'rejected'},
+      'prize_sent': <String>{'prize_sent'},
+      'delivered': <String>{},
+      'rejected': <String>{'rejected', 'reviewing'},
+    };
+    if (!(transitions[beforeStatus] ?? const <String>{}).contains(status)) {
+      throw StateError('invalid-prize-status-transition');
+    }
+    if (status == 'prize_sent' && prizeDetails.trim().isEmpty) {
+      throw ArgumentError('prize-details-required');
+    }
     final update = <String, dynamic>{
       'status': status,
       'adminMessage': adminMessage.trim(),
@@ -3281,8 +3327,8 @@ class DedaBackend {
       'adminByRole': normalizeAdminRole(actor['role']),
       'adminUpdatedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      if (status == 'prize_sent') 'prizeSentAt': FieldValue.serverTimestamp(),
-      if (status == 'delivered') 'deliveredAt': FieldValue.serverTimestamp(),
+      if (status == 'prize_sent' && beforeStatus != 'prize_sent')
+        'prizeSentAt': FieldValue.serverTimestamp(),
     };
     await ref.update(update);
     await _writeAdminAudit(

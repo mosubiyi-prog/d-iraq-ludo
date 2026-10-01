@@ -37,8 +37,8 @@ class _DedaPrizeWinnerRequestPageState
         'reviewing' => t('قيد التدقيق', 'Under review'),
         'needs_info' => t('مطلوب معلومات إضافية', 'More information needed'),
         'approved' => t('تم اعتماد الفوز', 'Win approved'),
-        'prize_sent' => t('تم إرسال الجائزة', 'Prize sent'),
-        'delivered' => t('تم تسليم الجائزة', 'Prize delivered'),
+        'prize_sent' => t('بانتظار تأكيد استلامك', 'Waiting for your confirmation'),
+        'delivered' => t('تم تأكيد استلام الجائزة', 'Prize receipt confirmed'),
         'rejected' => t('مرفوض', 'Rejected'),
         _ => status,
       };
@@ -140,7 +140,69 @@ class _DedaPrizeWinnerRequestPageState
     }
   }
 
-  Widget _infoTile(IconData icon, String title, String value) {
+  Future<void> _confirmPrizeReceived() async {
+    if (_submitting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('تأكيد استلام الجائزة', 'Confirm prize receipt')),
+        content: Text(
+          t(
+            'هل تؤكد أنك استلمت جائزتك؟ بعد التأكيد ستُغلق دورة الجوائز الحالية ولن يمكن إعادة تأكيدها.',
+            'Do you confirm that you received your prize? This will close the current prize cycle and cannot be repeated.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('إلغاء', 'Cancel')),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.verified_rounded),
+            label: Text(t('نعم، تم الاستلام', 'Yes, I received it')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _submitting = true);
+    try {
+      await DedaBackend.confirmPrizeReceivedByUser(phone: widget.phone);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تم تأكيد استلام الجائزة وإغلاق دورة الجوائز الحالية.',
+              'Prize receipt confirmed and the current prize cycle is closed.',
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t(
+              'تعذر تأكيد الاستلام الآن. تحقق من الإنترنت وحاول مرة أخرى.',
+              'Could not confirm receipt. Check your connection and try again.',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Widget _infoTile(
+    IconData icon,
+    String title,
+    String value, {
+    bool ltr = false,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(12),
@@ -167,11 +229,14 @@ class _DedaPrizeWinnerRequestPageState
                   ),
                 ),
                 const SizedBox(height: 3),
-                SelectableText(
-                  value.isEmpty ? '—' : value,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 15,
+                Directionality(
+                  textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
+                  child: SelectableText(
+                    value.isEmpty ? '—' : value,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ],
@@ -315,6 +380,7 @@ class _DedaPrizeWinnerRequestPageState
                   Icons.badge_outlined,
                   t('معرف DEDA', 'DEDA ID'),
                   widget.dedaId,
+                  ltr: true,
                 ),
                 if (adminMessage.isNotEmpty)
                   _infoTile(
@@ -342,25 +408,72 @@ class _DedaPrizeWinnerRequestPageState
                     label: Text(t('الرد على الإدارة', 'Reply to administration')),
                   ),
                 ],
+                if (status == 'prize_sent') ...[
+                  const SizedBox(height: 5),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 9),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7DB),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2C865)),
+                    ),
+                    child: Text(
+                      t(
+                        'تحقق من تفاصيل جائزتك أعلاه. إذا استلمتها فعليًا اضغط الزر أدناه ثم أكد الاستلام.',
+                        'Check your prize details above. If you actually received it, press the button below and confirm receipt.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _submitting ? null : _confirmPrizeReceived,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.task_alt_rounded),
+                    label: Text(t('✅ تم استلام الجائزة', '✅ I received the prize')),
+                  ),
+                ],
                 if (status == 'delivered') ...[
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(15),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEAF7EC),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFB7DDBD)),
                     ),
-                    child: Text(
-                      t(
-                        '✅ تم تسليم الجائزة. تهانينا من فريق DEDA.',
-                        '✅ Prize delivered. Congratulations from the DEDA team.',
-                      ),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF17652F),
-                        fontWeight: FontWeight.w900,
-                      ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.emoji_events_rounded,
+                            color: Color(0xFF9A7415), size: 34),
+                        const SizedBox(height: 7),
+                        Text(
+                          t(
+                            '✅ تم تأكيد استلام جائزتك بنجاح',
+                            '✅ Your prize receipt was confirmed',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF17652F),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          t(
+                            'شكرًا لمشاركتك مع DEDA. انتظر الحدث القادم وشارك من جديد يا عزيزي 🌟',
+                            'Thank you for joining DEDA. Wait for the next event and join again 🌟',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -373,23 +486,48 @@ class _DedaPrizeWinnerRequestPageState
   }
 }
 
-class DedaAdminPrizeWinnersPage extends StatelessWidget {
+class DedaAdminPrizeWinnersPage extends StatefulWidget {
   final bool isArabic;
 
   const DedaAdminPrizeWinnersPage({super.key, required this.isArabic});
 
-  String t(String ar, String en) => isArabic ? ar : en;
+  @override
+  State<DedaAdminPrizeWinnersPage> createState() =>
+      _DedaAdminPrizeWinnersPageState();
+}
+
+class _DedaAdminPrizeWinnersPageState extends State<DedaAdminPrizeWinnersPage> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   String _statusLabel(String status) => switch (status) {
         'new' => t('جديد', 'New'),
         'reviewing' => t('قيد التدقيق', 'Under review'),
         'needs_info' => t('نحتاج معلومات', 'Needs info'),
         'approved' => t('تم اعتماد الفوز', 'Approved'),
-        'prize_sent' => t('تم إرسال الجائزة', 'Prize sent'),
-        'delivered' => t('تم التسليم', 'Delivered'),
+        'prize_sent' => t('بانتظار تأكيد الفائز', 'Awaiting winner confirmation'),
+        'delivered' => t('تم التسليم بتأكيد الفائز', 'Confirmed delivered'),
         'rejected' => t('مرفوض', 'Rejected'),
         _ => status,
       };
+
+  String _displayDedaId(String value) {
+    final clean = value.trim().replaceAll('@', '');
+    return clean.isEmpty ? '—' : '@$clean';
+  }
+
+  int _createdMillis(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final value = doc.data()['createdAt'];
+    return value is Timestamp ? value.millisecondsSinceEpoch : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -410,112 +548,224 @@ class DedaAdminPrizeWinnersPage extends StatelessWidget {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
-            return Center(
-              child: Text(t('لا توجد طلبات فوز حاليًا.', 'No prize requests yet.')),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data();
-              final name = (data['name'] ?? '—').toString();
-              final dedaId = (data['dedaId'] ?? '—').toString();
-              final code = (data['rewardCode'] ?? '—').toString();
-              final status = (data['status'] ?? 'new').toString();
-              return Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(19),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(19),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => DedaAdminPrizeWinnerDetailPage(
-                        isArabic: isArabic,
-                        requestId: doc.id,
-                        initialData: data,
-                      ),
+
+          final allDocs = snapshot.data!.docs.toList();
+          final byCreated = allDocs.toList()
+            ..sort((a, b) => _createdMillis(a).compareTo(_createdMillis(b)));
+          final serialById = <String, int>{
+            for (var i = 0; i < byCreated.length; i++) byCreated[i].id: i + 1,
+          };
+          final q = _query.trim().toLowerCase();
+          final docs = allDocs.where((doc) {
+            if (q.isEmpty) return true;
+            final d = doc.data();
+            final serial = serialById[doc.id] ?? 0;
+            final haystack = <String>[
+              (d['name'] ?? '').toString(),
+              (d['dedaId'] ?? '').toString(),
+              (d['phone'] ?? '').toString(),
+              (d['rewardCode'] ?? '').toString(),
+              doc.id,
+              _statusLabel((d['status'] ?? '').toString()),
+              serial.toString(),
+              '#${serial.toString().padLeft(3, '0')}',
+            ].join(' ').toLowerCase();
+            return haystack.contains(q);
+          }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                child: TextField(
+                  controller: _search,
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: t('مسح البحث', 'Clear search'),
+                            onPressed: () {
+                              _search.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                    hintText: t(
+                      'ابحث بالاسم أو المعرف أو الهاتف أو رقم الفائز',
+                      'Search name, ID, phone, or winner number',
                     ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(19),
-                      border: Border.all(color: const Color(0xFFE5D5A5)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Color(0xFFFFF3C8),
-                          ),
-                          child: const Icon(
-                            Icons.emoji_events_rounded,
-                            color: Color(0xFF9A7415),
-                          ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 16)),
-                              const SizedBox(height: 3),
-                              Directionality(
-                                textDirection: TextDirection.ltr,
-                                child: Text(dedaId,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                              ),
-                              const SizedBox(height: 3),
-                              Directionality(
-                                textDirection: TextDirection.ltr,
-                                child: Text(code,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: Color(0xFF7A5A10),
-                                        fontWeight: FontWeight.w800)),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: status == 'new'
-                                ? const Color(0xFFFFE5E2)
-                                : const Color(0xFFEAF4EC),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            _statusLabel(status),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      ],
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                 ),
-              );
-            },
+              ),
+              Expanded(
+                child: allDocs.isEmpty
+                    ? Center(
+                        child: Text(t('لا توجد طلبات فوز حاليًا.', 'No prize requests yet.')),
+                      )
+                    : docs.isEmpty
+                        ? Center(
+                            child: Text(t('لا توجد نتائج مطابقة.', 'No matching winners.')),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+                            itemCount: docs.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final doc = docs[index];
+                              final data = doc.data();
+                              final serial = serialById[doc.id] ?? 0;
+                              final serialText =
+                                  '#${serial.toString().padLeft(3, '0')}';
+                              final name = (data['name'] ?? '—').toString();
+                              final dedaId =
+                                  _displayDedaId((data['dedaId'] ?? '').toString());
+                              final code = (data['rewardCode'] ?? '—').toString();
+                              final status = (data['status'] ?? 'new').toString();
+                              return Material(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(19),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(19),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => DedaAdminPrizeWinnerDetailPage(
+                                        isArabic: widget.isArabic,
+                                        requestId: doc.id,
+                                        initialData: data,
+                                        serialNumber: serial,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(19),
+                                      border: Border.all(
+                                        color: const Color(0xFFE5D5A5),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              width: 48,
+                                              height: 48,
+                                              decoration: const BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: Color(0xFFFFF3C8),
+                                              ),
+                                              child: const Icon(
+                                                Icons.emoji_events_rounded,
+                                                color: Color(0xFF9A7415),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 11),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    name,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Directionality(
+                                                    textDirection: TextDirection.ltr,
+                                                    child: Text(
+                                                      dedaId,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Directionality(
+                                                    textDirection: TextDirection.ltr,
+                                                    child: Text(
+                                                      code,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF7A5A10),
+                                                        fontWeight: FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: status == 'new'
+                                                    ? const Color(0xFFFFE5E2)
+                                                    : const Color(0xFFEAF4EC),
+                                                borderRadius: BorderRadius.circular(14),
+                                              ),
+                                              child: Text(
+                                                _statusLabel(status),
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 9),
+                                        Align(
+                                          alignment: AlignmentDirectional.centerEnd,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 9,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF5F0E1),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Directionality(
+                                              textDirection: TextDirection.ltr,
+                                              child: Text(
+                                                '${t('رقم الفائز', 'Winner')} $serialText',
+                                                style: const TextStyle(
+                                                  color: Color(0xFF6F5715),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
           );
         },
       ),
@@ -527,12 +777,14 @@ class DedaAdminPrizeWinnerDetailPage extends StatefulWidget {
   final bool isArabic;
   final String requestId;
   final Map<String, dynamic> initialData;
+  final int serialNumber;
 
   const DedaAdminPrizeWinnerDetailPage({
     super.key,
     required this.isArabic,
     required this.requestId,
     required this.initialData,
+    required this.serialNumber,
   });
 
   @override
@@ -543,6 +795,7 @@ class DedaAdminPrizeWinnerDetailPage extends StatefulWidget {
 class _DedaAdminPrizeWinnerDetailPageState
     extends State<DedaAdminPrizeWinnerDetailPage> {
   late String _status;
+  late String _savedStatus;
   late final TextEditingController _message;
   late final TextEditingController _prize;
   bool _saving = false;
@@ -553,6 +806,7 @@ class _DedaAdminPrizeWinnerDetailPageState
   void initState() {
     super.initState();
     _status = (widget.initialData['status'] ?? 'new').toString();
+    _savedStatus = _status;
     _message = TextEditingController(
       text: (widget.initialData['adminMessage'] ?? '').toString(),
     );
@@ -573,8 +827,8 @@ class _DedaAdminPrizeWinnerDetailPageState
         'reviewing' => t('قيد التدقيق', 'Under review'),
         'needs_info' => t('طلب معلومات إضافية', 'Request more info'),
         'approved' => t('اعتماد الفوز', 'Approve win'),
-        'prize_sent' => t('إرسال الجائزة', 'Prize sent'),
-        'delivered' => t('تم تسليم الجائزة', 'Delivered'),
+        'prize_sent' => t('إرسال الجائزة / انتظار تأكيد الفائز', 'Send prize / await winner'),
+        'delivered' => t('تم التسليم بتأكيد الفائز', 'Confirmed delivered'),
         'rejected' => t('مرفوض', 'Rejected'),
         _ => status,
       };
@@ -590,8 +844,7 @@ class _DedaAdminPrizeWinnerDetailPageState
       );
       return;
     }
-    if ((_status == 'prize_sent' || _status == 'delivered') &&
-        _prize.text.trim().isEmpty) {
+    if (_status == 'prize_sent' && _prize.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(t('اكتب تفاصيل الجائزة المخصصة أولًا.',
@@ -609,6 +862,7 @@ class _DedaAdminPrizeWinnerDetailPageState
         prizeDetails: _prize.text,
       );
       if (!mounted) return;
+      setState(() => _savedStatus = _status);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(t('تم حفظ تحديث الفائز.', 'Winner updated.'))),
       );
@@ -624,8 +878,47 @@ class _DedaAdminPrizeWinnerDetailPageState
     }
   }
 
-  Widget _dataRow(String label, dynamic value, {bool ltr = false}) {
+  List<String> _statusChoices() {
+    switch (_savedStatus) {
+      case 'new':
+        return const <String>['new', 'reviewing', 'needs_info', 'approved', 'rejected'];
+      case 'reviewing':
+        return const <String>['reviewing', 'needs_info', 'approved', 'rejected'];
+      case 'needs_info':
+        return const <String>['needs_info', 'reviewing', 'approved', 'rejected'];
+      case 'approved':
+        return const <String>['approved', 'prize_sent', 'rejected'];
+      case 'prize_sent':
+        return const <String>['prize_sent'];
+      case 'delivered':
+        return const <String>['delivered'];
+      case 'rejected':
+        return const <String>['rejected', 'reviewing'];
+      default:
+        return <String>[_status];
+    }
+  }
+
+  String _timestampText(dynamic value) {
+    if (value is! Timestamp) return '';
+    final d = value.toDate().toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  Widget _dataRow(
+    String label,
+    dynamic value, {
+    bool ltr = false,
+    bool singleLine = false,
+  }) {
     final text = (value ?? '').toString().trim();
+    final shown = text.isEmpty ? '—' : text;
+    final valueWidget = SelectableText(
+      shown,
+      maxLines: singleLine ? 1 : null,
+      style: const TextStyle(fontWeight: FontWeight.w900),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Row(
@@ -633,15 +926,26 @@ class _DedaAdminPrizeWinnerDetailPageState
         children: [
           SizedBox(
             width: 118,
-            child: Text(label,
-                style: const TextStyle(
-                    color: Color(0xFF6D746D), fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF6D746D),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           Expanded(
             child: Directionality(
               textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
-              child: SelectableText(text.isEmpty ? '—' : text,
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              child: singleLine
+                  ? FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: ltr
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
+                      child: valueWidget,
+                    )
+                  : valueWidget,
             ),
           ),
         ],
@@ -672,14 +976,26 @@ class _DedaAdminPrizeWinnerDetailPageState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _dataRow(t('الاسم', 'Name'), d['name']),
+                _dataRow(t('رقم الفائز', 'Winner number'),
+                    '#${widget.serialNumber.toString().padLeft(3, '0')}', ltr: true),
                 _dataRow(t('معرف DEDA', 'DEDA ID'), d['dedaId'], ltr: true),
                 _dataRow(t('الهاتف', 'Phone'), d['phone'], ltr: true),
-                _dataRow(t('الرمز الكامل', 'Full code'), d['rewardCode'], ltr: true),
+                _dataRow(t('الرمز الكامل', 'Full code'), d['rewardCode'],
+                    ltr: true, singleLine: true),
                 _dataRow(t('الرصيد عند الفوز', 'Balance at win'),
                     d['pointsAtCompletion']),
                 _dataRow(t('النقاط المستقطعة نهائيًا', 'Final reserved points'),
                     d['finalReservedPoints']),
                 _dataRow(t('رد الفائز', 'Winner reply'), d['userReply']),
+                if (d['createdAt'] != null)
+                  _dataRow(t('تاريخ الفوز', 'Won at'),
+                      _timestampText(d['createdAt']), ltr: true),
+                if (d['prizeSentAt'] != null)
+                  _dataRow(t('إرسال الجائزة', 'Prize sent at'),
+                      _timestampText(d['prizeSentAt']), ltr: true),
+                if (d['winnerConfirmedAt'] != null)
+                  _dataRow(t('تأكيد الفائز', 'Winner confirmed at'),
+                      _timestampText(d['winnerConfirmedAt']), ltr: true),
               ],
             ),
           ),
@@ -690,24 +1006,62 @@ class _DedaAdminPrizeWinnerDetailPageState
               labelText: t('حالة الطلب', 'Request status'),
               border: const OutlineInputBorder(),
             ),
-            items: const <String>[
-              'new',
-              'reviewing',
-              'needs_info',
-              'approved',
-              'prize_sent',
-              'delivered',
-              'rejected',
-            ]
-                .map((value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(_label(value)),
-                    ))
+            items: _statusChoices()
+                .map(
+                  (value) => DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(_label(value)),
+                  ),
+                )
                 .toList(),
-            onChanged: (value) {
-              if (value != null) setState(() => _status = value);
-            },
+            onChanged: _savedStatus == 'delivered' || _savedStatus == 'prize_sent'
+                ? null
+                : (value) {
+                    if (value != null) setState(() => _status = value);
+                  },
           ),
+          if (_savedStatus == 'prize_sent') ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7DB),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2C865)),
+              ),
+              child: Text(
+                t(
+                  'تم إرسال الجائزة. الحالة الآن بانتظار أن يضغط الفائز «تم استلام الجائزة» ويؤكد الاستلام بنفسه.',
+                  'Prize sent. Waiting for the winner to confirm receipt.',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+          if (_savedStatus == 'delivered') ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF7EC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFB7DDBD)),
+              ),
+              child: Text(
+                t(
+                  '✅ الفائز أكد استلام الجائزة. أُغلقت دورة الجوائز لهذا الطلب.',
+                  '✅ The winner confirmed receipt. This prize cycle is closed.',
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF17652F),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
           const SizedBox(height: 12),
           TextField(
             controller: _message,
@@ -740,7 +1094,7 @@ class _DedaAdminPrizeWinnerDetailPageState
           ),
           const SizedBox(height: 10),
           FilledButton.icon(
-            onPressed: _saving ? null : _save,
+            onPressed: _saving || _savedStatus == 'delivered' ? null : _save,
             icon: _saving
                 ? const SizedBox(
                     width: 18,

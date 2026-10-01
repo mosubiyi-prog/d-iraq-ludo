@@ -9045,173 +9045,231 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
     final thresholdLabel = _formatPointTier(threshold);
     final rewardCode = _rewardCode16();
 
-    return Column(
-      key: ValueKey<String>('reward-final-$threshold'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text(
-          'DEDA',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 2.1,
-          ),
-        ),
-        const SizedBox(height: 5),
-        const Icon(Icons.emoji_events_rounded, color: gold, size: 38),
-        const SizedBox(height: 4),
-        Text(
-          dedaText(
-            '🎉 مبروك! أكملت جميع المراحل',
-            '🎉 Congratulations! All stages completed',
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          style: const TextStyle(
-            color: gold,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w900,
-            height: 1.15,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          dedaText('رمز الجائزة الكامل', 'Complete prize code'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
-          decoration: BoxDecoration(
-            color: const Color(0xCC020914),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: gold, width: 1.4),
-          ),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: SelectableText(
-                rewardCode,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.7,
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: DedaBackend.prizeWinnerRequestForUser(DedaPreferences.phone),
+      builder: (context, snapshot) {
+        final request = snapshot.data;
+        final status = (request?['status'] ?? '').toString();
+        final delivered = status == 'delivered';
+        final hasRequest = request != null;
+
+        return Column(
+          key: ValueKey<String>('reward-final-$threshold-$status'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'DEDA',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.1,
+              ),
+            ),
+            const SizedBox(height: 5),
+            const Icon(Icons.emoji_events_rounded, color: gold, size: 38),
+            const SizedBox(height: 4),
+            Text(
+              delivered
+                  ? dedaText(
+                      '🏆 تم استلام جائزتك بنجاح',
+                      '🏆 Prize received successfully',
+                    )
+                  : dedaText(
+                      '🎉 مبروك! أكملت جميع المراحل',
+                      '🎉 Congratulations! All stages completed',
+                    ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                color: gold,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              dedaText('رمز الجائزة الكامل', 'Complete prize code'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xCC020914),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: gold, width: 1.4),
+              ),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SelectableText(
+                    rewardCode,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.7,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          dedaText(
-            'لقد حصلت على الجائزة النهائية 👏',
-            'You earned the final prize 👏',
-          ),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: gold,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          dedaText(
-            '$thresholdLabel نقطة خُصمت لإكمال المرحلة النهائية ولا تعاد إلى الرصيد.',
-            '$thresholdLabel points were spent on the final stage and are not returned.',
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 8.6,
-            fontWeight: FontWeight.w700,
-            height: 1.15,
-          ),
-        ),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 38,
-          child: Material(
-            color: deep,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                Navigator.push<void>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DedaPrizeWinnerRequestPage(
-                      isArabic: DedaLanguageState.isArabic,
-                      name: DedaPreferences.userName,
-                      phone: DedaPreferences.phone,
-                      dedaId: _personalDedaId,
-                      rewardCode: rewardCode,
-                      pointsAtCompletion: totalPoints,
+            const SizedBox(height: 5),
+            Text(
+              delivered
+                  ? dedaText(
+                      'شكرًا لمشاركتك مع DEDA 🌟',
+                      'Thank you for joining DEDA 🌟',
+                    )
+                  : dedaText(
+                      'لقد حصلت على الجائزة النهائية 👏',
+                      'You earned the final prize 👏',
+                    ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: gold,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              delivered
+                  ? dedaText(
+                      'انتظر الحدث القادم وشارك من جديد يا عزيزي.',
+                      'Wait for the next event and join again.',
+                    )
+                  : dedaText(
+                      '$thresholdLabel نقطة خُصمت لإكمال المرحلة النهائية ولا تعاد إلى الرصيد.',
+                      '$thresholdLabel points were spent on the final stage and are not returned.',
+                    ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 8.6,
+                fontWeight: FontWeight.w700,
+                height: 1.15,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (!delivered)
+              SizedBox(
+                height: 38,
+                child: Material(
+                  color: deep,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DedaPrizeWinnerRequestPage(
+                            isArabic: DedaLanguageState.isArabic,
+                            name: DedaPreferences.userName,
+                            phone: DedaPreferences.phone,
+                            dedaId: _personalDedaId,
+                            rewardCode: rewardCode,
+                            pointsAtCompletion: totalPoints,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: gold, width: 1.2),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          hasRequest
+                              ? dedaText(
+                                  'متابعة طلب الجائزة مع الإدارة',
+                                  'Follow prize request with administration',
+                                )
+                              : dedaText(
+                                  'مراسلة الإدارة للمطالبة بالجائزة',
+                                  'Contact administration to claim prize',
+                                ),
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: gold,
+                            fontSize: 10.3,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: gold, width: 1.2),
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF18351F),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: gold.withOpacity(0.75)),
+                ),
+                child: Text(
+                  dedaText(
+                    '✅ تم تأكيد الاستلام وإغلاق دورة الجوائز الحالية',
+                    '✅ Receipt confirmed and this prize cycle is closed',
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: const TextStyle(
+                    color: gold,
+                    fontSize: 9.8,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_rounded, color: gold, size: 14),
+                const SizedBox(width: 4),
+                Flexible(
                   child: Text(
-                    dedaText(
-                      'مراسلة الإدارة للمطالبة بالجائزة',
-                      'Contact administration to claim prize',
-                    ),
+                    delivered
+                        ? dedaText(
+                            'اكتملت الدورة • البطاقات مغلقة • انتظر الحدث القادم',
+                            'Cycle completed • cards locked • wait for the next event',
+                          )
+                        : dedaText(
+                            'البطاقات مكتملة • طلب الجائزة قيد المتابعة',
+                            'Cards completed • prize request in progress',
+                          ),
                     maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: gold,
-                      fontSize: 10.3,
+                      fontSize: 9.2,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.lock_rounded, color: gold, size: 14),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                dedaText(
-                  'اكتملت الدورة • البطاقات مغلقة',
-                  'Cycle completed • cards locked',
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: gold,
-                  fontSize: 9.4,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              ],
             ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 

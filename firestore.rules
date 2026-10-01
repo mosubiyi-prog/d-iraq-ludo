@@ -1098,6 +1098,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.accountKey is string
+        && request.resource.data.cycleId == 'prize_v1'
         && sameAccount(request.resource.data.accountKey)
         && requestId == 'prize_v1_' + request.resource.data.accountKey
         && request.resource.data.name is string
@@ -1119,7 +1120,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.keys().hasOnly([
-          'ownerUid', 'accountKey', 'name', 'phone', 'dedaId',
+          'ownerUid', 'cycleId', 'accountKey', 'name', 'phone', 'dedaId',
           'rewardCode', 'pointsAtCompletion', 'completedThresholds',
           'finalReservedPoints', 'status', 'adminMessage', 'prizeDetails',
           'userReply', 'createdAt', 'updatedAt'
@@ -1145,8 +1146,15 @@ service cloud.firestore {
           isGeneralManager()
           && request.resource.data.status in [
             'new', 'reviewing', 'needs_info', 'approved',
-            'prize_sent', 'delivered', 'rejected'
+            'prize_sent', 'rejected'
           ]
+          && (
+            request.resource.data.status != 'prize_sent'
+            || (
+              request.resource.data.prizeDetails is string
+              && request.resource.data.prizeDetails.size() > 0
+            )
+          )
           && request.resource.data.adminByUid == request.auth.uid
           && request.resource.data.adminByName is string
           && request.resource.data.adminByRole == 'general_manager'
@@ -1155,7 +1163,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'adminMessage', 'prizeDetails',
             'adminByUid', 'adminByName', 'adminByRole',
-            'adminUpdatedAt', 'updatedAt', 'prizeSentAt', 'deliveredAt'
+            'adminUpdatedAt', 'updatedAt', 'prizeSentAt'
           ])
         )
         || (
@@ -1172,6 +1180,21 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'status', 'userReply', 'userReplyAt', 'updatedAt'
+          ])
+        )
+        || (
+          signedIn()
+          && resource.data.status == 'prize_sent'
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+          && request.resource.data.status == 'delivered'
+          && request.resource.data.winnerConfirmedAt == request.time
+          && request.resource.data.deliveredAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'winnerConfirmedAt', 'deliveredAt', 'updatedAt'
           ])
         );
 
