@@ -41,6 +41,8 @@ jobs:
             exit 2
           fi
 
+      # This deployment intentionally runs from the isolated prize-flow branch
+      # so the new collection rules are syntax-checked before the test APK ships.
       - name: Deploy Firestore rules with service account
         if: steps.auth.outputs.mode == 'service'
         env:
