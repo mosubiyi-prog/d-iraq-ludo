@@ -1086,19 +1086,11 @@ class DedaTaskEngine {
     revisionNotifier.value++;
   }
 
-  /// Development cycle id. Weekly definitions will later supply their own
-  /// Firestore weekId, so changing rollover policy will not change task IDs.
+  /// Local progress cycle for the tasks shown on the Daily Tasks page.
+  /// A new local calendar day creates fresh completion/claim keys while old
+  /// awards stay in the ledger, so accumulated points are never reset.
   static String currentLocalCycleId([DateTime? value]) {
-    final now = (value ?? DateTime.now()).toLocal();
-    final monday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - DateTime.monday));
-    final y = monday.year.toString().padLeft(4, '0');
-    final m = monday.month.toString().padLeft(2, '0');
-    final d = monday.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
+    return currentLocalDayId(value);
   }
 
   static String? taskIdForEvent(DedaTaskEvent event) => switch (event) {
@@ -8530,6 +8522,8 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         _claimedPointTiers.add(threshold);
         _claimingPointTiers.remove(threshold);
       });
+      await _loadOpenedPointTiers();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -8564,26 +8558,17 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
   }
 
   Future<void> _openPointTier(int threshold, int totalPoints) async {
+    await _loadOpenedPointTiers();
+    if (!mounted) return;
+
     final index = _pointTierIndex(threshold);
     if (index < 0 || _openedPointTiers.contains(threshold)) return;
 
     final previousThreshold = index == 0 ? null : _pointTierThresholds[index - 1];
-    if (previousThreshold != null &&
-        !_claimedPointTiers.contains(previousThreshold)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            dedaText(
-              'استلم نقاط المرحلة السابقة أولًا حتى تفتح هذه البطاقة.',
-              'Claim the previous stage first to unlock this card.',
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-      return;
-    }
 
+    // The persisted task-points ledger is authoritative. The in-memory set can
+    // be briefly stale after returning to this page, so sequencing is verified
+    // below against point_tier_claim|<threshold> before a new card is opened.
     try {
       final accountKey = DedaTaskEngine._accountKey();
       if (accountKey.isEmpty) {
