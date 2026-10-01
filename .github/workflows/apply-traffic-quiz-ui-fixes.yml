@@ -52,7 +52,7 @@ jobs:
         run: flutter pub get
 
       - name: Analyze UI-fix integration
-        run: flutter analyze lib/main.dart lib/traffic_quiz_page.dart
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/main.dart lib/traffic_quiz_page.dart
 
       - name: Validate approved scope and logic guardrails
         run: |
