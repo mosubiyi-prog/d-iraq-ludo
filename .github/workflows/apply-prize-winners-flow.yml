@@ -1,0 +1,55 @@
+name: Apply Prize Winners Flow
+
+on:
+  push:
+    branches:
+      - prize-winners-flow-2026-10-01
+    paths:
+      - .github/workflows/apply-prize-winners-flow.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout prize winners work branch
+        uses: actions/checkout@v4
+        with:
+          ref: prize-winners-flow-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply scoped prize flow patch
+        run: |
+          python3 tools/patch_prize_winners_flow_2026_10_01.py
+          python3 tools/patch_prize_account_uid_resilience_2026_10_01.py
+
+      - name: Setup Flutter 3.47.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze changed Dart source
+        run: >-
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          lib/main.dart lib/deda_backend.dart lib/admin_pages.dart
+          lib/prize_winner_pages.dart
+
+      - name: Validate exact prize-flow invariants
+        run: python3 tools/validate_prize_winners_flow_2026_10_01.py
+
+      - name: Commit validated prize flow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/deda_backend.dart lib/admin_pages.dart firestore.rules
+          git diff --cached --quiet && exit 0
+          git commit -m "Implement terminal prize card and winners administration flow"
+          git push origin HEAD:prize-winners-flow-2026-10-01
