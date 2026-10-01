@@ -19,6 +19,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Retry after making the legacy +964 release patch format-tolerant.
           curl --fail-with-body -L \
             -X POST \
             -H "Accept: application/vnd.github+json" \
