@@ -1,0 +1,46 @@
+name: Apply complete prize cycle
+
+on:
+  push:
+    branches:
+      - prize-cycle-complete-2026-10-01
+    paths:
+      - tools/patch_prize_cycle_complete_2026_10_01.py
+      - .github/workflows/apply-prize-cycle-complete.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: prize-cycle-complete-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply complete prize cycle patch
+        run: python3 tools/patch_prize_cycle_complete_2026_10_01.py
+
+      - name: Validate patched source markers
+        run: |
+          python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
+          python3 tools/validate_prize_winners_flow_2026_10_01.py
+          python3 tools/validate_prize_cycle_complete_2026_10_01.py
+          git diff --check
+
+      - name: Commit complete prize cycle
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No patch changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/deda_backend.dart lib/prize_winner_pages.dart firestore.rules \
+            .github/workflows/build.yml .github/workflows/deploy-prize-winners-firestore.yml \
+            tools/validate_prize_cycle_complete_2026_10_01.py
+          git commit -m "Complete prize delivery confirmation and winners administration"
+          git push origin HEAD:prize-cycle-complete-2026-10-01
