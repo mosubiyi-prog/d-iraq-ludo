@@ -1,0 +1,58 @@
+name: Inspect DEDA Task Engine
+
+on:
+  push:
+    branches:
+      - fix-daily-tasks-card-sequence-2026-10-01
+    paths:
+      - .github/workflows/inspect-task-engine-2026-10-01.yml
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix-daily-tasks-card-sequence-2026-10-01
+          fetch-depth: 0
+
+      - name: Extract exact task engine snippets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('lib/main.dart').read_text(encoding='utf-8')
+          needles = [
+              'class DedaTaskEngine',
+              'class DedaDailyTasksPage',
+              'recordSuccessfulEvent',
+              'dailyLogin',
+              'login_daily',
+              'currentLocationShared',
+              'mapOpened',
+              'weekId',
+              'dayId',
+          ]
+          out = []
+          lines = s.splitlines()
+          for needle in needles:
+              hits = [i for i, line in enumerate(lines) if needle in line]
+              out.append(f'===== {needle} :: {hits} =====')
+              for i in hits[:8]:
+                  a = max(0, i - 35)
+                  b = min(len(lines), i + 90)
+                  out.append(f'--- lines {a+1}-{b} ---')
+                  out.extend(f'{j+1}: {lines[j]}' for j in range(a, b))
+          Path('docs/tmp-task-engine-inspect.txt').write_text('\n'.join(out), encoding='utf-8')
+          PY
+
+      - name: Commit inspection only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/tmp-task-engine-inspect.txt
+          git commit -m "Inspect task engine reset and daily state"
+          git push origin HEAD:fix-daily-tasks-card-sequence-2026-10-01
