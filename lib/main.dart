@@ -22,6 +22,7 @@ import 'deda_backend.dart';
 import 'places_service.dart';
 import 'prize_winner_pages.dart';
 import 'deda_team_page.dart';
+import 'traffic_quiz_page.dart';
 
 enum DedaMapStyle {
   normal,
@@ -11770,7 +11771,7 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     );
   }
 
-  void _openTask(int index) {
+  Future<void> _openTask(int index) async {
     switch (index) {
       case 0:
         Navigator.push(
@@ -11827,17 +11828,34 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
         );
         break;
       case 6:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              dedaText(
-                'اختبار المهارات المرورية هو الخطوة التالية في التنفيذ.',
-                'The traffic-skills quiz is the next implementation step.',
-              ),
-              textAlign: TextAlign.center,
+        final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(
+          DedaTaskIds.trafficSkills,
+        );
+        if (!mounted) return;
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DedaTrafficQuizPage(
+              isArabic: DedaLanguageState.isArabic,
+              accountKey: DedaBackend.accountKeyForPhone(DedaPreferences.phone),
+              alreadyCompletedToday: alreadyCompleted,
+              onCorrectAnswer: (questionId) async {
+                final result = await DedaTaskEngine.recordSuccessfulEvent(
+                  DedaTaskEvent.trafficQuizCorrectAnswer,
+                  dedupeId: questionId,
+                );
+                return result.pointsAwarded;
+              },
+              onCompleted: () async {
+                await DedaTaskEngine.recordSuccessfulEvent(
+                  DedaTaskEvent.trafficQuizCompleted,
+                );
+              },
             ),
           ),
         );
+        if (!mounted) return;
+        setState(() {});
         break;
       case 7:
         Navigator.push(
