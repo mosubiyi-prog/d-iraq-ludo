@@ -164,7 +164,9 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
     var currentCycleSeen = <String>{...seen};
 
     if (remaining.length >= _dailyQuestionCount) {
-      chosen.addAll(remaining.take(_dailyQuestionCount));
+      chosen.addAll(
+        _takeDiverseTrafficQuestions(remaining, _dailyQuestionCount),
+      );
       currentCycleSeen.addAll(chosen.map((q) => q.id));
     } else {
       // Finish the current bank cycle first. Only after every unseen question
@@ -177,7 +179,11 @@ class _DedaTrafficQuizPageState extends State<DedaTrafficQuizPage> {
           .toList(growable: true)
         ..shuffle(math.Random());
       final need = _dailyQuestionCount - chosen.length;
-      final fromNewCycle = pool.take(need).toList(growable: false);
+      final usedVisuals = chosen.map((q) => q.visual).toSet();
+      final diversePool = pool
+          .where((q) => !usedVisuals.contains(q.visual))
+          .toList(growable: false);
+      final fromNewCycle = _takeDiverseTrafficQuestions(diversePool, need);
       chosen.addAll(fromNewCycle);
       currentCycleSeen.addAll(fromNewCycle.map((q) => q.id));
     }
@@ -1569,7 +1575,7 @@ class _TrafficQuestion {
   });
 }
 
-const List<_TrafficQuestion> _trafficQuestionBank = [
+const List<_TrafficQuestion> _trafficQuestionBase = [
   _TrafficQuestion(
     id: 'sign_pedestrian_crossing',
     visual: _TrafficVisual.pedestrian,
@@ -1941,3 +1947,101 @@ const List<_TrafficQuestion> _trafficQuestionBank = [
         'A white P on a blue background marks an area designated for vehicle parking.',
   ),
 ];
+
+// DEDA traffic question bank: 20 core x 5 variants = 100 entries.
+// The original 20 IDs stay unchanged so previously seen-question history remains valid.
+const int _trafficVariantsPerBase = 5;
+
+const List<List<int>> _trafficAnswerOrders = <List<int>>[
+  <int>[0, 1, 2, 3],
+  <int>[1, 0, 2, 3],
+  <int>[2, 1, 0, 3],
+  <int>[3, 1, 2, 0],
+  <int>[2, 3, 1, 0],
+];
+
+const List<String> _trafficQuestionPrefixesAr = <String>[
+  '',
+  'اختر الإجابة الصحيحة:',
+  'اختبر معلوماتك المرورية:',
+  'بالاعتماد على العلامة الظاهرة:',
+  'سؤال مروري جديد:',
+];
+
+const List<String> _trafficQuestionPrefixesEn = <String>[
+  '',
+  'Choose the correct answer:',
+  'Test your road knowledge:',
+  'Based on the sign shown:',
+  'New traffic question:',
+];
+
+List<_TrafficQuestion> _buildTrafficQuestionBank() {
+  final expanded = <_TrafficQuestion>[];
+  for (final base in _trafficQuestionBase) {
+    if (base.answersAr.length != 4 || base.answersEn.length != 4) {
+      throw StateError(
+          'Each DEDA traffic question must have exactly four answers.');
+    }
+
+    for (var variant = 0; variant < _trafficVariantsPerBase; variant++) {
+      if (variant == 0) {
+        expanded.add(base);
+        continue;
+      }
+
+      final order = _trafficAnswerOrders[variant];
+      final answersAr = <String>[for (final i in order) base.answersAr[i]];
+      final answersEn = <String>[for (final i in order) base.answersEn[i]];
+      final newCorrectIndex = order.indexOf(base.correctIndex);
+
+      expanded.add(
+        _TrafficQuestion(
+          id: '${base.id}_v${variant + 1}',
+          visual: base.visual,
+          questionAr:
+              '${_trafficQuestionPrefixesAr[variant]} ${base.questionAr}',
+          questionEn:
+              '${_trafficQuestionPrefixesEn[variant]} ${base.questionEn}',
+          answersAr: answersAr,
+          answersEn: answersEn,
+          correctIndex: newCorrectIndex,
+          explanationAr: base.explanationAr,
+          explanationEn: base.explanationEn,
+        ),
+      );
+    }
+  }
+
+  if (expanded.length != 100) {
+    throw StateError('DEDA traffic bank must contain exactly 100 questions.');
+  }
+  return List<_TrafficQuestion>.unmodifiable(expanded);
+}
+
+final List<_TrafficQuestion> _trafficQuestionBank = _buildTrafficQuestionBank();
+
+List<_TrafficQuestion> _takeDiverseTrafficQuestions(
+  List<_TrafficQuestion> pool,
+  int count,
+) {
+  if (count <= 0 || pool.isEmpty) return const <_TrafficQuestion>[];
+
+  final selected = <_TrafficQuestion>[];
+  final usedVisuals = <_TrafficVisual>{};
+  for (final question in pool) {
+    if (usedVisuals.add(question.visual)) {
+      selected.add(question);
+      if (selected.length == count) return selected;
+    }
+  }
+
+  // Fallback only if a future bank has fewer unique visuals than requested.
+  for (final question in pool) {
+    if (!selected.contains(question)) {
+      selected.add(question);
+      if (selected.length == count) break;
+    }
+  }
+  return selected;
+}
