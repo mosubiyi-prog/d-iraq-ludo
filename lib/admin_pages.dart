@@ -12,6 +12,7 @@ import 'admin_recovery_pages.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 import 'deda_recovery_admin.dart';
+import 'prize_winner_pages.dart';
 
 Future<void> showDedaOwnerNotificationComposer({
   required BuildContext context,
@@ -1383,6 +1384,21 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             DedaPublishedPlacesAdminPage(
                               isArabic: ar,
                             ),
+                          ),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.emoji_events_outlined,
+                          accentColor: const Color(0xFF9A7415),
+                          backgroundColor: const Color(0xD9FFF6D8),
+                          title: t('🏆 الرابحون معنا', '🏆 Prize winners'),
+                          subtitle: t(
+                            'طلبات الفوز والتدقيق وتسليم الجوائز',
+                            'Prize claims, review and delivery',
+                          ),
+                          onTap: () => _open(
+                            DedaAdminPrizeWinnersPage(isArabic: ar),
                           ),
                         ),
                       if (DedaBackend.adminHasPermission(profile, 'supportRead'))

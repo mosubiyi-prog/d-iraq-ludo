@@ -3142,6 +3142,162 @@ class DedaBackend {
     );
   }
 
+  static String _prizeWinnerRequestIdForPhone(String phone) {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) throw ArgumentError('prize-account-required');
+    return 'prize_v1_$accountKey';
+  }
+
+  static Stream<Map<String, dynamic>?> prizeWinnerRequestForUser(String phone) {
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) return Stream<Map<String, dynamic>?>.value(null);
+    return FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .doc('prize_v1_$accountKey')
+        .snapshots()
+        .map((snapshot) => snapshot.exists && snapshot.data() != null
+            ? <String, dynamic>{'id': snapshot.id, ...snapshot.data()!}
+            : null);
+  }
+
+  static Future<String> submitPrizeWinnerRequest({
+    required String name,
+    required String phone,
+    required String dedaId,
+    required String rewardCode,
+    required int pointsAtCompletion,
+  }) async {
+    final cleanPhone = phone.trim();
+    final accountKey = accountKeyForPhone(cleanPhone);
+    if (accountKey.isEmpty) throw ArgumentError('prize-account-required');
+    final cleanCode = rewardCode.trim();
+    if (cleanCode.length != 16) throw ArgumentError('prize-code-invalid');
+
+    final user = await _ensureOwnerSessionForAccountKey(accountKey);
+    final requestId = _prizeWinnerRequestIdForPhone(cleanPhone);
+    final ref = FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .doc(requestId);
+    final existing = await ref.get();
+    if (existing.exists) return requestId;
+
+    await ref.set(<String, dynamic>{
+      'ownerUid': user.uid,
+      'accountKey': accountKey,
+      'name': name.trim(),
+      'phone': cleanPhone,
+      'dedaId': dedaId.trim(),
+      'rewardCode': cleanCode,
+      'pointsAtCompletion': pointsAtCompletion,
+      'completedThresholds': const <int>[5000, 10000, 15000, 20000, 25000],
+      'finalReservedPoints': 25000,
+      'status': 'new',
+      'adminMessage': '',
+      'prizeDetails': '',
+      'userReply': '',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return requestId;
+  }
+
+  static Future<void> replyToPrizeWinnerRequestFromUser({
+    required String phone,
+    required String message,
+  }) async {
+    final clean = message.trim();
+    if (clean.isEmpty) throw ArgumentError('empty-prize-reply');
+    final accountKey = accountKeyForPhone(phone);
+    if (accountKey.isEmpty) throw ArgumentError('prize-account-required');
+    await _ensureOwnerSessionForAccountKey(accountKey);
+    final ref = FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .doc(_prizeWinnerRequestIdForPhone(phone));
+    final snapshot = await ref.get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      throw StateError('prize-request-not-found');
+    }
+    // Firebase anonymous UIDs can rotate across trusted sessions. The stable
+    // DEDA account key is authoritative for the winner's own reply, matching
+    // the sameAccount Firestore rule used elsewhere in the app.
+    if ((data['accountKey'] ?? '').toString() != accountKey) {
+      throw StateError('prize-request-owner-mismatch');
+    }
+    if ((data['status'] ?? '').toString() != 'needs_info') {
+      throw StateError('prize-reply-not-requested');
+    }
+    await ref.update(<String, dynamic>{
+      'status': 'reviewing',
+      'userReply': clean,
+      'userReplyAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Stream<QuerySnapshot<Map<String, dynamic>>>
+      prizeWinnerRequestsForAdmin() {
+    return FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .orderBy('updatedAt', descending: true)
+        .limit(200)
+        .snapshots();
+  }
+
+  static Future<void> updatePrizeWinnerRequestFromAdmin({
+    required String requestId,
+    required String status,
+    String adminMessage = '',
+    String prizeDetails = '',
+  }) async {
+    const allowed = <String>{
+      'new',
+      'reviewing',
+      'needs_info',
+      'approved',
+      'prize_sent',
+      'delivered',
+      'rejected',
+    };
+    if (!allowed.contains(status)) throw ArgumentError('invalid-prize-status');
+    final actor = await currentAdminProfile();
+    if (normalizeAdminRole(actor['role']) != 'general_manager') {
+      throw StateError('general-manager-required');
+    }
+    final ref = FirebaseFirestore.instance
+        .collection('prize_winner_requests')
+        .doc(requestId);
+    final snapshot = await ref.get();
+    if (!snapshot.exists || snapshot.data() == null) {
+      throw StateError('prize-request-not-found');
+    }
+    final before = snapshot.data()!;
+    final update = <String, dynamic>{
+      'status': status,
+      'adminMessage': adminMessage.trim(),
+      'prizeDetails': prizeDetails.trim(),
+      'adminByUid': actor['uid'].toString(),
+      'adminByName': actor['displayName'].toString(),
+      'adminByRole': normalizeAdminRole(actor['role']),
+      'adminUpdatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (status == 'prize_sent') 'prizeSentAt': FieldValue.serverTimestamp(),
+      if (status == 'delivered') 'deliveredAt': FieldValue.serverTimestamp(),
+    };
+    await ref.update(update);
+    await _writeAdminAudit(
+      'prize_winner_status_changed',
+      details: <String, dynamic>{
+        'sourceCollection': 'prize_winner_requests',
+        'sourceId': requestId,
+        'targetAccountKey': before['accountKey'],
+        'targetDedaId': before['dedaId'],
+        'oldStatus': before['status'],
+        'newStatus': status,
+      },
+    );
+  }
+
   static String _newAdminInviteCode() {
     final random = Random.secure();
     return List<String>.generate(8, (_) => random.nextInt(10).toString()).join();

@@ -20,6 +20,7 @@ import 'package:image_picker/image_picker.dart';
 import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'places_service.dart';
+import 'prize_winner_pages.dart';
 import 'deda_team_page.dart';
 
 enum DedaMapStyle {
@@ -8423,6 +8424,24 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         migratedLegacyStageOne = true;
       }
 
+      // Build 235 temporarily allowed the final 25,000-point card to be
+      // claimed like the first four stages. The agreed prize flow keeps that
+      // final reserve spent. Remove only that obsolete final claim once; the
+      // 25,000 reserve remains untouched and the first four claims stay intact.
+      var migratedLegacyFinalClaim = false;
+      const legacyFinalClaimId = 'point_tier_claim|25000';
+      if (awards.containsKey(legacyFinalClaimId)) {
+        awards.remove(legacyFinalClaimId);
+        ledger.removeWhere((entry) {
+          if (entry is! Map) return false;
+          return entry['id']?.toString() == legacyFinalClaimId;
+        });
+        state['awards'] = awards;
+        state['ledger'] = ledger;
+        await DedaTaskEngine._writeState(prefs, accountKey, state);
+        migratedLegacyFinalClaim = true;
+      }
+
       for (final threshold in _pointTierThresholds) {
         final reserveId = 'point_tier_reserve|$threshold';
         final claimId = 'point_tier_claim|$threshold';
@@ -8433,7 +8452,7 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
         if (!hasReserve && !hasClaim) loaded.remove(threshold);
       }
 
-      if (migratedLegacyStageOne) {
+      if (migratedLegacyStageOne || migratedLegacyFinalClaim) {
         final total = DedaTaskEngine._effectiveTotalFromState(state);
         DedaTaskEngine._loadedAccountKey = accountKey;
         DedaTaskEngine.totalPointsNotifier.value = total;
@@ -8459,6 +8478,9 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
   }
 
   Future<void> _claimPointTierReward(int threshold) async {
+    // The fifth card is the terminal prize stage. Its 25,000 points stay spent
+    // and it never enters the normal reserve-return + bonus claim path.
+    if (threshold == _pointTierThresholds.last) return;
     if (!_pointTierThresholds.contains(threshold) ||
         _claimedPointTiers.contains(threshold) ||
         _claimingPointTiers.contains(threshold) ||
@@ -8672,10 +8694,15 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText(
-              'تم خصم ${_formatPointTier(threshold)} نقطة وحجزها داخل البطاقة. استلمها مع هدية $bonus نقطة.',
-              '${_formatPointTier(threshold)} points were reserved in the card. Claim them with the $bonus-point bonus.',
-            ),
+            threshold == _pointTierThresholds.last
+                ? dedaText(
+                    'تم خصم ${_formatPointTier(threshold)} نقطة نهائيًا لإكمال المرحلة الأخيرة. مبروك! أصبحت الجائزة جاهزة للمطالبة من إدارة DEDA.',
+                    '${_formatPointTier(threshold)} points were spent to complete the final stage. Congratulations! Your prize is ready to claim from DEDA administration.',
+                  )
+                : dedaText(
+                    'تم خصم ${_formatPointTier(threshold)} نقطة وحجزها داخل البطاقة. استلمها مع هدية $bonus نقطة.',
+                    '${_formatPointTier(threshold)} points were reserved in the card. Claim them with the $bonus-point bonus.',
+                  ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -9006,6 +9033,185 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _finalPrizeBackFace({
+    required int threshold,
+    required int totalPoints,
+  }) {
+    const gold = Color(0xFFFFD76A);
+    const deep = Color(0xFF080705);
+    final thresholdLabel = _formatPointTier(threshold);
+    final rewardCode = _rewardCode16();
+
+    return Column(
+      key: ValueKey<String>('reward-final-$threshold'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'DEDA',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 2.1,
+          ),
+        ),
+        const SizedBox(height: 5),
+        const Icon(Icons.emoji_events_rounded, color: gold, size: 38),
+        const SizedBox(height: 4),
+        Text(
+          dedaText(
+            '🎉 مبروك! أكملت جميع المراحل',
+            '🎉 Congratulations! All stages completed',
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          style: const TextStyle(
+            color: gold,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w900,
+            height: 1.15,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          dedaText('رمز الجائزة الكامل', 'Complete prize code'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xCC020914),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: gold, width: 1.4),
+          ),
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: SelectableText(
+                rewardCode,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.7,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          dedaText(
+            'لقد حصلت على الجائزة النهائية 👏',
+            'You earned the final prize 👏',
+          ),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: gold,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          dedaText(
+            '$thresholdLabel نقطة خُصمت لإكمال المرحلة النهائية ولا تعاد إلى الرصيد.',
+            '$thresholdLabel points were spent on the final stage and are not returned.',
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 8.6,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 38,
+          child: Material(
+            color: deep,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DedaPrizeWinnerRequestPage(
+                      isArabic: DedaLanguageState.isArabic,
+                      name: DedaPreferences.userName,
+                      phone: DedaPreferences.phone,
+                      dedaId: _personalDedaId,
+                      rewardCode: rewardCode,
+                      pointsAtCompletion: totalPoints,
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: gold, width: 1.2),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    dedaText(
+                      'مراسلة الإدارة للمطالبة بالجائزة',
+                      'Contact administration to claim prize',
+                    ),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      color: gold,
+                      fontSize: 10.3,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_rounded, color: gold, size: 14),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                dedaText(
+                  'اكتملت الدورة • البطاقات مغلقة',
+                  'Cycle completed • cards locked',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: gold,
+                  fontSize: 9.4,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -9506,7 +9712,15 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               );
             },
             child: opened
-                ? _rewardTierBackFace(threshold: threshold, index: index)
+                ? (index == _pointTierThresholds.length - 1
+                    ? _finalPrizeBackFace(
+                        threshold: threshold,
+                        totalPoints: totalPoints,
+                      )
+                    : _rewardTierBackFace(
+                        threshold: threshold,
+                        index: index,
+                      ))
                 : _pointTierFrontFace(
                     threshold: threshold,
                     index: index,

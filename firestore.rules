@@ -1091,6 +1091,93 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Final DEDA points-card prize request. One deterministic request is
+    // allowed per account for this prize cycle. The client card flow supplies
+    // the stage record; administration remains responsible for final review.
+    match /prize_winner_requests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.accountKey is string
+        && sameAccount(request.resource.data.accountKey)
+        && requestId == 'prize_v1_' + request.resource.data.accountKey
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.dedaId is string
+        && request.resource.data.dedaId.size() > 0
+        && request.resource.data.rewardCode is string
+        && request.resource.data.rewardCode.size() == 16
+        && request.resource.data.pointsAtCompletion is int
+        && request.resource.data.pointsAtCompletion >= 0
+        && request.resource.data.completedThresholds == [
+          5000, 10000, 15000, 20000, 25000
+        ]
+        && request.resource.data.finalReservedPoints == 25000
+        && request.resource.data.status == 'new'
+        && request.resource.data.adminMessage == ''
+        && request.resource.data.prizeDetails == ''
+        && request.resource.data.userReply == ''
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'accountKey', 'name', 'phone', 'dedaId',
+          'rewardCode', 'pointsAtCompletion', 'completedThresholds',
+          'finalReservedPoints', 'status', 'adminMessage', 'prizeDetails',
+          'userReply', 'createdAt', 'updatedAt'
+        ]);
+
+      // Exact gets for a not-yet-created request are allowed to signed-in
+      // users so submission can be idempotent. Existing winner records remain
+      // visible only to their owner/account or to the general manager.
+      allow get: if isGeneralManager()
+        || (
+          signedIn()
+          && (
+            !exists(
+              /databases/$(database)/documents/prize_winner_requests/$(requestId)
+            )
+            || resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+        );
+      allow list: if isGeneralManager();
+
+      allow update: if (
+          isGeneralManager()
+          && request.resource.data.status in [
+            'new', 'reviewing', 'needs_info', 'approved',
+            'prize_sent', 'delivered', 'rejected'
+          ]
+          && request.resource.data.adminByUid == request.auth.uid
+          && request.resource.data.adminByName is string
+          && request.resource.data.adminByRole == 'general_manager'
+          && request.resource.data.adminUpdatedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'adminMessage', 'prizeDetails',
+            'adminByUid', 'adminByName', 'adminByRole',
+            'adminUpdatedAt', 'updatedAt', 'prizeSentAt', 'deliveredAt'
+          ])
+        )
+        || (
+          signedIn()
+          && resource.data.status == 'needs_info'
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || sameAccount(resource.data.accountKey)
+          )
+          && request.resource.data.status == 'reviewing'
+          && request.resource.data.userReply is string
+          && request.resource.data.userReply.size() > 0
+          && request.resource.data.userReplyAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'userReply', 'userReplyAt', 'updatedAt'
+          ])
+        );
+
+      allow delete: if false;
+    }
+
     match /support_requests/{requestId} {
       allow create: if isGeneralManager()
         || (
