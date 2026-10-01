@@ -1,0 +1,28 @@
+name: Dispatch Final Signed Build
+
+on:
+  push:
+    branches:
+      - final-two-fixes-work-2026-10-02
+    paths:
+      - .github/workflows/dispatch-final-build-2026-10-02.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch existing signed APK/AAB workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail-with-body -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/build.yml/dispatches \
+            -d '{"ref":"final-two-fixes-work-2026-10-02"}'
