@@ -210,13 +210,13 @@ jobs:
 
           raw = os.environ["DEDA_KEYSTORE_BASE64"].strip()
           if raw.startswith("DEDA_KEYSTORE_BASE64="):
-            raw = raw.split("=", 1)[1].strip()
+              raw = raw.split("=", 1)[1].strip()
           raw = "".join(raw.split())
           data = base64.b64decode(raw, validate=True)
           output = Path("android/app/deda-release.jks")
           output.write_bytes(data)
           if output.stat().st_size == 0:
-            raise SystemExit("Signing key is empty")
+              raise SystemExit("Signing key is empty")
           PY
 
       - name: Validate permanent signing key
@@ -238,53 +238,53 @@ jobs:
           groovy = Path("android/app/build.gradle")
 
           if kts.exists():
-            text = kts.read_text()
-            marker = "    buildTypes {"
-            signing = """    signingConfigs {
-                create("release") {
-                    keyAlias = System.getenv("DEDA_KEY_ALIAS")
-                    keyPassword = System.getenv("DEDA_KEY_PASSWORD")
-                    storeFile = file("deda-release.jks")
-                    storePassword = System.getenv("DEDA_STORE_PASSWORD")
-                }
-            }
+              text = kts.read_text()
+              marker = "    buildTypes {"
+              signing = """    signingConfigs {
+                  create("release") {
+                      keyAlias = System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword = System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile = file("deda-release.jks")
+                      storePassword = System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
 
-        """
-            if marker not in text:
-                raise SystemExit("buildTypes not found in build.gradle.kts")
-            text = text.replace(marker, signing + marker, 1)
-            old = 'signingConfig = signingConfigs.getByName("debug")'
-            new = 'signingConfig = signingConfigs.getByName("release")'
-            if old not in text:
-                raise SystemExit("Debug signing configuration not found")
-            text = text.replace(old, new, 1)
-            kts.write_text(text)
+          """
+              if marker not in text:
+                  raise SystemExit("buildTypes not found in build.gradle.kts")
+              text = text.replace(marker, signing + marker, 1)
+              old = 'signingConfig = signingConfigs.getByName("debug")'
+              new = 'signingConfig = signingConfigs.getByName("release")'
+              if old not in text:
+                  raise SystemExit("Debug signing configuration not found")
+              text = text.replace(old, new, 1)
+              kts.write_text(text)
 
           elif groovy.exists():
-            text = groovy.read_text()
-            marker = "    buildTypes {"
-            signing = """    signingConfigs {
-                release {
-                    keyAlias System.getenv("DEDA_KEY_ALIAS")
-                    keyPassword System.getenv("DEDA_KEY_PASSWORD")
-                    storeFile file("deda-release.jks")
-                    storePassword System.getenv("DEDA_STORE_PASSWORD")
-                }
-            }
+              text = groovy.read_text()
+              marker = "    buildTypes {"
+              signing = """    signingConfigs {
+                  release {
+                      keyAlias System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile file("deda-release.jks")
+                      storePassword System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
 
-        """
-            if marker not in text:
-                raise SystemExit("buildTypes not found in build.gradle")
-            text = text.replace(marker, signing + marker, 1)
-            if "signingConfig signingConfigs.debug" in text:
-                text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release", 1)
-            elif "signingConfig = signingConfigs.debug" in text:
-                text = text.replace("signingConfig = signingConfigs.release", "signingConfig = signingConfigs.release", 1)
-            else:
-                raise SystemExit("Debug signing configuration not found")
-            groovy.write_text(text)
+          """
+              if marker not in text:
+                  raise SystemExit("buildTypes not found in build.gradle")
+              text = text.replace(marker, signing + marker, 1)
+              if "signingConfig signingConfigs.debug" in text:
+                  text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release", 1)
+              elif "signingConfig = signingConfigs.debug" in text:
+                  text = text.replace("signingConfig = signingConfigs.release", "signingConfig = signingConfigs.release", 1)
+              else:
+                  raise SystemExit("Debug signing configuration not found")
+              groovy.write_text(text)
           else:
-            raise SystemExit("Android Gradle file not found")
+              raise SystemExit("Android Gradle file not found")
           PY
 
       - name: Get dependencies
