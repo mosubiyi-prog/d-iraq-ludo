@@ -1,0 +1,80 @@
+name: Apply Daily Tasks And Card Sequence Fix
+
+on:
+  push:
+    branches:
+      - fix-daily-tasks-card-sequence-2026-10-01
+    paths:
+      - .github/workflows/apply-daily-tasks-card-sequence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix-daily-tasks-card-sequence-2026-10-01
+          fetch-depth: 0
+
+      - name: Apply scoped fixes
+        run: python3 tools/fix_daily_tasks_card_sequence_2026_10_01.py
+
+      - name: Setup Flutter 3.47.5
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze app source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+
+      - name: Validate exact invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('lib/main.dart').read_text(encoding='utf-8')
+
+          # Daily tasks use local-day cycle while accumulated awards remain intact.
+          assert 'static String currentLocalCycleId([DateTime? value]) {\n    return currentLocalDayId(value);\n  }' in s
+          assert "final awardId = 'task|$cycle|$taskId';" in s
+          assert "final awardId = 'daily_login|$dayId';" in s
+          assert 'totalPointsNotifier.value = total;' in s
+          assert 'revisionNotifier.value++;' in s
+
+          # Five point tiers and exact bonuses remain unchanged.
+          for n in (5000, 10000, 15000, 20000, 25000):
+              assert str(n) in s[s.index('static const List<int> _pointTierThresholds'):s.index('static const Map<int, int> _pointTierBonuses')]
+          for pair in ('5000: 50', '10000: 100', '15000: 150', '20000: 200', '25000: 250'):
+              assert pair in s
+
+          # Sequence uses persisted previous claim, not the stale pre-read memory gate.
+          assert "!awards.containsKey('point_tier_claim|$previousThreshold')" in s
+          assert 'await _loadOpenedPointTiers();\n    if (!mounted) return;\n\n    final index = _pointTierIndex(threshold);' in s
+          assert 'await _loadOpenedPointTiers();\n      if (!mounted) return;\n      ScaffoldMessenger.of(context).showSnackBar(' in s
+          stale = "if (previousThreshold != null &&\n        !_claimedPointTiers.contains(previousThreshold))"
+          assert stale not in s
+
+          # Reserve/claim accounting remains the same.
+          assert "'points': -threshold" in s
+          assert "'points': threshold + bonus" in s
+          assert "point_tier_reserve|$threshold" in s
+          assert "point_tier_claim|$threshold" in s
+          print('daily tasks + point-card sequence invariants validated')
+          PY
+
+      - name: Commit validated source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix daily task rollover and points card sequencing"
+          git push origin HEAD:fix-daily-tasks-card-sequence-2026-10-01
