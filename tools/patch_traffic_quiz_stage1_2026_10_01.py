@@ -79,6 +79,67 @@ clamp_new = (
 if clamp_old in quiz:
     quiz = quiz.replace(clamp_old, clamp_new, 1)
 
+# Keep the correct option from always appearing in the first slot. The order is
+# deterministic for the same account/day/question so reopening the quiz never
+# rearranges choices mid-attempt.
+order_method = """  List<int> _answerOrder(_TrafficQuestion q) {
+    final order = List<int>.generate(q.answersAr.length, (i) => i);
+    var seed = 17;
+    final source = '${q.id}|$_dayId|$_safeAccount';
+    for (final code in source.codeUnits) {
+      seed = ((seed * 31) + code) & 0x7fffffff;
+    }
+    order.shuffle(math.Random(seed));
+    return order;
+  }
+
+"""
+question_anchor = "  Widget _buildQuestion() {\n"
+if order_method not in quiz:
+    if question_anchor not in quiz:
+        raise SystemExit('question builder anchor not found')
+    quiz = quiz.replace(question_anchor, order_method + question_anchor, 1)
+
+question_start_old = """  Widget _buildQuestion() {
+    final q = _questions[_index];
+    return Column(
+"""
+question_start_new = """  Widget _buildQuestion() {
+    final q = _questions[_index];
+    final answerOrder = _answerOrder(q);
+    return Column(
+"""
+if question_start_new not in quiz:
+    if question_start_old not in quiz:
+        raise SystemExit('question start not found')
+    quiz = quiz.replace(question_start_old, question_start_new, 1)
+
+loop_old = """                  ...List.generate(q.answersAr.length, (choiceIndex) {
+                    final selected = _selectedIndex == choiceIndex;
+                    final isCorrectChoice = choiceIndex == q.correctIndex;
+"""
+loop_new = """                  ...List.generate(q.answersAr.length, (choiceIndex) {
+                    final originalChoiceIndex = answerOrder[choiceIndex];
+                    final selected = _selectedIndex == originalChoiceIndex;
+                    final isCorrectChoice =
+                        originalChoiceIndex == q.correctIndex;
+"""
+if loop_new not in quiz:
+    if loop_old not in quiz:
+        raise SystemExit('answer loop anchor not found')
+    quiz = quiz.replace(loop_old, loop_new, 1)
+
+quiz = quiz.replace(
+    '() => _selectedIndex = choiceIndex,',
+    '() => _selectedIndex = originalChoiceIndex,',
+    1,
+)
+quiz = quiz.replace(
+    '? q.answersAr[choiceIndex]\n                                        : q.answersEn[choiceIndex],',
+    '? q.answersAr[originalChoiceIndex]\n                                        : q.answersEn[originalChoiceIndex],',
+    1,
+)
+
 required_main_markers = [
     "import 'traffic_quiz_page.dart';",
     'Future<void> _openTask(int index) async',
@@ -95,6 +156,8 @@ required_quiz_markers = [
     'static const int _dailyQuestionCount = 5;',
     'deda_traffic_quiz_seen_v1_',
     'deda_traffic_quiz_daily_ids_v1_',
+    'List<int> _answerOrder(_TrafficQuestion q)',
+    'final originalChoiceIndex = answerOrder[choiceIndex];',
     "id: 'sign_pedestrian_crossing'",
     "id: 'sign_parking'",
 ]
