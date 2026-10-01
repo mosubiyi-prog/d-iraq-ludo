@@ -1,68 +1,47 @@
-name: Repair Prize Build Workflow
+name: Apply complete prize cycle patch
 
 on:
   push:
     branches:
-      - prize-winners-flow-2026-10-01
+      - prize-cycle-complete-2026-10-01
     paths:
       - .github/workflows/repair-prize-build-workflow.yml
+      - tools/patch_prize_cycle_complete_2026_10_01.py
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  repair:
+  patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout prize branch
+      - name: Checkout work branch
         uses: actions/checkout@v4
         with:
-          ref: prize-winners-flow-2026-10-01
+          ref: prize-cycle-complete-2026-10-01
           fetch-depth: 0
 
-      - name: Restore known-good Build 235 workflow and add only prize changes
+      - name: Apply complete prize cycle patch
+        run: python3 tools/patch_prize_cycle_complete_2026_10_01.py
+
+      - name: Validate complete prize cycle before commit
         run: |
-          git show checkpoint-build235-daily-tasks-card-sequence-2026-10-01:.github/workflows/build.yml > .github/workflows/build.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/build.yml')
-          text = path.read_text()
+          python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
+          python3 tools/validate_prize_winners_flow_2026_10_01.py
+          python3 tools/validate_prize_cycle_complete_2026_10_01.py
+          git diff --check
 
-          branch_anchor = '      - fix-daily-tasks-card-sequence-2026-10-01\n'
-          if '      - prize-winners-flow-2026-10-01\n' not in text:
-              if branch_anchor not in text:
-                  raise SystemExit('Build 235 branch anchor missing')
-              text = text.replace(
-                  branch_anchor,
-                  branch_anchor + '      - prize-winners-flow-2026-10-01\n',
-                  1,
-              )
-
-          validator_anchor = '''      - name: Validate DEDA daily tasks and card sequence in final source
-        run: python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
-'''
-          prize_validator = '''
-      - name: Validate DEDA prize winner flow in final source
-        run: python3 tools/validate_prize_winners_flow_2026_10_01.py
-'''
-          if 'Validate DEDA prize winner flow in final source' not in text:
-              if validator_anchor not in text:
-                  raise SystemExit('Build 235 validator anchor missing')
-              text = text.replace(
-                  validator_anchor,
-                  validator_anchor + prize_validator,
-                  1,
-              )
-
-          path.write_text(text)
-          PY
-
-      - name: Commit repaired workflow
+      - name: Commit complete prize cycle
         run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No patch changes to commit."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/build.yml
-          git diff --cached --quiet && exit 0
-          git commit -m "Restore Build 235 workflow and enable prize release build"
-          git push origin HEAD:prize-winners-flow-2026-10-01
+          git add lib/main.dart lib/deda_backend.dart lib/prize_winner_pages.dart firestore.rules \
+            .github/workflows/build.yml .github/workflows/deploy-prize-winners-firestore.yml \
+            tools/validate_prize_cycle_complete_2026_10_01.py
+          git commit -m "Complete prize delivery confirmation and winners administration"
+          git push origin HEAD:prize-cycle-complete-2026-10-01
