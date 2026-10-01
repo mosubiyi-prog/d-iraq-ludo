@@ -1,0 +1,88 @@
+name: Apply Final Two DEDA Fixes
+
+on:
+  push:
+    branches:
+      - final-two-fixes-work-2026-10-02
+    paths:
+      - .github/workflows/apply-final-two-fixes-2026-10-02.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-validate-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout final work branch
+        uses: actions/checkout@v4
+        with:
+          ref: final-two-fixes-work-2026-10-02
+          fetch-depth: 0
+
+      - name: Apply exact two fixes
+        run: python3 tools/final_two_fixes_2026_10_02.py
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Format changed Dart files
+        run: dart format lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Analyze changed source
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/traffic_quiz_page.dart
+
+      - name: Validate exact final invariants
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          main = Path('lib/main.dart').read_text(encoding='utf-8')
+          quiz = Path('lib/traffic_quiz_page.dart').read_text(encoding='utf-8')
+          build = Path('.github/workflows/build.yml').read_text(encoding='utf-8')
+
+          # Login: Arabic-Indic and Persian digits normalize to ASCII before validation.
+          for ch in '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹':
+              assert f"'{ch}':" in main
+          assert 'final normalizedRaw = raw' in main
+          assert "var digits = normalizedRaw.replaceAll(RegExp(r'\\D'), '');" in main
+          assert "digits.startsWith('07')" in main
+          assert 'digits.length != 11' in main or 'digits.length == 11' in main
+
+          # Quiz remains five questions per day.
+          assert 'static const int _dailyQuestionCount = 5;' in quiz
+          assert 'const int _trafficVariantsPerBase = 5;' in quiz
+          assert 'expanded.length != 100' in quiz
+          assert 'final List<_TrafficQuestion> _trafficQuestionBank = _buildTrafficQuestionBank();' in quiz
+          assert '_takeDiverseTrafficQuestions(remaining, _dailyQuestionCount)' in quiz
+
+          base_start = quiz.index('const List<_TrafficQuestion> _trafficQuestionBase = [')
+          base_end = quiz.index('// DEDA traffic question bank: 20 core x 5 variants = 100 entries.')
+          base = quiz[base_start:base_end]
+          core_count = len(re.findall(r'\n  _TrafficQuestion\(', base))
+          assert core_count == 20, core_count
+          assert core_count * 5 == 100
+
+          # Final work branch must build APK/AAB using the permanent-signing workflow.
+          assert '      - final-two-fixes-work-2026-10-02\n' in build
+          assert 'flutter build apk --release' in build
+          assert 'flutter build appbundle --release' in build
+
+          print('Validated: Arabic/Persian login digits + 100-question traffic bank + final build trigger.')
+          PY
+
+      - name: Commit validated final source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/traffic_quiz_page.dart .github/workflows/build.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Add Arabic login digits and 100-question traffic bank"
+          git push origin HEAD:final-two-fixes-work-2026-10-02
