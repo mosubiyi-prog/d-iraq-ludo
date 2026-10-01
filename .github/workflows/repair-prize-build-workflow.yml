@@ -63,16 +63,16 @@ jobs:
           python3 tools/validate_prize_cycle_complete_2026_10_01.py
           git diff --check
 
-      - name: Commit complete prize cycle
+      - name: Commit complete prize cycle source only
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "No patch changes to commit."
             exit 0
           fi
+          git restore --source=HEAD -- .github/workflows/build.yml .github/workflows/deploy-prize-winners-firestore.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/main.dart lib/deda_backend.dart lib/prize_winner_pages.dart firestore.rules \
-            .github/workflows/build.yml .github/workflows/deploy-prize-winners-firestore.yml \
             tools/validate_prize_cycle_complete_2026_10_01.py
           git commit -m "Complete prize delivery confirmation and winners administration"
           git push origin HEAD:prize-cycle-complete-2026-10-01
