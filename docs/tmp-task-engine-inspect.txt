@@ -1,0 +1,2907 @@
+===== class DedaTaskEngine :: [1003] =====
+--- lines 969-1093 ---
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+1021:       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+1022: 
+1023:   static String _statePrefsKey(String accountKey) =>
+1024:       'deda_task_points_state_v1_$accountKey';
+1025: 
+1026:   static Map<String, dynamic> _emptyState() => <String, dynamic>{
+1027:         'version': _storeVersion,
+1028:         'completions': <String, dynamic>{},
+1029:         'awards': <String, dynamic>{},
+1030:         'ledger': <dynamic>[],
+1031:       };
+1032: 
+1033:   static Map<String, dynamic> _decodeState(String? raw) {
+1034:     if (raw == null || raw.trim().isEmpty) return _emptyState();
+1035:     try {
+1036:       final decoded = jsonDecode(raw);
+1037:       if (decoded is! Map) return _emptyState();
+1038:       final state = Map<String, dynamic>.from(decoded);
+1039:       if (state['completions'] is! Map) {
+1040:         state['completions'] = <String, dynamic>{};
+1041:       }
+1042:       if (state['awards'] is! Map) {
+1043:         state['awards'] = <String, dynamic>{};
+1044:       }
+1045:       if (state['ledger'] is! List) {
+1046:         state['ledger'] = <dynamic>[];
+1047:       }
+1048:       state['version'] = _storeVersion;
+1049:       return state;
+1050:     } catch (_) {
+1051:       return _emptyState();
+1052:     }
+1053:   }
+1054: 
+1055:   static int _totalFromState(Map<String, dynamic> state) {
+1056:     final awardsRaw = state['awards'];
+1057:     if (awardsRaw is! Map) return 0;
+1058:     var total = 0;
+1059:     for (final value in awardsRaw.values) {
+1060:       if (value is Map) {
+1061:         final points = value['points'];
+1062:         if (points is num) total += points.toInt();
+1063:       }
+1064:     }
+1065:     return total;
+1066:   }
+1067: 
+1068:   static int _effectiveTotalFromState(Map<String, dynamic> state) {
+1069:     final earned = _totalFromState(state);
+1070:     return earned +
+1071:         (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+1072:   }
+1073: 
+1074:   static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+1075:     final isGeneralManager =
+1076:         await DedaBackend.currentDedaAccountIsGeneralManager(
+1077:       phone: DedaPreferences.phone,
+1078:     );
+1079:     if (_loadedAccountKey != accountKey) return;
+1080: 
+1081:     _generalManagerBonusActive = isGeneralManager;
+1082:     final prefs = await SharedPreferences.getInstance();
+1083:     final state = await _readState(prefs, accountKey);
+1084:     if (_loadedAccountKey != accountKey) return;
+1085:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1086:     revisionNotifier.value++;
+1087:   }
+1088: 
+1089:   /// Development cycle id. Weekly definitions will later supply their own
+1090:   /// Firestore weekId, so changing rollover policy will not change task IDs.
+1091:   static String currentLocalCycleId([DateTime? value]) {
+1092:     final now = (value ?? DateTime.now()).toLocal();
+1093:     final monday = DateTime(
+===== class DedaDailyTasksPage :: [11425] =====
+--- lines 11391-11515 ---
+11391:                                         textAlign: TextAlign.center,
+11392:                                       ),
+11393:                                     ],
+11394:                                   ),
+11395:                                 ),
+11396:                               ),
+11397:                             );
+11398:                           }
+11399: 
+11400:                           return ListView.separated(
+11401:                             padding: const EdgeInsets.fromLTRB(
+11402:                               14,
+11403:                               4,
+11404:                               14,
+11405:                               26,
+11406:                             ),
+11407:                             itemCount: items.length,
+11408:                             separatorBuilder: (_, __) =>
+11409:                                 const SizedBox(height: 12),
+11410:                             itemBuilder: (_, index) =>
+11411:                                 _shareCard(items[index]),
+11412:                           );
+11413:                         },
+11414:                       ),
+11415:                     ),
+11416:                   ],
+11417:                 ),
+11418:         ),
+11419:       ),
+11420:     );
+11421:   }
+11422: }
+11423: 
+11424: 
+11425: 
+11426: class DedaDailyTasksPage extends StatefulWidget {
+11427:   const DedaDailyTasksPage({super.key});
+11428: 
+11429:   @override
+11430:   State<DedaDailyTasksPage> createState() => _DedaDailyTasksPageState();
+11431: }
+11432: 
+11433: class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
+11434:   bool _loginRewardClaimed = false;
+11435:   bool _loadingRewardState = true;
+11436:   final Set<String> _claimingTaskIds = <String>{};
+11437: 
+11438:   @override
+11439:   void initState() {
+11440:     super.initState();
+11441:     _loadRewardState();
+11442:   }
+11443: 
+11444:   Future<void> _loadRewardState() async {
+11445:     final claimed = await DedaTaskEngine.hasDailyLoginRewardClaimed();
+11446:     if (!mounted) return;
+11447:     setState(() {
+11448:       _loginRewardClaimed = claimed;
+11449:       _loadingRewardState = false;
+11450:     });
+11451:   }
+11452: 
+11453:   Future<void> _claimLoginReward() async {
+11454:     if (_loginRewardClaimed || _loadingRewardState) return;
+11455:     setState(() => _loadingRewardState = true);
+11456: 
+11457:     final result = await DedaTaskEngine.claimDailyLoginReward();
+11458:     if (!mounted) return;
+11459: 
+11460:     setState(() {
+11461:       _loginRewardClaimed = result.accepted;
+11462:       _loadingRewardState = false;
+11463:     });
+11464: 
+11465:     ScaffoldMessenger.of(context).showSnackBar(
+11466:       SnackBar(
+11467:         content: Text(
+11468:           result.pointsAwarded
+11469:               ? dedaText(
+11470:                   'تم استلام 10 نقاط وإضافتها إلى رصيدك.',
+11471:                   '10 points were claimed and added to your balance.',
+11472:                 )
+11473:               : dedaText(
+11474:                   'تم استلام مكافأة تسجيل الدخول لهذا اليوم مسبقًا.',
+11475:                   'Today\'s daily login reward was already claimed.',
+11476:                 ),
+11477:           textAlign: TextAlign.center,
+11478:         ),
+11479:       ),
+11480:     );
+11481:   }
+11482: 
+11483:   Future<void> _claimTaskReward(String taskId) async {
+11484:     if (_claimingTaskIds.contains(taskId)) return;
+11485:     setState(() => _claimingTaskIds.add(taskId));
+11486: 
+11487:     final result = await DedaTaskEngine.claimTaskReward(taskId);
+11488:     if (!mounted) return;
+11489:     setState(() => _claimingTaskIds.remove(taskId));
+11490: 
+11491:     final message = !result.accepted
+11492:         ? dedaText(
+11493:             'أكمل المهمة أولًا حتى يتفعّل الاستلام.',
+11494:             'Complete the task first to enable claiming.',
+11495:           )
+11496:         : result.pointsAwarded
+11497:             ? dedaText(
+11498:                 'تم استلام 5 نقاط وإضافتها إلى رصيدك في الملف الشخصي.',
+11499:                 '5 points were claimed and added to your profile balance.',
+11500:               )
+11501:             : dedaText(
+11502:                 'تم استلام نقاط هذه المهمة مسبقًا.',
+11503:                 'This task reward was already claimed.',
+11504:               );
+11505: 
+11506:     ScaffoldMessenger.of(context).showSnackBar(
+11507:       SnackBar(
+11508:         content: Text(
+11509:           message,
+11510:           textAlign: TextAlign.center,
+11511:         ),
+11512:       ),
+11513:     );
+11514:   }
+11515: 
+===== recordSuccessfulEvent :: [1001, 1287, 10307, 11053, 18865] =====
+--- lines 967-1091 ---
+967:   static const List<String> weekly = <String>[
+968:     sharePersonalLocation,
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+1021:       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+1022: 
+1023:   static String _statePrefsKey(String accountKey) =>
+1024:       'deda_task_points_state_v1_$accountKey';
+1025: 
+1026:   static Map<String, dynamic> _emptyState() => <String, dynamic>{
+1027:         'version': _storeVersion,
+1028:         'completions': <String, dynamic>{},
+1029:         'awards': <String, dynamic>{},
+1030:         'ledger': <dynamic>[],
+1031:       };
+1032: 
+1033:   static Map<String, dynamic> _decodeState(String? raw) {
+1034:     if (raw == null || raw.trim().isEmpty) return _emptyState();
+1035:     try {
+1036:       final decoded = jsonDecode(raw);
+1037:       if (decoded is! Map) return _emptyState();
+1038:       final state = Map<String, dynamic>.from(decoded);
+1039:       if (state['completions'] is! Map) {
+1040:         state['completions'] = <String, dynamic>{};
+1041:       }
+1042:       if (state['awards'] is! Map) {
+1043:         state['awards'] = <String, dynamic>{};
+1044:       }
+1045:       if (state['ledger'] is! List) {
+1046:         state['ledger'] = <dynamic>[];
+1047:       }
+1048:       state['version'] = _storeVersion;
+1049:       return state;
+1050:     } catch (_) {
+1051:       return _emptyState();
+1052:     }
+1053:   }
+1054: 
+1055:   static int _totalFromState(Map<String, dynamic> state) {
+1056:     final awardsRaw = state['awards'];
+1057:     if (awardsRaw is! Map) return 0;
+1058:     var total = 0;
+1059:     for (final value in awardsRaw.values) {
+1060:       if (value is Map) {
+1061:         final points = value['points'];
+1062:         if (points is num) total += points.toInt();
+1063:       }
+1064:     }
+1065:     return total;
+1066:   }
+1067: 
+1068:   static int _effectiveTotalFromState(Map<String, dynamic> state) {
+1069:     final earned = _totalFromState(state);
+1070:     return earned +
+1071:         (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+1072:   }
+1073: 
+1074:   static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+1075:     final isGeneralManager =
+1076:         await DedaBackend.currentDedaAccountIsGeneralManager(
+1077:       phone: DedaPreferences.phone,
+1078:     );
+1079:     if (_loadedAccountKey != accountKey) return;
+1080: 
+1081:     _generalManagerBonusActive = isGeneralManager;
+1082:     final prefs = await SharedPreferences.getInstance();
+1083:     final state = await _readState(prefs, accountKey);
+1084:     if (_loadedAccountKey != accountKey) return;
+1085:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1086:     revisionNotifier.value++;
+1087:   }
+1088: 
+1089:   /// Development cycle id. Weekly definitions will later supply their own
+1090:   /// Firestore weekId, so changing rollover policy will not change task IDs.
+1091:   static String currentLocalCycleId([DateTime? value]) {
+--- lines 1253-1377 ---
+1253:       final award = <String, dynamic>{
+1254:         'id': awardId,
+1255:         'points': pointsDelta,
+1256:         'type': 'task',
+1257:         'event': sourceEvent ?? 'task_claimed',
+1258:         'cycleId': cycle,
+1259:         'taskId': taskId,
+1260:         'createdAt': now,
+1261:       };
+1262:       awards[awardId] = award;
+1263:       ledger.add(award);
+1264:       if (ledger.length > _maxLedgerEntries) {
+1265:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1266:       }
+1267:       state['awards'] = awards;
+1268:       state['ledger'] = ledger;
+1269:       await _writeState(prefs, accountKey, state);
+1270:     }
+1271: 
+1272:     final total = _effectiveTotalFromState(state);
+1273:     _loadedAccountKey = accountKey;
+1274:     totalPointsNotifier.value = total;
+1275:     revisionNotifier.value++;
+1276: 
+1277:     return DedaTaskEventResult(
+1278:       accepted: true,
+1279:       completedNow: false,
+1280:       pointsAwarded: !alreadyAwarded,
+1281:       pointsDelta: pointsDelta,
+1282:       totalPoints: total,
+1283:       taskId: taskId,
+1284:       cycleId: cycle,
+1285:     );
+1286:   }
+1287: 
+1288:   static Future<DedaTaskEventResult> recordSuccessfulEvent(
+1289:     DedaTaskEvent event, {
+1290:     String? dedupeId,
+1291:     DateTime? occurredAt,
+1292:     String? cycleId,
+1293:   }) async {
+1294:     final accountKey = _accountKey();
+1295:     final cycle = cycleId ?? currentLocalCycleId(occurredAt);
+1296:     if (accountKey.isEmpty) {
+1297:       return DedaTaskEventResult(
+1298:         accepted: false,
+1299:         completedNow: false,
+1300:         pointsAwarded: false,
+1301:         pointsDelta: 0,
+1302:         totalPoints: 0,
+1303:         taskId: taskIdForEvent(event),
+1304:         cycleId: cycle,
+1305:       );
+1306:     }
+1307: 
+1308:     final taskId = taskIdForEvent(event);
+1309:     final cleanDedupe = dedupeId?.trim() ?? '';
+1310:     if (event == DedaTaskEvent.trafficQuizCorrectAnswer &&
+1311:         cleanDedupe.isEmpty) {
+1312:       return DedaTaskEventResult(
+1313:         accepted: false,
+1314:         completedNow: false,
+1315:         pointsAwarded: false,
+1316:         pointsDelta: 0,
+1317:         totalPoints: await totalPoints(),
+1318:         taskId: null,
+1319:         cycleId: cycle,
+1320:       );
+1321:     }
+1322: 
+1323:     final prefs = await SharedPreferences.getInstance();
+1324:     final state = await _readState(prefs, accountKey);
+1325:     final completions = Map<String, dynamic>.from(
+1326:       state['completions'] as Map,
+1327:     );
+1328:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1329:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1330: 
+1331:     final completionKey =
+1332:         taskId == null ? null : '$cycle|$taskId';
+1333:     final String? awardId = taskId == null
+1334:         ? 'traffic_answer|$cycle|$cleanDedupe'
+1335:         : null;
+1336: 
+1337:     final wasCompleted =
+1338:         completionKey != null && completions.containsKey(completionKey);
+1339:     final alreadyAwarded = awardId != null && awards.containsKey(awardId);
+1340:     final now = (occurredAt ?? DateTime.now()).toUtc().toIso8601String();
+1341: 
+1342:     if (completionKey != null && !wasCompleted) {
+1343:       completions[completionKey] = <String, dynamic>{
+1344:         'taskId': taskId,
+1345:         'cycleId': cycle,
+1346:         'event': event.key,
+1347:         'completedAt': now,
+1348:       };
+1349:     }
+1350: 
+1351:     var pointsDelta = 0;
+1352:     if (taskId == null && !alreadyAwarded && awardId != null) {
+1353:       pointsDelta = pointsPerTrafficAnswer;
+1354:       final award = <String, dynamic>{
+1355:         'id': awardId,
+1356:         'points': pointsDelta,
+1357:         'type': 'traffic_answer',
+1358:         'event': event.key,
+1359:         'cycleId': cycle,
+1360:         'dedupeId': cleanDedupe,
+1361:         'createdAt': now,
+1362:       };
+1363:       awards[awardId] = award;
+1364:       ledger.add(award);
+1365:       if (ledger.length > _maxLedgerEntries) {
+1366:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1367:       }
+1368:     }
+1369: 
+1370:     state['completions'] = completions;
+1371:     state['awards'] = awards;
+1372:     state['ledger'] = ledger;
+1373:     await _writeState(prefs, accountKey, state);
+1374: 
+1375:     final total = _effectiveTotalFromState(state);
+1376:     _loadedAccountKey = accountKey;
+1377:     totalPointsNotifier.value = total;
+--- lines 10273-10397 ---
+10273:       if (_shareType == 'place') {
+10274:         final place = _approvedPlace;
+10275:         final lat = (place?['latitude'] as num?)?.toDouble();
+10276:         final lng = (place?['longitude'] as num?)?.toDouble();
+10277:         if (place == null || lat == null || lng == null || _placeId.isEmpty) {
+10278:           throw StateError('approved-place-unavailable');
+10279:         }
+10280:         latitude = lat;
+10281:         longitude = lng;
+10282:         senderId = _placeId;
+10283:         placeName = (place['placeName'] ?? '').toString();
+10284:       } else {
+10285:         final position = await _currentPosition();
+10286:         if (position == null) return;
+10287:         latitude = position.latitude;
+10288:         longitude = position.longitude;
+10289:         senderId = _personalId;
+10290:       }
+10291: 
+10292:       await DedaBackend.createLocationShare(
+10293:         recipientPublicId: recipient,
+10294:         senderPublicId: senderId,
+10295:         senderName: _shareType == 'place' && placeName.isNotEmpty
+10296:             ? placeName
+10297:             : DedaPreferences.userName,
+10298:         shareType: _shareType,
+10299:         latitude: latitude,
+10300:         longitude: longitude,
+10301:         durationMinutes: _durationMinutes,
+10302:         placeName: placeName,
+10303:         placeDocumentId:
+10304:             _shareType == 'place' ? (_approvedPlace?['id'] ?? '').toString() : '',
+10305:       );
+10306: 
+10307:       if (_shareType == 'current') {
+10308:         await DedaTaskEngine.recordSuccessfulEvent(
+10309:           DedaTaskEvent.currentLocationShared,
+10310:         );
+10311:       }
+10312: 
+10313:       if (!mounted) return;
+10314:       _recipientController.clear();
+10315:       await showDialog<void>(
+10316:         context: context,
+10317:         builder: (dialogContext) => AlertDialog(
+10318:           icon: const Icon(
+10319:             Icons.check_circle,
+10320:             color: Color(0xFF17652F),
+10321:             size: 48,
+10322:           ),
+10323:           title: Text(dedaText('تم إرسال المشاركة', 'Location shared')),
+10324:           content: Text(
+10325:             dedaText(
+10326:               'وصلت المشاركة إلى صندوق المواقع المستلمة داخل DEDA.',
+10327:               'The share was sent to the recipient’s DEDA received-locations inbox.',
+10328:             ),
+10329:             textAlign: TextAlign.center,
+10330:           ),
+10331:           actionsAlignment: MainAxisAlignment.center,
+10332:           actions: [
+10333:             FilledButton(
+10334:               onPressed: () => Navigator.pop(dialogContext),
+10335:               child: Text(dedaText('حسنًا', 'OK')),
+10336:             ),
+10337:           ],
+10338:         ),
+10339:       );
+10340:     } on StateError catch (error) {
+10341:       if (!mounted) return;
+10342:       final message = error.message == 'recipient-share-id-not-found'
+10343:           ? dedaText(
+10344:               'لم نعثر على هذا المعرف داخل DEDA. تأكد منه ثم حاول مجددًا.',
+10345:               'This DEDA ID was not found. Check it and try again.',
+10346:             )
+10347:           : dedaText(
+10348:               'تعذر إرسال المشاركة الآن. حاول مرة أخرى.',
+10349:               'Could not send the share right now. Try again.',
+10350:             );
+10351:       ScaffoldMessenger.of(context).showSnackBar(
+10352:         SnackBar(content: Text(message)),
+10353:       );
+10354:     } catch (_) {
+10355:       if (!mounted) return;
+10356:       ScaffoldMessenger.of(context).showSnackBar(
+10357:         SnackBar(
+10358:           content: Text(
+10359:             dedaText(
+10360:               'تعذر إرسال المشاركة الآن. تحقق من الإنترنت وحاول مجددًا.',
+10361:               'Could not send the share. Check your connection and try again.',
+10362:             ),
+10363:           ),
+10364:         ),
+10365:       );
+10366:     } finally {
+10367:       if (mounted) setState(() => _sending = false);
+10368:     }
+10369:   }
+10370: 
+10371:   Widget _idCard({
+10372:     required String title,
+10373:     required String id,
+10374:     required IconData icon,
+10375:   }) {
+10376:     return Card(
+10377:       elevation: 0,
+10378:       color: Colors.white.withOpacity(0.88),
+10379:       shape: RoundedRectangleBorder(
+10380:         borderRadius: BorderRadius.circular(20),
+10381:         side: const BorderSide(color: Color(0xFFCFD9D0)),
+10382:       ),
+10383:       child: Padding(
+10384:         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+10385:         child: Row(
+10386:           children: [
+10387:             CircleAvatar(
+10388:               radius: 18,
+10389:               backgroundColor: const Color(0xFFE1F2E3),
+10390:               foregroundColor: const Color(0xFF17652F),
+10391:               child: Icon(icon, size: 20),
+10392:             ),
+10393:             const SizedBox(width: 8),
+10394:             Expanded(
+10395:               child: Column(
+10396:                 crossAxisAlignment: CrossAxisAlignment.stretch,
+10397:                 children: [
+--- lines 11019-11143 ---
+11019:         ).catchError((_) {
+11020:           if (mounted) {
+11021:             ScaffoldMessenger.of(context).showSnackBar(
+11022:               SnackBar(
+11023:                 content: Text(
+11024:                   dedaText(
+11025:                     'فتحنا الموقع، لكن تعذر تحديث حالة القبول الآن.',
+11026:                     'The location opened, but its accepted state could not be updated.',
+11027:                   ),
+11028:                 ),
+11029:               ),
+11030:             );
+11031:           }
+11032:         }),
+11033:       );
+11034:     }
+11035: 
+11036:     final destination = PlaceInfo(
+11037:       name: title,
+11038:       type: placeShare
+11039:           ? dedaText('مكان مشترك', 'Shared place')
+11040:           : dedaText('موقع مشترك', 'Shared location'),
+11041:       location: LatLng(lat, lng),
+11042:     );
+11043: 
+11044:     if (!mounted) return;
+11045:     Navigator.push(
+11046:       context,
+11047:       MaterialPageRoute(
+11048:         builder: (_) => MapReadyPage(
+11049:           initialDestination: destination,
+11050:         ),
+11051:       ),
+11052:     );
+11053:     unawaited(
+11054:       DedaTaskEngine.recordSuccessfulEvent(
+11055:         DedaTaskEvent.receivedPlaceOpened,
+11056:       ),
+11057:     );
+11058:   }
+11059: 
+11060:   Future<void> _rejectShare(Map<String, dynamic> item) async {
+11061:     try {
+11062:       await DedaBackend.decideLocationShare(
+11063:         shareId: (item['id'] ?? '').toString(),
+11064:         accept: false,
+11065:       );
+11066:     } catch (_) {
+11067:       if (!mounted) return;
+11068:       ScaffoldMessenger.of(context).showSnackBar(
+11069:         SnackBar(
+11070:           content: Text(
+11071:             dedaText(
+11072:               'تعذر رفض المشاركة الآن.',
+11073:               'Could not reject the share right now.',
+11074:             ),
+11075:           ),
+11076:         ),
+11077:       );
+11078:     }
+11079:   }
+11080: 
+11081:   Widget _mapPreview(Map<String, dynamic> item) {
+11082:     final lat = (item['latitude'] as num?)?.toDouble();
+11083:     final lng = (item['longitude'] as num?)?.toDouble();
+11084:     if (lat == null || lng == null) {
+11085:       return const SizedBox.shrink();
+11086:     }
+11087:     final point = LatLng(lat, lng);
+11088:     return ClipRRect(
+11089:       borderRadius: BorderRadius.circular(16),
+11090:       child: SizedBox(
+11091:         height: 118,
+11092:         child: IgnorePointer(
+11093:           child: FlutterMap(
+11094:             options: MapOptions(
+11095:               initialCenter: point,
+11096:               initialZoom: 13.5,
+11097:             ),
+11098:             children: [
+11099:               ...dedaBaseMapLayers(DedaMapStyle.normal),
+11100:               MarkerLayer(
+11101:                 markers: [
+11102:                   Marker(
+11103:                     point: point,
+11104:                     width: 48,
+11105:                     height: 48,
+11106:                     child: Icon(
+11107:                       item['shareType'] == 'place'
+11108:                           ? Icons.location_pin
+11109:                           : Icons.my_location,
+11110:                       color: item['shareType'] == 'place'
+11111:                           ? const Color(0xFFE53935)
+11112:                           : const Color(0xFF1565C0),
+11113:                       size: 42,
+11114:                     ),
+11115:                   ),
+11116:                 ],
+11117:               ),
+11118:             ],
+11119:           ),
+11120:         ),
+11121:       ),
+11122:     );
+11123:   }
+11124: 
+11125:   Widget _shareCard(Map<String, dynamic> item) {
+11126:     final pending = (item['status'] ?? 'pending').toString() == 'pending';
+11127:     final accepted = (item['status'] ?? '').toString() == 'accepted';
+11128:     final ended = _isEnded(item);
+11129:     final placeShare = item['shareType'] == 'place';
+11130:     final senderName = (item['senderName'] ?? '').toString();
+11131:     final senderId = (item['senderPublicId'] ?? '').toString();
+11132: 
+11133:     return Card(
+11134:       margin: EdgeInsets.zero,
+11135:       elevation: 3,
+11136:       color: Colors.white.withOpacity(0.94),
+11137:       shape: RoundedRectangleBorder(
+11138:         borderRadius: BorderRadius.circular(22),
+11139:       ),
+11140:       child: Padding(
+11141:         padding: const EdgeInsets.all(14),
+11142:         child: Column(
+11143:           crossAxisAlignment: CrossAxisAlignment.stretch,
+--- lines 18831-18955 ---
+18831: }
+18832: 
+18833: class _MapReadyPageState extends State<MapReadyPage> {
+18834:   final PlacesService _placesService = PlacesService();
+18835:   final DedaRouteService _mapRouteService = DedaRouteService();
+18836:   final TextEditingController _mapSearchController = TextEditingController();
+18837:   Position? currentPosition;
+18838:   LatLng? selectedDestination;
+18839:   PlaceInfo? selectedDestinationPlace;
+18840:   DedaRouteResult? mapRoutePreview;
+18841:   bool isRoutePreviewLoading = false;
+18842:   int _routePreviewGeneration = 0;
+18843:   List<PlaceInfo> mapSearchResults = <PlaceInfo>[];
+18844:   List<PlaceInfo> registeredPlaces = <PlaceInfo>[];
+18845:   bool isLoading = false;
+18846:   bool isMapSearching = false;
+18847:   bool showAvailableOnly = false;
+18848:   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
+18849: 
+18850:   String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
+18851: 
+18852:   List<PlaceInfo> get visibleRegisteredPlaces => showAvailableOnly
+18853:       ? registeredPlaces.where((place) => place.isAvailableNow).toList()
+18854:       : registeredPlaces;
+18855: 
+18856:   List<PlaceInfo> get visibleMapSearchResults => showAvailableOnly
+18857:       ? mapSearchResults
+18858:           .where((place) => place.isDedaRegistered && place.isAvailableNow)
+18859:           .toList()
+18860:       : mapSearchResults;
+18861: 
+18862:   @override
+18863:   void initState() {
+18864:     super.initState();
+18865:     unawaited(
+18866:       DedaTaskEngine.recordSuccessfulEvent(DedaTaskEvent.mapOpened),
+18867:     );
+18868:     final initial = widget.initialDestination;
+18869:     if (initial != null) {
+18870:       selectedDestination = initial.location;
+18871:       selectedDestinationPlace = initial;
+18872:       statusMessage = dedaText(
+18873:         'تم استلام الوجهة. جاري تحديد موقعك على خريطة DEDA...',
+18874:         'Shared destination received. Locating you on the DEDA map...',
+18875:       );
+18876:       WidgetsBinding.instance.addPostFrameCallback((_) {
+18877:         if (mounted) {
+18878:           unawaited(determinePosition());
+18879:         }
+18880:       });
+18881:     }
+18882:   }
+18883: 
+18884:   @override
+18885:   void dispose() {
+18886:     _mapSearchController.dispose();
+18887:     super.dispose();
+18888:   }
+18889: 
+18890:   Future<void> determinePosition() async {
+18891:     if (isLoading) return;
+18892:     setState(() {
+18893:       isLoading = true;
+18894:       statusMessage = dedaText('جاري تحديد موقعك...', 'Locating you...');
+18895:     });
+18896: 
+18897:     try {
+18898:       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+18899:       if (!serviceEnabled) {
+18900:         if (!mounted) return;
+18901:         setState(() {
+18902:           statusMessage = dedaText(
+18903:             'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.',
+18904:             'GPS is turned off. Enable location and try again.',
+18905:           );
+18906:         });
+18907:         return;
+18908:       }
+18909: 
+18910:       var permission = await Geolocator.checkPermission();
+18911:       if (permission == LocationPermission.denied) {
+18912:         permission = await Geolocator.requestPermission();
+18913:       }
+18914:       if (permission == LocationPermission.denied) {
+18915:         if (!mounted) return;
+18916:         setState(() {
+18917:           statusMessage = dedaText('تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.', 'Location permission was denied. DEDA needs it to locate you.');
+18918:         });
+18919:         return;
+18920:       }
+18921:       if (permission == LocationPermission.deniedForever) {
+18922:         if (!mounted) return;
+18923:         setState(() {
+18924:           statusMessage =
+18925:               dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
+18926:         });
+18927:         return;
+18928:       }
+18929: 
+18930:       final position = await Geolocator.getCurrentPosition(
+18931:         locationSettings: const LocationSettings(
+18932:           accuracy: LocationAccuracy.high,
+18933:         ),
+18934:       );
+18935:       if (!mounted) return;
+18936:       final dedaPlaces = await DedaRegisteredPlacesStore.readAll();
+18937:       final destination = selectedDestination;
+18938:       setState(() {
+18939:         currentPosition = position;
+18940:         registeredPlaces = dedaPlaces;
+18941:         statusMessage = destination == null
+18942:             ? dedaText(
+18943:                 'تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.',
+18944:                 'Location found. Long-press anywhere on the map to choose a destination.',
+18945:               )
+18946:             : dedaText(
+18947:                 'تم تحديد موقعك والوجهة. جاري رسم الطريق الأخضر على خريطة DEDA...',
+18948:                 'Your location and destination are ready. Drawing the green route on the DEDA map...',
+18949:               );
+18950:       });
+18951:       if (destination != null) {
+18952:         unawaited(_previewRouteTo(destination));
+18953:       }
+18954:     } catch (e) {
+18955:       if (!mounted) return;
+===== dailyLogin :: [11593, 12380] =====
+--- lines 11559-11683 ---
+11559:         Navigator.push(
+11560:           context,
+11561:           MaterialPageRoute(
+11562:             builder: (_) => const DedaReceivedLocationsPage(),
+11563:           ),
+11564:         );
+11565:         break;
+11566:       case 5:
+11567:         Navigator.push(
+11568:           context,
+11569:           MaterialPageRoute(builder: (_) => const PersonalPlacesPage()),
+11570:         );
+11571:         break;
+11572:       case 6:
+11573:         ScaffoldMessenger.of(context).showSnackBar(
+11574:           SnackBar(
+11575:             content: Text(
+11576:               dedaText(
+11577:                 'اختبار المهارات المرورية هو الخطوة التالية في التنفيذ.',
+11578:                 'The traffic-skills quiz is the next implementation step.',
+11579:               ),
+11580:               textAlign: TextAlign.center,
+11581:             ),
+11582:           ),
+11583:         );
+11584:         break;
+11585:       case 7:
+11586:         Navigator.push(
+11587:           context,
+11588:           MaterialPageRoute(builder: (_) => const MapReadyPage()),
+11589:         );
+11590:         break;
+11591:     }
+11592:   }
+11593: 
+11594:   Widget _dailyLoginCard() {
+11595:     return LayoutBuilder(
+11596:       builder: (context, constraints) {
+11597:         final compact = constraints.maxWidth < 390;
+11598:         final iconBox = compact ? 52.0 : 58.0;
+11599:         final rewardWidth = compact ? 58.0 : 64.0;
+11600: 
+11601:         return Container(
+11602:           padding: EdgeInsets.symmetric(
+11603:             horizontal: compact ? 9 : 11,
+11604:             vertical: compact ? 8 : 9,
+11605:           ),
+11606:           decoration: BoxDecoration(
+11607:             gradient: const LinearGradient(
+11608:               colors: [
+11609:                 Color(0xFF0D4778),
+11610:                 Color(0xFF082E59),
+11611:                 Color(0xFF061F3E),
+11612:               ],
+11613:               begin: AlignmentDirectional.topStart,
+11614:               end: AlignmentDirectional.bottomEnd,
+11615:             ),
+11616:             borderRadius: BorderRadius.circular(20),
+11617:             border: Border.all(
+11618:               color: const Color(0xFFFFD76A),
+11619:               width: 1.35,
+11620:             ),
+11621:             boxShadow: const [
+11622:               BoxShadow(
+11623:                 color: Color(0x36000000),
+11624:                 blurRadius: 13,
+11625:                 offset: Offset(0, 5),
+11626:               ),
+11627:             ],
+11628:           ),
+11629:           child: Row(
+11630:             textDirection: TextDirection.ltr,
+11631:             crossAxisAlignment: CrossAxisAlignment.center,
+11632:             children: [
+11633:               Container(
+11634:                 width: iconBox,
+11635:                 height: iconBox,
+11636:                 decoration: BoxDecoration(
+11637:                   gradient: const LinearGradient(
+11638:                     colors: [
+11639:                       Color(0xFFFFE9A8),
+11640:                       Color(0xFFE0AE39),
+11641:                     ],
+11642:                     begin: Alignment.topLeft,
+11643:                     end: Alignment.bottomRight,
+11644:                   ),
+11645:                   borderRadius: BorderRadius.circular(17),
+11646:                   boxShadow: const [
+11647:                     BoxShadow(
+11648:                       color: Color(0x44E5B74C),
+11649:                       blurRadius: 9,
+11650:                       offset: Offset(0, 3),
+11651:                     ),
+11652:                   ],
+11653:                 ),
+11654:                 alignment: Alignment.center,
+11655:                 child: Icon(
+11656:                   Icons.calendar_month_rounded,
+11657:                   size: compact ? 30 : 34,
+11658:                   color: const Color(0xFF0A3B68),
+11659:                 ),
+11660:               ),
+11661:               SizedBox(width: compact ? 8 : 10),
+11662:               Expanded(
+11663:                 child: Column(
+11664:                   mainAxisSize: MainAxisSize.min,
+11665:                   crossAxisAlignment: CrossAxisAlignment.stretch,
+11666:                   children: [
+11667:                     FittedBox(
+11668:                       fit: BoxFit.scaleDown,
+11669:                       alignment: AlignmentDirectional.centerEnd,
+11670:                       child: Text(
+11671:                         dedaText('تسجيل الدخول اليومي', 'Daily login'),
+11672:                         maxLines: 1,
+11673:                         style: TextStyle(
+11674:                           color: Colors.white,
+11675:                           fontSize: compact ? 16.0 : 17.5,
+11676:                           fontWeight: FontWeight.w900,
+11677:                         ),
+11678:                       ),
+11679:                     ),
+11680:                     const SizedBox(height: 2),
+11681:                     Row(
+11682:                       mainAxisAlignment: MainAxisAlignment.end,
+11683:                       children: [
+--- lines 12346-12470 ---
+12346:             fit: BoxFit.cover,
+12347:             opacity: 0.10,
+12348:           ),
+12349:         ),
+12350:         child: SafeArea(
+12351:           top: false,
+12352:           child: ListView(
+12353:             padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
+12354:             children: [
+12355:               Container(
+12356:                 padding: const EdgeInsets.fromLTRB(7, 8, 7, 10),
+12357:                 decoration: BoxDecoration(
+12358:                   gradient: const LinearGradient(
+12359:                     colors: [
+12360:                       Color(0xFFFFFBF2),
+12361:                       Color(0xFFF9F3E8),
+12362:                     ],
+12363:                     begin: Alignment.topCenter,
+12364:                     end: Alignment.bottomCenter,
+12365:                   ),
+12366:                   borderRadius: BorderRadius.circular(26),
+12367:                   border: Border.all(
+12368:                     color: const Color(0xFFE8C56C),
+12369:                     width: 1.5,
+12370:                   ),
+12371:                   boxShadow: const [
+12372:                     BoxShadow(
+12373:                       color: Color(0x55000000),
+12374:                       blurRadius: 18,
+12375:                       offset: Offset(0, 8),
+12376:                     ),
+12377:                   ],
+12378:                 ),
+12379:                 child: Column(
+12380:                   children: [
+12381:                     _dailyLoginCard(),
+12382:                     const SizedBox(height: 7),
+12383:                     ValueListenableBuilder<int>(
+12384:                       valueListenable: DedaTaskEngine.revisionNotifier,
+12385:                       builder: (context, _, __) {
+12386:                         return Column(
+12387:                           children: List<Widget>.generate(
+12388:                             tasks.length,
+12389:                             (index) {
+12390:                               final task = tasks[index];
+12391:                               final taskId = DedaTaskIds.weekly[index];
+12392:                               return FutureBuilder<List<bool>>(
+12393:                                 future: Future.wait<bool>([
+12394:                                   DedaTaskEngine.isTaskCompleted(taskId),
+12395:                                   DedaTaskEngine.isTaskRewardClaimed(taskId),
+12396:                                 ]),
+12397:                                 builder: (context, snapshot) {
+12398:                                   final values = snapshot.data;
+12399:                                   final completed =
+12400:                                       values != null && values.isNotEmpty
+12401:                                           ? values[0]
+12402:                                           : false;
+12403:                                   final rewardClaimed =
+12404:                                       values != null && values.length > 1
+12405:                                           ? values[1]
+12406:                                           : false;
+12407:                                   return Padding(
+12408:                                     padding: EdgeInsets.only(
+12409:                                       bottom:
+12410:                                           index == tasks.length - 1 ? 0 : 6,
+12411:                                     ),
+12412:                                     child: _taskCard(
+12413:                                       index: index,
+12414:                                       taskId: taskId,
+12415:                                       icon: task.$1,
+12416:                                       title: task.$2,
+12417:                                       subtitle: task.$3,
+12418:                                       action: task.$4,
+12419:                                       completed: completed,
+12420:                                       rewardClaimed: rewardClaimed,
+12421:                                       claiming:
+12422:                                           _claimingTaskIds.contains(taskId),
+12423:                                     ),
+12424:                                   );
+12425:                                 },
+12426:                               );
+12427:                             },
+12428:                           ),
+12429:                         );
+12430:                       },
+12431:                     ),
+12432:                     const SizedBox(height: 7),
+12433:                     Container(
+12434:                       padding: const EdgeInsets.symmetric(
+12435:                         horizontal: 10,
+12436:                         vertical: 7,
+12437:                       ),
+12438:                       decoration: BoxDecoration(
+12439:                         color: const Color(0xFFEAF3FA),
+12440:                         borderRadius: BorderRadius.circular(16),
+12441:                         border: Border.all(
+12442:                           color: const Color(0xFFBCD4E6),
+12443:                         ),
+12444:                       ),
+12445:                       child: Row(
+12446:                         crossAxisAlignment: CrossAxisAlignment.start,
+12447:                         children: [
+12448:                           const Icon(
+12449:                             Icons.info_rounded,
+12450:                             color: Color(0xFF0B4E7D),
+12451:                             size: 20,
+12452:                           ),
+12453:                           const SizedBox(width: 7),
+12454:                           Expanded(
+12455:                             child: Text(
+12456:                               dedaText(
+12457:                                 'توضيح: يمكن إنجاز بعض مهام الخريطة ضمن مسار واحد، وسيحتسبها DEDA تلقائيًا عند تحقق شروطها.',
+12458:                                 'Some map tasks can be completed in one route and DEDA will count them automatically.',
+12459:                               ),
+12460:                               textAlign: TextAlign.right,
+12461:                               style: const TextStyle(
+12462:                                 color: Color(0xFF244C6B),
+12463:                                 fontSize: 10.6,
+12464:                                 height: 1.4,
+12465:                                 fontWeight: FontWeight.w700,
+12466:                               ),
+12467:                             ),
+12468:                           ),
+12469:                         ],
+12470:                       ),
+===== login_daily :: [] =====
+===== currentLocationShared :: [931, 944, 1105, 10308] =====
+--- lines 897-1021 ---
+897:   }
+898: 
+899:   static Future<void> setDefaultTravelMode(DedaTravelMode mode) async {
+900:     defaultTravelMode = mode;
+901:     final prefs = await SharedPreferences.getInstance();
+902:     await prefs.setString(_travelModeKey, mode.name);
+903:   }
+904: 
+905:   static Future<void> setDefaultMapStyle(DedaMapStyle style) async {
+906:     defaultMapStyle = style;
+907:     final prefs = await SharedPreferences.getInstance();
+908:     await prefs.setString(_mapStyleKey, style.name);
+909:   }
+910: 
+911:   static Future<void> logout() async {
+912:     final prefs = await SharedPreferences.getInstance();
+913:     isLoggedIn = false;
+914:     userName = '';
+915:     phone = '';
+916:     accountPhone = '';
+917:     accountType = null;
+918:     profileAvatarStyle = 0;
+919:     profileFrameStyle = 0;
+920:     profileBackgroundStyle = 0;
+921:     await prefs.setBool(_loggedInKey, false);
+922:     await prefs.remove(_userNameKey);
+923:     await prefs.remove(_phoneKey);
+924:     await prefs.remove(_accountPhoneKey);
+925:     await prefs.remove(_accountTypeKey);
+926:   }
+927: }
+928: 
+929: 
+930: enum DedaTaskEvent {
+931:   mapOpened,
+932:   currentLocationShared,
+933:   registeredPlaceShared,
+934:   receivedPlaceOpened,
+935:   savedPlaceOpened,
+936:   addedPlaceReviewed,
+937:   trafficQuizCompleted,
+938:   longTripCompleted,
+939:   trafficQuizCorrectAnswer,
+940: }
+941: 
+942: extension DedaTaskEventKey on DedaTaskEvent {
+943:   String get key => switch (this) {
+944:         DedaTaskEvent.mapOpened => 'map_opened',
+945:         DedaTaskEvent.currentLocationShared => 'current_location_shared',
+946:         DedaTaskEvent.registeredPlaceShared => 'registered_place_shared',
+947:         DedaTaskEvent.receivedPlaceOpened => 'received_place_opened',
+948:         DedaTaskEvent.savedPlaceOpened => 'saved_place_opened',
+949:         DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
+950:         DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
+951:         DedaTaskEvent.longTripCompleted => 'long_trip_completed',
+952:         DedaTaskEvent.trafficQuizCorrectAnswer =>
+953:           'traffic_quiz_correct_answer',
+954:       };
+955: }
+956: 
+957: class DedaTaskIds {
+958:   static const String sharePersonalLocation = 'share_personal_location';
+959:   static const String openMap = 'open_map';
+960:   static const String shareRegisteredPlace = 'share_registered_place';
+961:   static const String openSavedPlace = 'open_saved_place';
+962:   static const String openReceivedPlace = 'open_received_place';
+963:   static const String reviewAddedPlace = 'review_added_place';
+964:   static const String trafficSkills = 'traffic_skills';
+965:   static const String longTrip = 'long_trip';
+966: 
+967:   static const List<String> weekly = <String>[
+968:     sharePersonalLocation,
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+1021:       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+--- lines 910-1034 ---
+910: 
+911:   static Future<void> logout() async {
+912:     final prefs = await SharedPreferences.getInstance();
+913:     isLoggedIn = false;
+914:     userName = '';
+915:     phone = '';
+916:     accountPhone = '';
+917:     accountType = null;
+918:     profileAvatarStyle = 0;
+919:     profileFrameStyle = 0;
+920:     profileBackgroundStyle = 0;
+921:     await prefs.setBool(_loggedInKey, false);
+922:     await prefs.remove(_userNameKey);
+923:     await prefs.remove(_phoneKey);
+924:     await prefs.remove(_accountPhoneKey);
+925:     await prefs.remove(_accountTypeKey);
+926:   }
+927: }
+928: 
+929: 
+930: enum DedaTaskEvent {
+931:   mapOpened,
+932:   currentLocationShared,
+933:   registeredPlaceShared,
+934:   receivedPlaceOpened,
+935:   savedPlaceOpened,
+936:   addedPlaceReviewed,
+937:   trafficQuizCompleted,
+938:   longTripCompleted,
+939:   trafficQuizCorrectAnswer,
+940: }
+941: 
+942: extension DedaTaskEventKey on DedaTaskEvent {
+943:   String get key => switch (this) {
+944:         DedaTaskEvent.mapOpened => 'map_opened',
+945:         DedaTaskEvent.currentLocationShared => 'current_location_shared',
+946:         DedaTaskEvent.registeredPlaceShared => 'registered_place_shared',
+947:         DedaTaskEvent.receivedPlaceOpened => 'received_place_opened',
+948:         DedaTaskEvent.savedPlaceOpened => 'saved_place_opened',
+949:         DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
+950:         DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
+951:         DedaTaskEvent.longTripCompleted => 'long_trip_completed',
+952:         DedaTaskEvent.trafficQuizCorrectAnswer =>
+953:           'traffic_quiz_correct_answer',
+954:       };
+955: }
+956: 
+957: class DedaTaskIds {
+958:   static const String sharePersonalLocation = 'share_personal_location';
+959:   static const String openMap = 'open_map';
+960:   static const String shareRegisteredPlace = 'share_registered_place';
+961:   static const String openSavedPlace = 'open_saved_place';
+962:   static const String openReceivedPlace = 'open_received_place';
+963:   static const String reviewAddedPlace = 'review_added_place';
+964:   static const String trafficSkills = 'traffic_skills';
+965:   static const String longTrip = 'long_trip';
+966: 
+967:   static const List<String> weekly = <String>[
+968:     sharePersonalLocation,
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+1021:       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+1022: 
+1023:   static String _statePrefsKey(String accountKey) =>
+1024:       'deda_task_points_state_v1_$accountKey';
+1025: 
+1026:   static Map<String, dynamic> _emptyState() => <String, dynamic>{
+1027:         'version': _storeVersion,
+1028:         'completions': <String, dynamic>{},
+1029:         'awards': <String, dynamic>{},
+1030:         'ledger': <dynamic>[],
+1031:       };
+1032: 
+1033:   static Map<String, dynamic> _decodeState(String? raw) {
+1034:     if (raw == null || raw.trim().isEmpty) return _emptyState();
+--- lines 1071-1195 ---
+1071:         (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+1072:   }
+1073: 
+1074:   static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+1075:     final isGeneralManager =
+1076:         await DedaBackend.currentDedaAccountIsGeneralManager(
+1077:       phone: DedaPreferences.phone,
+1078:     );
+1079:     if (_loadedAccountKey != accountKey) return;
+1080: 
+1081:     _generalManagerBonusActive = isGeneralManager;
+1082:     final prefs = await SharedPreferences.getInstance();
+1083:     final state = await _readState(prefs, accountKey);
+1084:     if (_loadedAccountKey != accountKey) return;
+1085:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1086:     revisionNotifier.value++;
+1087:   }
+1088: 
+1089:   /// Development cycle id. Weekly definitions will later supply their own
+1090:   /// Firestore weekId, so changing rollover policy will not change task IDs.
+1091:   static String currentLocalCycleId([DateTime? value]) {
+1092:     final now = (value ?? DateTime.now()).toLocal();
+1093:     final monday = DateTime(
+1094:       now.year,
+1095:       now.month,
+1096:       now.day,
+1097:     ).subtract(Duration(days: now.weekday - DateTime.monday));
+1098:     final y = monday.year.toString().padLeft(4, '0');
+1099:     final m = monday.month.toString().padLeft(2, '0');
+1100:     final d = monday.day.toString().padLeft(2, '0');
+1101:     return '$y-$m-$d';
+1102:   }
+1103: 
+1104:   static String? taskIdForEvent(DedaTaskEvent event) => switch (event) {
+1105:         DedaTaskEvent.mapOpened => DedaTaskIds.openMap,
+1106:         DedaTaskEvent.currentLocationShared =>
+1107:           DedaTaskIds.sharePersonalLocation,
+1108:         DedaTaskEvent.registeredPlaceShared =>
+1109:           DedaTaskIds.shareRegisteredPlace,
+1110:         DedaTaskEvent.receivedPlaceOpened =>
+1111:           DedaTaskIds.openReceivedPlace,
+1112:         DedaTaskEvent.savedPlaceOpened => DedaTaskIds.openSavedPlace,
+1113:         DedaTaskEvent.addedPlaceReviewed => DedaTaskIds.reviewAddedPlace,
+1114:         DedaTaskEvent.trafficQuizCompleted => DedaTaskIds.trafficSkills,
+1115:         DedaTaskEvent.longTripCompleted => DedaTaskIds.longTrip,
+1116:         DedaTaskEvent.trafficQuizCorrectAnswer => null,
+1117:       };
+1118: 
+1119:   static Future<Map<String, dynamic>> _readState(
+1120:     SharedPreferences prefs,
+1121:     String accountKey,
+1122:   ) async {
+1123:     return _decodeState(prefs.getString(_statePrefsKey(accountKey)));
+1124:   }
+1125: 
+1126:   static Future<void> _writeState(
+1127:     SharedPreferences prefs,
+1128:     String accountKey,
+1129:     Map<String, dynamic> state,
+1130:   ) async {
+1131:     await prefs.setString(_statePrefsKey(accountKey), jsonEncode(state));
+1132:   }
+1133: 
+1134:   static Future<void> initializeForCurrentAccount() async {
+1135:     final accountKey = _accountKey();
+1136:     _loadedAccountKey = accountKey;
+1137:     _generalManagerBonusActive = false;
+1138:     if (accountKey.isEmpty) {
+1139:       totalPointsNotifier.value = 0;
+1140:       revisionNotifier.value++;
+1141:       return;
+1142:     }
+1143:     final prefs = await SharedPreferences.getInstance();
+1144:     final state = await _readState(prefs, accountKey);
+1145:     if (_loadedAccountKey != accountKey) return;
+1146:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1147:     revisionNotifier.value++;
+1148: 
+1149:     // Do not hold app startup on a network role lookup. The protected admin
+1150:     // gateway is checked immediately after the local balance is available,
+1151:     // then the notifier refreshes to include the manager-only 1,000,000 bonus.
+1152:     unawaited(_refreshGeneralManagerBonus(accountKey));
+1153:   }
+1154: 
+1155:   static void clearSessionView() {
+1156:     _loadedAccountKey = '';
+1157:     _generalManagerBonusActive = false;
+1158:     totalPointsNotifier.value = 0;
+1159:     revisionNotifier.value++;
+1160:   }
+1161: 
+1162:   static Future<int> totalPoints() async {
+1163:     final accountKey = _accountKey();
+1164:     if (accountKey.isEmpty) return 0;
+1165:     final prefs = await SharedPreferences.getInstance();
+1166:     final state = await _readState(prefs, accountKey);
+1167:     final total = _effectiveTotalFromState(state);
+1168:     if (_loadedAccountKey == accountKey) {
+1169:       totalPointsNotifier.value = total;
+1170:     }
+1171:     return total;
+1172:   }
+1173: 
+1174:   static Future<bool> isTaskCompleted(
+1175:     String taskId, {
+1176:     String? cycleId,
+1177:   }) async {
+1178:     final accountKey = _accountKey();
+1179:     if (accountKey.isEmpty) return false;
+1180:     final prefs = await SharedPreferences.getInstance();
+1181:     final state = await _readState(prefs, accountKey);
+1182:     final completions = Map<String, dynamic>.from(
+1183:       state['completions'] as Map,
+1184:     );
+1185:     final cycle = cycleId ?? currentLocalCycleId();
+1186:     return completions.containsKey('$cycle|$taskId');
+1187:   }
+1188: 
+1189:   static Future<bool> isTaskRewardClaimed(
+1190:     String taskId, {
+1191:     String? cycleId,
+1192:   }) async {
+1193:     final accountKey = _accountKey();
+1194:     if (accountKey.isEmpty) return false;
+1195:     final prefs = await SharedPreferences.getInstance();
+--- lines 10274-10398 ---
+10274:         final place = _approvedPlace;
+10275:         final lat = (place?['latitude'] as num?)?.toDouble();
+10276:         final lng = (place?['longitude'] as num?)?.toDouble();
+10277:         if (place == null || lat == null || lng == null || _placeId.isEmpty) {
+10278:           throw StateError('approved-place-unavailable');
+10279:         }
+10280:         latitude = lat;
+10281:         longitude = lng;
+10282:         senderId = _placeId;
+10283:         placeName = (place['placeName'] ?? '').toString();
+10284:       } else {
+10285:         final position = await _currentPosition();
+10286:         if (position == null) return;
+10287:         latitude = position.latitude;
+10288:         longitude = position.longitude;
+10289:         senderId = _personalId;
+10290:       }
+10291: 
+10292:       await DedaBackend.createLocationShare(
+10293:         recipientPublicId: recipient,
+10294:         senderPublicId: senderId,
+10295:         senderName: _shareType == 'place' && placeName.isNotEmpty
+10296:             ? placeName
+10297:             : DedaPreferences.userName,
+10298:         shareType: _shareType,
+10299:         latitude: latitude,
+10300:         longitude: longitude,
+10301:         durationMinutes: _durationMinutes,
+10302:         placeName: placeName,
+10303:         placeDocumentId:
+10304:             _shareType == 'place' ? (_approvedPlace?['id'] ?? '').toString() : '',
+10305:       );
+10306: 
+10307:       if (_shareType == 'current') {
+10308:         await DedaTaskEngine.recordSuccessfulEvent(
+10309:           DedaTaskEvent.currentLocationShared,
+10310:         );
+10311:       }
+10312: 
+10313:       if (!mounted) return;
+10314:       _recipientController.clear();
+10315:       await showDialog<void>(
+10316:         context: context,
+10317:         builder: (dialogContext) => AlertDialog(
+10318:           icon: const Icon(
+10319:             Icons.check_circle,
+10320:             color: Color(0xFF17652F),
+10321:             size: 48,
+10322:           ),
+10323:           title: Text(dedaText('تم إرسال المشاركة', 'Location shared')),
+10324:           content: Text(
+10325:             dedaText(
+10326:               'وصلت المشاركة إلى صندوق المواقع المستلمة داخل DEDA.',
+10327:               'The share was sent to the recipient’s DEDA received-locations inbox.',
+10328:             ),
+10329:             textAlign: TextAlign.center,
+10330:           ),
+10331:           actionsAlignment: MainAxisAlignment.center,
+10332:           actions: [
+10333:             FilledButton(
+10334:               onPressed: () => Navigator.pop(dialogContext),
+10335:               child: Text(dedaText('حسنًا', 'OK')),
+10336:             ),
+10337:           ],
+10338:         ),
+10339:       );
+10340:     } on StateError catch (error) {
+10341:       if (!mounted) return;
+10342:       final message = error.message == 'recipient-share-id-not-found'
+10343:           ? dedaText(
+10344:               'لم نعثر على هذا المعرف داخل DEDA. تأكد منه ثم حاول مجددًا.',
+10345:               'This DEDA ID was not found. Check it and try again.',
+10346:             )
+10347:           : dedaText(
+10348:               'تعذر إرسال المشاركة الآن. حاول مرة أخرى.',
+10349:               'Could not send the share right now. Try again.',
+10350:             );
+10351:       ScaffoldMessenger.of(context).showSnackBar(
+10352:         SnackBar(content: Text(message)),
+10353:       );
+10354:     } catch (_) {
+10355:       if (!mounted) return;
+10356:       ScaffoldMessenger.of(context).showSnackBar(
+10357:         SnackBar(
+10358:           content: Text(
+10359:             dedaText(
+10360:               'تعذر إرسال المشاركة الآن. تحقق من الإنترنت وحاول مجددًا.',
+10361:               'Could not send the share. Check your connection and try again.',
+10362:             ),
+10363:           ),
+10364:         ),
+10365:       );
+10366:     } finally {
+10367:       if (mounted) setState(() => _sending = false);
+10368:     }
+10369:   }
+10370: 
+10371:   Widget _idCard({
+10372:     required String title,
+10373:     required String id,
+10374:     required IconData icon,
+10375:   }) {
+10376:     return Card(
+10377:       elevation: 0,
+10378:       color: Colors.white.withOpacity(0.88),
+10379:       shape: RoundedRectangleBorder(
+10380:         borderRadius: BorderRadius.circular(20),
+10381:         side: const BorderSide(color: Color(0xFFCFD9D0)),
+10382:       ),
+10383:       child: Padding(
+10384:         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+10385:         child: Row(
+10386:           children: [
+10387:             CircleAvatar(
+10388:               radius: 18,
+10389:               backgroundColor: const Color(0xFFE1F2E3),
+10390:               foregroundColor: const Color(0xFF17652F),
+10391:               child: Icon(icon, size: 20),
+10392:             ),
+10393:             const SizedBox(width: 8),
+10394:             Expanded(
+10395:               child: Column(
+10396:                 crossAxisAlignment: CrossAxisAlignment.stretch,
+10397:                 children: [
+10398:                   Text(
+===== mapOpened :: [930, 943, 1104, 18865] =====
+--- lines 896-1020 ---
+896:     await prefs.setDouble(_speechRateKey, rate);
+897:   }
+898: 
+899:   static Future<void> setDefaultTravelMode(DedaTravelMode mode) async {
+900:     defaultTravelMode = mode;
+901:     final prefs = await SharedPreferences.getInstance();
+902:     await prefs.setString(_travelModeKey, mode.name);
+903:   }
+904: 
+905:   static Future<void> setDefaultMapStyle(DedaMapStyle style) async {
+906:     defaultMapStyle = style;
+907:     final prefs = await SharedPreferences.getInstance();
+908:     await prefs.setString(_mapStyleKey, style.name);
+909:   }
+910: 
+911:   static Future<void> logout() async {
+912:     final prefs = await SharedPreferences.getInstance();
+913:     isLoggedIn = false;
+914:     userName = '';
+915:     phone = '';
+916:     accountPhone = '';
+917:     accountType = null;
+918:     profileAvatarStyle = 0;
+919:     profileFrameStyle = 0;
+920:     profileBackgroundStyle = 0;
+921:     await prefs.setBool(_loggedInKey, false);
+922:     await prefs.remove(_userNameKey);
+923:     await prefs.remove(_phoneKey);
+924:     await prefs.remove(_accountPhoneKey);
+925:     await prefs.remove(_accountTypeKey);
+926:   }
+927: }
+928: 
+929: 
+930: enum DedaTaskEvent {
+931:   mapOpened,
+932:   currentLocationShared,
+933:   registeredPlaceShared,
+934:   receivedPlaceOpened,
+935:   savedPlaceOpened,
+936:   addedPlaceReviewed,
+937:   trafficQuizCompleted,
+938:   longTripCompleted,
+939:   trafficQuizCorrectAnswer,
+940: }
+941: 
+942: extension DedaTaskEventKey on DedaTaskEvent {
+943:   String get key => switch (this) {
+944:         DedaTaskEvent.mapOpened => 'map_opened',
+945:         DedaTaskEvent.currentLocationShared => 'current_location_shared',
+946:         DedaTaskEvent.registeredPlaceShared => 'registered_place_shared',
+947:         DedaTaskEvent.receivedPlaceOpened => 'received_place_opened',
+948:         DedaTaskEvent.savedPlaceOpened => 'saved_place_opened',
+949:         DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
+950:         DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
+951:         DedaTaskEvent.longTripCompleted => 'long_trip_completed',
+952:         DedaTaskEvent.trafficQuizCorrectAnswer =>
+953:           'traffic_quiz_correct_answer',
+954:       };
+955: }
+956: 
+957: class DedaTaskIds {
+958:   static const String sharePersonalLocation = 'share_personal_location';
+959:   static const String openMap = 'open_map';
+960:   static const String shareRegisteredPlace = 'share_registered_place';
+961:   static const String openSavedPlace = 'open_saved_place';
+962:   static const String openReceivedPlace = 'open_received_place';
+963:   static const String reviewAddedPlace = 'review_added_place';
+964:   static const String trafficSkills = 'traffic_skills';
+965:   static const String longTrip = 'long_trip';
+966: 
+967:   static const List<String> weekly = <String>[
+968:     sharePersonalLocation,
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+--- lines 909-1033 ---
+909:   }
+910: 
+911:   static Future<void> logout() async {
+912:     final prefs = await SharedPreferences.getInstance();
+913:     isLoggedIn = false;
+914:     userName = '';
+915:     phone = '';
+916:     accountPhone = '';
+917:     accountType = null;
+918:     profileAvatarStyle = 0;
+919:     profileFrameStyle = 0;
+920:     profileBackgroundStyle = 0;
+921:     await prefs.setBool(_loggedInKey, false);
+922:     await prefs.remove(_userNameKey);
+923:     await prefs.remove(_phoneKey);
+924:     await prefs.remove(_accountPhoneKey);
+925:     await prefs.remove(_accountTypeKey);
+926:   }
+927: }
+928: 
+929: 
+930: enum DedaTaskEvent {
+931:   mapOpened,
+932:   currentLocationShared,
+933:   registeredPlaceShared,
+934:   receivedPlaceOpened,
+935:   savedPlaceOpened,
+936:   addedPlaceReviewed,
+937:   trafficQuizCompleted,
+938:   longTripCompleted,
+939:   trafficQuizCorrectAnswer,
+940: }
+941: 
+942: extension DedaTaskEventKey on DedaTaskEvent {
+943:   String get key => switch (this) {
+944:         DedaTaskEvent.mapOpened => 'map_opened',
+945:         DedaTaskEvent.currentLocationShared => 'current_location_shared',
+946:         DedaTaskEvent.registeredPlaceShared => 'registered_place_shared',
+947:         DedaTaskEvent.receivedPlaceOpened => 'received_place_opened',
+948:         DedaTaskEvent.savedPlaceOpened => 'saved_place_opened',
+949:         DedaTaskEvent.addedPlaceReviewed => 'added_place_reviewed',
+950:         DedaTaskEvent.trafficQuizCompleted => 'traffic_quiz_completed',
+951:         DedaTaskEvent.longTripCompleted => 'long_trip_completed',
+952:         DedaTaskEvent.trafficQuizCorrectAnswer =>
+953:           'traffic_quiz_correct_answer',
+954:       };
+955: }
+956: 
+957: class DedaTaskIds {
+958:   static const String sharePersonalLocation = 'share_personal_location';
+959:   static const String openMap = 'open_map';
+960:   static const String shareRegisteredPlace = 'share_registered_place';
+961:   static const String openSavedPlace = 'open_saved_place';
+962:   static const String openReceivedPlace = 'open_received_place';
+963:   static const String reviewAddedPlace = 'review_added_place';
+964:   static const String trafficSkills = 'traffic_skills';
+965:   static const String longTrip = 'long_trip';
+966: 
+967:   static const List<String> weekly = <String>[
+968:     sharePersonalLocation,
+969:     openMap,
+970:     shareRegisteredPlace,
+971:     openSavedPlace,
+972:     openReceivedPlace,
+973:     reviewAddedPlace,
+974:     trafficSkills,
+975:     longTrip,
+976:   ];
+977: }
+978: 
+979: class DedaTaskEventResult {
+980:   final bool accepted;
+981:   final bool completedNow;
+982:   final bool pointsAwarded;
+983:   final int pointsDelta;
+984:   final int totalPoints;
+985:   final String? taskId;
+986:   final String cycleId;
+987: 
+988:   const DedaTaskEventResult({
+989:     required this.accepted,
+990:     required this.completedNow,
+991:     required this.pointsAwarded,
+992:     required this.pointsDelta,
+993:     required this.totalPoints,
+994:     required this.taskId,
+995:     required this.cycleId,
+996:   });
+997: }
+998: 
+999: /// Central local task/points state for the first implementation stage.
+1000: ///
+1001: /// The UI never decides completion by itself. Screens report only successful
+1002: /// real actions to [recordSuccessfulEvent]. Cloud transaction sync is added in
+1003: /// the next backend stage; this local store keeps the engine testable offline.
+1004: class DedaTaskEngine {
+1005:   static const int pointsPerTask = 5;
+1006:   static const int pointsPerTrafficAnswer = 5;
+1007:   static const int pointsPerDailyLogin = 10;
+1008:   static const int generalManagerBonusPoints = 1000000;
+1009:   static const int _storeVersion = 1;
+1010:   static const int _maxLedgerEntries = 600;
+1011: 
+1012:   static final ValueNotifier<int> totalPointsNotifier =
+1013:       ValueNotifier<int>(0);
+1014:   static final ValueNotifier<int> revisionNotifier =
+1015:       ValueNotifier<int>(0);
+1016: 
+1017:   static String _loadedAccountKey = '';
+1018:   static bool _generalManagerBonusActive = false;
+1019: 
+1020:   static String _accountKey() =>
+1021:       DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
+1022: 
+1023:   static String _statePrefsKey(String accountKey) =>
+1024:       'deda_task_points_state_v1_$accountKey';
+1025: 
+1026:   static Map<String, dynamic> _emptyState() => <String, dynamic>{
+1027:         'version': _storeVersion,
+1028:         'completions': <String, dynamic>{},
+1029:         'awards': <String, dynamic>{},
+1030:         'ledger': <dynamic>[],
+1031:       };
+1032: 
+1033:   static Map<String, dynamic> _decodeState(String? raw) {
+--- lines 1070-1194 ---
+1070:     return earned +
+1071:         (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+1072:   }
+1073: 
+1074:   static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+1075:     final isGeneralManager =
+1076:         await DedaBackend.currentDedaAccountIsGeneralManager(
+1077:       phone: DedaPreferences.phone,
+1078:     );
+1079:     if (_loadedAccountKey != accountKey) return;
+1080: 
+1081:     _generalManagerBonusActive = isGeneralManager;
+1082:     final prefs = await SharedPreferences.getInstance();
+1083:     final state = await _readState(prefs, accountKey);
+1084:     if (_loadedAccountKey != accountKey) return;
+1085:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1086:     revisionNotifier.value++;
+1087:   }
+1088: 
+1089:   /// Development cycle id. Weekly definitions will later supply their own
+1090:   /// Firestore weekId, so changing rollover policy will not change task IDs.
+1091:   static String currentLocalCycleId([DateTime? value]) {
+1092:     final now = (value ?? DateTime.now()).toLocal();
+1093:     final monday = DateTime(
+1094:       now.year,
+1095:       now.month,
+1096:       now.day,
+1097:     ).subtract(Duration(days: now.weekday - DateTime.monday));
+1098:     final y = monday.year.toString().padLeft(4, '0');
+1099:     final m = monday.month.toString().padLeft(2, '0');
+1100:     final d = monday.day.toString().padLeft(2, '0');
+1101:     return '$y-$m-$d';
+1102:   }
+1103: 
+1104:   static String? taskIdForEvent(DedaTaskEvent event) => switch (event) {
+1105:         DedaTaskEvent.mapOpened => DedaTaskIds.openMap,
+1106:         DedaTaskEvent.currentLocationShared =>
+1107:           DedaTaskIds.sharePersonalLocation,
+1108:         DedaTaskEvent.registeredPlaceShared =>
+1109:           DedaTaskIds.shareRegisteredPlace,
+1110:         DedaTaskEvent.receivedPlaceOpened =>
+1111:           DedaTaskIds.openReceivedPlace,
+1112:         DedaTaskEvent.savedPlaceOpened => DedaTaskIds.openSavedPlace,
+1113:         DedaTaskEvent.addedPlaceReviewed => DedaTaskIds.reviewAddedPlace,
+1114:         DedaTaskEvent.trafficQuizCompleted => DedaTaskIds.trafficSkills,
+1115:         DedaTaskEvent.longTripCompleted => DedaTaskIds.longTrip,
+1116:         DedaTaskEvent.trafficQuizCorrectAnswer => null,
+1117:       };
+1118: 
+1119:   static Future<Map<String, dynamic>> _readState(
+1120:     SharedPreferences prefs,
+1121:     String accountKey,
+1122:   ) async {
+1123:     return _decodeState(prefs.getString(_statePrefsKey(accountKey)));
+1124:   }
+1125: 
+1126:   static Future<void> _writeState(
+1127:     SharedPreferences prefs,
+1128:     String accountKey,
+1129:     Map<String, dynamic> state,
+1130:   ) async {
+1131:     await prefs.setString(_statePrefsKey(accountKey), jsonEncode(state));
+1132:   }
+1133: 
+1134:   static Future<void> initializeForCurrentAccount() async {
+1135:     final accountKey = _accountKey();
+1136:     _loadedAccountKey = accountKey;
+1137:     _generalManagerBonusActive = false;
+1138:     if (accountKey.isEmpty) {
+1139:       totalPointsNotifier.value = 0;
+1140:       revisionNotifier.value++;
+1141:       return;
+1142:     }
+1143:     final prefs = await SharedPreferences.getInstance();
+1144:     final state = await _readState(prefs, accountKey);
+1145:     if (_loadedAccountKey != accountKey) return;
+1146:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1147:     revisionNotifier.value++;
+1148: 
+1149:     // Do not hold app startup on a network role lookup. The protected admin
+1150:     // gateway is checked immediately after the local balance is available,
+1151:     // then the notifier refreshes to include the manager-only 1,000,000 bonus.
+1152:     unawaited(_refreshGeneralManagerBonus(accountKey));
+1153:   }
+1154: 
+1155:   static void clearSessionView() {
+1156:     _loadedAccountKey = '';
+1157:     _generalManagerBonusActive = false;
+1158:     totalPointsNotifier.value = 0;
+1159:     revisionNotifier.value++;
+1160:   }
+1161: 
+1162:   static Future<int> totalPoints() async {
+1163:     final accountKey = _accountKey();
+1164:     if (accountKey.isEmpty) return 0;
+1165:     final prefs = await SharedPreferences.getInstance();
+1166:     final state = await _readState(prefs, accountKey);
+1167:     final total = _effectiveTotalFromState(state);
+1168:     if (_loadedAccountKey == accountKey) {
+1169:       totalPointsNotifier.value = total;
+1170:     }
+1171:     return total;
+1172:   }
+1173: 
+1174:   static Future<bool> isTaskCompleted(
+1175:     String taskId, {
+1176:     String? cycleId,
+1177:   }) async {
+1178:     final accountKey = _accountKey();
+1179:     if (accountKey.isEmpty) return false;
+1180:     final prefs = await SharedPreferences.getInstance();
+1181:     final state = await _readState(prefs, accountKey);
+1182:     final completions = Map<String, dynamic>.from(
+1183:       state['completions'] as Map,
+1184:     );
+1185:     final cycle = cycleId ?? currentLocalCycleId();
+1186:     return completions.containsKey('$cycle|$taskId');
+1187:   }
+1188: 
+1189:   static Future<bool> isTaskRewardClaimed(
+1190:     String taskId, {
+1191:     String? cycleId,
+1192:   }) async {
+1193:     final accountKey = _accountKey();
+1194:     if (accountKey.isEmpty) return false;
+--- lines 18831-18955 ---
+18831: }
+18832: 
+18833: class _MapReadyPageState extends State<MapReadyPage> {
+18834:   final PlacesService _placesService = PlacesService();
+18835:   final DedaRouteService _mapRouteService = DedaRouteService();
+18836:   final TextEditingController _mapSearchController = TextEditingController();
+18837:   Position? currentPosition;
+18838:   LatLng? selectedDestination;
+18839:   PlaceInfo? selectedDestinationPlace;
+18840:   DedaRouteResult? mapRoutePreview;
+18841:   bool isRoutePreviewLoading = false;
+18842:   int _routePreviewGeneration = 0;
+18843:   List<PlaceInfo> mapSearchResults = <PlaceInfo>[];
+18844:   List<PlaceInfo> registeredPlaces = <PlaceInfo>[];
+18845:   bool isLoading = false;
+18846:   bool isMapSearching = false;
+18847:   bool showAvailableOnly = false;
+18848:   DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;
+18849: 
+18850:   String statusMessage = dedaText('اضغط على الزر لتحديد موقعك الحالي', 'Tap the button to get your current location');
+18851: 
+18852:   List<PlaceInfo> get visibleRegisteredPlaces => showAvailableOnly
+18853:       ? registeredPlaces.where((place) => place.isAvailableNow).toList()
+18854:       : registeredPlaces;
+18855: 
+18856:   List<PlaceInfo> get visibleMapSearchResults => showAvailableOnly
+18857:       ? mapSearchResults
+18858:           .where((place) => place.isDedaRegistered && place.isAvailableNow)
+18859:           .toList()
+18860:       : mapSearchResults;
+18861: 
+18862:   @override
+18863:   void initState() {
+18864:     super.initState();
+18865:     unawaited(
+18866:       DedaTaskEngine.recordSuccessfulEvent(DedaTaskEvent.mapOpened),
+18867:     );
+18868:     final initial = widget.initialDestination;
+18869:     if (initial != null) {
+18870:       selectedDestination = initial.location;
+18871:       selectedDestinationPlace = initial;
+18872:       statusMessage = dedaText(
+18873:         'تم استلام الوجهة. جاري تحديد موقعك على خريطة DEDA...',
+18874:         'Shared destination received. Locating you on the DEDA map...',
+18875:       );
+18876:       WidgetsBinding.instance.addPostFrameCallback((_) {
+18877:         if (mounted) {
+18878:           unawaited(determinePosition());
+18879:         }
+18880:       });
+18881:     }
+18882:   }
+18883: 
+18884:   @override
+18885:   void dispose() {
+18886:     _mapSearchController.dispose();
+18887:     super.dispose();
+18888:   }
+18889: 
+18890:   Future<void> determinePosition() async {
+18891:     if (isLoading) return;
+18892:     setState(() {
+18893:       isLoading = true;
+18894:       statusMessage = dedaText('جاري تحديد موقعك...', 'Locating you...');
+18895:     });
+18896: 
+18897:     try {
+18898:       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+18899:       if (!serviceEnabled) {
+18900:         if (!mounted) return;
+18901:         setState(() {
+18902:           statusMessage = dedaText(
+18903:             'خدمة الموقع GPS غير مفعلة. يرجى تشغيل الموقع ثم المحاولة مرة أخرى.',
+18904:             'GPS is turned off. Enable location and try again.',
+18905:           );
+18906:         });
+18907:         return;
+18908:       }
+18909: 
+18910:       var permission = await Geolocator.checkPermission();
+18911:       if (permission == LocationPermission.denied) {
+18912:         permission = await Geolocator.requestPermission();
+18913:       }
+18914:       if (permission == LocationPermission.denied) {
+18915:         if (!mounted) return;
+18916:         setState(() {
+18917:           statusMessage = dedaText('تم رفض إذن الموقع. نحتاج الإذن لتحديد موقعك.', 'Location permission was denied. DEDA needs it to locate you.');
+18918:         });
+18919:         return;
+18920:       }
+18921:       if (permission == LocationPermission.deniedForever) {
+18922:         if (!mounted) return;
+18923:         setState(() {
+18924:           statusMessage =
+18925:               dedaText('إذن الموقع مرفوض نهائيًا. افتح إعدادات التطبيق واسمح بالموقع.', 'Location permission is permanently denied. Open app settings and allow location access.');
+18926:         });
+18927:         return;
+18928:       }
+18929: 
+18930:       final position = await Geolocator.getCurrentPosition(
+18931:         locationSettings: const LocationSettings(
+18932:           accuracy: LocationAccuracy.high,
+18933:         ),
+18934:       );
+18935:       if (!mounted) return;
+18936:       final dedaPlaces = await DedaRegisteredPlacesStore.readAll();
+18937:       final destination = selectedDestination;
+18938:       setState(() {
+18939:         currentPosition = position;
+18940:         registeredPlaces = dedaPlaces;
+18941:         statusMessage = destination == null
+18942:             ? dedaText(
+18943:                 'تم تحديد موقعك. اضغط مطولًا على أي نقطة في الخريطة لاختيارها كوجهة.',
+18944:                 'Location found. Long-press anywhere on the map to choose a destination.',
+18945:               )
+18946:             : dedaText(
+18947:                 'تم تحديد موقعك والوجهة. جاري رسم الطريق الأخضر على خريطة DEDA...',
+18948:                 'Your location and destination are ready. Drawing the green route on the DEDA map...',
+18949:               );
+18950:       });
+18951:       if (destination != null) {
+18952:         unawaited(_previewRouteTo(destination));
+18953:       }
+18954:     } catch (e) {
+18955:       if (!mounted) return;
+===== weekId :: [1089] =====
+--- lines 1055-1179 ---
+1055:   static int _totalFromState(Map<String, dynamic> state) {
+1056:     final awardsRaw = state['awards'];
+1057:     if (awardsRaw is! Map) return 0;
+1058:     var total = 0;
+1059:     for (final value in awardsRaw.values) {
+1060:       if (value is Map) {
+1061:         final points = value['points'];
+1062:         if (points is num) total += points.toInt();
+1063:       }
+1064:     }
+1065:     return total;
+1066:   }
+1067: 
+1068:   static int _effectiveTotalFromState(Map<String, dynamic> state) {
+1069:     final earned = _totalFromState(state);
+1070:     return earned +
+1071:         (_generalManagerBonusActive ? generalManagerBonusPoints : 0);
+1072:   }
+1073: 
+1074:   static Future<void> _refreshGeneralManagerBonus(String accountKey) async {
+1075:     final isGeneralManager =
+1076:         await DedaBackend.currentDedaAccountIsGeneralManager(
+1077:       phone: DedaPreferences.phone,
+1078:     );
+1079:     if (_loadedAccountKey != accountKey) return;
+1080: 
+1081:     _generalManagerBonusActive = isGeneralManager;
+1082:     final prefs = await SharedPreferences.getInstance();
+1083:     final state = await _readState(prefs, accountKey);
+1084:     if (_loadedAccountKey != accountKey) return;
+1085:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1086:     revisionNotifier.value++;
+1087:   }
+1088: 
+1089:   /// Development cycle id. Weekly definitions will later supply their own
+1090:   /// Firestore weekId, so changing rollover policy will not change task IDs.
+1091:   static String currentLocalCycleId([DateTime? value]) {
+1092:     final now = (value ?? DateTime.now()).toLocal();
+1093:     final monday = DateTime(
+1094:       now.year,
+1095:       now.month,
+1096:       now.day,
+1097:     ).subtract(Duration(days: now.weekday - DateTime.monday));
+1098:     final y = monday.year.toString().padLeft(4, '0');
+1099:     final m = monday.month.toString().padLeft(2, '0');
+1100:     final d = monday.day.toString().padLeft(2, '0');
+1101:     return '$y-$m-$d';
+1102:   }
+1103: 
+1104:   static String? taskIdForEvent(DedaTaskEvent event) => switch (event) {
+1105:         DedaTaskEvent.mapOpened => DedaTaskIds.openMap,
+1106:         DedaTaskEvent.currentLocationShared =>
+1107:           DedaTaskIds.sharePersonalLocation,
+1108:         DedaTaskEvent.registeredPlaceShared =>
+1109:           DedaTaskIds.shareRegisteredPlace,
+1110:         DedaTaskEvent.receivedPlaceOpened =>
+1111:           DedaTaskIds.openReceivedPlace,
+1112:         DedaTaskEvent.savedPlaceOpened => DedaTaskIds.openSavedPlace,
+1113:         DedaTaskEvent.addedPlaceReviewed => DedaTaskIds.reviewAddedPlace,
+1114:         DedaTaskEvent.trafficQuizCompleted => DedaTaskIds.trafficSkills,
+1115:         DedaTaskEvent.longTripCompleted => DedaTaskIds.longTrip,
+1116:         DedaTaskEvent.trafficQuizCorrectAnswer => null,
+1117:       };
+1118: 
+1119:   static Future<Map<String, dynamic>> _readState(
+1120:     SharedPreferences prefs,
+1121:     String accountKey,
+1122:   ) async {
+1123:     return _decodeState(prefs.getString(_statePrefsKey(accountKey)));
+1124:   }
+1125: 
+1126:   static Future<void> _writeState(
+1127:     SharedPreferences prefs,
+1128:     String accountKey,
+1129:     Map<String, dynamic> state,
+1130:   ) async {
+1131:     await prefs.setString(_statePrefsKey(accountKey), jsonEncode(state));
+1132:   }
+1133: 
+1134:   static Future<void> initializeForCurrentAccount() async {
+1135:     final accountKey = _accountKey();
+1136:     _loadedAccountKey = accountKey;
+1137:     _generalManagerBonusActive = false;
+1138:     if (accountKey.isEmpty) {
+1139:       totalPointsNotifier.value = 0;
+1140:       revisionNotifier.value++;
+1141:       return;
+1142:     }
+1143:     final prefs = await SharedPreferences.getInstance();
+1144:     final state = await _readState(prefs, accountKey);
+1145:     if (_loadedAccountKey != accountKey) return;
+1146:     totalPointsNotifier.value = _effectiveTotalFromState(state);
+1147:     revisionNotifier.value++;
+1148: 
+1149:     // Do not hold app startup on a network role lookup. The protected admin
+1150:     // gateway is checked immediately after the local balance is available,
+1151:     // then the notifier refreshes to include the manager-only 1,000,000 bonus.
+1152:     unawaited(_refreshGeneralManagerBonus(accountKey));
+1153:   }
+1154: 
+1155:   static void clearSessionView() {
+1156:     _loadedAccountKey = '';
+1157:     _generalManagerBonusActive = false;
+1158:     totalPointsNotifier.value = 0;
+1159:     revisionNotifier.value++;
+1160:   }
+1161: 
+1162:   static Future<int> totalPoints() async {
+1163:     final accountKey = _accountKey();
+1164:     if (accountKey.isEmpty) return 0;
+1165:     final prefs = await SharedPreferences.getInstance();
+1166:     final state = await _readState(prefs, accountKey);
+1167:     final total = _effectiveTotalFromState(state);
+1168:     if (_loadedAccountKey == accountKey) {
+1169:       totalPointsNotifier.value = total;
+1170:     }
+1171:     return total;
+1172:   }
+1173: 
+1174:   static Future<bool> isTaskCompleted(
+1175:     String taskId, {
+1176:     String? cycleId,
+1177:   }) async {
+1178:     final accountKey = _accountKey();
+1179:     if (accountKey.isEmpty) return false;
+===== dayId :: [1406, 1407, 1415, 1434, 1446] =====
+--- lines 1372-1496 ---
+1372:     state['ledger'] = ledger;
+1373:     await _writeState(prefs, accountKey, state);
+1374: 
+1375:     final total = _effectiveTotalFromState(state);
+1376:     _loadedAccountKey = accountKey;
+1377:     totalPointsNotifier.value = total;
+1378:     revisionNotifier.value++;
+1379: 
+1380:     return DedaTaskEventResult(
+1381:       accepted: true,
+1382:       completedNow: completionKey != null && !wasCompleted,
+1383:       pointsAwarded: taskId == null && !alreadyAwarded,
+1384:       pointsDelta: pointsDelta,
+1385:       totalPoints: total,
+1386:       taskId: taskId,
+1387:       cycleId: cycle,
+1388:     );
+1389:   }
+1390: 
+1391:   static String currentLocalDayId([DateTime? value]) {
+1392:     final now = (value ?? DateTime.now()).toLocal();
+1393:     final y = now.year.toString().padLeft(4, '0');
+1394:     final m = now.month.toString().padLeft(2, '0');
+1395:     final d = now.day.toString().padLeft(2, '0');
+1396:     return '$y-$m-$d';
+1397:   }
+1398: 
+1399:   static Future<bool> hasDailyLoginRewardClaimed({
+1400:     DateTime? day,
+1401:   }) async {
+1402:     final accountKey = _accountKey();
+1403:     if (accountKey.isEmpty) return false;
+1404:     final prefs = await SharedPreferences.getInstance();
+1405:     final state = await _readState(prefs, accountKey);
+1406:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1407:     final dayId = currentLocalDayId(day);
+1408:     return awards.containsKey('daily_login|$dayId');
+1409:   }
+1410: 
+1411:   static Future<DedaTaskEventResult> claimDailyLoginReward({
+1412:     DateTime? occurredAt,
+1413:   }) async {
+1414:     final accountKey = _accountKey();
+1415:     final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+1416:     final dayId = currentLocalDayId(nowLocal);
+1417:     final cycle = currentLocalCycleId(nowLocal);
+1418: 
+1419:     if (accountKey.isEmpty) {
+1420:       return DedaTaskEventResult(
+1421:         accepted: false,
+1422:         completedNow: false,
+1423:         pointsAwarded: false,
+1424:         pointsDelta: 0,
+1425:         totalPoints: 0,
+1426:         taskId: null,
+1427:         cycleId: cycle,
+1428:       );
+1429:     }
+1430: 
+1431:     final prefs = await SharedPreferences.getInstance();
+1432:     final state = await _readState(prefs, accountKey);
+1433:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1434:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1435:     final awardId = 'daily_login|$dayId';
+1436:     final alreadyAwarded = awards.containsKey(awardId);
+1437: 
+1438:     var pointsDelta = 0;
+1439:     if (!alreadyAwarded) {
+1440:       pointsDelta = pointsPerDailyLogin;
+1441:       final award = <String, dynamic>{
+1442:         'id': awardId,
+1443:         'points': pointsDelta,
+1444:         'type': 'daily_login',
+1445:         'event': 'daily_login_claimed',
+1446:         'cycleId': cycle,
+1447:         'dayId': dayId,
+1448:         'createdAt': nowLocal.toUtc().toIso8601String(),
+1449:       };
+1450:       awards[awardId] = award;
+1451:       ledger.add(award);
+1452:       if (ledger.length > _maxLedgerEntries) {
+1453:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1454:       }
+1455:       state['awards'] = awards;
+1456:       state['ledger'] = ledger;
+1457:       await _writeState(prefs, accountKey, state);
+1458:     }
+1459: 
+1460:     final total = _effectiveTotalFromState(state);
+1461:     _loadedAccountKey = accountKey;
+1462:     totalPointsNotifier.value = total;
+1463:     revisionNotifier.value++;
+1464: 
+1465:     return DedaTaskEventResult(
+1466:       accepted: true,
+1467:       completedNow: !alreadyAwarded,
+1468:       pointsAwarded: !alreadyAwarded,
+1469:       pointsDelta: pointsDelta,
+1470:       totalPoints: total,
+1471:       taskId: null,
+1472:       cycleId: cycle,
+1473:     );
+1474:   }
+1475: 
+1476:   static Future<List<Map<String, dynamic>>> recentLedger({
+1477:     int limit = 30,
+1478:   }) async {
+1479:     final accountKey = _accountKey();
+1480:     if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+1481:     final prefs = await SharedPreferences.getInstance();
+1482:     final state = await _readState(prefs, accountKey);
+1483:     final raw = List<dynamic>.from(state['ledger'] as List);
+1484:     final entries = raw
+1485:         .whereType<Map>()
+1486:         .map((entry) => Map<String, dynamic>.from(entry))
+1487:         .toList()
+1488:         .reversed
+1489:         .take(limit.clamp(1, 100))
+1490:         .toList();
+1491:     return entries;
+1492:   }
+1493: }
+1494: 
+1495: String dedaCategoryLabel(String ar) {
+1496:   if (DedaLanguageState.isArabic) return ar;
+--- lines 1373-1497 ---
+1373:     await _writeState(prefs, accountKey, state);
+1374: 
+1375:     final total = _effectiveTotalFromState(state);
+1376:     _loadedAccountKey = accountKey;
+1377:     totalPointsNotifier.value = total;
+1378:     revisionNotifier.value++;
+1379: 
+1380:     return DedaTaskEventResult(
+1381:       accepted: true,
+1382:       completedNow: completionKey != null && !wasCompleted,
+1383:       pointsAwarded: taskId == null && !alreadyAwarded,
+1384:       pointsDelta: pointsDelta,
+1385:       totalPoints: total,
+1386:       taskId: taskId,
+1387:       cycleId: cycle,
+1388:     );
+1389:   }
+1390: 
+1391:   static String currentLocalDayId([DateTime? value]) {
+1392:     final now = (value ?? DateTime.now()).toLocal();
+1393:     final y = now.year.toString().padLeft(4, '0');
+1394:     final m = now.month.toString().padLeft(2, '0');
+1395:     final d = now.day.toString().padLeft(2, '0');
+1396:     return '$y-$m-$d';
+1397:   }
+1398: 
+1399:   static Future<bool> hasDailyLoginRewardClaimed({
+1400:     DateTime? day,
+1401:   }) async {
+1402:     final accountKey = _accountKey();
+1403:     if (accountKey.isEmpty) return false;
+1404:     final prefs = await SharedPreferences.getInstance();
+1405:     final state = await _readState(prefs, accountKey);
+1406:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1407:     final dayId = currentLocalDayId(day);
+1408:     return awards.containsKey('daily_login|$dayId');
+1409:   }
+1410: 
+1411:   static Future<DedaTaskEventResult> claimDailyLoginReward({
+1412:     DateTime? occurredAt,
+1413:   }) async {
+1414:     final accountKey = _accountKey();
+1415:     final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+1416:     final dayId = currentLocalDayId(nowLocal);
+1417:     final cycle = currentLocalCycleId(nowLocal);
+1418: 
+1419:     if (accountKey.isEmpty) {
+1420:       return DedaTaskEventResult(
+1421:         accepted: false,
+1422:         completedNow: false,
+1423:         pointsAwarded: false,
+1424:         pointsDelta: 0,
+1425:         totalPoints: 0,
+1426:         taskId: null,
+1427:         cycleId: cycle,
+1428:       );
+1429:     }
+1430: 
+1431:     final prefs = await SharedPreferences.getInstance();
+1432:     final state = await _readState(prefs, accountKey);
+1433:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1434:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1435:     final awardId = 'daily_login|$dayId';
+1436:     final alreadyAwarded = awards.containsKey(awardId);
+1437: 
+1438:     var pointsDelta = 0;
+1439:     if (!alreadyAwarded) {
+1440:       pointsDelta = pointsPerDailyLogin;
+1441:       final award = <String, dynamic>{
+1442:         'id': awardId,
+1443:         'points': pointsDelta,
+1444:         'type': 'daily_login',
+1445:         'event': 'daily_login_claimed',
+1446:         'cycleId': cycle,
+1447:         'dayId': dayId,
+1448:         'createdAt': nowLocal.toUtc().toIso8601String(),
+1449:       };
+1450:       awards[awardId] = award;
+1451:       ledger.add(award);
+1452:       if (ledger.length > _maxLedgerEntries) {
+1453:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1454:       }
+1455:       state['awards'] = awards;
+1456:       state['ledger'] = ledger;
+1457:       await _writeState(prefs, accountKey, state);
+1458:     }
+1459: 
+1460:     final total = _effectiveTotalFromState(state);
+1461:     _loadedAccountKey = accountKey;
+1462:     totalPointsNotifier.value = total;
+1463:     revisionNotifier.value++;
+1464: 
+1465:     return DedaTaskEventResult(
+1466:       accepted: true,
+1467:       completedNow: !alreadyAwarded,
+1468:       pointsAwarded: !alreadyAwarded,
+1469:       pointsDelta: pointsDelta,
+1470:       totalPoints: total,
+1471:       taskId: null,
+1472:       cycleId: cycle,
+1473:     );
+1474:   }
+1475: 
+1476:   static Future<List<Map<String, dynamic>>> recentLedger({
+1477:     int limit = 30,
+1478:   }) async {
+1479:     final accountKey = _accountKey();
+1480:     if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+1481:     final prefs = await SharedPreferences.getInstance();
+1482:     final state = await _readState(prefs, accountKey);
+1483:     final raw = List<dynamic>.from(state['ledger'] as List);
+1484:     final entries = raw
+1485:         .whereType<Map>()
+1486:         .map((entry) => Map<String, dynamic>.from(entry))
+1487:         .toList()
+1488:         .reversed
+1489:         .take(limit.clamp(1, 100))
+1490:         .toList();
+1491:     return entries;
+1492:   }
+1493: }
+1494: 
+1495: String dedaCategoryLabel(String ar) {
+1496:   if (DedaLanguageState.isArabic) return ar;
+1497:   switch (ar) {
+--- lines 1381-1505 ---
+1381:       accepted: true,
+1382:       completedNow: completionKey != null && !wasCompleted,
+1383:       pointsAwarded: taskId == null && !alreadyAwarded,
+1384:       pointsDelta: pointsDelta,
+1385:       totalPoints: total,
+1386:       taskId: taskId,
+1387:       cycleId: cycle,
+1388:     );
+1389:   }
+1390: 
+1391:   static String currentLocalDayId([DateTime? value]) {
+1392:     final now = (value ?? DateTime.now()).toLocal();
+1393:     final y = now.year.toString().padLeft(4, '0');
+1394:     final m = now.month.toString().padLeft(2, '0');
+1395:     final d = now.day.toString().padLeft(2, '0');
+1396:     return '$y-$m-$d';
+1397:   }
+1398: 
+1399:   static Future<bool> hasDailyLoginRewardClaimed({
+1400:     DateTime? day,
+1401:   }) async {
+1402:     final accountKey = _accountKey();
+1403:     if (accountKey.isEmpty) return false;
+1404:     final prefs = await SharedPreferences.getInstance();
+1405:     final state = await _readState(prefs, accountKey);
+1406:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1407:     final dayId = currentLocalDayId(day);
+1408:     return awards.containsKey('daily_login|$dayId');
+1409:   }
+1410: 
+1411:   static Future<DedaTaskEventResult> claimDailyLoginReward({
+1412:     DateTime? occurredAt,
+1413:   }) async {
+1414:     final accountKey = _accountKey();
+1415:     final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+1416:     final dayId = currentLocalDayId(nowLocal);
+1417:     final cycle = currentLocalCycleId(nowLocal);
+1418: 
+1419:     if (accountKey.isEmpty) {
+1420:       return DedaTaskEventResult(
+1421:         accepted: false,
+1422:         completedNow: false,
+1423:         pointsAwarded: false,
+1424:         pointsDelta: 0,
+1425:         totalPoints: 0,
+1426:         taskId: null,
+1427:         cycleId: cycle,
+1428:       );
+1429:     }
+1430: 
+1431:     final prefs = await SharedPreferences.getInstance();
+1432:     final state = await _readState(prefs, accountKey);
+1433:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1434:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1435:     final awardId = 'daily_login|$dayId';
+1436:     final alreadyAwarded = awards.containsKey(awardId);
+1437: 
+1438:     var pointsDelta = 0;
+1439:     if (!alreadyAwarded) {
+1440:       pointsDelta = pointsPerDailyLogin;
+1441:       final award = <String, dynamic>{
+1442:         'id': awardId,
+1443:         'points': pointsDelta,
+1444:         'type': 'daily_login',
+1445:         'event': 'daily_login_claimed',
+1446:         'cycleId': cycle,
+1447:         'dayId': dayId,
+1448:         'createdAt': nowLocal.toUtc().toIso8601String(),
+1449:       };
+1450:       awards[awardId] = award;
+1451:       ledger.add(award);
+1452:       if (ledger.length > _maxLedgerEntries) {
+1453:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1454:       }
+1455:       state['awards'] = awards;
+1456:       state['ledger'] = ledger;
+1457:       await _writeState(prefs, accountKey, state);
+1458:     }
+1459: 
+1460:     final total = _effectiveTotalFromState(state);
+1461:     _loadedAccountKey = accountKey;
+1462:     totalPointsNotifier.value = total;
+1463:     revisionNotifier.value++;
+1464: 
+1465:     return DedaTaskEventResult(
+1466:       accepted: true,
+1467:       completedNow: !alreadyAwarded,
+1468:       pointsAwarded: !alreadyAwarded,
+1469:       pointsDelta: pointsDelta,
+1470:       totalPoints: total,
+1471:       taskId: null,
+1472:       cycleId: cycle,
+1473:     );
+1474:   }
+1475: 
+1476:   static Future<List<Map<String, dynamic>>> recentLedger({
+1477:     int limit = 30,
+1478:   }) async {
+1479:     final accountKey = _accountKey();
+1480:     if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+1481:     final prefs = await SharedPreferences.getInstance();
+1482:     final state = await _readState(prefs, accountKey);
+1483:     final raw = List<dynamic>.from(state['ledger'] as List);
+1484:     final entries = raw
+1485:         .whereType<Map>()
+1486:         .map((entry) => Map<String, dynamic>.from(entry))
+1487:         .toList()
+1488:         .reversed
+1489:         .take(limit.clamp(1, 100))
+1490:         .toList();
+1491:     return entries;
+1492:   }
+1493: }
+1494: 
+1495: String dedaCategoryLabel(String ar) {
+1496:   if (DedaLanguageState.isArabic) return ar;
+1497:   switch (ar) {
+1498:     case 'مطعم':
+1499:       return 'Restaurant';
+1500:     case 'مطاعم':
+1501:       return 'Restaurants';
+1502:     case 'فندق':
+1503:       return 'Hotel';
+1504:     case 'فنادق':
+1505:       return 'Hotels';
+--- lines 1400-1524 ---
+1400:     DateTime? day,
+1401:   }) async {
+1402:     final accountKey = _accountKey();
+1403:     if (accountKey.isEmpty) return false;
+1404:     final prefs = await SharedPreferences.getInstance();
+1405:     final state = await _readState(prefs, accountKey);
+1406:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1407:     final dayId = currentLocalDayId(day);
+1408:     return awards.containsKey('daily_login|$dayId');
+1409:   }
+1410: 
+1411:   static Future<DedaTaskEventResult> claimDailyLoginReward({
+1412:     DateTime? occurredAt,
+1413:   }) async {
+1414:     final accountKey = _accountKey();
+1415:     final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+1416:     final dayId = currentLocalDayId(nowLocal);
+1417:     final cycle = currentLocalCycleId(nowLocal);
+1418: 
+1419:     if (accountKey.isEmpty) {
+1420:       return DedaTaskEventResult(
+1421:         accepted: false,
+1422:         completedNow: false,
+1423:         pointsAwarded: false,
+1424:         pointsDelta: 0,
+1425:         totalPoints: 0,
+1426:         taskId: null,
+1427:         cycleId: cycle,
+1428:       );
+1429:     }
+1430: 
+1431:     final prefs = await SharedPreferences.getInstance();
+1432:     final state = await _readState(prefs, accountKey);
+1433:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1434:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1435:     final awardId = 'daily_login|$dayId';
+1436:     final alreadyAwarded = awards.containsKey(awardId);
+1437: 
+1438:     var pointsDelta = 0;
+1439:     if (!alreadyAwarded) {
+1440:       pointsDelta = pointsPerDailyLogin;
+1441:       final award = <String, dynamic>{
+1442:         'id': awardId,
+1443:         'points': pointsDelta,
+1444:         'type': 'daily_login',
+1445:         'event': 'daily_login_claimed',
+1446:         'cycleId': cycle,
+1447:         'dayId': dayId,
+1448:         'createdAt': nowLocal.toUtc().toIso8601String(),
+1449:       };
+1450:       awards[awardId] = award;
+1451:       ledger.add(award);
+1452:       if (ledger.length > _maxLedgerEntries) {
+1453:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1454:       }
+1455:       state['awards'] = awards;
+1456:       state['ledger'] = ledger;
+1457:       await _writeState(prefs, accountKey, state);
+1458:     }
+1459: 
+1460:     final total = _effectiveTotalFromState(state);
+1461:     _loadedAccountKey = accountKey;
+1462:     totalPointsNotifier.value = total;
+1463:     revisionNotifier.value++;
+1464: 
+1465:     return DedaTaskEventResult(
+1466:       accepted: true,
+1467:       completedNow: !alreadyAwarded,
+1468:       pointsAwarded: !alreadyAwarded,
+1469:       pointsDelta: pointsDelta,
+1470:       totalPoints: total,
+1471:       taskId: null,
+1472:       cycleId: cycle,
+1473:     );
+1474:   }
+1475: 
+1476:   static Future<List<Map<String, dynamic>>> recentLedger({
+1477:     int limit = 30,
+1478:   }) async {
+1479:     final accountKey = _accountKey();
+1480:     if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+1481:     final prefs = await SharedPreferences.getInstance();
+1482:     final state = await _readState(prefs, accountKey);
+1483:     final raw = List<dynamic>.from(state['ledger'] as List);
+1484:     final entries = raw
+1485:         .whereType<Map>()
+1486:         .map((entry) => Map<String, dynamic>.from(entry))
+1487:         .toList()
+1488:         .reversed
+1489:         .take(limit.clamp(1, 100))
+1490:         .toList();
+1491:     return entries;
+1492:   }
+1493: }
+1494: 
+1495: String dedaCategoryLabel(String ar) {
+1496:   if (DedaLanguageState.isArabic) return ar;
+1497:   switch (ar) {
+1498:     case 'مطعم':
+1499:       return 'Restaurant';
+1500:     case 'مطاعم':
+1501:       return 'Restaurants';
+1502:     case 'فندق':
+1503:       return 'Hotel';
+1504:     case 'فنادق':
+1505:       return 'Hotels';
+1506:     case 'مول':
+1507:       return 'Mall';
+1508:     case 'مولات':
+1509:       return 'Malls';
+1510:     case 'محطة وقود':
+1511:       return 'Fuel station';
+1512:     case 'محطات وقود':
+1513:       return 'Fuel stations';
+1514:     case 'صيدلية':
+1515:       return 'Pharmacy';
+1516:     case 'صيدليات':
+1517:       return 'Pharmacies';
+1518:     case 'موقف':
+1519:       return 'Parking';
+1520:     case 'مواقف':
+1521:       return 'Parking';
+1522:     case 'حديقة':
+1523:       return 'Park';
+1524:     case 'حدائق':
+--- lines 1412-1536 ---
+1412:     DateTime? occurredAt,
+1413:   }) async {
+1414:     final accountKey = _accountKey();
+1415:     final nowLocal = (occurredAt ?? DateTime.now()).toLocal();
+1416:     final dayId = currentLocalDayId(nowLocal);
+1417:     final cycle = currentLocalCycleId(nowLocal);
+1418: 
+1419:     if (accountKey.isEmpty) {
+1420:       return DedaTaskEventResult(
+1421:         accepted: false,
+1422:         completedNow: false,
+1423:         pointsAwarded: false,
+1424:         pointsDelta: 0,
+1425:         totalPoints: 0,
+1426:         taskId: null,
+1427:         cycleId: cycle,
+1428:       );
+1429:     }
+1430: 
+1431:     final prefs = await SharedPreferences.getInstance();
+1432:     final state = await _readState(prefs, accountKey);
+1433:     final awards = Map<String, dynamic>.from(state['awards'] as Map);
+1434:     final ledger = List<dynamic>.from(state['ledger'] as List);
+1435:     final awardId = 'daily_login|$dayId';
+1436:     final alreadyAwarded = awards.containsKey(awardId);
+1437: 
+1438:     var pointsDelta = 0;
+1439:     if (!alreadyAwarded) {
+1440:       pointsDelta = pointsPerDailyLogin;
+1441:       final award = <String, dynamic>{
+1442:         'id': awardId,
+1443:         'points': pointsDelta,
+1444:         'type': 'daily_login',
+1445:         'event': 'daily_login_claimed',
+1446:         'cycleId': cycle,
+1447:         'dayId': dayId,
+1448:         'createdAt': nowLocal.toUtc().toIso8601String(),
+1449:       };
+1450:       awards[awardId] = award;
+1451:       ledger.add(award);
+1452:       if (ledger.length > _maxLedgerEntries) {
+1453:         ledger.removeRange(0, ledger.length - _maxLedgerEntries);
+1454:       }
+1455:       state['awards'] = awards;
+1456:       state['ledger'] = ledger;
+1457:       await _writeState(prefs, accountKey, state);
+1458:     }
+1459: 
+1460:     final total = _effectiveTotalFromState(state);
+1461:     _loadedAccountKey = accountKey;
+1462:     totalPointsNotifier.value = total;
+1463:     revisionNotifier.value++;
+1464: 
+1465:     return DedaTaskEventResult(
+1466:       accepted: true,
+1467:       completedNow: !alreadyAwarded,
+1468:       pointsAwarded: !alreadyAwarded,
+1469:       pointsDelta: pointsDelta,
+1470:       totalPoints: total,
+1471:       taskId: null,
+1472:       cycleId: cycle,
+1473:     );
+1474:   }
+1475: 
+1476:   static Future<List<Map<String, dynamic>>> recentLedger({
+1477:     int limit = 30,
+1478:   }) async {
+1479:     final accountKey = _accountKey();
+1480:     if (accountKey.isEmpty) return const <Map<String, dynamic>>[];
+1481:     final prefs = await SharedPreferences.getInstance();
+1482:     final state = await _readState(prefs, accountKey);
+1483:     final raw = List<dynamic>.from(state['ledger'] as List);
+1484:     final entries = raw
+1485:         .whereType<Map>()
+1486:         .map((entry) => Map<String, dynamic>.from(entry))
+1487:         .toList()
+1488:         .reversed
+1489:         .take(limit.clamp(1, 100))
+1490:         .toList();
+1491:     return entries;
+1492:   }
+1493: }
+1494: 
+1495: String dedaCategoryLabel(String ar) {
+1496:   if (DedaLanguageState.isArabic) return ar;
+1497:   switch (ar) {
+1498:     case 'مطعم':
+1499:       return 'Restaurant';
+1500:     case 'مطاعم':
+1501:       return 'Restaurants';
+1502:     case 'فندق':
+1503:       return 'Hotel';
+1504:     case 'فنادق':
+1505:       return 'Hotels';
+1506:     case 'مول':
+1507:       return 'Mall';
+1508:     case 'مولات':
+1509:       return 'Malls';
+1510:     case 'محطة وقود':
+1511:       return 'Fuel station';
+1512:     case 'محطات وقود':
+1513:       return 'Fuel stations';
+1514:     case 'صيدلية':
+1515:       return 'Pharmacy';
+1516:     case 'صيدليات':
+1517:       return 'Pharmacies';
+1518:     case 'موقف':
+1519:       return 'Parking';
+1520:     case 'مواقف':
+1521:       return 'Parking';
+1522:     case 'حديقة':
+1523:       return 'Park';
+1524:     case 'حدائق':
+1525:       return 'Parks';
+1526:     case 'مقهى':
+1527:       return 'Cafe';
+1528:     case 'مستشفى':
+1529:       return 'Hospital';
+1530:     case 'الخريطة':
+1531:       return 'Map';
+1532:     case 'وجهة':
+1533:       return 'Destination';
+1534:     case 'إدارة مكاني':
+1535:       return 'Manage my place';
+1536:     case 'أماكني الشخصية':
