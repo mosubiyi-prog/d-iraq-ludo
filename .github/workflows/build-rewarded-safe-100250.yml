@@ -1,0 +1,111 @@
+name: Build DEDA 100250 Safe Rewarded Ads
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rewarded-ads-safe-reintegration-2026-10-02
+    paths:
+      - pubspec.yaml
+      - tools/rewarded_ads_startup_safety_fix_2026_10_02.py
+      - tools/apply_admob_android16_workmanager_fix_2026_10_02.py
+      - tools/validate_rewarded_ads_scope_2026_10_02.py
+      - .github/workflows/build-rewarded-safe-100250.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout safe rewarded branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA source files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
+
+      - name: Create clean Flutter Android project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA source files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Apply established DEDA release patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Apply rewarded task UI and points logic
+        run: |
+          python3 tools/make_task_rewarded_patch_unique_2026_10_02.py
+          python3 tools/task_rewarded_ads_test_2026_10_02.py
+          python3 tools/rewarded_ads_startup_safety_fix_2026_10_02.py
+          dart format lib/main.dart
+
+      - name: Configure Firebase Android AdMob launcher and signing
+        run: python3 tools/configure_rewarded_ads_android_build_2026_10_02.py
+
+      - name: Apply Android 16 WorkManager compatibility fix
+        run: python3 tools/apply_admob_android16_workmanager_fix_2026_10_02.py
+
+      - name: Enable DEDA admin image saving
+        run: python3 tools/android_media_save_patch.py
+
+      - name: Restore permanent signing key
+        env:
+          DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+        run: python3 tools/restore_signing_key_2026_10_02.py
+
+      - name: Validate permanent signing key
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+        run: keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" > /dev/null
+
+      - name: Install dependencies and launcher icon
+        run: |
+          flutter pub add --dev flutter_launcher_icons
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Verify Android 16 AdMob compatibility inputs
+        run: |
+          grep -q "google_mobile_ads: 9.1.0" pubspec.yaml
+          grep -R -q "androidx.work:work-runtime:2.11.2" android/app/build.gradle.kts android/app/build.gradle 2>/dev/null
+          grep -q "com.google.android.gms.ads.APPLICATION_ID" android/app/src/main/AndroidManifest.xml
+          grep -q "ca-app-pub-3940256099942544~3347511713" android/app/src/main/AndroidManifest.xml
+
+      - name: Validate DEDA flows and rewarded ad scope
+        run: |
+          python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
+          python3 tools/validate_prize_winners_flow_2026_10_01.py
+          python3 tools/validate_prize_cycle_complete_2026_10_01.py
+          python3 tools/validate_task_rewarded_ads_2026_10_02.py
+          python3 tools/validate_rewarded_ads_scope_2026_10_02.py
+
+      - name: Build signed test APK 100250
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+          DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number=100250
+
+      - name: Upload safe rewarded APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-safe-rewarded-ads-100250
+          path: build/app/outputs/flutter-apk/app-release.apk
