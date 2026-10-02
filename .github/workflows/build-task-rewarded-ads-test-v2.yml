@@ -49,6 +49,7 @@ jobs:
       - name: Apply task rewarded-ad test patch
         run: |
           python3 tools/task_rewarded_ads_test_2026_10_02.py
+          python3 tools/rewarded_ads_startup_safety_fix_2026_10_02.py
           dart format lib/main.dart
 
       - name: Configure Android, Firebase, test AdMob, launcher and signing
@@ -89,7 +90,7 @@ jobs:
           DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
           DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
         run: |
-          BUILD_NUMBER=100246
+          BUILD_NUMBER=100247
           flutter build apk --release --build-number="$BUILD_NUMBER"
 
       - name: Upload rewarded-ad test APK
