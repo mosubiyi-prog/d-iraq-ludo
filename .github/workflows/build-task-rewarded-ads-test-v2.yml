@@ -43,6 +43,9 @@ jobs:
           python3 tools/pin_login_patch.py
           python3 tools/map_zoom_fix.py
 
+      - name: Tighten rewarded-ad patch target
+        run: python3 tools/make_task_rewarded_patch_unique_2026_10_02.py
+
       - name: Apply task rewarded-ad test patch
         run: |
           python3 tools/task_rewarded_ads_test_2026_10_02.py
