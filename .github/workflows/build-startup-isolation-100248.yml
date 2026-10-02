@@ -143,16 +143,17 @@ jobs:
           if kts.exists():
               text = kts.read_text()
               marker = '    buildTypes {'
-              signing = '''    signingConfigs {
-                  create("release") {
-                      keyAlias = System.getenv("DEDA_KEY_ALIAS")
-                      keyPassword = System.getenv("DEDA_KEY_PASSWORD")
-                      storeFile = file("deda-release.jks")
-                      storePassword = System.getenv("DEDA_STORE_PASSWORD")
-                  }
-              }
-
-'''
+              signing = '\n'.join([
+                  '    signingConfigs {',
+                  '        create("release") {',
+                  '            keyAlias = System.getenv("DEDA_KEY_ALIAS")',
+                  '            keyPassword = System.getenv("DEDA_KEY_PASSWORD")',
+                  '            storeFile = file("deda-release.jks")',
+                  '            storePassword = System.getenv("DEDA_STORE_PASSWORD")',
+                  '        }',
+                  '    }',
+                  '',
+              ])
               if 'create("release")' not in text:
                   text = text.replace(marker, signing + marker, 1)
               text = text.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")', 1)
@@ -160,16 +161,17 @@ jobs:
           elif groovy.exists():
               text = groovy.read_text()
               marker = '    buildTypes {'
-              signing = '''    signingConfigs {
-                  release {
-                      keyAlias System.getenv("DEDA_KEY_ALIAS")
-                      keyPassword System.getenv("DEDA_KEY_PASSWORD")
-                      storeFile file("deda-release.jks")
-                      storePassword System.getenv("DEDA_STORE_PASSWORD")
-                  }
-              }
-
-'''
+              signing = '\n'.join([
+                  '    signingConfigs {',
+                  '        release {',
+                  '            keyAlias System.getenv("DEDA_KEY_ALIAS")',
+                  '            keyPassword System.getenv("DEDA_KEY_PASSWORD")',
+                  '            storeFile file("deda-release.jks")',
+                  '            storePassword System.getenv("DEDA_STORE_PASSWORD")',
+                  '        }',
+                  '    }',
+                  '',
+              ])
               if 'signingConfigs {' not in text or 'release {' not in text:
                   text = text.replace(marker, signing + marker, 1)
               text = text.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release', 1)
