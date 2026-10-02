@@ -1,0 +1,6 @@
+DEDA task rewarded ads test v100247
+Date: 2026-10-02
+Purpose: isolate Google Mobile Ads initialization from app startup after v100246 immediate-start crash.
+Result: existing DEDA validators passed, rewarded-ad validator passed with startup isolation, permanent signing passed, APK build/upload succeeded.
+Workflow run: 37041980035
+Head SHA: 8d5fcaccac02ee9083bcba36c6d7cd55fa58f3e1
