@@ -1,0 +1,198 @@
+name: Build DEDA Startup Isolation 100248
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - startup-crash-isolation-100248-2026-10-02
+    paths:
+      - .github/workflows/build-startup-isolation-100248.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout clean pre-AdMob checkpoint
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA source files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
+
+      - name: Create clean Flutter Android project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA source files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Apply established DEDA release patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Configure Firebase Android and target SDK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          settings_kts = Path('android/settings.gradle.kts')
+          settings_groovy = Path('android/settings.gradle')
+          app_kts = Path('android/app/build.gradle.kts')
+          app_groovy = Path('android/app/build.gradle')
+
+          if settings_kts.exists():
+              text = settings_kts.read_text()
+              line = '    id("com.google.gms.google-services") version "4.4.2" apply false\n'
+              if 'com.google.gms.google-services' not in text:
+                  text = text.replace('plugins {\n', 'plugins {\n' + line, 1)
+              settings_kts.write_text(text)
+          elif settings_groovy.exists():
+              text = settings_groovy.read_text()
+              line = "    id 'com.google.gms.google-services' version '4.4.2' apply false\n"
+              if 'com.google.gms.google-services' not in text:
+                  text = text.replace('plugins {\n', 'plugins {\n' + line, 1)
+              settings_groovy.write_text(text)
+
+          if app_kts.exists():
+              text = app_kts.read_text()
+              line = '    id("com.google.gms.google-services")\n'
+              if 'com.google.gms.google-services' not in text:
+                  text = text.replace('plugins {\n', 'plugins {\n' + line, 1)
+              text = text.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
+              text = text.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
+              app_kts.write_text(text)
+          elif app_groovy.exists():
+              text = app_groovy.read_text()
+              line = "    id 'com.google.gms.google-services'\n"
+              if 'com.google.gms.google-services' not in text:
+                  text = text.replace('plugins {\n', 'plugins {\n' + line, 1)
+              text = text.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
+              text = text.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 36')
+              app_groovy.write_text(text)
+          PY
+
+      - name: Configure Android manifest without AdMob
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+          ]
+          missing = [p for p in permissions if p not in text]
+          if missing:
+              pos = text.find('>')
+              text = text[:pos + 1] + '\n' + '\n'.join('    ' + p for p in missing) + '\n' + text[pos + 1:]
+          text = text.replace('android:label="d_iraq_ludo"', 'android:label="DEDA"')
+          assert 'com.google.android.gms.ads.APPLICATION_ID' not in text
+          path.write_text(text)
+          PY
+
+      - name: Enable DEDA admin image saving
+        run: python3 tools/android_media_save_patch.py
+
+      - name: Configure launcher icon
+        run: |
+          flutter pub add --dev flutter_launcher_icons
+          cat >> pubspec.yaml <<'YAML'
+
+          flutter_launcher_icons:
+            android: "ic_launcher"
+            ios: false
+            image_path: "deda_app_icon.png"
+            min_sdk_android: 21
+          YAML
+          dart run flutter_launcher_icons
+
+      - name: Restore permanent signing key
+        env:
+          DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+        run: python3 tools/restore_signing_key_2026_10_02.py
+
+      - name: Validate permanent signing key
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+        run: keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" > /dev/null
+
+      - name: Configure permanent release signing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          kts = Path('android/app/build.gradle.kts')
+          groovy = Path('android/app/build.gradle')
+
+          if kts.exists():
+              text = kts.read_text()
+              marker = '    buildTypes {'
+              signing = '''    signingConfigs {
+                  create("release") {
+                      keyAlias = System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword = System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile = file("deda-release.jks")
+                      storePassword = System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
+
+'''
+              if 'create("release")' not in text:
+                  text = text.replace(marker, signing + marker, 1)
+              text = text.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")', 1)
+              kts.write_text(text)
+          elif groovy.exists():
+              text = groovy.read_text()
+              marker = '    buildTypes {'
+              signing = '''    signingConfigs {
+                  release {
+                      keyAlias System.getenv("DEDA_KEY_ALIAS")
+                      keyPassword System.getenv("DEDA_KEY_PASSWORD")
+                      storeFile file("deda-release.jks")
+                      storePassword System.getenv("DEDA_STORE_PASSWORD")
+                  }
+              }
+
+'''
+              if 'signingConfigs {' not in text or 'release {' not in text:
+                  text = text.replace(marker, signing + marker, 1)
+              text = text.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release', 1)
+              text = text.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release', 1)
+              groovy.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify AdMob is absent
+        run: |
+          ! grep -R "google_mobile_ads\|com.google.android.gms.ads.APPLICATION_ID" -n lib pubspec.yaml android/app/src/main/AndroidManifest.xml
+
+      - name: Build signed clean APK 100248
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+          DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number=100248
+
+      - name: Upload clean startup isolation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-startup-isolation-100248
+          path: build/app/outputs/flutter-apk/app-release.apk
