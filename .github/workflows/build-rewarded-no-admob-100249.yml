@@ -1,0 +1,100 @@
+name: Build DEDA 100249 Rewarded UI No AdMob
+
+on:
+  push:
+    branches:
+      - fix-rewarded-ads-startup-crash-2026-10-02
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA source files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
+
+      - name: Create Flutter project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA source files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Apply existing DEDA release patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Apply rewarded task UI and points logic
+        run: |
+          python3 tools/make_task_rewarded_patch_unique_2026_10_02.py
+          python3 tools/task_rewarded_ads_test_2026_10_02.py
+
+      - name: Configure Android build
+        run: python3 tools/configure_rewarded_ads_android_build_2026_10_02.py
+
+      - name: Disable AdMob runtime only
+        run: |
+          python3 tools/disable_admob_keep_reward_ui_2026_10_02.py
+          dart format lib/main.dart
+
+      - name: Enable DEDA admin image saving
+        run: python3 tools/android_media_save_patch.py
+
+      - name: Restore permanent signing key
+        env:
+          DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+        run: python3 tools/restore_signing_key_2026_10_02.py
+
+      - name: Validate permanent signing key
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+        run: keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" > /dev/null
+
+      - name: Install dependencies and launcher icon
+        run: |
+          flutter pub add --dev flutter_launcher_icons
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Verify AdMob is completely absent
+        run: |
+          ! grep -R "google_mobile_ads\|MobileAds\.\|RewardedAd\.\|com.google.android.gms.ads.APPLICATION_ID" -n lib pubspec.yaml android/app/src/main/AndroidManifest.xml
+
+      - name: Validate existing DEDA flows
+        run: |
+          python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
+          python3 tools/validate_prize_winners_flow_2026_10_01.py
+          python3 tools/validate_prize_cycle_complete_2026_10_01.py
+
+      - name: Build signed repair APK 100249
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+          DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number=100249
+
+      - name: Upload repair APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-rewarded-ui-no-admob-100249
+          path: build/app/outputs/flutter-apk/app-release.apk
