@@ -3,7 +3,10 @@ from pathlib import Path
 # Full validator for the isolated 100254 branch. It carries forward the stable
 # 100253 Done-button invariants while validating only the new 1 km tracker
 # block for the changed GPS rules; other GPS features are intentionally left
-# untouched and may keep their own accuracy thresholds.
+# untouched and may keep their own accuracy thresholds. Newer builds may scope
+# the same progress store per account, so either the original v1 key or the
+# account-scoped v2 key is acceptable here; the newer build has its own stricter
+# validator for account isolation.
 text = Path('lib/main.dart').read_text(encoding='utf-8')
 
 required = {
@@ -11,7 +14,6 @@ required = {
     'completed action label': "label: taskDone ? dedaText('تم', 'Done') : action",
     'completed action disabled': 'onTap: taskDone ? null : () => _openTask(index)',
     'shared progress helper': 'class DedaLongTripProgress',
-    'daily progress key': 'deda_long_trip_progress_m_v1',
     'daily progress field': 'double _longTripProgressMeters = 0;',
     'dynamic task subtitle': '_longTripProgressText(),',
     'travelled Arabic label': 'قطعت $travelledKm كم • المتبقي ${remaining.round()} متر',
@@ -33,6 +35,12 @@ required = {
 for label, marker in required.items():
     if marker not in text:
         raise SystemExit(f'Missing {label}: {marker}')
+
+if (
+    'deda_long_trip_progress_m_v1' not in text
+    and 'deda_long_trip_progress_m_v2_' not in text
+):
+    raise SystemExit('Missing long-trip daily progress storage key')
 
 if 'trafficDone' in text:
     raise SystemExit('Legacy traffic-only Done logic is still present')
