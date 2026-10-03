@@ -24,117 +24,7 @@ end = text.find(end_marker, start)
 if end < 0:
     raise SystemExit('Rewarded-ad watch method end marker not found')
 
-methods = r'''  Future<bool> _loadRewardedAdOnce() {
-    if (_preparedRewardedAd != null) {
-      return Future<bool>.value(true);
-    }
-
-    final inFlight = _rewardedAdLoadFuture;
-    if (inFlight != null) return inFlight;
-
-    final completer = Completer<bool>();
-    _rewardedAdLoadFuture = completer.future;
-
-    RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) {
-          _rewardedAdLoadFuture = null;
-          if (!mounted) {
-            ad.dispose();
-            if (!completer.isCompleted) completer.complete(false);
-            return;
-          }
-
-          _preparedRewardedAd?.dispose();
-          _preparedRewardedAd = ad;
-          _rewardedAdNextAutomaticAttemptAt = null;
-          if (!completer.isCompleted) completer.complete(true);
-        },
-        onAdFailedToLoad: (error) {
-          _rewardedAdLoadFuture = null;
-          debugPrint(
-            'DEDA rewarded ad load failed: '
-            'code=${error.code}, domain=${error.domain}, message=${error.message}',
-          );
-          if (!completer.isCompleted) completer.complete(false);
-        },
-      ),
-    );
-
-    return completer.future;
-  }
-
-  Future<void> _preloadRewardedAdWithRetry({bool force = false}) async {
-    if (_preparedRewardedAd != null || _rewardedAdRetryLoopRunning) return;
-
-    final nextAttempt = _rewardedAdNextAutomaticAttemptAt;
-    if (!force &&
-        nextAttempt != null &&
-        DateTime.now().isBefore(nextAttempt)) {
-      return;
-    }
-
-    _rewardedAdRetryLoopRunning = true;
-    var loaded = false;
-    const retryDelays = <Duration>[
-      Duration.zero,
-      Duration(seconds: 2),
-      Duration(seconds: 5),
-      Duration(seconds: 10),
-    ];
-
-    try {
-      for (final delay in retryDelays) {
-        if (!mounted || _preparedRewardedAd != null) {
-          loaded = _preparedRewardedAd != null;
-          break;
-        }
-
-        if (delay > Duration.zero) {
-          await Future<void>.delayed(delay);
-          if (!mounted || _preparedRewardedAd != null) {
-            loaded = _preparedRewardedAd != null;
-            break;
-          }
-        }
-
-        loaded = await _loadRewardedAdOnce();
-        if (loaded) break;
-      }
-    } finally {
-      _rewardedAdRetryLoopRunning = false;
-      if (!loaded && mounted && _preparedRewardedAd == null) {
-        _rewardedAdNextAutomaticAttemptAt =
-            DateTime.now().add(const Duration(minutes: 1));
-      }
-    }
-  }
-
-  void _queueRewardedAdPreload() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _preloadRewardedAdWithRetry();
-    });
-  }
-
-  void _showRewardedAdUnavailableMessage() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          dedaText(
-            'تعذر تجهيز الإعلان الآن. حاول مرة أخرى بعد قليل.',
-            'The ad could not be prepared right now. Please try again shortly.',
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _watchTaskRewardedAd(String taskId) async {
+methods = r'''  Future<void> _watchTaskRewardedAd(String taskId) async {
     if (_watchingRewardedTaskIds.contains(taskId)) return;
 
     final alreadyClaimed =
@@ -270,6 +160,132 @@ methods = r'''  Future<bool> _loadRewardedAdOnce() {
           ),
         );
       },
+    );
+  }
+
+  Future<bool> _loadRewardedAdOnce() {
+    if (_preparedRewardedAd != null) {
+      return Future<bool>.value(true);
+    }
+
+    final inFlight = _rewardedAdLoadFuture;
+    if (inFlight != null) return inFlight;
+
+    final completer = Completer<bool>();
+    _rewardedAdLoadFuture = completer.future;
+
+    Future<void>(() async {
+      try {
+        await MobileAds.instance.initialize();
+        if (!mounted) {
+          _rewardedAdLoadFuture = null;
+          if (!completer.isCompleted) completer.complete(false);
+          return;
+        }
+
+        RewardedAd.load(
+          adUnitId: _rewardedAdUnitId,
+          request: const AdRequest(),
+          rewardedAdLoadCallback: RewardedAdLoadCallback(
+            onAdLoaded: (ad) {
+              _rewardedAdLoadFuture = null;
+              if (!mounted) {
+                ad.dispose();
+                if (!completer.isCompleted) completer.complete(false);
+                return;
+              }
+
+              _preparedRewardedAd?.dispose();
+              _preparedRewardedAd = ad;
+              _rewardedAdNextAutomaticAttemptAt = null;
+              if (!completer.isCompleted) completer.complete(true);
+            },
+            onAdFailedToLoad: (error) {
+              _rewardedAdLoadFuture = null;
+              debugPrint(
+                'DEDA rewarded ad load failed: '
+                'code=${error.code}, domain=${error.domain}, message=${error.message}',
+              );
+              if (!completer.isCompleted) completer.complete(false);
+            },
+          ),
+        );
+      } catch (error, stackTrace) {
+        _rewardedAdLoadFuture = null;
+        debugPrint('DEDA Mobile Ads initialization failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        if (!completer.isCompleted) completer.complete(false);
+      }
+    });
+
+    return completer.future;
+  }
+
+  Future<void> _preloadRewardedAdWithRetry({bool force = false}) async {
+    if (_preparedRewardedAd != null || _rewardedAdRetryLoopRunning) return;
+
+    final nextAttempt = _rewardedAdNextAutomaticAttemptAt;
+    if (!force &&
+        nextAttempt != null &&
+        DateTime.now().isBefore(nextAttempt)) {
+      return;
+    }
+
+    _rewardedAdRetryLoopRunning = true;
+    var loaded = false;
+    const retryDelays = <Duration>[
+      Duration.zero,
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+    ];
+
+    try {
+      for (final delay in retryDelays) {
+        if (!mounted || _preparedRewardedAd != null) {
+          loaded = _preparedRewardedAd != null;
+          break;
+        }
+
+        if (delay > Duration.zero) {
+          await Future<void>.delayed(delay);
+          if (!mounted || _preparedRewardedAd != null) {
+            loaded = _preparedRewardedAd != null;
+            break;
+          }
+        }
+
+        loaded = await _loadRewardedAdOnce();
+        if (loaded) break;
+      }
+    } finally {
+      _rewardedAdRetryLoopRunning = false;
+      if (!loaded && mounted && _preparedRewardedAd == null) {
+        _rewardedAdNextAutomaticAttemptAt =
+            DateTime.now().add(const Duration(minutes: 1));
+      }
+    }
+  }
+
+  void _queueRewardedAdPreload() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _preloadRewardedAdWithRetry();
+    });
+  }
+
+  void _showRewardedAdUnavailableMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          dedaText(
+            'تعذر تجهيز الإعلان الآن. حاول مرة أخرى بعد قليل.',
+            'The ad could not be prepared right now. Please try again shortly.',
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 
