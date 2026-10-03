@@ -1,3 +1,4 @@
+# Build 100254 after real-road test confirmed the old counter needed about 10 km.
 name: Build DEDA 100254 Trip 1km Progress Fix
 
 on:
