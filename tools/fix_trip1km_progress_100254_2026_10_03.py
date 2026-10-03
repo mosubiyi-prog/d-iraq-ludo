@@ -61,7 +61,9 @@ helper = r'''class DedaLongTripProgress {
 '''
 replace_once(helper_marker, helper + helper_marker, 'long trip shared progress helper')
 
-# Load the persisted progress whenever the daily-tasks page opens.
+# Load the persisted progress whenever the daily-tasks page opens. When a user
+# updates from 100253 after already completing this task today, migrate the new
+# progress display to 1.00 km so a completed card can never show 0 m remaining.
 replace_once(
     'class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {\n'
     '  bool _loginRewardClaimed = false;\n',
@@ -82,7 +84,14 @@ old_load = '''  Future<void> _loadRewardState() async {
 '''
 new_load = '''  Future<void> _loadRewardState() async {
     final claimed = await DedaTaskEngine.hasDailyLoginRewardClaimed();
-    final longTripProgress = await DedaLongTripProgress.load();
+    final longTripCompleted = await DedaTaskEngine.isTaskCompleted(
+      DedaTaskIds.longTrip,
+    );
+    var longTripProgress = await DedaLongTripProgress.load();
+    if (longTripCompleted && longTripProgress < 1000) {
+      await DedaLongTripProgress.update(1000);
+      longTripProgress = 1000;
+    }
     if (!mounted) return;
     setState(() {
       _longTripProgressMeters = longTripProgress;
@@ -135,6 +144,18 @@ replace_once(
     'trip progress tracker fields',
 )
 
+# Complete the persistent reset before activating the navigation GPS stream.
+# This prevents a slow SharedPreferences write from racing with the first real
+# distance update and wiping out valid metres after the trip has already begun.
+replace_once(
+    '    await DedaPlacesStore.addRecent(widget.destination);\n'
+    '    if (!mounted) return;\n',
+    '    await DedaPlacesStore.addRecent(widget.destination);\n'
+    '    await DedaLongTripProgress.resetForNewTrip();\n'
+    '    if (!mounted) return;\n',
+    'await trip progress reset before start',
+)
+
 replace_once(
     '      _dailyTaskTripLastPoint = null;\n'
     '      _dailyTaskTripDistanceMeters = 0;\n'
@@ -143,9 +164,8 @@ replace_once(
     '      _dailyTaskTripLastFixAt = null;\n'
     '      _dailyTaskTripDistanceMeters = 0;\n'
     '      _dailyTaskTripLastSavedMeters = 0;\n'
-    '      _dailyTaskTripReported = false;\n'
-    '      unawaited(DedaLongTripProgress.resetForNewTrip());\n',
-    'trip progress reset',
+    '      _dailyTaskTripReported = false;\n',
+    'trip progress in-memory reset',
 )
 
 tracker_pattern = re.compile(
