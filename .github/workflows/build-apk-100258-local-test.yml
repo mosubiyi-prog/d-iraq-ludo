@@ -1,10 +1,10 @@
-name: Build DEDA 100258 APK Local Test
+name: Build DEDA 100259 Diamonds Local Test
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - apk-test-100258-2026-10-03
+      - diamonds-reward-100259-2026-10-04
     paths:
       - .github/workflows/build-apk-100258-local-test.yml
 
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout isolated 100258 APK branch
+      - name: Checkout isolated 100259 diamonds branch
         uses: actions/checkout@v4
 
       - name: Setup Flutter
@@ -83,6 +83,11 @@ jobs:
           python3 tools/rewarded_ad_resilience_100258_2026_10_03.py
           dart format lib/main.dart
 
+      - name: Apply 100259 diamonds rewarded-ad feature
+        run: |
+          python3 tools/add_diamonds_reward_100259_2026_10_04.py
+          dart format lib/main.dart
+
       - name: Keep Android 16 WorkManager compatibility guard
         run: python3 tools/apply_admob_android16_workmanager_fix_2026_10_02.py
 
@@ -106,7 +111,7 @@ jobs:
           flutter pub get
           dart run flutter_launcher_icons
 
-      - name: Validate 100258 APK source
+      - name: Validate 100259 APK source
         run: |
           python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
           python3 tools/validate_prize_winners_flow_2026_10_01.py
@@ -117,20 +122,21 @@ jobs:
           python3 tools/validate_trip_progress_account_scope_100256_2026_10_03.py
           python3 tools/validate_real_admob_100257_2026_10_03.py
           python3 tools/validate_rewarded_ad_resilience_100258_2026_10_03.py
+          python3 tools/validate_diamonds_reward_100259_2026_10_04.py
           grep -q "ca-app-pub-2512641627784244~4635932278" android/app/src/main/AndroidManifest.xml
           grep -q "ca-app-pub-2512641627784244/6037567292" lib/main.dart
           ! grep -q "ca-app-pub-3940256099942544~3347511713" android/app/src/main/AndroidManifest.xml
           ! grep -q "ca-app-pub-3940256099942544/5224354917" lib/main.dart
 
-      - name: Build signed APK 100258 for local device test
+      - name: Build signed APK 100259 for local device test
         env:
           DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
           DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
           DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
-        run: flutter build apk --release --build-number=100258 --dart-define=USE_NEXT_GEN_SDK=true
+        run: flutter build apk --release --build-number=100259 --dart-define=USE_NEXT_GEN_SDK=true
 
-      - name: Upload APK 100258
+      - name: Upload APK 100259
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100258-local-test-apk
+          name: DEDA-100259-diamonds-local-test-apk
           path: build/app/outputs/flutter-apk/app-release.apk
