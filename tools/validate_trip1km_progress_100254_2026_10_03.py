@@ -1,7 +1,9 @@
 from pathlib import Path
 
 # Full validator for the isolated 100254 branch. It carries forward the stable
-# 100253 Done-button invariants while validating the new 1 km progress design.
+# 100253 Done-button invariants while validating only the new 1 km tracker
+# block for the changed GPS rules; other GPS features are intentionally left
+# untouched and may keep their own accuracy thresholds.
 text = Path('lib/main.dart').read_text(encoding='utf-8')
 
 required = {
@@ -19,9 +21,6 @@ required = {
     'trip saved progress field': 'double _dailyTaskTripLastSavedMeters = 0;',
     'trip completion flag': 'bool _dailyTaskTripReported = false;',
     'trip reset persistence': 'DedaLongTripProgress.resetForNewTrip()',
-    'broader GPS accuracy': 'position.accuracy <= 80',
-    'timestamp-aware segment guard': 'taskMaxSegmentMeters',
-    'dynamic speed guard': 'taskPlausibleSpeed',
     '1 km threshold': '_dailyTaskTripDistanceMeters >= 1000',
     'progress persistence': 'DedaLongTripProgress.update(_dailyTaskTripDistanceMeters)',
     'completion persistence': 'DedaLongTripProgress.update(1000)',
@@ -32,23 +31,36 @@ for label, marker in required.items():
     if marker not in text:
         raise SystemExit(f'Missing {label}: {marker}')
 
-forbidden = {
-    'legacy traffic-only Done logic': 'trafficDone',
-    'old strict GPS accuracy': 'position.accuracy <= 30',
-    'old fixed 200m segment ceiling': 'taskSegmentMeters <= 200',
-    'old long trip subtitle': 'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة',
-}
-for label, marker in forbidden.items():
-    if marker in text:
-        raise SystemExit(f'Forbidden {label} is still present: {marker}')
+if 'trafficDone' in text:
+    raise SystemExit('Legacy traffic-only Done logic is still present')
+if 'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة' in text:
+    raise SystemExit('Old long trip subtitle is still present')
 
-# Keep the tracker transport-mode independent exactly as in the successful
-# 100253 design; walking, motorcycle, car and truck all share the same GPS path.
+# Inspect only the actual long-trip tracker. Other map/location code can have
+# independent thresholds and must not be modified by this targeted fix.
 start = text.find('final taskGpsAccurate = position.accuracy.isFinite')
 end = text.find('DedaTaskEvent.longTripCompleted', start)
 if start < 0 or end < 0:
     raise SystemExit('Could not locate the final trip tracker block')
 tracker = text[start:end]
+
+tracker_required = {
+    'broader tracker GPS accuracy': 'position.accuracy <= 80',
+    'timestamp-aware segment guard': 'taskMaxSegmentMeters',
+    'dynamic speed guard': 'taskPlausibleSpeed',
+}
+for label, marker in tracker_required.items():
+    if marker not in tracker:
+        raise SystemExit(f'Missing {label}: {marker}')
+
+tracker_forbidden = {
+    'old tracker GPS accuracy': 'position.accuracy <= 30',
+    'old fixed 200m segment ceiling': 'taskSegmentMeters <= 200',
+}
+for label, marker in tracker_forbidden.items():
+    if marker in tracker:
+        raise SystemExit(f'Forbidden {label} is still present in tracker: {marker}')
+
 if 'widget.travelMode' in tracker or 'DedaTravelMode.' in tracker:
     raise SystemExit('Trip tracker must remain independent of travel mode')
 
