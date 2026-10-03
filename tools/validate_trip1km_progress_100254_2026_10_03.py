@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Trigger/build validator for the isolated 100254 branch only.
 text = Path('lib/main.dart').read_text(encoding='utf-8')
 
 required = {
