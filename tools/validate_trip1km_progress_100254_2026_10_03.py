@@ -36,11 +36,12 @@ if 'trafficDone' in text:
 if 'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة' in text:
     raise SystemExit('Old long trip subtitle is still present')
 
-# Inspect only the actual long-trip tracker. Other map/location code can have
-# independent thresholds and must not be modified by this targeted fix.
-start = text.find('final taskGpsAccurate = position.accuracy.isFinite')
-end = text.find('DedaTaskEvent.longTripCompleted', start)
-if start < 0 or end < 0:
+# Locate the formatted tracker using the unique timestamp marker, then walk
+# backwards to the tracker accuracy guard. This survives dart format changes.
+task_now = text.find('final taskNow = DateTime.now();')
+end = text.find('DedaTaskEvent.longTripCompleted', task_now)
+start = text.rfind('final taskGpsAccurate', 0, task_now)
+if task_now < 0 or start < 0 or end < 0:
     raise SystemExit('Could not locate the final trip tracker block')
 tracker = text[start:end]
 
@@ -48,6 +49,7 @@ tracker_required = {
     'broader tracker GPS accuracy': 'position.accuracy <= 80',
     'timestamp-aware segment guard': 'taskMaxSegmentMeters',
     'dynamic speed guard': 'taskPlausibleSpeed',
+    'timestamp marker': 'final taskNow = DateTime.now();',
 }
 for label, marker in tracker_required.items():
     if marker not in tracker:
