@@ -83,6 +83,11 @@ jobs:
           python3 tools/rewarded_ad_resilience_100258_2026_10_03.py
           dart format lib/main.dart
 
+      - name: Validate intact 100258 rewarded baseline before diamonds
+        run: |
+          python3 tools/validate_real_admob_100257_2026_10_03.py
+          python3 tools/validate_rewarded_ad_resilience_100258_2026_10_03.py
+
       - name: Apply 100259 diamonds rewarded-ad feature
         run: |
           python3 tools/add_diamonds_reward_100259_2026_10_04.py
@@ -120,8 +125,6 @@ jobs:
           python3 tools/validate_trip1km_progress_100254_2026_10_03.py
           python3 tools/validate_traffic_quiz_semantic_no_repeat_100255_2026_10_03.py
           python3 tools/validate_trip_progress_account_scope_100256_2026_10_03.py
-          python3 tools/validate_real_admob_100257_2026_10_03.py
-          python3 tools/validate_rewarded_ad_resilience_100258_2026_10_03.py
           python3 tools/validate_diamonds_reward_100259_2026_10_04.py
           grep -q "ca-app-pub-2512641627784244~4635932278" android/app/src/main/AndroidManifest.xml
           grep -q "ca-app-pub-2512641627784244/6037567292" lib/main.dart
