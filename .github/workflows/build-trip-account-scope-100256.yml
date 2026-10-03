@@ -124,3 +124,5 @@ jobs:
         with:
           name: DEDA-trip-account-scope-100256
           path: build/app/outputs/flutter-apk/app-release.apk
+
+# Triggered after making the account-scope patch formatter-safe.
