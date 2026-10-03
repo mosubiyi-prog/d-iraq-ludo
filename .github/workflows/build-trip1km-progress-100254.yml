@@ -12,7 +12,6 @@ on:
       - tools/validate_rewarded_ads_scope_2026_10_02.py
       - tools/rewarded_ads_diagnostic_error_details_2026_10_02.py
       - tools/fix_daily_task_done_and_trip_1km_2026_10_02.py
-      - tools/validate_daily_task_done_and_trip_1km_2026_10_02.py
       - tools/fix_trip1km_progress_100254_2026_10_03.py
       - tools/validate_trip1km_progress_100254_2026_10_03.py
       - .github/workflows/build-trip1km-progress-100254.yml
@@ -103,7 +102,6 @@ jobs:
           python3 tools/validate_prize_cycle_complete_2026_10_01.py
           python3 tools/validate_task_rewarded_ads_2026_10_02.py
           python3 tools/validate_rewarded_ads_scope_2026_10_02.py
-          python3 tools/validate_daily_task_done_and_trip_1km_2026_10_02.py
           python3 tools/validate_trip1km_progress_100254_2026_10_03.py
           grep -q "تفاصيل خطأ الإعلان" lib/main.dart
           grep -q "error.code" lib/main.dart
