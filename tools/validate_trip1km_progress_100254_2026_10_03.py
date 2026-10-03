@@ -15,12 +15,15 @@ required = {
     'daily progress field': 'double _longTripProgressMeters = 0;',
     'dynamic task subtitle': '_longTripProgressText(),',
     'travelled Arabic label': 'قطعت $travelledKm كم • المتبقي ${remaining.round()} متر',
+    'completed-task migration lookup': 'final longTripCompleted = await DedaTaskEngine.isTaskCompleted(',
+    'completed-task migration guard': 'if (longTripCompleted && longTripProgress < 1000)',
+    'completed-task migration write': 'await DedaLongTripProgress.update(1000);',
     'trip last point field': 'LatLng? _dailyTaskTripLastPoint;',
     'trip last fix field': 'DateTime? _dailyTaskTripLastFixAt;',
     'trip distance field': 'double _dailyTaskTripDistanceMeters = 0;',
     'trip saved progress field': 'double _dailyTaskTripLastSavedMeters = 0;',
     'trip completion flag': 'bool _dailyTaskTripReported = false;',
-    'trip reset persistence': 'DedaLongTripProgress.resetForNewTrip()',
+    'awaited trip reset': 'await DedaLongTripProgress.resetForNewTrip();',
     '1 km threshold': '_dailyTaskTripDistanceMeters >= 1000',
     'progress persistence': 'DedaLongTripProgress.update(_dailyTaskTripDistanceMeters)',
     'completion persistence': 'DedaLongTripProgress.update(1000)',
@@ -35,6 +38,18 @@ if 'trafficDone' in text:
     raise SystemExit('Legacy traffic-only Done logic is still present')
 if 'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة' in text:
     raise SystemExit('Old long trip subtitle is still present')
+if 'unawaited(DedaLongTripProgress.resetForNewTrip())' in text:
+    raise SystemExit('Trip progress reset must complete before GPS tracking starts')
+
+# The persistent reset must finish before tripStarted is enabled and before the
+# location stream can emit the first distance segment.
+reset_index = text.find('await DedaLongTripProgress.resetForNewTrip();')
+trip_started_index = text.find('tripStarted = true;', reset_index)
+position_stream_index = text.find('_positionSubscription = Geolocator.getPositionStream(', reset_index)
+if reset_index < 0 or trip_started_index < 0 or position_stream_index < 0:
+    raise SystemExit('Could not verify safe trip reset ordering')
+if not (reset_index < trip_started_index < position_stream_index):
+    raise SystemExit('Trip progress reset ordering is unsafe')
 
 # Locate the formatted tracker using the unique timestamp marker, then walk
 # backwards to the tracker accuracy guard. This survives dart format changes.
@@ -73,4 +88,4 @@ if text.count('_dailyTaskTripReported = false;') < 2:
 if text.count('_dailyTaskTripLastFixAt = null;') != 1:
     raise SystemExit('Trip timestamp tracker is not reset exactly once at trip start')
 
-print('Build 100254 Done-state + robust 1 km progress validation passed.')
+print('Build 100254 Done-state + robust 1 km progress + migration validation passed.')
