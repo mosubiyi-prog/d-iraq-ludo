@@ -44,4 +44,14 @@ if text.count('static const int rewardPerAd = 3;') != 1:
 if text.count('static const int maxAdsPerDay = 5;') != 1:
     raise SystemExit('Unexpected duplicate diamonds daily limit')
 
+# Build 100259 intentionally has exactly two rewarded callbacks:
+# one established +5-points task path and one new +3-diamonds path.
+if text.count('onUserEarnedReward:') != 2:
+    raise SystemExit('Expected exactly two rewarded callbacks in 100259')
+
+# Both reward surfaces must keep using the single centralized loader/preload
+# introduced by 100258, not create a second competing ad loader.
+if text.count('RewardedAd.load(') != 1:
+    raise SystemExit('Diamonds must reuse the single centralized RewardedAd loader')
+
 print('DEDA 100259 diamonds reward validation passed.')
