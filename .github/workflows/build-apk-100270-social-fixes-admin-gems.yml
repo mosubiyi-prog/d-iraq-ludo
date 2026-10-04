@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/build-apk-100270-social-fixes-admin-gems.yml'
 
+# Build is triggered only after green 100270 preflight and Firestore deployment.
 jobs:
   build:
     if: contains(github.event.head_commit.message, '[build-100270]')
