@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 main = Path('lib/main.dart').read_text(encoding='utf-8')
 service = Path('lib/deda_social_service.dart').read_text(encoding='utf-8')
@@ -10,6 +11,11 @@ rules = Path('firestore.rules').read_text(encoding='utf-8')
 def require(text: str, needle: str, label: str) -> None:
     if needle not in text:
         raise SystemExit(f'100270 validation failed: {label} missing: {needle}')
+
+
+def require_regex(text: str, pattern: str, label: str) -> None:
+    if re.search(pattern, text, flags=re.MULTILINE | re.DOTALL) is None:
+        raise SystemExit(f'100270 validation failed: {label} missing pattern: {pattern}')
 
 
 def forbid(text: str, needle: str, label: str) -> None:
@@ -43,8 +49,8 @@ require(main, 'DedaProfileAppearanceState.frameNotifier.value = index;', 'style-
 require(main, 'ValueListenableBuilder<int>(\n                valueListenable: DedaProfileAppearanceState.frameNotifier', 'my-profile frame listener')
 require(main, 'DedaFramedAvatar(\n                    avatarStyle: DedaPreferences.profileAvatarStyle,\n                    frameStyle: frameStyle,\n                    size: 124,', 'public preview shared frame')
 forbid(main, 'colors: <Color>[_gold, Colors.white, _navy]', 'old fixed public profile ring')
-require(main, 'progress.level < minLevel\n                                  ? null', 'locked frame button disabled by level')
-require(main, "(_progress?.level ?? 1) < level\n                  ? null", 'locked badge button disabled by level')
+require_regex(main, r'progress\.level\s*<\s*minLevel\s*\?\s*null', 'locked frame button disabled by level')
+require_regex(main, r'\(_progress\?\.level\s*\?\?\s*1\)\s*<\s*level\s*\?\s*null', 'locked badge button disabled by level')
 
 # Settings logout placement and proven behavior.
 require(main, '// DEDA_SETTINGS_LOGOUT_100270', 'settings logout marker')
