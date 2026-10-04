@@ -1,0 +1,171 @@
+name: Build DEDA 100261 Profile Phase 2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - profile-phase2-100261-2026-10-04
+    paths:
+      - .github/workflows/build-apk-100261-profile-phase2.yml
+      - tools/profile_phase2_100261_2026_10_04.py
+      - tools/validate_profile_phase2_100261_2026_10_04.py
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout isolated 100261 profile branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Save DEDA source files
+        run: |
+          cp lib/main.dart /tmp/main.dart
+          cp lib/traffic_quiz_page.dart /tmp/traffic_quiz_page.dart
+          cp pubspec.yaml /tmp/pubspec.yaml
+          cp deda_app_icon.png /tmp/deda_app_icon.png
+          cp google-services.json /tmp/google-services.json
+
+      - name: Create clean Flutter Android project
+        run: flutter create . --org com.diraq.ludo --project-name d_iraq_ludo
+
+      - name: Restore DEDA source files
+        run: |
+          cp /tmp/main.dart lib/main.dart
+          cp /tmp/traffic_quiz_page.dart lib/traffic_quiz_page.dart
+          cp /tmp/pubspec.yaml pubspec.yaml
+          cp /tmp/deda_app_icon.png deda_app_icon.png
+          cp /tmp/google-services.json android/app/google-services.json
+
+      - name: Apply established DEDA release patches
+        run: |
+          python3 tools/final_release_fix_compat.py
+          python3 tools/final_release_fix.py
+          python3 tools/pin_login_patch.py
+          python3 tools/map_zoom_fix.py
+
+      - name: Apply 100253 task and rewarded-ad baseline
+        run: |
+          python3 tools/make_task_rewarded_patch_unique_2026_10_02.py
+          python3 tools/task_rewarded_ads_test_2026_10_02.py
+          python3 tools/rewarded_ads_startup_safety_fix_2026_10_02.py
+          python3 tools/rewarded_ads_diagnostic_error_details_2026_10_02.py
+          python3 tools/fix_daily_task_done_and_trip_1km_2026_10_02.py
+
+      - name: Apply 100254 robust 1km progress
+        run: |
+          python3 tools/fix_trip1km_progress_100254_2026_10_03.py
+          dart format lib/main.dart
+
+      - name: Apply 100255 traffic semantic no-repeat
+        run: |
+          python3 tools/fix_traffic_quiz_semantic_no_repeat_100255_2026_10_03.py
+          dart format lib/traffic_quiz_page.dart
+
+      - name: Apply 100256 per-account trip progress
+        run: |
+          python3 tools/fix_trip_progress_account_scope_100256_2026_10_03.py
+          dart format lib/main.dart
+
+      - name: Configure Firebase Android AdMob launcher and signing
+        run: python3 tools/configure_rewarded_ads_android_build_2026_10_02.py
+
+      - name: Switch build to real DEDA AdMob IDs
+        run: |
+          python3 tools/apply_real_admob_ids_100257_2026_10_03.py
+          dart format lib/main.dart
+
+      - name: Apply 100258 rewarded ad preload and retry resilience
+        run: |
+          python3 tools/rewarded_ad_resilience_100258_2026_10_03.py
+          dart format lib/main.dart
+
+      - name: Validate intact 100258 rewarded baseline before diamonds
+        run: |
+          python3 tools/validate_real_admob_100257_2026_10_03.py
+          python3 tools/validate_rewarded_ad_resilience_100258_2026_10_03.py
+
+      - name: Apply 100259 diamonds rewarded-ad feature
+        run: |
+          python3 tools/add_diamonds_reward_100259_2026_10_04.py
+          dart format lib/main.dart
+
+      - name: Validate intact 100259 diamonds baseline
+        run: python3 tools/validate_diamonds_reward_100259_2026_10_04.py
+
+      - name: Apply 100260 social hub phase 1
+        run: |
+          python3 tools/add_social_hub_phase1_100260_2026_10_04.py
+          dart format lib/main.dart
+
+      - name: Validate intact 100260 social hub before profile redesign
+        run: |
+          python3 tools/validate_social_hub_phase1_100260_2026_10_04.py
+          python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
+
+      - name: Apply 100261 profile phase 2
+        run: |
+          python3 tools/profile_phase2_100261_2026_10_04.py
+          dart format lib/main.dart
+
+      - name: Validate 100261 profile phase 2
+        run: |
+          python3 tools/validate_profile_phase2_100261_2026_10_04.py
+          python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
+
+      - name: Keep Android 16 WorkManager compatibility guard
+        run: python3 tools/apply_admob_android16_workmanager_fix_2026_10_02.py
+
+      - name: Enable DEDA admin image saving
+        run: python3 tools/android_media_save_patch.py
+
+      - name: Restore permanent signing key
+        env:
+          DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+        run: python3 tools/restore_signing_key_2026_10_02.py
+
+      - name: Validate permanent signing key
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+        run: keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" > /dev/null
+
+      - name: Install dependencies and launcher icon
+        run: |
+          flutter pub add --dev flutter_launcher_icons
+          flutter pub get
+          dart run flutter_launcher_icons
+
+      - name: Validate 100261 APK source
+        run: |
+          python3 tools/validate_daily_tasks_card_sequence_2026_10_01.py
+          python3 tools/validate_prize_winners_flow_2026_10_01.py
+          python3 tools/validate_prize_cycle_complete_2026_10_01.py
+          python3 tools/validate_rewarded_ads_scope_2026_10_02.py
+          python3 tools/validate_trip1km_progress_100254_2026_10_03.py
+          python3 tools/validate_traffic_quiz_semantic_no_repeat_100255_2026_10_03.py
+          python3 tools/validate_trip_progress_account_scope_100256_2026_10_03.py
+          python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
+          python3 tools/validate_profile_phase2_100261_2026_10_04.py
+          grep -q "ca-app-pub-2512641627784244~4635932278" android/app/src/main/AndroidManifest.xml
+          grep -q "ca-app-pub-2512641627784244/6037567292" lib/main.dart
+          ! grep -q "ca-app-pub-3940256099942544~3347511713" android/app/src/main/AndroidManifest.xml
+          ! grep -q "ca-app-pub-3940256099942544/5224354917" lib/main.dart
+
+      - name: Build signed APK 100261 for local device test
+        env:
+          DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+          DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+          DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number=100261 --dart-define=USE_NEXT_GEN_SDK=true
+
+      - name: Upload APK 100261
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100261-profile-phase2-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
