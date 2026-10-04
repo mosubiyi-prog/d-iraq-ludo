@@ -1,0 +1,39 @@
+name: Build DEDA 100268 Compact Social Fields
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - compact-social-fields-100268-2026-10-04
+    paths:
+      - .github/workflows/build-apk-100268-compact-social-fields.yml
+      - tools/compact_social_fields_100268_2026_10_04.py
+      - tools/validate_compact_social_fields_100268_2026_10_04.py
+      - tools/build_100268_compact_social_fields.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100268 compact social fields branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build and validate DEDA 100268
+        run: bash tools/build_100268_compact_social_fields.sh
+
+      - name: Upload APK 100268
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100268-compact-social-fields-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
