@@ -10,6 +10,8 @@ start = text.index('class _DedaProfilePhase2PageState extends State<DedaProfileP
 end = text.index('class DedaPublicProfilePreviewPage', start)
 profile = text[start:end]
 
+# These checks deliberately use formatter-stable tokens. dart format may wrap
+# builders, MaterialPageRoute calls, or dedaText arguments across multiple lines.
 required = [
     'bool _pointsExpanded = true;',
     'static const List<int> _pointTierThresholds = <int>[',
@@ -25,12 +27,12 @@ required = [
     'Widget _pointsTierCard({',
     'Widget _pointsCardsPanel(int totalPoints)',
     'DedaPrizeWinnerRequestPage(',
-    'builder: (context, totalPoints, _) => _pointsCardsPanel(totalPoints)',
+    '_pointsCardsPanel(totalPoints)',
     "title: dedaText('تعديل الملف', 'Edit profile')",
-    "subtitle: dedaText('بيانات الحساب وإعداداته', 'Account details and settings')",
-    'MaterialPageRoute(builder: (_) => const DedaAccountInfoPage())',
+    'بيانات الحساب وإعداداته',
+    'DedaAccountInfoPage()',
     "title: dedaText('الصور', 'Photos')",
-    "subtitle: dedaText('قسم مستقل للصور لاحقًا', 'Dedicated photos area later')",
+    'قسم مستقل للصور لاحقًا',
     'أبقينا قسم الصور بمكانه وسيتم تخصيص وظيفة مستقلة له عند حاجتنا لها.',
 ]
 missing = [needle for needle in required if needle not in profile]
