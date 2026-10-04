@@ -13,6 +13,7 @@ python3 tools/social_service_query_fix_100270_2026_10_04.py
 python3 tools/admin_diamond_backend_100270_2026_10_04.py
 python3 tools/admin_diamond_gift_ui_100270_2026_10_04.py
 python3 tools/normalize_profile_avatar_anchor_100270_2026_10_04.py
+python3 tools/normalize_badge_button_anchor_100270_2026_10_04.py
 python3 tools/social_ui_wallet_fixes_100270_2026_10_04.py
 python3 tools/restore_compact_profile_avatar_100270_2026_10_04.py
 python3 tools/settings_logout_100270_2026_10_04.py
