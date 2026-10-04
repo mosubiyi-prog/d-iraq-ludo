@@ -20,10 +20,12 @@ jobs:
           set -euo pipefail
           python3 tools/add_social_firestore_rules_100269_2026_10_04.py
           python3 tools/stabilize_social_rules_identity_100269_2026_10_04.py
+          python3 tools/hotfix_social_first_request_get_100269_2026_10_04.py
           grep -q "deda_social_profiles" firestore.rules
           grep -q "deda_friendships" firestore.rules
           grep -q "requesterPublicId" firestore.rules
           grep -q "recipientPublicId" firestore.rules
+          grep -q "DEDA_SOCIAL_FIRST_REQUEST_GET_HOTFIX_100269" firestore.rules
 
       - name: Select Firebase credential
         id: auth
