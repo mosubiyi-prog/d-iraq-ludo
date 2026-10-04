@@ -1,0 +1,39 @@
+name: Build DEDA 100267 Add Friend UI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - add-friend-ui-100267-2026-10-04
+    paths:
+      - .github/workflows/build-apk-100267-add-friend-ui.yml
+      - tools/add_friend_ui_100267_2026_10_04.py
+      - tools/validate_add_friend_ui_100267_2026_10_04.py
+      - tools/build_100267_add_friend_ui.sh
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100267 Add Friend branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build and validate DEDA 100267
+        run: bash tools/build_100267_add_friend_ui.sh
+
+      - name: Upload APK 100267
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100267-add-friend-ui-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
