@@ -1,6 +1,6 @@
 name: Build DEDA 100272 Purchase Level Separation
 
-# retry-4: formatter-safe paid cards after proven 100271 reconstruction
+# retry-5: app patch passed; validator now ignores harmless dart line wrapping
 on:
   push:
     branches:
