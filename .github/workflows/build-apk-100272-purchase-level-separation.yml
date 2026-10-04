@@ -1,6 +1,6 @@
 name: Build DEDA 100272 Purchase Level Separation
 
-# retry-3: structural paid-style patch after proven 100271 reconstruction
+# retry-4: formatter-safe paid cards after proven 100271 reconstruction
 on:
   push:
     branches:
