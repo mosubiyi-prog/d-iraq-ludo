@@ -78,7 +78,12 @@ friends = replace_once(friends, 'size: 44,', 'size: 32,', 'friends empty icon si
 friends = replace_once(friends, 'const SizedBox(height: 18),', 'const SizedBox(height: 12),', 'friends empty icon/title gap')
 friends = replace_once(friends, 'fontSize: 23,', 'fontSize: 20,', 'friends empty title size')
 friends = replace_once(friends, 'const SizedBox(height: 9),', 'const SizedBox(height: 6),', 'friends empty title/body gap')
-friends = replace_once(friends, 'fontSize: 14,', 'fontSize: 13,', 'friends empty body size')
+friends = replace_once(
+    friends,
+    'height: 1.55,\n                                fontWeight: FontWeight.w600,\n                                fontSize: 14,',
+    'height: 1.45,\n                                fontWeight: FontWeight.w600,\n                                fontSize: 13,',
+    'friends empty body style',
+)
 friends = replace_once(friends, 'const SizedBox(height: 22),', 'const SizedBox(height: 14),', 'friends empty body/button gap')
 friends = replace_once(
     friends,
