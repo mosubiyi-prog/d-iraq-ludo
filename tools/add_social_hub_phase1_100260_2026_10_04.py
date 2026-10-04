@@ -11,10 +11,13 @@ if marker in text:
 old_route = "MaterialPageRoute(builder: (_) => const DedaAccountHubPage()),"
 new_route = "MaterialPageRoute(builder: (_) => const DedaSocialHubPage()),"
 count = text.count(old_route)
-if count != 1:
-    raise SystemExit(f'expected exactly one account hub route anchor, found {count}')
+if count != 2:
+    raise SystemExit(f'expected exactly two account hub route anchors after 100259, found {count}')
 
-text = text.replace(old_route, new_route, 1)
+# In the 100259 baseline there are two intentional entries to the profile:
+# 1) the main bottom-bar Account button, and 2) the successful diamonds flow.
+# Both must land on the new social shell, whose default tab is My profile.
+text = text.replace(old_route, new_route)
 
 addition = r'''
 
