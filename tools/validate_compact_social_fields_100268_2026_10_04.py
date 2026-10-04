@@ -1,6 +1,7 @@
 from pathlib import Path
 
 text = Path('lib/main.dart').read_text(encoding='utf-8')
+compact = ''.join(text.split())
 
 required = [
     '// DEDA_COMPACT_SOCIAL_FIELDS_100268',
@@ -9,22 +10,27 @@ required = [
     "dedaText('معرف الصديق', 'Friend DEDA ID')",
     "hintText: '@DEDA-AQPYXJ'",
     "dedaText('بحث عن المعرف', 'Search ID')",
-    "padding: const EdgeInsets.fromLTRB(16, 12, 16, 20)",
-    "padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9)",
-    "padding: const EdgeInsets.symmetric(vertical: 10)",
-    "padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14)",
 ]
 missing = [needle for needle in required if needle not in text]
 if missing:
     raise SystemExit('missing 100268 compact UI markers: ' + ' | '.join(missing))
 
-if 'prefixIcon: const Icon(Icons.alternate_email_rounded)' in text:
+compact_required = [
+    'padding:constEdgeInsets.fromLTRB(16,12,16,20)',
+    'padding:constEdgeInsets.symmetric(horizontal:12,vertical:9)',
+    'padding:constEdgeInsets.symmetric(vertical:10)',
+    'padding:constEdgeInsets.symmetric(horizontal:14,vertical:14)',
+]
+compact_missing = [needle for needle in compact_required if needle not in compact]
+if compact_missing:
+    raise SystemExit('missing whitespace-normalized 100268 markers: ' + ' | '.join(compact_missing))
+
+if 'prefixIcon:constIcon(Icons.alternate_email_rounded)' in compact:
     raise SystemExit('duplicate @ prefix icon still exists in Add Friend field')
 
-if "padding: const EdgeInsets.fromLTRB(20, 18, 20, 28)" in text:
+if 'padding:constEdgeInsets.fromLTRB(20,18,20,28)' in compact:
     raise SystemExit('old oversized Add Friend outer padding still exists')
 
-# Preserve the already-approved behavior and visual-only friendship phase.
 for invariant in [
     'class DedaFriendsPage extends StatelessWidget',
     'class DedaAddFriendPage extends StatefulWidget',
