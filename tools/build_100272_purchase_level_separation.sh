@@ -4,10 +4,7 @@ set -euo pipefail
 echo '== Reconstruct and validate proven DEDA 100271 baseline =='
 DEDA_100271_PREFLIGHT_ONLY=1 bash tools/build_100271_gifts_friends_v1.sh
 
-echo '== Normalize formatted 100271 style-purchase anchors =='
-python3 tools/normalize_style_purchase_anchors_100272_2026_10_05.py
-
-echo '== Apply DEDA 100272 purchase/level separation only =='
+echo '== Apply structural DEDA 100272 purchase/level separation only =='
 python3 tools/style_purchase_separation_100272_2026_10_05.py
 
 echo '== Format only the source changed by 100272 =='
