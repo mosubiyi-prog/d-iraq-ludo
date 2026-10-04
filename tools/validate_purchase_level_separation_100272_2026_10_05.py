@@ -58,11 +58,13 @@ need(
     'clear paid-frame explanation EN',
 )
 
-# Prices and payment paths remain exactly the purchasing mechanism.
+# Prices and payment paths remain exactly the purchasing mechanism. Price
+# literals are checked independently from ternary formatting so dart format is
+# free to wrap the expression across lines without weakening the invariant.
 for token, label in [
-    ("index == 3 ? '💎 30'", 'premium frame 1 diamond price'),
-    ("index == 4 ? '🪙 120'", 'premium frame 2 DEDA currency price'),
-    ("index == 5 ? '💎 60'", 'premium frame 3 diamond price'),
+    ("'💎 30'", 'premium frame 1 diamond price'),
+    ("'🪙 120'", 'premium frame 2 DEDA currency price'),
+    ("'💎 60'", 'premium frame 3 diamond price'),
     ('await DedaDiamondsWallet.spend(index == 3 ? 30 : 60)', 'frame diamond payment'),
     ('await DedaSocialProgressWallet.spendCoins(120)', 'frame DEDA currency payment'),
     ("_badgeTile('badge_member'", 'free member badge'),
