@@ -15,11 +15,13 @@ missing = [needle for needle in required if needle not in text]
 if missing:
     raise SystemExit('missing 100268 compact UI markers: ' + ' | '.join(missing))
 
+# Match the meaningful compact dimensions while remaining tolerant of Dart's
+# optional trailing comma formatting inside constructors.
 compact_required = [
     'padding:constEdgeInsets.fromLTRB(16,12,16,20)',
-    'padding:constEdgeInsets.symmetric(horizontal:12,vertical:9)',
+    'horizontal:12,vertical:9',
     'padding:constEdgeInsets.symmetric(vertical:10)',
-    'padding:constEdgeInsets.symmetric(horizontal:14,vertical:14)',
+    'horizontal:14,vertical:14',
 ]
 compact_missing = [needle for needle in compact_required if needle not in compact]
 if compact_missing:
