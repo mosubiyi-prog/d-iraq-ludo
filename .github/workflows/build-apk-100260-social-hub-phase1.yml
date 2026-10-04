@@ -9,6 +9,7 @@ on:
       - .github/workflows/build-apk-100260-social-hub-phase1.yml
       - tools/add_social_hub_phase1_100260_2026_10_04.py
       - tools/validate_social_hub_phase1_100260_2026_10_04.py
+      - tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
 
 jobs:
   build:
@@ -138,7 +139,7 @@ jobs:
           python3 tools/validate_trip1km_progress_100254_2026_10_03.py
           python3 tools/validate_traffic_quiz_semantic_no_repeat_100255_2026_10_03.py
           python3 tools/validate_trip_progress_account_scope_100256_2026_10_03.py
-          python3 tools/validate_diamonds_reward_100259_2026_10_04.py
+          python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
           python3 tools/validate_social_hub_phase1_100260_2026_10_04.py
           grep -q "ca-app-pub-2512641627784244~4635932278" android/app/src/main/AndroidManifest.xml
           grep -q "ca-app-pub-2512641627784244/6037567292" lib/main.dart
