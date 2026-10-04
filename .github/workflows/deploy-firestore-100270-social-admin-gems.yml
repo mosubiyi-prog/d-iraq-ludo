@@ -10,6 +10,7 @@ on:
       - 'tools/hotfix_social_first_request_get_100269_2026_10_04.py'
       - 'tools/hotfix_social_list_query_100269_2026_10_04.py'
 
+# Validated by successful 100270 preflight before deployment.
 jobs:
   deploy:
     if: contains(github.event.head_commit.message, '[deploy-100270]')
