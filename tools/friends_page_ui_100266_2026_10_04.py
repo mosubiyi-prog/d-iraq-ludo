@@ -23,15 +23,20 @@ if count != 1:
     raise SystemExit(f'expected exactly one Friends placeholder anchor, found {count}')
 text = text.replace(old, new, 1)
 
+# 100261 replaced the phase-one profile child with DedaProfilePhase2Page.
 # The social hub list can no longer be const because Friends receives a callback.
-old_children = """        children: const <Widget>[
-          // Keep the existing account/profile screen fully intact in phase 1.
-          DedaAccountHubPage(),"""
-new_children = """        children: <Widget>[
-          // Keep the existing account/profile screen fully intact in phase 1.
-          const DedaAccountHubPage(),"""
+old_children = """      body: IndexedStack(
+        index: _selectedIndex,
+        children: const <Widget>[
+          // DEDA_PROFILE_PHASE2_100261
+          DedaProfilePhase2Page(),"""
+new_children = """      body: IndexedStack(
+        index: _selectedIndex,
+        children: <Widget>[
+          // DEDA_PROFILE_PHASE2_100261
+          const DedaProfilePhase2Page(),"""
 if old_children not in text:
-    raise SystemExit('social hub children anchor not found')
+    raise SystemExit('social hub phase2 children anchor not found')
 text = text.replace(old_children, new_children, 1)
 
 addition = r'''
