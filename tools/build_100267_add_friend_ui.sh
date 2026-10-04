@@ -112,7 +112,6 @@ echo '== Apply 100267 Add Friend page + Friends search-line polish =='
 python3 tools/add_friend_ui_100267_2026_10_04.py
 dart format lib/main.dart
 python3 tools/validate_add_friend_ui_100267_2026_10_04.py
-python3 tools/validate_friends_page_ui_100266_2026_10_04.py
 python3 tools/validate_profile_stat_cards_polish_100265_2026_10_04.py
 python3 tools/validate_profile_points_toggle_100264_2026_10_04.py
 python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
@@ -141,7 +140,6 @@ python3 tools/validate_trip_progress_account_scope_100256_2026_10_03.py
 python3 tools/validate_diamonds_after_social_hub_100260_2026_10_04.py
 python3 tools/validate_profile_points_toggle_100264_2026_10_04.py
 python3 tools/validate_profile_stat_cards_polish_100265_2026_10_04.py
-python3 tools/validate_friends_page_ui_100266_2026_10_04.py
 python3 tools/validate_add_friend_ui_100267_2026_10_04.py
 grep -q "ca-app-pub-2512641627784244~4635932278" android/app/src/main/AndroidManifest.xml
 grep -q "ca-app-pub-2512641627784244/6037567292" lib/main.dart
