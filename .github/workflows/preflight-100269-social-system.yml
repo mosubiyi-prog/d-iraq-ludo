@@ -1,0 +1,31 @@
+name: Preflight DEDA 100269 Social System
+
+on:
+  push:
+    branches:
+      - social-system-consolidated-100269-2026-10-04
+    paths:
+      - '.github/workflows/preflight-100269-social-system.yml'
+
+jobs:
+  preflight:
+    if: contains(github.event.head_commit.message, '[preflight-100269]')
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+      DEDA_100269_PREFLIGHT_ONLY: '1'
+    steps:
+      - name: Checkout isolated 100269 social branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Run 100269 preflight only
+        run: bash tools/build_100269_social_system.sh
