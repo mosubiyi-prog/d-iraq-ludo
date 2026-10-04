@@ -12,6 +12,37 @@ if '// DEDA_GIFTS_MAIN_UI_100271' not in text:
 if '// DEDA_SOCIAL_UI_WALLET_FIXES_100270' not in text:
     raise SystemExit('100270 social UI wallet fixes must be applied before 100272')
 
+
+def matching_paren_end(source: str, call_start: int) -> int:
+    """Return index just after the closing paren of a Dart call."""
+    open_pos = source.find('(', call_start)
+    if open_pos < 0:
+        return -1
+    depth = 0
+    quote = None
+    escaped = False
+    for index in range(open_pos, len(source)):
+        char = source[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == '\\':
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in ("'", '"'):
+            quote = char
+            continue
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth == 0:
+                return index + 1
+    return -1
+
+
 # ---------------------------------------------------------------------------
 # 1) My Profile: show the spendable wallet. The GM personal test million is
 #    displayed only for the authorized manager personal account. The ordinary
@@ -101,49 +132,62 @@ if min_stmt_end < 0:
     raise SystemExit('frame minLevel declaration terminator missing')
 text = text[:min_line_start] + text[min_stmt_end + 1:]
 
-# Subtitle under a paid frame: always its real price, never a level requirement.
-subtitle_start = text.find('Text(minLevel > 1', frame_gen_pos)
-subtitle_style = text.find('style: const TextStyle', subtitle_start)
-if subtitle_start < 0 or subtitle_style < 0:
+# Subtitle under a paid frame: formatter may wrap Text(...) over several lines.
+subtitle_condition = text.find('minLevel > 1', frame_gen_pos)
+subtitle_start = text.rfind('Text(', frame_gen_pos, subtitle_condition)
+subtitle_style = text.find('style: const TextStyle', subtitle_condition)
+if subtitle_condition < 0 or subtitle_start < 0 or subtitle_style < 0:
     raise SystemExit('frame level subtitle missing')
 text = text[:subtitle_start] + 'Text(price,\n                    ' + text[subtitle_style:]
 
-# 100270 visual lock -> ordinary purchase button.
-lock_onpress = text.find('onPressed: _busy || progress.level < minLevel', frame_gen_pos)
-lock_child = text.find('child: Text(progress.level < minLevel', lock_onpress)
-lock_price_end = text.find(': price),', lock_child)
-if lock_onpress < 0 or lock_child < 0 or lock_price_end < 0:
-    raise SystemExit('100270 frame level-lock button missing')
-lock_price_end += len(': price),')
-frame_button = '''onPressed: _busy ? null : () => _buyFrame(index),\n                              child: Text(price),'''
-text = text[:lock_onpress] + frame_button + text[lock_price_end:]
+# 100270 visual frame lock -> ordinary purchase button. Replace the condition
+# and the complete Text(...) call structurally, independent of line wrapping.
+frame_gate = text.find('progress.level < minLevel', frame_gen_pos)
+frame_onpress = text.rfind('onPressed:', frame_gen_pos, frame_gate)
+frame_question = text.find('? null', frame_gate)
+if frame_gate < 0 or frame_onpress < 0 or frame_question < 0:
+    raise SystemExit('100270 frame level-lock onPressed missing')
+text = text[:frame_onpress] + 'onPressed: _busy ' + text[frame_question:]
+
+frame_label_gate = text.find('progress.level < minLevel', frame_onpress)
+frame_child = text.rfind('child: Text', frame_onpress, frame_label_gate)
+frame_child_end = matching_paren_end(text, frame_child)
+if frame_label_gate < 0 or frame_child < 0 or frame_child_end < 0:
+    raise SystemExit('100270 frame level-lock label missing')
+text = text[:frame_child] + 'child: Text(price)' + text[frame_child_end:]
 
 badge_tile_pos = text.find('  Widget _badgeTile(', style_pos)
 if badge_tile_pos < 0:
     raise SystemExit('badge tile missing')
 
-# Badge subtitle: free if price is zero; otherwise show currency price.
-badge_subtitle = text.find('Text(level > 1', badge_tile_pos)
-badge_subtitle_style = text.find('style: const TextStyle', badge_subtitle)
-if badge_subtitle < 0 or badge_subtitle_style < 0:
+# Badge subtitle: free only when price is zero; otherwise show currency price.
+badge_level_condition = text.find('level > 1', badge_tile_pos)
+badge_subtitle = text.rfind('Text(', badge_tile_pos, badge_level_condition)
+badge_subtitle_style = text.find('style: const TextStyle', badge_level_condition)
+if badge_level_condition < 0 or badge_subtitle < 0 or badge_subtitle_style < 0:
     raise SystemExit('badge level subtitle missing')
 badge_subtitle_new = '''Text(\n              price == 0\n                  ? dedaText('مجانية', 'Free')\n                  : (diamonds ? '💎 $price' : '🪙 $price'),\n              '''
 text = text[:badge_subtitle] + badge_subtitle_new + text[badge_subtitle_style:]
 
-# 100270 badge lock -> ordinary purchase button.
-badge_lock_press = text.find(
-    'onPressed: _busy || (_progress?.level ?? 1) < level', badge_tile_pos
+# 100270 visual badge lock -> ordinary purchase button, also formatter-safe.
+badge_gate_token = '(_progress?.level ?? 1) < level'
+badge_gate = text.find(badge_gate_token, badge_tile_pos)
+badge_onpress = text.rfind('onPressed:', badge_tile_pos, badge_gate)
+badge_question = text.find('? null', badge_gate)
+if badge_gate < 0 or badge_onpress < 0 or badge_question < 0:
+    raise SystemExit('100270 badge level-lock onPressed missing')
+text = text[:badge_onpress] + 'onPressed: _busy ' + text[badge_question:]
+
+badge_label_gate = text.find(badge_gate_token, badge_onpress)
+badge_child = text.rfind('child: Text', badge_onpress, badge_label_gate)
+badge_child_end = matching_paren_end(text, badge_child)
+if badge_label_gate < 0 or badge_child < 0 or badge_child_end < 0:
+    raise SystemExit('100270 badge level-lock label missing')
+text = (
+    text[:badge_child]
+    + "child: Text(diamonds ? '💎 $price' : '🪙 $price')"
+    + text[badge_child_end:]
 )
-badge_lock_child = text.find(
-    'child: Text((_progress?.level ?? 1) < level', badge_lock_press
-)
-badge_lock_end_token = ": (diamonds ? '💎 $price' : '🪙 $price'))"
-badge_lock_end = text.find(badge_lock_end_token, badge_lock_child)
-if badge_lock_press < 0 or badge_lock_child < 0 or badge_lock_end < 0:
-    raise SystemExit('100270 badge level-lock button missing')
-badge_lock_end += len(badge_lock_end_token)
-badge_button = '''onPressed: _busy\n                  ? null\n                  : () => _buyBadge(id, level, price, diamonds),\n              child: Text(diamonds ? '💎 $price' : '🪙 $price')'''
-text = text[:badge_lock_press] + badge_button + text[badge_lock_end:]
 
 text = text.replace(
     style_state,
