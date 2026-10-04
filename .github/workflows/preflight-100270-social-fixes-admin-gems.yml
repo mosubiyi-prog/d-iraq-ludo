@@ -1,0 +1,27 @@
+name: Preflight DEDA 100270 Social Fixes and Admin Gems
+
+on:
+  push:
+    branches:
+      - social-fixes-admin-gems-100270-2026-10-04
+    paths:
+      - '.github/workflows/preflight-100270-social-fixes-admin-gems.yml'
+
+jobs:
+  preflight:
+    if: contains(github.event.head_commit.message, '[preflight-100270]')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated 100270 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Run 100270 preflight only
+        env:
+          DEDA_100270_PREFLIGHT_ONLY: '1'
+        run: bash tools/build_100270_social_fixes_admin_gems.sh
