@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/preflight-100270-social-fixes-admin-gems-v3.yml'
 
+# v4 rerun: hardened badge branch boundary after dart format.
 jobs:
   preflight:
     runs-on: ubuntu-24.04
