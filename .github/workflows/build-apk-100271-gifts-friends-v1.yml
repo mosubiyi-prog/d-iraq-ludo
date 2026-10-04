@@ -1,5 +1,6 @@
 name: Build DEDA 100271 Gifts Friends V1
 
+# retry-2: friend overflow anchor normalized against proven 100270 formatting
 on:
   push:
     branches:
