@@ -46,12 +46,15 @@ for forbidden in [
         raise SystemExit('100267 must remain visual/local-only; found: ' + forbidden)
 
 # The previous Friends UI must remain in place and its button must still route
-# to the Add friend tab through the social hub callback.
-for friend_marker in [
+# to the Add friend tab through the social hub callback. Search individual text
+# markers instead of one formatted dedaText line because dart format may split it.
+friend_markers = [
     'class DedaFriendsPage extends StatelessWidget',
     'onAddFriend: () => setState(() => _selectedIndex = 3)',
-    "dedaText('ما عندك أصدقاء بعد', 'No friends yet')",
-]:
+    "'ما عندك أصدقاء بعد'",
+    "'No friends yet'",
+]
+for friend_marker in friend_markers:
     if friend_marker not in text:
         raise SystemExit('100266 Friends UI invariant missing: ' + friend_marker)
 
