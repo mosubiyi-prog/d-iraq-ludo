@@ -7,6 +7,7 @@ DEDA_100270_PREFLIGHT_ONLY=1 bash tools/build_100270_social_fixes_admin_gems.sh
 echo '== Apply DEDA 100271 gifts/friends layer only =='
 python3 tools/gifts_backend_100271_2026_10_05.py
 python3 tools/admin_gifts_ui_100271_2026_10_05.py
+python3 tools/normalize_friend_menu_anchor_100271_2026_10_05.py
 python3 tools/gifts_main_ui_100271_2026_10_05.py
 python3 tools/gift_nav_badge_fix_100271_2026_10_05.py
 python3 tools/firestore_gifts_100271_2026_10_05.py
