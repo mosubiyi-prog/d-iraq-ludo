@@ -7,7 +7,7 @@ on:
     paths:
       - '.github/workflows/preflight-100270-social-fixes-admin-gems-v3.yml'
 
-# v5 rerun: structural requests builder normalization added.
+# v6 rerun: validator checks level locks independent of dart format wrapping.
 jobs:
   preflight:
     runs-on: ubuntu-24.04
