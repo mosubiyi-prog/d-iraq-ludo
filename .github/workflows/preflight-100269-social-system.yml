@@ -29,3 +29,5 @@ jobs:
 
       - name: Run 100269 preflight only
         run: bash tools/build_100269_social_system.sh
+
+# Re-run marker: preserve proven point-tier initialization around 100269.
