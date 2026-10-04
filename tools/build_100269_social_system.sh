@@ -17,10 +17,14 @@ bash /tmp/deda_base_100267_no_apk.sh
 cp /tmp/deda_social_service_100269.dart lib/deda_social_service.dart
 
 echo '== Apply consolidated personal social system 100269 =='
+# Normalize only the profile init anchor, apply 100269, then restore the exact
+# proven point-tier initialization so the old point cards keep their behavior.
+python3 tools/prepare_profile_init_100269_2026_10_04.py
 python3 tools/social_system_consolidated_100269_2026_10_04.py
 python3 tools/fix_social_service_types_100269_2026_10_04.py
 python3 tools/stabilize_social_identity_100269_2026_10_04.py
 python3 tools/refine_social_runtime_100269_2026_10_04.py
+python3 tools/restore_profile_point_init_100269_2026_10_04.py
 dart format lib/main.dart lib/deda_social_service.dart
 
 echo '== Apply and validate 100269 Firestore rules locally =='
