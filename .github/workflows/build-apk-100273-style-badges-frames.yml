@@ -1,6 +1,6 @@
 name: Build DEDA 100273 Style Badges Frames
 
-# retry-7: deterministic badge/frame artwork generation, no binary reference
+# retry-8: reconstruct proven 100272 baseline, then add 100273 style layer
 on:
   push:
     branches:
