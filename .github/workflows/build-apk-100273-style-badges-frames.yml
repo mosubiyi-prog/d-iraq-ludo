@@ -1,6 +1,6 @@
 name: Build DEDA 100273 Style Badges Frames
 
-# retry-9: preserve 100272 marker after 100273 style replacement
+# retry-10: 100273 contract supersedes old style-store literals after baseline validation
 on:
   push:
     branches:
