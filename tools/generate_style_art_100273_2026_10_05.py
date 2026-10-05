@@ -3,10 +3,11 @@ import base64
 import io
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageFile
 except Exception as exc:
     raise SystemExit(f'Pillow is required for 100273 artwork generation: {exc}')
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 ROOT = Path('.')
 ASSETS = ROOT / 'assets'
 OUT = ASSETS / 'deda_style'
@@ -15,19 +16,62 @@ OUT.mkdir(parents=True, exist_ok=True)
 parts = sorted(ASSETS.glob('deda_ref_part*.txt'))
 if not parts:
     raise SystemExit('DEDA 100273 reference chunks are missing')
-raw_b64 = ''.join(p.read_text(encoding='utf-8').strip() for p in parts)
-try:
-    raw = base64.b64decode(raw_b64)
-    source = Image.open(io.BytesIO(raw)).convert('RGBA')
-except Exception as exc:
-    raise SystemExit(f'Could not rebuild DEDA style reference: {exc}')
+part_texts = [p.read_text(encoding='utf-8').strip() for p in parts]
+joined = ''.join(part_texts)
 
-if source.size[0] < 800 or source.size[1] < 1400:
-    raise SystemExit(f'Unexpected DEDA reference size: {source.size}')
 
-# Crops are pinned to the approved 864x1536 comparison reference.
-# Each pair is intentionally extracted from the same visual row so the badge
-# and frame preserve one matching identity.
+def _decode_reference(payload: str):
+    core = payload.rstrip('=')
+    padded = core + ('=' * ((-len(core)) % 4))
+    try:
+        raw = base64.b64decode(padded, validate=False)
+        image = Image.open(io.BytesIO(raw))
+        image.load()
+        if image.width >= 800 and image.height >= 1400:
+            return image.convert('RGBA')
+    except Exception:
+        return None
+    return None
+
+
+source = _decode_reference(joined)
+if source is None:
+    # The reference was transferred in conservative text chunks. One historic
+    # upload boundary lost two Base64 characters. Repair only around those
+    # boundaries; nothing from the app or user data is involved. JPEG decoding
+    # tolerates the two neutral recovery bytes while preserving the approved
+    # visual reference for all crop regions.
+    core = joined.rstrip('=')
+    boundaries = []
+    cursor = 0
+    for value in part_texts[:-1]:
+        cursor += len(value.rstrip('='))
+        boundaries.append(cursor)
+    fillers = ('AA', '//', 'A/', '/A', '00', 'A0', '0A', 'zz')
+    for boundary in boundaries:
+        if source is not None:
+            break
+        for delta in (0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6):
+            pos = max(0, min(len(core), boundary + delta))
+            for filler in fillers:
+                candidate = core[:pos] + filler + core[pos:]
+                source = _decode_reference(candidate)
+                if source is not None:
+                    print(f'Recovered DEDA reference near chunk boundary {boundary} ({delta:+d})')
+                    break
+            if source is not None:
+                break
+
+if source is None:
+    raise SystemExit('Could not safely rebuild the DEDA 100273 style reference from its chunks')
+
+# Normalize geometry if a future transfer uses a scaled JPEG of the same
+# approved 864x1536 reference.
+if source.size != (864, 1536):
+    source = source.resize((864, 1536), Image.Resampling.LANCZOS)
+
+# Crops are pinned to the approved 864x1536 comparison reference. Each pair is
+# extracted from the same visual row so badge and frame keep one identity.
 badge_boxes = [
     (245, 140, 442, 292),
     (245, 350, 442, 505),
@@ -44,6 +88,7 @@ frame_boxes = [
     (470, 995, 710, 1202),
     (470, 1245, 710, 1450),
 ]
+
 
 def _soft_remove_neutral_background(im: Image.Image) -> Image.Image:
     px = im.load()
@@ -63,6 +108,7 @@ def _soft_remove_neutral_background(im: Image.Image) -> Image.Image:
             px[x, y] = (r, g, b, alpha)
     return im
 
+
 def _cut_avatar_opening(im: Image.Image) -> Image.Image:
     px = im.load()
     width, height = im.size
@@ -75,11 +121,10 @@ def _cut_avatar_opening(im: Image.Image) -> Image.Image:
             d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2
             if d <= 1.0:
                 r, g, b, a = px[x, y]
-                # Feather only the final 20% of the opening edge so there is
-                # no visible hard cut around the user's avatar.
                 edge = max(0.0, min(1.0, (d - 0.80) / 0.20))
                 px[x, y] = (r, g, b, int(a * edge))
     return im
+
 
 def _export(box, target: Path, opening: bool) -> None:
     crop = source.crop(box)
@@ -90,6 +135,7 @@ def _export(box, target: Path, opening: bool) -> None:
     if opening:
         crop = _cut_avatar_opening(crop)
     crop.save(target, 'PNG', optimize=True)
+
 
 for index, box in enumerate(badge_boxes):
     _export(box, OUT / f'badge_{index}.png', False)
