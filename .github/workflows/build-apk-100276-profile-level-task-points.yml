@@ -1,0 +1,33 @@
+name: Build DEDA 100276 Profile Level Task Points
+
+on:
+  push:
+    branches:
+      - profile-level-task-points-100276-2026-10-05
+    paths:
+      - '.github/workflows/build-apk-100276-profile-level-task-points.yml'
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[build-100276]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout isolated 100276 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100276
+        run: bash tools/build_100276_profile_level_task_points.sh
+
+      - name: Upload APK 100276
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100276-profile-level-task-points-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
