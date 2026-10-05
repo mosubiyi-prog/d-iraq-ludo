@@ -1,5 +1,6 @@
 name: Build DEDA 100273 Style Badges Frames
 
+# retry-2: recover the approved split visual reference before extracting assets
 on:
   push:
     branches:
