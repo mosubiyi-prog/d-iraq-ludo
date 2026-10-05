@@ -1,5 +1,6 @@
 name: Build DEDA 100274 Style Preview
 
+# retry-2: tolerant formatted anchors
 on:
   push:
     branches:
