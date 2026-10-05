@@ -10,8 +10,9 @@ if ! python3 -c 'import PIL' >/dev/null 2>&1; then
 fi
 python3 tools/generate_style_art_100273_2026_10_05.py
 
- echo '== Apply DEDA 100273 style badge/frame layer only =='
+echo '== Apply DEDA 100273 style badge/frame layer only =='
 python3 tools/style_badges_frames_100273_2026_10_05.py
+python3 tools/restore_style_marker_100273_2026_10_05.py
 
 echo '== Format only the source changed by 100273 =='
 dart format lib/main.dart
