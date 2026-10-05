@@ -15,6 +15,7 @@ dart format lib/main.dart
 python3 tools/validate_style_badges_frames_100273_2026_10_05.py
 
 echo '== Apply DEDA 100274 sticky preview layer only =='
+python3 tools/prepare_style_preview_patch_100274.py
 python3 tools/style_preview_100274_2026_10_05.py
 dart format lib/main.dart
 python3 tools/validate_style_preview_100274_2026_10_05.py
