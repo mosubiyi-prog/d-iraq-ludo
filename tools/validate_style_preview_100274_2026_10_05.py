@@ -11,7 +11,7 @@ required = [
     'Widget _stylePreviewCard(',
     "dedaText('معاينة ملفك', 'Your profile preview')",
     "dedaText('اضغط للمعاينة', 'Tap to preview')",
-    "dedaText('المعاينة مجانية ولا تخصم أي رصيد • الخصم فقط عند الضغط على زر الشراء'",
+    "'المعاينة مجانية ولا تخصم أي رصيد • الخصم فقط عند الضغط على زر الشراء'",
     "_miniBalanceChip('💎', _diamonds)",
     "_miniBalanceChip('🪙', progress.coins)",
     'onTap: () => _previewBadge(index)',
