@@ -1,0 +1,38 @@
+name: Build DEDA 100278 Level System Team Admin Polish
+
+on:
+  push:
+    branches:
+      - level-system-team-admin-polish-100278-2026-10-05
+    paths:
+      - '.github/workflows/build-apk-100278-level-system-team-admin-polish.yml'
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[build-100278]')
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100278 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100278
+        run: bash tools/build_100278_level_system_team_admin_polish.sh
+
+      - name: Upload APK 100278
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100278-level-system-team-admin-polish-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
