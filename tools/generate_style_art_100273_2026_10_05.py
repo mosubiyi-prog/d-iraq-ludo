@@ -1,77 +1,29 @@
 from pathlib import Path
-import base64
-import io
 
 try:
-    from PIL import Image, ImageFile
+    from PIL import Image
 except Exception as exc:
     raise SystemExit(f'Pillow is required for 100273 artwork generation: {exc}')
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 ROOT = Path('.')
 ASSETS = ROOT / 'assets'
 OUT = ASSETS / 'deda_style'
 OUT.mkdir(parents=True, exist_ok=True)
+REFERENCE = ASSETS / 'deda_style_reference_100273.jpg'
 
-parts = sorted(ASSETS.glob('deda_ref_part*.txt'))
-if not parts:
-    raise SystemExit('DEDA 100273 reference chunks are missing')
-part_texts = [p.read_text(encoding='utf-8').strip() for p in parts]
-joined = ''.join(part_texts)
+if not REFERENCE.exists():
+    raise SystemExit('DEDA 100273 intact approved reference image is missing')
 
+try:
+    source = Image.open(REFERENCE).convert('RGBA')
+except Exception as exc:
+    raise SystemExit(f'Could not open DEDA 100273 approved reference: {exc}')
 
-def _decode_reference(payload: str):
-    core = payload.rstrip('=')
-    padded = core + ('=' * ((-len(core)) % 4))
-    try:
-        raw = base64.b64decode(padded, validate=False)
-        image = Image.open(io.BytesIO(raw))
-        image.load()
-        if image.width >= 800 and image.height >= 1400:
-            return image.convert('RGBA')
-    except Exception:
-        return None
-    return None
-
-
-source = _decode_reference(joined)
-if source is None:
-    # The reference was transferred in conservative text chunks. One historic
-    # upload boundary lost two Base64 characters. Repair only around those
-    # boundaries; nothing from the app or user data is involved. JPEG decoding
-    # tolerates the two neutral recovery bytes while preserving the approved
-    # visual reference for all crop regions.
-    core = joined.rstrip('=')
-    boundaries = []
-    cursor = 0
-    for value in part_texts[:-1]:
-        cursor += len(value.rstrip('='))
-        boundaries.append(cursor)
-    fillers = ('AA', '//', 'A/', '/A', '00', 'A0', '0A', 'zz')
-    for boundary in boundaries:
-        if source is not None:
-            break
-        for delta in (0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6):
-            pos = max(0, min(len(core), boundary + delta))
-            for filler in fillers:
-                candidate = core[:pos] + filler + core[pos:]
-                source = _decode_reference(candidate)
-                if source is not None:
-                    print(f'Recovered DEDA reference near chunk boundary {boundary} ({delta:+d})')
-                    break
-            if source is not None:
-                break
-
-if source is None:
-    raise SystemExit('Could not safely rebuild the DEDA 100273 style reference from its chunks')
-
-# Normalize geometry if a future transfer uses a scaled JPEG of the same
-# approved 864x1536 reference.
+# Normalize the checked-in compact copy back to the approved 864x1536 geometry
+# before applying crop coordinates. The visual identity remains the same.
 if source.size != (864, 1536):
     source = source.resize((864, 1536), Image.Resampling.LANCZOS)
 
-# Crops are pinned to the approved 864x1536 comparison reference. Each pair is
-# extracted from the same visual row so badge and frame keep one identity.
 badge_boxes = [
     (245, 140, 442, 292),
     (245, 350, 442, 505),
@@ -147,4 +99,4 @@ missing = [str(p) for p in expected if not p.exists() or p.stat().st_size < 2000
 if missing:
     raise SystemExit(f'100273 artwork generation incomplete: {missing}')
 
-print('Generated 6 matched DEDA badges + 6 matched DEDA frames for 100273')
+print('Generated 6 matched DEDA badges + 6 matched DEDA frames from intact approved reference')
