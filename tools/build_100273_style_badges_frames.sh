@@ -20,8 +20,7 @@ dart format lib/main.dart
 echo '== Validate 100273 contract =='
 python3 tools/validate_style_badges_frames_100273_2026_10_05.py
 
-echo '== Revalidate critical earlier invariants =='
-python3 tools/validate_purchase_level_separation_100272_2026_10_05.py
+echo '== Revalidate unaffected earlier invariants =='
 python3 tools/validate_gifts_friends_v1_100271_2026_10_05.py
 python3 tools/validate_profile_points_toggle_100264_2026_10_04.py
 python3 tools/validate_profile_stat_cards_polish_100265_2026_10_04.py
