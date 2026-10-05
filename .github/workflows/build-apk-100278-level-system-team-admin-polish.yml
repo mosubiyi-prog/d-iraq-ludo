@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/build-apk-100278-level-system-team-admin-polish.yml'
 
+# Retry 2: all level-progress UI now uses the progressive XP requirement.
 jobs:
   build:
     if: contains(github.event.head_commit.message, '[build-100278]')
