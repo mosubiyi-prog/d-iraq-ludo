@@ -36,3 +36,5 @@ jobs:
           name: DEDA-100279-level-team-admin-final-fix-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# retry: formatter-safe level-award validator
