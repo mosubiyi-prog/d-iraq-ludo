@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo '== DEDA 100273: preserve proven 100272 source and reconstruct approved artwork =='
+echo '== DEDA 100273: preserve proven 100272 source and restore approved artwork =='
 
 # GitHub-hosted runners may not have Pillow preinstalled. Install it only when
 # needed; this happens before deterministic local artwork extraction.
@@ -9,29 +9,29 @@ if ! python3 -c 'import PIL' >/dev/null 2>&1; then
   python3 -m pip install --user pillow
 fi
 
-# The approved visual payload is stored as small checked-in text parts so it
-# survives repository/API binary handling. Reassemble it first. The payload can
-# either restore the full reference image or extract the final 12 PNG assets.
-python3 tools/reconstruct_style_assets_100273.py
+# The complete approved visual reference is already preserved in four text
+# chunks under assets/. Reassemble those exact chunks into the JPEG used by the
+# deterministic badge/frame cropper. This avoids binary corruption in the repo.
+python3 - <<'PY'
+import base64
+from pathlib import Path
 
-STYLE_DIR='assets/deda_style'
-READY_COUNT=0
-for kind in badge frame; do
-  for index in 0 1 2 3 4 5; do
-    file="$STYLE_DIR/${kind}_${index}.png"
-    if [ -s "$file" ] && [ "$(wc -c < "$file")" -ge 2000 ]; then
-      READY_COUNT=$((READY_COUNT + 1))
-    fi
-  done
-done
+parts = sorted(Path('assets').glob('deda_ref_part*.txt'))
+if len(parts) != 4:
+    raise SystemExit(f'Expected 4 DEDA reference chunks, found {len(parts)}')
+encoded = ''.join(p.read_text(encoding='utf-8').strip() for p in parts)
+try:
+    data = base64.b64decode(encoded, validate=True)
+except Exception as exc:
+    raise SystemExit(f'Could not decode complete DEDA reference chunks: {exc}')
+if not data.startswith(b'\xff\xd8\xff') or not data.endswith(b'\xff\xd9'):
+    raise SystemExit('Reassembled DEDA reference is not a complete JPEG')
+out = Path('assets/deda_style_reference_100273.jpg')
+out.write_bytes(data)
+print(f'Restored complete DEDA style reference: {len(data)} bytes')
+PY
 
-if [ "$READY_COUNT" -eq 12 ]; then
-  echo 'Using 12 reconstructed DEDA 100273 style PNGs directly.'
-else
-  echo "Direct PNG assets ready: $READY_COUNT/12; generating from restored approved reference."
-  python3 tools/generate_style_art_100273_2026_10_05.py
-fi
-
+python3 tools/generate_style_art_100273_2026_10_05.py
 python3 tools/style_badges_frames_100273_2026_10_05.py
 
 echo '== Format only the source changed by 100273 =='
