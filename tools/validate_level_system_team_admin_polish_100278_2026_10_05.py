@@ -14,7 +14,9 @@ required_main = [
     'static int xpIntoLevel(int xp)',
     'DedaSocialProgressWallet.xpRequiredForLevel(level)',
     'DedaSocialProgressWallet.xpIntoLevel(safePoints)',
+    'DedaSocialProgressWallet.xpIntoLevel(progress.xp)',
     "'$withinLevel / $required'",
+    "'$within/$required'",
     "'نقاط المستوى: $withinLevel / $required'",
     "'باقي $remaining نقطة مستوى للمستوى ${level + 1}'",
 ]
@@ -26,6 +28,8 @@ if 'static const int xpPerTaskClaim = 20;' in main:
     raise SystemExit('20 XP per task must remain reserved for future tuning, not current 100278')
 if 'xpPerLevel = 100' in main:
     raise SystemExit('fixed 100-XP-per-level logic must not remain')
+if 'DedaSocialProgressWallet.xpPerLevel' in main:
+    raise SystemExit('legacy fixed xpPerLevel UI reference remains after progressive migration')
 if 'final level = 1 + (safePoints ~/ 100);' in main:
     raise SystemExit('profile still uses fixed 100 XP level formula')
 if 'final withinLevel = safePoints % 100;' in main:
