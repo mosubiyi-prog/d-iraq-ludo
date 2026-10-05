@@ -1,6 +1,6 @@
 name: Build DEDA 100273 Style Badges Frames
 
-# retry-3: use the intact checked-in approved visual reference directly
+# retry-4: reconstruct approved visual assets from the checked-in split payload
 on:
   push:
     branches:
