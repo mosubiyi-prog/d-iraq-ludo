@@ -13,7 +13,8 @@ required_main = [
     'static int xpRequiredForLevel(int level)',
     'static int levelForXp(int xp)',
     'static int xpIntoLevel(int xp)',
-    'unawaited(DedaSocialProgressWallet.awardTaskClaim(taskId));',
+    'DedaSocialProgressWallet.awardTaskClaim(taskId)',
+    'result.pointsAwarded',
 ]
 missing = [item for item in required_main if item not in main]
 if missing:
