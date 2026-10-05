@@ -1,6 +1,6 @@
 name: Build DEDA 100273 Style Badges Frames
 
-# retry-6: recover the approved JPEG from its repository chunks before cropping
+# retry-7: deterministic badge/frame artwork generation, no binary reference
 on:
   push:
     branches:
