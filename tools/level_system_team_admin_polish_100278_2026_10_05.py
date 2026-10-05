@@ -71,6 +71,19 @@ for old, new in replacements.items():
     progress = progress.replace(old, new, 1)
 main = main[:progress_start] + progress + main[progress_end:]
 
+# The style/store page also shows level progress. Convert its three legacy
+# fixed-xpPerLevel references to the same progressive stage calculations.
+old_style_calc = '''    final within = progress.xp % DedaSocialProgressWallet.xpPerLevel;\n    final ratio = within / DedaSocialProgressWallet.xpPerLevel;'''
+new_style_calc = '''    final level = DedaSocialProgressWallet.levelForXp(progress.xp);\n    final required = DedaSocialProgressWallet.xpRequiredForLevel(level);\n    final within = DedaSocialProgressWallet.xpIntoLevel(progress.xp);\n    final ratio = required <= 0 ? 0.0 : within / required;'''
+if main.count(old_style_calc) != 1:
+    raise SystemExit(f'legacy style XP calculation count={main.count(old_style_calc)}')
+main = main.replace(old_style_calc, new_style_calc, 1)
+
+old_style_text = "'$within/${DedaSocialProgressWallet.xpPerLevel}'"
+if main.count(old_style_text) != 1:
+    raise SystemExit(f'legacy style XP text count={main.count(old_style_text)}')
+main = main.replace(old_style_text, "'$within/$required'", 1)
+
 # Keep the 100277 marker and add a new checkpoint marker beside it.
 main = main.replace(
     '// DEDA_PROFILE_LEVEL_XP_FIX_100277\nclass _DedaProfilePhase2PageState',
