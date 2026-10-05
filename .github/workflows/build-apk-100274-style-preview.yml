@@ -1,6 +1,6 @@
 name: Build DEDA 100274 Style Preview
 
-# retry-2: tolerant formatted anchors
+# retry-3: formatter-safe preview validator
 on:
   push:
     branches:
