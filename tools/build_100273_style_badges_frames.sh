@@ -2,18 +2,9 @@
 set -euo pipefail
 
 echo '== DEDA 100273: preserve proven 100272 source and generate approved artwork =='
-python3 - <<'PY'
-try:
-    import PIL  # noqa: F401
-except Exception:
-    raise SystemExit(1)
-PY
-if [[ $? -ne 0 ]]; then
-  python3 -m pip install --user pillow
-fi
 
-# GitHub-hosted runners may not have Pillow preinstalled. Because set -e is
-# active, perform the import check safely with an if block as well.
+# GitHub-hosted runners may not have Pillow preinstalled. Install it only when
+# needed; this happens before the deterministic local artwork extraction.
 if ! python3 -c 'import PIL' >/dev/null 2>&1; then
   python3 -m pip install --user pillow
 fi
