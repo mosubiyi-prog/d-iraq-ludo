@@ -117,7 +117,7 @@ if missing_old:
         + "; ".join(missing_old)
     )
 
-new_follow_block = '''  void _followLivePosition(LatLng current) {
+new_follow_block = """  void _followLivePosition(LatLng current) {
     if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;
     try {
       final zoom = _currentMapZoom();
@@ -134,14 +134,10 @@ new_follow_block = '''  void _followLivePosition(LatLng current) {
     _startSmoothNavigationReturn(startup: true);
   }
 
-'''
+"""
 text = text[:follow_start] + new_follow_block + text[follow_end:]
 
 '''
-script = (
-    script[:follow_section_start]
-    + structural_follow_patch
-    + script[follow_section_end:]
-)
+script = script[:follow_section_start] + structural_follow_patch + script[follow_section_end:]
 
 exec(compile(script, str(script_path), "exec"), {"__name__": "__main__"})
