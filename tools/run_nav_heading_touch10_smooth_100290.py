@@ -140,4 +140,91 @@ text = text[:follow_start] + new_follow_block + text[follow_end:]
 '''
 script = script[:follow_section_start] + structural_follow_patch + script[follow_section_end:]
 
+# Replace only the navigation map's onPositionChanged callback. Require exactly
+# one callback that carries the known 100286 _displayMapZoom bookkeeping. Find
+# its closing brace by balance instead of depending on dart-format whitespace.
+callback_section_start = script.find(
+    "# A real map gesture pauses follow and restarts the full 10-second window."
+)
+callback_section_end = script.find(
+    "# Manual recenter uses the same smooth return instead of an immediate move().",
+    callback_section_start,
+)
+if callback_section_start < 0 or callback_section_end < 0:
+    raise SystemExit("100290 runner: gesture-callback patch section not found")
+
+structural_callback_patch = r'''# A real map gesture pauses follow and restarts the full 10-second window.
+callback_candidates = []
+scan_from = 0
+while True:
+    pos = text.find("onPositionChanged:", scan_from)
+    if pos < 0:
+        break
+    window = text[pos:min(len(text), pos + 900)]
+    if (
+        "final zoom = camera.zoom;" in window
+        and "_displayMapZoom" in window
+        and "setState(() => _displayMapZoom = zoom);" in window
+    ):
+        callback_candidates.append(pos)
+    scan_from = pos + 1
+
+if len(callback_candidates) != 1:
+    raise SystemExit(
+        f"100290: expected one navigation map-position callback, found {len(callback_candidates)}"
+    )
+
+callback_pos = callback_candidates[0]
+callback_window = text[callback_pos:callback_pos + 900]
+if "hasGesture" in callback_window:
+    raise SystemExit("100290: navigation callback already contains hasGesture unexpectedly")
+
+open_brace = text.find("{", callback_pos, callback_pos + 350)
+if open_brace < 0:
+    raise SystemExit("100290: navigation callback opening brace missing")
+
+depth = 0
+close_brace = -1
+for i in range(open_brace, min(len(text), callback_pos + 1200)):
+    ch = text[i]
+    if ch == "{":
+        depth += 1
+    elif ch == "}":
+        depth -= 1
+        if depth == 0:
+            close_brace = i
+            break
+if close_brace < 0:
+    raise SystemExit("100290: navigation callback closing brace missing")
+
+comma_pos = close_brace + 1
+while comma_pos < len(text) and text[comma_pos] in " \t\r\n":
+    comma_pos += 1
+if comma_pos >= len(text) or text[comma_pos] != ",":
+    raise SystemExit("100290: navigation callback trailing comma missing")
+
+line_start = text.rfind("\n", 0, callback_pos) + 1
+indent = text[line_start:callback_pos]
+inner = indent + "  "
+inner2 = indent + "    "
+new_callback = (
+    "onPositionChanged: (camera, hasGesture) {\n"
+    f"{inner}final zoom = camera.zoom;\n"
+    f"{inner}if ((zoom - _displayMapZoom).abs() >= 0.08 && mounted) {{\n"
+    f"{inner2}setState(() => _displayMapZoom = zoom);\n"
+    f"{inner}}}\n"
+    f"{inner}if (tripStarted && hasGesture) {{\n"
+    f"{inner2}_pauseNavigationFollowForGesture();\n"
+    f"{inner}}}\n"
+    f"{indent}}},"
+)
+text = text[:callback_pos] + new_callback + text[comma_pos + 1:]
+
+'''
+script = (
+    script[:callback_section_start]
+    + structural_callback_patch
+    + script[callback_section_end:]
+)
+
 exec(compile(script, str(script_path), "exec"), {"__name__": "__main__"})
