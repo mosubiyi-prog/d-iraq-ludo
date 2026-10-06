@@ -1,0 +1,37 @@
+name: Build DEDA 100292 Green Route Forward Only
+
+on:
+  push:
+    branches:
+      - green-route-forward-only-100292-2026-10-07
+    paths:
+      - '.github/workflows/build-apk-100292-green-route-forward-only.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100292 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate exact 100286 plus green-route-only patch
+        run: bash tools/build_100292_green_route_forward_only.sh
+
+      - name: Upload APK 100292
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100292-green-route-forward-only-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
