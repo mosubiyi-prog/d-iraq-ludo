@@ -1,0 +1,37 @@
+name: Build DEDA 100290 Focused Navigation
+
+on:
+  push:
+    branches:
+      - nav-start-heading-touch10-smooth-100290-2026-10-06
+    paths:
+      - '.github/workflows/build-100290-focused-navigation.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - name: Checkout exact green 100290 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build signed DEDA 100290 APK
+        run: bash tools/build_100290_nav_heading_touch10_smooth.sh
+
+      - name: Upload DEDA 100290 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100290-focused-navigation
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
