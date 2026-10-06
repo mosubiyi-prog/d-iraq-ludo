@@ -80,4 +80,68 @@ text = text[:tools_line_end] + heading_init + text[tools_line_end:]
 '''
 script = script[:section_start] + structural_trip_patch + script[section_end:]
 
+# Replace only the two 100286 camera-follow functions by their function
+# boundaries. This avoids depending on dart-format line wrapping, while still
+# refusing to continue unless the old 100286 look-ahead implementation is
+# positively identified inside the exact block.
+follow_section_start = script.find(
+    "# Exact-center heading-up follow. No look-ahead offset: the navigation arrow is"
+)
+follow_section_end = script.find(
+    "# A real map gesture pauses follow and restarts the full 10-second window.",
+    follow_section_start,
+)
+if follow_section_start < 0 or follow_section_end < 0:
+    raise SystemExit("100290 runner: follow/focus patch section not found")
+
+structural_follow_patch = r'''# Exact-center heading-up follow. No look-ahead offset: the navigation arrow is
+# the map center and the green route rotates underneath it. Target the two
+# functions structurally so dart format cannot redirect the replacement.
+follow_start = text.find("  void _followLivePosition(LatLng current) {")
+focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
+follow_end = text.find("  double _distanceToManeuver", focus_start)
+if follow_start < 0 or focus_start < 0 or follow_end < 0:
+    raise SystemExit("100290: structural follow/focus boundaries missing")
+
+old_follow_block = text[follow_start:follow_end]
+required_old_tokens = (
+    "final lookAhead =",
+    "_pointAlongBearing(current, heading, lookAhead)",
+    "final navigationZoom =",
+    "_mapController.moveAndRotate",
+)
+missing_old = [token for token in required_old_tokens if token not in old_follow_block]
+if missing_old:
+    raise SystemExit(
+        "100290: follow/focus block is not the expected 100286 implementation: "
+        + "; ".join(missing_old)
+    )
+
+new_follow_block = '''  void _followLivePosition(LatLng current) {
+    if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;
+    try {
+      final zoom = _currentMapZoom();
+      final heading = (_displayHeading + 360) % 360;
+      _mapController.moveAndRotate(
+        current,
+        zoom,
+        (360 - heading) % 360,
+      );
+    } catch (_) {}
+  }
+
+  void _focusNavigationPosition() {
+    _startSmoothNavigationReturn(startup: true);
+  }
+
+'''
+text = text[:follow_start] + new_follow_block + text[follow_end:]
+
+'''
+script = (
+    script[:follow_section_start]
+    + structural_follow_patch
+    + script[follow_section_end:]
+)
+
 exec(compile(script, str(script_path), "exec"), {"__name__": "__main__"})
