@@ -68,7 +68,7 @@ dart format lib/main.dart
 python3 tools/validate_navigation_seven_fixes_100286.py
 
 echo '== Apply ONLY focused DEDA 100290 navigation correction =='
-python3 tools/run_nav_heading_touch10_smooth_100290.py
+python3 tools/run_nav_heading_touch10_smooth_100290_safe.py
 dart format lib/main.dart
 python3 tools/validate_nav_heading_touch10_smooth_100290.py
 
