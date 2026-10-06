@@ -22,9 +22,8 @@ checks = {
     and "_navigationCameraReturnTimer?.cancel();" in text,
 }
 
-# Scope guard: reject the explicit driver-view state from the rejected experiment.
-# Do not ban generic Matrix4 usage globally because unrelated proven DEDA UI may
-# legitimately use Matrix4 and 100290 does not add or change that code.
+# Scope guard: reject only the explicit state from the rejected driver-view experiment.
+# Generic Matrix4 code elsewhere in the proven app is unrelated to 100290.
 if "_driverViewEnabled" in text:
     raise SystemExit("100290 validation failed: rejected driver-view state is present")
 
@@ -34,16 +33,33 @@ if "_startSmoothNavigationReturn(userRequested:" in text:
 if "_cancelNavigationCameraReturn(notify: false)" in text:
     raise SystemExit("100290 validation failed: stop-trip flow was modified outside requested scope")
 
-# Old look-ahead offset must be gone only from the two functions being changed.
-# Use the same proven structural boundary as the patch itself; do not depend on
-# the unrelated animation helper's position after dart format.
-follow_start = text.find("  void _followLivePosition(LatLng current) {")
-focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
-follow_end = text.find("  double _distanceToManeuver", focus_start)
-if follow_start < 0 or focus_start < 0 or follow_end < 0:
-    raise SystemExit("100290 validation failed: focused follow/focus block missing")
-follow_block = text[follow_start:follow_end]
-if "lookAhead" in follow_block or "_pointAlongBearing(current, heading" in follow_block:
+
+def function_block(signature: str) -> str:
+    start = text.find(signature)
+    if start < 0:
+        raise SystemExit(f"100290 validation failed: function missing: {signature}")
+    open_brace = text.find("{", start, start + 300)
+    if open_brace < 0:
+        raise SystemExit(f"100290 validation failed: opening brace missing: {signature}")
+    depth = 0
+    for index in range(open_brace, len(text)):
+        ch = text[index]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+    raise SystemExit(f"100290 validation failed: closing brace missing: {signature}")
+
+
+# Validate exactly the two camera functions intentionally changed by 100290.
+# Brace-balanced extraction prevents dart format or neighboring helpers from
+# widening the validation scope.
+follow_block = function_block("  void _followLivePosition(LatLng current) {")
+focus_block = function_block("  void _focusNavigationPosition() {")
+focused_camera_block = follow_block + "\n" + focus_block
+if "lookAhead" in focused_camera_block or "_pointAlongBearing(current, heading" in focused_camera_block:
     raise SystemExit("100290 validation failed: old look-ahead offset still active in follow/focus")
 
 failed = [name for name, ok in checks.items() if not ok]
