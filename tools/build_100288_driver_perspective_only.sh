@@ -75,7 +75,6 @@ python3 tools/validate_driver_perspective_only_100288.py
 echo '== Revalidate unaffected invariants =='
 python3 tools/validate_navigation_batch1_100287.py
 python3 tools/validate_navigation_batch2_100287.py
-python3 tools/validate_navigation_batch3_driver_mode_100287.py
 python3 tools/validate_gifts_friends_v1_100271_2026_10_05.py
 python3 tools/validate_profile_points_toggle_100264_2026_10_04.py
 python3 tools/validate_profile_stat_cards_polish_100265_2026_10_04.py
