@@ -37,14 +37,14 @@ if "_startSmoothNavigationReturn(userRequested:" in text:
 if "_cancelNavigationCameraReturn(notify: false)" in text:
     raise SystemExit("100290 validation failed: stop-trip flow was modified outside requested scope")
 
-# Old look-ahead offset must be gone only from the live follow/focus block.
+# Old look-ahead offset must be gone only from the two functions being changed.
 follow_start = text.find("  void _followLivePosition(LatLng current) {")
-follow_end = text.find("  double _distanceToManeuver", follow_start)
+follow_end = text.find("  void _animateNavigationMarker(", follow_start)
 if follow_start < 0 or follow_end < 0:
-    raise SystemExit("100290 validation failed: follow/focus block missing")
+    raise SystemExit("100290 validation failed: focused follow/focus block missing")
 follow_block = text[follow_start:follow_end]
 if "lookAhead" in follow_block or "_pointAlongBearing(current, heading" in follow_block:
-    raise SystemExit("100290 validation failed: old look-ahead offset still active")
+    raise SystemExit("100290 validation failed: old look-ahead offset still active in follow/focus")
 
 failed = [name for name, ok in checks.items() if not ok]
 if failed:
