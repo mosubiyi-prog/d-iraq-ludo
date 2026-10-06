@@ -6,6 +6,7 @@ on:
       - nav-start-heading-touch10-smooth-100290-2026-10-06
     paths:
       - 'tools/nav_heading_touch10_smooth_100290.py'
+      - 'tools/run_nav_heading_touch10_smooth_100290.py'
       - 'tools/validate_nav_heading_touch10_smooth_100290.py'
       - 'tools/build_100290_nav_heading_touch10_smooth.sh'
       - '.github/workflows/preflight-100290-nav-heading-touch10-smooth.yml'
