@@ -6,7 +6,6 @@ on:
       - navigation-polish-driver-mode-100287-2026-10-06
     paths:
       - '.github/workflows/preflight-100287-navigation-batch1.yml'
-      - 'tools/preflight_100287_navigation_batch1.sh'
       - 'tools/navigation_batch1_100287.py'
       - 'tools/validate_navigation_batch1_100287.py'
 
@@ -24,8 +23,64 @@ jobs:
           channel: stable
           cache: false
 
-      - name: Reconstruct proven DEDA 100286
-        run: awk '/== Flutter analyzer ==/{exit} {print}' tools/build_100286_navigation_seven_fixes.sh | bash
+      - name: Reconstruct proven DEDA 100272
+        run: DEDA_100272_PREFLIGHT_ONLY=1 bash tools/build_100272_purchase_level_separation.sh
+
+      - name: Reconstruct proven DEDA 100273 to 100279
+        run: |
+          if ! python3 -c 'import PIL' >/dev/null 2>&1; then python3 -m pip install --user pillow; fi
+          python3 tools/generate_style_art_100273_2026_10_05.py
+          python3 tools/style_badges_frames_100273_2026_10_05.py
+          python3 tools/restore_style_marker_100273_2026_10_05.py
+          dart format lib/main.dart
+          python3 tools/validate_style_badges_frames_100273_2026_10_05.py
+          python3 tools/prepare_style_preview_patch_100274.py
+          python3 tools/style_preview_100274_2026_10_05.py
+          dart format lib/main.dart
+          python3 tools/validate_style_preview_100274_2026_10_05.py
+          python3 tools/style_wallet_sync_100275_2026_10_05.py
+          dart format lib/main.dart
+          python3 tools/validate_style_wallet_sync_100275_2026_10_05.py
+          python3 tools/profile_level_task_points_100276_2026_10_05.py
+          dart format lib/main.dart
+          python3 tools/validate_profile_level_task_points_100276_2026_10_05.py
+          python3 tools/profile_level_xp_fix_100277_2026_10_05.py
+          dart format lib/main.dart
+          python3 tools/validate_profile_level_xp_fix_100277_2026_10_05.py
+          python3 tools/level_system_team_admin_polish_100278_2026_10_05.py
+          dart format lib/main.dart lib/deda_team_page.dart lib/admin_pages.dart
+          python3 tools/validate_level_system_team_admin_polish_100278_2026_10_05.py
+          python3 tools/level_team_admin_final_fix_100279_2026_10_05.py
+          dart format lib/main.dart lib/deda_team_page.dart lib/admin_pages.dart
+          python3 tools/validate_level_team_admin_final_fix_100279_2026_10_05.py
+
+      - name: Reapply tested DEDA 100283
+        run: |
+          python3 tools/road_pulse_v2_min_patch_100283.py
+          dart format lib/main.dart
+          python3 tools/validate_road_pulse_v2_100283.py
+
+      - name: Reapply tested DEDA 100284
+        run: |
+          python3 tools/nav_follow_pulse_position_100284.py
+          dart format lib/main.dart
+          python3 tools/validate_nav_follow_pulse_position_100284.py
+
+      - name: Reapply tested DEDA 100285
+        run: |
+          python3 tools/nav_guide_road_pulse_final_ui_100285.py
+          dart format lib/main.dart
+          python3 tools/validate_nav_guide_road_pulse_final_ui_100285.py
+
+      - name: Reapply proven DEDA 100286 road layer
+        run: |
+          python3 tools/navigation_road_alignment_reroute_100286.py
+          dart format lib/main.dart
+
+      - name: Reapply proven DEDA 100286 live layer
+        run: |
+          python3 tools/navigation_live_heading_ui_100286.py
+          dart format lib/main.dart
 
       - name: Validate pristine DEDA 100286
         run: python3 tools/validate_navigation_seven_fixes_100286.py
