@@ -23,12 +23,31 @@ missing = [name for name, needle in required.items() if needle not in text]
 if missing:
     raise SystemExit("100287 batch2 validator missing: " + ", ".join(missing))
 
-for forbidden in [
-    "onPositionChanged: (camera, _) {",
-    "color: const Color(0xFFB65A00)",
-]:
-    if forbidden in text:
-        raise SystemExit(f"100287 batch2 validator found old behavior: {forbidden}")
+# The old callback must be gone globally.
+old_callback = "onPositionChanged: (camera, _) {"
+if old_callback in text:
+    raise SystemExit(
+        f"100287 batch2 validator found old behavior: {old_callback}"
+    )
+
+# Validate the HAZARD MAP MARKER section only. The same historical orange is
+# intentionally still used by unrelated UI such as the report button/details,
+# so a global color search would be a false positive.
+marker_start = text.find("final markerColor = switch (hazard.type)")
+if marker_start < 0:
+    raise SystemExit("100287 batch2 validator: hazard marker color block missing")
+marker_end = text.find("point: destinationPoint", marker_start)
+if marker_end < 0:
+    marker_end = min(len(text), marker_start + 6000)
+marker_section = text[marker_start:marker_end]
+if "Color(0xFFB65A00)" in marker_section:
+    raise SystemExit(
+        "100287 batch2 validator: old single orange color remains in hazard map markers"
+    )
+if "color: markerColor" not in marker_section:
+    raise SystemExit(
+        "100287 batch2 validator: hazard marker icon/border does not use type color"
+    )
 
 # Recenter must no longer jump using MapController.move.
 recenter_start = text.find("void _recenterNavigation()")
