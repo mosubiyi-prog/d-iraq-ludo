@@ -6,6 +6,9 @@ on:
       - navigation-polish-driver-mode-100287-2026-10-06
     paths:
       - '.github/workflows/preflight-100287-navigation-batch1.yml'
+      - 'tools/preflight_100287_navigation_batch1.sh'
+      - 'tools/navigation_batch1_100287.py'
+      - 'tools/validate_navigation_batch1_100287.py'
 
 jobs:
   preflight:
