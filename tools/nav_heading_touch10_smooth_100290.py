@@ -3,84 +3,99 @@ from pathlib import Path
 path = Path("lib/main.dart")
 text = path.read_text()
 
-# DEDA 100290 — focused navigation correction only.
-# Scope is intentionally limited to:
-# 1) align map/route to the launch direction,
-# 2) keep the live arrow at the exact map center,
-# 3) give the driver 10 seconds of free map control from the LAST gesture,
-# 4) return smoothly with no recenter/rotation/zoom jump,
-# 5) freeze heading while stationary so compass noise cannot shake the map.
+# DEDA 100290 — ONLY the four requested navigation behaviors:
+# 1) launch direction aligns to the green route,
+# 2) live arrow remains centered/up while the map rotates underneath it,
+# 3) free map gestures last 10 seconds from the LAST gesture,
+# 4) automatic return is smooth, with no center/rotation/zoom jump.
+# Stationary compass noise is frozen only to protect items 1-2.
+# Intentionally NOT touched: manual recenter button, stop-trip flow, hazards,
+# rerouting, map styling, navigation UI, route instructions, or driver view.
 
-# Dedicated timers/state for free control and the smooth camera return.
-old_timers = '''  Timer? _toolsAutoHideTimer;
-  Timer? _positionAnimationTimer;
-'''
-new_timers = '''  Timer? _toolsAutoHideTimer;
-  Timer? _positionAnimationTimer;
-  Timer? _navigationFreeControlTimer;
-  Timer? _navigationCameraReturnTimer;
-'''
-if old_timers not in text:
-    raise SystemExit("100290: timer anchor missing")
+# ---- minimal state required for the 10-second free-control return ----
+old_timers = "  Timer? _toolsAutoHideTimer;\n  Timer? _positionAnimationTimer;\n"
+new_timers = (
+    "  Timer? _toolsAutoHideTimer;\n"
+    "  Timer? _positionAnimationTimer;\n"
+    "  Timer? _navigationFreeControlTimer;\n"
+    "  Timer? _navigationCameraReturnTimer;\n"
+)
+if text.count(old_timers) != 1:
+    raise SystemExit("100290: expected exactly one timer state anchor")
 text = text.replace(old_timers, new_timers, 1)
 
-old_follow_state = '''  bool _mapFullscreen = false;
-  bool _autoFollowMap = true;
-  bool _submittingHazard = false;
-'''
-new_follow_state = '''  bool _mapFullscreen = false;
-  bool _autoFollowMap = true;
-  bool _navigationCameraReturning = false;
-  bool _submittingHazard = false;
-'''
-if old_follow_state not in text:
-    raise SystemExit("100290: follow-state anchor missing")
+old_follow_state = (
+    "  bool _mapFullscreen = false;\n"
+    "  bool _autoFollowMap = true;\n"
+    "  bool _submittingHazard = false;\n"
+)
+new_follow_state = (
+    "  bool _mapFullscreen = false;\n"
+    "  bool _autoFollowMap = true;\n"
+    "  bool _navigationCameraReturning = false;\n"
+    "  bool _submittingHazard = false;\n"
+)
+if text.count(old_follow_state) != 1:
+    raise SystemExit("100290: expected exactly one follow-state anchor")
 text = text.replace(old_follow_state, new_follow_state, 1)
 
-old_dispose = '''    _toolsAutoHideTimer?.cancel();
-    _positionAnimationTimer?.cancel();
-    _tts.stop();
-'''
-new_dispose = '''    _toolsAutoHideTimer?.cancel();
-    _positionAnimationTimer?.cancel();
-    _navigationFreeControlTimer?.cancel();
-    _navigationCameraReturnTimer?.cancel();
-    _tts.stop();
-'''
-if old_dispose not in text:
-    raise SystemExit("100290: dispose anchor missing")
+# Dispose only the two new timers. No stop-trip logic is changed.
+old_dispose = (
+    "    _toolsAutoHideTimer?.cancel();\n"
+    "    _positionAnimationTimer?.cancel();\n"
+    "    _tts.stop();\n"
+)
+new_dispose = (
+    "    _toolsAutoHideTimer?.cancel();\n"
+    "    _positionAnimationTimer?.cancel();\n"
+    "    _navigationFreeControlTimer?.cancel();\n"
+    "    _navigationCameraReturnTimer?.cancel();\n"
+    "    _tts.stop();\n"
+)
+if text.count(old_dispose) != 1:
+    raise SystemExit("100290: expected exactly one dispose anchor")
 text = text.replace(old_dispose, new_dispose, 1)
 
-# While a trip is active, never let a noisy stationary phone compass rotate the
-# map. Movement/GPS course remains authoritative once the user actually moves.
-old_compass = '''        final speed = livePosition?.speed ?? 0;
-        if (speed >= 0.8) return;
-        setState(() {
-          _navigationHeading = normalized;
-          _displayHeading = normalized;
-        });
-'''
-new_compass = '''        final speed = livePosition?.speed ?? 0;
-        if (tripStarted || speed >= 0.8) return;
-        setState(() {
-          _navigationHeading = normalized;
-          _displayHeading = normalized;
-        });
-'''
-if old_compass not in text:
-    raise SystemExit("100290: compass anchor missing")
+# ---- stationary direction: do not let compass noise rotate an active trip ----
+old_compass = (
+    "        final speed = livePosition?.speed ?? 0;\n"
+    "        if (speed >= 0.8) return;\n"
+    "        setState(() {\n"
+    "          _navigationHeading = normalized;\n"
+    "          _displayHeading = normalized;\n"
+    "        });\n"
+)
+new_compass = (
+    "        final speed = livePosition?.speed ?? 0;\n"
+    "        if (tripStarted || speed >= 0.8) return;\n"
+    "        setState(() {\n"
+    "          _navigationHeading = normalized;\n"
+    "          _displayHeading = normalized;\n"
+    "        });\n"
+)
+if text.count(old_compass) != 1:
+    raise SystemExit("100290: expected exactly one compass block")
 text = text.replace(old_compass, new_compass, 1)
 
-# Replace only the heading resolver. Route geometry supplies the launch heading;
-# after launch a stationary vehicle holds the last trusted heading. GPS course
-# takes over once there is real motion.
-resolver_start = text.find(
-    '''  double _resolvedHeading(Position position, LatLng current) {'''
+# Replace ONLY _resolvedHeading, bounded by the immediately following
+# _projectToSegment function. No neighboring helper/animation function is removed.
+resolver_start = text.find("  double _resolvedHeading(Position position, LatLng current) {")
+resolver_end = text.find(
+    "  ({LatLng point, double distance, double fraction}) _projectToSegment(",
+    resolver_start,
 )
-resolver_end = text.find('''  void _animateNavigationMarker(''', resolver_start)
 if resolver_start < 0 or resolver_end < 0:
-    raise SystemExit("100290: heading resolver block missing")
-resolver = r'''  double? _routeHeadingNear(
+    raise SystemExit("100290: heading resolver boundary missing")
+old_resolver = text[resolver_start:resolver_end]
+required_resolver_tokens = (
+    "final gpsHeading = position.heading;",
+    "_previousLivePoint",
+    "_compassHeadingIsFresh",
+)
+if any(token not in old_resolver for token in required_resolver_tokens):
+    raise SystemExit("100290: heading resolver is not expected 100286 implementation")
+
+new_resolver = '''  double? _routeHeadingNear(
     LatLng current, {
     List<LatLng>? pointsOverride,
   }) {
@@ -127,8 +142,6 @@ resolver = r'''  double? _routeHeadingNear(
     }
 
     if (tripStarted) {
-      // At a standstill, keep the trusted launch/last-motion heading. This is
-      // what prevents the map from twitching while the car is parked.
       if (_hasNavigationHeading) return _navigationHeading;
       final routeHeading = _routeHeadingNear(current);
       if (routeHeading != null) {
@@ -146,43 +159,76 @@ resolver = r'''  double? _routeHeadingNear(
   }
 
 '''
-text = text[:resolver_start] + resolver + text[resolver_end:]
+text = text[:resolver_start] + new_resolver + text[resolver_end:]
 
-# Initialize the active trip heading from the green route itself. This makes the
-# first heading-up frame agree with the actual departure direction even while
-# the vehicle is still stationary.
-old_trip_start = '''    setState(() {
-      tripStarted = true;
-      _autoFollowMap = true;
-      _liveRemainingMeters = validRoute.distanceMeters;
-      _previousLivePoint = startPoint;
-      _navigationToolsOpen = false;
-'''
-new_trip_start = '''    final launchHeading = _routeHeadingNear(
-      startPoint,
-      pointsOverride: validRoute.points,
-    );
-    setState(() {
-      tripStarted = true;
-      _autoFollowMap = true;
-      _liveRemainingMeters = validRoute.distanceMeters;
-      _previousLivePoint = startPoint;
-      _navigationToolsOpen = false;
-      if (launchHeading != null) {
-        _navigationHeading = launchHeading;
-        _displayHeading = launchHeading;
-        _hasNavigationHeading = true;
-      }
-'''
-if old_trip_start not in text:
-    raise SystemExit("100290: trip-start anchor missing")
-text = text.replace(old_trip_start, new_trip_start, 1)
+# ---- launch heading: modify ONLY the one active-trip setState block ----
+trip_candidates = []
+scan_from = 0
+while True:
+    pos = text.find("tripStarted = true;", scan_from)
+    if pos < 0:
+        break
+    window = text[max(0, pos - 300):min(len(text), pos + 1000)]
+    if (
+        "_liveRemainingMeters = validRoute.distanceMeters;" in window
+        and "_previousLivePoint = startPoint;" in window
+        and "_navigationToolsOpen = false;" in window
+    ):
+        trip_candidates.append(pos)
+    scan_from = pos + 1
+if len(trip_candidates) != 1:
+    raise SystemExit(f"100290: expected one trip-start block, found {len(trip_candidates)}")
 
-# Camera helpers: 10 seconds from the LAST gesture, cancellable smooth return,
-# shortest-path rotation, and no forced zoom change.
-follow_anchor = '''  void _followLivePosition(LatLng current) {
-'''
-helpers = r'''  double _cameraEaseInOut(double t) {
+trip_pos = trip_candidates[0]
+state_pos = text.rfind("setState(() {", max(0, trip_pos - 600), trip_pos)
+if state_pos < 0:
+    raise SystemExit("100290: trip-start setState boundary missing")
+state_line_start = text.rfind("\n", 0, state_pos) + 1
+state_indent = text[state_line_start:state_pos]
+launch_decl = (
+    f"{state_indent}final launchHeading = _routeHeadingNear(\n"
+    f"{state_indent}  startPoint,\n"
+    f"{state_indent}  pointsOverride: validRoute.points,\n"
+    f"{state_indent});\n"
+)
+text = text[:state_line_start] + launch_decl + text[state_line_start:]
+
+trip_pos = text.find("tripStarted = true;", state_line_start + len(launch_decl))
+tools_pos = text.find("_navigationToolsOpen = false;", trip_pos, trip_pos + 1200)
+if tools_pos < 0:
+    raise SystemExit("100290: trip-start navigation-tools line missing")
+tools_line_start = text.rfind("\n", 0, tools_pos) + 1
+inner_indent = text[tools_line_start:tools_pos]
+tools_line_end = text.find("\n", tools_pos)
+if tools_line_end < 0:
+    raise SystemExit("100290: trip-start line ending missing")
+tools_line_end += 1
+heading_init = (
+    f"{inner_indent}if (launchHeading != null) {{\n"
+    f"{inner_indent}  _navigationHeading = launchHeading;\n"
+    f"{inner_indent}  _displayHeading = launchHeading;\n"
+    f"{inner_indent}  _hasNavigationHeading = true;\n"
+    f"{inner_indent}}}\n"
+)
+text = text[:tools_line_end] + heading_init + text[tools_line_end:]
+
+# ---- camera helpers: inserted immediately before live follow ----
+follow_start = text.find("  void _followLivePosition(LatLng current) {")
+focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
+follow_end = text.find("  double _distanceToManeuver", focus_start)
+if follow_start < 0 or focus_start < 0 or follow_end < 0:
+    raise SystemExit("100290: follow/focus boundaries missing")
+old_follow_block = text[follow_start:follow_end]
+required_follow_tokens = (
+    "final lookAhead =",
+    "_pointAlongBearing(current, heading, lookAhead)",
+    "final navigationZoom =",
+    "_mapController.moveAndRotate",
+)
+if any(token not in old_follow_block for token in required_follow_tokens):
+    raise SystemExit("100290: follow/focus block is not expected 100286 implementation")
+
+helpers = '''  double _cameraEaseInOut(double t) {
     final x = t.clamp(0.0, 1.0).toDouble();
     return x < 0.5
         ? 4 * x * x * x
@@ -193,11 +239,11 @@ helpers = r'''  double _cameraEaseInOut(double t) {
     return (to - from + 540) % 360 - 180;
   }
 
-  void _cancelNavigationCameraReturn({bool notify = true}) {
+  void _cancelNavigationCameraReturn() {
     _navigationCameraReturnTimer?.cancel();
     _navigationCameraReturnTimer = null;
     if (_navigationCameraReturning) {
-      if (notify && mounted) {
+      if (mounted) {
         setState(() => _navigationCameraReturning = false);
       } else {
         _navigationCameraReturning = false;
@@ -210,7 +256,7 @@ helpers = r'''  double _cameraEaseInOut(double t) {
     _navigationFreeControlTimer?.cancel();
     _navigationFreeControlTimer = Timer(const Duration(seconds: 10), () {
       if (!mounted || !tripStarted) return;
-      _startSmoothNavigationReturn();
+      _startSmoothNavigationReturn(startup: false);
     });
   }
 
@@ -223,13 +269,11 @@ helpers = r'''  double _cameraEaseInOut(double t) {
     _scheduleNavigationReturnAfterGesture();
   }
 
-  void _startSmoothNavigationReturn({
-    bool userRequested = false,
-    bool startup = false,
-  }) {
+  void _startSmoothNavigationReturn({required bool startup}) {
     if (!mounted || !tripStarted) return;
     _navigationFreeControlTimer?.cancel();
-    _cancelNavigationCameraReturn(notify: false);
+    _navigationCameraReturnTimer?.cancel();
+    _navigationCameraReturnTimer = null;
 
     late final LatLng startCenter;
     late final double startZoom;
@@ -243,7 +287,6 @@ helpers = r'''  double _cameraEaseInOut(double t) {
       setState(() {
         _autoFollowMap = true;
         _navigationCameraReturning = false;
-        if (userRequested) _navigationToolsOpen = false;
       });
       return;
     }
@@ -251,7 +294,6 @@ helpers = r'''  double _cameraEaseInOut(double t) {
     setState(() {
       _autoFollowMap = false;
       _navigationCameraReturning = true;
-      if (userRequested) _navigationToolsOpen = false;
     });
 
     final startedAt = DateTime.now();
@@ -261,30 +303,24 @@ helpers = r'''  double _cameraEaseInOut(double t) {
       if (!mounted || !tripStarted) {
         timer.cancel();
         _navigationCameraReturnTimer = null;
+        _navigationCameraReturning = false;
         return;
       }
 
       final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
       final rawT = (elapsed / durationMs).clamp(0.0, 1.0).toDouble();
       final t = _cameraEaseInOut(rawT);
-
-      // Recompute the live target every frame. The car may move during the
-      // return, so a fixed target would create a final snap of its own.
       final targetCenter = _displayPosition ?? startPoint;
       final heading = (_displayHeading + 360) % 360;
       final targetRotation = (360 - heading) % 360;
-      final rotationDelta =
-          _shortestRotationDelta(startRotation, targetRotation);
+      final rotationDelta = _shortestRotationDelta(startRotation, targetRotation);
       final center = LatLng(
-        startCenter.latitude +
-            (targetCenter.latitude - startCenter.latitude) * t,
-        startCenter.longitude +
-            (targetCenter.longitude - startCenter.longitude) * t,
+        startCenter.latitude + (targetCenter.latitude - startCenter.latitude) * t,
+        startCenter.longitude + (targetCenter.longitude - startCenter.longitude) * t,
       );
       final rotation = (startRotation + rotationDelta * t + 360) % 360;
 
       try {
-        // Keep the driver's chosen zoom. Only center + rotation return.
         _mapController.moveAndRotate(center, startZoom, rotation);
       } catch (_) {}
 
@@ -296,54 +332,12 @@ helpers = r'''  double _cameraEaseInOut(double t) {
           _navigationCameraReturning = false;
           _autoFollowMap = true;
         });
-        // No extra follow call here: the final animation frame already uses
-        // the newest live point, avoiding the old visible last-frame jump.
       }
     });
   }
 
 '''
-if follow_anchor not in text:
-    raise SystemExit("100290: follow anchor missing")
-text = text.replace(follow_anchor, helpers + follow_anchor, 1)
-
-# Exact-center heading-up follow. No look-ahead offset: the navigation arrow is
-# the map center and the green route rotates underneath it.
-old_follow = '''  void _followLivePosition(LatLng current) {
-    if (!tripStarted || !_autoFollowMap) return;
-    try {
-      final zoom = _currentMapZoom();
-      final heading = (_displayHeading + 360) % 360;
-      final lookAhead =
-          (75.0 * math.pow(2.0, 16.0 - zoom)).clamp(35.0, 280.0).toDouble();
-      final focus = _pointAlongBearing(current, heading, lookAhead);
-      _mapController.moveAndRotate(
-        focus,
-        zoom,
-        (360 - heading) % 360,
-      );
-    } catch (_) {}
-  }
-
-  void _focusNavigationPosition() {
-    try {
-      final currentZoom = _currentMapZoom();
-      final navigationZoom = currentZoom.clamp(13.6, 16.2).toDouble();
-      final current = _displayPosition ?? startPoint;
-      final heading = (_displayHeading + 360) % 360;
-      final lookAhead =
-          (75.0 * math.pow(2.0, 16.0 - navigationZoom))
-              .clamp(35.0, 280.0)
-              .toDouble();
-      _mapController.moveAndRotate(
-        _pointAlongBearing(current, heading, lookAhead),
-        navigationZoom,
-        (360 - heading) % 360,
-      );
-    } catch (_) {}
-  }
-'''
-new_follow = '''  void _followLivePosition(LatLng current) {
+new_follow_block = '''  void _followLivePosition(LatLng current) {
     if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;
     try {
       final zoom = _currentMapZoom();
@@ -359,75 +353,72 @@ new_follow = '''  void _followLivePosition(LatLng current) {
   void _focusNavigationPosition() {
     _startSmoothNavigationReturn(startup: true);
   }
-'''
-if old_follow not in text:
-    raise SystemExit("100290: post-100286 follow block missing")
-text = text.replace(old_follow, new_follow, 1)
 
-# A real map gesture pauses follow and restarts the full 10-second window.
-old_position_changed = '''                        onPositionChanged: (camera, _) {
-                          final zoom = camera.zoom;
-                          if ((zoom - _displayMapZoom).abs() >= 0.08 && mounted) {
-                            setState(() => _displayMapZoom = zoom);
-                          }
-                          // Active navigation always returns to heading-up live
-                          // follow on the next GPS/animation frame.
-                        },
 '''
-new_position_changed = '''                        onPositionChanged: (camera, hasGesture) {
-                          final zoom = camera.zoom;
-                          if ((zoom - _displayMapZoom).abs() >= 0.08 && mounted) {
-                            setState(() => _displayMapZoom = zoom);
-                          }
-                          if (tripStarted && hasGesture) {
-                            _pauseNavigationFollowForGesture();
-                          }
-                        },
-'''
-if old_position_changed not in text:
-    raise SystemExit("100290: map-position callback anchor missing")
-text = text.replace(old_position_changed, new_position_changed, 1)
+text = text[:follow_start] + helpers + new_follow_block + text[follow_end:]
 
-# Manual recenter uses the same smooth return instead of an immediate move().
-old_recenter = '''  void _recenterNavigation() {
-    if (mounted) {
-      setState(() {
-        _autoFollowMap = true;
-        _navigationToolsOpen = false;
-      });
-    }
-    try {
-      _mapController.move(
-        _displayPosition ?? startPoint,
-        _currentMapZoom(),
-      );
-    } catch (_) {}
-  }
-'''
-new_recenter = '''  void _recenterNavigation() {
-    _startSmoothNavigationReturn(userRequested: true);
-  }
-'''
-if old_recenter not in text:
-    raise SystemExit("100290: recenter anchor missing")
-text = text.replace(old_recenter, new_recenter, 1)
+# ---- gesture callback: modify ONLY the navigation map callback ----
+callback_candidates = []
+scan_from = 0
+while True:
+    pos = text.find("onPositionChanged:", scan_from)
+    if pos < 0:
+        break
+    window = text[pos:min(len(text), pos + 900)]
+    if (
+        "final zoom = camera.zoom;" in window
+        and "_displayMapZoom" in window
+        and "setState(() => _displayMapZoom = zoom);" in window
+    ):
+        callback_candidates.append(pos)
+    scan_from = pos + 1
+if len(callback_candidates) != 1:
+    raise SystemExit(
+        f"100290: expected one navigation map-position callback, found {len(callback_candidates)}"
+    )
+callback_pos = callback_candidates[0]
+callback_window = text[callback_pos:callback_pos + 900]
+if "hasGesture" in callback_window:
+    raise SystemExit("100290: navigation callback already changed unexpectedly")
 
-# Clean up the focused camera state whenever navigation stops.
-old_stop_cleanup = '''    _toolsAutoHideTimer?.cancel();
-    _positionAnimationTimer?.cancel();
-    setState(() {
-      tripStarted = false;
-'''
-new_stop_cleanup = '''    _toolsAutoHideTimer?.cancel();
-    _positionAnimationTimer?.cancel();
-    _navigationFreeControlTimer?.cancel();
-    _cancelNavigationCameraReturn(notify: false);
-    setState(() {
-      tripStarted = false;
-'''
-if old_stop_cleanup not in text:
-    raise SystemExit("100290: stop-trip cleanup anchor missing")
-text = text.replace(old_stop_cleanup, new_stop_cleanup, 1)
+open_brace = text.find("{", callback_pos, callback_pos + 350)
+if open_brace < 0:
+    raise SystemExit("100290: navigation callback opening brace missing")
+depth = 0
+close_brace = -1
+for i in range(open_brace, min(len(text), callback_pos + 1200)):
+    ch = text[i]
+    if ch == "{":
+        depth += 1
+    elif ch == "}":
+        depth -= 1
+        if depth == 0:
+            close_brace = i
+            break
+if close_brace < 0:
+    raise SystemExit("100290: navigation callback closing brace missing")
+comma_pos = close_brace + 1
+while comma_pos < len(text) and text[comma_pos] in " \t\r\n":
+    comma_pos += 1
+if comma_pos >= len(text) or text[comma_pos] != ",":
+    raise SystemExit("100290: navigation callback trailing comma missing")
+
+line_start = text.rfind("\n", 0, callback_pos) + 1
+indent = text[line_start:callback_pos]
+inner = indent + "  "
+inner2 = indent + "    "
+new_callback = (
+    "onPositionChanged: (camera, hasGesture) {\n"
+    f"{inner}final zoom = camera.zoom;\n"
+    f"{inner}if ((zoom - _displayMapZoom).abs() >= 0.08 && mounted) {{\n"
+    f"{inner2}setState(() => _displayMapZoom = zoom);\n"
+    f"{inner}}}\n"
+    f"{inner}if (tripStarted && hasGesture) {{\n"
+    f"{inner2}_pauseNavigationFollowForGesture();\n"
+    f"{inner}}}\n"
+    f"{indent}}},"
+)
+text = text[:callback_pos] + new_callback + text[comma_pos + 1:]
 
 path.write_text(text)
-print("DEDA 100290 focused navigation correction applied.")
+print("DEDA 100290 focused navigation correction applied: requested behavior only.")
