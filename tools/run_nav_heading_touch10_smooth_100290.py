@@ -56,8 +56,6 @@ launch_decl = (
 )
 text = text[:state_line_start] + launch_decl + text[state_line_start:]
 
-# Re-find the same block after the declaration insertion and add only the heading
-# initialization immediately after the navigation-tools flag.
 trip_pos = text.find("tripStarted = true;", state_line_start + len(launch_decl))
 tools_pos = text.find("_navigationToolsOpen = false;", trip_pos, trip_pos + 1100)
 if tools_pos < 0:
@@ -80,10 +78,6 @@ text = text[:tools_line_end] + heading_init + text[tools_line_end:]
 '''
 script = script[:section_start] + structural_trip_patch + script[section_end:]
 
-# Replace only the two 100286 camera-follow functions by their function
-# boundaries. This avoids depending on dart-format line wrapping, while still
-# refusing to continue unless the old 100286 look-ahead implementation is
-# positively identified inside the exact block.
 follow_section_start = script.find(
     "# Exact-center heading-up follow. No look-ahead offset: the navigation arrow is"
 )
@@ -140,9 +134,6 @@ text = text[:follow_start] + new_follow_block + text[follow_end:]
 '''
 script = script[:follow_section_start] + structural_follow_patch + script[follow_section_end:]
 
-# Replace only the navigation map's onPositionChanged callback. Require exactly
-# one callback that carries the known 100286 _displayMapZoom bookkeeping. Find
-# its closing brace by balance instead of depending on dart-format whitespace.
 callback_section_start = script.find(
     "# A real map gesture pauses follow and restarts the full 10-second window."
 )
@@ -221,10 +212,71 @@ new_callback = (
 text = text[:callback_pos] + new_callback + text[comma_pos + 1:]
 
 '''
-script = (
-    script[:callback_section_start]
-    + structural_callback_patch
-    + script[callback_section_end:]
+script = script[:callback_section_start] + structural_callback_patch + script[callback_section_end:]
+
+# Replace only _recenterNavigation by its exact function boundary and require
+# the known 100286 immediate-move implementation before replacing it.
+recenter_section_start = script.find(
+    "# Manual recenter uses the same smooth return instead of an immediate move()."
 )
+recenter_section_end = script.find(
+    "# Clean up the focused camera state whenever navigation stops.",
+    recenter_section_start,
+)
+if recenter_section_start < 0 or recenter_section_end < 0:
+    raise SystemExit("100290 runner: recenter patch section not found")
+
+structural_recenter_patch = r'''# Manual recenter uses the same smooth return instead of an immediate move().
+recenter_start = text.find("  void _recenterNavigation() {")
+if recenter_start < 0:
+    raise SystemExit("100290: recenter function missing")
+open_brace = text.find("{", recenter_start, recenter_start + 120)
+if open_brace < 0:
+    raise SystemExit("100290: recenter opening brace missing")
+
+depth = 0
+recenter_close = -1
+for i in range(open_brace, min(len(text), recenter_start + 1400)):
+    ch = text[i]
+    if ch == "{":
+        depth += 1
+    elif ch == "}":
+        depth -= 1
+        if depth == 0:
+            recenter_close = i
+            break
+if recenter_close < 0:
+    raise SystemExit("100290: recenter closing brace missing")
+
+old_recenter_block = text[recenter_start:recenter_close + 1]
+required_recenter_tokens = (
+    "_autoFollowMap = true;",
+    "_navigationToolsOpen = false;",
+    "_mapController.move(",
+    "_displayPosition ?? startPoint",
+    "_currentMapZoom()",
+)
+missing_recenter = [
+    token for token in required_recenter_tokens if token not in old_recenter_block
+]
+if missing_recenter:
+    raise SystemExit(
+        "100290: recenter block is not expected 100286 implementation: "
+        + "; ".join(missing_recenter)
+    )
+
+new_recenter_block = (
+    "  void _recenterNavigation() {\n"
+    "    _startSmoothNavigationReturn(userRequested: true);\n"
+    "  }"
+)
+text = (
+    text[:recenter_start]
+    + new_recenter_block
+    + text[recenter_close + 1:]
+)
+
+'''
+script = script[:recenter_section_start] + structural_recenter_patch + script[recenter_section_end:]
 
 exec(compile(script, str(script_path), "exec"), {"__name__": "__main__"})
