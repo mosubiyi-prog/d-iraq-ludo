@@ -11,6 +11,8 @@ on:
       - 'tools/normalize_navigation_callback_for_batch2_100287.py'
       - 'tools/navigation_batch2_camera_hazards_100287.py'
       - 'tools/validate_navigation_batch2_100287.py'
+      - 'tools/navigation_batch3_driver_mode_100287.py'
+      - 'tools/validate_navigation_batch3_driver_mode_100287.py'
 
 jobs:
   preflight:
@@ -111,6 +113,14 @@ jobs:
 
       - name: Validate DEDA 100287 navigation batch2
         run: python3 tools/validate_navigation_batch2_100287.py
+
+      - name: Apply DEDA 100287 navigation batch3
+        run: |
+          python3 tools/navigation_batch3_driver_mode_100287.py
+          dart format lib/main.dart
+
+      - name: Validate DEDA 100287 navigation batch3
+        run: python3 tools/validate_navigation_batch3_driver_mode_100287.py
 
       - name: Flutter analyzer
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_team_page.dart lib/admin_pages.dart
