@@ -1,4 +1,9 @@
 from pathlib import Path
+import subprocess
+
+# Rescue build is intentionally identical to the stable 100279 source.
+# Only force a higher versionCode so Android can install it over 100280.
+subprocess.run(["python3", "tools/rescue_100281_version_patch.py"], check=True)
 
 path = Path("lib/main.dart")
 text = path.read_text()
