@@ -35,9 +35,12 @@ if "_cancelNavigationCameraReturn(notify: false)" in text:
     raise SystemExit("100290 validation failed: stop-trip flow was modified outside requested scope")
 
 # Old look-ahead offset must be gone only from the two functions being changed.
+# Use the same proven structural boundary as the patch itself; do not depend on
+# the unrelated animation helper's position after dart format.
 follow_start = text.find("  void _followLivePosition(LatLng current) {")
-follow_end = text.find("  void _animateNavigationMarker(", follow_start)
-if follow_start < 0 or follow_end < 0:
+focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
+follow_end = text.find("  double _distanceToManeuver", focus_start)
+if follow_start < 0 or focus_start < 0 or follow_end < 0:
     raise SystemExit("100290 validation failed: focused follow/focus block missing")
 follow_block = text[follow_start:follow_end]
 if "lookAhead" in follow_block or "_pointAlongBearing(current, heading" in follow_block:
