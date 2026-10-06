@@ -1,0 +1,33 @@
+name: Preflight DEDA 100290 Focused Navigation
+
+on:
+  push:
+    branches:
+      - nav-start-heading-touch10-smooth-100290-2026-10-06
+    paths:
+      - 'tools/nav_heading_touch10_smooth_100290.py'
+      - 'tools/validate_nav_heading_touch10_smooth_100290.py'
+      - 'tools/build_100290_nav_heading_touch10_smooth.sh'
+      - '.github/workflows/preflight-100290-nav-heading-touch10-smooth.yml'
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100290 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Reconstruct exact 100286 reference, apply focused 100290 patch, validate
+        run: DEDA_100290_PREFLIGHT_ONLY=1 bash tools/build_100290_nav_heading_touch10_smooth.sh
