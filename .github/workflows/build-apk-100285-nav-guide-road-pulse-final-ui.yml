@@ -1,0 +1,37 @@
+name: Build DEDA 100285 Nav Guide + Road Pulse Final UI
+
+on:
+  push:
+    branches:
+      - nav-guide-road-pulse-final-ui-100285-2026-10-06
+    paths:
+      - '.github/workflows/build-apk-100285-nav-guide-road-pulse-final-ui.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100285 navigation UI branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100285
+        run: bash tools/build_100285_nav_guide_road_pulse_final_ui.sh
+
+      - name: Upload APK 100285
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100285-nav-guide-road-pulse-final-ui-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
