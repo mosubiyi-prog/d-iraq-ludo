@@ -4,6 +4,8 @@ import subprocess
 # Apply the DEDA Road Pulse/navigation polish first. This is intentionally
 # build-time and isolated to the current work branch until road testing passes.
 subprocess.run(["python3", "tools/road_pulse_patch.py"], check=True)
+# Keep this road-test APK installable over the currently tested 100279 build.
+subprocess.run(["python3", "tools/road_pulse_version_patch.py"], check=True)
 
 path = Path("lib/main.dart")
 text = path.read_text()
