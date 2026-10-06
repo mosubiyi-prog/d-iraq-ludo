@@ -1,0 +1,21 @@
+name: Trigger Road Pulse APK v2
+
+on:
+  push:
+    branches:
+      - road-pulse-nav-polish-100280-2026-10-06
+    paths:
+      - .github/workflows/road-pulse-trigger-v2.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch existing DEDA APK workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --repo mosubiyi-prog/d-iraq-ludo --ref road-pulse-nav-polish-100280-2026-10-06
