@@ -4,14 +4,14 @@ set -euo pipefail
 echo '== Reconstruct proven DEDA 100286 without producing an APK =='
 awk '/== Flutter analyzer ==/{exit} {print}' tools/build_100286_navigation_seven_fixes.sh | bash
 
+echo '== Validate reconstructed 100286 before changing it =='
+python3 tools/validate_navigation_seven_fixes_100286.py
+
 echo '== Apply DEDA 100287 navigation batch 1 =='
 python3 tools/navigation_batch1_100287.py
 dart format lib/main.dart
 
-echo '== Validate 100286 invariants are still intact =='
-python3 tools/validate_navigation_seven_fixes_100286.py
-
-echo '== Validate 100287 batch 1 =='
+echo '== Validate DEDA 100287 batch 1 =='
 python3 tools/validate_navigation_batch1_100287.py
 
 echo '== Flutter analyzer =='
