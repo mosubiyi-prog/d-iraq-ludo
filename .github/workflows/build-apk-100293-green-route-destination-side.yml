@@ -1,0 +1,37 @@
+name: Build DEDA 100293 Green Route Destination Side
+
+on:
+  push:
+    branches:
+      - green-route-destination-side-100293-2026-10-07
+    paths:
+      - '.github/workflows/build-apk-100293-green-route-destination-side.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100293 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate exact 100286 plus green-route-only patch
+        run: bash tools/build_100293_green_route_forward_only.sh
+
+      - name: Upload APK 100293
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100293-green-route-destination-side-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
