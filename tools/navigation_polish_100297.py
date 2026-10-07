@@ -448,14 +448,33 @@ map_child = map_child.replace(
                         ),""",
     1,
 )
-# Replace only the label style inside this chip.
-label_anchor = """                        Text(
-                          dedaMapStyleLabel(mapStyle),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),"""
-label_new = """                        Text(
+# Replace only the map-style label widget, independent of whether the proven
+# baseline formatted its TextStyle as const/non-const or omitted the style.
+label_token = "dedaMapStyleLabel(mapStyle)"
+label_pos = map_child.find(label_token)
+if label_pos < 0:
+    raise SystemExit("100297: map-style label text missing")
+label_start = map_child.rfind("Text(", 0, label_pos)
+if label_start < 0:
+    raise SystemExit("100297: map-style Text widget start missing")
+
+depth = 0
+label_close = -1
+for idx in range(label_start, len(map_child)):
+    ch = map_child[idx]
+    if ch == "(":
+        depth += 1
+    elif ch == ")":
+        depth -= 1
+        if depth == 0:
+            label_close = idx + 1
+            break
+if label_close < 0:
+    raise SystemExit("100297: map-style Text widget end missing")
+if label_close < len(map_child) and map_child[label_close] == ",":
+    label_close += 1
+
+label_new = """Text(
                           dedaMapStyleLabel(mapStyle),
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
@@ -464,9 +483,12 @@ label_new = """                        Text(
                                 : const Color(0xFF405047),
                           ),
                         ),"""
-if label_anchor not in map_child:
-    raise SystemExit("100297: map-style label anchor missing")
-map_child = map_child.replace(label_anchor, label_new, 1)
+map_child = (
+    map_child[:label_start]
+    + label_new
+    + map_child[label_close:]
+)
+
 text = text[:map_child_start] + map_child + text[map_child_end:]
 
 def color_circle_control(src: str, tooltip: str, bg: str, icon_color: str, label: str) -> str:
