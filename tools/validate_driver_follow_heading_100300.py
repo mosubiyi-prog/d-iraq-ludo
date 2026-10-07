@@ -25,9 +25,9 @@ checks = {
         "setEntry(3, 2, 0.00100 * amount)" in t
         and "rotateX(0.42 * amount)" in t,
     "100299 route widths preserved":
-        "_driverViewEnabled ? 17 : (tripStarted ? 13 : 10)" in t
-        and "_driverViewEnabled ? 12 : (tripStarted ? 9 : 7)" in t
-        and "_driverViewEnabled ? 7 : 5" in t,
+        re.search(r"_driverViewEnabled\s*\?\s*17\s*:\s*\(\s*tripStarted\s*\?\s*13\s*:\s*10\s*\)", t) is not None
+        and re.search(r"_driverViewEnabled\s*\?\s*12\s*:\s*\(\s*tripStarted\s*\?\s*9\s*:\s*7\s*\)", t) is not None
+        and re.search(r"_driverViewEnabled\s*\?\s*7\s*:\s*5", t) is not None,
     "normal zoom preserved": "final navigationHomeZoom = 15.0;" in t,
     "fixed route origin preserved":
         "final current = _lastRouteOrigin ?? startPoint;" in t,
