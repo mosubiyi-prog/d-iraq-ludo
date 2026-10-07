@@ -1,0 +1,37 @@
+name: Build DEDA 100298 Driver View Only
+
+on:
+  push:
+    branches:
+      - driver-view-only-100298-2026-10-07
+    paths:
+      - '.github/workflows/build-apk-100298-driver-view-only.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100298 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100298
+        run: bash tools/build_100298_driver_view_only.sh
+
+      - name: Upload APK 100298
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100298-driver-view-only-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
