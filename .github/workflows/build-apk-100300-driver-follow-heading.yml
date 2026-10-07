@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100300-driver-follow-heading-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# trigger-100300-precise-field-follow
