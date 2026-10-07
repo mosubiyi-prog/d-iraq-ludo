@@ -13,7 +13,7 @@ required = {
     "compass blocked during trip": "if (tripStarted) return;" in text,
     "route-forward launch heading": "final launchHeading = _routeForwardHeading(" in text
         and "pointsOverride: validRoute.points" in text,
-    "movement-owned heading": "required bool moving" in text
+    "movement-owned heading": "bool moving = true" in text
         and "if (!moving)" in text,
     "one camera target": "LatLng _navigationCameraTarget(" in text,
     "10-second free control": "Timer(const Duration(seconds: 10)" in text
