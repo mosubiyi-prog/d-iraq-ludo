@@ -1,0 +1,37 @@
+name: Build DEDA 100300 Driver Follow Heading
+
+on:
+  push:
+    branches:
+      - driver-follow-heading-100300-2026-10-07
+    paths:
+      - '.github/workflows/build-apk-100300-driver-follow-heading.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100300 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100300
+        run: bash tools/build_100300_driver_follow_heading.sh
+
+      - name: Upload APK 100300
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100300-driver-follow-heading-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
