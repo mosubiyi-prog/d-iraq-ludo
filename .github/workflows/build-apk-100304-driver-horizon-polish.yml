@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100304-driver-horizon-polish-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# retry-after-camera-calibration-anchor-fix
