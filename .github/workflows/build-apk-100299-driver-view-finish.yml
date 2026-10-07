@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100299-driver-view-finish-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# trigger-100299-driver-view-finish
