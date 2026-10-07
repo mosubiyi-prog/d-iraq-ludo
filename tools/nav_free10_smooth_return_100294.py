@@ -54,22 +54,11 @@ if text.count(old_dispose) != 1:
     raise SystemExit("100294: dispose anchor missing")
 text = text.replace(old_dispose, new_dispose, 1)
 
-follow_start = text.find("  void _followLivePosition(LatLng current) {")
-focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
-follow_end = text.find("  double _distanceToManeuver", focus_start)
-if follow_start < 0 or focus_start < 0 or follow_end < 0:
-    raise SystemExit("100294: follow/focus boundaries missing")
+camera_anchor = "  void _followLivePosition(LatLng current) {\n"
+if text.count(camera_anchor) != 1:
+    raise SystemExit("100294: live-follow anchor missing")
 
-old_follow_block = text[follow_start:follow_end]
-required = (
-    "final lookAhead =",
-    "_pointAlongBearing(current, heading, lookAhead)",
-    "_mapController.moveAndRotate",
-)
-if any(token not in old_follow_block for token in required):
-    raise SystemExit("100294: expected 100286 camera block not found")
-
-helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
+helpers = r'''  double _cameraEaseInOut(double t) {
     final x = t.clamp(0.0, 1.0).toDouble();
     return x < 0.5
         ? 4 * x * x * x
@@ -91,7 +80,7 @@ helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
     _navigationFreeControlTimer?.cancel();
     _navigationFreeControlTimer = Timer(const Duration(seconds: 10), () {
       if (!mounted || !tripStarted) return;
-      _startSmoothNavigationReturn(startup: false);
+      _startSmoothNavigationReturn();
     });
   }
 
@@ -104,7 +93,7 @@ helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
     _scheduleNavigationReturnAfterGesture();
   }
 
-  void _startSmoothNavigationReturn({required bool startup}) {
+  void _startSmoothNavigationReturn() {
     if (!mounted || !tripStarted) return;
     _navigationFreeControlTimer?.cancel();
     _navigationCameraReturnTimer?.cancel();
@@ -131,7 +120,7 @@ helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
     });
 
     final startedAt = DateTime.now();
-    final durationMs = startup ? 900 : 1200;
+    const durationMs = 1200;
 
     _navigationCameraReturnTimer =
         Timer.periodic(const Duration(milliseconds: 16), (timer) {
@@ -146,8 +135,13 @@ helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
       final rawT = (elapsed / durationMs).clamp(0.0, 1.0).toDouble();
       final t = _cameraEaseInOut(rawT);
 
-      final targetCenter = _displayPosition ?? startPoint;
+      final current = _displayPosition ?? startPoint;
       final heading = (_displayHeading + 360) % 360;
+      final lookAhead =
+          (75.0 * math.pow(2.0, 16.0 - startZoom))
+              .clamp(35.0, 280.0)
+              .toDouble();
+      final targetCenter = _pointAlongBearing(current, heading, lookAhead);
       final targetRotation = (360 - heading) % 360;
       final rotationDelta =
           _shortestRotationDelta(startRotation, targetRotation);
@@ -177,25 +171,28 @@ helpers_and_follow = r'''  double _cameraEaseInOut(double t) {
     });
   }
 
-  void _followLivePosition(LatLng current) {
-    if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;
-    try {
-      final zoom = _currentMapZoom();
-      final heading = (_displayHeading + 360) % 360;
-      _mapController.moveAndRotate(
-        current,
-        zoom,
-        (360 - heading) % 360,
-      );
-    } catch (_) {}
-  }
-
-  void _focusNavigationPosition() {
-    _startSmoothNavigationReturn(startup: true);
-  }
-
 '''
-text = text[:follow_start] + helpers_and_follow + text[follow_end:]
+
+text = text.replace(camera_anchor, helpers + camera_anchor, 1)
+
+# Preserve the proven 100286 live-follow/look-ahead and startup focus functions
+# exactly. Free control works by toggling _autoFollowMap; the smooth return
+# targets the SAME look-ahead point as normal follow so enabling follow at the
+# end cannot create a final camera snap.
+follow_start = text.find("  void _followLivePosition(LatLng current) {")
+animate_start = text.find("  void _animateNavigationMarker(", follow_start)
+if follow_start < 0 or animate_start < 0:
+    raise SystemExit("100294: follow/focus preservation boundary missing")
+camera_block = text[follow_start:animate_start]
+for token in (
+    "if (!tripStarted || !_autoFollowMap) return;",
+    "final lookAhead =",
+    "_pointAlongBearing(current, heading, lookAhead)",
+    "_mapController.moveAndRotate(",
+    "void _focusNavigationPosition()",
+):
+    if token not in camera_block:
+        raise SystemExit(f"100294: proven camera behavior missing: {token}")
 
 callback_candidates = []
 scan_from = 0
