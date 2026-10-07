@@ -162,23 +162,28 @@ t=t.replace(old_state,new_state,1)
 # With the map physically lowered to expose sky, less geographic look-ahead is
 # needed to place the real current point directly under the fixed arrow.
 # ---------------------------------------------------------------------------
-old_pixels=r'''      final desiredPixels =
-          media.height * (isLandscape ? 0.12 : 0.20);
-      final lookAhead =
-          (metersPerPixel * desiredPixels + speedMps * 1.2)
-              .clamp(140.0, 520.0)
-              .toDouble();
-'''
-new_pixels=r'''      final desiredPixels =
-          media.height * (isLandscape ? 0.055 : 0.105);
-      final lookAhead =
-          (metersPerPixel * desiredPixels + speedMps * 0.9)
-              .clamp(90.0, 360.0)
-              .toDouble();
-'''
-if t.count(old_pixels)!=1:
-    raise SystemExit(f"100304 camera anchor calibration count {t.count(old_pixels)}")
-t=t.replace(old_pixels,new_pixels,1)
+camera_start=t.find("  LatLng _navigationCameraTarget(")
+camera_end=t.find("  void _cancelNavigationCameraReturn()", camera_start)
+if camera_start<0 or camera_end<0:
+    raise SystemExit("100304 camera target boundaries missing")
+camera_block=t[camera_start:camera_end]
+camera_block,n=re.subn(
+    r"media\.height\s*\*\s*\(isLandscape\s*\?\s*0\.12\s*:\s*0\.20\)",
+    "media.height * (isLandscape ? 0.055 : 0.105)",
+    camera_block,
+    count=1,
+)
+if n!=1:
+    raise SystemExit(f"100304 camera desiredPixels replacement count {n}")
+camera_block,n=re.subn(
+    r"\(metersPerPixel\s*\*\s*desiredPixels\s*\+\s*speedMps\s*\*\s*1\.2\)\s*\.clamp\(140\.0,\s*520\.0\)",
+    "(metersPerPixel * desiredPixels + speedMps * 0.9).clamp(90.0, 360.0)",
+    camera_block,
+    count=1,
+)
+if n!=1:
+    raise SystemExit(f"100304 camera lookAhead replacement count {n}")
+t=t[:camera_start]+camera_block+t[camera_end:]
 
 # ---------------------------------------------------------------------------
 # 3) Driver View visual composition: lower the entire map surface and reveal a
