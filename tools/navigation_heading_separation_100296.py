@@ -96,23 +96,24 @@ text = (
     + text[trip_nav_tools_pos:]
 )
 
-# Route geometry updates the camera heading. The 100295 stationary filter is
-# applied here to the real trip stream so GPS jitter cannot move the marker,
-# camera, distance, or speed while the user is standing still.
-old_live_fix = """        final current = LatLng(position.latitude, position.longitude);
-        final heading = _resolvedHeading(position, current);
-        final remaining = _remainingDistanceFrom(current);
+# Route geometry updates the camera heading. Wire the 100295 stationary
+# filter into the active trip stream using stable stream boundaries instead
+# of depending on prior Dart formatting.
+stream_start = text.find(
+    "    _positionSubscription = Geolocator.getPositionStream("
+)
+if stream_start < 0:
+    raise SystemExit("100296: position stream start missing")
+callback_start = text.find("      (position) {", stream_start)
+speak_anchor = "        _speakCurrentInstruction();"
+speak_pos = text.find(speak_anchor, callback_start)
+if callback_start < 0 or speak_pos < 0:
+    raise SystemExit("100296: position callback/speech boundary missing")
+prefix_end = speak_pos + len(speak_anchor)
 
-        setState(() {
-          livePosition = position;
-          _navigationHeading = heading;
-          _liveRemainingMeters = remaining;
-        });
-        _animateNavigationMarker(current, heading);
-        _previousLivePoint = current;
-        _speakCurrentInstruction();
-"""
-new_live_fix = """        final filtered = _filterNavigationFix(position);
+new_callback_prefix = """      (position) {
+        if (!mounted) return;
+        final filtered = _filterNavigationFix(position);
         final current = filtered.point;
         final heading = _resolvedHeading(
           position,
@@ -143,13 +144,13 @@ new_live_fix = """        final filtered = _filterNavigationFix(position);
           setState(() => _displayPosition = current);
           _followLivePosition(current);
         }
-        _speakCurrentInstruction();
-"""
-if text.count(old_live_fix) != 1:
-    raise SystemExit(
-        f"100296: live fix stream anchor count {text.count(old_live_fix)}"
-    )
-text = text.replace(old_live_fix, new_live_fix, 1)
+        _speakCurrentInstruction();"""
+
+text = (
+    text[:callback_start]
+    + new_callback_prefix
+    + text[prefix_end:]
+)
 
 # ---------- camera uses route heading only ----------
 camera_start = text.find("  double _cameraEaseInOut(double t) {")
