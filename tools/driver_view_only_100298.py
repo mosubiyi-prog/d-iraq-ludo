@@ -40,8 +40,15 @@ new=r'''  double _navigationModeZoom() =>
 '''
 one(old,new,"camera target")
 z="_navigationHomeZoom.clamp(13.6, 16.2).toDouble()"
-if t.count(z)!=3: raise SystemExit(f"100298 camera zoom owners: {t.count(z)}")
-t=t.replace(z,"_navigationModeZoom()")
+if t.count(z)!=4:
+    raise SystemExit(f"100298 camera zoom owners: expected helper + 3 owners, found {t.count(z)}")
+# The first occurrence belongs to _navigationModeZoom() itself and must remain.
+# Replace only the three downstream camera-owner uses.
+first=t.find(z)
+tail=t[first+len(z):]
+if tail.count(z)!=3:
+    raise SystemExit(f"100298 downstream camera zoom owners: {tail.count(z)}")
+t=t[:first+len(z)] + tail.replace(z,"_navigationModeZoom()",3)
 
 anchor="  void _followLivePosition(LatLng current) {\n"
 if t.count(anchor)!=1: raise SystemExit("100298 follow anchor")
