@@ -45,3 +45,5 @@ jobs:
 # retry-after-stable-gps-stream-boundary
 
 # retry-after-camera-owner-boundary-rewrite
+
+# retry-after-arrow-reset-boundaries
