@@ -156,11 +156,7 @@ new_callback_prefix = """      (position) {
                       20) {
                 _dailyTaskTripLastSavedMeters =
                     _dailyTaskTripDistanceMeters;
-                unawaited(
-                  DedaLongTripProgress.update(
-                    _dailyTaskTripDistanceMeters,
-                  ),
-                );
+                unawaited(DedaLongTripProgress.update(_dailyTaskTripDistanceMeters));
               }
             }
           }
