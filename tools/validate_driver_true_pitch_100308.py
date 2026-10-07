@@ -18,9 +18,9 @@ checks={
     "route on pitched map":"controller.addLine(" in driver
         and "lineColor: '#22D866'" in driver,
     "camera bearing":"bearing: (widget.headingDegrees + 360) % 360" in driver,
-    "gesture bridge":"onPointerDown: (_) => widget.onMapGesture()" in driver
+    "modern MapLibre API":"ml.MapLibreMapController" in driver\n        and "child: ml.MapLibreMap(" in driver,\n    "gesture bridge":"onPointerDown: (_) => widget.onMapGesture()" in driver
         and "onMapGesture: _pauseNavigationFollowForGesture" in main,
-    "maplibre dependency":"maplibre_gl:" in pub,
+    "maplibre dependency":"maplibre_gl: ^0.27.1" in pub,
     "100302 bump preserved":"if (_isNeighborhoodBump(hazard)) return 50.0;" in main
         and "_spokenHazardIds.add(best.id);" in main,
     "stationary filter preserved":"final requiredCandidates = isWalking ? 2 : 3;" in main,

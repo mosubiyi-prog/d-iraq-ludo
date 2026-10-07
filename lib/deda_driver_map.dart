@@ -44,7 +44,7 @@ class DedaDriverMap extends StatefulWidget {
 }
 
 class _DedaDriverMapState extends State<DedaDriverMap> {
-  ml.MaplibreMapController? _controller;
+  ml.MapLibreMapController? _controller;
   ml.Line? _routeShadow;
   ml.Line? _routeCore;
   bool _styleReady = false;
@@ -232,7 +232,7 @@ class _DedaDriverMapState extends State<DedaDriverMap> {
     }
   }
 
-  Future<void> _onMapCreated(ml.MaplibreMapController controller) async {
+  Future<void> _onMapCreated(ml.MapLibreMapController controller) async {
     _controller = controller;
     await _moveCamera();
   }
@@ -277,7 +277,7 @@ class _DedaDriverMapState extends State<DedaDriverMap> {
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
                   onPointerDown: (_) => widget.onMapGesture(),
-                  child: ml.MaplibreMap(
+                  child: ml.MapLibreMap(
                     styleString: _osmStyle,
                     initialCameraPosition: _cameraPosition(),
                     onMapCreated: _onMapCreated,
