@@ -35,6 +35,11 @@ checks = {
     "route heading updates from route geometry":
         "final routeCameraHeading = _routeForwardHeading(current);" in text
         and "_routeCameraHeading = routeCameraHeading;" in text,
+    "stationary filter wired into live trip stream":
+        "final filtered = _filterNavigationFix(position);" in text
+        and "moving: filtered.moving" in text
+        and "_navigationDisplaySpeedMps = filtered.speedMps;" in text
+        and "if (filtered.moving)" in text,
     "arrow moves independently":
         "((_arrowHeading - _routeCameraHeading + 360) % 360)" in text
         and "angle: navigationArrowAngle," in text,
