@@ -16,6 +16,7 @@ dependencies:
   geolocator: ^14.0.2
   flutter_compass: ^0.8.1
   flutter_map: ^8.2.2
+  maplibre_gl: ^0.20.0
   latlong2: ^0.9.1
   shared_preferences: ^2.3.3
   flutter_tts: ^4.2.3
