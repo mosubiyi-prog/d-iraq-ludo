@@ -1,12 +1,13 @@
 from pathlib import Path
+import re
 
 t=Path("lib/main.dart").read_text()
 
 checks={
 "driver state":"bool _driverViewEnabled = false;" in t,
 "driver toggle":"Widget _buildDriverViewToggle()" in t,
-"driver zoom":"_driverViewEnabled ? 15.8" in t,
-"driver lookahead":"final base = _driverViewEnabled ? 165.0 : 75.0;" in t,
+"driver zoom": re.search(r"_driverViewEnabled\s*\?\s*15\.8\s*:", t) is not None,
+"driver lookahead": re.search(r"final\s+base\s*=\s*_driverViewEnabled\s*\?\s*165\.0\s*:\s*75\.0\s*;", t) is not None,
 "perspective":"setEntry(3, 2, 0.00075 * amount)" in t and "rotateX(0.28 * amount)" in t,
 "map wrapped":"child: _wrapDriverPerspective(FlutterMap(" in t,
 "fixed arrow":"_buildFixedDriverArrow(navigationArrowAngle)" in t,
