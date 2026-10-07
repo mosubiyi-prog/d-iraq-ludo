@@ -70,28 +70,31 @@ if text.count(old_launch) != 1:
     raise SystemExit("100296: launch heading anchor missing")
 text = text.replace(old_launch, new_launch, 1)
 
-old_launch_state = """      if (launchHeading != null) {
-        _navigationHeading = launchHeading;
-        _displayHeading = launchHeading;
-        _hasNavigationHeading = true;
-      }
-      _navigationToolsOpen = false;
-"""
-new_launch_state = """      if (launchHeading != null) {
-        _navigationHeading = launchHeading;
-        _displayHeading = launchHeading;
-        _hasNavigationHeading = true;
-      }
-      _routeCameraHeading = launchHeading ?? _navigationHeading;
+# Add 100296 launch-state fields using a scoped insertion instead of replacing
+# a formatting-sensitive block.
+trip_start_pos = text.find("      tripStarted = true;")
+trip_nav_tools_pos = text.find(
+    "      _navigationToolsOpen = false;",
+    trip_start_pos,
+)
+if trip_start_pos < 0 or trip_nav_tools_pos < 0:
+    raise SystemExit("100296: trip start/navigation-tools boundary missing")
+
+launch_window = text[trip_start_pos:trip_nav_tools_pos]
+if "if (launchHeading != null)" not in launch_window:
+    raise SystemExit("100296: launch heading initialization missing")
+
+launch_insert = """      _routeCameraHeading = launchHeading ?? _navigationHeading;
       if (!_compassHeadingIsFresh) {
         _arrowHeading = _routeCameraHeading;
       }
       _navigationHomeZoom = navigationHomeZoom;
-      _navigationToolsOpen = false;
 """
-if text.count(old_launch_state) != 1:
-    raise SystemExit("100296: launch state anchor missing")
-text = text.replace(old_launch_state, new_launch_state, 1)
+text = (
+    text[:trip_nav_tools_pos]
+    + launch_insert
+    + text[trip_nav_tools_pos:]
+)
 
 # Route geometry updates the camera heading. Accepted movement remains a
 # fallback for the arrow only when the compass is unavailable/stale.
