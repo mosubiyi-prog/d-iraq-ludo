@@ -282,39 +282,47 @@ text = (
 )
 
 # ---------- arrow uses phone heading relative to route-up map ----------
-route_points_anchor = "    final routePoints = route?.points ?? const <LatLng>[];\n"
-if text.count(route_points_anchor) != 1:
+route_points_token = "    final routePoints = route?.points ?? const <LatLng>[];"
+route_points_pos = text.find(route_points_token)
+if route_points_pos < 0:
     raise SystemExit("100296: routePoints build anchor missing")
+route_points_end = text.find("\n", route_points_pos) + 1
+
 arrow_angle_decl = """    final navigationArrowAngle = tripStarted
         ? ((_arrowHeading - _routeCameraHeading + 360) % 360) *
             math.pi /
             180
         : _displayHeading * math.pi / 180;
 """
-text = text.replace(
-    route_points_anchor,
-    route_points_anchor + arrow_angle_decl,
-    1,
+text = text[:route_points_end] + arrow_angle_decl + text[route_points_end:]
+
+arrow_comment = text.find(
+    "// Keep one small green heading arrow for the user's start/live position."
+)
+if arrow_comment < 0:
+    raise SystemExit("100296: navigation arrow marker comment missing")
+transform_pos = text.find("Transform.rotate(", arrow_comment)
+angle_pos = text.find("          angle:", transform_pos)
+angle_end = text.find("\n", angle_pos)
+if transform_pos < 0 or angle_pos < 0 or angle_end < 0:
+    raise SystemExit("100296: navigation arrow angle line missing")
+text = (
+    text[:angle_pos]
+    + "          angle: navigationArrowAngle,"
+    + text[angle_end:]
 )
 
-old_arrow = "          angle: tripStarted ? 0 : _displayHeading * math.pi / 180,"
-new_arrow = "          angle: navigationArrowAngle,"
-if text.count(old_arrow) != 1:
-    raise SystemExit("100296: active-trip arrow angle anchor missing")
-text = text.replace(old_arrow, new_arrow, 1)
-
-# Stop-trip clears only 100296-specific references. 100295 reset stays intact.
-old_stop = """      _navigationDisplaySpeedMps = 0;
-      _stationaryAnchor = null;
-"""
-new_stop = """      _navigationDisplaySpeedMps = 0;
-      _routeCameraHeading = 0;
+# Stop-trip clears only 100296-specific camera state. Insert immediately after
+# the 100295 filtered-speed reset within stopTrip, independent of formatting.
+stop_start = text.find("  Future<void> stopTrip({")
+stop_speed = text.find("      _navigationDisplaySpeedMps = 0;", stop_start)
+if stop_start < 0 or stop_speed < 0:
+    raise SystemExit("100296: stop-trip filtered-speed reset missing")
+stop_speed_end = text.find("\n", stop_speed) + 1
+stop_insert = """      _routeCameraHeading = 0;
       _navigationHomeZoom = 16.2;
-      _stationaryAnchor = null;
 """
-if text.count(old_stop) != 1:
-    raise SystemExit("100296: stop reset anchor missing")
-text = text.replace(old_stop, new_stop, 1)
+text = text[:stop_speed_end] + stop_insert + text[stop_speed_end:]
 
 path.write_text(text)
 print("DEDA 100296 route/camera vs phone-arrow separation applied.")
