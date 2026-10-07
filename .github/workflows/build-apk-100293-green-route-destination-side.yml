@@ -27,7 +27,7 @@ jobs:
           cache: false
 
       - name: Build and validate exact 100286 plus green-route-only patch
-        run: bash tools/build_100293_green_route_forward_only.sh
+        run: bash tools/build_100293_green_route_destination_side.sh
 
       - name: Upload APK 100293
         uses: actions/upload-artifact@v4
