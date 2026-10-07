@@ -115,6 +115,69 @@ new_callback_prefix = """      (position) {
         if (!mounted) return;
         final filtered = _filterNavigationFix(position);
         final current = filtered.point;
+
+        // Preserve the proven account-scoped 1 km daily-task tracker. Count
+        // only accepted movement so stationary GPS jitter cannot earn metres.
+        final taskGpsAccurate =
+            position.accuracy.isFinite && position.accuracy <= 80;
+        if (taskGpsAccurate && filtered.moving) {
+          final taskNow = DateTime.now();
+          final taskPrevious = _dailyTaskTripLastPoint;
+          final taskPreviousAt = _dailyTaskTripLastFixAt;
+          if (taskPrevious != null && taskPreviousAt != null) {
+            final taskSegmentMeters =
+                _metersBetween(taskPrevious, current);
+            final taskElapsedSeconds = math.max(
+              0.5,
+              taskNow.difference(taskPreviousAt).inMilliseconds / 1000.0,
+            );
+            final taskReportedSpeed =
+                position.speed.isFinite && position.speed > 0
+                    ? position.speed
+                    : 0.0;
+            final taskPlausibleSpeed =
+                math.max(55.0, taskReportedSpeed * 1.8 + 15.0);
+            final taskMaxSegmentMeters = math.min(
+              2000.0,
+              math.max(
+                120.0,
+                taskElapsedSeconds * taskPlausibleSpeed + 100.0,
+              ),
+            );
+            if (taskSegmentMeters >= 1 &&
+                taskSegmentMeters <= taskMaxSegmentMeters) {
+              _dailyTaskTripDistanceMeters = math.min(
+                1000.0,
+                _dailyTaskTripDistanceMeters + taskSegmentMeters,
+              );
+              if (_dailyTaskTripDistanceMeters >= 1000 ||
+                  _dailyTaskTripDistanceMeters -
+                          _dailyTaskTripLastSavedMeters >=
+                      20) {
+                _dailyTaskTripLastSavedMeters =
+                    _dailyTaskTripDistanceMeters;
+                unawaited(
+                  DedaLongTripProgress.update(
+                    _dailyTaskTripDistanceMeters,
+                  ),
+                );
+              }
+            }
+          }
+          _dailyTaskTripLastPoint = current;
+          _dailyTaskTripLastFixAt = taskNow;
+        }
+        if (!_dailyTaskTripReported &&
+            _dailyTaskTripDistanceMeters >= 1000) {
+          _dailyTaskTripReported = true;
+          unawaited(DedaLongTripProgress.update(1000));
+          unawaited(
+            DedaTaskEngine.recordSuccessfulEvent(
+              DedaTaskEvent.longTripCompleted,
+            ).then<void>((_) {}),
+          );
+        }
+
         final heading = _resolvedHeading(
           position,
           current,
