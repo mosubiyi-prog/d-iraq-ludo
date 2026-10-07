@@ -233,7 +233,7 @@ new_heading_filter = r'''  double? _routeForwardHeading(
   double _resolvedHeading(
     Position position,
     LatLng current, {
-    required bool moving,
+    bool moving = true,
   }) {
     if (!moving) {
       return _navigationHeading;
