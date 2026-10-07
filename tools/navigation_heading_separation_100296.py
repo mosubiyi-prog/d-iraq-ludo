@@ -153,23 +153,30 @@ text = (
 )
 
 # ---------- camera uses route heading only ----------
-camera_start = text.find("  double _cameraEaseInOut(double t) {")
-camera_end = text.find("  void _animateNavigationMarker(", camera_start)
-if camera_start < 0 or camera_end < 0:
-    raise SystemExit("100296: camera block boundary missing")
-camera = text[camera_start:camera_end]
+# Rewrite the three camera-owner functions by semantic boundaries. This avoids
+# brittle formatting matches after dart format and guarantees the same home
+# target is used by start, live-follow, and the 10-second return.
+smooth_start = text.find("  void _startSmoothNavigationReturn() {")
+follow_start = text.find("  void _followLivePosition(LatLng current) {", smooth_start)
+focus_start = text.find("  void _focusNavigationPosition() {", follow_start)
+animate_start = text.find("  void _animateNavigationMarker(", focus_start)
+if min(smooth_start, follow_start, focus_start, animate_start) < 0:
+    raise SystemExit("100296: camera owner boundaries missing")
 
-old_heading = "final heading = (_displayHeading + 360) % 360;"
-if camera.count(old_heading) != 3:
-    raise SystemExit(
-        f"100296: expected 3 display-heading camera owners, found {camera.count(old_heading)}"
-    )
-camera = camera.replace(
-    old_heading,
-    "final heading = (_routeCameraHeading + 360) % 360;",
-)
+new_smooth = r'''  void _startSmoothNavigationReturn() {
+    if (!mounted || !tripStarted) return;
+    _navigationFreeControlTimer?.cancel();
+    _navigationCameraReturnTimer?.cancel();
 
-old_after_camera_read = """    } catch (_) {
+    late final LatLng startCenter;
+    late final double startZoom;
+    late final double startRotation;
+    try {
+      final camera = _mapController.camera;
+      startCenter = camera.center;
+      startZoom = camera.zoom;
+      startRotation = camera.rotation;
+    } catch (_) {
       setState(() {
         _navigationCameraReturning = false;
         _autoFollowMap = true;
@@ -177,69 +184,102 @@ old_after_camera_read = """    } catch (_) {
       return;
     }
 
-    setState(() {
-"""
-new_after_camera_read = """    } catch (_) {
-      setState(() {
-        _navigationCameraReturning = false;
-        _autoFollowMap = true;
-      });
-      return;
-    }
     final targetZoom =
         _navigationHomeZoom.clamp(13.6, 16.2).toDouble();
 
     setState(() {
-"""
-if camera.count(old_after_camera_read) != 1:
-    raise SystemExit("100296: smooth-return camera-read anchor missing")
-camera = camera.replace(old_after_camera_read, new_after_camera_read, 1)
+      _autoFollowMap = false;
+      _navigationCameraReturning = true;
+    });
 
-old_target = """      final targetCenter = _navigationCameraTarget(current, heading, startZoom);
-      final targetRotation = (360 - heading) % 360;
-"""
-new_target = """      final targetCenter =
+    final startedAt = DateTime.now();
+    const durationMs = 1200;
+    _navigationCameraReturnTimer =
+        Timer.periodic(const Duration(milliseconds: 16), (timer) {
+      if (!mounted || !tripStarted) {
+        timer.cancel();
+        _navigationCameraReturnTimer = null;
+        _navigationCameraReturning = false;
+        return;
+      }
+
+      final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+      final rawT = (elapsed / durationMs).clamp(0.0, 1.0).toDouble();
+      final t = _cameraEaseInOut(rawT);
+      final current = _displayPosition ?? startPoint;
+      final heading = (_routeCameraHeading + 360) % 360;
+      final targetCenter =
           _navigationCameraTarget(current, heading, targetZoom);
       final targetRotation = (360 - heading) % 360;
-"""
-if camera.count(old_target) != 1:
-    raise SystemExit("100296: smooth-return target anchor missing")
-camera = camera.replace(old_target, new_target, 1)
+      final rotationDelta =
+          _shortestRotationDelta(startRotation, targetRotation);
 
-old_rotation_move = """      final rotation =
-          (startRotation + rotationDelta * t + 360) % 360;
-
-      try {
-        _mapController.moveAndRotate(center, startZoom, rotation);
-      } catch (_) {}
-"""
-new_rotation_move = """      final rotation =
+      final center = LatLng(
+        startCenter.latitude +
+            (targetCenter.latitude - startCenter.latitude) * t,
+        startCenter.longitude +
+            (targetCenter.longitude - startCenter.longitude) * t,
+      );
+      final rotation =
           (startRotation + rotationDelta * t + 360) % 360;
       final zoom = startZoom + (targetZoom - startZoom) * t;
 
       try {
         _mapController.moveAndRotate(center, zoom, rotation);
       } catch (_) {}
-"""
-if camera.count(old_rotation_move) != 1:
-    raise SystemExit("100296: smooth-return zoom interpolation anchor missing")
-camera = camera.replace(old_rotation_move, new_rotation_move, 1)
 
-old_focus_zoom = """    try {
-      final currentZoom = _currentMapZoom();
-      final navigationZoom = currentZoom.clamp(13.6, 16.2).toDouble();
-      final current = _displayPosition ?? startPoint;
-"""
-new_focus_zoom = """    try {
+      if (rawT >= 1) {
+        timer.cancel();
+        _navigationCameraReturnTimer = null;
+        if (!mounted) return;
+        setState(() {
+          _navigationCameraReturning = false;
+          _autoFollowMap = true;
+        });
+      }
+    });
+  }
+
+'''
+
+new_follow = r'''  void _followLivePosition(LatLng current) {
+    if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;
+    try {
+      final zoom = _navigationHomeZoom.clamp(13.6, 16.2).toDouble();
+      final heading = (_routeCameraHeading + 360) % 360;
+      _mapController.moveAndRotate(
+        _navigationCameraTarget(current, heading, zoom),
+        zoom,
+        (360 - heading) % 360,
+      );
+    } catch (_) {}
+  }
+
+'''
+
+new_focus = r'''  void _focusNavigationPosition() {
+    try {
       final navigationZoom =
           _navigationHomeZoom.clamp(13.6, 16.2).toDouble();
       final current = _displayPosition ?? startPoint;
-"""
-if camera.count(old_focus_zoom) != 1:
-    raise SystemExit("100296: focus zoom anchor missing")
-camera = camera.replace(old_focus_zoom, new_focus_zoom, 1)
+      final heading = (_routeCameraHeading + 360) % 360;
+      _mapController.moveAndRotate(
+        _navigationCameraTarget(current, heading, navigationZoom),
+        navigationZoom,
+        (360 - heading) % 360,
+      );
+    } catch (_) {}
+  }
 
-text = text[:camera_start] + camera + text[camera_end:]
+'''
+
+text = (
+    text[:smooth_start]
+    + new_smooth
+    + new_follow
+    + new_focus
+    + text[animate_start:]
+)
 
 # ---------- arrow uses phone heading relative to route-up map ----------
 route_points_anchor = "    final routePoints = route?.points ?? const <LatLng>[];\n"
