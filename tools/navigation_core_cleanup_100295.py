@@ -497,19 +497,32 @@ text = text.replace(
     1,
 )
 
-old_trip_state = """    setState(() {
-      tripStarted = true;
+# Add trip-start state with narrow anchors so formatting from earlier proven
+# reconstruction layers cannot make this patch brittle.
+trip_follow_anchor = """      tripStarted = true;
       _autoFollowMap = true;
-      _liveRemainingMeters = validRoute.distanceMeters;
-      _previousLivePoint = startPoint;
-      _navigationToolsOpen = false;
 """
-new_trip_state = """    setState(() {
-      tripStarted = true;
+if text.count(trip_follow_anchor) != 1:
+    raise SystemExit(
+        f"100295: trip follow anchor count {text.count(trip_follow_anchor)}"
+    )
+text = text.replace(
+    trip_follow_anchor,
+    """      tripStarted = true;
       _autoFollowMap = true;
       _navigationCameraReturning = false;
-      _liveRemainingMeters = validRoute.distanceMeters;
-      _previousLivePoint = startPoint;
+""",
+    1,
+)
+
+trip_previous_anchor = "      _previousLivePoint = startPoint;\n"
+if text.count(trip_previous_anchor) != 1:
+    raise SystemExit(
+        f"100295: previous-point anchor count {text.count(trip_previous_anchor)}"
+    )
+text = text.replace(
+    trip_previous_anchor,
+    """      _previousLivePoint = startPoint;
       _stationaryAnchor = startPoint;
       _movementReferencePoint = startPoint;
       _lastMeaningfulMovementAt = DateTime.now();
@@ -521,56 +534,9 @@ new_trip_state = """    setState(() {
         _displayHeading = launchHeading;
         _hasNavigationHeading = true;
       }
-      _navigationToolsOpen = false;
-"""
-if text.count(old_trip_state) != 1:
-    raise SystemExit("100295: trip-start state anchor missing")
-text = text.replace(old_trip_state, new_trip_state, 1)
-
-old_fix = """        final current = LatLng(position.latitude, position.longitude);
-        final heading = _resolvedHeading(position, current);
-        final remaining = _remainingDistanceFrom(current);
-
-        setState(() {
-          livePosition = position;
-          _navigationHeading = heading;
-          _liveRemainingMeters = remaining;
-        });
-        _animateNavigationMarker(current, heading);
-        _previousLivePoint = current;
-"""
-new_fix = """        final filtered = _filterNavigationFix(position);
-        final current = filtered.point;
-        final heading = _resolvedHeading(
-          position,
-          current,
-          moving: filtered.moving,
-        );
-        final remaining = _remainingDistanceFrom(current);
-
-        setState(() {
-          livePosition = position;
-          _navigationHeading = heading;
-          _navigationDisplaySpeedMps = filtered.speedMps;
-          _liveRemainingMeters = remaining;
-        });
-
-        if (filtered.moving) {
-          _animateNavigationMarker(current, heading);
-          _previousLivePoint = current;
-        } else {
-          _positionAnimationTimer?.cancel();
-          final stable = _stationaryAnchor ?? current;
-          setState(() {
-            _displayPosition = stable;
-            _displayHeading = _navigationHeading;
-          });
-          _followLivePosition(stable);
-        }
-"""
-if text.count(old_fix) != 1:
-    raise SystemExit("100295: live GPS fix block anchor missing")
-text = text.replace(old_fix, new_fix, 1)
+""",
+    1,
+)
 
 # ---------- gesture ownership ----------
 callback_start = "                        onPositionChanged: (camera, _) {"
