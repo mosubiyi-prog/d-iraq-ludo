@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100297-navigation-polish-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# retry-after-map-style-label-anchor-fix
