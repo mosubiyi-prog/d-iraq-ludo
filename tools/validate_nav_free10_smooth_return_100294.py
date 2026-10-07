@@ -4,16 +4,21 @@ text = Path("lib/main.dart").read_text()
 
 required = [
     "Timer(const Duration(seconds: 10)",
-    "void _startSmoothNavigationReturn({required bool startup})",
+    "void _startSmoothNavigationReturn()",
     "Timer.periodic(const Duration(milliseconds: 16)",
     "_cameraEaseInOut(rawT)",
-    "final targetCenter = _displayPosition ?? startPoint;",
+    "final targetCenter = _pointAlongBearing(current, heading, lookAhead);",
     "_mapController.moveAndRotate(center, startZoom, rotation);",
     "onPositionChanged: (camera, hasGesture)",
     "_pauseNavigationFollowForGesture();",
-    "if (!tripStarted || !_autoFollowMap || _navigationCameraReturning) return;",
-    "_mapController.moveAndRotate(\n        current,\n        zoom,",
-    "_startSmoothNavigationReturn(startup: true);",
+    "if (!tripStarted || !_autoFollowMap) return;",
+    "_pointAlongBearing(current, heading, lookAhead)",
+    "void _focusNavigationPosition()",
+    "void _animateNavigationMarker(",
+    "void _refreshRoadHazards(",
+    "void _evaluateRoadHazards(",
+    "Widget _buildHazardWarning(",
+    "Widget _buildMapZoomControls(",
     "final visibleRoutePoints = (() {",
     "final destinationIsTowardLast =",
     "points: visibleRoutePoints,",
@@ -23,7 +28,7 @@ for token in required:
         raise SystemExit(f"100294 validation missing: {token}")
 
 if text.count("points: visibleRoutePoints,") != 3:
-    raise SystemExit("100294 validation: green-route clipping changed unexpectedly")
+    raise SystemExit("100294 validation: 100293 green-route clipping changed unexpectedly")
 
 for forbidden in [
     "_routeHeadingNear(",
@@ -33,4 +38,4 @@ for forbidden in [
     if forbidden in text:
         raise SystemExit(f"100294 validation: unrelated/rejected behavior present: {forbidden}")
 
-print("DEDA 100294 validation passed: 100293 route clipping preserved; camera gesture/free10/smooth-return only.")
+print("DEDA 100294 validation passed: 100293 preserved; 10s free control + smooth no-snap return only.")
