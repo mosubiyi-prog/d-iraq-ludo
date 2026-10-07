@@ -1,0 +1,37 @@
+name: Build DEDA 100299 Driver View Finish
+
+on:
+  push:
+    branches:
+      - driver-view-finish-100299-2026-10-07
+    paths:
+      - '.github/workflows/build-apk-100299-driver-view-finish.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100299 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100299
+        run: bash tools/build_100299_driver_view_finish.sh
+
+      - name: Upload APK 100299
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100299-driver-view-finish-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
