@@ -49,3 +49,5 @@ jobs:
 # retry-after-arrow-reset-boundaries
 
 # retry-after-preserving-long-trip-tracker
+
+# retry-after-canonical-trip-progress-marker
