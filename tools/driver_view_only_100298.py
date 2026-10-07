@@ -166,10 +166,8 @@ block=block.replace(one_child,
     "        child: _driverViewEnabled\n            ? const SizedBox.shrink()\n            : Transform.rotate(\n",1)
 t=t[:m]+block+t[e+len("      ),"):]
 
-a="""            if (!(isLandscape && tripStarted) &&
-                !(tripStarted && _mapFullscreen))
-"""
-if t.count(a)!=1: raise SystemExit("100298 map control anchor")
+# Place the fixed driver arrow immediately before the proven portrait speed
+# block. This is a stable Stack child anchor in the reconstructed 100297 UI.
 overlay=r'''            if (tripStarted && _driverViewEnabled)
               Positioned.fill(
                 child: Align(
@@ -178,8 +176,6 @@ overlay=r'''            if (tripStarted && _driverViewEnabled)
                 ),
               ),
 '''
-t=t.replace(a,overlay+a,1)
-
 ps='''            if (tripStarted && !isLandscape)
               Positioned(
                 top: _activeHazard != null ? 174 : 118,
@@ -188,7 +184,7 @@ ps='''            if (tripStarted && !isLandscape)
               ),
 '''
 if t.count(ps)!=1: raise SystemExit(f"100298 portrait speed {t.count(ps)}")
-t=t.replace(ps,ps+'''            if (tripStarted && !isLandscape)
+t=t.replace(ps,overlay+ps+'''            if (tripStarted && !isLandscape)
               Positioned(
                 top: _activeHazard != null ? 244 : 188,
                 left: 12,
