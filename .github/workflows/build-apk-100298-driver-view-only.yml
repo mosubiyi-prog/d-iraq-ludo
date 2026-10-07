@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100298-driver-view-only-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# trigger-driver-view-100298
