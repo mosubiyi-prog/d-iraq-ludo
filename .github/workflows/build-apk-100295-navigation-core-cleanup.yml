@@ -35,3 +35,5 @@ jobs:
           name: DEDA-100295-navigation-core-cleanup-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+# retry-after-trip-start-anchor-fix
