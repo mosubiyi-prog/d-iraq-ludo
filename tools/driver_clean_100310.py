@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 # DEDA 100310 — small and isolated changes ON TOP OF EXACT 100303.
 # 1) Remove blue "sky" gradient behind Driver View (not a raster image).
@@ -61,22 +62,26 @@ replace_once(
 # from the overlay arrow, especially on a landscape/small viewport. Base it
 # instead on actual screen pixels and Mercator m/px. Keep 100303 route-up
 # camera and zoom untouched.
-replace_once(
-    "      final speedMps =\n          _navigationDisplaySpeedMps.clamp(0.0, 45.0).toDouble();\n"
-    "      final latitudeScale =",
-    "      final latitudeScale =",
-    "driver camera speed lead removal",
+# Dart format may merge/reflow this expression, so use a tightly scoped
+# multi-line pattern rather than a literal whitespace-dependent anchor.
+speed_pattern = re.compile(
+    r"      final speedMps\s*=\s*_navigationDisplaySpeedMps\.clamp\(0\.0,\s*45\.0\)\.toDouble\(\);\s*(?=      final latitudeScale)"
 )
-replace_once(
-    "      final lookAhead =\n"
-    "          (metersPerPixel * desiredPixels + speedMps * 1.2)\n"
-    "              .clamp(140.0, 520.0)\n"
-    "              .toDouble();",
+t, n = speed_pattern.subn("", t, count=1)
+if n != 1:
+    raise SystemExit(f"100310 speed lead anchor count {n}")
+
+lookahead_pattern = re.compile(
+    r"      final lookAhead\s*=\s*\(metersPerPixel\s*\*\s*desiredPixels\s*\+\s*speedMps\s*\*\s*1\.2\)\s*\.clamp\(140\.0,\s*520\.0\)\s*\.toDouble\(\);"
+)
+t, n = lookahead_pattern.subn(
     "      final lookAhead = (metersPerPixel * desiredPixels)\n"
     "          .clamp(35.0, 520.0)\n"
     "          .toDouble();",
-    "screen-space camera lead",
+    t, count=1
 )
+if n != 1:
+    raise SystemExit(f"100310 screen-space lead anchor count {n}")
 
 p.write_text(t)
 
