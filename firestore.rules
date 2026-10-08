@@ -1493,6 +1493,75 @@ service cloud.firestore {
         && !isProvinceAgent();
     }
 
+    // Task administration stage 1: manager-owned, UNPUBLISHED drafts.
+    // This collection is never read by current user task points/claims.
+    // Do not grant any user or non-manager access, even to list drafts.
+    match /admin_task_drafts/{draftId} {
+      function validDraftShape(data) {
+        return data.keys().hasOnly([
+          'cycle', 'action', 'titleAr', 'titleEn', 'targetCount',
+          'rewardUnit', 'rewardAmount', 'url', 'status', 'revision',
+          'createdByUid', 'updatedByUid', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasAll([
+          'cycle', 'action', 'titleAr', 'titleEn', 'targetCount',
+          'rewardUnit', 'rewardAmount', 'url', 'status', 'revision',
+          'createdByUid', 'updatedByUid', 'createdAt', 'updatedAt'
+        ])
+        && data.cycle in ['daily', 'weekly']
+        && data.action in [
+          'open_map', 'share_personal_location', 'share_registered_place',
+          'open_saved_place', 'open_received_place', 'review_added_place',
+          'traffic_skills', 'long_trip', 'visit_telegram'
+        ]
+        && data.titleAr is string
+        && data.titleAr.size() >= 3
+        && data.titleAr.size() <= 80
+        && data.titleEn is string
+        && data.titleEn.size() >= 3
+        && data.titleEn.size() <= 80
+        && data.targetCount is int
+        && data.targetCount >= 1
+        && data.targetCount <= 100
+        && data.rewardUnit in ['points', 'diamonds']
+        && data.rewardAmount is int
+        && data.rewardAmount >= 1
+        && data.rewardAmount <= 5000
+        && data.url is string
+        && data.url.size() <= 220
+        && data.status == 'draft'
+        && data.revision is int
+        && data.createdByUid is string
+        && data.updatedByUid is string
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+      }
+
+      allow get, list: if isGeneralManager();
+      allow create: if isGeneralManager()
+        && validDraftShape(request.resource.data)
+        && request.resource.data.revision == 1
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isGeneralManager()
+        && validDraftShape(request.resource.data)
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && resource.data.status == 'draft'
+        && request.resource.data.status == 'draft'
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'cycle', 'action', 'titleAr', 'titleEn', 'targetCount',
+          'rewardUnit', 'rewardAmount', 'url', 'updatedByUid',
+          'updatedAt', 'revision'
+        ]);
+      allow delete: if false;
+    }
+
     match /admin_audit/{auditId} {
       allow read: if hasAdminPermission('viewAudit')
         && !isProvinceAgent();
