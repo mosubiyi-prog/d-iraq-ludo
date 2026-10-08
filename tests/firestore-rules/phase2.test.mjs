@@ -248,10 +248,38 @@ test('APK 100321 exact Arabic survey write with full audit succeeds for 1 and 3 
       questionCount: count,
       createdAt: serverTimestamp(),
     });
+    console.log('APK_100321_SURVEY_SAVE_START: question_count=' + count);
     await assertSucceeds(batch.commit());
+    console.log('APK_100321_SURVEY_SAVE_OK: question_count=' + count);
     const saved = await assertSucceeds(getDoc(doc(manager, 'admin_survey_drafts', path)));
     assert.equal(saved.exists(), true);
     assert.equal(saved.data().questions.length, count);
     assert.equal(saved.data().rewardAmount, amount);
   }
+});
+
+test('Six Arabic rating questions and five-option choice rules keep limits without 1000-expression overflow', async () => {
+  const allRatings = Array.from({length: 6}, (_, i) => ({
+    type: 'rating_5',
+    promptAr: 'تقييم خارطة ديدا وسرعتها رقم ' + (i + 1),
+    promptEn: 'تقييم خارطة ديدا وسرعتها رقم ' + (i + 1),
+    optionsAr: [], optionsEn: [], required: true,
+  }));
+  console.log('SIX_RATINGS_START');
+  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-six-ratings'),
+    surveyDraft('manager', {questions: allRatings})));
+  console.log('SIX_RATINGS_PASS');
+  const fiveChoices = [
+    'ممتاز جداً', 'جيد جداً', 'جيد', 'مقبول', 'يحتاج تطوير',
+  ];
+  const allChoices = Array.from({length: 6}, (_, i) => ({
+    type: 'choice',
+    promptAr: 'اختيار رأي عن خارطة ديدا رقم ' + (i + 1),
+    promptEn: 'اختيار رأي عن خارطة ديدا رقم ' + (i + 1),
+    optionsAr: fiveChoices, optionsEn: fiveChoices, required: true,
+  }));
+  console.log('SIX_CHOICES_START');
+  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-six-choices'),
+    surveyDraft('manager', {questions: allChoices})));
+  console.log('SIX_CHOICES_PASS');
 });
