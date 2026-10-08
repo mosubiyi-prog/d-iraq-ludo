@@ -220,6 +220,8 @@ def deploy():
 
 def verify_cli_before():
     """Refuse CLI deployment unless live release equals the backed-up original."""
+    if os.environ.get("DEDA_EXPLICIT_MANAGER_DRAFTS_ACTIVATION") != "approved-2026-10-08":
+        raise RuntimeError("Explicit owner approval marker absent: NO DEPLOY")
     m = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
     current = get_live(request_session())
     if (current["sha256"] != m["previous_sha256"]
