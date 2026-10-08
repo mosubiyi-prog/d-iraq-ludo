@@ -1,0 +1,43 @@
+name: DEDA Daily Task Admin UI Stage 4 - NO PRODUCTION
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage4-ui-2026-10-09
+    paths:
+      - 'lib/deda_admin_task_management_page.dart'
+      - 'lib/deda_daily_schedule_preview_service.dart'
+      - '.github/workflows/qa-deda-daily-admin-ui-stage4.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-ui-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    steps:
+      - name: Checkout isolated stage 4
+        uses: actions/checkout@v4
+      - name: Guard unchanged engine and signed-off server prototype
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage3-publisher-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage3-publisher-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage3-publisher-qa-2026-10-09 -- lib/main.dart lib/deda_backend.dart functions/ firestore.rules pubspec.yaml
+      - name: Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Analyze admin daily task preview controls
+        run: |
+          flutter analyze lib/deda_admin_task_management_page.dart lib/deda_admin_task_drafts.dart lib/deda_daily_task_slots.dart lib/deda_daily_schedule_policy.dart lib/deda_daily_schedule_preview_service.dart
+      - name: Retest eight slot and midnight draft rules
+        run: flutter test test/deda_daily_task_slots_test.dart test/deda_daily_schedule_policy_test.dart test/deda_admin_task_drafts_test.dart
+      - name: Verify no user-side claim / Firebase deployment
+        run: |
+          grep -q 'جدولة تجريبية' lib/deda_admin_task_management_page.dart
+          grep -q 'إلغاء الموعد' lib/deda_admin_task_management_page.dart
+          grep -q 'ما تظهر للمستخدمين' lib/deda_admin_task_management_page.dart
+          echo 'STAGE4_UI_PASS: admin-only schedule previews; production app unchanged'
