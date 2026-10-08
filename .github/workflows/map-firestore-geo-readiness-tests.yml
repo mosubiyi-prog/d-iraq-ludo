@@ -20,7 +20,7 @@ jobs:
           cache: false
       - name: Install dependencies
         run: flutter pub get
-      - name: Test geographic bounds and pagination with no server load
+      - name: Test exact Iraq geographic bounds and pagination without server load
         run: flutter test test/deda_geo_window_test.dart test/deda_request_coalescer_test.dart test/deda_public_provider_health_test.dart
       - name: Analyze isolated region reader and provider guards
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_geo_window.dart lib/deda_geo_firestore_reader.dart lib/places_service.dart lib/deda_request_coalescer.dart lib/deda_public_provider_health.dart test/deda_geo_window_test.dart
