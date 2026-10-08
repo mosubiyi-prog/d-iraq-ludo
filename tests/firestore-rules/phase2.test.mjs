@@ -290,6 +290,7 @@ test('Choice option validator rejects empty, overlength and non-string fields', 
   for (const values of [
     ['موافق', ''], ['موافق', 'أ'.repeat(71)], ['موافق', 123],
   ]) {
+    console.log('INVALID_CHOICE_TEST:', JSON.stringify(values));
     const badQuestion = {
       type: 'choice', promptAr: 'هل أعجبك تطبيق ديدا؟',
       promptEn: 'هل أعجبك تطبيق ديدا؟',
