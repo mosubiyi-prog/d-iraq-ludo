@@ -216,3 +216,42 @@ test('Question types, choices, and counts are checked by security rules', async 
       optionsAr: ['نعم', 'لا'], optionsEn: ['نعم', 'لا'],
     }] }));
 });
+
+
+test('APK 100321 exact Arabic survey write with full audit succeeds for 1 and 3 rating questions', async () => {
+  const prompts = [
+    'ما رأيك باستخدام خارطة DEDA؟',
+    'ما رأيك بالمهام اليومية؟',
+    'ما رأيك بالأسئلة المرورية؟',
+  ];
+  for (const [count, unit, amount] of [[1, 'none', 0], [3, 'diamonds', 10]]) {
+    const path = 'apk100321-' + count;
+    const questions = prompts.slice(0, count).map(promptAr => ({
+      type: 'rating_5', promptAr, promptEn: promptAr,
+      optionsAr: [], optionsEn: [], required: true,
+    }));
+    const draft = surveyDraft('manager', {
+      titleAr: 'آراء المستخدمين عن DEDA',
+      titleEn: 'آراء المستخدمين عن DEDA',
+      questions, rewardUnit: unit, rewardAmount: amount,
+      durationDays: 14,
+    });
+    const batch = writeBatch(manager);
+    batch.set(doc(manager, 'admin_survey_drafts', path), draft);
+    batch.set(doc(manager, 'admin_audit', path + '-audit'), {
+      action: 'admin_survey_draft_created',
+      adminUid: 'manager',
+      adminName: 'مدير عام',
+      adminRole: 'general_manager',
+      sourceCollection: 'admin_survey_drafts',
+      sourceId: path,
+      questionCount: count,
+      createdAt: serverTimestamp(),
+    });
+    await assertSucceeds(batch.commit());
+    const saved = await assertSucceeds(getDoc(doc(manager, 'admin_survey_drafts', path)));
+    assert.equal(saved.exists(), true);
+    assert.equal(saved.data().questions.length, count);
+    assert.equal(saved.data().rewardAmount, amount);
+  }
+});
