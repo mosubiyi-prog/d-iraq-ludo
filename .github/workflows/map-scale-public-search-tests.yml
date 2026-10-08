@@ -1,0 +1,44 @@
+name: DEDA Safe Public Search Dedup Tests
+
+on:
+  push:
+    branches:
+      - map-scalability-public-search-coalesce-2026-10-08
+    paths:
+      - '.github/workflows/map-scale-public-search-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated public search optimisation
+        uses: actions/checkout@v4
+      - name: Set up Flutter for offline provider-simulation tests
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Fetch dependencies
+        run: flutter pub get
+      - name: Test request coalescing and bounded cache WITHOUT any public HTTP calls
+        run: flutter test test/deda_request_coalescer_test.dart
+      - name: Static Dart analyzer - search paths only
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/places_service.dart lib/deda_request_coalescer.dart test/deda_request_coalescer_test.dart
+      - name: Verify all 100318 driving, camera, backend and rules sources are untouched
+        run: |
+          git fetch --no-tags origin backup-100318-field-tested-user-heading-camera-2026-10-08:refs/remotes/origin/backup-100318-field-tested-user-heading-camera-2026-10-08
+          git diff --exit-code origin/backup-100318-field-tested-user-heading-camera-2026-10-08 -- lib/main.dart lib/deda_backend.dart lib/deda_road_class_lookup.dart pubspec.yaml firestore.rules storage.rules
+      - name: Source integration checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          x=Path('lib/places_service.dart').read_text()
+          assert "DedaRequestCoalescer<List<PlaceInfo>>" in x
+          assert "ttl: const Duration(seconds: 45)" in x
+          assert "maxEntries: 24" in x
+          assert "return List<PlaceInfo>.of(results);" in x
+          assert "cacheWhen: (places) => places.isNotEmpty" in x
+          assert x.count("return _cachedPublicPlaces(") == 2
+          assert "_searchPlacesByNameUncached" in x
+          print("PASS: public search only, two callers, bounded 45s, defensive clones.")
+          PY
