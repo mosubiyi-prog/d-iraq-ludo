@@ -1,0 +1,89 @@
+name: DEDA Phase 2 Read Only Live Firebase Rule Diff
+
+on:
+  push:
+    branches:
+      - admin-firebase-drafts-phase2-qa-2026-10-08
+    paths:
+      - '.github/workflows/admin-firebase-live-rules-readonly-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout proposed Firestore rules
+        uses: actions/checkout@v4
+      - name: Python for Google Firebaserules REST read-only
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install API auth libraries
+        run: python -m pip install --disable-pip-version-check google-auth requests
+      - name: Compare published Firestore release with proposed branch without logging secrets
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+
+          raw=os.environ.get('FIREBASE_SERVICE_ACCOUNT_DEDA_25B88') or os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+          if not raw:
+              print('READ_ONLY_BLOCKED: no service account credential configured; no live changes attempted.')
+              sys.exit(2)
+          account=json.loads(raw)
+          if account.get('type')!='service_account':
+              print('READ_ONLY_BLOCKED: configured credential is not a service account.')
+              sys.exit(2)
+          credential=service_account.Credentials.from_service_account_info(
+              account,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          client=AuthorizedSession(credential)
+          project='deda-25b88'
+          base='https://firebaserules.googleapis.com/v1/'
+          try:
+              release=client.get(base + 'projects/' + project +
+                  '/releases/cloud.firestore',timeout=35)
+              release.raise_for_status()
+              ruleset_name=release.json().get('rulesetName','')
+              if not ruleset_name.startswith('projects/'+project+'/rulesets/'):
+                  raise ValueError('Unexpected ruleset release name')
+              remote=client.get(base + ruleset_name,timeout=35)
+              remote.raise_for_status()
+              files=remote.json().get('source',{}).get('files',[])
+              live='\n'.join(f['content'] for f in files if f.get('name','').endswith('.rules'))
+              if not live:
+                  raise ValueError('Published ruleset contained no *.rules source')
+          except Exception as exc:
+              print('READ_ONLY_BLOCKED: unable to fetch deployed Firestore rules. Reason:',
+                    type(exc).__name__)
+              sys.exit(3)
+          proposed=Path('firestore.rules').read_text()
+          # Need only exact protected baseline from same branch ancestry.
+          baseline=subprocess.check_output(
+              ['git','show','HEAD~1:firestore.rules'],text=True)
+          normalize=lambda s: '\n'.join(line.rstrip() for line in s.strip().splitlines())
+          sha=lambda s: hashlib.sha256(s.encode()).hexdigest()[:16]
+          liveN,proposedN,baselineN=map(normalize,(live,proposed,baseline))
+          print('READ_ONLY_OK: current deployed Firestore rules successfully inspected.')
+          print('live_sha256_prefix='+sha(liveN))
+          print('candidate_sha256_prefix='+sha(proposedN))
+          print('live_matches_phase2_candidate='+str(liveN==proposedN).lower())
+          print('live_matches_pre_security_fix_baseline='+str(liveN==baselineN).lower())
+          print('live_contains_admin_task_drafts='+str('match /admin_task_drafts/{draftId}' in live).lower())
+          print('live_contains_admin_survey_drafts='+str('match /admin_survey_drafts/{surveyId}' in live).lower())
+          print('candidate_contains_admin_task_drafts='+str('match /admin_task_drafts/{draftId}' in proposed).lower())
+          print('candidate_contains_admin_survey_drafts='+str('match /admin_survey_drafts/{surveyId}' in proposed).lower())
+          print('NO_DEPLOY: this job makes GET requests only. Live rules unchanged.')
+          PY
