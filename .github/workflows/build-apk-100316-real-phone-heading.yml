@@ -1,5 +1,5 @@
 name: Build DEDA 100316 Real Phone And Reverse Arrow Heading
-# Preserve 100315 exactly except live user-bearing sensors/fallback and actual map angle; protect hazards, map, GPS, Road Pulse.
+# Retry 100316: the GPS heading-owner patch now safely matches Dart-formatted indentation.
 
 on:
   push:
