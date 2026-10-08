@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:latlong2/latlong.dart';
 
 import 'deda_request_coalescer.dart';
+import 'deda_public_provider_health.dart';
 
 class PlaceInfo {
   final String name;
@@ -68,6 +69,23 @@ class PlacesService {
   ];
 
   static const Duration _requestTimeout = Duration(seconds: 14);
+
+  // Only named public POI endpoints: no location, query, user ID or URL
+  // is retained by this monitor. No telemetry is uploaded.
+  static final DedaPublicProviderHealth _publicHealth =
+      DedaPublicProviderHealth(
+    providers: const <String>{
+      'nominatim',
+      'overpass-1',
+      'overpass-2',
+      'overpass-3',
+    },
+  );
+
+  /// Diagnostic counters, for future opt-in admin diagnostics UI only.
+  /// Nothing is sent remotely or displayed to the user automatically.
+  static Map<String, Map<String, Object>> get publicProviderDiagnostics =>
+      _publicHealth.snapshot();
 
   // PUBLIC OSM/Nominatim/Overpass results only. Never cache live GPS,
   // route geometry, road hazards or DEDA registered place availability here.
@@ -172,7 +190,10 @@ out center tags;
     if (text.length < 2) return [];
 
     try {
-      final nominatimResults = await _searchIraqWithNominatim(text);
+      final nominatimResults = await _publicHealth.guard(
+        'nominatim',
+        () => _searchIraqWithNominatim(text),
+      );
       if (nominatimResults.isNotEmpty) return nominatimResults;
     } catch (_) {
       // Fall back to Overpass below when the name-search service is busy.
@@ -302,13 +323,17 @@ out center tags;
   }) async {
     Object? lastError;
 
-    for (final endpoint in _overpassUrls) {
+    for (var index = 0; index < _overpassUrls.length; index++) {
+      final endpoint = _overpassUrls[index];
       try {
-        return await _fetchFromEndpoint(
-          endpoint: endpoint,
-          query: query,
-          fallbackType: fallbackType,
-        ).timeout(_requestTimeout);
+        return await _publicHealth.guard(
+          'overpass-${index + 1}',
+          () => _fetchFromEndpoint(
+            endpoint: endpoint,
+            query: query,
+            fallbackType: fallbackType,
+          ).timeout(_requestTimeout),
+        );
       } on TimeoutException {
         lastError = HttpException(
           'Overpass timeout after ${_requestTimeout.inSeconds}s ($endpoint)',
