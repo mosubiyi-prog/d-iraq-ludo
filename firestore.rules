@@ -1564,6 +1564,33 @@ service cloud.firestore {
 
     // DEDA manager surveys: private UNPUBLISHED drafts only.
     // No read access for ordinary users, no submission/claim endpoint here.
+    // Validate each option's type/size in rules, not only in Flutter.
+    // This prevents malformed Firestore clients from bypassing UI checks.
+    function validSurveyOptionList(options) {
+      return options is list
+        && options.size() <= 5
+        && (options.size() < 1 ||
+            (options[0] is string
+              && options[0].size() >= 1
+              && options[0].size() <= 70))
+        && (options.size() < 2 ||
+            (options[1] is string
+              && options[1].size() >= 1
+              && options[1].size() <= 70))
+        && (options.size() < 3 ||
+            (options[2] is string
+              && options[2].size() >= 1
+              && options[2].size() <= 70))
+        && (options.size() < 4 ||
+            (options[3] is string
+              && options[3].size() >= 1
+              && options[3].size() <= 70))
+        && (options.size() < 5 ||
+            (options[4] is string
+              && options[4].size() >= 1
+              && options[4].size() <= 70));
+    }
+
     function validSurveyQuestion(question) {
       return question is map
         && question.keys().hasOnly([
@@ -1581,10 +1608,8 @@ service cloud.firestore {
         && question.promptEn is string
         && question.promptEn.size() >= 3
         && question.promptEn.size() <= 160
-        && question.optionsAr is list
-        && question.optionsEn is list
-        && question.optionsAr.size() <= 5
-        && question.optionsEn.size() <= 5
+        && validSurveyOptionList(question.optionsAr)
+        && validSurveyOptionList(question.optionsEn)
         && question.required is bool
         && (
           (question.type == 'choice'
