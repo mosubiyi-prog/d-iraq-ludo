@@ -1,0 +1,52 @@
+name: DEDA Daily Task Publisher Stage 3 - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage3-publisher-2026-10-09
+    paths:
+      - 'functions/deda_daily_task_publisher.js'
+      - 'tests/firestore-rules/daily-publisher.test.mjs'
+      - 'firestore.rules'
+      - '.github/workflows/qa-deda-daily-publisher-stage3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  publisher-emulator-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 26
+    steps:
+      - name: Checkout isolated publisher branch
+        uses: actions/checkout@v4
+      - name: Guard stable navigation, task engine, admin service and dependencies
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage2-preview-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage2-preview-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage2-preview-qa-2026-10-09 -- lib/ functions/index.js functions/package.json pubspec.yaml
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup Java for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Firebase Admin and rules dependencies
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Syntax and no-publication-trigger checks
+        run: |
+          node --check functions/deda_daily_task_publisher.js
+          node --check tests/firestore-rules/daily-publisher.test.mjs
+          ! grep -q 'deda_daily_task_publisher' functions/index.js
+          ! grep -q 'onSchedule' functions/deda_daily_task_publisher.js
+      - name: Test server-side publication and user read rules on local Firebase emulator
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-daily-task-publisher "node --test tests/firestore-rules/daily-publisher.test.mjs"
+      - name: Assert no deployed payouts or APK
+        run: |
+          ! grep -Eiq 'firebase deploy|firebase-tools.*deploy|functions:deploy' .github/workflows/qa-deda-daily-publisher-stage3.yml
+          echo 'STAGE3_CONFIG_ONLY_PASS: emulator only; no Firebase production changes, payout, or APK'
