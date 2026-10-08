@@ -8,8 +8,10 @@ import {
 import {doc, getDoc, getDocs, setDoc, collection} from 'firebase/firestore';
 
 const require = createRequire(import.meta.url);
-const {initializeApp, deleteApp} = require('../../functions/node_modules/firebase-admin/app');
-const {getFirestore, Timestamp} = require('../../functions/node_modules/firebase-admin/firestore');
+const requireFunctions = createRequire(
+    new URL('../../functions/package.json', import.meta.url));
+const {initializeApp, deleteApp} = requireFunctions('firebase-admin/app');
+const {getFirestore, Timestamp} = requireFunctions('firebase-admin/firestore');
 const {
   SLOTS, iraqDayId, midnightUtcForIraqDay, publicationDecision,
   publishDueDailySlots,
