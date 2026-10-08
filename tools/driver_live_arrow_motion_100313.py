@@ -120,11 +120,20 @@ for begin,finish,label in [
      'all road warnings'),
     ('  Future<void> loadRoute({bool background = false}) async {',
      '  String _friendlyRouteError(', 'route recalculation'),
-    ('  Widget _buildFixedDriverArrow(double angle) {',
-     '  double _driverViewZoom() {', 'driver arrow appearance'),
 ]:
     if section(original,begin,finish)!=section(s,begin,finish):
         raise SystemExit('100313 altered protected '+label)
+
+# The arrow widget must remain exactly the proven white/green
+# phone-facing navigation glyph, with zero changes to its rendering.
+arrow_begin = '  Widget _buildFixedDriverArrow(double angle) {'
+if arrow_begin not in original or arrow_begin not in s:
+    raise SystemExit('100313 proven Driver arrow missing')
+arrow_end = '  }\n'
+old_arrow = original.split(arrow_begin, 1)[1].split(arrow_end, 1)[0]
+new_arrow = s.split(arrow_begin, 1)[1].split(arrow_end, 1)[0]
+if old_arrow != new_arrow:
+    raise SystemExit('100313 altered protected Driver arrow widget')
 
 protected = [
     'Timer(const Duration(seconds: 10)',
