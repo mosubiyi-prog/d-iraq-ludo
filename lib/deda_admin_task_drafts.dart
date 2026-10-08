@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_backend.dart';
+import 'deda_daily_task_slots.dart';
 
 /// Administrative task DRAFTS: not live task definitions or payout settings.
 ///
@@ -142,7 +143,17 @@ class DedaAdminTaskDraftService {
 
   Future<String> save({
     required DedaAdminTaskDraft draft,
+    String? dailySlotId,
   }) async {
+    // A fixed slot is an admin-only draft overlay, never a live task.
+    // Deliberately retain the legacy save() API for prior private drafts.
+    final slot = dailySlotId == null ? null
+        : DedaDailyTaskSlot.byId(dailySlotId);
+    if (dailySlotId != null &&
+        (slot == null || draft.cycle != 'daily' ||
+         (draft.id.isNotEmpty && draft.id != slot.draftId))) {
+      throw StateError('invalid-fixed-daily-slot');
+    }
     final profile = await DedaBackend.currentAdminProfile(
       forceRefresh: true,
     );
@@ -162,7 +173,7 @@ class DedaAdminTaskDraftService {
     final audit = firestore.collection('admin_audit').doc();
 
     if (draft.id.isEmpty) {
-      final ref = _collection.doc();
+      final ref = slot == null ? _collection.doc() : _collection.doc(slot.draftId);
       final batch = firestore.batch();
       batch.set(ref, {
         ...values,
