@@ -1,0 +1,34 @@
+name: Build DEDA 100311 GPS Arrow Clean Driver View
+
+on:
+  push:
+    branches:
+      - driver-route-marker-no-sky-100311-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100311-driver-route-marker.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100311 (from successful 100310)
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Reconstruct, validate, analyze and build DEDA 100311
+        run: bash tools/build_100311_driver_map_anchor.sh
+      - name: Upload signed DEDA 100311
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100311-driver-marker-no-sky-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
