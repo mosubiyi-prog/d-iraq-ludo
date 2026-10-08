@@ -1,5 +1,5 @@
 name: Build DEDA 100318 True Heading-Up Navigation Camera
-# Build from proven 100317; rotate smooth navigation camera with actual user heading, not planned route.
+# Release preflight: proven 100317 flag; heading-up user camera + full Flutter analyzer and signed APK.
 
 on:
   push:
