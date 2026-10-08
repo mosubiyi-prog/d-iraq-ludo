@@ -1,0 +1,47 @@
+name: DEDA Public Provider Health Guard QA
+
+on:
+  push:
+    branches:
+      - map-provider-health-guard-2026-10-08
+    paths:
+      - '.github/workflows/map-public-provider-health-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated public provider guard
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Dependencies
+        run: flutter pub get
+      - name: Offline tests - 429 and 503 cooldown privacy failover no public requests
+        run: flutter test test/deda_public_provider_health_test.dart test/deda_request_coalescer_test.dart
+      - name: Analyze modified public search only
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/places_service.dart lib/deda_public_provider_health.dart lib/deda_request_coalescer.dart test/deda_public_provider_health_test.dart test/deda_request_coalescer_test.dart
+      - name: Confirm proven 100318 navigation and backend unchanged
+        run: |
+          git fetch --no-tags origin backup-100318-field-tested-user-heading-camera-2026-10-08:refs/remotes/origin/backup-100318-field-tested-user-heading-camera-2026-10-08
+          git diff --exit-code origin/backup-100318-field-tested-user-heading-camera-2026-10-08 -- lib/main.dart lib/deda_backend.dart lib/deda_road_class_lookup.dart pubspec.yaml firestore.rules storage.rules
+      - name: Verify provider aliases/privacy and original search features
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/places_service.dart').read_text()
+          h=Path('lib/deda_public_provider_health.dart').read_text()
+          assert "publicProviderDiagnostics" in p
+          assert "'nominatim'" in p and "'overpass-1'" in p and "'overpass-3'" in p
+          assert p.count("_publicHealth.guard(") == 2
+          assert "_cachedPublicPlaces(" in p and "places.length <= 100" in p
+          assert "Duration(seconds: 45)" in p
+          for unsafe in ("FirebaseFirestore","getPositionStream","_arrowHeading","_navigationCameraHeading","_refreshRoadHazards"):
+            assert unsafe not in h, unsafe
+          assert "Map<String, Map<String, Object>> snapshot()" in h
+          assert "No timers, no network telemetry" in h
+          print("PASS: public POI only, privacy-preserving local metrics, proven 100318 navigation unchanged.")
+          PY
