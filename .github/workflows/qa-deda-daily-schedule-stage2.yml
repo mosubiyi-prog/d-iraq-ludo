@@ -6,6 +6,7 @@ on:
       - admin-daily-slots-stage2-schedule-2026-10-09
     paths:
       - 'lib/deda_daily_schedule_policy.dart'
+      - 'lib/deda_daily_schedule_preview_service.dart'
       - 'test/deda_daily_schedule_policy_test.dart'
       - 'firestore.rules'
       - 'tests/firestore-rules/daily-schedule.test.mjs'
@@ -36,7 +37,7 @@ jobs:
         run: flutter pub get
       - name: Validate schedule model
         run: |
-          flutter analyze lib/deda_daily_schedule_policy.dart lib/deda_daily_task_slots.dart
+          flutter analyze lib/deda_daily_schedule_policy.dart lib/deda_daily_task_slots.dart lib/deda_daily_schedule_preview_service.dart
           flutter test test/deda_daily_schedule_policy_test.dart test/deda_daily_task_slots_test.dart
       - name: Install local emulator dependencies
         uses: actions/setup-node@v4
