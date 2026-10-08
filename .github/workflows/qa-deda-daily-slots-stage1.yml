@@ -1,0 +1,45 @@
+name: DEDA Daily Card Slots Stage 1 QA - NO PRODUCTION
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage1-2026-10-09
+    paths:
+      - 'lib/deda_admin_task_management_page.dart'
+      - 'lib/deda_admin_task_drafts.dart'
+      - 'lib/deda_daily_task_slots.dart'
+      - 'test/deda_daily_task_slots_test.dart'
+      - '.github/workflows/qa-deda-daily-slots-stage1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  safe-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated development branch
+        uses: actions/checkout@v4
+      - name: Confirm user-accepted 100319 engine and wallet untouched
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ tools/build_100318_user_heading_camera.sh
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze isolated manager code
+        run: flutter analyze --no-fatal-infos lib/deda_daily_task_slots.dart lib/deda_admin_task_drafts.dart lib/deda_admin_task_management_page.dart
+      - name: Test legacy draft rules and fixed eight slots with Iraq midnight
+        run: flutter test test/deda_daily_task_slots_test.dart test/deda_admin_task_drafts_test.dart
+      - name: Assert no user task engine, wallet or production Firebase changed
+        run: |
+          test -f lib/deda_daily_task_slots.dart
+          ! grep -q 'DedaAdminSurveysPage' lib/deda_admin_task_management_page.dart
+          ! grep -q 'المهام الأسبوعية' lib/deda_admin_task_management_page.dart
+          ! grep -q 'controller: titleEn' lib/deda_admin_task_management_page.dart
+          echo 'STAGE1_PASS: eight admin-only slots; no schedule, payout, Play or Firebase deploy'
