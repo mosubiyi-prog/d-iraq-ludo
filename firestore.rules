@@ -1570,6 +1570,11 @@ service cloud.firestore {
       return options is list
         && options.size() >= 2
         && options.size() <= 5
+        && options[0] is string
+        && options[1] is string
+        && (options.size() < 3 || options[2] is string)
+        && (options.size() < 4 || options[3] is string)
+        && (options.size() < 5 || options[4] is string)
         && options.join('|').matches('^[^|\\n]{1,70}(\\|[^|\\n]{1,70}){1,4}$');
     }
 
