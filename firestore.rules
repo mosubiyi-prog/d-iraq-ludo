@@ -1562,6 +1562,119 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // DEDA manager surveys: private UNPUBLISHED drafts only.
+    // No read access for ordinary users, no submission/claim endpoint here.
+    function validSurveyQuestion(question) {
+      return question is map
+        && question.keys().hasOnly([
+          'type', 'promptAr', 'promptEn',
+          'optionsAr', 'optionsEn', 'required'
+        ])
+        && question.keys().hasAll([
+          'type', 'promptAr', 'promptEn',
+          'optionsAr', 'optionsEn', 'required'
+        ])
+        && question.type in ['rating_5', 'choice', 'text']
+        && question.promptAr is string
+        && question.promptAr.size() >= 3
+        && question.promptAr.size() <= 160
+        && question.promptEn is string
+        && question.promptEn.size() >= 3
+        && question.promptEn.size() <= 160
+        && question.optionsAr is list
+        && question.optionsEn is list
+        && question.optionsAr.size() <= 5
+        && question.optionsEn.size() <= 5
+        && question.required is bool
+        && (
+          (question.type == 'choice'
+            && question.optionsAr.size() >= 2
+            && question.optionsAr.size() == question.optionsEn.size())
+          || (question.type != 'choice'
+            && question.optionsAr.size() == 0
+            && question.optionsEn.size() == 0)
+        );
+    }
+
+    function validSurveyQuestions(questions) {
+      return questions is list
+        && questions.size() >= 1
+        && questions.size() <= 6
+        && validSurveyQuestion(questions[0])
+        && (questions.size() < 2 || validSurveyQuestion(questions[1]))
+        && (questions.size() < 3 || validSurveyQuestion(questions[2]))
+        && (questions.size() < 4 || validSurveyQuestion(questions[3]))
+        && (questions.size() < 5 || validSurveyQuestion(questions[4]))
+        && (questions.size() < 6 || validSurveyQuestion(questions[5]));
+    }
+
+    function validAdminSurveyDraft(data) {
+      return data.keys().hasOnly([
+          'titleAr', 'titleEn', 'questions',
+          'rewardUnit', 'rewardAmount', 'durationDays',
+          'status', 'rewardPolicy', 'revision',
+          'createdAt', 'updatedAt', 'createdByUid', 'updatedByUid'
+        ])
+        && data.keys().hasAll([
+          'titleAr', 'titleEn', 'questions',
+          'rewardUnit', 'rewardAmount', 'durationDays',
+          'status', 'rewardPolicy', 'revision',
+          'createdAt', 'updatedAt', 'createdByUid', 'updatedByUid'
+        ])
+        && data.titleAr is string
+        && data.titleAr.size() >= 3
+        && data.titleAr.size() <= 80
+        && data.titleEn is string
+        && data.titleEn.size() >= 3
+        && data.titleEn.size() <= 80
+        && validSurveyQuestions(data.questions)
+        && data.rewardUnit in ['none', 'points', 'diamonds']
+        && data.rewardAmount is int
+        && data.rewardAmount >= 0
+        && data.rewardAmount <= 500
+        && (
+          (data.rewardUnit == 'none' && data.rewardAmount == 0)
+          || (data.rewardUnit != 'none' && data.rewardAmount >= 1)
+        )
+        && data.durationDays is int
+        && data.durationDays >= 1
+        && data.durationDays <= 90
+        && data.status == 'draft'
+        && data.rewardPolicy ==
+            'once_per_account_on_verified_submission'
+        && data.revision is int
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.createdByUid is string
+        && data.updatedByUid is string;
+    }
+
+    match /admin_survey_drafts/{surveyId} {
+      allow get, list: if isGeneralManager();
+      allow create: if isGeneralManager()
+        && validAdminSurveyDraft(request.resource.data)
+        && request.resource.data.revision == 1
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isGeneralManager()
+        && validAdminSurveyDraft(request.resource.data)
+        && resource.data.status == 'draft'
+        && request.resource.data.status == 'draft'
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'titleAr', 'titleEn', 'questions', 'rewardUnit',
+          'rewardAmount', 'durationDays', 'updatedAt',
+          'updatedByUid', 'revision'
+        ]);
+      allow delete: if false;
+    }
+
     match /admin_audit/{auditId} {
       allow read: if hasAdminPermission('viewAudit')
         && !isProvinceAgent();
