@@ -1784,7 +1784,6 @@ service cloud.firestore {
       allow update: if managerOnly()
         && validPreview(request.resource.data)
         && resource.data.status in ['pending', 'cancelled']
-        && resource.data.effectiveAt > request.time
         && request.resource.data.effectiveAt > request.time
         && request.resource.data.effectiveAt <=
              request.time + duration.value(2, 'd')
@@ -1803,6 +1802,8 @@ service cloud.firestore {
           request.resource.data.status == 'pending'
           || (
             resource.data.status == 'pending'
+            && resource.data.effectiveAt > request.time
+            && request.resource.data.effectiveAt == resource.data.effectiveAt
             && request.resource.data.status == 'cancelled'
             && request.resource.data.diff(resource.data).affectedKeys()
                 .hasOnly(['status', 'revision', 'updatedByUid', 'updatedAt'])
