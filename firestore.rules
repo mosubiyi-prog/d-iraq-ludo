@@ -1566,20 +1566,25 @@ service cloud.firestore {
     // This prevents malformed Firestore clients from bypassing UI checks.
     function validSurveyOptionList(options) {
       return options is list
+        && options.size() >= 2
         && options.size() <= 5
-        && (options.size() < 1 ||
-            (options[0].matches('^.{1,70}$')))
-        && (options.size() < 2 ||
-            (options[1].matches('^.{1,70}$')))
-        && (options.size() < 3 ||
-            (options[2].matches('^.{1,70}$')))
-        && (options.size() < 4 ||
-            (options[3].matches('^.{1,70}$')))
-        && (options.size() < 5 ||
-            (options[4].matches('^.{1,70}$')));
+        && options[0].matches('^.{1,70}$')
+        && options[1].matches('^.{1,70}$')
+        && (
+          (options.size() == 5
+            && options[2].matches('^.{1,70}$')
+            && options[3].matches('^.{1,70}$')
+            && options[4].matches('^.{1,70}$'))
+          || (options.size() == 4
+            && options[2].matches('^.{1,70}$')
+            && options[3].matches('^.{1,70}$'))
+          || (options.size() == 3
+            && options[2].matches('^.{1,70}$'))
+          || options.size() == 2
+        );
     }
 
-    function validSurveyQuestion(question) {
+        function validSurveyQuestion(question) {
       return question is map
         && question.keys().size() == 6
         && question.type in ['rating_5', 'choice', 'text']
@@ -1589,7 +1594,6 @@ service cloud.firestore {
         && (
           (question.type == 'choice'
             && validSurveyOptionList(question.optionsAr)
-            && question.optionsAr.size() >= 2
             && question.optionsEn == question.optionsAr)
           || (question.type != 'choice'
             && question.optionsAr == []
