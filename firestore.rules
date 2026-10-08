@@ -1565,23 +1565,12 @@ service cloud.firestore {
     // Validate each option's type/size in rules, not only in Flutter.
     // This prevents malformed Firestore clients from bypassing UI checks.
     function validSurveyOptionList(options) {
+      // Only string choices; per-option 1..70 chars using a single joined
+      // validation to stay inside the Firestore 1000-expression ceiling.
       return options is list
         && options.size() >= 2
         && options.size() <= 5
-        && options[0].matches('^.{1,70}$')
-        && options[1].matches('^.{1,70}$')
-        && (
-          (options.size() == 5
-            && options[2].matches('^.{1,70}$')
-            && options[3].matches('^.{1,70}$')
-            && options[4].matches('^.{1,70}$'))
-          || (options.size() == 4
-            && options[2].matches('^.{1,70}$')
-            && options[3].matches('^.{1,70}$'))
-          || (options.size() == 3
-            && options[2].matches('^.{1,70}$'))
-          || options.size() == 2
-        );
+        && options.join('|').matches('^[^|\\n]{1,70}(\\|[^|\\n]{1,70}){1,4}$');
     }
 
         function validSurveyQuestion(question) {
