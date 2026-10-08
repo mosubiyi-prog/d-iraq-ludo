@@ -1,0 +1,35 @@
+name: Build DEDA 100315 Single Correct Arrow Rotation
+# Preserve 100314 exactly except one mobile-map arrow marker rotate flag; mathematical bearing test and source diff.
+
+on:
+  push:
+    branches:
+      - nav-arrow-single-rotation-100315-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100315-single-arrow-rotation.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100315 after proven 100314
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Build and validate only DEDA 100315 marker rotation correction
+        run: bash tools/build_100315_single_arrow_rotation.sh
+      - name: Upload signed APK DEDA 100315
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100315-arrow-single-rotation-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
