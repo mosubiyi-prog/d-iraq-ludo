@@ -1,0 +1,78 @@
+name: DEDA 100320 Admin Phase 1 Preview Signed APK
+
+on:
+  push:
+    branches:
+      - admin-phase1-apk-100320-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100320-admin-phase1-preview.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - name: Checkout isolated admin preview (never production or main)
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Get Flutter dependencies
+        run: flutter pub get
+      - name: Re-test unpublished task and survey models
+        run: flutter test test/deda_admin_task_drafts_test.dart test/deda_admin_survey_drafts_test.dart
+      - name: Check existing nav backend points signing config untouched from 100319
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Create proven DEDA build with admin preview safety guard (100320 only)
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path('tools/build_100318_user_heading_camera.sh').read_text()
+          old = 'flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true'
+          assert script.count(old) == 1, 'golden signed APK command missing or changed'
+          guard = """
+          echo '== Ensure admin task + survey pages survive reconstruction =='
+          python3 - <<'ADMIN_PREVIEW_CHECK'
+          from pathlib import Path
+          admin = Path('lib/admin_pages.dart').read_text()
+          tasks = Path('lib/deda_admin_task_management_page.dart').read_text()
+          surveys = Path('lib/deda_admin_surveys_page.dart').read_text()
+          engine = Path('lib/main.dart').read_text()
+          assert admin.count('DedaAdminTaskManagementPage(isArabic: ar)') == 1, 'Admin card missing after reconstruction'
+          assert "DedaBackend.normalizeAdminRole(profile['role'])" in admin, 'General-manager role guard missing'
+          assert 'DedaAdminSurveysPage(' in tasks, 'Surveys link missing'
+          assert "المهام اليومية" in tasks and "المهام الأسبوعية" in tasks, 'Daily or weekly section missing'
+          assert 'آراء المستخدمين واستطلاعات DEDA' in tasks, 'Survey entry missing'
+          assert 'admin_survey_drafts' not in engine and 'admin_task_drafts' not in engine, 'Drafts leaked into user task engine'
+          assert "flutter build apk" in Path('tools/build_100318_user_heading_camera.sh').read_text()
+          print('PASS: admin dashboard, daily/weekly, surveys, 100319 navigation and user reward engine isolated')
+          ADMIN_PREVIEW_CHECK
+          """
+          insert = "echo '== Flutter analyzer =='\n"
+          assert script.count(insert) == 1, 'golden preflight insertion point changed'
+          script = script.replace(insert, guard + '\n' + insert)
+          script = script.replace(old, 'flutter build apk --release --build-number=100320 --dart-define=USE_NEXT_GEN_SDK=true')
+          Path('/tmp/deda_100320_admin_preview.sh').write_text(script)
+          PY
+      - name: Run proven 100319 navigation construction plus isolated admin preview APK
+        run: bash /tmp/deda_100320_admin_preview.sh
+      - name: Check one signed test APK
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          sha256sum build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload preview APK only (no Firebase or Google Play deploy)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100320-admin-phase1-preview-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
