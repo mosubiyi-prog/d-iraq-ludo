@@ -11,6 +11,7 @@ import 'admin_place_map.dart';
 import 'admin_recovery_pages.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
+import 'deda_admin_task_management_page.dart';
 import 'deda_recovery_admin.dart';
 import 'prize_winner_pages.dart';
 
@@ -1560,6 +1561,21 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           ),
                           onTap: () => _open(
                             DedaAdminAuditPage(isArabic: ar),
+                          ),
+                        ),
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager')
+                        _dashboardCard(
+                          icon: Icons.assignment_outlined,
+                          accentColor: const Color(0xFF1D7690),
+                          backgroundColor: const Color(0xD9E2F4F7),
+                          title: t('إدارة المهام والمكافآت', 'Tasks & rewards'),
+                          subtitle: t(
+                            'المهام اليومية والأسبوعية',
+                            'Daily and weekly tasks',
+                          ),
+                          onTap: () => _open(
+                            DedaAdminTaskManagementPage(isArabic: ar),
                           ),
                         ),
                       _dashboardCard(
