@@ -1,5 +1,5 @@
 name: Build DEDA 100313 Instant Arrow And GPS Response
-# All successful DEDA 100312 hazard improvements retained, change compass/GPS responsiveness only.
+# Corrected the 100313 safety check to compare the actual arrow widget, not a nonexistent method boundary.
 
 on:
   push:
