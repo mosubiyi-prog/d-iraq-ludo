@@ -1,0 +1,61 @@
+name: DEDA Stage 6 Safe User Task Titles - NO PRODUCTION
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage6-user-ui-2026-10-09
+    paths:
+      - 'lib/main.dart'
+      - 'lib/deda_daily_user_task_display.dart'
+      - 'test/deda_daily_user_task_display_test.dart'
+      - '.github/workflows/qa-deda-daily-user-ui-stage6.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gated-user-ui-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - name: Checkout isolated stage 6 branch
+        uses: actions/checkout@v4
+      - name: Guard server, Firebase rules, Android, and admin controls
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage5-reader-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage5-reader-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage5-reader-qa-2026-10-09 -- lib/deda_backend.dart lib/deda_admin_task_management_page.dart lib/deda_daily_published_tasks.dart functions firestore.rules android pubspec.yaml
+      - name: Guard main.dart engine and all unrelated pages unchanged
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          old = subprocess.check_output(
+              ["git", "show", "origin/backup-admin-daily-slots-stage5-reader-qa-2026-10-09:lib/main.dart"],
+              text=True)
+          new = open("lib/main.dart", encoding="utf-8").read()
+          start = "class DedaTaskEngine {"
+          page = "class DedaDailyTasksPage extends StatefulWidget {"
+          suffix = "class _DedaTasksHeroCard extends StatelessWidget"
+          assert old[old.index(start):old.index(page)] == new[new.index(start):new.index(page)]
+          assert old[old.index(suffix):] == new[new.index(suffix):]
+          assert "DedaDailyUserTaskDisplay.previewEnabled" in new
+          assert "DedaTaskEngine.claimTaskReward(taskId)" in new
+          assert "DedaTaskEngine.claimDailyLoginReward()" in new
+          print("ENGINE_PROTECTED: task earnings, admin, map & other pages unchanged")
+          PY
+      - name: Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Analyze actual main UI and stage 6 display policy
+        run: flutter analyze lib/main.dart lib/deda_daily_user_task_display.dart lib/deda_daily_published_tasks.dart test/deda_daily_user_task_display_test.dart
+      - name: Run stage 6 compatibility and stage 5 regression tests
+        run: flutter test test/deda_daily_user_task_display_test.dart test/deda_daily_published_tasks_test.dart test/deda_daily_task_slots_test.dart
+      - name: Verify normal build has safe preview disabled by default
+        run: |
+          grep -q 'defaultValue: false' lib/deda_daily_user_task_display.dart
+          grep -q 'DedaDailyUserTaskDisplay.previewEnabled' lib/main.dart
+          ! grep -q 'deda_daily_user_task_display' functions/index.js
+          echo 'STAGE6_SAFE: title-only and opt-in, not a released or reward-paying feature'
