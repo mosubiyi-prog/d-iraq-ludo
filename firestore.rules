@@ -1628,10 +1628,10 @@ service cloud.firestore {
         && data.titleEn.size() >= 3
         && data.titleEn.size() <= 80
         && validSurveyQuestions(data.questions)
-        && data.rewardUnit in ['none', 'points', 'diamonds']
+        && data.rewardUnit in ['none', 'coins', 'points', 'diamonds']
         && data.rewardAmount is int
         && data.rewardAmount >= 0
-        && data.rewardAmount <= 500
+        && data.rewardAmount <= 1000000
         && (
           (data.rewardUnit == 'none' && data.rewardAmount == 0)
           || (data.rewardUnit != 'none' && data.rewardAmount >= 1)
