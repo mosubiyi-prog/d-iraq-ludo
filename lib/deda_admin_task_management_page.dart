@@ -328,7 +328,7 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: action,
+                  initialValue: action,
                   isExpanded: true,
                   decoration: decoration(t('نوع المهمة', 'Task type')),
                   items: DedaAdminTaskDraft.actions.map((key) =>
@@ -353,7 +353,7 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
                 numberField(target, t('عدد المرات', 'Required count'), 100),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: unit,
+                  initialValue: unit,
                   decoration: decoration(t('نوع المكافأة', 'Reward type')),
                   items: [
                     DropdownMenuItem(
