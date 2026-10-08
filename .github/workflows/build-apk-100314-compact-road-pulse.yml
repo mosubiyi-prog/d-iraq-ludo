@@ -1,0 +1,35 @@
+name: Build DEDA 100314 Compact Road Pulse Equal Size
+# Preserve proven 100313 responsiveness; adjust the visual Road Pulse card only.
+
+on:
+  push:
+    branches:
+      - driver-pulse-compact-100314-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100314-compact-road-pulse.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100314 after proven 100313
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Build and validate only DEDA 100314 compact Road Pulse UI
+        run: bash tools/build_100314_compact_road_pulse.sh
+      - name: Upload signed APK DEDA 100314
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100314-compact-road-pulse-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
