@@ -1,0 +1,60 @@
+name: DEDA Survey Arabic-First Single Reward Draft QA
+
+on:
+  push:
+    branches:
+      - admin-survey-arabic-reward-phase2-2026-10-08
+    paths:
+      - '.github/workflows/admin-survey-arabic-reward-phase2-qa.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated survey editor changes
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Dependencies
+        run: flutter pub get
+      - name: Test survey drafts and existing task drafts
+        run: flutter test test/deda_admin_survey_drafts_test.dart test/deda_admin_task_drafts_test.dart
+      - name: Analyze survey editor, model and admin entry
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_admin_surveys_page.dart lib/deda_admin_survey_drafts.dart lib/deda_admin_task_management_page.dart lib/admin_pages.dart test/deda_admin_survey_drafts_test.dart
+      - name: Check 100319 navigation points rewards backend and app build unchanged
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Check Arabic-only editor compatible stored fields and safe reward choices
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          ui=Path('lib/deda_admin_surveys_page.dart').read_text()
+          model=Path('lib/deda_admin_survey_drafts.dart').read_text()
+          rules=Path('firestore.rules').read_text()
+          assert 'controller: titleEn' not in ui
+          assert 'controller: q.en' not in ui
+          assert 'controller: q.optionsEn' not in ui
+          assert 'titleEn: titleAr.text.trim()' in ui
+          assert 'promptEn: ar.text.trim()' in ui
+          assert 'optionsEn: options' in ui
+          assert "value: 'coins'" in ui and "value: 'diamonds'" in ui
+          assert 'مكافأة واحدة بعد إكمال الاستطلاع' in ui
+          assert "rewardPolicy': 'once_per_account_on_verified_submission'" in model
+          assert "rewardAmount > 1000000" in model
+          assert "rewardAmount <= 1000000" in rules
+          assert "data.rewardUnit in ['none', 'coins', 'points', 'diamonds']" in rules
+          assert 'admin_survey_drafts' not in Path('lib/main.dart').read_text()
+          assert 'claimTaskReward' not in ui and 'claimTaskReward' not in model
+          match=rules.index('match /admin_survey_drafts/{surveyId}')
+          section=rules[match:rules.index('match /admin_audit/{auditId}',match)]
+          assert 'allow get, list: if isGeneralManager()' in section
+          assert 'allow create: if isGeneralManager()' in section
+          assert 'allow update: if isGeneralManager()' in section
+          assert 'allow delete: if false;' in section
+          assert "data.status == 'draft'" in rules
+          print('PASS: Arabic-only editing, schema fallback, configurable one-per-survey draft reward, manager-only rules.')
+          PY
