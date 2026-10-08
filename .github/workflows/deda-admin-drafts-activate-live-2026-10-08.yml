@@ -1,0 +1,83 @@
+name: DEDA Activate ONLY Admin Draft Firestore Rules (Authorized 2026-10-08)
+
+on:
+  push:
+    branches:
+      - admin-firebase-drafts-live-activation-2026-10-08
+    paths:
+      - '.github/workflows/deda-admin-drafts-activate-live-2026-10-08.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-firestore-admin-drafts-live-release
+  cancel-in-progress: false
+
+jobs:
+  activate-safely:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      DEDA_DRAFT_ACTIVATION_DIR: /tmp/deda-admin-draft-activation
+    steps:
+      - name: Checkout approved isolated branch only
+        uses: actions/checkout@v4
+      - name: Confirm core 100319 and existing reward/backend files untouched
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Setup isolated emulator Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup Firestore emulator Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install verification-only dependencies
+        run: |
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check google-auth requests
+          python -m py_compile tools/deda_activate_admin_drafts_rules_2026_10_08.py
+      - name: Snapshot current live rules again and create minimal candidate only
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python tools/deda_activate_admin_drafts_rules_2026_10_08.py prepare
+      - name: Repeat all 8 security emulator tests on exact live baseline plus additions
+        env:
+          CI: 'true'
+        run: |
+          npx --yes firebase-tools@14 emulators:exec \
+            --only firestore \
+            --project demo-deda-phase2-drafts \
+            "node --test tests/firestore-rules/phase2.test.mjs"
+      - name: REQUIRED safeguard - archive prior immutable ruleset and full backup before apply
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-prior-live-Firestore-rule-snapshot-before-admin-drafts
+          path: |
+            /tmp/deda-admin-draft-activation/live-rules-backup.rules
+            /tmp/deda-admin-draft-activation/firestore-phase2-merged.rules
+            /tmp/deda-admin-draft-activation/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: ACTIVATE only unpublished manager draft collections with live SHA recheck and rollback
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DEDA_EXPLICIT_MANAGER_DRAFTS_ACTIVATION: approved-2026-10-08
+        run: python tools/deda_activate_admin_drafts_rules_2026_10_08.py deploy
+      - name: Save successful Firestore publication identifiers for exact rollback
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-admin-drafts-live-Firestore-activation-receipt
+          path: /tmp/deda-admin-draft-activation/activation-result.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Final production scope verification
+        if: success()
+        run: echo 'Only manager-only draft Firestore rules activated. No APK deploy, no Cloud Functions deploy and no payouts.'
