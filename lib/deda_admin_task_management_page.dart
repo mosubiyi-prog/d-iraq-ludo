@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'deda_admin_task_drafts.dart';
 import 'deda_backend.dart';
-import 'deda_admin_surveys_page.dart';
+import 'deda_daily_task_slots.dart';
 
-/// Phase 1: manager-only draft editor, NEVER publishes to current task engine.
+/// Manager-only editor for the EXISTING eight daily task card slots.
+/// This stage saves isolated private drafts. It never publishes a task,
+/// changes a user's progress or awards points/diamonds.
 class DedaAdminTaskManagementPage extends StatefulWidget {
   const DedaAdminTaskManagementPage({super.key, required this.isArabic});
   final bool isArabic;
@@ -17,7 +19,6 @@ class DedaAdminTaskManagementPage extends StatefulWidget {
 class _DedaAdminTaskManagementPageState
     extends State<DedaAdminTaskManagementPage> {
   final _service = const DedaAdminTaskDraftService();
-  String _cycle = 'daily';
   bool _checking = true;
   bool _allowed = false;
 
@@ -45,23 +46,37 @@ class _DedaAdminTaskManagementPageState
     });
   }
 
-  Future<void> _edit([DedaAdminTaskDraft? previous]) async {
+  Future<void> _edit(
+    DedaDailyTaskSlot slot,
+    DedaAdminTaskDraft? current,
+  ) async {
+    // Do not modify current user tasks; start from the original card's
+    // immutable type/title if no administrative draft exists for this slot.
+    final seed = current ?? DedaAdminTaskDraft(
+      cycle: 'daily',
+      action: slot.action,
+      titleAr: slot.titleAr,
+      titleEn: slot.titleAr,
+      targetCount: 1,
+      rewardUnit: 'points',
+      rewardAmount: 5,
+    );
     final draft = await showDialog<DedaAdminTaskDraft>(
       context: context,
       builder: (_) => _DedaTaskDraftDialog(
         isArabic: widget.isArabic,
-        cycle: _cycle,
-        previous: previous,
+        slot: slot,
+        previous: seed,
       ),
     );
     if (draft == null || !mounted) return;
     try {
-      await _service.save(draft: draft);
+      await _service.save(draft: draft, dailySlotId: slot.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(t(
-          'حُفظت المسودة في Firebase وسجل الإدارة، لكنها غير منشورة للمستخدمين.',
-          'Draft saved in Firebase and the admin audit; not published to users.',
+          'انحفظ تعديل البطاقة كمسودة خاصة بالإدارة فقط؛ المستخدم ما يتأثر.',
+          'Card changes saved as private admin draft only; user tasks unchanged.',
         )),
       ));
     } catch (error) {
@@ -70,85 +85,59 @@ class _DedaAdminTaskManagementPageState
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
           message.contains('task-draft-changed-remotely')
-              ? t('البيانات تغيرت من مدير آخر. أعد فتح المهمة.',
-                  'Another manager changed this draft; reopen it.')
+              ? t('المدير عدّل المسودة بجهاز آخر؛ افتح البطاقة من جديد.',
+                  'Draft changed elsewhere. Reopen the card.')
               : message.contains('permission-denied')
-                  ? t('قواعد Firebase للقسم لم تُنشر بعد؛ لم يُحفظ التعديل.',
-                      'Firebase rules are not yet deployed; nothing was saved.')
-                  : t('تعذر حفظ المسودة. لم تتغير مكافآت المستخدمين.',
-                      'Could not save draft; user rewards are unchanged.'),
+                  ? t('Firebase رفض حفظ المسودة. ماكو أي تغيير عند المستخدم.',
+                      'Firebase denied the draft. Users are unaffected.')
+                  : t('تعذر حفظ تعديل البطاقة. النظام الحالي ما تغير.',
+                      'Could not save draft. Live tasks remain unchanged.'),
         ),
       ));
     }
   }
 
-  Widget _cycleTile(String cycle, Color color, IconData icon) {
-    final active = cycle == _cycle;
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => setState(() => _cycle = cycle),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: active ? color.withOpacity(.16) : Colors.white,
-            border: Border.all(
-              color: active ? color : const Color(0xFFD6E0D4),
-              width: active ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, size: 32, color: color),
-              const SizedBox(height: 9),
-              Text(
-                cycle == 'daily'
-                    ? t('المهام اليومية', 'Daily tasks')
-                    : t('المهام الأسبوعية', 'Weekly tasks'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                t('إدارة وتحديد', 'Manage and define'),
-                style: const TextStyle(fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _taskRow(DedaAdminTaskDraft draft) {
-    final rewardLabel = draft.rewardUnit == 'diamonds'
-        ? '💎'
-        : t('نقطة', 'points');
+  Widget _taskCard(
+    DedaDailyTaskSlot slot,
+    DedaAdminTaskDraft? draft,
+  ) {
+    final staged = draft != null;
     return Card(
       color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 9),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(17),
+        side: BorderSide(
+          color: staged ? const Color(0xFFAEC6B3)
+              : const Color(0xFFE0E4DC),
+        ),
       ),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 13, vertical: 9,
+        ),
+        leading: const Icon(Icons.edit_note_rounded,
+            color: Color(0xFF1B6A44), size: 28),
         title: Text(
-          widget.isArabic ? draft.titleAr : draft.titleEn,
-          style: const TextStyle(fontWeight: FontWeight.w800),
+          staged ? draft.titleAr : slot.titleAr,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900, fontSize: 15.5,
+          ),
         ),
         subtitle: Text(
-          DedaAdminTaskDraft.actionTitle(draft.action, widget.isArabic) +
-              ' • ' + draft.targetCount.toString() +
-              ' × • ' + draft.rewardAmount.toString() +
-              ' ' + rewardLabel + '\n' +
-              t('مسودة غير منشورة', 'Unpublished draft'),
+          (staged ? DedaAdminTaskDraft.actionTitle(
+                  draft.action, widget.isArabic)
+              : slot.subtitleAr) +
+              '\n' +
+              (staged
+                  ? t('تعديل محفوظ كمسودة — غير منشور',
+                      'Saved draft — not published')
+                  : t('المهمة الحالية محفوظة كما هي',
+                      'Existing task unchanged')),
+          style: const TextStyle(height: 1.4),
         ),
-        isThreeLine: true,
         trailing: const Icon(Icons.edit_outlined),
-        onTap: () => _edit(draft),
+        onTap: () => _edit(slot, draft),
       ),
     );
   }
@@ -158,145 +147,105 @@ class _DedaAdminTaskManagementPageState
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAF2),
       appBar: AppBar(
-        title: Text(t('إدارة المهام والمكافآت', 'Tasks & rewards management')),
+        title: Text(t('إدارة المهام اليومية', 'Daily tasks management')),
       ),
       body: _checking
           ? const Center(child: CircularProgressIndicator())
           : !_allowed
-              ? Center(
-                  child: Text(t(
-                    'هذا القسم مخصص للمدير العام المصرح فقط.',
-                    'Authorized general manager only.',
-                  )),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          _cycleTile(
-                            'daily', const Color(0xFF2886B6),
-                            Icons.calendar_today_outlined,
+              ? Center(child: Text(t(
+                  'هذا القسم للمدير العام فقط.',
+                  'General manager only.',
+                )))
+              : StreamBuilder<List<DedaAdminTaskDraft>>(
+                  stream: _service.watchDrafts(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(child: Text(t(
+                        'تعذر قراءة مسودات المهام من Firebase.',
+                        'Cannot load admin task drafts from Firebase.',
+                      )));
+                    }
+                    if (!snapshot.hasData) {
+                      return const Center(
+                        child: CircularProgressIndicator(),
+                      );
+                    }
+                    final drafts = snapshot.data!;
+                    final byId = <String, DedaAdminTaskDraft>{
+                      for (final draft in drafts) draft.id: draft,
+                    };
+                    final legacyCount = drafts.where((draft) =>
+                      !DedaDailyTaskSlot.slots.any(
+                        (slot) => slot.draftId == draft.id,
+                      )).length;
+
+                    return ListView(
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(13),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F0E7),
+                            borderRadius: BorderRadius.circular(15),
                           ),
-                          const SizedBox(width: 10),
-                          _cycleTile(
-                            'weekly', const Color(0xFF388A59),
-                            Icons.date_range_outlined,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 11),
-                      Card(
-                        color: const Color(0xFFE9E6F6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          side: const BorderSide(color: Color(0xFFBDB1DC)),
+                          child: Text(t(
+                            'نفس بطاقات مهام المستخدم الثمانية. عدّل أي بطاقة وحدها؛ البقية تبقى مثل ما هي.',
+                            'The same eight user task cards. Edit one card without affecting the others.',
+                          ), style: const TextStyle(
+                            fontWeight: FontWeight.w700, height: 1.5,
+                          )),
                         ),
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: Color(0xFFD7C9EF),
-                            child: Icon(Icons.rate_review_outlined,
-                                color: Color(0xFF654B90)),
-                          ),
-                          title: Text(
-                            t('آراء المستخدمين واستطلاعات DEDA',
-                                'DEDA user opinions and surveys'),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF43345E),
+                        const SizedBox(height: 10),
+                        Card(
+                          color: const Color(0xFF0B3156),
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.calendar_month_rounded,
+                              color: Color(0xFFFFD76A),
                             ),
-                          ),
-                          subtitle: Text(
-                            t('افتح حقول تقييم وأسئلة ومقترحات جديدة',
-                                'Add rating, questions and feedback fields'),
-                          ),
-                          trailing: const Icon(Icons.chevron_left_rounded),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => DedaAdminSurveysPage(
-                                isArabic: widget.isArabic,
+                            title: const Text(
+                              DedaDailyTaskSlot.loginTitleAr,
+                              style: TextStyle(
+                                color: Colors.white, fontWeight: FontWeight.bold,
                               ),
                             ),
+                            subtitle: Text(t(
+                              'ثابتة — 10 نقاط حاليًا. جدولة مكافأة المناسبات تحتاج ربط صرف آمن قبل تفعيلها.',
+                              'Fixed — 10 points today. Holiday reward scheduling awaits verified payout integration.',
+                            ), style: const TextStyle(
+                              color: Color(0xFFE2EAF4),
+                            )),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(13),
-                          color: const Color(0xFFFFF2D8),
-                        ),
-                        child: Text(
-                          t(
-                            'مرحلة التجهيز: التغييرات هنا مسودات فقط. لا تتغير المهام أو المكافآت عند المستخدم قبل ربط نظام الصرف الآمن.',
-                            'Preparation stage: drafts only. User tasks and rewards remain unchanged until secure payout integration.',
-                          ),
+                        const SizedBox(height: 12),
+                        Text(t('المهام اليومية', 'Daily tasks'),
                           style: const TextStyle(
-                            color: Color(0xFF73541B), height: 1.4,
+                            fontWeight: FontWeight.w900, fontSize: 19,
+                          )),
+                        const SizedBox(height: 10),
+                        for (final slot in DedaDailyTaskSlot.slots)
+                          _taskCard(slot, byId[slot.draftId]),
+                        if (legacyCount > 0)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Text(t(
+                              'المسودات التجريبية القديمة محفوظة في Firebase ولم تُحذف أو تُنشر.',
+                              'Older test drafts remain saved in Firebase; nothing was deleted or published.',
+                            ), style: const TextStyle(
+                              fontSize: 12, color: Color(0xFF646A63),
+                            )),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _cycle == 'daily'
-                                  ? t('المهام اليومية', 'Daily tasks')
-                                  : t('المهام الأسبوعية', 'Weekly tasks'),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900, fontSize: 17,
-                              ),
-                            ),
-                          ),
-                          FilledButton.icon(
-                            onPressed: () => _edit(),
-                            icon: const Icon(Icons.add),
-                            label: Text(t('إضافة', 'Add')),
-                          ),
-                        ],
-                      ),
-                      Expanded(
-                        child: StreamBuilder<List<DedaAdminTaskDraft>>(
-                          stream: _service.watchDrafts(),
-                          builder: (context, snap) {
-                            if (snap.hasError) {
-                              return Center(
-                                child: Text(t(
-                                  'لا يمكن قراءة مسودات Firebase. يجب تفعيل قواعد القسم المعتمدة أولًا.',
-                                  'Cannot read Firebase drafts until task-draft rules are deployed.',
-                                )),
-                              );
-                            }
-                            if (!snap.hasData) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            final rows = snap.data!
-                                .where((item) => item.cycle == _cycle)
-                                .toList(growable: false);
-                            if (rows.isEmpty) {
-                              return Center(
-                                child: Text(t(
-                                  'ماكو مسودات بعد. أضف أول مهمة.',
-                                  'No drafts yet. Add the first task.',
-                                )),
-                              );
-                            }
-                            return ListView.builder(
-                              itemCount: rows.length,
-                              itemBuilder: (context, index) =>
-                                  _taskRow(rows[index]),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 8),
+                        Text(t(
+                          'مرحلة ربط آمنة: كل ما تراه هنا مسودات خاصة بالإدارة. النشر بعد 12 ليلًا، إلغاؤه، تغيير مكافآت التسجيل والروابط الخارجية سيتم تفعيله فقط بعد اختبار قاعدة الجدولة والتحقق بالخادم.',
+                          'Safe integration stage: admin-only drafts. Midnight publication, cancellation, login bonuses and external links require tested server scheduling and verification.',
+                        ), style: const TextStyle(
+                          fontSize: 12, height: 1.5,
+                          color: Color(0xFF6A542D),
+                        )),
+                      ],
+                    );
+                  },
                 ),
     );
   }
@@ -305,12 +254,12 @@ class _DedaAdminTaskManagementPageState
 class _DedaTaskDraftDialog extends StatefulWidget {
   const _DedaTaskDraftDialog({
     required this.isArabic,
-    required this.cycle,
+    required this.slot,
     this.previous,
   });
 
   final bool isArabic;
-  final String cycle;
+  final DedaDailyTaskSlot slot;
   final DedaAdminTaskDraft? previous;
 
   @override
@@ -320,7 +269,6 @@ class _DedaTaskDraftDialog extends StatefulWidget {
 class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController titleAr;
-  late final TextEditingController titleEn;
   late final TextEditingController target;
   late final TextEditingController amount;
   late final TextEditingController url;
@@ -336,7 +284,6 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
     action = old?.action ?? 'open_map';
     unit = old?.rewardUnit ?? 'points';
     titleAr = TextEditingController(text: old?.titleAr ?? '');
-    titleEn = TextEditingController(text: old?.titleEn ?? '');
     target = TextEditingController(text: (old?.targetCount ?? 1).toString());
     amount = TextEditingController(text: (old?.rewardAmount ?? 5).toString());
     url = TextEditingController(text: old?.url ?? '');
@@ -345,7 +292,6 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
   @override
   void dispose() {
     titleAr.dispose();
-    titleEn.dispose();
     target.dispose();
     amount.dispose();
     url.dispose();
@@ -372,7 +318,7 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(t('إعدادات المهمة', 'Task draft settings')),
+      title: Text(t('تعديل المهمة', 'Edit task')),
       content: SizedBox(
         width: 420,
         child: SingleChildScrollView(
@@ -399,14 +345,6 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
                 TextFormField(
                   controller: titleAr,
                   decoration: decoration(t('عنوان المهمة بالعربية', 'Arabic title')),
-                  maxLength: 80,
-                  validator: (value) => (value?.trim().length ?? 0) < 3
-                      ? t('اكتب عنوانًا صحيحًا', 'Enter a title')
-                      : null,
-                ),
-                TextFormField(
-                  controller: titleEn,
-                  decoration: decoration(t('عنوان المهمة بالإنجليزية', 'English title')),
                   maxLength: 80,
                   validator: (value) => (value?.trim().length ?? 0) < 3
                       ? t('اكتب عنوانًا صحيحًا', 'Enter a title')
@@ -446,7 +384,7 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
                 ],
                 const SizedBox(height: 10),
                 Text(t(
-                  'الحفظ كمسودة فقط؛ لا تفعيل ولا صرف نقاط أو ألماس.',
+                  'التعديل مسودة إدارية فقط؛ لا نشر أو صرف نقاط وألماس حاليًا.',
                   'Draft only; no activation or rewards.',
                 )),
               ],
@@ -466,10 +404,10 @@ class _DedaTaskDraftDialogState extends State<_DedaTaskDraftDialog> {
             final draft = DedaAdminTaskDraft(
               id: old?.id ?? '',
               revision: old?.revision ?? 0,
-              cycle: old?.cycle ?? widget.cycle,
+              cycle: 'daily',
               action: action,
               titleAr: titleAr.text,
-              titleEn: titleEn.text,
+              titleEn: titleAr.text.trim(),
               targetCount: int.parse(target.text.trim()),
               rewardUnit: unit,
               rewardAmount: int.parse(amount.text.trim()),
