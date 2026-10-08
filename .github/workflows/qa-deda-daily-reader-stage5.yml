@@ -1,0 +1,42 @@
+name: DEDA Daily Published Reader Stage 5 - NO PRODUCTION
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage5-reader-2026-10-09
+    paths:
+      - 'lib/deda_daily_published_tasks.dart'
+      - 'test/deda_daily_published_tasks_test.dart'
+      - '.github/workflows/qa-deda-daily-reader-stage5.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-read-only-reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    steps:
+      - name: Checkout isolated stage 5
+        uses: actions/checkout@v4
+      - name: Guard stable app, backend, reward logic and Firebase rules
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage4-ui-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage4-ui-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage4-ui-qa-2026-10-09 -- lib/main.dart lib/deda_backend.dart lib/deda_admin_task_management_page.dart lib/deda_daily_schedule_preview_service.dart functions firestore.rules android pubspec.yaml
+      - name: Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Analyze stage 5 reader and stable slot model
+        run: flutter analyze lib/deda_daily_published_tasks.dart lib/deda_daily_task_slots.dart test/deda_daily_published_tasks_test.dart
+      - name: Test read-only presentation and Iraq time guard
+        run: flutter test test/deda_daily_published_tasks_test.dart test/deda_daily_task_slots_test.dart
+      - name: Confirm non-production, non-reward scope
+        run: |
+          ! grep -q "deda_daily_published_tasks" lib/main.dart
+          ! grep -q "deda_daily_published_tasks" functions/index.js
+          grep -q 'bool get canGrantRewards => false;' lib/deda_daily_published_tasks.dart
+          echo 'STAGE5_READER_PASS: public read model only; no live Firebase, no APK, no rewards'
