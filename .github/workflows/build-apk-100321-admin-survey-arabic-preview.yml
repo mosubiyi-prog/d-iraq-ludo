@@ -5,7 +5,7 @@ on:
     branches:
       - admin-survey-arabic-preview-100321-2026-10-08
     paths:
-      - '.github/workflows/build-apk-100321-admin-phase1-preview.yml'
+      - '.github/workflows/build-apk-100321-admin-survey-arabic-preview.yml'
 
 jobs:
   build:
