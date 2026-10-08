@@ -130,6 +130,29 @@ test('Past and implausibly distant activation timestamps are rejected', async ()
   }
 });
 
+test('Expired private preview can be replaced for a new day, not cancelled retroactively', async () => {
+  const item = doc(generalManager, path, 'preview_open_map');
+  await environment.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), path, 'preview_open_map'),
+      proposed({
+        status: 'pending',
+        effectiveAt: Timestamp.fromDate(new Date(Date.now() - 86400000)),
+      }));
+  });
+  await assertFails(updateDoc(item, {
+    status: 'cancelled', revision: 2,
+    updatedByUid: 'gm', updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(item, {
+    status: 'pending', revision: 2,
+    effectiveAt: Timestamp.fromDate(new Date(Date.now() + 5 * 3600000)),
+    updatedByUid: 'gm', updatedAt: serverTimestamp(),
+  }));
+  const saved = await assertSucceeds(getDoc(item));
+  assert.equal(saved.data().revision, 2);
+  assert.equal(saved.data().status, 'pending');
+});
+
 test('Manager edit needs next revision and original identity', async () => {
   const item = doc(generalManager, path, 'preview_open_map');
   await assertSucceeds(setDoc(item, proposed()));
