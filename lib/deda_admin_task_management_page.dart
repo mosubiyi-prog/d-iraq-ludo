@@ -225,7 +225,7 @@ class _DedaAdminTaskManagementPageState
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  if (staged)
+                  if (draft != null)
                     OutlinedButton.icon(
                       onPressed: busy ? null : () => _preparePreview(slot, draft),
                       icon: const Icon(Icons.schedule_rounded, size: 17),
@@ -285,7 +285,8 @@ class _DedaAdminTaskManagementPageState
                     return StreamBuilder<List<DedaDailySchedulePreview>>(
                       stream: _previewStream,
                       builder: (context, previewsSnapshot) {
-                        final previewAvailable = !previewsSnapshot.hasError;
+                        final previewAvailable = !previewsSnapshot.hasError &&
+                            previewsSnapshot.hasData;
                         final bySlot = <String, DedaDailySchedulePreview>{
                           for (final p in previewsSnapshot.data ??
                               const <DedaDailySchedulePreview>[])
