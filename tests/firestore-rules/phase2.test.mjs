@@ -285,6 +285,34 @@ test('Four Arabic rating questions and five-option choice rules keep limits with
 });
 
 
+
+test('Four-question survey can be created with the real manager audit batch', async () => {
+  const choices = ['ممتاز', 'جيد', 'مقبول', 'ضعيف', 'سيئ'];
+  const questions = Array.from({ length: 4 }, (_, i) => ({
+    type: i % 2 == 0 ? 'choice' : 'rating_5',
+    promptAr: 'سؤال عن أداء التطبيق رقم ' + (i + 1),
+    promptEn: 'سؤال عن أداء التطبيق رقم ' + (i + 1),
+    optionsAr: i % 2 == 0 ? choices : [],
+    optionsEn: i % 2 == 0 ? choices : [],
+    required: true,
+  }));
+  const batch = writeBatch(manager);
+  batch.set(doc(manager, 'admin_survey_drafts', 'four-real-batch'),
+    surveyDraft('manager', { questions, rewardUnit: 'diamonds', rewardAmount: 10 }));
+  batch.set(doc(manager, 'admin_audit', 'four-real-batch-audit'), {
+    action: 'admin_survey_draft_created',
+    adminUid: 'manager', adminName: 'مدير عام', adminRole: 'general_manager',
+    sourceCollection: 'admin_survey_drafts', sourceId: 'four-real-batch',
+    questionCount: 4, createdAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+  const snap = await assertSucceeds(getDoc(doc(manager, 'admin_survey_drafts', 'four-real-batch')));
+  assert.equal(snap.data().questions.length, 4);
+  assert.equal(snap.data().rewardAmount, 10);
+  await assertFails(setDoc(doc(manager, 'admin_survey_drafts', 'five-rejected'),
+    surveyDraft('manager', { questions: [...questions, questions[0]] })));
+});
+
 test('Choice option validator rejects empty, overlength and non-string fields', async () => {
   const base = surveyDraft();
   for (const values of [
