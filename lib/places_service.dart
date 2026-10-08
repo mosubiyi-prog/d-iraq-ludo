@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:latlong2/latlong.dart';
 
+import 'deda_request_coalescer.dart';
+
 class PlaceInfo {
   final String name;
   final String type;
@@ -67,6 +69,28 @@ class PlacesService {
 
   static const Duration _requestTimeout = Duration(seconds: 14);
 
+  // PUBLIC OSM/Nominatim/Overpass results only. Never cache live GPS,
+  // route geometry, road hazards or DEDA registered place availability here.
+  // Bounded in-memory, no timer/network background jobs and no persistence.
+  static final DedaRequestCoalescer<List<PlaceInfo>> _publicSearchGate =
+      DedaRequestCoalescer<List<PlaceInfo>>(
+    ttl: const Duration(seconds: 45),
+    maxEntries: 24,
+  );
+
+  Future<List<PlaceInfo>> _cachedPublicPlaces(
+    String key,
+    Future<List<PlaceInfo>> Function() fetch,
+  ) async {
+    final results = await _publicSearchGate.run(
+      key,
+      fetch,
+      cacheWhen: (places) => places.isNotEmpty,
+    );
+    // Callers sort/filter returned lists; never let them mutate cached data.
+    return List<PlaceInfo>.of(results);
+  }
+
   String _filterForType(String type) {
     switch (type) {
       case 'مطعم':
@@ -109,10 +133,36 @@ nwr(around:$radiusMeters,${center.latitude},${center.longitude})$filter;
 out center tags;
 ''';
 
-    return _requestPlaces(query: query, fallbackType: type);
+    final key = 'nearby|$type|$radiusMeters|'
+        '${center.latitude.toStringAsFixed(5)}|'
+        '${center.longitude.toStringAsFixed(5)}';
+    return _cachedPublicPlaces(
+      key,
+      () => _requestPlaces(query: query, fallbackType: type),
+    );
   }
 
   Future<List<PlaceInfo>> searchPlacesByName({
+    required LatLng center,
+    required String queryText,
+    int radiusMeters = 25000,
+  }) async {
+    final text = queryText.trim();
+    if (text.length < 2) return <PlaceInfo>[];
+    // Existing name search is global across Iraq (center is not sent to its
+    // public providers). Keep the response semantics and preserve radius in
+    // the key for future locality-aware search upgrades.
+    return _cachedPublicPlaces(
+      'iraq-name|${text.toLowerCase()}|$radiusMeters',
+      () => _searchPlacesByNameUncached(
+        center: center,
+        queryText: text,
+        radiusMeters: radiusMeters,
+      ),
+    );
+  }
+
+  Future<List<PlaceInfo>> _searchPlacesByNameUncached({
     required LatLng center,
     required String queryText,
     int radiusMeters = 25000,
