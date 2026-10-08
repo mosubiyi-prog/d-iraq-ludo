@@ -1,0 +1,37 @@
+name: Build DEDA 100310 Clean Driver View From 100303
+
+on:
+  push:
+    branches:
+      - driver-clean-road-arrow-100310-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100310-driver-clean.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated DEDA 100310 branch from verified 100303
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Reconstruct, validate and build one DEDA 100310 APK
+        run: bash tools/build_100310_driver_clean.sh
+
+      - name: Upload clean DEDA 100310 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100310-clean-driver-view-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
