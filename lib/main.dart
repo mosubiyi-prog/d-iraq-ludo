@@ -15,10 +15,13 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'admin_pages.dart';
 import 'deda_backend.dart';
+import 'deda_daily_published_tasks.dart';
+import 'deda_daily_user_task_display.dart';
 import 'places_service.dart';
 import 'prize_winner_pages.dart';
 import 'deda_team_page.dart';
@@ -11782,10 +11785,16 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
   bool _loginRewardClaimed = false;
   bool _loadingRewardState = true;
   final Set<String> _claimingTaskIds = <String>{};
+  late final Stream<Map<String, Map<String, dynamic>>>? _dailyPublicStream;
 
   @override
   void initState() {
     super.initState();
+    // Staging-only reading. Production APKs do not subscribe to Firestore.
+    _dailyPublicStream = DedaDailyUserTaskDisplay.previewEnabled
+        ? DedaDailyPublishedTaskReader(FirebaseFirestore.instance)
+            .watchPublicDocuments()
+        : null;
     _loadRewardState();
   }
 
@@ -12757,7 +12766,14 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                   children: [
                     _dailyLoginCard(),
                     const SizedBox(height: 7),
-                    ValueListenableBuilder<int>(
+                    StreamBuilder<Map<String, Map<String, dynamic>>>(
+                      stream: _dailyPublicStream,
+                      builder: (context, publishedSnapshot) {
+                        final publicDocuments = publishedSnapshot.data ??
+                            const <String, Map<String, dynamic>>{};
+                        // Network/permission errors intentionally show the
+                        // eight original cards, with unchanged progress.
+                        return ValueListenableBuilder<int>(
                       valueListenable: DedaTaskEngine.revisionNotifier,
                       builder: (context, _, __) {
                         return Column(
@@ -12789,7 +12805,17 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                       index: index,
                                       taskId: taskId,
                                       icon: task.$1,
-                                      title: task.$2,
+                                      title: DedaDailyUserTaskDisplay.previewEnabled
+                                          ? DedaDailyUserTaskDisplay
+                                              .titleForExistingCard(
+                                                  slotId: taskId,
+                                                  originalTitle: task.$2,
+                                                  isArabic:
+                                                      DedaLanguageState.isArabic,
+                                                  publicDocuments:
+                                                      publicDocuments,
+                                                )
+                                          : task.$2,
                                       subtitle: task.$3,
                                       action: task.$4,
                                       completed: completed,
@@ -12802,6 +12828,8 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                               );
                             },
                           ),
+                        );
+                      },
                         );
                       },
                     ),
