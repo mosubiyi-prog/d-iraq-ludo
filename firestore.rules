@@ -1602,19 +1602,16 @@ service cloud.firestore {
         && question.promptAr is string
         && question.promptAr.size() >= 3
         && question.promptAr.size() <= 160
-        && question.promptEn is string
-        && question.promptEn.size() >= 3
-        && question.promptEn.size() <= 160
+        && question.promptEn == question.promptAr
         && question.required is bool
         && (
           (question.type == 'choice'
             && validSurveyOptionList(question.optionsAr)
-            && validSurveyOptionList(question.optionsEn)
             && question.optionsAr.size() >= 2
-            && question.optionsAr.size() == question.optionsEn.size())
+            && question.optionsEn == question.optionsAr)
           || (question.type != 'choice'
             && question.optionsAr == []
-            && question.optionsEn == [])
+            && question.optionsEn == question.optionsAr)
         );
     }
 
@@ -1641,9 +1638,7 @@ service cloud.firestore {
         && data.titleAr is string
         && data.titleAr.size() >= 3
         && data.titleAr.size() <= 80
-        && data.titleEn is string
-        && data.titleEn.size() >= 3
-        && data.titleEn.size() <= 80
+        && data.titleEn == data.titleAr
         && validSurveyQuestions(data.questions)
         && data.rewardUnit in ['none', 'coins', 'points', 'diamonds']
         && data.rewardAmount is int
