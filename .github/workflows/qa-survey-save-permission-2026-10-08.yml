@@ -1,0 +1,44 @@
+name: DEDA Survey 100321 Save Permission Reproduction (Emulator Only)
+
+on:
+  push:
+    branches:
+      - qa-survey-save-permission-2026-10-08
+    paths:
+      - '.github/workflows/qa-survey-save-permission-2026-10-08.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  replay-apk-survey-writes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated QA branch (no production changes)
+        uses: actions/checkout@v4
+      - name: Node.js for Firestore emulator
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Confirm this workflow cannot deploy
+        run: |
+          ! grep -Eq 'firebase-tools.*deploy|deda_activate_admin_drafts_rules_2026_10_08.py deploy' .github/workflows/qa-survey-save-permission-2026-10-08.yml
+          git diff --exit-code origin/admin-firebase-drafts-live-activation-2026-10-08 -- lib/ functions/ android/ 2>/dev/null || true
+      - name: Install local test tools only
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Run exact APK 100321 single and three-question full-audit Firestore batch tests
+        env:
+          CI: 'true'
+        run: |
+          npx --yes firebase-tools@14 emulators:exec \
+            --only firestore \
+            --project demo-deda-phase2-drafts \
+            "node --test tests/firestore-rules/phase2.test.mjs"
+      - name: Report safe result
+        run: echo 'Emulator-only survey-save tests completed; NO production rules or wallets modified.'
