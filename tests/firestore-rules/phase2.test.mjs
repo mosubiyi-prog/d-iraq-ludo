@@ -202,7 +202,7 @@ test('Question types, choices, and counts are checked by security rules', async 
   const base = surveyDraft();
   await assertFails(setDoc(ref, { ...base, questions: [] }));
   await assertFails(setDoc(ref, { ...base,
-    questions: Array(7).fill(base.questions[0]) }));
+    questions: Array(5).fill(base.questions[0]) }));
   await assertFails(setDoc(ref, { ...base,
     questions: [{ ...base.questions[0], type: 'instant_reward' }] }));
   await assertFails(setDoc(ref, { ...base,
@@ -258,30 +258,30 @@ test('APK 100321 exact Arabic survey write with full audit succeeds for 1 and 3 
   }
 });
 
-test('Six Arabic rating questions and five-option choice rules keep limits without 1000-expression overflow', async () => {
-  const allRatings = Array.from({length: 6}, (_, i) => ({
+test('Four Arabic rating questions and five-option choice rules keep limits without 1000-expression overflow', async () => {
+  const allRatings = Array.from({length: 4}, (_, i) => ({
     type: 'rating_5',
     promptAr: 'تقييم خارطة ديدا وسرعتها رقم ' + (i + 1),
     promptEn: 'تقييم خارطة ديدا وسرعتها رقم ' + (i + 1),
     optionsAr: [], optionsEn: [], required: true,
   }));
-  console.log('SIX_RATINGS_START');
-  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-six-ratings'),
+  console.log('FOUR_RATINGS_START');
+  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-four-ratings'),
     surveyDraft('manager', {questions: allRatings})));
-  console.log('SIX_RATINGS_PASS');
+  console.log('FOUR_RATINGS_PASS');
   const fiveChoices = [
     'ممتاز جداً', 'جيد جداً', 'جيد', 'مقبول', 'يحتاج تطوير',
   ];
-  const allChoices = Array.from({length: 6}, (_, i) => ({
+  const allChoices = Array.from({length: 4}, (_, i) => ({
     type: 'choice',
     promptAr: 'اختيار رأي عن خارطة ديدا رقم ' + (i + 1),
     promptEn: 'اختيار رأي عن خارطة ديدا رقم ' + (i + 1),
     optionsAr: fiveChoices, optionsEn: fiveChoices, required: true,
   }));
-  console.log('SIX_CHOICES_START');
-  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-six-choices'),
+  console.log('FOUR_CHOICES_START');
+  await assertSucceeds(setDoc(doc(manager, 'admin_survey_drafts', 'max-four-choices'),
     surveyDraft('manager', {questions: allChoices})));
-  console.log('SIX_CHOICES_PASS');
+  console.log('FOUR_CHOICES_PASS');
 });
 
 
