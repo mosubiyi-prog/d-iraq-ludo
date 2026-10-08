@@ -283,3 +283,20 @@ test('Six Arabic rating questions and five-option choice rules keep limits witho
     surveyDraft('manager', {questions: allChoices})));
   console.log('SIX_CHOICES_PASS');
 });
+
+
+test('Choice option validator rejects empty, overlength and non-string fields', async () => {
+  const base = surveyDraft();
+  for (const values of [
+    ['موافق', ''], ['موافق', 'أ'.repeat(71)], ['موافق', 123],
+  ]) {
+    const badQuestion = {
+      type: 'choice', promptAr: 'هل أعجبك تطبيق ديدا؟',
+      promptEn: 'هل أعجبك تطبيق ديدا؟',
+      optionsAr: values, optionsEn: values, required: true,
+    };
+    await assertFails(setDoc(doc(manager, 'admin_survey_drafts', 'bad-choice'), {
+      ...base, questions: [badQuestion],
+    }));
+  }
+});
