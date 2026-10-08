@@ -5,7 +5,7 @@ on:
     branches:
       - survey-4-questions-safe-2026-10-09
     paths:
-      - '.github/workflows/build-apk-100322-admin-survey-arabic-preview.yml'
+      - '.github/workflows/build-apk-100322-survey-four-preview.yml'
 
 jobs:
   build:
