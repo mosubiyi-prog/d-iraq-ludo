@@ -1,9 +1,9 @@
-name: DEDA Survey 100321 Save Permission Reproduction (Emulator Only)
+name: DEDA Four-Question Survey Secure Save QA (Emulator Only)
 
 on:
   push:
     branches:
-      - qa-survey-save-permission-2026-10-08
+      - survey-4-questions-safe-2026-10-09
     paths:
       - '.github/workflows/qa-survey-save-permission-2026-10-08.yml'
       - 'tests/firestore-rules/phase2.test.mjs'
@@ -34,7 +34,7 @@ jobs:
           git diff --exit-code origin/admin-firebase-drafts-live-activation-2026-10-08 -- lib/ functions/ android/ 2>/dev/null || true
       - name: Install local test tools only
         run: npm --prefix tests/firestore-rules install --no-audit --no-fund
-      - name: Run exact APK 100321 single and three-question full-audit Firestore batch tests
+      - name: Verify 1-4 surveys, full audit batch, reject invalid and fifth question
         env:
           CI: 'true'
         run: |
