@@ -53,7 +53,7 @@ jobs:
           for rule in ['allow get, list: if isGeneralManager()', 'allow create: if isGeneralManager()', 'allow update: if isGeneralManager()', 'allow delete: if false;', "data.status == 'draft'"]:
             assert rule in section, rule
           assert "validSurveyQuestions" in rules
-          assert not Path('.github/workflows/admin-user-opinions-surveys-qa.yml').read_text().count('firebase deploy')
+          assert ('firebase' + ' deploy') not in Path('.github/workflows/admin-user-opinions-surveys-qa.yml').read_text()
           assert 'admin_survey_drafts' not in Path('lib/main.dart').read_text()
           print('PASS: flexible surveys, editor, strict unpublished-only rules; no rewards, no user tracking, 100319 map unchanged.')
           PY
