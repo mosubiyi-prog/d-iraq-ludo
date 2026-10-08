@@ -1,0 +1,64 @@
+name: DEDA Manager Draft Rules Production Preflight Only
+
+on:
+  push:
+    branches:
+      - admin-firebase-drafts-live-activation-2026-10-08
+    paths:
+      - '.github/workflows/deda-admin-drafts-production-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEDA_DRAFT_ACTIVATION_DIR: /tmp/deda-admin-draft-activation
+    steps:
+      - name: Checkout isolated production preflight branch
+        uses: actions/checkout@v4
+      - name: Verify untouched 100319 core and previous draft-only QA
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Install Node for local security rules emulator
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install no-production JS and Python verification libraries
+        run: |
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check google-auth requests
+          python -m py_compile tools/deda_activate_admin_drafts_rules_2026_10_08.py
+      - name: Read current production rules and prepare minimal merged rules ONLY
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python tools/deda_activate_admin_drafts_rules_2026_10_08.py prepare
+      - name: Run all 8 Firestore permission and atomicity tests against merged live rules locally
+        env:
+          CI: 'true'
+        run: |
+          npx --yes firebase-tools@14 emulators:exec \
+            --only firestore \
+            --project demo-deda-phase2-drafts \
+            "node --test tests/firestore-rules/phase2.test.mjs"
+      - name: Archive exact live rules backup and candidate before any production write
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-live-Firestore-rules-pre-activation-readonly-backup
+          path: |
+            /tmp/deda-admin-draft-activation/live-rules-backup.rules
+            /tmp/deda-admin-draft-activation/firestore-phase2-merged.rules
+            /tmp/deda-admin-draft-activation/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Confirm this workflow never deploys
+        run: echo 'PREDEPLOY_PASS - backup and 8/8 emulator gates passed, NO production writes'
