@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:d_iraq_ludo/deda_geo_window.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,7 +22,7 @@ void main() {
       expect(w.includes(
         latitude: lat+2900/111195, longitude: lon), true);
       expect(w.includes(
-        latitude: lat, longitude: lon+2900/(111195*.79)), true);
+        latitude: lat, longitude: lon+2900/(111195*math.cos(lat*math.pi/180))), true);
     }
   });
 
