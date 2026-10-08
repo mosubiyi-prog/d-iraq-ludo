@@ -1600,14 +1600,32 @@ service cloud.firestore {
         && questions.size() >= 1
         && questions.size() <= 6
         && validSurveyQuestion(questions[0])
-        && (questions.size() < 2 || validSurveyQuestion(questions[1]))
-        && (questions.size() < 3 || validSurveyQuestion(questions[2]))
-        && (questions.size() < 4 || validSurveyQuestion(questions[3]))
-        && (questions.size() < 5 || validSurveyQuestion(questions[4]))
-        && (questions.size() < 6 || validSurveyQuestion(questions[5]));
+        && (
+          (questions.size() == 6
+            && validSurveyQuestion(questions[1])
+            && validSurveyQuestion(questions[2])
+            && validSurveyQuestion(questions[3])
+            && validSurveyQuestion(questions[4])
+            && validSurveyQuestion(questions[5]))
+          || (questions.size() == 5
+            && validSurveyQuestion(questions[1])
+            && validSurveyQuestion(questions[2])
+            && validSurveyQuestion(questions[3])
+            && validSurveyQuestion(questions[4]))
+          || (questions.size() == 4
+            && validSurveyQuestion(questions[1])
+            && validSurveyQuestion(questions[2])
+            && validSurveyQuestion(questions[3]))
+          || (questions.size() == 3
+            && validSurveyQuestion(questions[1])
+            && validSurveyQuestion(questions[2]))
+          || (questions.size() == 2
+            && validSurveyQuestion(questions[1]))
+          || questions.size() == 1
+        );
     }
 
-    function validAdminSurveyDraft(data) {
+        function validAdminSurveyDraft(data) {
       return data.keys().size() == 13
         && data.titleAr is string
         && data.titleAr.size() >= 3
