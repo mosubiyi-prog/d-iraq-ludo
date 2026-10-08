@@ -1,0 +1,35 @@
+name: Build DEDA 100317 Upright Half-Size Iraqi Flag
+# Preserve all DEDA 100316 app logic; only Iraqi destination flag marker/widget appearance changes.
+
+on:
+  push:
+    branches:
+      - map-iraq-flag-upright-halfsize-100317-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100317-iraq-flag-only.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100317 from proven 100316
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Build and validate only DEDA 100317 Iraqi flag visual
+        run: bash tools/build_100317_iraq_flag_only.sh
+      - name: Upload signed APK DEDA 100317
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100317-halfsize-iraq-flag-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
