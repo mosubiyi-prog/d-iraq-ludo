@@ -1571,8 +1571,8 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           backgroundColor: const Color(0xD9E2F4F7),
                           title: t('إدارة المهام والمكافآت', 'Tasks & rewards'),
                           subtitle: t(
-                            'المهام اليومية والأسبوعية',
-                            'Daily and weekly tasks',
+                            'المهام اليومية فقط',
+                            'Daily tasks only',
                           ),
                           onTap: () => _open(
                             DedaAdminTaskManagementPage(isArabic: ar),
