@@ -1,0 +1,58 @@
+name: DEDA Daily Task Schedule Stage 2 - Emulator Only
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage2-schedule-2026-10-09
+    paths:
+      - 'lib/deda_daily_schedule_policy.dart'
+      - 'test/deda_daily_schedule_policy_test.dart'
+      - 'firestore.rules'
+      - 'tests/firestore-rules/daily-schedule.test.mjs'
+      - '.github/workflows/qa-deda-daily-schedule-stage2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout stage 2 without Firebase credentials
+        uses: actions/checkout@v4
+      - name: Ensure user navigation, existing reward engine and backend untouched
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ tools/build_100318_user_heading_camera.sh
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Get Flutter packages
+        run: flutter pub get
+      - name: Validate schedule model
+        run: |
+          flutter analyze lib/deda_daily_schedule_policy.dart lib/deda_daily_task_slots.dart
+          flutter test test/deda_daily_schedule_policy_test.dart test/deda_daily_task_slots_test.dart
+      - name: Install local emulator dependencies
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java for Firestore rules emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install rules unit test packages
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Check nine security cases against local rules
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-daily-task-preview "node --test tests/firestore-rules/daily-schedule.test.mjs"
+      - name: Confirm deployment is impossible in this workflow
+        run: |
+          ! grep -Eiq 'firebase deploy|firebase-tools.*deploy|functions:deploy' .github/workflows/qa-deda-daily-schedule-stage2.yml
+          echo 'STAGE2_PREVIEW_ONLY: no production writes, no APK or payouts'
