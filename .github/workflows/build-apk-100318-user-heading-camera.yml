@@ -1,0 +1,35 @@
+name: Build DEDA 100318 True Heading-Up Navigation Camera
+# Build from proven 100317; rotate smooth navigation camera with actual user heading, not planned route.
+
+on:
+  push:
+    branches:
+      - navigation-user-heading-camera-100318-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100318-user-heading-camera.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100318 on backup-protected 100317
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Build and test DEDA 100318 real heading-up camera and preserved 100317 features
+        run: bash tools/build_100318_user_heading_camera.sh
+      - name: Upload signed APK DEDA 100318
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100318-user-heading-camera-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
