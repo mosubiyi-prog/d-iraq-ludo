@@ -1,0 +1,59 @@
+name: DEDA Admin User Opinions Survey Draft QA
+
+on:
+  push:
+    branches:
+      - admin-user-opinion-surveys-phase1-2026-10-08
+    paths:
+      - '.github/workflows/admin-user-opinions-surveys-qa.yml'
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout protected 100319 admin-survey branch
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Dependencies
+        run: flutter pub get
+      - name: Test new opinion-survey and existing task-draft models offline
+        run: |
+          flutter test test/deda_admin_survey_drafts_test.dart test/deda_admin_task_drafts_test.dart
+      - name: Analyze Flutter admin UI and backend drafts
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_admin_survey_drafts.dart lib/deda_admin_surveys_page.dart lib/deda_admin_task_management_page.dart lib/deda_admin_task_drafts.dart lib/admin_pages.dart test/deda_admin_survey_drafts_test.dart
+      - name: Verify 100319 golden navigation, task awards, admin backend, routes and build tools unchanged
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Verify only general manager can use unpublished survey drafts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manager=Path('lib/deda_admin_surveys_page.dart').read_text()
+          menu=Path('lib/deda_admin_task_management_page.dart').read_text()
+          draft=Path('lib/deda_admin_survey_drafts.dart').read_text()
+          rules=Path('firestore.rules').read_text()
+          assert 'DedaAdminSurveysPage(' in menu
+          assert "'general_manager'" in manager and "'general_manager'" in draft
+          assert 'forceRefresh: true' in manager and 'forceRefresh: true' in draft
+          assert "'status': 'draft'" in draft
+          assert "'admin_survey_draft_created'" in draft
+          assert "'admin_survey_draft_updated'" in draft
+          assert "'once_per_account_on_verified_submission'" in draft
+          assert 'survey-draft-conflict' in draft
+          assert 'claimTaskReward' not in draft and 'DedaTaskEngine' not in draft
+          start=rules.index('match /admin_survey_drafts/{surveyId}')
+          stop=rules.index('match /admin_audit/{auditId}',start)
+          section=rules[start:stop]
+          for rule in ['allow get, list: if isGeneralManager()', 'allow create: if isGeneralManager()', 'allow update: if isGeneralManager()', 'allow delete: if false;', "data.status == 'draft'"]:
+            assert rule in section, rule
+          assert "validSurveyQuestions" in rules
+          assert not Path('.github/workflows/admin-user-opinions-surveys-qa.yml').read_text().count('firebase deploy')
+          assert 'admin_survey_drafts' not in Path('lib/main.dart').read_text()
+          print('PASS: flexible surveys, editor, strict unpublished-only rules; no rewards, no user tracking, 100319 map unchanged.')
+          PY
