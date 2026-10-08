@@ -1570,20 +1570,15 @@ service cloud.firestore {
       return options is list
         && options.size() <= 5
         && (options.size() < 1 ||
-            (options[0] is string
-              && options[0].matches('^.{1,70}$')))
+            (options[0].matches('^.{1,70}$')))
         && (options.size() < 2 ||
-            (options[1] is string
-              && options[1].matches('^.{1,70}$')))
+            (options[1].matches('^.{1,70}$')))
         && (options.size() < 3 ||
-            (options[2] is string
-              && options[2].matches('^.{1,70}$')))
+            (options[2].matches('^.{1,70}$')))
         && (options.size() < 4 ||
-            (options[3] is string
-              && options[3].matches('^.{1,70}$')))
+            (options[3].matches('^.{1,70}$')))
         && (options.size() < 5 ||
-            (options[4] is string
-              && options[4].matches('^.{1,70}$')));
+            (options[4].matches('^.{1,70}$')));
     }
 
     function validSurveyQuestion(question) {
