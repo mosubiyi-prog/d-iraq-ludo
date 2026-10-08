@@ -1,0 +1,106 @@
+name: DEDA Phase 2 Live Rules Plus Draft Only Merge Emulator QA
+
+on:
+  push:
+    branches:
+      - admin-firebase-drafts-phase2-qa-2026-10-08
+    paths:
+      - '.github/workflows/admin-firebase-live-merge-emulator-qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  merged-firestore-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout candidate and tests
+        uses: actions/checkout@v4
+      - name: Node.js emulator runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java 21 for local Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Python auth support and JS test libraries
+        run: |
+          python -m pip install --disable-pip-version-check google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Fetch read-only live rules and insert only isolated new draft sections
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+
+          raw=os.getenv('FIREBASE_SERVICE_ACCOUNT_DEDA_25B88') or os.getenv('FIREBASE_SERVICE_ACCOUNT')
+          if not raw:
+              sys.exit('SAFE_STOP: Missing configured service account; did not touch Firebase.')
+          credentials=service_account.Credentials.from_service_account_info(
+              json.loads(raw),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(credentials)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=session.get(base+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          release.raise_for_status()
+          ruleset=release.json()['rulesetName']
+          if not ruleset.startswith('projects/deda-25b88/rulesets/'):
+              sys.exit('SAFE_STOP: unexpected ruleset URL')
+          remote=session.get(base+ruleset,timeout=35)
+          remote.raise_for_status()
+          source=remote.json().get('source',{}).get('files',[])
+          live='\n'.join(v.get('content','') for v in source if v.get('name','').endswith('.rules'))
+          candidate=Path('firestore.rules').read_text()
+          normalized=lambda s: '\n'.join(line.rstrip() for line in s.strip().splitlines())
+          sha=lambda s: hashlib.sha256(normalized(s).encode()).hexdigest()[:16]
+          actual_sha=sha(live)
+          if actual_sha != 'c1a9b61097b13ebe':
+              sys.exit('SAFE_STOP: live Firestore rules changed since last read-only comparison. Do not merge.')
+          audit='    match /admin_audit/{auditId} {'
+          if live.count(audit)!=1 or 'function isGeneralManager()' not in live:
+              sys.exit('SAFE_STOP: unrecognized live admin authorization or audit structure')
+          if 'match /admin_task_drafts/{draftId}' in live or 'match /admin_survey_drafts/{surveyId}' in live:
+              sys.exit('SAFE_STOP: draft sections appeared live; manual conflict resolution required.')
+          first='    match /admin_task_drafts/{draftId} {'
+          after_task='    // DEDA manager surveys: private UNPUBLISHED drafts only.'
+          after_survey='    match /admin_audit/{auditId} {'
+          if candidate.count(first)!=1 or candidate.count(after_task)!=1 or candidate.count(after_survey)!=1:
+              sys.exit('SAFE_STOP: expected candidate section anchors missing')
+          task=candidate[candidate.index(first):candidate.index(after_task)]
+          surveys=candidate[candidate.index(after_task):candidate.index(after_survey)]
+          added=task+surveys
+          if 'allow delete: if false;' not in task or 'allow delete: if false;' not in surveys:
+              sys.exit('SAFE_STOP: manager drafts lack no-delete protection')
+          if 'allow create: if isGeneralManager()' not in task or 'allow create: if isGeneralManager()' not in surveys:
+              sys.exit('SAFE_STOP: manager-only protection missing')
+          merged=live.replace(audit,added+'\n'+audit,1)
+          if merged.replace(added+'\n','',1)!=live:
+              sys.exit('SAFE_STOP: insertion changed live rules outside the new draft blocks')
+          # Only this throw-away GitHub runner workspace is mutated, NEVER live Firebase.
+          Path('firestore.rules').write_text(merged)
+          print('PREVIEW_ONLY: live Firestore release verified against snapshot '+actual_sha)
+          print('PREVIEW_ONLY: existing deployed rules preserved byte-for-byte except insertion point')
+          print('PREVIEW_ONLY: inserted manager draft sections and validators only')
+          print('NO_FIREBASE_WRITE: local emulator will validate merged rules.')
+          PY
+      - name: Run actual security tests against merged live plus manager draft rules locally
+        env:
+          CI: 'true'
+        run: |
+          npx --yes firebase-tools@14 emulators:exec \
+            --only firestore \
+            --project demo-deda-phase2-merged \
+            "node --test tests/firestore-rules/phase2.test.mjs"
+      - name: Verify no production deploy command in executed steps
+        run: |
+          echo 'PASS: read-only GET from live Firebase; temporary emulator-only merge; no live rules deployment.'
