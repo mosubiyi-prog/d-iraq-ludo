@@ -175,8 +175,12 @@ evaluator=r'''  void _evaluateRoadHazards(LatLng current) {
     var bestDistance = double.infinity;
     for (final hazard in _roadHazards) {
       if (!_hazardIsUsable(hazard)) continue;
+      // CRITICAL: filter distant Firebase reports before any O(route points)
+      // projection; otherwise a 500-report collection stalls live GPS updates.
+      if (_metersBetween(current, hazard.location) > 1550) continue;
       final distance = _hazardForwardDistance(current, hazard);
       if (distance == null) {
+        if (_metersBetween(current, hazard.location) > 110) continue;
         // Once GPS has genuinely passed the report on this route, it must
         // stay hidden even if later GPS drift briefly points backwards.
         final points = route?.points ?? const <LatLng>[];
@@ -291,6 +295,7 @@ required=[
     "return 500.0;","return 300.0;","return 50.0;",
     "_passedHazardIds.add(hazard.id)",
     "_buildFixedDriverArrow(navigationArrowAngle)",
+    "if (_metersBetween(current, hazard.location) > 1550) continue;",
 ]
 absent=[v for v in required if v not in t]
 if absent:raise SystemExit("100312 checks failed "+str(absent))
