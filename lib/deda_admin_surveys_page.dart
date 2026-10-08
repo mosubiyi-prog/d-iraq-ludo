@@ -97,8 +97,8 @@ class _DedaAdminSurveysPageState extends State<DedaAdminSurveysPage> {
                         child: Padding(
                           padding: const EdgeInsets.all(13),
                           child: Text(t(
-                            'اسأل المستخدم عن الخارطة والمهام والأسئلة المرورية أو أي ميزة أخرى. تقدر تضيف حتى 6 أسئلة للاستطلاع، بتقييم أو خيارات أو اقتراح مكتوب.',
-                            'Ask about maps, tasks, traffic quizzes or any feature. Add up to six rating, multiple-choice or free-text questions.',
+                            'اسأل المستخدم عن الخارطة والمهام والأسئلة المرورية أو أي ميزة أخرى. تقدر تضيف حتى 4 أسئلة للاستطلاع، بتقييم أو خيارات أو اقتراح مكتوب.',
+                            'Ask about maps, tasks, traffic quizzes or any feature. Add up to four rating, multiple-choice or free-text questions.',
                           ), style: const TextStyle(height: 1.5)),
                         ),
                       ),
@@ -416,7 +416,7 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
             const SizedBox(height: 8),
             for (var i = 0; i < questions.length; i++) _questionCard(i),
             OutlinedButton.icon(
-              onPressed: questions.length >= 6
+              onPressed: questions.length >= 4
                   ? null
                   : () => setState(() {
                         questions.add(_SurveyQuestionFields());
