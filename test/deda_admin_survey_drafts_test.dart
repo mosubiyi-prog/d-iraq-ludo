@@ -83,6 +83,44 @@ void main() {
     expect(data.keys, isNot(contains('claimAvailable')));
   });
 
+  test('One survey completion can define arbitrary coin or diamond amounts', () {
+    for (final kind in ['coins', 'diamonds']) {
+      final draft = DedaAdminSurveyDraft(
+        titleAr: 'ملاحظات مستخدمي ديدا',
+        titleEn: 'ملاحظات مستخدمي ديدا',
+        questions: const [
+          DedaSurveyQuestion(
+            type: 'rating_5',
+            promptAr: 'ما رأيك بالخارطة؟',
+            promptEn: 'ما رأيك بالخارطة؟',
+          ),
+        ],
+        rewardUnit: kind,
+        rewardAmount: 15000,
+      );
+      final saved = draft.toEditableMap();
+      expect(saved['rewardUnit'], kind);
+      expect(saved['rewardAmount'], 15000);
+      expect(saved['rewardPolicy'],
+          'once_per_account_on_verified_submission');
+      expect(saved['status'], 'draft');
+      expect(saved.keys, isNot(contains('claimAvailable')));
+      expect(saved.keys, isNot(contains('userAnswer')));
+    }
+  });
+
+  test('Legacy points drafts stay editable but no client payout is possible', () {
+    const draft = DedaAdminSurveyDraft(
+      titleAr: 'ملاحظات على الخدمات',
+      titleEn: 'Old draft title',
+      questions: [mapRating],
+      rewardUnit: 'points',
+      rewardAmount: 25,
+    );
+    expect(draft.toEditableMap()['rewardUnit'], 'points');
+    expect(draft.toEditableMap()['status'], 'draft');
+  });
+
   test('Question prompts, unsupported types and answer options checked', () {
     final problems = [
       const DedaSurveyQuestion(
@@ -137,7 +175,7 @@ void main() {
   });
 
   test('Reject invalid award amount, timing and inconsistent no-reward mode', () {
-    for (final amount in [-1, 501]) {
+    for (final amount in [-1, 1000001]) {
       final bad = DedaAdminSurveyDraft(
         titleAr: survey.titleAr,
         titleEn: survey.titleEn,
