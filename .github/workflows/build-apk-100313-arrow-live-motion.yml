@@ -1,0 +1,35 @@
+name: Build DEDA 100313 Instant Arrow And GPS Response
+# All successful DEDA 100312 hazard improvements retained, change compass/GPS responsiveness only.
+
+on:
+  push:
+    branches:
+      - driver-arrow-live-motion-100313-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100313-arrow-live-motion.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100313 after proven 100312
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Build and validate only DEDA 100313 arrow-motion response
+        run: bash tools/build_100313_arrow_live_motion.sh
+      - name: Upload signed APK DEDA 100313
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100313-live-arrow-gps-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
