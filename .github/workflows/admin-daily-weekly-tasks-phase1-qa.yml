@@ -1,0 +1,59 @@
+name: DEDA Admin Daily Weekly Tasks Phase 1 QA
+
+on:
+  push:
+    branches:
+      - admin-daily-weekly-tasks-phase1-2026-10-08
+    paths:
+      - '.github/workflows/admin-daily-weekly-tasks-phase1-qa.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated DEDA admin task stage
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Verify draft settings cannot publish reward claims
+        run: flutter test test/deda_admin_task_drafts_test.dart
+      - name: Analyze admin section and existing admin dashboard
+        run: |
+          dart format lib/deda_admin_task_drafts.dart lib/deda_admin_task_management_page.dart test/deda_admin_task_drafts_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_admin_task_drafts.dart lib/deda_admin_task_management_page.dart lib/admin_pages.dart test/deda_admin_task_drafts_test.dart
+      - name: Preserve 100319 navigation engine, login, points and APK toolchain
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml android/ functions/index.js tools/build_100318_user_heading_camera.sh
+      - name: Source audit manager-only, stage-only and security rules
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          admin=Path('lib/admin_pages.dart').read_text()
+          ui=Path('lib/deda_admin_task_management_page.dart').read_text()
+          service=Path('lib/deda_admin_task_drafts.dart').read_text()
+          rules=Path('firestore.rules').read_text()
+          assert admin.count("DedaAdminTaskManagementPage(isArabic: ar)") == 1
+          assert "DedaBackend.normalizeAdminRole(profile['role'])" in admin
+          assert "'general_manager'" in ui and "'general_manager'" in service
+          assert "currentAdminProfile(" in service and "forceRefresh: true" in service
+          assert "only-draft-editing-allowed" in service
+          assert "'status': 'draft'" in service
+          assert "task-draft-changed-remotely" in service
+          assert "'task_draft_created'" in service and "'task_draft_updated'" in service
+          marker=rules.index('match /admin_task_drafts/{draftId}')
+          segment=rules[marker:rules.index('match /admin_audit/{auditId}',marker)]
+          assert 'allow get, list: if isGeneralManager()' in segment
+          assert 'allow create: if isGeneralManager()' in segment
+          assert 'allow update: if isGeneralManager()' in segment
+          assert 'allow delete: if false;' in segment
+          assert "data.status == 'draft'" in segment
+          assert "data.revision == resource.data.revision + 1" in segment
+          assert "DedaTaskEngine" not in ui and "claimTaskReward" not in service
+          print('PASS: manager-only draft architecture, no client payouts, golden 100319 unchanged.')
+          PY
