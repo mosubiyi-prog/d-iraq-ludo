@@ -37,7 +37,7 @@ jobs:
           assert "ttl: const Duration(seconds: 45)" in x
           assert "maxEntries: 24" in x
           assert "return List<PlaceInfo>.of(results);" in x
-          assert "cacheWhen: (places) => places.isNotEmpty" in x
+          assert "places.isNotEmpty && places.length <= 100" in x
           assert x.count("return _cachedPublicPlaces(") == 2
           assert "_searchPlacesByNameUncached" in x
           print("PASS: public search only, two callers, bounded 45s, defensive clones.")
