@@ -159,7 +159,7 @@ void main() {
     }
   });
 
-  test('Bound to one through six questions; no unlimited fields', () {
+  test('Bound to one through four questions; reject a fifth', () {
     final missing = DedaAdminSurveyDraft(
       titleAr: survey.titleAr,
       titleEn: survey.titleEn,
@@ -168,9 +168,15 @@ void main() {
     final tooMany = DedaAdminSurveyDraft(
       titleAr: survey.titleAr,
       titleEn: survey.titleEn,
-      questions: List<DedaSurveyQuestion>.filled(7, mapRating),
+      questions: List<DedaSurveyQuestion>.filled(5, mapRating),
+    );
+    final fourQuestions = DedaAdminSurveyDraft(
+      titleAr: survey.titleAr,
+      titleEn: survey.titleEn,
+      questions: List<DedaSurveyQuestion>.filled(4, mapRating),
     );
     expect(() => missing.validate(), throwsArgumentError);
+    expect(() => fourQuestions.validate(), returnsNormally);
     expect(() => tooMany.validate(), throwsArgumentError);
   });
 
