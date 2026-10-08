@@ -1565,18 +1565,21 @@ service cloud.firestore {
     // Validate each option's type/size in rules, not only in Flutter.
     // This prevents malformed Firestore clients from bypassing UI checks.
     function validSurveyOptionList(options) {
+      // String concatenation fails closed on non-string choice values.
+      // One bounded expression handles 2-5 entries, avoiding expensive
+      // per-option conditions repeated across all six survey questions.
       return options is list
         && options.size() >= 2
         && options.size() <= 5
-        && options[0] is string
-        && options[1] is string
-        && (options.size() < 3 || options[2] is string)
-        && (options.size() < 4 || options[3] is string)
-        && (options.size() < 5 || options[4] is string)
-        && options.join('|').matches('^[^|\\n]{1,70}(\\|[^|\\n]{1,70}){1,4}$');
+        && (
+          options[0] + '|' + options[1]
+          + (options.size() >= 3 ? '|' + options[2] : '')
+          + (options.size() >= 4 ? '|' + options[3] : '')
+          + (options.size() == 5 ? '|' + options[4] : '')
+        ).matches('^[^|\\n]{1,70}(\\|[^|\\n]{1,70}){1,4}$');
     }
 
-    function validSurveyQuestion(q) {
+        function validSurveyQuestion(q) {
       return q is map
         && q.keys().size() == 6
         && q.type in ['rating_5', 'choice', 'text']
