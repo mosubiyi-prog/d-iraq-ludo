@@ -71,8 +71,12 @@ jobs:
               sys.exit(3)
           proposed=Path('firestore.rules').read_text()
           # Need only exact protected baseline from same branch ancestry.
+          subprocess.check_output(
+              ['git','fetch','--no-tags','origin',
+               'admin-survey-arabic-preview-100321-2026-10-08'],
+               stderr=subprocess.DEVNULL)
           baseline=subprocess.check_output(
-              ['git','show','HEAD~1:firestore.rules'],text=True)
+              ['git','show','FETCH_HEAD:firestore.rules'],text=True)
           normalize=lambda s: '\n'.join(line.rstrip() for line in s.strip().splitlines())
           sha=lambda s: hashlib.sha256(s.encode()).hexdigest()[:16]
           liveN,proposedN,baselineN=map(normalize,(live,proposed,baseline))
