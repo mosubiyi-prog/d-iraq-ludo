@@ -1565,8 +1565,6 @@ service cloud.firestore {
     // Validate each option's type/size in rules, not only in Flutter.
     // This prevents malformed Firestore clients from bypassing UI checks.
     function validSurveyOptionList(options) {
-      // Only string choices; per-option 1..70 chars using a single joined
-      // validation to stay inside the Firestore 1000-expression ceiling.
       return options is list
         && options.size() >= 2
         && options.size() <= 5
@@ -1578,21 +1576,16 @@ service cloud.firestore {
         && options.join('|').matches('^[^|\\n]{1,70}(\\|[^|\\n]{1,70}){1,4}$');
     }
 
-        function validSurveyQuestion(question) {
-      return question is map
-        && question.keys().size() == 6
-        && question.type in ['rating_5', 'choice', 'text']
-        && question.promptAr.matches('^.{3,160}$')
-        && question.promptEn == question.promptAr
-        && question.required is bool
-        && (
-          (question.type == 'choice'
-            && validSurveyOptionList(question.optionsAr)
-            && question.optionsEn == question.optionsAr)
-          || (question.type != 'choice'
-            && question.optionsAr == []
-            && question.optionsEn == question.optionsAr)
-        );
+    function validSurveyQuestion(q) {
+      return q is map
+        && q.keys().size() == 6
+        && q.type in ['rating_5', 'choice', 'text']
+        && q.promptAr.matches('^.{3,160}$')
+        && q.promptEn == q.promptAr
+        && q.required is bool
+        && (q.type == 'choice'
+          ? validSurveyOptionList(q.optionsAr) && q.optionsEn == q.optionsAr
+          : q.optionsAr == [] && q.optionsEn == []);
     }
 
     function validSurveyQuestions(questions) {
@@ -1600,29 +1593,11 @@ service cloud.firestore {
         && questions.size() >= 1
         && questions.size() <= 6
         && validSurveyQuestion(questions[0])
-        && (
-          (questions.size() == 6
-            && validSurveyQuestion(questions[1])
-            && validSurveyQuestion(questions[2])
-            && validSurveyQuestion(questions[3])
-            && validSurveyQuestion(questions[4])
-            && validSurveyQuestion(questions[5]))
-          || (questions.size() == 5
-            && validSurveyQuestion(questions[1])
-            && validSurveyQuestion(questions[2])
-            && validSurveyQuestion(questions[3])
-            && validSurveyQuestion(questions[4]))
-          || (questions.size() == 4
-            && validSurveyQuestion(questions[1])
-            && validSurveyQuestion(questions[2])
-            && validSurveyQuestion(questions[3]))
-          || (questions.size() == 3
-            && validSurveyQuestion(questions[1])
-            && validSurveyQuestion(questions[2]))
-          || (questions.size() == 2
-            && validSurveyQuestion(questions[1]))
-          || questions.size() == 1
-        );
+        && (questions.size() < 2 || validSurveyQuestion(questions[1]))
+        && (questions.size() < 3 || validSurveyQuestion(questions[2]))
+        && (questions.size() < 4 || validSurveyQuestion(questions[3]))
+        && (questions.size() < 5 || validSurveyQuestion(questions[4]))
+        && (questions.size() < 6 || validSurveyQuestion(questions[5]));
     }
 
         function validAdminSurveyDraft(data) {
