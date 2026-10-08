@@ -63,6 +63,28 @@ void main() {
     expect(calls, 2);
   });
 
+  test('large public result sets are not retained in device memory', () async {
+    final gate = DedaRequestCoalescer<List<int>>(
+      ttl: const Duration(seconds: 45),
+    );
+    var calls = 0;
+    Future<List<int>> fetch() async {
+      calls++;
+      return List<int>.generate(101, (i) => i);
+    }
+    for (var i = 0; i < 2; i++) {
+      expect(
+        (await gate.run(
+          'large-query',
+          fetch,
+          cacheWhen: (places) => places.isNotEmpty && places.length <= 100,
+        )).length,
+        101,
+      );
+    }
+    expect(calls, 2);
+  });
+
   test('different search keys do not share results', () async {
     final gate = DedaRequestCoalescer<String>(
       ttl: const Duration(seconds: 45),
