@@ -64,12 +64,36 @@ jobs:
             /tmp/deda-admin-draft-activation/manifest.json
           if-no-files-found: error
           retention-days: 90
-      - name: ACTIVATE only unpublished manager draft collections with live SHA recheck and rollback
+      - name: ACTIVATE only manager draft rules using Firebase CLI with exact live snapshot gate
         env:
           FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           DEDA_EXPLICIT_MANAGER_DRAFTS_ACTIVATION: approved-2026-10-08
-        run: python tools/deda_activate_admin_drafts_rules_2026_10_08.py deploy
+        run: |
+          set -euo pipefail
+          # The Rules REST release PATCH returned HTTP 400 in run 37835350646.
+          # Use the same supported Firebase CLI path as prior DEDA rules deploys.
+          # Only manager draft sections are inserted into the EXACT live rules.
+          credential="$RUNNER_TEMP/deda-manager-drafts-service-account.json"
+          trap 'rm -f "$credential"' EXIT
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT_DEDA_25B88:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_DEDA_25B88" > "$credential"
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$credential"
+          else
+            echo 'SAFE_STOP: no Firebase service account configured; production unchanged.'
+            exit 2
+          fi
+          chmod 600 "$credential"
+          export GOOGLE_APPLICATION_CREDENTIALS="$credential"
+
+          # Re-read live rules and forbid deploy if the tested backup/candidate
+          # differs from the latest published rules or the user approval gate.
+          python tools/deda_activate_admin_drafts_rules_2026_10_08.py verify-cli-before
+          npx --yes firebase-tools@14 deploy --only firestore:rules --project deda-25b88 --non-interactive
+          # A successful CLI exit alone never counts as published: read back
+          # from Firebase and compare with the exact emulator-tested candidate.
+          python tools/deda_activate_admin_drafts_rules_2026_10_08.py verify-cli-after
       - name: Save successful Firestore publication identifiers for exact rollback
         if: success()
         uses: actions/upload-artifact@v4
