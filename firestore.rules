@@ -1608,14 +1608,16 @@ service cloud.firestore {
         && question.promptEn is string
         && question.promptEn.size() >= 3
         && question.promptEn.size() <= 160
-        && validSurveyOptionList(question.optionsAr)
-        && validSurveyOptionList(question.optionsEn)
         && question.required is bool
         && (
           (question.type == 'choice'
+            && validSurveyOptionList(question.optionsAr)
+            && validSurveyOptionList(question.optionsEn)
             && question.optionsAr.size() >= 2
             && question.optionsAr.size() == question.optionsEn.size())
           || (question.type != 'choice'
+            && question.optionsAr is list
+            && question.optionsEn is list
             && question.optionsAr.size() == 0
             && question.optionsEn.size() == 0)
         );
