@@ -1668,6 +1668,149 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // PRIVATE PREVIEWS ONLY. NO PUBLIC READ, NO ACTIVE TASKS, NO PAYOUTS.
+    // A separate trusted server publisher will eventually read approved
+    // schedules and validate Iraqi midnight before touching public configs.
+    match /admin_daily_schedule_previews/{previewId} {
+      function validPreview(data) {
+        return data.keys().size() == 15
+          && data.keys().hasAll([
+            'slotId', 'action', 'titleAr', 'titleEn',
+            'targetCount', 'rewardUnit', 'rewardAmount', 'url',
+            'status', 'revision', 'effectiveAt',
+            'createdByUid', 'updatedByUid', 'createdAt', 'updatedAt'
+          ])
+          && previewId in [
+            'preview_share_personal_location', 'preview_open_map',
+            'preview_share_registered_place', 'preview_open_saved_place',
+            'preview_open_received_place', 'preview_review_added_place',
+            'preview_traffic_skills', 'preview_long_trip'
+          ]
+          && previewId == 'preview_' + data.slotId
+          && data.action in [
+            'open_map', 'share_personal_location',
+            'share_registered_place', 'open_saved_place',
+            'open_received_place', 'review_added_place',
+            'traffic_skills', 'long_trip', 'visit_telegram'
+          ]
+          && data.titleAr is string
+          && data.titleAr.matches('^.{3,80}
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+          && data.titleEn == data.titleAr
+          && data.targetCount is int
+          && data.targetCount >= 1 && data.targetCount <= 100
+          && data.rewardUnit in ['points', 'diamonds']
+          && data.rewardAmount is int
+          && data.rewardAmount >= 1 && data.rewardAmount <= 5000
+          && data.url is string && data.url.size() <= 220
+          && (
+            (data.action == 'visit_telegram'
+              && data.url.matches(
+                '^https://(t[.]me|telegram[.]me)/[A-Za-z0-9_/-]{1,180}
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+))
+            || (data.action != 'visit_telegram' && data.url == '')
+          )
+          && data.status in ['pending', 'cancelled']
+          && data.revision is int && data.revision > 0
+          && data.effectiveAt is timestamp
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp
+          && data.createdByUid is string
+          && data.updatedByUid is string;
+      }
+
+      function managerOnly() {
+        return isAdmin() && adminData().role == 'general_manager';
+      }
+
+      allow get, list: if managerOnly();
+      allow create: if managerOnly()
+        && validPreview(request.resource.data)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.revision == 1
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.effectiveAt > request.time
+        && request.resource.data.effectiveAt <=
+             request.time + duration.value(2, 'd');
+      allow update: if managerOnly()
+        && validPreview(request.resource.data)
+        && resource.data.status in ['pending', 'cancelled']
+        && resource.data.effectiveAt > request.time
+        && request.resource.data.effectiveAt > request.time
+        && request.resource.data.effectiveAt <=
+             request.time + duration.value(2, 'd')
+        && request.resource.data.slotId == resource.data.slotId
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'action', 'titleAr', 'titleEn', 'targetCount',
+          'rewardUnit', 'rewardAmount', 'url', 'status',
+          'effectiveAt', 'revision', 'updatedByUid', 'updatedAt'
+        ])
+        && (
+          request.resource.data.status == 'pending'
+          || (
+            resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'revision', 'updatedByUid', 'updatedAt'])
+          )
+        );
+      allow delete: if false;
+    }
+
     match /admin_audit/{auditId} {
       allow read: if hasAdminPermission('viewAudit')
         && !isProvinceAgent();
