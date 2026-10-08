@@ -1,0 +1,56 @@
+name: DEDA 100319 Safe Map Scale Pilot Signed APK
+
+on:
+  push:
+    branches:
+      - map-hazard-route-corridor-readiness-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100319-map-scale-pilot.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - name: Checkout isolated 100319 pilot on stable 100318
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Verify no stable 100318 navigation and production rules changes
+        run: |
+          git fetch --no-tags origin backup-100318-field-tested-user-heading-camera-2026-10-08:refs/remotes/origin/backup-100318-field-tested-user-heading-camera-2026-10-08
+          git diff --exit-code origin/backup-100318-field-tested-user-heading-camera-2026-10-08 -- lib/main.dart lib/deda_backend.dart lib/deda_road_class_lookup.dart firestore.rules storage.rules firebase.json pubspec.yaml
+      - name: Reconstruct proven navigation exactly, change only APK build-number 100319
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          baseline=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          old='flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true'
+          new='flutter build apk --release --build-number=100319 --dart-define=USE_NEXT_GEN_SDK=true'
+          assert baseline.count(old)==1, 'unexpected golden build script version'
+          Path('/tmp/deda_100319_safe_scale.sh').write_text(baseline.replace(old,new))
+          assert Path('lib/places_service.dart').read_text().count('_publicHealth.guard(')==2
+          assert 'DedaRouteHazardCorridor' not in Path('lib/main.dart').read_text()
+          assert 'DedaGeoFirestoreReader' not in Path('lib/main.dart').read_text()
+          print('PASS: 100319 rebuild preserves golden camera GPS, only public search active')
+          PY
+      - name: Run original full DEDA 100318 construction, analysis and 100319 signed build
+        run: bash /tmp/deda_100319_safe_scale.sh
+      - name: Verify signed artifact exists
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+      - name: Upload one pilot APK, no store deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100319-safe-map-scale-pilot-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
