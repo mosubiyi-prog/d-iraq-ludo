@@ -9,6 +9,8 @@
  * a trusted Cloud Functions clock, AFTER the user client and reward ledger
  * have been integrated and tested together.
  */
+const {FieldValue} = require("firebase-admin/firestore");
+
 const HOURS_3_MS = 3 * 60 * 60 * 1000;
 const PUBLICATION_GRACE_MS = 15 * 60 * 1000;
 
@@ -174,7 +176,7 @@ async function publishDueDailySlots(db, trustedNow) {
         // verification and a separate atomic reward ledger are still missing.
         rewardsEnabled: false,
         rewardClaimMode: "disabled_until_verified_server_ledger",
-        publishedAt: dbTimestamp(db),
+        publishedAt: FieldValue.serverTimestamp(),
       };
       tx.set(published, values);
       tx.create(history, {
@@ -191,21 +193,13 @@ async function publishDueDailySlots(db, trustedNow) {
           rewardAmount: preview.rewardAmount,
           url: preview.url,
         },
-        createdAt: dbTimestamp(db),
+        createdAt: FieldValue.serverTimestamp(),
       });
       return "published-config-only";
     });
     results.push({slotId, outcome});
   }
   return results;
-}
-
-function dbTimestamp(db) {
-  // Timestamp helper injected by Admin SDK calling code (not by the user).
-  if (!db.FieldValue || typeof db.FieldValue.serverTimestamp !== "function") {
-    throw Error("firestore-server-timestamp-required");
-  }
-  return db.FieldValue.serverTimestamp();
 }
 
 module.exports = {
