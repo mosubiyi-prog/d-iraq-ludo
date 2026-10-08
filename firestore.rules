@@ -1593,10 +1593,7 @@ service cloud.firestore {
 
     function validSurveyQuestion(question) {
       return question is map
-        && question.keys().hasOnly([
-          'type', 'promptAr', 'promptEn',
-          'optionsAr', 'optionsEn', 'required'
-        ])
+        && question.keys().size() == 6
         && question.keys().hasAll([
           'type', 'promptAr', 'promptEn',
           'optionsAr', 'optionsEn', 'required'
@@ -1616,10 +1613,8 @@ service cloud.firestore {
             && question.optionsAr.size() >= 2
             && question.optionsAr.size() == question.optionsEn.size())
           || (question.type != 'choice'
-            && question.optionsAr is list
-            && question.optionsEn is list
-            && question.optionsAr.size() == 0
-            && question.optionsEn.size() == 0)
+            && question.optionsAr == []
+            && question.optionsEn == [])
         );
     }
 
@@ -1636,12 +1631,7 @@ service cloud.firestore {
     }
 
     function validAdminSurveyDraft(data) {
-      return data.keys().hasOnly([
-          'titleAr', 'titleEn', 'questions',
-          'rewardUnit', 'rewardAmount', 'durationDays',
-          'status', 'rewardPolicy', 'revision',
-          'createdAt', 'updatedAt', 'createdByUid', 'updatedByUid'
-        ])
+      return data.keys().size() == 13
         && data.keys().hasAll([
           'titleAr', 'titleEn', 'questions',
           'rewardUnit', 'rewardAmount', 'durationDays',
