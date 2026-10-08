@@ -306,6 +306,7 @@ python3 tools/user_heading_camera_100318.py
 dart format lib/main.dart
 python3 - <<'PY'
 from pathlib import Path
+import re
 s=Path('lib/main.dart').read_text()
 a=s.index('  double _navigationCameraHeading() {')
 b=s.index('  LatLng _navigationCameraTarget(',a)
@@ -318,7 +319,7 @@ assert 'final zoom = _navigationModeZoom();' in s, 'mode zoom changed'
 assert 'final navigationHomeZoom = 15.8;' in s, 'normal zoom changed'
 assert 'Timer(const Duration(seconds: 10)' in s, 'free-touch return changed'
 assert '_pauseNavigationFollowForGesture()' in s, 'manual map gesture changed'
-assert '(_autoFollowMap ? 0.0 : ' in s and '_cameraBearingForArrow()' in s, 'arrow not coupled to true camera'
+assert re.search(r'_autoFollowMap\s*\?\s*0\.0\s*:', s) and '_cameraBearingForArrow()' in s, 'arrow not coupled to true camera'
 assert s.count('_syncUserHeadingCamera();') == 3, 'compass/GPS/free return not synchronized'
 a=s.index('      Marker(\n        point: destinationPoint,')
 b=s.index("      // Keep one small green heading arrow for the user's start/live position.",a)
