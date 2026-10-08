@@ -1694,31 +1694,7 @@ service cloud.firestore {
             'traffic_skills', 'long_trip', 'visit_telegram'
           ]
           && data.titleAr is string
-          && data.titleAr.matches('^.{3,80}
-      allow read: if hasAdminPermission('viewAudit')
-        && !isProvinceAgent();
-      allow create: if isAdmin()
-        && request.resource.data.adminUid == request.auth.uid;
-      allow update, delete: if false;
-    }
-
-    match /admin_history/{uid} {
-      allow read: if isGeneralManager();
-      allow write: if false;
-    }
-
-    match /system_counters/{counterId} {
-      allow read, write: if isGeneralManager()
-        || (
-          counterId == 'place_approval'
-          && hasAdminPermission('approvePlaces')
-        );
-    }
-  }
-}
-
-// DEDA location sharing v1 deployment marker
-)
+          && data.titleAr.matches('^.{3,80}$')
           && data.titleEn == data.titleAr
           && data.targetCount is int
           && data.targetCount >= 1 && data.targetCount <= 100
@@ -1729,31 +1705,7 @@ service cloud.firestore {
           && (
             (data.action == 'visit_telegram'
               && data.url.matches(
-                '^https://(t[.]me|telegram[.]me)/[A-Za-z0-9_/-]{1,180}
-      allow read: if hasAdminPermission('viewAudit')
-        && !isProvinceAgent();
-      allow create: if isAdmin()
-        && request.resource.data.adminUid == request.auth.uid;
-      allow update, delete: if false;
-    }
-
-    match /admin_history/{uid} {
-      allow read: if isGeneralManager();
-      allow write: if false;
-    }
-
-    match /system_counters/{counterId} {
-      allow read, write: if isGeneralManager()
-        || (
-          counterId == 'place_approval'
-          && hasAdminPermission('approvePlaces')
-        );
-    }
-  }
-}
-
-// DEDA location sharing v1 deployment marker
-))
+                '^https://(t[.]me|telegram[.]me)/[A-Za-z0-9_/-]{1,180}$'))
             || (data.action != 'visit_telegram' && data.url == '')
           )
           && data.status in ['pending', 'cancelled']
