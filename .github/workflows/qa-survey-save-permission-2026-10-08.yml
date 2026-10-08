@@ -6,6 +6,8 @@ on:
       - qa-survey-save-permission-2026-10-08
     paths:
       - '.github/workflows/qa-survey-save-permission-2026-10-08.yml'
+      - 'tests/firestore-rules/phase2.test.mjs'
+      - 'firestore.rules'
 
 permissions:
   contents: read
