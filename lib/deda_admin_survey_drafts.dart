@@ -96,7 +96,7 @@ class DedaAdminSurveyDraft {
         titleEn.trim().length < 3 || titleEn.trim().length > 80) {
       throw ArgumentError('invalid-survey-title');
     }
-    if (questions.isEmpty || questions.length > 6) {
+    if (questions.isEmpty || questions.length > 4) {
       throw ArgumentError('invalid-survey-question-count');
     }
     for (final question in questions) {
