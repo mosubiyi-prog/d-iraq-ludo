@@ -1764,6 +1764,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Stage 3: server-written CONFIG snapshots only. They do not authorize
+    // any reward claims or expose private drafts. The user application
+    // cannot write these documents.
+    match /deda_daily_published_task_slots/{slotId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    // Immutable, private server publication history, including rollback data.
+    match /deda_daily_task_publication_history/{publicationId} {
+      allow read, write: if false;
+    }
+
     match /admin_audit/{auditId} {
       allow read: if hasAdminPermission('viewAudit')
         && !isProvinceAgent();
