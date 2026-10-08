@@ -1,5 +1,5 @@
 name: Build DEDA 100316 Real Phone And Reverse Arrow Heading
-# Retry 100316: the GPS heading-owner patch now safely matches Dart-formatted indentation.
+# Retry 100316: strict GPS heading-owner match also preserves the existing in-block comment.
 
 on:
   push:
