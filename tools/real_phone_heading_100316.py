@@ -172,7 +172,22 @@ new = """          if (filtered.moving) {
             _headingMovementAnchor = null;
             _oppositeMovementFixes = 0;
           }"""
-s=replace_exact(s,old,new,"GPS fallback limited to heading selection")
+# Dart formatter changes indentation in the callback depending on the
+# surrounding patch stack. Match the IDENTICAL semantic expression but adapt
+# the replacement's indentation to the actual generated source.
+import re
+import textwrap
+pattern = re.compile(
+    r"(?m)^(?P<indent>[ \\t]*)if \\(!_compassHeadingIsFresh && filtered\\.moving\\) \\{\\s*_arrowHeading = heading;\\s*\\}"
+)
+m = pattern.search(s)
+if m is None or len(pattern.findall(s)) != 1:
+    raise SystemExit("100316 GPS heading owner expected exactly once")
+indent = m.group("indent")
+formatted_new = textwrap.dedent(new).strip("\\n")
+replacement_lines = [indent + line if line.strip() else "" for line in formatted_new.splitlines()]
+s = s[:m.start()] + "\\n".join(replacement_lines) + s[m.end():]
+
 
 # Starting a new trip may not carry an old compass/GPS fallback.
 start=s.find("  Future<void> startTrip() async {")
