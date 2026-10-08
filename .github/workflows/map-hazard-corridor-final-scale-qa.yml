@@ -1,0 +1,52 @@
+name: DEDA Final Map Scale Safety Gate - Offline
+
+on:
+  push:
+    branches:
+      - map-hazard-route-corridor-readiness-2026-10-08
+    paths:
+      - '.github/workflows/map-hazard-corridor-final-scale-qa.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Dependencies
+        run: flutter pub get
+      - name: Run ALL map scale simulation tests without contacting providers
+        run: |
+          flutter test test/deda_request_coalescer_test.dart test/deda_public_provider_health_test.dart test/deda_geo_window_test.dart test/deda_route_hazard_corridor_test.dart
+      - name: Dart analyzer scoped to scalability modules
+        run: |
+          flutter analyze --no-fatal-warnings --no-fatal-infos lib/deda_request_coalescer.dart lib/deda_public_provider_health.dart lib/deda_geo_window.dart lib/deda_geo_firestore_reader.dart lib/deda_route_hazard_corridor.dart lib/places_service.dart test/deda_request_coalescer_test.dart test/deda_public_provider_health_test.dart test/deda_geo_window_test.dart test/deda_route_hazard_corridor_test.dart
+      - name: Validate immutable proven 100318 map, GPS, routing and Firebase rules
+        run: |
+          git fetch --no-tags origin backup-100318-field-tested-user-heading-camera-2026-10-08:refs/remotes/origin/backup-100318-field-tested-user-heading-camera-2026-10-08
+          git diff --exit-code origin/backup-100318-field-tested-user-heading-camera-2026-10-08 -- lib/main.dart lib/deda_backend.dart lib/deda_road_class_lookup.dart pubspec.yaml firestore.rules storage.rules firebase.json
+      - name: Verify corridor preparation is NOT wired to production
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main.dart').read_text()
+          b=Path('lib/deda_backend.dart').read_text()
+          c=Path('lib/deda_route_hazard_corridor.dart').read_text()
+          r=Path('lib/deda_geo_firestore_reader.dart').read_text()
+          for code in ('DedaRouteHazardCorridor', 'dedaCollectCorridorWindows'):
+            assert code in c and code not in p and code not in b
+          assert 'DedaGeoFirestoreReader' in r
+          assert 'DedaGeoFirestoreReader' not in b and 'DedaGeoFirestoreReader' not in p
+          assert 'complete: false' in c
+          assert 'lastSampleMeters' in c
+          assert 'FirebaseFirestore' not in c
+          assert 'DateTime.now' not in c
+          assert 'getPositionStream' not in c
+          assert 'indexes' not in Path('firebase.json').read_text()
+          print('PASS: route corridor is offline-only, signals incomplete work; GPS, navigation and production Firestore untouched.')
+          PY
