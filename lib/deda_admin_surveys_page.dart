@@ -192,44 +192,42 @@ class _DedaAdminSurveysPageState extends State<DedaAdminSurveysPage> {
   }
 }
 
+// Arabic-first editor. Legacy English schema fields are mirrored from Arabic
+// until a separate translation workflow is introduced; no hidden stale text.
 class _SurveyQuestionFields {
   _SurveyQuestionFields([DedaSurveyQuestion? q])
       : type = q?.type ?? 'rating_5',
         required = q?.required ?? true,
         ar = TextEditingController(text: q?.promptAr ?? ''),
-        en = TextEditingController(text: q?.promptEn ?? ''),
         optionsAr = TextEditingController(
-            text: q?.optionsAr.join('\n') ?? ''),
-        optionsEn = TextEditingController(
-            text: q?.optionsEn.join('\n') ?? '');
+            text: q?.optionsAr.join('\n') ?? '');
 
   String type;
   bool required;
   final TextEditingController ar;
-  final TextEditingController en;
   final TextEditingController optionsAr;
-  final TextEditingController optionsEn;
 
-  DedaSurveyQuestion toQuestion() => DedaSurveyQuestion(
-        type: type,
-        promptAr: ar.text,
-        promptEn: en.text,
-        required: required,
-        optionsAr: type == 'choice'
-            ? optionsAr.text.split('\n').map((s) => s.trim())
-                .where((s) => s.isNotEmpty).toList()
-            : const [],
-        optionsEn: type == 'choice'
-            ? optionsEn.text.split('\n').map((s) => s.trim())
-                .where((s) => s.isNotEmpty).toList()
-            : const [],
-      );
+  DedaSurveyQuestion toQuestion() {
+    final options = type == 'choice'
+        ? optionsAr.text
+            .split('\n')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
+    return DedaSurveyQuestion(
+      type: type,
+      promptAr: ar.text,
+      promptEn: ar.text.trim(), // Compatibility fallback, not a translation.
+      required: required,
+      optionsAr: options,
+      optionsEn: options,
+    );
+  }
 
   void dispose() {
     ar.dispose();
-    en.dispose();
     optionsAr.dispose();
-    optionsEn.dispose();
   }
 }
 
@@ -244,7 +242,6 @@ class _SurveyDraftEditor extends StatefulWidget {
 
 class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
   late final TextEditingController titleAr;
-  late final TextEditingController titleEn;
   late final TextEditingController reward;
   late final TextEditingController days;
   late final List<_SurveyQuestionFields> questions;
@@ -257,8 +254,6 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
     final original = widget.original;
     titleAr = TextEditingController(
         text: original?.titleAr ?? 'آراء المستخدمين عن DEDA');
-    titleEn = TextEditingController(
-        text: original?.titleEn ?? 'Your opinions about DEDA');
     rewardUnit = original?.rewardUnit ?? 'none';
     reward = TextEditingController(
         text: (original?.rewardAmount ?? 0).toString());
@@ -286,7 +281,6 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
   @override
   void dispose() {
     titleAr.dispose();
-    titleEn.dispose();
     reward.dispose();
     days.dispose();
     for (final q in questions) {
@@ -354,12 +348,7 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
             const SizedBox(height: 9),
             TextFormField(
               controller: q.ar,
-              decoration: _decoration(t('نص السؤال بالعربية', 'Arabic prompt')),
-              maxLength: 160,
-            ),
-            TextFormField(
-              controller: q.en,
-              decoration: _decoration(t('السؤال بالإنجليزية', 'English prompt')),
+              decoration: _decoration(t('نص السؤال', 'Question')),
               maxLength: 160,
             ),
             if (q.type == 'choice') ...[
@@ -367,17 +356,8 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
                 controller: q.optionsAr,
                 maxLines: 3,
                 decoration: _decoration(
-                  t('الخيارات بالعربي، كل خيار بسطر',
-                      'Arabic options, one per line'),
-                ),
-              ),
-              const SizedBox(height: 9),
-              TextFormField(
-                controller: q.optionsEn,
-                maxLines: 3,
-                decoration: _decoration(
-                  t('الخيارات بالإنجليزي، كل خيار بسطر',
-                      'English options, one per line'),
+                  t('الخيارات، كل خيار بسطر',
+                      'Options, one per line'),
                 ),
               ),
             ],
@@ -399,7 +379,7 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
       id: original?.id ?? '',
       revision: original?.revision ?? 0,
       titleAr: titleAr.text,
-      titleEn: titleEn.text,
+      titleEn: titleAr.text.trim(), // Legacy schema fallback; Arabic-first.
       questions: questions.map((q) => q.toQuestion()).toList(),
       rewardUnit: rewardUnit,
       rewardAmount: int.tryParse(reward.text.trim()) ?? -1,
@@ -430,14 +410,8 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
             TextFormField(
               controller: titleAr,
               maxLength: 80,
-              decoration: _decoration(t('عنوان الاستطلاع بالعربي',
-                  'Arabic survey title')),
-            ),
-            TextFormField(
-              controller: titleEn,
-              maxLength: 80,
-              decoration: _decoration(t('العنوان بالإنجليزي',
-                  'English survey title')),
+              decoration: _decoration(t('عنوان الاستطلاع',
+                  'Survey title')),
             ),
             const SizedBox(height: 8),
             for (var i = 0; i < questions.length; i++) _questionCard(i),
@@ -451,7 +425,7 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
               label: Text(t('إضافة سؤال جديد', 'Add another question')),
             ),
             const SizedBox(height: 12),
-            Text(t('المكافأة الاختيارية', 'Optional reward'),
+            Text(t('مكافأة واحدة بعد إكمال الاستطلاع', 'One reward for completing the survey'),
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -462,8 +436,12 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
                     value: 'none',
                     child: Text(t('بدون مكافأة', 'No reward'))),
                 DropdownMenuItem(
-                    value: 'points',
-                    child: Text(t('نقاط', 'Points'))),
+                    value: 'coins',
+                    child: Text(t('عملات 🪙', 'Coins 🪙'))),
+                if (rewardUnit == 'points')
+                  DropdownMenuItem(
+                      value: 'points',
+                      child: Text(t('نقاط (مسودة قديمة)', 'Points (legacy draft)'))),
                 DropdownMenuItem(
                     value: 'diamonds',
                     child: Text(t('ألماس 💎', 'Diamonds'))),
@@ -471,7 +449,11 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
               onChanged: (value) {
                 setState(() {
                   rewardUnit = value ?? rewardUnit;
-                  if (rewardUnit == 'none') reward.text = '0';
+                  if (rewardUnit == 'none') {
+                    reward.text = '0';
+                  } else if (reward.text.trim() == '0') {
+                    reward.text = '10';
+                  }
                 });
               },
             ),
@@ -480,10 +462,15 @@ class _SurveyDraftEditorState extends State<_SurveyDraftEditor> {
               TextFormField(
                 controller: reward,
                 keyboardType: TextInputType.number,
-                decoration: _decoration(t('قيمة المكافأة 1–500',
-                    'Reward value 1–500')),
+                decoration: _decoration(t('عدد العملات أو الماسات (1–1000000)',
+                    'Coins or diamonds amount (1–1000000)')),
               ),
             ],
+            const SizedBox(height: 8),
+            Text(t(
+              'المكافأة للاستطلاع كاملًا، مرة واحدة للحساب بعد إكمال الإجابات والتحقق منها، وليس لكل سؤال. المسودة لا تصرف أي مكافأة.',
+              'One reward per verified completed survey per account, not per question. Drafts cannot pay rewards.',
+            ), style: const TextStyle(fontSize: 12, height: 1.4)),
             const SizedBox(height: 10),
             TextFormField(
               controller: days,
