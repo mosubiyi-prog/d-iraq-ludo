@@ -85,7 +85,8 @@ class PlacesService {
     final results = await _publicSearchGate.run(
       key,
       fetch,
-      cacheWhen: (places) => places.isNotEmpty,
+      // Avoid keeping huge nation-wide search responses in phone memory.
+      cacheWhen: (places) => places.isNotEmpty && places.length <= 100,
     );
     // Callers sort/filter returned lists; never let them mutate cached data.
     return List<PlaceInfo>.of(results);
