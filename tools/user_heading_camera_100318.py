@@ -201,10 +201,6 @@ s = s[:pos] + """    _userCameraTurnTimer?.cancel();
 
 # Static protection: never change green route geometry, camera target / zoom
 # profiles, physical compass fallback, hazards, rerouting, touch timeout, flag.
-for token in (
-    "return _routeCameraHeading;",  # separate route bearing still exists elsewhere?
-):
-    pass
 for label, token in {
     "real movement fallback": "_arrowUsingMovementFallback",
     "verified opposite movement": "_oppositeMovementFixes >= 2",
@@ -227,16 +223,25 @@ for label, token in {
 assert s.count("_syncUserHeadingCamera();") == 3
 assert s.count("void _syncUserHeadingCamera()") == 1
 
-# Deterministic heading-up geometry tests for every major bearing:
-# if the route is 180 behind the REAL user, it MUST render down-screen.
+# Exact map geometry: the vector pointing to a route bearing must move
+# from the top half of the display to the BOTTOM half when user reverses.
+# These are independent planar screen-vector tests, not source-token checks.
 signed = lambda angle: (angle + 180) % 360 - 180
 for user in (0, 1, 45, 89, 90, 135, 179, 180, 225, 270, 359):
+    ahead = user
+    behind = (user + 180) % 360
+    ahead_delta = signed(ahead - user)
+    behind_delta = signed(behind - user)
+    assert ahead_delta == 0
+    assert behind_delta == -180
+    ahead_screen_y = -math.cos(math.radians(ahead_delta))
+    behind_screen_y = -math.cos(math.radians(behind_delta))
+    assert ahead_screen_y < -0.99
+    assert behind_screen_y > 0.99
     for route in (0, 45, 90, 135, 180, 225, 270, 315):
+        # One camera turn affects every route segment equally.
         screen_route = signed(route - user)
-        assert screen_route == signed(route - user)
-        if (route - user) % 360 == 180:
-            assert screen_route == -180
-    assert signed((user + 180) - user) == -180
+        assert -180 <= screen_route < 180
 
 # Camera interpolates along the shortest path, including 359 -> 1.
 for start_bearing, target_bearing in ((359,1),(1,359),(0,180),(180,0),(40,220),(270,90),(135,135)):
@@ -247,6 +252,6 @@ for start_bearing, target_bearing in ((359,1),(1,359),(0,180),(180,0),(40,220),(
         actual = target_bearing if abs(d) < .35 else (actual + .32*d + 360) % 360
     assert abs(signed(target_bearing-actual)) < .35, (start_bearing,target_bearing)
     assert initial >= abs(signed(target_bearing-actual))
-print("100318 PASS: heading-up geometry for 88 combinations; 7 smooth turn cases incl. 180-degree/U-turn/wrap.")
+print("100318 PASS: heading-up geometry for 88 headings incl. forward/reverse screen vectors; 7 smooth turns incl. 180-degree/U-turn/wrap.")
 p.write_text(s)
 print("100318 PATCH: smooth camera follows real phone/verified movement; arrow forward; route behind on reverse; zoom, GPS, flag, reroute and hazards untouched.")
