@@ -6,6 +6,7 @@ on:
       - admin-daily-slots-stage1-2026-10-09
     paths:
       - 'lib/deda_admin_task_management_page.dart'
+      - 'lib/admin_pages.dart'
       - 'lib/deda_admin_task_drafts.dart'
       - 'lib/deda_daily_task_slots.dart'
       - 'test/deda_daily_task_slots_test.dart'
@@ -42,4 +43,6 @@ jobs:
           ! grep -q 'DedaAdminSurveysPage' lib/deda_admin_task_management_page.dart
           ! grep -q 'المهام الأسبوعية' lib/deda_admin_task_management_page.dart
           ! grep -q 'controller: titleEn' lib/deda_admin_task_management_page.dart
+          grep -q 'DedaAdminTaskManagementPage(isArabic: ar)' lib/admin_pages.dart
+          grep -q 'المهام اليومية فقط' lib/admin_pages.dart
           echo 'STAGE1_PASS: eight admin-only slots; no schedule, payout, Play or Firebase deploy'
