@@ -1,0 +1,64 @@
+name: DEDA Phase 2 Firestore Draft Security Emulator QA
+
+on:
+  push:
+    branches:
+      - admin-firebase-drafts-phase2-qa-2026-10-08
+    paths:
+      - '.github/workflows/admin-firebase-drafts-phase2-emulator-qa.yml'
+
+jobs:
+  firestore-draft-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated phase 2, never production
+        uses: actions/checkout@v4
+      - name: Node.js for emulator
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java runtime for local Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install only local rule test libraries
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Ensure the real navigation and reward engines are unchanged
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart lib/deda_backend.dart pubspec.yaml functions/ android/ tools/build_100318_user_heading_camera.sh
+      - name: Audit draft-only rules and manager-wallet isolation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          rules=Path('firestore.rules').read_text()
+          ui=Path('lib/deda_admin_survey_drafts.dart').read_text()
+          task=Path('lib/deda_admin_task_drafts.dart').read_text()
+          guide=Path('docs/deda_rewards_manager_wallet_isolation_2026-10-08.md').read_text()
+          assert 'function validSurveyOptionList(options)' in rules
+          for section in ['admin_task_drafts','admin_survey_drafts']:
+              start=rules.index('match /'+section+'/{')
+              end=rules.index('allow delete: if false;',start)
+              source=rules[start:end]
+              for marker in ['allow get, list: if isGeneralManager()',
+                             'allow create: if isGeneralManager()',
+                             'allow update: if isGeneralManager()']:
+                  assert marker in source, (section,marker)
+          assert "data.status == 'draft'" in rules
+          assert "once_per_account_on_verified_submission" in ui
+          assert 'claimTaskReward' not in ui and 'claimTaskReward' not in task
+          assert 'المدير العام الشخصي' in guide and 'محفظة الإدارة' in guide
+          assert not any(term in Path('.github/workflows/admin-firebase-drafts-phase2-emulator-qa.yml').read_text()
+                         for term in ['firebase deploy', 'flutter build apk', 'deploy --only'])
+          print('PASS: draft-only, manager-only, wallets untouched; no app build, no production deploy')
+          PY
+      - name: Start local emulator and test actual Firestore security rules
+        env:
+          CI: 'true'
+        run: |
+          npx --yes firebase-tools@14 emulators:exec \
+            --only firestore \
+            --project demo-deda-phase2-drafts \
+            "node --test tests/firestore-rules/phase2.test.mjs"
