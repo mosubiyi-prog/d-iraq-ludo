@@ -51,7 +51,7 @@ jobs:
           assert 'claimTaskReward' not in ui and 'claimTaskReward' not in task
           assert 'المدير العام الشخصي' in guide and 'محفظة الإدارة' in guide
           assert not any(term in Path('.github/workflows/admin-firebase-drafts-phase2-emulator-qa.yml').read_text()
-                         for term in ['firebase deploy', 'flutter build apk', 'deploy --only'])
+                         for term in ['firebase' + ' deploy', 'flutter' + ' build apk', 'deploy' + ' --only'])
           print('PASS: draft-only, manager-only, wallets untouched; no app build, no production deploy')
           PY
       - name: Start local emulator and test actual Firestore security rules
