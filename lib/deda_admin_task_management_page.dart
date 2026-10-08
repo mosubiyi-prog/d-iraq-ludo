@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'deda_admin_task_drafts.dart';
 import 'deda_backend.dart';
+import 'deda_admin_surveys_page.dart';
 
 /// Phase 1: manager-only draft editor, NEVER publishes to current task engine.
 class DedaAdminTaskManagementPage extends StatefulWidget {
@@ -185,6 +186,41 @@ class _DedaAdminTaskManagementPageState
                             Icons.date_range_outlined,
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 11),
+                      Card(
+                        color: const Color(0xFFE9E6F6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          side: const BorderSide(color: Color(0xFFBDB1DC)),
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFFD7C9EF),
+                            child: Icon(Icons.rate_review_outlined,
+                                color: Color(0xFF654B90)),
+                          ),
+                          title: Text(
+                            t('آراء المستخدمين واستطلاعات DEDA',
+                                'DEDA user opinions and surveys'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF43345E),
+                            ),
+                          ),
+                          subtitle: Text(
+                            t('افتح حقول تقييم وأسئلة ومقترحات جديدة',
+                                'Add rating, questions and feedback fields'),
+                          ),
+                          trailing: const Icon(Icons.chevron_left_rounded),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => DedaAdminSurveysPage(
+                                isArabic: widget.isArabic,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Container(
