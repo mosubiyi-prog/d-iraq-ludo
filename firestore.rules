@@ -1514,9 +1514,7 @@ service cloud.firestore {
           'open_saved_place', 'open_received_place', 'review_added_place',
           'traffic_skills', 'long_trip', 'visit_telegram'
         ]
-        && data.titleAr is string
-        && data.titleAr.size() >= 3
-        && data.titleAr.size() <= 80
+        && data.titleAr.matches('^.{3,80}$')
         && data.titleEn is string
         && data.titleEn.size() >= 3
         && data.titleEn.size() <= 80
@@ -1584,14 +1582,8 @@ service cloud.firestore {
     function validSurveyQuestion(question) {
       return question is map
         && question.keys().size() == 6
-        && question.keys().hasAll([
-          'type', 'promptAr', 'promptEn',
-          'optionsAr', 'optionsEn', 'required'
-        ])
         && question.type in ['rating_5', 'choice', 'text']
-        && question.promptAr is string
-        && question.promptAr.size() >= 3
-        && question.promptAr.size() <= 160
+        && question.promptAr.matches('^.{3,160}$')
         && question.promptEn == question.promptAr
         && question.required is bool
         && (
@@ -1619,12 +1611,6 @@ service cloud.firestore {
 
     function validAdminSurveyDraft(data) {
       return data.keys().size() == 13
-        && data.keys().hasAll([
-          'titleAr', 'titleEn', 'questions',
-          'rewardUnit', 'rewardAmount', 'durationDays',
-          'status', 'rewardPolicy', 'revision',
-          'createdAt', 'updatedAt', 'createdByUid', 'updatedByUid'
-        ])
         && data.titleAr is string
         && data.titleAr.size() >= 3
         && data.titleAr.size() <= 80
