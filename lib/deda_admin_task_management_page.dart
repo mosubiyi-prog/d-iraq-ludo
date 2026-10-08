@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'deda_admin_task_drafts.dart';
 import 'deda_backend.dart';
 import 'deda_daily_task_slots.dart';
+import 'deda_daily_schedule_preview_service.dart';
 
 /// Manager-only editor for the EXISTING eight daily task card slots.
 /// This stage saves isolated private drafts. It never publishes a task,
@@ -19,6 +20,9 @@ class DedaAdminTaskManagementPage extends StatefulWidget {
 class _DedaAdminTaskManagementPageState
     extends State<DedaAdminTaskManagementPage> {
   final _service = const DedaAdminTaskDraftService();
+  final _previewService = const DedaDailySchedulePreviewService();
+  late final Stream<List<DedaDailySchedulePreview>> _previewStream;
+  final Set<String> _busySlots = <String>{};
   bool _checking = true;
   bool _allowed = false;
 
@@ -27,6 +31,7 @@ class _DedaAdminTaskManagementPageState
   @override
   void initState() {
     super.initState();
+    _previewStream = _previewService.watchPreviews();
     _checkAccess();
   }
 
@@ -97,11 +102,83 @@ class _DedaAdminTaskManagementPageState
     }
   }
 
+  Future<void> _preparePreview(
+    DedaDailyTaskSlot slot,
+    DedaAdminTaskDraft draft,
+  ) async {
+    if (_busySlots.contains(slot.id)) return;
+    setState(() => _busySlots.add(slot.id));
+    try {
+      await _previewService.prepare(slot: slot, draft: draft);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تحدد موعد تجريبي لتعديل البطاقة. هذا ما ينشر شي للمستخدمين حاليًا.',
+          'Preview scheduled privately; nothing is published to users yet.',
+        )),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تعذر تجهيز الموعد التجريبي. تأكد من صلاحيات Firebase.',
+          'Could not prepare private preview. Check Firebase permissions.',
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _busySlots.remove(slot.id));
+    }
+  }
+
+  Future<void> _cancelPreview(DedaDailyTaskSlot slot) async {
+    if (_busySlots.contains(slot.id)) return;
+    setState(() => _busySlots.add(slot.id));
+    try {
+      await _previewService.cancel(slot.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'انلغى الموعد التجريبي. المهمة الأصلية ما تغيرت.',
+          'Private preview cancelled; the original task is unchanged.',
+        )),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تعذر الإلغاء. يمكن يكون موعد الجدولة انتهى؛ حدّث الصفحة.',
+          'Cancellation denied or deadline passed; reload the page.',
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _busySlots.remove(slot.id));
+    }
+  }
+
   Widget _taskCard(
     DedaDailyTaskSlot slot,
     DedaAdminTaskDraft? draft,
-  ) {
+    DedaDailySchedulePreview? preview, {
+    required bool previewAvailable,
+  }) {
     final staged = draft != null;
+    final isPending = preview?.status == 'pending';
+    final busy = _busySlots.contains(slot.id);
+    final cancelled = preview?.status == 'cancelled';
+    final status = !previewAvailable
+        ? t('الجدولة التجريبية غير مفعلة على Firebase الحالي',
+            'Private scheduling is not enabled in this Firebase environment')
+        : isPending
+            ? t('موعد تجريبي محفوظ — غير منشور للمستخدمين',
+                'Private scheduled preview — not published')
+            : cancelled
+                ? t('تم إلغاء الموعد التجريبي',
+                    'Private preview cancelled')
+                : staged
+                    ? t('تعديل محفوظ كمسودة — غير منشور',
+                        'Saved draft — not published')
+                    : t('المهمة الحالية محفوظة كما هي',
+                        'Existing task unchanged');
     return Card(
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 9),
@@ -112,32 +189,58 @@ class _DedaAdminTaskManagementPageState
               : const Color(0xFFE0E4DC),
         ),
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 13, vertical: 9,
-        ),
-        leading: const Icon(Icons.edit_note_rounded,
-            color: Color(0xFF1B6A44), size: 28),
-        title: Text(
-          staged ? draft.titleAr : slot.titleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900, fontSize: 15.5,
-          ),
-        ),
-        subtitle: Text(
-          (staged ? DedaAdminTaskDraft.actionTitle(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 13, vertical: 9,
+            ),
+            leading: const Icon(Icons.edit_note_rounded,
+                color: Color(0xFF1B6A44), size: 28),
+            title: Text(
+              staged ? draft.titleAr : slot.titleAr,
+              style: const TextStyle(
+                fontWeight: FontWeight.w900, fontSize: 15.5,
+              ),
+            ),
+            subtitle: Text(
+              (staged ? DedaAdminTaskDraft.actionTitle(
                   draft.action, widget.isArabic)
-              : slot.subtitleAr) +
-              '\n' +
-              (staged
-                  ? t('تعديل محفوظ كمسودة — غير منشور',
-                      'Saved draft — not published')
-                  : t('المهمة الحالية محفوظة كما هي',
-                      'Existing task unchanged')),
-          style: const TextStyle(height: 1.4),
-        ),
-        trailing: const Icon(Icons.edit_outlined),
-        onTap: () => _edit(slot, draft),
+                  : slot.subtitleAr) +
+                  '\n' + status +
+                  (isPending
+                      ? '\n' + t('منتصف الليل القادم (العراق) — موعد تجريبي',
+                          'Next Iraq midnight — private preview')
+                      : ''),
+              style: const TextStyle(height: 1.4),
+            ),
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: busy ? null : () => _edit(slot, draft),
+          ),
+          if (previewAvailable && (staged || isPending))
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 10),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (staged)
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : () => _preparePreview(slot, draft),
+                      icon: const Icon(Icons.schedule_rounded, size: 17),
+                      label: Text(t('جدولة تجريبية', 'Preview schedule')),
+                    ),
+                  if (isPending)
+                    TextButton.icon(
+                      onPressed: busy ? null : () => _cancelPreview(slot),
+                      icon: const Icon(Icons.undo_rounded, size: 17),
+                      label: Text(t('إلغاء الموعد', 'Cancel preview')),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -179,7 +282,16 @@ class _DedaAdminTaskManagementPageState
                         (slot) => slot.draftId == draft.id,
                       )).length;
 
-                    return ListView(
+                    return StreamBuilder<List<DedaDailySchedulePreview>>(
+                      stream: _previewStream,
+                      builder: (context, previewsSnapshot) {
+                        final previewAvailable = !previewsSnapshot.hasError;
+                        final bySlot = <String, DedaDailySchedulePreview>{
+                          for (final p in previewsSnapshot.data ??
+                              const <DedaDailySchedulePreview>[])
+                            p.slotId: p,
+                        };
+                        return ListView(
                       padding: const EdgeInsets.all(12),
                       children: [
                         Container(
@@ -224,7 +336,10 @@ class _DedaAdminTaskManagementPageState
                           )),
                         const SizedBox(height: 10),
                         for (final slot in DedaDailyTaskSlot.slots)
-                          _taskCard(slot, byId[slot.draftId]),
+                          _taskCard(
+                            slot, byId[slot.draftId], bySlot[slot.id],
+                            previewAvailable: previewAvailable,
+                          ),
                         if (legacyCount > 0)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -237,13 +352,15 @@ class _DedaAdminTaskManagementPageState
                           ),
                         const SizedBox(height: 8),
                         Text(t(
-                          'مرحلة ربط آمنة: كل ما تراه هنا مسودات خاصة بالإدارة. النشر بعد 12 ليلًا، إلغاؤه، تغيير مكافآت التسجيل والروابط الخارجية سيتم تفعيله فقط بعد اختبار قاعدة الجدولة والتحقق بالخادم.',
-                          'Safe integration stage: admin-only drafts. Midnight publication, cancellation, login bonuses and external links require tested server scheduling and verification.',
+                          'هاي المعاينات الإدارية تجريبية فقط وما تظهر للمستخدمين. نشر منتصف الليل وصرف المكافآت يحتاجان تفعيل خادم آمن واختبار منفصل.',
+                          'Admin previews are private and do not reach users. Midnight publication and payouts await separately verified server integration.',
                         ), style: const TextStyle(
                           fontSize: 12, height: 1.5,
                           color: Color(0xFF6A542D),
                         )),
                       ],
+                    );
+                      },
                     );
                   },
                 ),
