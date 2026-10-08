@@ -87,7 +87,7 @@ class DedaAdminSurveyDraft {
   final String titleAr;
   final String titleEn;
   final List<DedaSurveyQuestion> questions;
-  final String rewardUnit; // none | points | diamonds
+  final String rewardUnit; // none | coins | diamonds | legacy points (drafts only)
   final int rewardAmount;
   final int durationDays;
 
@@ -102,9 +102,9 @@ class DedaAdminSurveyDraft {
     for (final question in questions) {
       question.validate();
     }
-    if (!{'none', 'points', 'diamonds'}.contains(rewardUnit) ||
+    if (!{'none', 'coins', 'points', 'diamonds'}.contains(rewardUnit) ||
         rewardAmount < 0 ||
-        rewardAmount > 500 ||
+        rewardAmount > 1000000 ||
         (rewardUnit == 'none' && rewardAmount != 0) ||
         (rewardUnit != 'none' && rewardAmount == 0) ||
         durationDays < 1 ||
@@ -124,6 +124,8 @@ class DedaAdminSurveyDraft {
       'durationDays': durationDays,
       // No user account can observe or claim any draft.
       'status': 'draft',
+      // One future verified reward for the entire survey, never per question.
+      // No draft can ever issue a balance credit or claim.
       // Only one verified claim per user/survey, irrespective of answer.
       'rewardPolicy': 'once_per_account_on_verified_submission',
     };
