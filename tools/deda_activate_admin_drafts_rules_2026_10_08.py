@@ -218,15 +218,61 @@ def deploy():
         raise
 
 
+def verify_cli_before():
+    """Refuse CLI deployment unless live release equals the backed-up original."""
+    m = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
+    current = get_live(request_session())
+    if (current["sha256"] != m["previous_sha256"]
+            or current["ruleset_name"] != m["previous_ruleset"]
+            or current["file_name"] != m["source_file_name"]):
+        raise RuntimeError("Live release changed after preflight: NO DEPLOY.")
+    candidate = (OUT / "firestore-phase2-merged.rules").read_text(encoding="utf-8")
+    if digest(candidate) != m["candidate_sha256"]:
+        raise RuntimeError("Emulator-tested candidate has changed: NO DEPLOY.")
+    if digest(Path("firestore.rules").read_text(encoding="utf-8")) != m["candidate_sha256"]:
+        raise RuntimeError("CLI Firestore rules input no longer equals candidate: NO DEPLOY.")
+    print("CLI_RELEASE_GATE_OK: live release and candidate unchanged; CLI may publish draft-only rules")
+
+
+def verify_cli_after():
+    """Read back the published ruleset, do not infer success from CLI exit alone."""
+    m = json.loads((OUT / "manifest.json").read_text(encoding="utf-8"))
+    current = get_live(request_session())
+    if current["sha256"] != m["candidate_sha256"]:
+        print("CRITICAL: post-CLI release differs from emulator-tested candidate.")
+        print("PREVIOUS_RULESET_SAVED: " + m["previous_ruleset"])
+        print("CURRENT_RULESET: " + current["ruleset_name"])
+        print("No further writes attempted; human review and safe rollback required.")
+        raise RuntimeError("Published ruleset content not equal to verified draft-only candidate")
+    if current["ruleset_name"] == m["previous_ruleset"]:
+        raise RuntimeError("CLI did not activate a different immutable ruleset")
+    (OUT / "activation-result.json").write_text(
+        json.dumps({
+            "status": "published_and_readback_verified",
+            "project": PROJECT,
+            "old_ruleset": m["previous_ruleset"],
+            "new_ruleset": current["ruleset_name"],
+            "old_sha256": m["previous_sha256"],
+            "new_sha256": m["candidate_sha256"],
+            "method": "firebase-tools CLI firestore:rules only",
+        }, indent=2), encoding="utf-8")
+    print("PRODUCTION_OK: live Firestore content exactly matches test-backed minimal manager-only rules merge")
+    print("NO_USER_TASKS_OR_REWARDS: no Cloud Functions, main.dart, user wallets, or APK touched")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["prepare", "deploy"])
+    parser.add_argument("mode", choices=["prepare", "deploy", "verify-cli-before", "verify-cli-after"])
     args = parser.parse_args()
     try:
         if args.mode == "prepare":
             prepare()
-        else:
+        elif args.mode == "deploy":
             deploy()
+        elif args.mode == "verify-cli-before":
+            verify_cli_before()
+        else:
+            verify_cli_after()
     except Exception as exc:
         print("SAFE_STOP_OR_ERROR: " + type(exc).__name__ + ": " + str(exc))
         sys.exit(1)
