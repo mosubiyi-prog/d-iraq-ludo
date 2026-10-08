@@ -1,0 +1,43 @@
+name: Build DEDA 100309 Free Vector Driver
+
+on:
+  push:
+    branches:
+      - driver-free-vector-100309-2026-10-08
+    paths:
+      - '.github/workflows/build-apk-100309-free-vector-driver.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout isolated 100309 branch
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21 for MapLibre 0.27.1
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+
+      - name: Build and validate DEDA 100309
+        run: bash tools/build_100309_free_vector_driver.sh
+
+      - name: Upload APK 100309
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100309-free-vector-driver-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
