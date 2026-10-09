@@ -1,0 +1,37 @@
+name: DEDA Telegram Trusted Payout Firestore Emulator - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'firestore.rules'
+      - 'tests/firestore-rules/next-telegram-verified.test.mjs'
+      - '.github/workflows/qa-deda-next-telegram-firestore-rules-emulator.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-firestore-emulator-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-next-telegram-verified
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Firebase emulator TEST dependencies only
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Real Firestore Security Rules adversarial test (emulator ONLY)
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-next-telegram-verified "node --test tests/firestore-rules/next-telegram-verified.test.mjs"
+      - name: No production Firebase or Play changes
+        run: echo 'EMULATOR ONLY - no deployment, APK or production mutation.'
