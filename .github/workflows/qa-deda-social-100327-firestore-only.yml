@@ -1,0 +1,57 @@
+name: DEDA 100327 Social Firestore-Only Midnight Security QA - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-social-firestore-no-functions-100327-2026-10-09
+    paths:
+      - 'firestore.rules'
+      - 'lib/deda_social_task_live_service.dart'
+      - 'lib/deda_social_task_preview.dart'
+      - 'lib/deda_admin_social_task_preview_page.dart'
+      - 'tests/firestore-rules/social-100327-direct.test.mjs'
+      - '.github/workflows/qa-deda-social-100327-firestore-only.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-no-production-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-100327-firestore-no-functions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no backend or reward ledger changes
+        run: |
+          git fetch --no-tags origin deda-trial-live-scheduling-100326-2026-10-09:refs/remotes/origin/deda-trial-live-scheduling-100326-2026-10-09
+          git diff --exit-code origin/deda-trial-live-scheduling-100326-2026-10-09 -- functions/ android/ lib/deda_backend.dart lib/main.dart lib/deda_task_engine.dart
+          ! grep -q 'FirebaseFunctions.instance' lib/deda_social_task_live_service.dart
+          grep -q 'Source.server' lib/deda_social_task_live_service.dart
+          grep -q "rewardsEnabled': false" lib/deda_social_task_live_service.dart
+          ! grep -q 'firebase deploy' .github/workflows/qa-deda-social-100327-firestore-only.yml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator SDK
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Firestore strict manager/clock/no-payment tests
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions "node --test tests/firestore-rules/social-100327-direct.test.mjs"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Check Flutter client and existing social widgets
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos lib/deda_social_task_live_service.dart lib/deda_social_task_preview.dart lib/deda_admin_social_task_preview_page.dart
+          flutter test test/deda_social_task_preview_test.dart
+      - name: Safety summary
+        run: echo "DEDA_100327_TEST_ONLY: no production deploy, no wallet changes, no new Cloud Functions"
