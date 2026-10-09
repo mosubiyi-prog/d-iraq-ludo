@@ -1994,6 +1994,67 @@ service cloud.firestore {
           .hasOnly(['status','revision','updatedByUid','updatedAt']);
     }
 
+    // DEDA next release: ordinary spendable gift-wallet ownership checks.
+    // The original 100270 wallet rules were added by historical build-time
+    // scripts and are absent from the checked-in rules snapshot. Future
+    // Firebase deploy MUST merge this with actual live rules; NEVER deploy
+    // the source snapshot unreviewed or replace existing production policies.
+    //
+    // A user can update their users/{uid}.sharePersonalId in the existing
+    // account-session rules. Requiring the real reserved personal share ID's
+    // owner accountKey + current live DEDA session prevents wallet takeovers
+    // by editing that publicId. UID rotation within ONE DEDA account is OK.
+    function verifiedDiamondsPersonalOwner(publicId) {
+      return signedIn()
+        && publicId is string
+        && exists(/databases/$(database)/documents/deda_share_ids/$(publicId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.kind == 'personal'
+        && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.active == true
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId == publicId
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey is string
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey
+        && exists(/databases/$(database)/documents/users/$(
+          get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid))
+        && get(/databases/$(database)/documents/users/$(
+          get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid)).data.accountKey ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey;
+    }
+    match /deda_diamond_gift_balances/{publicId} {
+      // Rewarded Telegram server worker credits with Admin SDK; the client
+      // may only read its truly owned personal wallet or spend downwards.
+      allow get: if isGeneralManager()
+        || verifiedDiamondsPersonalOwner(publicId);
+      allow list, delete: if false;
+      // Existing management gifts keep admin's historical ability to credit
+      // only, without allowing recipients to increase the balance.
+      allow create: if isGeneralManager()
+        && request.resource.data.publicId == publicId
+        && request.resource.data.balance is int
+        && request.resource.data.balance > 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'publicId','balance','createdAt','updatedAt'
+        ]);
+      allow update: if
+        request.resource.data.publicId == publicId
+        && resource.data.publicId == publicId
+        && request.resource.data.balance is int
+        && request.resource.data.balance >= 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['balance','updatedAt'])
+        && (
+          (isGeneralManager()
+            && request.resource.data.balance >= resource.data.balance)
+          || (verifiedDiamondsPersonalOwner(publicId)
+            && request.resource.data.balance <= resource.data.balance)
+        );
+    }
+
     // DEDA next release: Telegram identity, short-lived bot challenge,
     // payout ledgers and audit are ALWAYS Admin SDK only. The Flutter
     // client has no direct write or identity-read permission.
