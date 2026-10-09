@@ -1,0 +1,56 @@
+name: DEDA Stage 11 Seasonal Login Policy - EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage11-login-seasonal-2026-10-09
+    paths:
+      - 'functions/deda_daily_login_seasonal_shadow.js'
+      - 'tests/firestore-rules/daily-login-seasonal-stage11.test.mjs'
+      - '.github/workflows/qa-deda-daily-login-seasonal-stage11.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  login-seasonal-policy-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      GCLOUD_PROJECT: demo-deda-stage11-seasonal-login
+    steps:
+      - name: Checkout separate stage11 branch
+        uses: actions/checkout@v4
+      - name: Guard all previous accepted app, rule, reward and admin files
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage10-verified-share-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage10-verified-share-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage10-verified-share-qa-2026-10-09 -- lib/ android firestore.rules functions/index.js functions/deda_daily_task_publisher.js functions/deda_daily_task_restore.js functions/deda_daily_task_restore_callable.js functions/deda_daily_reward_shadow_ledger.js functions/deda_daily_task_share_verifier.js functions/package.json pubspec.yaml
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local emulator test tools
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Verify isolated code and hard no-production-payment guard
+        run: |
+          node --check functions/deda_daily_login_seasonal_shadow.js
+          node --check tests/firestore-rules/daily-login-seasonal-stage11.test.mjs
+          ! grep -q 'deda_daily_login_seasonal_shadow' functions/index.js
+          ! grep -q '^exports[.]' functions/deda_daily_login_seasonal_shadow.js
+          grep -q 'STAGE11_EMULATOR_ONLY_NO_LIVE_PAYOUT' functions/deda_daily_login_seasonal_shadow.js
+          ! grep -q 'collection("users")' functions/deda_daily_login_seasonal_shadow.js
+          ! grep -q 'collection("admin_wallets")' functions/deda_daily_login_seasonal_shadow.js
+          ! grep -q 'collection("admin_gift_wallets")' functions/deda_daily_login_seasonal_shadow.js
+      - name: Test manager schedules, temporary Eid coins and expiry
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage11-seasonal-login "node --test tests/firestore-rules/daily-login-seasonal-stage11.test.mjs"
+      - name: Confirm no payout, client changes or production deployment
+        run: |
+          echo 'STAGE11_POLICY_SAFE: preview only, 10 legacy login points unchanged, no user wallets and no deployment'
