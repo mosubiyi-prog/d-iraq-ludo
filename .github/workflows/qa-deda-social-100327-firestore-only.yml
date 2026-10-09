@@ -54,4 +54,5 @@ jobs:
           flutter analyze --no-fatal-infos lib/deda_social_task_live_service.dart lib/deda_social_task_preview.dart lib/deda_admin_social_task_preview_page.dart
           flutter test test/deda_social_task_preview_test.dart
       - name: Safety summary
-        run: echo "DEDA_100327_TEST_ONLY: no production deploy, no wallet changes, no new Cloud Functions"
+        run: |
+          echo "DEDA_100327_TEST_ONLY: no production deploy, no wallet changes, no new Cloud Functions"
