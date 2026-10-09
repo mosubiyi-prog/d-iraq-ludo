@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'deda_social_task_preview.dart';
+import 'deda_social_task_live_service.dart';
 
 /// General-manager design preview, reached only through the existing protected
 /// admin task editor. No Firestore, URL launch, publishing or reward claims.
@@ -27,6 +28,98 @@ class _DedaAdminSocialTaskPreviewPageState
   String _unit = 'points';
   bool _doubleWithRewardedAd = false;
   DateTime? _day;
+  final _live = const DedaLiveSocialTaskService();
+  int _revision = 0;
+  String _remoteStatus = 'new';
+  String _serverMessage = '';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRemote();
+  }
+
+  Future<void> _loadRemote() async {
+    try {
+      final data = await _live.load();
+      if (!mounted) return;
+      setState(() {
+        _revision = (data['revision'] as num?)?.toInt() ?? 0;
+        _remoteStatus = (data['status'] ?? 'new').toString();
+        _serverMessage = t('تم الاتصال بخادم المهام.', 'Connected to tasks backend.');
+        if (data['exists'] == true) {
+          _platform = (data['platform'] ?? 'facebook').toString();
+          _action = (data['action'] ?? 'follow').toString();
+          _unit = (data['rewardUnit'] ?? 'points').toString();
+          _title.text = (data['title'] ?? '').toString();
+          _url.text = (data['url'] ?? '').toString();
+          _reward.text = (data['rewardAmount'] ?? 5).toString();
+          _doubleWithRewardedAd = data['doubleWithRewardedAd'] == true;
+          _otherPlatform.text = (data['otherPlatform'] ?? '').toString();
+          _otherAction.text = (data['otherAction'] ?? '').toString();
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _serverMessage = t(
+        'الخادم غير مفعّل أو الاتصال تعذّر؛ لا يوجد نشر فعلي بعد.',
+        'Backend unavailable: live publishing is not active.'));
+    }
+  }
+
+  Future<void> _perform(Future<Map<String, dynamic>> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await action();
+      if (!mounted) return;
+      setState(() {
+        _revision = (result['revision'] as num?)?.toInt() ?? _revision;
+        _remoteStatus = (result['status'] ?? '').toString();
+        _serverMessage = t('نجحت العملية وحُفظت على الخادم.', 'Saved on server.');
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _serverMessage = t(
+        'فشلت العملية أو رفضها الخادم؛ لم يتم نشر أي شيء.',
+        'Server rejected request; nothing was published.') +
+        '\n' + error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveLive() async {
+    if (!(_form.currentState?.validate() ?? false)) return;
+    final amount = int.tryParse(_reward.text.trim());
+    if (amount == null) return;
+    await _perform(() => _live.save(
+      expectedRevision: _revision,
+      platform: _platform, action: _action,
+      title: _title.text, url: _url.text,
+      unit: _unit, amount: amount,
+      doubleWithAd: _doubleWithRewardedAd,
+      otherPlatform: _otherPlatform.text,
+      otherAction: _otherAction.text,
+    ));
+  }
+
+  Future<void> _scheduleLive() async {
+    if (_day == null) {
+      setState(() => _serverMessage = t(
+        'حدد موعد الجدولة أولاً.', 'Select the schedule day first.'));
+      return;
+    }
+    final day = '${_day!.year.toString().padLeft(4, '0')}-'
+      '${_day!.month.toString().padLeft(2, '0')}-'
+      '${_day!.day.toString().padLeft(2, '0')}';
+    await _perform(() => _live.schedule(
+      expectedRevision: _revision, iraqDay: day));
+  }
+
+  Future<void> _cancelLive() async => _perform(() =>
+    _live.cancel(expectedRevision: _revision));
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
@@ -41,7 +134,7 @@ class _DedaAdminSocialTaskPreviewPageState
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc().add(const Duration(hours: 3));
     final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final picked = await showDatePicker(
       context: context,
@@ -116,8 +209,8 @@ class _DedaAdminSocialTaskPreviewPageState
           padding: const EdgeInsets.all(14),
           children: [
             Text(
-              t('نموذج تجريبي للمدير العام فقط، ولا يغير مهمة من المهام الثمانية.',
-                'General manager mock form; the eight existing tasks stay unchanged.'),
+              t('نموذج المدير العام: حفظ على الخادم ثم جدولة. تنشر المهمة عند منتصف الليل بتوقيت العراق بعد تفعيل الخادم، بلا صرف مكافآت إلى حين التحقق.',
+                'Save on server, then schedule for Iraq midnight once backend is deployed. Rewards stay blocked.'),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -240,12 +333,42 @@ class _DedaAdminSocialTaskPreviewPageState
             ),
             const SizedBox(height: 10),
             Text(
-              t('مجرد فتح رابط أو الضغط على إعجاب لا يثبت المتابعة الفعلية. سنضيف التحقق الآمن قبل تفعيل أي مكافأة.',
-                'Opening links or tapping Like is not verified completion. Secure verification is required before rewards.'),
+              t('نشر المهمة لا يصرف الجائزة. زيارة الرابط وحدها ليست دليلاً على الاشتراك. مكافآت الأعضاء والإعلانات مقفلة حتى توفر تحقق خادمي.',
+                'Publishing does not grant rewards. URL visits are not subscription proof; payouts remain blocked.'),
               style: const TextStyle(
                 fontSize: 12, color: Color(0xFF73572B)),
             ),
             const SizedBox(height: 12),
+            Text(t('حالة الخادم: $_remoteStatus — الإصدار $_revision',
+              'Server status: $_remoteStatus — revision $_revision'),
+              key: const Key('socialTrialServerStatus'),
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+            if (_serverMessage.isNotEmpty)
+              Text(_serverMessage, key: const Key('socialTrialResult')),
+            const SizedBox(height: 10),
+            FilledButton(
+              key: const Key('socialSaveLiveDraft'),
+              onPressed: _busy ? null : _saveLive,
+              child: Text(t('حفظ المسودة في Firebase',
+                'Save draft on Firebase')),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              key: const Key('socialScheduleLive'),
+              onPressed: _busy || _remoteStatus != 'draft'
+                ? null : _scheduleLive,
+              child: Text(t('جدولة النشر لمنتصف الليل',
+                'Schedule midnight publishing')),
+            ),
+            if (_remoteStatus == 'scheduled') ...[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('socialCancelLive'),
+                onPressed: _busy ? null : _cancelLive,
+                child: Text(t('إلغاء الجدولة', 'Cancel schedule')),
+              ),
+            ],
+            const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('socialAdminPreviewOnly'),
               onPressed: _preview,
