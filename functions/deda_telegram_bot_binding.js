@@ -127,6 +127,21 @@ async function acceptBotStart(db, {
         !/^\d{10,15}$/.test(accountKey)) {
       return {outcome: "invalid-bound-account"};
     }
+    // A QR/deep-link stays valid for 15 minutes, but a DEDA session can
+    // expire or be revoked in that window. Revalidate all binding authority
+    // AT the Telegram callback, not merely when creating the nonce.
+    const [sessionNow, userNow, directoryNow] = await Promise.all([
+      tx.get(db.collection("deda_sessions").doc(uid)),
+      tx.get(db.collection("users").doc(uid)),
+      tx.get(db.collection("deda_account_directory").doc(accountKey)),
+    ]);
+    if (!sessionNow.exists || !userNow.exists ||
+        !directoryNow.exists ||
+        sessionNow.data()?.accountKey !== accountKey ||
+        userNow.data()?.accountKey !== accountKey ||
+        directoryNow.data()?.active !== true) {
+      return {outcome: "deda-session-revoked-before-telegram-binding"};
+    }
     const accountRef = db.collection("deda_telegram_bot_accounts")
         .doc(accountKey);
     const telegramRef = db.collection("deda_telegram_bot_identities")
