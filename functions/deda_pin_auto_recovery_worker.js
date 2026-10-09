@@ -82,7 +82,11 @@ async function autoRecoverForgottenPin(firestore, {
       return {outcome:"manual-review",reason:res.reason};
     }
 
-    const newPin=String(randomInt(100000,1000000));
+    // A newly issued PIN must differ from the current credential.
+    let newPin;
+    do {
+      newPin = String(randomInt(100000,1000000));
+    } while (newPin === String(credential.pin || ""));
     const timestamp=FieldValue.serverTimestamp();
     // All three changes happen as one transaction. No full account
     // takeover from arbitrary number/name knowledge.
