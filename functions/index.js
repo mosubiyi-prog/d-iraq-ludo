@@ -336,6 +336,30 @@ exports.onRecoveryRequestUpdated = onDocumentUpdated(
 );
 
 
+/**
+ * General-manager-only readiness handshake. Exists only when the two
+ * trusted automation workers are ACTUALLY deployed with this code.
+ * The UI uses this to enable its ON/OFF switches without staff setup.
+ */
+exports.dedaAutomationReadiness = onCall(async (request) => {
+  const actor = await requireGeneralManager(request);
+  if (actor.data.role !== "general_manager") {
+    throw new HttpsError("permission-denied", "general-manager-required");
+  }
+  const firestore = getFirestore();
+  const stamp = Timestamp.now();
+  const batch = firestore.batch();
+  for (const kind of ["place_auto_approval", "pin_auto_recovery"]) {
+    batch.set(firestore.collection("deda_automation_status").doc(kind), {
+      ready: true,
+      checkedAt: stamp,
+      serviceVersion: "next-four-2026-10-10",
+    }, {merge: true});
+  }
+  await batch.commit();
+  return {ready: true};
+});
+
 const ADMIN_ROLES = new Set([
   "general_manager",
   "deputy_manager",
