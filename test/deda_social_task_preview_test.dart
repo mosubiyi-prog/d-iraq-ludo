@@ -57,6 +57,10 @@ void main() {
     expect(find.byKey(const Key('socialPlatformDropdown')), findsOneWidget);
     expect(find.text('صفحة فيس بوك'), findsOneWidget);
     expect(find.byKey(const Key('socialActionDropdown')), findsOneWidget);
+    // The preview button is below the fold in a lazily built ListView.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('socialAdminPreviewOnly')), 250.0,
+    );
     expect(find.byKey(const Key('socialAdminPreviewOnly')), findsOneWidget);
   });
 }
