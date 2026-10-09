@@ -126,6 +126,11 @@ class DedaLoginPreviewPlan {
     return base;
   }
 
-  bool isOfferDay(String iraqDay) =>
-      rewardForDay(iraqDay) == offer.reward;
+  bool isOfferDay(String iraqDay) {
+    if (_parseDay(iraqDay) == null) {
+      throw FormatException('invalid-iraq-day');
+    }
+    return iraqDay.compareTo(offer.startDay) >= 0 &&
+        iraqDay.compareTo(offer.endDay) <= 0;
+  }
 }
