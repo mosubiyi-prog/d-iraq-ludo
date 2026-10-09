@@ -12766,6 +12766,20 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                 child: Column(
                   children: [
                     _dailyLoginCard(),
+                    if (DedaSocialTaskPreview.visible) ...[
+                      const SizedBox(height: 6),
+                      DedaSocialTaskCompactCard(
+                        isArabic: DedaLanguageState.isArabic,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => DedaSocialTaskUserPreviewPage(
+                              isArabic: DedaLanguageState.isArabic,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 7),
                     StreamBuilder<Map<String, Map<String, dynamic>>>(
                       stream: _dailyPublicStream,
@@ -12829,22 +12843,6 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                   );
                                 },
                                   ),
-                                  if (index == 5 && DedaSocialTaskPreview.visible)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 6, bottom: 6),
-                                      child: DedaSocialTaskCompactCard(
-                                        isArabic: DedaLanguageState.isArabic,
-                                        onTap: () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute<void>(
-                                            builder: (_) =>
-                                                DedaSocialTaskUserPreviewPage(
-                                                  isArabic: DedaLanguageState.isArabic,
-                                                ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
                                 ],
                               );
                             },
