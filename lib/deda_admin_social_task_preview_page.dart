@@ -427,6 +427,37 @@ class _DedaAdminSocialTaskPreviewPageState
               ),
             ],
             const SizedBox(height: 8),
+            if (_remoteStatus == 'scheduled') ...[
+              const SizedBox(height: 12),
+              Text(
+                _telegramBackendReady
+                    ? t('✅ بوت تليجرام موثوق وصلاحيات القناة مؤكدة من الخادم.',
+                        'Telegram bot administrator rights verified by server.')
+                    : t('⏳ مكافأة تليجرام الحقيقية مغلقة حتى تشغيل الخادم وربط البوت كمسؤول بالقناة.',
+                        'Real Telegram rewards are off until trusted server and bot admin are ready.'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 7),
+              FilledButton.icon(
+                key: const Key('socialEnableVerifiedTelegramReward'),
+                onPressed: _busy || !_telegramBackendReady
+                    ? null : () => _toggleTelegramVerifiedReward('enable'),
+                icon: const Icon(Icons.verified_user_rounded),
+                label: Text(t('تفعيل مكافأة الاشتراك المتحقق (10 ماسات)',
+                    'Enable verified 10-diamond Telegram reward')),
+              ),
+              const SizedBox(height: 7),
+              OutlinedButton.icon(
+                key: const Key('socialDisableVerifiedTelegramReward'),
+                onPressed: _busy || !_telegramBackendReady
+                    ? null : () => _toggleTelegramVerifiedReward('disable'),
+                icon: const Icon(Icons.block),
+                label: Text(t('إيقاف صرف مكافأة تليجرام',
+                    'Stop Telegram reward payouts')),
+              ),
+            ],
+            const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('socialAdminPreviewOnly'),
               onPressed: _preview,
