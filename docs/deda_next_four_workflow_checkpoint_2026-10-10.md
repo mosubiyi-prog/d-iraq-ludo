@@ -62,3 +62,18 @@ Keep one combined APK release only after working end-to-end. DO NOT deploy or bu
 - For verified previously registered installations, use pre-existing DEDA trusted-session recovery capability to establish account access invisibly; do not pretend that simply providing a phone + name proves ownership. If secure same-account proof is unavailable, do NOT issue that account's secret to an unrelated requester. Use manual exception/fallback, explain candidly; this boundary cannot be postponed to the SMS rollout.
 - Separate place OWNER requests should be automatically approved/published after ~30s when manager toggle ON, with no manual review of their content, and OFF restores manual. Existing pending requests unaffected.
 - Existing secure channel checks occur in background and are not new user-facing verification steps. Backend deploy limitations still require resolution. No client-only PIN reset, no APK until full test.
+
+## Implementation follow-up — after owner confirmed launch-first simplicity
+
+Latest work on this branch only:
+- Place request server trigger: when GM ON before request creation, delay ~30 seconds, then atomic prepare/publish including existing approval counter, status and audit. OFF/new older-than-toggle remain manual. Removed earlier proposed duplicate/content moderation contrary to owner request. Backend still NOT deployed.
+- Trusted-device PIN recovery trigger: after 10s of newly-created request, server checks the existing 48-hex installation secret against protected known account profile and account name; issues fresh six-digit credential and requester-visible new PIN in one server transaction with one-hour issuance throttle and immutable audit. Missing old trusted device -> manual, never resets from phone/name alone. No SMS and no extra user-facing step. Backend still NOT deployed.
+- Manager controls: when owner opens place/recovery admin screens, client checks manager-only callable readiness automatically. On/Off remains protected/disabled unless these server workers are REALLY deployed. No live business behavior changes.
+- Compact administration cards from previous stage unchanged; responsive Flutter widget test and Firestore emulator guard runs previously passed.
+- Telegram social cryptographic ID and member policy remains **policy only**. No live payout, no Bot Token in source, no credits to any wallet.
+
+Node stage1+2+Telegram policy/syntax suite verified passing at https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38000722815
+Manager UI / rules security QA https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38000741467 (verify finished run status before claiming pass).
+
+IMPORTANT: NO NEW APK, NO LIVE FIREBASE CHANGES, NO GOOGLE PLAY ACTION.
+All four owner requests remain under active development. Backend deployment Cloud Build restriction, bot admin/setup and live wallet verification remain to be resolved before integrated APK.
