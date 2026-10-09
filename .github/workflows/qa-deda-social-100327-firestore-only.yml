@@ -10,6 +10,7 @@ on:
       - 'lib/deda_social_task_preview.dart'
       - 'lib/deda_admin_social_task_preview_page.dart'
       - 'tests/firestore-rules/social-100327-direct.test.mjs'
+      - 'test/deda_social_task_preview_test.dart'
       - '.github/workflows/qa-deda-social-100327-firestore-only.yml'
   workflow_dispatch:
 
