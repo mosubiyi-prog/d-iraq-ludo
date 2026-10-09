@@ -44,3 +44,14 @@ test("fields and location integrity still mandatory",()=>{
     {latitude:0},{longitude:180},
   ])assert.equal(assess(input({request:{...request,...change}})).eligible,false);
 });
+
+test("auto-approved certificate uses Iraq date after 21:00 UTC",()=>{
+  const {iraqApprovalDate} =
+    require("../../functions/deda_place_auto_approval_worker.js");
+  assert.deepEqual(iraqApprovalDate(Date.parse("2026-10-09T20:59:59Z")),
+    {year:2026,day:"09/10/2026"});
+  assert.deepEqual(iraqApprovalDate(Date.parse("2026-10-09T21:00:00Z")),
+    {year:2026,day:"10/10/2026"});
+  assert.deepEqual(iraqApprovalDate(Date.parse("2026-12-31T21:00:00Z")),
+    {year:2027,day:"01/01/2027"});
+});
