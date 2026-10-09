@@ -4,6 +4,19 @@ const {assess} = require("./deda_place_auto_approval_policy.js");
 const {FieldValue} = require("firebase-admin/firestore");
 
 /**
+ * Iraq uses fixed UTC+03:00 with no daylight-saving changes. The automatic
+ * approval stamp must match the manual Iraqi DD/MM/YYYY certificate date.
+ */
+function iraqApprovalDate(nowMs) {
+  if (!Number.isFinite(nowMs)) throw Error("invalid-server-clock");
+  const date = new Date(nowMs + 3 * 60 * 60 * 1000);
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  return {year, day: `${dd}/${mm}/${year}`};
+}
+
+/**
  * Privileged backend proposal for NEW place auto-approval.
  * Stage 1 is deliberately OFF unless a deployed, protected manager
  * switch exists. Never invoke from Flutter/browser.
@@ -70,12 +83,8 @@ async function processNewPlace(firestore, {requestId, nowMs = Date.now()}) {
     if (!Number.isSafeInteger(next) || next < 1) {
       return {outcome: "invalid-counter"};
     }
-    const approvedAt = new Date(nowMs);
-    const dd = String(approvedAt.getUTCDate()).padStart(2, "0");
-    const mm = String(approvedAt.getUTCMonth() + 1).padStart(2, "0");
-    const year = approvedAt.getUTCFullYear();
+    const {year, day} = iraqApprovalDate(nowMs);
     const number = `DEDA-${year}-${String(next).padStart(7, "0")}`;
-    const day = `${dd}/${mm}/${year}`;
     const message = `تم اعتماد: ${request.placeName}\nرقم الاعتماد: ${number}\nتاريخ الاعتماد: ${day}\nDEDA - الدليل الدقيق`;
     const admin = {uid: "deda-system", name: "DEDA", role: "system"};
     const stamp = FieldValue.serverTimestamp();
@@ -108,4 +117,4 @@ async function processNewPlace(firestore, {requestId, nowMs = Date.now()}) {
   return result;
 }
 
-module.exports = {processNewPlace};
+module.exports = {processNewPlace, iraqApprovalDate};
