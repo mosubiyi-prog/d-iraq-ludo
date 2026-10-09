@@ -78,7 +78,8 @@ jobs:
         run: npm --prefix tests/firestore-rules install --no-audit --no-fund
       - name: Test current live merged rules without production change
         run: |
-          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions "node --test tests/firestore-rules/social-100327-direct.test.mjs tests/firestore-rules/social-trial-security.test.mjs"
+          GCLOUD_PROJECT=demo-deda-100327-firestore-no-functions npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions "node --test tests/firestore-rules/social-100327-direct.test.mjs"
+          GCLOUD_PROJECT=demo-deda-social-trial-live-rules npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-social-trial-live-rules "node --test tests/firestore-rules/social-trial-security.test.mjs"
       - name: Upload review-only merged rules (never deployed)
         uses: actions/upload-artifact@v4
         with:
