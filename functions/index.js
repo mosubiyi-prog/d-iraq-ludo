@@ -115,14 +115,33 @@ exports.onPlaceRequestCreated = onDocumentCreated(
     async (event) => {
       const data = event.data && event.data.data();
       if (!data) return;
-      // Trusted backend ONLY: no switch document means manual review.
-      // A failure in this optional worker never prevents existing alerts.
+      // Only if manager switched ON BEFORE this new request: wait 30s.
+      // OFF or old pending requests retain existing admin notification flow.
+      // Errors fail closed to manual with no accidental publication.
       let automationOutcome = "manual";
       try {
-        const processed = await processNewPlace(getFirestore(), {
-          requestId: event.params.requestId, nowMs: Date.now(),
-        });
-        automationOutcome = processed.outcome;
+        const firestore = getFirestore();
+        const config = await firestore.collection("deda_automation_settings")
+            .doc("place_auto_approval").get();
+        const cfg = config.data() || {};
+        const submitted = data.createdAt &&
+            typeof data.createdAt.toMillis === "function" ?
+            data.createdAt.toMillis() : NaN;
+        const turnedOn = cfg.enabledAt &&
+            typeof cfg.enabledAt.toMillis === "function" ?
+            cfg.enabledAt.toMillis() : NaN;
+        if (cfg.enabled === true && Number.isFinite(submitted) &&
+            Number.isFinite(turnedOn) && submitted > turnedOn) {
+          const delay = Math.max(0, Math.min(31500,
+              submitted + 30000 - Date.now() + 250));
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+          const processed = await processNewPlace(firestore, {
+            requestId: event.params.requestId, nowMs: Date.now(),
+          });
+          automationOutcome = processed.outcome;
+        }
       } catch (error) {
         console.error("DEDA_AUTO_PLACE_SAFE_MANUAL_FALLBACK",
             event.params.requestId, String(error.message || error));
