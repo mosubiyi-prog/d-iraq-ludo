@@ -1235,10 +1235,11 @@ exports.dedaTelegramVerifiedRewardReadiness = onCall({
   const botToken = dedaTelegramBotToken.value();
   if (!botToken) return {ready: false, reason: "bot-not-configured"};
   try {
-    const botIsAdmin =
-      await telegramRewardActivation.checkBotIsChannelAdmin(botToken);
-    return {ready: botIsAdmin,
-      reason: botIsAdmin ? "bot-channel-admin-confirmed" : "bot-not-channel-admin"};
+    const botReady =
+      await telegramRewardActivation.checkVerifiedTelegramBotReady(botToken);
+    return {ready: botReady,
+      reason: botReady ? "bot-admin-and-firebase-webhook-confirmed"
+        : "bot-admin-or-deda-webhook-not-configured"};
   } catch (_) {
     return {ready: false, reason: "telegram-bot-unreachable"};
   }
