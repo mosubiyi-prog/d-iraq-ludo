@@ -143,12 +143,12 @@ class _DedaAdminAutomationToggleState
         : t('استرجاع الرمز تلقائياً بعد 10 ثوانٍ',
             'Auto-reissue PIN after 10 seconds');
     final help = _place
-        ? t('الطلبات القديمة والناقصة والمكررة تبقى للمراجعة اليدوية.',
-            'Existing, incomplete or duplicate requests stay manual.')
-        : t('لمن نسي رمز الدخول فقط، وبعد التحقق الآمن من هوية صاحب الحساب.',
-            'Forgot-PIN requests only, after secure identity verification.');
+        ? t('الطلبات الجديدة المكتملة تُنشر تلقائياً بعد 30 ثانية؛ القديمة تبقى يدوية.',
+            'New complete requests publish after 30 seconds; old ones stay manual.')
+        : t('يصل الرمز بعد 10 ثوانٍ لجهاز مسجّل سابقاً، دون موافقة موظف.',
+            '10-second self-recovery for previously trusted devices, no staff step.');
     final blocked = !_backendReady
-        ? t('غير مفعّل خادمياً بعد — يبقى النظام اليدوي شغالاً.',
+        ? t('خدمة التشغيل التلقائي لم تتفعّل بعد؛ النظام اليدوي مستمر.',
             'Server worker not active yet — manual workflow remains.')
         : t(_enabled ? 'مفعّل للطلبات الجديدة' : 'مطفأ — مراجعة يدوية',
             _enabled ? 'ON for new requests' : 'OFF — manual review');
