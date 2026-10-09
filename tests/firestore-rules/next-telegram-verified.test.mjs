@@ -119,6 +119,18 @@ test("non-manager cannot forge spendable diamond credit", async()=>{
     const db=ctx.firestore();
     await setDoc(at(db,"users","member"),
       {sharePersonalId:"@DEDA-G7XY2Z",accountKey:"07712345678"});
+    await setDoc(at(db,"deda_sessions","member"),
+      {accountKey:"07712345678"});
+    await setDoc(at(db,"deda_share_ids","@DEDA-G7XY2Z"),{
+      publicId:"@DEDA-G7XY2Z",kind:"personal",
+      active:true,ownerUid:"member",
+    });
+    // A separate real DEDA session MUST NOT read/spend another member's
+    // wallet merely by writing their publicId to their OWN users doc.
+    await setDoc(at(db,"users","anotherMember"),
+      {sharePersonalId:"@DEDA-G7XY2Z",accountKey:"07822222222"});
+    await setDoc(at(db,"deda_sessions","anotherMember"),
+      {accountKey:"07822222222"});
     await setDoc(at(db,"deda_diamond_gift_balances","@DEDA-G7XY2Z"),
       {publicId:"@DEDA-G7XY2Z",balance:7,
       createdAt:Timestamp.now(),updatedAt:Timestamp.now()});
@@ -128,6 +140,8 @@ test("non-manager cannot forge spendable diamond credit", async()=>{
   await assertFails(updateDoc(
     at(user,"deda_diamond_gift_balances","@DEDA-G7XY2Z"),{
       balance:17,updatedAt:serverTimestamp()}));
+  await assertFails(getDoc(
+    at(stranger,"deda_diamond_gift_balances","@DEDA-G7XY2Z")));
   await assertFails(updateDoc(
     at(stranger,"deda_diamond_gift_balances","@DEDA-G7XY2Z"),{
       balance:17,updatedAt:serverTimestamp()}));
