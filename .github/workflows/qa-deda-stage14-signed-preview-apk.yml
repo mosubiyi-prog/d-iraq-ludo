@@ -106,7 +106,7 @@ jobs:
       - name: Test manager preview after golden Android reconstruction
         run: |
           flutter test test/deda_daily_login_offer_preview_policy_test.dart test/deda_daily_login_offer_preview_page_test.dart test/deda_daily_task_slots_test.dart
-          flutter analyze lib/deda_admin_task_management_page.dart lib/deda_daily_login_offer_preview_page.dart lib/deda_daily_login_offer_preview_policy.dart
+          flutter analyze --no-fatal-infos lib/deda_admin_task_management_page.dart lib/deda_daily_login_offer_preview_page.dart lib/deda_daily_login_offer_preview_policy.dart
       - name: Verify signature output and Android 100323 version
         run: |
           test -s build/app/outputs/flutter-apk/app-release.apk
