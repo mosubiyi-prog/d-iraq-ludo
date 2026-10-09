@@ -5,6 +5,7 @@ const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {randomInt} = require("node:crypto");
+const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
 
 initializeApp();
 
@@ -239,6 +240,35 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
         updatedAt: Timestamp.now(),
       });
 
+      // Owner-opted 10-second self-service for previously trusted
+      // devices. The request is protected by the existing 48-hex
+      // installation secret; unrecognized phones still go manual.
+      try {
+        const config = await firestore.collection("deda_automation_settings")
+            .doc("pin_auto_recovery").get();
+        const setting = config.data() || {};
+        const created = data.createdAt &&
+            typeof data.createdAt.toMillis === "function" ?
+            data.createdAt.toMillis() : NaN;
+        const enabledAt = setting.enabledAt &&
+            typeof setting.enabledAt.toMillis === "function" ?
+            setting.enabledAt.toMillis() : NaN;
+        if (setting.enabled === true && Number.isFinite(created) &&
+            Number.isFinite(enabledAt) && created > enabledAt) {
+          const delay = Math.max(0,
+              Math.min(11000, created + 10000 - Date.now() + 250));
+          if (delay > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+          const result = await autoRecoverForgottenPin(firestore, {
+            requestId:event.params.requestId,nowMs:Date.now(),
+          });
+          if (result.outcome === "issued") return;
+        }
+      } catch (error) {
+        console.error("DEDA_PIN_AUTO_RECOVERY_SAFE_MANUAL_FALLBACK",
+            event.params.requestId, String(error.message || error));
+      }
       await notifyAdmins(
           "طلب استرجاع دخول جديد في DEDA",
           data.fullName || data.phone || "طلب استرجاع",
