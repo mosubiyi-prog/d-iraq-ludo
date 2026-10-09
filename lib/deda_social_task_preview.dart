@@ -135,38 +135,63 @@ class DedaSocialTaskCompactCard extends StatelessWidget {
 
 /// Published social config is displayed only after a trusted backend publish.
 /// There are deliberately NO reward-claim or wallet-write methods on this page.
-class DedaSocialTaskUserPreviewPage extends StatelessWidget {
+/// User view: fetch only today's signed-in Firestore server document.
+/// Reads before Baghdad midnight are denied by Firestore Security Rules.
+/// No offline future cache, payout, ad claim, or client-side unlock.
+class DedaSocialTaskUserPreviewPage extends StatefulWidget {
   const DedaSocialTaskUserPreviewPage({
     super.key, required this.isArabic,
   });
   final bool isArabic;
 
-  String t(String ar, String en) => isArabic ? ar : en;
+  @override
+  State<DedaSocialTaskUserPreviewPage> createState() =>
+      _DedaSocialTaskUserPreviewPageState();
+}
+
+class _DedaSocialTaskUserPreviewPageState
+    extends State<DedaSocialTaskUserPreviewPage> {
+  Future<Map<String, dynamic>?>? _taskFuture;
+  final _service = const DedaLiveSocialTaskService();
+
+  String t(String ar, String en) => widget.isArabic ? ar : en;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Firebase.apps.isNotEmpty) _taskFuture = _service.publishedToday();
+  }
+
+  void _refresh() {
+    if (Firebase.apps.isEmpty) return;
+    setState(() => _taskFuture = _service.publishedToday());
+  }
 
   Uri? safeTaskUrl(Map<String, dynamic> data) {
     final text = (data['url'] ?? '').toString();
-    final platform = (data['platform'] ?? '').toString();
     final uri = Uri.tryParse(text);
-    if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty ||
-        uri.hasPort || uri.hasFragment) return null;
-    if (platform == 'telegram' &&
-        !<String>{'t.me', 'telegram.me'}.contains(uri.host.toLowerCase())) {
+    if (data['platform'] != 'telegram' || data['action'] != 'follow' ||
+        !DedaLiveSocialTaskService.allowedTelegramLink(text) ||
+        uri == null || uri.scheme != 'https' || uri.host != 't.me') {
       return null;
     }
-    const allowed = <String, List<String>>{
-      'facebook': ['facebook.com', 'fb.com', 'fb.watch'],
-      'youtube': ['youtube.com', 'youtu.be'],
-      'instagram': ['instagram.com'],
-      'tiktok': ['tiktok.com'],
-    };
-    if (allowed.containsKey(platform) &&
-        !allowed[platform]!.any((host) =>
-            uri.host == host || uri.host.endsWith('.$host'))) {
-      return null;
-    }
-    if (!<String>{'telegram', ...allowed.keys}.contains(platform)) return null;
     return uri;
   }
+
+  Widget _empty() => Center(child: Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(t('لا توجد مهمة تليجرام منشورة لهذا اليوم.',
+          'There is no Telegram task for today.'),
+          textAlign: TextAlign.center),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: _refresh,
+        icon: const Icon(Icons.refresh),
+        label: Text(t('تحديث من الخادم', 'Refresh from server')),
+      ),
+    ],
+  ));
 
   @override
   Widget build(BuildContext context) {
@@ -177,106 +202,107 @@ class DedaSocialTaskUserPreviewPage extends StatelessWidget {
         foregroundColor: Colors.white,
       ),
       backgroundColor: const Color(0xFFF8FAF2),
-      body: Firebase.apps.isEmpty
-          ? Center(child: Text(t('لا توجد مهمة منشورة بعد.',
-              'No published task yet.')))
-          : StreamBuilder(
-              stream: const DedaLiveSocialTaskService().watchPublished(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text(t(
-                    'تعذر تحميل المهام المنشورة. حاول لاحقاً.',
-                    'Could not load published social tasks.')));
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final doc = snapshot.data!;
-                final data = doc.data();
-                if (!doc.exists || data == null ||
-                    data['rewardsEnabled'] != false ||
-                    data['rewardClaimMode'] !=
-                      'blocked-until-trusted-proof-and-ssv-ledger') {
-                  return Center(child: Text(t(
-                    'لا توجد مهمة منشورة حالياً.',
-                    'There is no published task yet.')));
-                }
-                final uri = safeTaskUrl(data);
-                if (uri == null) {
-                  return Center(child: Text(t(
-                    'بيانات المهمة غير صالحة، ولا يمكن فتحها.',
-                    'Task link is invalid.')));
-                }
-                final title = (data['title'] ?? '').toString();
-                final amount = data['rewardAmount'];
-                final unit = (data['rewardUnit'] ?? '').toString();
-                final rewardName = unit == 'diamonds'
-                  ? t('ماسات', 'diamonds')
-                  : unit == 'coins' ? t('عملات', 'coins')
-                  : t('نقاط', 'points');
-                return ListView(
-                  padding: const EdgeInsets.all(18),
+      body: _taskFuture == null ? _empty()
+        : FutureBuilder<Map<String, dynamic>?>(
+            future: _taskFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Card(
-                      color: const Color(0xFF0B3156),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        side: const BorderSide(color: Color(0xFFE8C56C)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Icon(Icons.people_alt_rounded,
-                                color: Color(0xFFFFD76A), size: 38),
-                            const SizedBox(height: 12),
-                            Text(title, textAlign: TextAlign.center,
-                                key: const Key('publishedSocialTaskTitle'),
-                                style: const TextStyle(
-                                  color: Color(0xFFFFD76A), fontSize: 20,
-                                  fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 12),
-                            Text(uri.toString(),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white)),
-                            const SizedBox(height: 10),
-                            Text(t(
-                              'المكافأة المحددة: $amount $rewardName (غير متاحة للاستلام حتى التحقق)',
-                              'Configured reward: $amount $rewardName (not claimable until verification)'),
-                              textAlign: TextAlign.center,
+                    Text(t('تعذر الاتصال بخادم Firebase. حاول مرة أخرى.',
+                        'Firebase connection failed. Try again.'),
+                        textAlign: TextAlign.center),
+                    TextButton(onPressed: _refresh,
+                      child: Text(t('إعادة المحاولة', 'Retry'))),
+                  ],
+                ));
+              }
+              final data = snapshot.data;
+              if (data == null || data['rewardsEnabled'] != false ||
+                  data['rewardClaimMode'] !=
+                    'blocked-until-trusted-proof-and-ssv-ledger') {
+                return _empty();
+              }
+              final uri = safeTaskUrl(data);
+              if (uri == null) return _empty();
+              final title = (data['title'] ?? '').toString();
+              final amount = data['rewardAmount'];
+              final unit = (data['rewardUnit'] ?? '').toString();
+              final rewardName = unit == 'diamonds'
+                  ? t('ماسات', 'diamonds')
+                  : unit == 'coins'
+                    ? t('عملات', 'coins') : t('نقاط', 'points');
+              return ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  Card(
+                    color: const Color(0xFF0B3156),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      side: const BorderSide(color: Color(0xFFE8C56C)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Icon(Icons.people_alt_rounded,
+                              color: Color(0xFFFFD76A), size: 38),
+                          const SizedBox(height: 12),
+                          Text(title, textAlign: TextAlign.center,
+                              key: const Key('publishedSocialTaskTitle'),
+                              style: const TextStyle(
+                                color: Color(0xFFFFD76A), fontSize: 20,
+                                fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 12),
+                          Text(uri.toString(), textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white)),
-                            const SizedBox(height: 18),
-                            FilledButton.icon(
-                              key: const Key('openPublishedSocialTask'),
-                              icon: const Icon(Icons.open_in_new),
-                              label: Text(t('افتح القناة', 'Open channel')),
-                              onPressed: () async {
-                                final opened = await launchUrl(uri,
-                                    mode: LaunchMode.externalApplication);
-                                if (!opened && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(t(
-                                      'تعذر فتح الرابط.', 'Could not open link.'))));
-                                }
-                              },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFE8C56C),
-                                foregroundColor: const Color(0xFF0B3156)),
-                            ),
-                          ],
-                        ),
+                          const SizedBox(height: 10),
+                          Text(t(
+                            'المكافأة المحددة: $amount $rewardName (غير قابلة للاستلام حالياً)',
+                            'Configured reward: $amount $rewardName (claim disabled)'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white)),
+                          const SizedBox(height: 18),
+                          FilledButton.icon(
+                            key: const Key('openPublishedSocialTask'),
+                            icon: const Icon(Icons.open_in_new),
+                            label: Text(t('افتح القناة', 'Open channel')),
+                            onPressed: () async {
+                              final opened = await launchUrl(uri,
+                                  mode: LaunchMode.externalApplication);
+                              if (!opened && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(t(
+                                    'تعذر فتح الرابط.', 'Could not open link.'))));
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFE8C56C),
+                              foregroundColor: const Color(0xFF0B3156)),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(t(
-                      'عرض المهمة ونقل المستخدم للقناة لا يثبت الاشتراك. لن تُمنح أي مكافأة قبل توفر تحقق موثوق، ولن يُخصم شيء من رصيد المدير العام.',
-                      'Opening a channel is not proof of subscription. No reward is granted until server verification.'),
-                      textAlign: TextAlign.center),
-                  ],
-                );
-              },
-            ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(t(
+                    'فتح الرابط لا يثبت الاشتراك. لا توجد مكافآت قابلة للصرف بهذه النسخة، ولا خصم من محفظة المدير.',
+                    'Opening the link is not subscription proof; payouts are disabled.'),
+                    textAlign: TextAlign.center),
+                  TextButton.icon(
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(t('تحديث', 'Refresh')),
+                  ),
+                ],
+              );
+            },
+          ),
     );
   }
 }
