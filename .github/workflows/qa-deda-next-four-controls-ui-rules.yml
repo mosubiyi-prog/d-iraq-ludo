@@ -1,0 +1,48 @@
+name: DEDA Next Four Manager Controls Rules and Flutter - NO APK
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'firestore.rules'
+      - 'lib/admin_pages.dart'
+      - 'lib/deda_admin_automation_toggle.dart'
+      - 'tests/firestore-rules/deda-next-manager-automation-controls.test.mjs'
+      - '.github/workflows/qa-deda-next-four-controls-ui-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safe-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-next-manager-automations
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install test-only Firebase emulator libs
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Test exact manager-only controls in emulator, NEVER production
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-next-manager-automations "node --test tests/firestore-rules/deda-next-manager-automation-controls.test.mjs"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Flutter analyzer UI and nearby screens
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos lib/deda_admin_automation_toggle.dart lib/admin_pages.dart lib/deda_recovery_admin.dart
+      - name: Test only, no deployment, no new APK
+        run: |
+          echo 'Manager automation UI safe-gated until trusted server readiness; no production modification.'
