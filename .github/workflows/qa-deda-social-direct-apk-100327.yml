@@ -6,6 +6,7 @@ on:
       - deda-social-firestore-no-functions-100327-2026-10-09
     paths:
       - '.github/workflows/qa-deda-social-direct-apk-100327.yml'
+      - 'test/deda_social_task_preview_test.dart'
   workflow_dispatch:
 
 permissions:
