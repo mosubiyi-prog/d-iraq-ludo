@@ -53,6 +53,16 @@ jobs:
           node --test tests/stage13/deda_release_gate.test.cjs
           node scripts/deda_stage13_release_gate.cjs > /tmp/deda14-release-gate.json
           node -e 'const r=require("/tmp/deda14-release-gate.json"); if(r.productionDeployApproved!==false || r.productionRolloutStatus!=="blocked" || r.sourceGuardFailures.length) process.exit(1); console.log("SAFE_NO_DEPLOY:",r.blockers.length,"remaining blockers")'
+      - name: Use accepted 100319 user task core only inside CI build workspace
+        run: |
+          # Stage6 added a disabled user title-preview StreamBuilder to HEAD.
+          # The golden 100319 nav/release patch series needs its accepted
+          # 100319 main.dart baseline (and the user never sees that Stage6
+          # title preview in ordinary builds anyway).
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart
+          ! grep -q 'DedaDailyUserTaskDisplay.previewEnabled' lib/main.dart
+          echo 'STAGE14: original 100319 user app restored only in ephemeral CI workspace'
       - name: Construct test-only 100323 build from proven 100319 signed routine
         run: |
           python3 - <<'PY'
@@ -78,7 +88,7 @@ jobs:
           assert 'عرض نتيجة المحاكاة' in login and '50' in login,'Holiday reward preview missing'
           assert 'canGrantRewards => false' in policy,'Potential direct payout unsafe'
           assert 'defaultValue: false' in display,'User title preview default gate changed'
-          assert 'DedaDailyUserTaskDisplay.previewEnabled' in user,'User title preview guard lost'
+          assert 'DedaDailyUserTaskDisplay.previewEnabled' not in user,'Stage6 off-by-default user stream leaked into 100319 user core'
           assert 'static const int pointsPerDailyLogin = 10;' in user,'Legacy user 10-point login changed'
           assert 'FirebaseFirestore' not in login and 'FirebaseFunctions' not in login,'Admin preview has remote write'
           print('STAGE14_SAFE_PREVIEW: 100319 navigation restored, stage12 admin preview retained, no payout')
