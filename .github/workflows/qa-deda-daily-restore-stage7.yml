@@ -1,0 +1,52 @@
+name: DEDA Stage 7 Restore Previous Task - EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage7-restore-2026-10-09
+    paths:
+      - 'functions/deda_daily_task_restore.js'
+      - 'tests/firestore-rules/daily-restore.test.mjs'
+      - '.github/workflows/qa-deda-daily-restore-stage7.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-restore-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - name: Checkout stage 7 branch
+        uses: actions/checkout@v4
+      - name: Ensure core app and existing publisher are unchanged
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage6-user-ui-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage6-user-ui-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage6-user-ui-qa-2026-10-09 -- lib/ android firestore.rules functions/index.js functions/deda_daily_task_publisher.js functions/package.json pubspec.yaml
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java for local Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator and admin test packages
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Check syntax and no production exports
+        run: |
+          node --check functions/deda_daily_task_restore.js
+          node --check tests/firestore-rules/daily-restore.test.mjs
+          ! grep -q 'deda_daily_task_restore' functions/index.js
+          ! grep -q '^exports[.]' functions/deda_daily_task_restore.js
+      - name: Test restorer and publisher on demo project only
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-daily-task-restore "node --test tests/firestore-rules/daily-restore.test.mjs"
+      - name: Confirm restoration never touches wallets or actual prod settings
+        run: |
+          ! grep -q 'admin_wallets' functions/deda_daily_task_restore.js
+          ! grep -q 'users/' functions/deda_daily_task_restore.js
+          echo 'STAGE7_RESTORE_SAFE: private preview tomorrow only; no APK, no deploy, no reward payouts'
