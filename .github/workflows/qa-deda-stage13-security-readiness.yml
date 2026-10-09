@@ -1,0 +1,58 @@
+name: DEDA Stage 13 Security Release Readiness - NEVER DEPLOY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage13-security-readiness-2026-10-09
+    paths:
+      - 'scripts/deda_stage13_release_gate.cjs'
+      - 'tests/stage13/deda_release_gate.test.cjs'
+      - 'tests/firestore-rules/daily-stage13-security.test.mjs'
+      - '.github/workflows/qa-deda-stage13-security-readiness.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-security-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 34
+    env:
+      GCLOUD_PROJECT: demo-deda-stage13-security-readiness
+    steps:
+      - name: Checkout isolated stage13 security review
+        uses: actions/checkout@v4
+      - name: Prove signed-off application, Firebase and all reward modules unchanged
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage12-control-preview-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage12-control-preview-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage12-control-preview-qa-2026-10-09 -- lib/ android firestore.rules functions/ pubspec.yaml firebase.json .firebaserc
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java 21 for local Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Check offline release barrier and reject accidental deployment
+        run: |
+          node --check scripts/deda_stage13_release_gate.cjs
+          node --check tests/stage13/deda_release_gate.test.cjs
+          node --test tests/stage13/deda_release_gate.test.cjs
+          node scripts/deda_stage13_release_gate.cjs > /tmp/deda-stage13-readiness.json
+          node -e 'const r=require("/tmp/deda-stage13-readiness.json"); if(r.productionDeployApproved!==false || r.productionRolloutStatus!=="blocked" || r.sourceGuardFailures.length) process.exit(1); console.log("RELEASE_BLOCKED_SAFELY:",r.blockers.length,"blockers")'
+      - name: Install local emulator test tools
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Verify deployed-rule model authorization and wallet isolation
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage13-security-readiness "node --test tests/firestore-rules/daily-stage13-security.test.mjs"
+      - name: Security confirmation - sandbox has not been released
+        run: |
+          ! grep -q 'deda_daily_reward_shadow_ledger' functions/index.js
+          ! grep -q 'deda_daily_login_seasonal_shadow' functions/index.js
+          ! grep -q 'deda_daily_task_restore_callable' functions/index.js
+          test -f /tmp/deda-stage13-readiness.json
+          echo 'STAGE13_QA_PASSED_BUT_PRODUCTION_BLOCKED: no APK, no Firebase deploy, no real payout'
