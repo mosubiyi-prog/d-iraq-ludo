@@ -98,10 +98,18 @@ async function claimVerifiedTelegramFollow(firestore, {
         String(user.accountKey || "") !== accountKey) {
       return {outcome: "not-a-verified-deda-session"};
     }
-    const [directorySnap, accountClaimSnap] = await Promise.all([
-      tx.get(db.collection("deda_account_directory").doc(accountKey)),
-      tx.get(db.collection("deda_telegram_account_claims").doc(accountKey)),
-    ]);
+    const [directorySnap, accountClaimSnap, botLinkSnap] =
+      await Promise.all([
+        tx.get(db.collection("deda_account_directory").doc(accountKey)),
+        tx.get(db.collection("deda_telegram_account_claims").doc(accountKey)),
+        botAccount ? tx.get(db.collection("deda_telegram_bot_accounts")
+            .doc(accountKey)) : Promise.resolve(null),
+      ]);
+    if (botAccount && (accountKey !== botAccount ||
+        !botLinkSnap?.exists ||
+        botLinkSnap.data()?.telegramUserId !== proof.telegramUserId)) {
+      return {outcome: "telegram-bot-binding-changed"};
+    }
     if (!directorySnap.exists ||
         directorySnap.data()?.active !== true) {
       return {outcome: "inactive-deda-account"};
