@@ -24,7 +24,7 @@ class _DedaAdminSocialTaskPreviewPageState
   final _otherPlatform = TextEditingController();
   final _otherAction = TextEditingController();
   final _reward = TextEditingController(text: '5');
-  String _platform = 'facebook';
+  String _platform = 'telegram';
   String _action = 'follow';
   String _unit = 'points';
   bool _doubleWithRewardedAd = false;
@@ -49,7 +49,9 @@ class _DedaAdminSocialTaskPreviewPageState
       setState(() {
         _revision = (data['revision'] as num?)?.toInt() ?? 0;
         _remoteStatus = (data['status'] ?? 'new').toString();
-        _serverMessage = t('تم الاتصال بخادم المهام.', 'Connected to tasks backend.');
+        _serverMessage = t('اتصال Firestore آمن: المسودات للمدير فقط.', 'Secure Firestore access: manager-only drafts.');
+        final day = (data['scheduledDay'] ?? '').toString();
+        if (day.isNotEmpty) _day = DateTime.tryParse(day);
         if (data['exists'] == true) {
           _platform = (data['platform'] ?? 'facebook').toString();
           _action = (data['action'] ?? 'follow').toString();
@@ -65,8 +67,8 @@ class _DedaAdminSocialTaskPreviewPageState
     } catch (_) {
       if (!mounted) return;
       setState(() => _serverMessage = t(
-        'الخادم غير مفعّل أو الاتصال تعذّر؛ لا يوجد نشر فعلي بعد.',
-        'Backend unavailable: live publishing is not active.'));
+        'تعذر الاتصال بـFirestore أو لا توجد صلاحية للمدير العام. لا يوجد نشر.',
+        'Firestore unavailable or general manager permission denied.'));
     }
   }
 
@@ -79,13 +81,13 @@ class _DedaAdminSocialTaskPreviewPageState
       setState(() {
         _revision = (result['revision'] as num?)?.toInt() ?? _revision;
         _remoteStatus = (result['status'] ?? '').toString();
-        _serverMessage = t('نجحت العملية وحُفظت على الخادم.', 'Saved on server.');
+        _serverMessage = t('تم حفظ العملية في Firestore، ولن تظهر قبل الموعد.', 'Saved on Firestore; invisible until due.');
       });
     } catch (error) {
       if (!mounted) return;
       setState(() => _serverMessage = t(
-        'فشلت العملية أو رفضها الخادم؛ لم يتم نشر أي شيء.',
-        'Server rejected request; nothing was published.') +
+        'رفض Firestore العملية؛ لا يوجد نشر جديد.',
+        'Firestore rejected the operation; nothing published.') +
         '\n' + error.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -96,6 +98,12 @@ class _DedaAdminSocialTaskPreviewPageState
     if (!(_form.currentState?.validate() ?? false)) return;
     final amount = int.tryParse(_reward.text.trim());
     if (amount == null) return;
+    if (_platform != 'telegram' || _action != 'follow') {
+      setState(() => _serverMessage = t(
+        'التجربة الأولى تدعم متابعة قناة تليجرام فقط.',
+        'First trial supports Telegram follow only.'));
+      return;
+    }
     await _perform(() => _live.save(
       expectedRevision: _revision,
       platform: _platform, action: _action,
@@ -142,7 +150,7 @@ class _DedaAdminSocialTaskPreviewPageState
       context: context,
       initialDate: _day ?? tomorrow,
       firstDate: tomorrow,
-      lastDate: DateTime(now.year + 2, now.month, now.day),
+      lastDate: DateTime(now.year, now.month, now.day + 31),
     );
     if (picked != null && mounted) setState(() => _day = picked);
   }
@@ -211,8 +219,8 @@ class _DedaAdminSocialTaskPreviewPageState
           padding: const EdgeInsets.all(14),
           children: [
             Text(
-              t('نموذج المدير العام: حفظ على الخادم ثم جدولة. تنشر المهمة عند منتصف الليل بتوقيت العراق بعد تفعيل الخادم، بلا صرف مكافآت إلى حين التحقق.',
-                'Save on server, then schedule for Iraq midnight once backend is deployed. Rewards stay blocked.'),
+              t('تجربة Firestore المباشرة: تليجرام فقط. يحفظ المدير المسودة ثم يجدولها، ولا تظهر للمستخدم إلا بعد منتصف الليل بتوقيت العراق حين يفتح صفحة المهام متصلاً بالإنترنت. لا تُصرف مكافآت.',
+                'Direct Firestore trial: Telegram only. Save then schedule. The task appears after Iraq midnight when a user opens the page online. No payouts.'),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -335,14 +343,14 @@ class _DedaAdminSocialTaskPreviewPageState
             ),
             const SizedBox(height: 10),
             Text(
-              t('نشر المهمة لا يصرف الجائزة. زيارة الرابط وحدها ليست دليلاً على الاشتراك. مكافآت الأعضاء والإعلانات مقفلة حتى توفر تحقق خادمي.',
+              t('يظهر الرابط فقط يوم الموعد بعد منتصف الليل وفتح الصفحة متصلاً بالإنترنت؛ لا توجد إشعارات نشر تلقائية ولا صرف للمكافآت. فتح الرابط لا يثبت الاشتراك.',
                 'Publishing does not grant rewards. URL visits are not subscription proof; payouts remain blocked.'),
               style: const TextStyle(
                 fontSize: 12, color: Color(0xFF73572B)),
             ),
             const SizedBox(height: 12),
-            Text(t('حالة الخادم: $_remoteStatus — الإصدار $_revision',
-              'Server status: $_remoteStatus — revision $_revision'),
+            Text(t('حالة Firestore: $_remoteStatus — الإصدار $_revision',
+              'Firestore status: $_remoteStatus — revision $_revision'),
               key: const Key('socialTrialServerStatus'),
               style: const TextStyle(fontWeight: FontWeight.bold)),
             if (_serverMessage.isNotEmpty)
