@@ -1777,6 +1777,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /deda_social_admin_state/{taskId} {
+      // Callable-only writes. Never expose administrative drafts to users.
+      allow read, write: if false;
+    }
+    match /deda_social_task_audit/{auditId} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+    match /deda_social_task_public/{taskId} {
+      // Published configuration only; clients cannot grant rewards.
+      allow get, list: if signedIn() && taskId == 'featured';
+      allow create, update, delete: if false;
+    }
+
     match /admin_audit/{auditId} {
       allow read: if hasAdminPermission('viewAudit')
         && !isProvinceAgent();
