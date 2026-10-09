@@ -13,6 +13,7 @@ import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 import 'deda_admin_task_management_page.dart';
 import 'deda_admin_automation_toggle.dart';
+import 'deda_admin_compact_card.dart';
 import 'deda_recovery_admin.dart';
 import 'prize_winner_pages.dart';
 
@@ -1040,62 +1041,13 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
     Color accentColor = const Color(0xFF17652F),
     Color backgroundColor = const Color(0xDDF4F8F1),
   }) {
-    return Card(
-      elevation: 1.5,
-      clipBehavior: Clip.antiAlias,
-      color: backgroundColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(
-          color: accentColor.withOpacity(0.22),
-        ),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, size: 32, color: accentColor),
-              ),
-              const SizedBox(height: 9),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
-                  height: 1.18,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  height: 1.2,
-                  color: Color(0xFF5D685F),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return DedaAdminCompactCard(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      accentColor: accentColor,
+      backgroundColor: backgroundColor,
     );
   }
 
@@ -1305,12 +1257,18 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                   ),
                   const SizedBox(height: 16),
                   GridView.count(
-                    crossAxisCount: 2,
+                    crossAxisCount:
+                        MediaQuery.sizeOf(context).width >= 830
+                            ? 4
+                            : MediaQuery.sizeOf(context).width >= 590
+                                ? 3 : 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
+                    mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
-                    mainAxisExtent: 198,
+                    mainAxisExtent: (178 *
+                            MediaQuery.textScalerOf(context).scale(1.0))
+                        .clamp(178.0, 280.0),
                     children: [
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
