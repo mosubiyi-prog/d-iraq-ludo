@@ -25,6 +25,7 @@ class _DedaAdminSocialTaskPreviewPageState
   String _platform = 'facebook';
   String _action = 'follow';
   String _unit = 'points';
+  bool _doubleWithRewardedAd = false;
   DateTime? _day;
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
@@ -65,6 +66,8 @@ class _DedaAdminSocialTaskPreviewPageState
     final action = _action == 'other'
         ? _otherAction.text.trim()
         : DedaSocialTaskCatalog.actionLabel(_action, widget.isArabic);
+    final bonus = _doubleWithRewardedAd ? int.parse(_reward.text.trim()) : 0;
+    final total = int.parse(_reward.text.trim()) + bonus;
     final scheduled = _day!;
     final dateLabel = scheduled.day.toString() + '/' +
         scheduled.month.toString() + '/' + scheduled.year.toString();
@@ -77,7 +80,11 @@ class _DedaAdminSocialTaskPreviewPageState
         title: Text(t('معاينة غير منشورة', 'Unpublished preview')),
         content: Text(
           [label, action, _title.text.trim(), _url.text.trim(),
-           rewardText, dateLabel,
+           rewardText,
+           if (_doubleWithRewardedAd)
+             t('بعد الإعلان المكافئ: المجموع $total (إضافة $bonus من نفس نوع المكافأة)، محاكاة فقط.',
+               'After rewarded ad: total $total (bonus $bonus), preview only.'),
+           dateLabel,
            t('هذه معاينة محلية فقط. لا حفظ، لا جدولة حقيقية، لا نشر ولا مكافآت.',
              'Local preview only. No saving, scheduling, publishing or rewards.')].join('\n'),
         ),
@@ -207,7 +214,20 @@ class _DedaAdminSocialTaskPreviewPageState
                     ? t('القيمة من 1 إلى 5000', 'Enter 1 to 5000') : null;
               },
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
+            SwitchListTile.adaptive(
+              key: const Key('socialRewardedAdDoubleToggle'),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 2),
+              title: Text(t('مضاعفة المكافأة بمشاهدة إعلان',
+                'Double reward with rewarded ad')),
+              subtitle: Text(t(
+                'اختياري • يشمل النقاط والعملات والماسات • لا يُصرف شيء في هذه المعاينة',
+                'Optional • points, coins and diamonds • no payout in preview')),
+              value: _doubleWithRewardedAd,
+              onChanged: (value) =>
+                  setState(() => _doubleWithRewardedAd = value),
+            ),
+            const SizedBox(height: 6),
             OutlinedButton.icon(
               onPressed: _pickDate,
               icon: const Icon(Icons.calendar_month_rounded),
