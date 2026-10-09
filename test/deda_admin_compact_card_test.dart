@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:deda_guide/deda_admin_compact_card.dart';
+import 'package:d_iraq_ludo/deda_admin_compact_card.dart';
 
 void main() {
   for (final textScale in [1.0, 1.4, 2.0]) {
