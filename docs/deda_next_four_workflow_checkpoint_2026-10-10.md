@@ -88,3 +88,22 @@ This means a real Telegram follow reward CANNOT be implemented by merely creatin
 The signed 100327 build reconstructs main.dart through tools/build_100318_user_heading_camera.sh with scripts; validate future UI patch on that resulting build workspace, not just the checked-in lib/main.dart. Preserve all accepted navigation checks.
 
 FINAL QA AT THIS CHECKPOINT: Firestore emulator strict manager-toggle tests plus Flutter analyzer and compact-card widget tests passed on https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38000741467 . Node auto-place/auto-PIN/Telegram-policy and JavaScript syntax checks passed on https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38000722815 . These are source/policy tests, NOT live backend integration or a completed four-feature APK.
+
+## OWNER-OBSERVED RELEASE-BLOCKING REGRESSION — rewarded-ad diamonds profile display (2026-10-10)
+
+Owner attached BEFORE still photo (profile diamonds **999600**) and an AFTER 58s phone screen recording. Recording clearly shows real rewarded advertisement, DEDA return, toast **"تم منحك 3 ماسات بنجاح 💎"** around 52 seconds, but profile diamonds STILL **999600** at 56 seconds. Not a Telegram social-task payout; this is the already-existing three-diamonds-per-rewarded-ad feature.
+
+Source cause found in PROVEN BUILD RECONSTRUCTION SCRIPT tools/style_purchase_separation_100272_2026_10_05.py (profile diamond block):
+`${DedaDiamondsWallet.hasGeneralManagerPersonalWallet ? managerDiamonds : normalDiamonds}`
+For manager's personal 1,000,000-diamond testing wallet, this conditional HIDES the separate earned-ad/gifted pool, even when DedaDiamondsWallet.claimReward() shows success. Do NOT assume the 3 earned diamonds disappeared; the original rewarded-wallet code adds 3 to an independent per-account SharedPreferences balance and notifies normalDiamonds. The original manager-personal wallet remains at 999600, explaining the static display.
+
+Owner expects rewarded earned diamonds to be VISIBLE. Source-only fix drafted:
+- lib/deda_profile_visible_diamonds.dart: display-only sum of authorized manager-personal balance and ordinary earned/gifted balance, no movement/minting.
+- tools/fix_profile_rewarded_diamond_display_next_release.py: safe fail-closed post-golden-reconstruction patch of ONLY one profile stat expression; old 100327 code unchanged.
+- test/deda_profile_visible_diamonds_test.dart and tests/stage14/test_profile_diamonds_patch.py: regression tests cover example 999600 + 3 -> 999603 WHEN PREVIOUS ordinary earned pool = 0, normal users unaffected.
+- Profile display total may be ABOVE 999603 if the owner already has other stored ordinary ad diamonds. Do not erase accumulated balances to force an expected number.
+- Award claim success shown by video, but persistence on owner's particular phone has NOT been directly inspected. Future signed APK and owner-device test must check actual wallet component balances and usable spending, without any manager administrative gift budget debit.
+- ALWAYS apply the post-reconstruction patch in the eventual single integrated APK pipeline; just creating the patch file does NOT change 100327 or future builds by itself.
+- This defect fix is added to release regression checklist, on top of the FOUR approved features, and is NOT grounds for an intermediate APK.
+
+No production Firestore changes, no user data modifications, no APK yet.
