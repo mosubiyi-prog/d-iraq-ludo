@@ -4,6 +4,7 @@ import 'deda_admin_task_drafts.dart';
 import 'deda_backend.dart';
 import 'deda_daily_task_slots.dart';
 import 'deda_daily_schedule_preview_service.dart';
+import 'deda_daily_login_offer_preview_page.dart';
 
 /// Manager-only editor for the EXISTING eight daily task card slots.
 /// This stage saves isolated private drafts. It never publishes a task,
@@ -323,11 +324,29 @@ class _DedaAdminTaskManagementPageState
                               ),
                             ),
                             subtitle: Text(t(
-                              'ثابتة — 10 نقاط حاليًا. جدولة مكافأة المناسبات تحتاج ربط صرف آمن قبل تفعيلها.',
-                              'Fixed — 10 points today. Holiday reward scheduling awaits verified payout integration.',
+                              'ثابتة — 10 نقاط حاليًا. تگدر تجرب عروض المناسبات بمعاينة آمنة بدون نشر أو صرف.',
+                              'Fixed — 10 points today. Try holiday reward offers in a safe, non-paying preview.',
                             ), style: const TextStyle(
                               color: Color(0xFFE2EAF4),
                             )),
+                            trailing: IconButton(
+                              key: const Key('stage12LoginPreviewOpen'),
+                              tooltip: t('معاينة عروض الدخول', 'Preview login offers'),
+                              icon: const Icon(
+                                Icons.visibility_outlined,
+                                color: Color(0xFFFFD76A),
+                              ),
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        DedaDailyLoginOfferPreviewPage(
+                                      isArabic: widget.isArabic,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),
