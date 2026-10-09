@@ -20,6 +20,7 @@ const {iraqDayId} = require("./deda_daily_task_publisher.js");
 const SLOT = "share_personal_location";
 const PROOF_KIND = "stage10_checked_personal_share";
 const ID_PATTERN = /^[A-Za-z0-9_-]{6,60}$/;
+const PUBLIC_ID_PATTERN = /^@DEDA-[A-Z2-9]{6}$/;
 
 function requireSandbox(db) {
   if (!process.env.FIRESTORE_EMULATOR_HOST ||
@@ -133,8 +134,8 @@ function makeVerifier({db, serverNow} = {}) {
       if (share.senderUid !== actor.uid ||
           typeof share.senderPublicId !== "string" ||
           typeof share.recipientPublicId !== "string" ||
-          !ID_PATTERN.test(share.senderPublicId) ||
-          !ID_PATTERN.test(share.recipientPublicId)) {
+          !PUBLIC_ID_PATTERN.test(share.senderPublicId) ||
+          !PUBLIC_ID_PATTERN.test(share.recipientPublicId)) {
         return "no-valid-share";
       }
       const [senderIdSnap, recipientIdSnap] = await Promise.all([
