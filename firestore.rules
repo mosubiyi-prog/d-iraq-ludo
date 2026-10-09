@@ -2005,6 +2005,8 @@ service cloud.firestore {
     // owner accountKey + current live DEDA session prevents wallet takeovers
     // by editing that publicId. UID rotation within ONE DEDA account is OK.
     function verifiedDiamondsPersonalOwner(publicId) {
+      let registeredOwner = get(
+        /databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid;
       return signedIn()
         && publicId is string
         && exists(/databases/$(database)/documents/deda_share_ids/$(publicId))
@@ -2016,10 +2018,9 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey is string
         && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey ==
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey
-        && exists(/databases/$(database)/documents/users/$(
-          get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid))
-        && get(/databases/$(database)/documents/users/$(
-          get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid)).data.accountKey ==
+        && registeredOwner is string
+        && exists(/databases/$(database)/documents/users/$(registeredOwner))
+        && get(/databases/$(database)/documents/users/$(registeredOwner)).data.accountKey ==
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey;
     }
     match /deda_diamond_gift_balances/{publicId} {
