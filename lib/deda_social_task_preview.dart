@@ -95,13 +95,13 @@ class DedaSocialTaskCompactCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   isArabic
-                      ? 'تابع صفحاتنا وتفاعل مع المنشورات والفيديوهات لتحصل على مكافآت مميزة'
+                      ? 'تابع صفحاتنا وتفاعل مع المنشورات والفيديوهات'
                       : 'Follow pages and engage with posts and videos for rewards',
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  maxLines: 3, overflow: TextOverflow.visible,
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                    color: Colors.white, fontSize: 10.2,
-                    height: 1.16, fontWeight: FontWeight.w600),
+                    color: Colors.white, fontSize: 9.8,
+                    height: 1.12, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
