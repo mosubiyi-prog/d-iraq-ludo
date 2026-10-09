@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'deda_social_task_preview.dart';
 import 'deda_social_task_live_service.dart';
 
-/// General-manager design preview, reached only through the existing protected
-/// admin task editor. No Firestore, URL launch, publishing or reward claims.
+/// Owner-only social editor with authenticated backend draft/schedule controls.
+/// Config can be published by the server after midnight. Rewards stay blocked.
 class DedaAdminSocialTaskPreviewPage extends StatefulWidget {
   const DedaAdminSocialTaskPreviewPage({
     super.key, required this.isArabic,
@@ -41,6 +42,7 @@ class _DedaAdminSocialTaskPreviewPageState
   }
 
   Future<void> _loadRemote() async {
+    if (Firebase.apps.isEmpty) return;
     try {
       final data = await _live.load();
       if (!mounted) return;
