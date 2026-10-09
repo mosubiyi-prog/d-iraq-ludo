@@ -38,28 +38,24 @@ async function processNewPlace(firestore, {requestId, nowMs = Date.now()}) {
     const directoryRef = firestore.collection("deda_account_directory")
         .doc(accountKey);
     const ownerRef = firestore.collection("users").doc(ownerUid);
-    const [directorySnap, ownerSnap] = await Promise.all([
-      tx.get(directoryRef), tx.get(ownerRef),
+    const sessionRef = firestore.collection("deda_sessions").doc(ownerUid);
+    const [directorySnap, ownerSnap, sessionSnap] = await Promise.all([
+      tx.get(directoryRef), tx.get(ownerRef), tx.get(sessionRef),
     ]);
     const directory = directorySnap.data() || {};
     const owner = ownerSnap.data() || {};
-    // Account ID must be bound to the same authenticated owner; never
-    // treat a user-supplied name, phone or install ID as identity proof.
+    const session = sessionSnap.data() || {};
+    // Firestore session is issued ONLY after credential proof or a trusted
+    // device secret; a self-entered phone/name is not account ownership.
     const verifiedOwner = directorySnap.exists && ownerSnap.exists &&
-      directory.active === true && directory.createdUid === ownerUid &&
-      owner.accountKey === accountKey;
+      sessionSnap.exists && directory.active === true &&
+      owner.accountKey === accountKey && session.accountKey === accountKey;
 
-    // A bounded exhaustive scan: if over 200 records, defer to manual.
-    // Do not approve if we cannot establish whether the location duplicates
-    // an existing published record in its governorate.
-    const publishedQuery = firestore.collection("published_places")
-        .where("governorate", "==", province).limit(201);
-    const provinceDocs = await tx.get(publishedQuery);
-    const provinceRecords = provinceDocs.docs.map((doc) => doc.data() || {});
+    // The owner explicitly chose publication without manual content or
+    // duplicate moderation. Basic validated fields/account binding only.
     const decision = assess({
-      request, settings: setting,
-      publishedInProvince: provinceRecords,
-      provinceScanComplete: provinceDocs.size < 201,
+      request,
+      settings: setting,
       serverNowMs: nowMs,
       exactTrustedOwner: verifiedOwner,
     });
