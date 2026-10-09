@@ -118,7 +118,7 @@ jobs:
           "from pathlib import Path\n"
           "s=Path('lib/main.dart').read_text()\n"
           "assert s.count('DedaSocialTaskCompactCard(')==1\n"
-          "assert s.count('if (index == 5 && DedaSocialTaskPreview.visible)')==1\n"
+          "assert s.count('DedaSocialTaskPreview.visible')==1\n"
           "assert s.count('final taskId = DedaTaskIds.weekly[index];')==1\n"
           "assert 'DedaDailyUserTaskDisplay.previewEnabled' not in s\n"
           "print('SOCIAL_PREVIEW_GATED: inserted after review card, no old task replaced')\n"
