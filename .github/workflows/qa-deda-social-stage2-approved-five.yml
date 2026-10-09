@@ -11,6 +11,8 @@ on:
       - 'lib/main.dart'
       - 'test/deda_social_task_preview_test.dart'
       - 'functions/deda_social_task_stage2.js'
+      - 'functions/deda_social_task_stage2_store.js'
+      - 'tests/stage2_social/store_policy.test.cjs'
       - 'tests/stage2_social/social_policy.test.cjs'
       - '.github/workflows/qa-deda-social-stage2-approved-five.yml'
   workflow_dispatch:
@@ -50,7 +52,7 @@ jobs:
           flutter test test/deda_daily_task_slots_test.dart test/deda_admin_task_drafts_test.dart
       - name: Test scheduled midnight, manager-only write and nonpaying reward policy
         run: |
-          node --test tests/stage2_social/social_policy.test.cjs
+          node --test tests/stage2_social/social_policy.test.cjs tests/stage2_social/store_policy.test.cjs
           python3 - <<'SOCIAL_SCOPE'
           from pathlib import Path
           s=Path('lib/main.dart').read_text()
