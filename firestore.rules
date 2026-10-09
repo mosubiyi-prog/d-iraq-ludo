@@ -1908,7 +1908,18 @@ service cloud.firestore {
     match /deda_social_direct_days/{dayId} {
       allow get: if directSocialAdmin() || (
         signedIn() && resource.data.status == 'scheduled'
-        && resource.data.rewardsEnabled == false
+        && (
+          (resource.data.rewardsEnabled == false
+            && resource.data.rewardClaimMode ==
+                'blocked-until-trusted-proof-and-ssv-ledger')
+          || (resource.data.rewardsEnabled == true
+            && resource.data.rewardClaimMode ==
+                'server-verified-telegram-membership'
+            && resource.data.platform == 'telegram'
+            && resource.data.action == 'follow'
+            && resource.data.rewardUnit == 'diamonds'
+            && resource.data.rewardAmount == 10)
+        )
         && resource.data.activateAt <= request.time
         && request.time < resource.data.activateAt + duration.value(1,'d'));
       allow list: if directSocialAdmin();
@@ -1981,6 +1992,32 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status','revision','updatedByUid','updatedAt']);
+    }
+
+    // DEDA next release: Telegram identity, short-lived bot challenge,
+    // payout ledgers and audit are ALWAYS Admin SDK only. The Flutter
+    // client has no direct write or identity-read permission.
+    match /deda_telegram_start_tokens/{tokenId} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_start_throttle/{accountKey} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_bot_accounts/{accountKey} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_bot_identities/{telegramUserId} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_account_claims/{accountKey} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_identity_claims/{telegramUserId} {
+      allow read, write: if false;
+    }
+    match /deda_telegram_reward_audit/{accountKey} {
+      allow get: if directSocialAdmin();
+      allow list, write: if false;
     }
 
     match /deda_social_admin_state/{taskId} {
