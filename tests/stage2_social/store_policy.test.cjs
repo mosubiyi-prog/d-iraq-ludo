@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const service = require("../functions/deda_social_task_stage2_store.js");
+const service = require("../../functions/deda_social_task_stage2_store.js");
 
 class FakeFirestore {
   constructor() { this.values=new Map(); this.counter=0; }
