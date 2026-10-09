@@ -31,6 +31,9 @@ src = src.replace(
                           MaterialPageRoute<void>(
                             builder: (_) => DedaSocialTaskUserPreviewPage(
                               isArabic: DedaLanguageState.isArabic,
+                              onDiamondsGranted: () async {
+                                await DedaDiamondsWallet.load();
+                              },
                             ),
                           ),
                         ),
