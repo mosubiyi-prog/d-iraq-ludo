@@ -51,7 +51,7 @@ jobs:
           ! grep -q 'collection("admin_gift_wallets")' functions/deda_daily_task_share_verifier.js
       - name: Verify authenticated real share documents with stage9 regression tests
         run: |
-          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage9-shadow-rewards "node --test tests/firestore-rules/daily-share-proof-stage10.test.mjs tests/firestore-rules/daily-reward-shadow-ledger.test.mjs"
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage9-shadow-rewards "node --test tests/firestore-rules/daily-share-proof-stage10.test.mjs && node --test tests/firestore-rules/daily-reward-shadow-ledger.test.mjs"
       - name: Confirm no APK or real payout
         run: |
           echo 'STAGE10_SHARE_PROOF_PASS: persisted share proof and shadow ledger only, no deploy, no actual payouts'
