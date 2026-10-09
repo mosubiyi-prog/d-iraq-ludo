@@ -1,0 +1,57 @@
+name: DEDA Stage 10 Verified Personal Share - EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage10-verified-share-2026-10-09
+    paths:
+      - 'functions/deda_daily_task_share_verifier.js'
+      - 'functions/deda_daily_reward_shadow_ledger.js'
+      - 'tests/firestore-rules/daily-share-proof-stage10.test.mjs'
+      - '.github/workflows/qa-deda-daily-share-proof-stage10.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  persisted-share-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 33
+    env:
+      GCLOUD_PROJECT: demo-deda-stage9-shadow-rewards
+    steps:
+      - name: Checkout protected stage10 branch
+        uses: actions/checkout@v4
+      - name: Guard stable app, backend, published functions and live rules
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage9-reward-ledger-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage9-reward-ledger-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage9-reward-ledger-qa-2026-10-09 -- lib/ android firestore.rules functions/index.js functions/deda_daily_task_publisher.js functions/deda_daily_task_restore.js functions/deda_daily_task_restore_callable.js functions/package.json pubspec.yaml
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install isolated emulator dependencies
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Verify syntax and no deployment or payments
+        run: |
+          node --check functions/deda_daily_task_share_verifier.js
+          node --check functions/deda_daily_reward_shadow_ledger.js
+          node --check tests/firestore-rules/daily-share-proof-stage10.test.mjs
+          ! grep -q 'deda_daily_task_share_verifier' functions/index.js
+          ! grep -q '^exports[.]' functions/deda_daily_task_share_verifier.js
+          grep -q 'STAGE10_EMULATOR_ONLY_DO_NOT_PAY' functions/deda_daily_task_share_verifier.js
+          ! grep -q 'collection("admin_wallets")' functions/deda_daily_task_share_verifier.js
+          ! grep -q 'collection("admin_gift_wallets")' functions/deda_daily_task_share_verifier.js
+      - name: Verify authenticated real share documents with stage9 regression tests
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage9-shadow-rewards "node --test tests/firestore-rules/daily-share-proof-stage10.test.mjs tests/firestore-rules/daily-reward-shadow-ledger.test.mjs"
+      - name: Confirm no APK or real payout
+        run: |
+          echo 'STAGE10_SHARE_PROOF_PASS: persisted share proof and shadow ledger only, no deploy, no actual payouts'
