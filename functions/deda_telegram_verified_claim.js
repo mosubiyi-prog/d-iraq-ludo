@@ -52,7 +52,23 @@ async function claimVerifiedTelegramFollow(firestore, {
   if (!uid || !/^[A-Za-z0-9_-]{6,128}$/.test(String(uid))) {
     return {outcome: "unauthenticated"};
   }
-  const proof = verifyTelegramLogin(telegramLogin, botToken, nowMs);
+  let proof = verifyTelegramLogin(telegramLogin, botToken, nowMs);
+  let botAccount = null;
+  if (!telegramLogin) {
+    const s = await firestore.collection("deda_sessions").doc(uid).get();
+    const accountKey = String(s.data()?.accountKey || "");
+    if (!s.exists || !/^\\d{10,15}$/.test(accountKey)) {
+      return {outcome: "not-a-verified-deda-session"};
+    }
+    botAccount = accountKey;
+    const b = await firestore.collection("deda_telegram_bot_accounts")
+        .doc(accountKey).get();
+    if (!b.exists || b.data()?.accountKey !== accountKey ||
+        !/^\\d{1,20}$/.test(String(b.data()?.telegramUserId || ""))) {
+      return {outcome: "telegram-bot-not-linked"};
+    }
+    proof = {valid: true, telegramUserId: String(b.data().telegramUserId)};
+  }
   if (!proof.valid) return {outcome: "telegram-login-not-verified"};
 
   // Never trust a client-reported membership flag or reported TG identity.
