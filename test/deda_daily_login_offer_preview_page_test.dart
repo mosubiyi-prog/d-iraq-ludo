@@ -58,7 +58,12 @@ void main() {
     await tapPreview(tester);
     expect(find.byKey(const Key('loginPreviewResults')), findsOneWidget);
     final clear = find.text('مسح نتيجة المحاكاة');
+    // The preview card pushes the clear button below the 600px test screen.
+    // Scroll just as a phone user would before attempting to tap it.
+    await tester.drag(find.byType(ListView), const Offset(0, -450));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(clear);
+    await tester.pumpAndSettle();
     await tester.tap(clear);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('loginPreviewResults')), findsNothing);
