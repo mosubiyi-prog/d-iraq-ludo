@@ -36,3 +36,8 @@ HARD BLOCKERS BEFORE A REAL RELEASE:
 4. End-to-end tests, comprehensive UI regression, actual protected backend activation and owner device test are still pending.
 
 NEVER claim the four additions are complete or issue a new APK prematurely. Work may continue on backend and UI in the dev branch only. Do not deploy old full repository Firestore rules (different from actual published rules).
+
+QA UPDATE:
+- Stage1 + Stage2 + Stage4 pure Node policy regression succeeded: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37997911608
+- GM controls Firestore emulator + admin Flutter analyzer + compact responsive Arabic widget test succeeded: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37997791969
+- Current status remains NOT READY FOR APK because the backend trigger is NOT deployed, ten-second cryptographic PIN verification is NOT built, and verified Telegram real-wallet credit is NOT live.
