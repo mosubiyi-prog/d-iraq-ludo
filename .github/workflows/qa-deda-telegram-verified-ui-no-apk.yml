@@ -1,0 +1,57 @@
+name: DEDA Telegram Verified UI + Trusted Wallet - NO APK
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'lib/deda_social_task_live_service.dart'
+      - 'lib/deda_social_task_preview.dart'
+      - 'lib/deda_telegram_verified_reward_service.dart'
+      - 'tools/inject_social_task_golden_preview_2026_10_09.py'
+      - 'firestore.rules'
+      - 'test/deda_social_task_preview_test.dart'
+      - '.github/workflows/qa-deda-telegram-verified-ui-no-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-telegram-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter package dependencies
+        run: flutter pub get
+      - name: Analyze member verification and both task states
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_social_task_live_service.dart lib/deda_social_task_preview.dart lib/deda_telegram_verified_reward_service.dart
+      - name: Verify original social card and manager preview untouched
+        run: flutter test test/deda_social_task_preview_test.dart
+      - name: Assert full server-proof UI and no local diamond-mint path
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          service=Path('lib/deda_telegram_verified_reward_service.dart').read_text()
+          ui=Path('lib/deda_social_task_preview.dart').read_text()
+          rules=Path('firestore.rules').read_text()
+          assert 'dedaStartTelegramVerification' in service
+          assert 'dedaClaimVerifiedTelegramFollow' in service
+          assert 'claimVerifiedTelegramDiamonds' in ui
+          assert 'startTelegramBotVerification' in ui
+          assert "data['rewardsEnabled'] == true" in ui
+          assert "data['rewardAmount'] == 10" in ui
+          assert 'DedaDiamondsWallet.claimReward' not in ui
+          assert 'deda_diamond_gift_balances' not in service
+          assert 'server-verified-telegram-membership' in rules
+          assert 'match /deda_telegram_bot_identities/' in rules
+          print('PASS: server-verification-only Telegram UX; NO client wallet credits.')
+          PY
+      - name: Explicitly no APK or Firebase deployment
+        run: echo 'Source-only checks. No APK, Cloud Functions or Firestore rules deployed.'
