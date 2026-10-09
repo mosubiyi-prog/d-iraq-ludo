@@ -55,8 +55,11 @@ async function command(db, {actor, input, now = new Date()}) {
     if ((old?.revision ?? 0) !== expected) throw Error("revision-conflict");
     let next;
     if (op === "save") {
+      // A previously published task may be replaced by a new DRAFT for
+      // a future day; preserve the monotonic revision and publication audit.
       next = policy.saveDraft({
-        previous: old,
+        previous: old?.status === "published"
+          ? {...old, status: "cancelled"} : old,
         draft: input.draft,
         actor,
         now,
