@@ -5,6 +5,9 @@ const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {randomInt} = require("node:crypto");
+const {defineSecret} = require("firebase-functions/params");
+const {claimVerifiedTelegramFollow} = require("./deda_telegram_verified_claim.js");
+const dedaTelegramBotToken = defineSecret("DEDA_TELEGRAM_BOT_TOKEN");
 const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
 
 initializeApp();
@@ -1060,4 +1063,42 @@ exports.dedaPublishSocialTaskTrial = dedaOnSchedule({
 }, async () => {
   const result = await socialTrial.publishDue(getFirestore(), new Date());
   console.log("DEDA_SOCIAL_CONFIG_ONLY", result.outcome);
+});
+
+
+/**
+ * DEDA next launch: verified one-time Telegram membership credit.
+ * Not live without explicit Firebase Functions deployment, Bot Token secret,
+ * bot ADMIN membership in the official Telegram channel and a signed
+ * Telegram Login payload from a connected user-facing verification flow.
+ *
+ * Currently published 100327 daily-task records have rewardsEnabled=false;
+ * their ten-diamond reward remains intentionally OFF until full validation.
+ */
+exports.dedaClaimVerifiedTelegramFollow = onCall({
+  secrets: [dedaTelegramBotToken],
+  timeoutSeconds: 30,
+}, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "deda-login-required");
+  }
+  const botToken = dedaTelegramBotToken.value();
+  if (!botToken) {
+    throw new HttpsError("failed-precondition",
+        "telegram-bot-not-provisioned");
+  }
+  try {
+    return await claimVerifiedTelegramFollow(getFirestore(), {
+      uid: request.auth.uid,
+      telegramLogin: request.data?.telegramLogin,
+      botToken,
+      nowMs: Date.now(),
+    });
+  } catch (error) {
+    // No bot token, signed payload or raw Telegram profile in logs.
+    console.error("DEDA_TELEGRAM_VERIFIED_REWARD_ERROR",
+        String(error?.name || "Error"));
+    throw new HttpsError("unavailable",
+        "telegram-verification-retry-later");
+  }
 });
