@@ -37,6 +37,7 @@ jobs:
           # admin card. Use the accepted OLD admin source during reconstruction,
           # then safely restore our NEW compact/admin-toggle source afterward.
           cp lib/admin_pages.dart /tmp/deda_next_four_admin_pages.dart
+          cp firestore.rules /tmp/deda_next_four_trusted_rules.snapshot
           git fetch --no-tags origin deda-social-firestore-no-functions-100327-2026-10-09:refs/remotes/origin/deda-social-firestore-no-functions-100327-2026-10-09
           git show origin/deda-social-firestore-no-functions-100327-2026-10-09:lib/admin_pages.dart > lib/admin_pages.dart
       - uses: subosito/flutter-action@v2
@@ -54,6 +55,16 @@ jobs:
           build="flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true"
           assert src.count(marker)==1 and src.count(build)==1, "Accepted golden script unexpectedly changed"
           check="""echo '== Restore approved NEW responsive administration UI on reconstructed app =='
+          cp /tmp/deda_next_four_trusted_rules.snapshot firestore.rules
+          python3 - <<'FIRESTORE_NEXT_RELEASE'
+          from pathlib import Path
+          s=Path('firestore.rules').read_text()
+          assert s.count('match /deda_diamond_gift_balances/{publicId}')==1
+          assert 'verifiedDiamondsPersonalOwner' in s
+          assert 'match /deda_telegram_reward_audit/' in s
+          assert 'match /deda_automation_settings/' in s
+          print('PASS: next-release verified wallet, manager automation and Telegram ledger policies remain exactly once after golden reconstruction.')
+          FIRESTORE_NEXT_RELEASE
           cp /tmp/deda_next_four_admin_pages.dart lib/admin_pages.dart
           dart format lib/admin_pages.dart
           python3 - <<'ADMIN_UI_REGRESSION'
