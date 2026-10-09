@@ -106,7 +106,10 @@ function inspectSourceBoundaries(s) {
   demand(s.rules.includes("match /deda_daily_task_publication_history/"),
       "publication-history-private-guard-missing");
   for (const id of SLOT_IDS) {
-    demand(s.pub.includes(id) && s.slots.includes(id),
+    demand(
+        s.pub.includes("\n  " + id + ":") &&
+        s.slots.includes("id: '" + id + "'") &&
+        s.slots.includes("action: '" + id + "'"),
         "task-slot-contract-missing-" + id);
   }
   demand(s.slots.includes("static const int regularLoginPoints = 10;"),
