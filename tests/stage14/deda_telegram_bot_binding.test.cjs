@@ -20,7 +20,12 @@ function fakeDb(init) {
   const writes = [];
   return {
     docs, writes,
-    collection(name) {return {doc(id) {return {key: name+"/"+id};}};},
+    collection(name) {return {doc(id) {
+      const key = name+"/"+id;
+      return {key, async get() {
+        return {exists: docs.has(key), data: () => docs.get(key)};
+      }};
+    }};},
     async runTransaction(callback) {
       const changes = [];
       const tx = {
