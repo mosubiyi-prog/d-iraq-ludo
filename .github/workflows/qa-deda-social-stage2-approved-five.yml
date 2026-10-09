@@ -27,7 +27,7 @@ jobs:
       - name: Guarantee reference app and backend are untouched
         run: |
           git fetch --no-tags origin checkpoint-stage14-general-manager-tasks-review-323-2026-10-09:refs/remotes/origin/checkpoint-stage14-general-manager-tasks-review-323-2026-10-09
-          git diff --exit-code origin/checkpoint-stage14-general-manager-tasks-review-323-2026-10-09 -- lib/deda_backend.dart lib/deda_admin_task_drafts.dart lib/deda_daily_task_slots.dart lib/deda_daily_schedule_preview_service.dart functions/ firestore.rules pubspec.yaml android/
+          git diff --exit-code origin/checkpoint-stage14-general-manager-tasks-review-323-2026-10-09 -- lib/deda_backend.dart lib/deda_admin_task_drafts.dart lib/deda_daily_task_slots.dart lib/deda_daily_schedule_preview_service.dart functions/index.js functions/deda_daily_task_publisher.js functions/deda_daily_reward_shadow_ledger.js firestore.rules pubspec.yaml android/
           grep -q 'defaultValue: false' lib/deda_social_task_preview.dart
           grep -q 'if (DedaSocialTaskPreview.visible)' lib/main.dart
           ! grep -q 'index == 5 && DedaSocialTaskPreview.visible' lib/main.dart
