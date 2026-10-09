@@ -6,6 +6,7 @@ on:
       - deda-next-four-items-stage0-2026-10-10
     paths:
       - 'lib/deda_social_task_live_service.dart'
+      - 'lib/deda_admin_social_task_preview_page.dart'
       - 'lib/deda_social_task_preview.dart'
       - 'lib/deda_telegram_verified_reward_service.dart'
       - 'tools/inject_social_task_golden_preview_2026_10_09.py'
@@ -31,7 +32,7 @@ jobs:
         run: flutter pub get
       - name: Analyze member verification and both task states
         run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_social_task_live_service.dart lib/deda_social_task_preview.dart lib/deda_telegram_verified_reward_service.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_social_task_live_service.dart lib/deda_social_task_preview.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart
       - name: Verify original social card and manager preview untouched
         run: flutter test test/deda_social_task_preview_test.dart
       - name: Assert full server-proof UI and no local diamond-mint path
@@ -40,11 +41,15 @@ jobs:
           from pathlib import Path
           service=Path('lib/deda_telegram_verified_reward_service.dart').read_text()
           ui=Path('lib/deda_social_task_preview.dart').read_text()
+          admin=Path('lib/deda_admin_social_task_preview_page.dart').read_text()
           rules=Path('firestore.rules').read_text()
           assert 'dedaStartTelegramVerification' in service
           assert 'dedaClaimVerifiedTelegramFollow' in service
           assert 'claimVerifiedTelegramDiamonds' in ui
           assert 'startTelegramBotVerification' in ui
+          assert 'dedaTelegramVerifiedRewardReadiness' in admin
+          assert 'socialEnableVerifiedTelegramReward' in admin
+          assert 'socialDisableVerifiedTelegramReward' in admin
           assert "data['rewardsEnabled'] == true" in ui
           assert "data['rewardAmount'] == 10" in ui
           assert 'DedaDiamondsWallet.claimReward' not in ui
