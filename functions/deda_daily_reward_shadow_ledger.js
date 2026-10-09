@@ -81,7 +81,13 @@ function validFixture(event, config, uid, slotId, dayId, trustedNow) {
       event.publicationId !== config.publicationId ||
       event.sourcePreviewRevision !== config.sourcePreviewRevision ||
       event.eventState !== "verified" ||
-      event.fixtureSource !== "stage9_emulator_server_fixture" ||
+      !(
+        event.fixtureSource === "stage9_emulator_server_fixture" ||
+        (event.fixtureSource === "stage10_checked_personal_share" &&
+         slotId === "share_personal_location" &&
+         typeof event.sourceShareId === "string" &&
+         /^[A-Za-z0-9_-]{6,60}$/.test(event.sourceShareId))
+      ) ||
       event.serverVerified !== true) return false;
   const at = asMillis(event.verifiedAt);
   return Number.isFinite(at) &&
