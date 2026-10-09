@@ -6,7 +6,8 @@
 - نسخة الملاحة المستقرة المقبولة: **100319**؛ مرجع `backup-deda-100319-user-accepted-2026-10-08`.
 - أساس بناء المرحلة 14: `backup-admin-daily-slots-stage13-security-readiness-qa-2026-10-09`، commit `3b988c7c93ff69e6b1fd1d41dde3912685ed1464`.
 - فرع البناء الخاص بالاختبار: `admin-daily-slots-stage14-signed-qa-apk-2026-10-09`.
-- GitHub Actions (إعادة البناء بعد تعديل مؤقت آمن): https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37867375150
+- GitHub Actions (الاختبار الثالث بعد السماح بملاحظات تنسيق Dart فقط): https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37868453917
+- الفحص الثاني run `37867375150` أكمل APK الموقّع ونجح 19 اختبار Flutter بعد إعادة بناء الملاحة، لكن توقف على 10 ملاحظات Dart `info/prefer_interpolation_to_compose_strings` غير مؤثرة، قبل رفع Artifact. تم تغيير **فحص ما بعد البناء فقط** إلى `flutter analyze --no-fatal-infos` مع بقاء تحذيرات وأخطاء التحليل حاسمة. فحص ما قبل البناء ما زال صارمًا.
 - الفحص الأول run `37867144779` توقف بسبب انتظار سكربت الملاحة علامة `initState` القديمة بعدما أضيفت تهيئة معاينة المرحلة 6؛ لم يحدث بناء APK ولم يُغيّر أي مستخدم. لذلك اتخذنا مسار الرجوع المؤقت للملف الأصلي في مساحة البناء فقط.
 - رقم نسخة APK الاختبارية المقصودة: **100323**، أكبر من آخر APK قديم 100322 لتسهيل التثبيت إذا كان التوقيع متوافقًا.
 
