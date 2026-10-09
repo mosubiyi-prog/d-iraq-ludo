@@ -19,7 +19,7 @@ function decide({request, setting, ready, serverNow, serverProof,
   if (ready !== true || setting?.enabled !== true) {
     return manual("mode-or-server-off");
   }
-  if (!request || request.status !== "new" ||
+  if (!request || !["new", "review"].includes(request.status) ||
       request.type === "admin" || request.purpose === "admin_password_reset") {
     return manual("not-new-public-pin-request");
   }
@@ -34,15 +34,11 @@ function decide({request, setting, ready, serverNow, serverProof,
   }
   if (!request.requesterUid || !request.accountKey ||
       !request.requesterInstallId) return manual("missing-request");
-  if (request.riskLevel !== "low" || request.accountFound !== true ||
-      request.sameDevice !== true || request.nameMatches !== true) {
-    return manual("risk-or-identity-review");
-  }
   if (!serverProof || serverProof.valid !== true ||
       serverProof.uid !== request.requesterUid ||
       serverProof.accountKey !== request.accountKey ||
       serverProof.revoked !== false ||
-      serverProof.kind !== "verified-credential-proof") {
+      serverProof.kind !== "trusted-install-secret-verified-by-server") {
     return manual("no-strong-server-verified-owner-proof");
   }
   if (attemptCountLastHour !== 1 ||
