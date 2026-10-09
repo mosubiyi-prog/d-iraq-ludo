@@ -118,7 +118,7 @@ exports.onSupportRequestUpdated = onDocumentUpdated(
 const {processNewPlace} = require("./deda_place_auto_approval_worker.js");
 
 exports.onPlaceRequestCreated = onDocumentCreated(
-    "place_requests/{requestId}",
+    {document: "place_requests/{requestId}", timeoutSeconds: 120},
     async (event) => {
       const data = event.data && event.data.data();
       if (!data) return;
@@ -200,7 +200,7 @@ exports.onPlaceRequestUpdated = onDocumentUpdated(
 );
 
 exports.onRecoveryRequestCreated = onDocumentCreated(
-    "recovery_requests/{requestId}",
+    {document: "recovery_requests/{requestId}", timeoutSeconds: 90},
     async (event) => {
       const data = event.data && event.data.data();
       if (!data) return;
