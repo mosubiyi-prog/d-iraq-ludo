@@ -1,0 +1,51 @@
+name: DEDA Stage 12 Manager Login Preview UI - NO PRODUCTION
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage12-control-preview-2026-10-09
+    paths:
+      - 'lib/deda_admin_task_management_page.dart'
+      - 'lib/deda_daily_login_offer_preview_page.dart'
+      - 'lib/deda_daily_login_offer_preview_policy.dart'
+      - 'test/deda_daily_login_offer_preview_page_test.dart'
+      - 'test/deda_daily_login_offer_preview_policy_test.dart'
+      - '.github/workflows/qa-deda-stage12-manager-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  manager-only-safe-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - name: Checkout isolated stage12
+        uses: actions/checkout@v4
+      - name: Guard user app, backend, Android, security and rewards
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage11-login-seasonal-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage11-login-seasonal-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage11-login-seasonal-qa-2026-10-09 -- lib/main.dart lib/deda_backend.dart lib/deda_daily_published_tasks.dart lib/deda_daily_schedule_preview_service.dart functions/ firestore.rules android pubspec.yaml
+      - name: Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter packages
+        run: flutter pub get
+      - name: Strict analyzer for manager preview and existing administration
+        run: flutter analyze lib/deda_admin_task_management_page.dart lib/deda_daily_login_offer_preview_page.dart lib/deda_daily_login_offer_preview_policy.dart test/deda_daily_login_offer_preview_page_test.dart test/deda_daily_login_offer_preview_policy_test.dart
+      - name: Test interactive manager preview and original task controls
+        run: |
+          flutter test test/deda_daily_login_offer_preview_policy_test.dart test/deda_daily_login_offer_preview_page_test.dart test/deda_daily_task_slots_test.dart test/deda_daily_schedule_policy_test.dart test/deda_admin_task_drafts_test.dart
+      - name: Verify no saving, payout or production integration
+        run: |
+          ! grep -q 'cloud_firestore' lib/deda_daily_login_offer_preview_page.dart
+          ! grep -q 'cloud_functions' lib/deda_daily_login_offer_preview_page.dart
+          ! grep -q 'FirebaseFirestore' lib/deda_daily_login_offer_preview_page.dart
+          ! grep -q 'claimTaskReward' lib/deda_daily_login_offer_preview_page.dart
+          ! grep -q 'claimDailyLoginReward' lib/deda_daily_login_offer_preview_page.dart
+          ! grep -q 'functions/index.js' lib/deda_daily_login_offer_preview_page.dart
+          grep -q 'stage12LoginPreviewOpen' lib/deda_admin_task_management_page.dart
+          grep -q 'canGrantRewards => false' lib/deda_daily_login_offer_preview_policy.dart
+          echo 'STAGE12_SAFE: preview is manager-only and local; old login and wallets unchanged'
