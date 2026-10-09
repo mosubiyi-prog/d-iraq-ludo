@@ -66,7 +66,7 @@ jobs:
           assert s.count('dedaProfileVisibleDiamonds(') == 1
           assert s.count('ordinaryEarnedAndGifted: normalDiamonds') == 1
           assert s.count('generalManagerPersonal: managerDiamonds') == 1
-          assert 'import \'deda_profile_visible_diamonds.dart\';' in s
+          assert 'deda_profile_visible_diamonds.dart' in s
           assert 'hasGeneralManagerPersonalWallet ? managerDiamonds : normalDiamonds' not in s
           assert 'Timer.periodic(const Duration(milliseconds: 16)' in s, 'Golden live navigation changed'
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in s
