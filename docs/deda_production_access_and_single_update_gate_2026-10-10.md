@@ -32,3 +32,13 @@ Wait for it to finish and review logs before claiming full golden reconstruction
 - Prepare a Play-ready .aab only after owner approval of the verified APK. Explicitly verify signing, increasing versionCode, security/Data Safety/privacy disclosures and Google Play review. Do not assume production is already live.
 
 No production Firebase deploy, no APK/AAB or public release has been initiated by this checkpoint.
+
+## Golden rebuild integration lesson
+The proven navigation APK is assembled by replaying many pre-100318 patch scripts, NOT by directly building checked-in lib/main.dart. Those older scripts still expect the ORIGINAL admin card during 100278/100279. When preparing the eventual single signed next-release APK:
+1. Save NEW development lib/admin_pages.dart safely before restoring golden source.
+2. Reconstruct using accepted 100327-era admin_pages.dart and golden user main.dart, allowing old 100278/100279 style scripts to complete.
+3. AFTER legacy navigation reconstruction, restore NEW compact admin_pages.dart from development branch, inject manager-only automatic-place and trusted-device PIN controls.
+4. Run tools/fix_profile_rewarded_diamond_display_next_release.py on the FULLY reconstructed user lib/main.dart, then dart format and analyze.
+5. Preserve the accepted 100327 Firestore-gated social tasks display card injection. Never silently drop original social task, friends, profile, ads or eight daily tasks.
+6. Build one signed internal release APK (owner testing only), test all four scope items and earned diamond number, then seek owner approval before creating Google Play Production AAB. Do NOT sign with the CI-generated ephemeral QA certificate.
+A separate NO-APK GitHub Action validates the golden reconstruction plus final UI and profile patch independently of a release.
