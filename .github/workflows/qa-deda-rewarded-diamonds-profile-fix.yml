@@ -1,0 +1,36 @@
+name: DEDA Rewarded-Ad Diamonds Profile Regression - NO APK
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'lib/deda_profile_visible_diamonds.dart'
+      - 'tools/fix_profile_rewarded_diamond_display_next_release.py'
+      - 'test/deda_profile_visible_diamonds_test.dart'
+      - 'tests/stage14/test_profile_diamonds_patch.py'
+      - '.github/workflows/qa-deda-rewarded-diamonds-profile-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-visibility-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify post-build safe patch against reconstructed manager profile snippet
+        run: python3 -m unittest -v tests/stage14/test_profile_diamonds_patch.py
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Flutter isolated wallet-display regression tests
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos lib/deda_profile_visible_diamonds.dart
+          flutter test test/deda_profile_visible_diamonds_test.dart
+      - name: Explicitly no APK or Firebase deployment
+        run: echo 'Reward display only; DEDA 100327 unchanged and no new APK built.'
