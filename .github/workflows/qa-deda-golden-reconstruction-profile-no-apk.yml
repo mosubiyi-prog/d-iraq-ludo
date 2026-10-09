@@ -78,16 +78,22 @@ jobs:
           Path('/tmp/deda_golden_profile_no_apk.sh').write_text(src)
           PY
       - name: Reconstruct full accepted navigation + rewards profile, analyze but DO NOT BUILD
-        # The original preflight expects a keystore file to exist. Supply only
-        # a disposable NON-KEY placeholder; this job explicitly strips ALL APK
-        # build steps and MUST NEVER sign an app or use production secrets.
-        env:
-          DEDA_KEYSTORE_BASE64: 'Q0ktT05MWS1OT1QtQS1TSUdOSU5HLUtFWQ=='
-          DEDA_KEY_ALIAS: 'CI-NOT-A-KEY'
-          DEDA_KEY_PASSWORD: 'CI-DO-NOT-SIGN'
-          DEDA_STORE_PASSWORD: 'CI-DO-NOT-SIGN'
+        # The old 100267 preflight runs "keytool -list" to validate a JKS.
+        # Create a temporary, 1-day QA ONLY keystore IN MEMORY for that check,
+        # never use the production signing secret, never sign or build any APK.
         run: |
-          echo 'QA placeholder only. DO NOT build/sign any app.'
+          set -euo pipefail
+          keytool -genkeypair -noprompt -alias qa-one-day-never-release \
+            -keyalg RSA -keysize 2048 -validity 1 -storetype JKS \
+            -keystore /tmp/deda-qa-one-day.jks \
+            -storepass QAOnlyTemporaryPass123 -keypass QAOnlyTemporaryPass123 \
+            -dname 'CN=DEDA QA Only, OU=Not for Releases, O=Internal CI, C=IQ' > /dev/null 2>&1
+          export DEDA_KEYSTORE_BASE64="$(base64 -w0 /tmp/deda-qa-one-day.jks)"
+          export DEDA_KEY_ALIAS='qa-one-day-never-release'
+          export DEDA_KEY_PASSWORD='QAOnlyTemporaryPass123'
+          export DEDA_STORE_PASSWORD='QAOnlyTemporaryPass123'
+          rm -f /tmp/deda-qa-one-day.jks
+          echo 'QA-only ephemeral key supports legacy keytool preflight; no APK.'
           bash /tmp/deda_golden_profile_no_apk.sh
       - name: Verify ad reward profile math and no profile wallet debits
         run: |
