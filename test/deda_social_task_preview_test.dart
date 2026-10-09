@@ -50,6 +50,24 @@ void main() {
     expect(opened, 1);
   });
 
+  testWidgets('compact social subtitle is not truncated at phone width',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: Center(child: SizedBox(
+        width: 320,
+        child: DedaSocialTaskCompactCard(
+          isArabic: true, onTap: () {},
+        ),
+      ))),
+    ));
+    final subtitle = find.text('تابع صفحاتنا وتفاعل مع المنشورات والفيديوهات');
+    expect(subtitle, findsOneWidget);
+    final widget = tester.widget<Text>(subtitle);
+    expect(widget.overflow, TextOverflow.visible);
+    final rect = tester.getRect(find.byKey(const Key('socialTaskCompactCard')));
+    expect(rect.height, lessThan(94));
+  });
+
   testWidgets('manager editor begins with platform selector', (tester) async {
     await tester.pumpWidget(const MaterialApp(
       home: DedaAdminSocialTaskPreviewPage(isArabic: true),
@@ -57,5 +75,12 @@ void main() {
     expect(find.byKey(const Key('socialPlatformDropdown')), findsOneWidget);
     expect(find.text('صفحة فيس بوك'), findsOneWidget);
     expect(find.byKey(const Key('socialActionDropdown')), findsOneWidget);
+    // Exercise the settings available further down the scrollable form.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('socialRewardedAdDoubleToggle')),
+      300.0, scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('socialRewardedAdDoubleToggle')),
+        findsOneWidget);
   });
 }
