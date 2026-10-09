@@ -12,6 +12,7 @@ import 'admin_recovery_pages.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 import 'deda_admin_task_management_page.dart';
+import 'deda_admin_automation_toggle.dart';
 import 'deda_recovery_admin.dart';
 import 'prize_winner_pages.dart';
 
@@ -1437,7 +1438,17 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                                   t('استرجاع الدخول', 'Sign-in recovery'),
                                 ),
                               ),
-                              body: DedaRecoveryAdminList(isArabic: ar),
+                              body: Column(
+                                children: [
+                                  DedaAdminAutomationToggle(
+                                    isArabic: ar,
+                                    kind: 'pin_auto_recovery',
+                                  ),
+                                  Expanded(child: DedaRecoveryAdminList(
+                                    isArabic: ar,
+                                  )),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -1645,13 +1656,26 @@ class _AdminRequestsPage extends StatelessWidget {
             ),
         ],
       ),
-      body: _RequestList(
-        isArabic: isArabic,
-        collection: collection,
-        adminProfile: adminProfile,
-        stream: isSupport
-            ? DedaBackend.supportRequestsForAdmin(adminProfile)
-            : DedaBackend.placeRequestsForAdmin(adminProfile),
+      body: Column(
+        children: [
+          if (!isSupport &&
+              DedaBackend.normalizeAdminRole(adminProfile['role']) ==
+                  'general_manager')
+            DedaAdminAutomationToggle(
+              isArabic: isArabic,
+              kind: 'place_auto_approval',
+            ),
+          Expanded(
+            child: _RequestList(
+              isArabic: isArabic,
+              collection: collection,
+              adminProfile: adminProfile,
+              stream: isSupport
+                  ? DedaBackend.supportRequestsForAdmin(adminProfile)
+                  : DedaBackend.placeRequestsForAdmin(adminProfile),
+            ),
+          ),
+        ],
       ),
     );
   }
