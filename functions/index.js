@@ -932,3 +932,39 @@ exports.deleteAdminMember = onCall(async (request) => {
   } catch (_) {}
   return {success: true};
 });
+
+
+/**
+ * 100326 owner-only trial: social-task CONFIG publication.
+ * Reward verification, wallet debits/credits, and rewarded-ad SSV remain off.
+ * This function is inert until an explicitly reviewed Firebase deployment.
+ */
+const {onSchedule: dedaOnSchedule} = require("firebase-functions/v2/scheduler");
+const socialTrial = require("./deda_social_trial_runtime.js");
+exports.dedaManageSocialTaskTrial = onCall(async (request) => {
+  const actor = await requireGeneralManager(request);
+  try {
+    return await socialTrial.command(getFirestore(), {
+      actor: {
+        uid: actor.uid,
+        role: actor.role,
+        active: true,
+        serverVerified: true,
+      },
+      input: request.data,
+      now: new Date(),
+    });
+  } catch (error) {
+    const message = String(error.message || "invalid-task-request");
+    const conflict = message === "revision-conflict";
+    throw new HttpsError(conflict ? "aborted" : "invalid-argument", message);
+  }
+});
+exports.dedaPublishSocialTaskTrial = dedaOnSchedule({
+  schedule: "3 0 * * *",
+  timeZone: "Asia/Baghdad",
+  retryCount: 0,
+}, async () => {
+  const result = await socialTrial.publishDue(getFirestore(), new Date());
+  console.log("DEDA_SOCIAL_CONFIG_ONLY", result.outcome);
+});
