@@ -1186,3 +1186,38 @@ exports.dedaTelegramBotWebhook = onRequest({
   }
   res.status(200).send("OK");
 });
+
+
+/**
+ * Live reward activation stays behind strict GM authorization and a real
+ * Bot API administrator check. Historical unverified task labels remain OFF.
+ * Supports immediate GM emergency shutdown even if Telegram is unavailable.
+ */
+const telegramRewardActivation = require("./deda_telegram_reward_activation.js");
+exports.dedaManageTelegramVerifiedReward = onCall({
+  secrets: [dedaTelegramBotToken],
+  timeoutSeconds: 30,
+}, async (request) => {
+  const actor = await requireGeneralManager(request);
+  if (actor.role !== "general_manager") {
+    throw new HttpsError("permission-denied", "strict-manager-required");
+  }
+  const op = String(request.data?.op || "");
+  if (!["enable", "disable"].includes(op)) {
+    throw new HttpsError("invalid-argument", "unsupported-operation");
+  }
+  if (op === "enable" && !dedaTelegramBotToken.value()) {
+    throw new HttpsError("failed-precondition", "bot-not-configured");
+  }
+  try {
+    return await telegramRewardActivation.manageVerifiedTelegramReward(
+        getFirestore(), {
+          actor: {uid: actor.uid, role: actor.role, active: true},
+          botToken: dedaTelegramBotToken.value(), op,
+        });
+  } catch (error) {
+    console.error("DEDA_TELEGRAM_REWARD_ACTIVATION_ERROR",
+        String(error?.name || "Error"));
+    throw new HttpsError("unavailable", "telegram-reward-activation-failed");
+  }
+});
