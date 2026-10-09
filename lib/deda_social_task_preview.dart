@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'deda_social_task_live_service.dart';
+import 'deda_telegram_verified_reward_service.dart';
 
 /// Isolated social-task UI: never enters the existing eight task IDs, Firebase,
 /// or the reward ledger. The release build keeps this preview disabled.
@@ -140,9 +141,10 @@ class DedaSocialTaskCompactCard extends StatelessWidget {
 /// No offline future cache, payout, ad claim, or client-side unlock.
 class DedaSocialTaskUserPreviewPage extends StatefulWidget {
   const DedaSocialTaskUserPreviewPage({
-    super.key, required this.isArabic,
+    super.key, required this.isArabic, this.onDiamondsGranted,
   });
   final bool isArabic;
+  final Future<void> Function()? onDiamondsGranted;
 
   @override
   State<DedaSocialTaskUserPreviewPage> createState() =>
@@ -153,6 +155,8 @@ class _DedaSocialTaskUserPreviewPageState
     extends State<DedaSocialTaskUserPreviewPage> {
   Future<Map<String, dynamic>?>? _taskFuture;
   final _service = const DedaLiveSocialTaskService();
+  final _telegram = const DedaTelegramVerifiedRewardService();
+  bool _verificationBusy = false;
 
   String t(String ar, String en) => widget.isArabic ? ar : en;
 
