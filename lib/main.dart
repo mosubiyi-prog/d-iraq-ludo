@@ -22,6 +22,7 @@ import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
+import 'deda_social_task_preview.dart';
 import 'places_service.dart';
 import 'prize_winner_pages.dart';
 import 'deda_team_page.dart';
@@ -12782,7 +12783,9 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                             (index) {
                               final task = tasks[index];
                               final taskId = DedaTaskIds.weekly[index];
-                              return FutureBuilder<List<bool>>(
+                              return Column(
+                                children: [
+                                  FutureBuilder<List<bool>>(
                                 future: Future.wait<bool>([
                                   DedaTaskEngine.isTaskCompleted(taskId),
                                   DedaTaskEngine.isTaskRewardClaimed(taskId),
@@ -12825,6 +12828,24 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
                                     ),
                                   );
                                 },
+                                  ),
+                                  if (index == 5 && DedaSocialTaskPreview.visible)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6, bottom: 6),
+                                      child: DedaSocialTaskCompactCard(
+                                        isArabic: DedaLanguageState.isArabic,
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute<void>(
+                                            builder: (_) =>
+                                                DedaSocialTaskUserPreviewPage(
+                                                  isArabic: DedaLanguageState.isArabic,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               );
                             },
                           ),
