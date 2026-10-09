@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:deda_guide/deda_social_task_preview.dart';
-import 'package:deda_guide/deda_admin_social_task_preview_page.dart';
+import 'package:d_iraq_ludo/deda_social_task_preview.dart';
+import 'package:d_iraq_ludo/deda_admin_social_task_preview_page.dart';
 
 void main() {
   test('platform selection is the six user-approved options in order', () {
