@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/qa-deda-social-trial-backend.yml'
       - 'functions/deda_social_trial_runtime.js'
+      - 'functions/index.js'
       - 'functions/deda_social_task_stage2.js'
       - 'firestore.rules'
       - 'tests/stage2_social/trial_runtime.test.cjs'
@@ -37,6 +38,7 @@ jobs:
       - name: Static server guards
         run: |
           node --check functions/index.js
+          grep -q 'actor.data.role !== "general_manager"' functions/index.js
           node --check functions/deda_social_trial_runtime.js
           node --check tests/stage2_social/trial_runtime.test.cjs
           grep -q 'rewardsEnabled: false' functions/deda_social_trial_runtime.js
