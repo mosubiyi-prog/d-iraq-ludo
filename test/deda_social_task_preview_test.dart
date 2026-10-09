@@ -73,7 +73,7 @@ void main() {
       home: DedaAdminSocialTaskPreviewPage(isArabic: true),
     ));
     expect(find.byKey(const Key('socialPlatformDropdown')), findsOneWidget);
-    expect(find.text('صفحة فيس بوك'), findsOneWidget);
+    expect(find.text('تلي جرام'), findsOneWidget);
     expect(find.byKey(const Key('socialActionDropdown')), findsOneWidget);
     // Exercise the settings available further down the scrollable form.
     await tester.scrollUntilVisible(
