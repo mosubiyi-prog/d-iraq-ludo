@@ -1777,6 +1777,310 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Stage 100327: Firestore-only Telegram task scheduling. Client can
+    // NEVER earn rewards from these documents.
+    function strictSocialManager() {
+      return isAdmin() && adminData().keys().hasAll(['role'])
+        && adminData().role == 'general_manager';
+    }
+    function validSocialDraft(d) {
+      return d.keys().hasOnly([
+          'platform','action','title','url','rewardUnit','rewardAmount',
+          'doubleWithRewardedAd','otherPlatform','otherAction',
+          'rewardsEnabled','status','revision','scheduledDay','activateAt',
+          'createdByUid','createdAt','updatedByUid','updatedAt'])
+        && d.keys().hasAll([
+          'platform','action','title','url','rewardUnit','rewardAmount',
+          'doubleWithRewardedAd','otherPlatform','otherAction',
+          'rewardsEnabled','status','revision','scheduledDay','activateAt',
+          'createdByUid','createdAt','updatedByUid','updatedAt'])
+        && d.platform == 'telegram' && d.action == 'follow'
+        && d.title is string && d.title.size() >= 3 && d.title.size() <= 80
+        && d.url is string
+        && d.url.matches('^https://t[.]me/[A-Za-z0-9_]{5,32}
+      // Callable-only writes. Never expose administrative drafts to users.
+      allow read, write: if false;
+    }
+    match /deda_social_task_audit/{auditId} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+    match /deda_social_task_public/{taskId} {
+      // Published configuration only; clients cannot grant rewards.
+      allow get, list: if signedIn() && taskId == 'featured';
+      allow create, update, delete: if false;
+    }
+
+    match /admin_audit/{auditId} {
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+        && d.rewardUnit in ['points','coins','diamonds']
+        && d.rewardAmount is int && d.rewardAmount >= 1
+        && d.rewardAmount <= 5000
+        && d.doubleWithRewardedAd is bool
+        && d.otherPlatform == '' && d.otherAction == ''
+        && d.rewardsEnabled == false && d.revision is int
+        && d.status in ['draft','scheduled','cancelled']
+        && d.scheduledDay is string
+        && (d.activateAt == null || d.activateAt is timestamp)
+        && d.createdByUid is string && d.createdAt is timestamp
+        && d.updatedByUid == request.auth.uid && d.updatedAt == request.time;
+    }
+    match /deda_social_direct_drafts/{draftId} {
+      allow get: if strictSocialManager() && draftId == 'featured';
+      allow list, delete: if false;
+      allow create: if strictSocialManager() && draftId == 'featured'
+        && validSocialDraft(request.resource.data)
+        && request.resource.data.status == 'draft'
+        && request.resource.data.revision == 1
+        && request.resource.data.scheduledDay == ''
+        && request.resource.data.activateAt == null
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if strictSocialManager() && draftId == 'featured'
+        && validSocialDraft(request.resource.data)
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1
+        && (
+          (request.resource.data.status == 'draft'
+            && request.resource.data.scheduledDay == ''
+            && request.resource.data.activateAt == null
+            && (resource.data.status in ['draft','cancelled']
+              || (resource.data.status == 'scheduled'
+                && resource.data.activateAt <= request.time)))
+          || (request.resource.data.status == 'scheduled'
+            && resource.data.status == 'draft'
+            && request.resource.data.scheduledDay.matches(
+              '^20[0-9]{2}-[0-9]{2}-[0-9]{2}
+      // Callable-only writes. Never expose administrative drafts to users.
+      allow read, write: if false;
+    }
+    match /deda_social_task_audit/{auditId} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+    match /deda_social_task_public/{taskId} {
+      // Published configuration only; clients cannot grant rewards.
+      allow get, list: if signedIn() && taskId == 'featured';
+      allow create, update, delete: if false;
+    }
+
+    match /admin_audit/{auditId} {
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+            && request.resource.data.activateAt is timestamp
+            && request.resource.data.activateAt > request.time
+            && request.resource.data.activateAt <=
+              request.time + duration.value(31,'d')
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status','revision','scheduledDay','activateAt',
+                'updatedAt','updatedByUid']))
+          || (request.resource.data.status == 'cancelled'
+            && resource.data.status == 'scheduled'
+            && resource.data.activateAt > request.time
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status','revision','updatedAt','updatedByUid']))
+        );
+    }
+    match /deda_social_direct_days/{dayId} {
+      allow get: if strictSocialManager() || (
+        signedIn() && resource.data.status == 'scheduled'
+        && resource.data.rewardsEnabled == false
+        && resource.data.activateAt <= request.time
+        && request.time < resource.data.activateAt + duration.value(1,'d'));
+      allow list: if strictSocialManager();
+      allow delete: if false;
+      allow create: if strictSocialManager()
+        && request.resource.data.keys().hasOnly([
+          'dayId','year','month','day','activateAt','status','revision',
+          'platform','action','title','url','rewardUnit','rewardAmount',
+          'doubleWithRewardedAd','rewardsEnabled','rewardClaimMode',
+          'createdByUid','updatedByUid','createdAt','updatedAt'])
+        && request.resource.data.keys().hasAll([
+          'dayId','year','month','day','activateAt','status','revision',
+          'platform','action','title','url','rewardUnit','rewardAmount',
+          'doubleWithRewardedAd','rewardsEnabled','rewardClaimMode',
+          'createdByUid','updatedByUid','createdAt','updatedAt'])
+        && request.resource.data.dayId == dayId
+        && dayId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}
+      // Callable-only writes. Never expose administrative drafts to users.
+      allow read, write: if false;
+    }
+    match /deda_social_task_audit/{auditId} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+    match /deda_social_task_public/{taskId} {
+      // Published configuration only; clients cannot grant rewards.
+      allow get, list: if signedIn() && taskId == 'featured';
+      allow create, update, delete: if false;
+    }
+
+    match /admin_audit/{auditId} {
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+        && request.resource.data.year is int
+        && request.resource.data.month is int
+        && request.resource.data.day is int
+        && request.resource.data.year >= 2026
+        && request.resource.data.year <= 2100
+        && request.resource.data.month >= 1
+        && request.resource.data.month <= 12
+        && request.resource.data.day >= 1
+        && request.resource.data.day <= 31
+        && request.resource.data.activateAt ==
+          timestamp.date(request.resource.data.year,
+            request.resource.data.month,request.resource.data.day)
+          - duration.value(3,'h')
+        && request.resource.data.activateAt > request.time
+        && request.resource.data.activateAt <=
+          request.time + duration.value(31,'d')
+        && request.resource.data.status == 'scheduled'
+        && request.resource.data.revision == 1
+        && request.resource.data.platform == 'telegram'
+        && request.resource.data.action == 'follow'
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.url is string
+        && request.resource.data.url.matches(
+          '^https://t[.]me/[A-Za-z0-9_]{5,32}
+      // Callable-only writes. Never expose administrative drafts to users.
+      allow read, write: if false;
+    }
+    match /deda_social_task_audit/{auditId} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+    match /deda_social_task_public/{taskId} {
+      // Published configuration only; clients cannot grant rewards.
+      allow get, list: if signedIn() && taskId == 'featured';
+      allow create, update, delete: if false;
+    }
+
+    match /admin_audit/{auditId} {
+      allow read: if hasAdminPermission('viewAudit')
+        && !isProvinceAgent();
+      allow create: if isAdmin()
+        && request.resource.data.adminUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /admin_history/{uid} {
+      allow read: if isGeneralManager();
+      allow write: if false;
+    }
+
+    match /system_counters/{counterId} {
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+        && request.resource.data.rewardUnit in ['points','coins','diamonds']
+        && request.resource.data.rewardAmount is int
+        && request.resource.data.rewardAmount >= 1
+        && request.resource.data.rewardAmount <= 5000
+        && request.resource.data.doubleWithRewardedAd is bool
+        && request.resource.data.rewardsEnabled == false
+        && request.resource.data.rewardClaimMode ==
+          'blocked-until-trusted-proof-and-ssv-ledger'
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/deda_social_direct_drafts/featured)
+          .data.status == 'scheduled'
+        && getAfter(/databases/$(database)/documents/deda_social_direct_drafts/featured)
+          .data.scheduledDay == dayId
+        && getAfter(/databases/$(database)/documents/deda_social_direct_drafts/featured)
+          .data.activateAt == request.resource.data.activateAt
+        && getAfter(/databases/$(database)/documents/deda_social_direct_drafts/featured)
+          .data.title == request.resource.data.title;
+      allow update: if strictSocialManager()
+        && resource.data.status == 'scheduled'
+        && resource.data.activateAt > request.time
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status','revision','updatedByUid','updatedAt']);
+    }
+
     match /deda_social_admin_state/{taskId} {
       // Callable-only writes. Never expose administrative drafts to users.
       allow read, write: if false;
