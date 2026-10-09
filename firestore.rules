@@ -2019,6 +2019,10 @@ service cloud.firestore {
       allow get: if directSocialAdmin();
       allow list, write: if false;
     }
+    match /deda_telegram_reward_activation_audit/{auditId} {
+      allow get: if directSocialAdmin();
+      allow list, write: if false;
+    }
 
     match /deda_social_admin_state/{taskId} {
       // Callable-only writes. Never expose administrative drafts to users.
