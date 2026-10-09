@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {manageVerifiedTelegramReward} =
+const {manageVerifiedTelegramReward, checkTelegramWebhookReady} =
   require("../../functions/deda_telegram_reward_activation.js");
 
 const NOW = Date.parse("2026-10-10T09:00:00Z");
@@ -90,6 +90,28 @@ test("wrong currency or amount cannot be enabled even by GM", async () => {
       {...allowed,op:"enable"})).outcome,
     "day-not-approved-for-10-diamonds");
     assert.equal(db.writes.length,0);
+  }
+});
+
+
+test("payout readiness rejects unrelated and insecure Telegram webhook", async () => {
+  const request = (url) => (async () => ({
+    ok: true, async json() {return {ok:true, result:{url}};},
+  }));
+  for(const url of [
+    "",
+    "http://us-central1-demo.cloudfunctions.net/dedaTelegramBotWebhook",
+    "https://not-firebase.example/dedaTelegramBotWebhook",
+    "https://us-central1-demo.cloudfunctions.net/notDedaTelegramBotWebhook",
+    "https://us-central1-demo.cloudfunctions.net/dedaTelegramBotWebhook?steal=1",
+  ]) {
+    assert.equal(await checkTelegramWebhookReady(BOT, request(url)), false);
+  }
+  for(const url of [
+    "https://us-central1-demo.cloudfunctions.net/dedaTelegramBotWebhook",
+    "https://dedatelegrambotwebhook-42.a.run.app/",
+  ]) {
+    assert.equal(await checkTelegramWebhookReady(BOT, request(url)), true);
   }
 });
 
