@@ -133,3 +133,22 @@ NEW UNRESOLVED DEPENDENCIES:
 5. New place/recovery Cloud Functions triggers have bounded explicit 120s/90s function timeouts to cover 30-second/10-second waits safely.
 
 OWNER DECISION: pause all other Google Play work until this ONE integrated version is tested and approved; only THEN prepare public Production upload. Granted Production access is not actual publication.
+
+
+## Follow-up QA checkpoint — full NEXT version code integrated successfully (source only)
+
+**Verified green end-to-end**:
+- Reconstructed the genuine accepted 100319/100327 navigation with all patch scripts, restored NEW compact GM admin and auto controls, applied real +3 rewarded-ad diamonds profile display, **injected actual Telegram user card and success wallet refresh inside final lib/main.dart**, and ran Flutter analyze & widget tests. NO APK built: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38006500534
+- Live Firestore Security Rules emulator now passes adversarial tests: deny public/employee/GM direct spoof of private bot start token, Telegram identity, one-time ledgers; only active GM can read audit; legitimate personal wallet may be read by owner with authenticated DEDA session and reserved personal ID; strangers cannot fake a matching sharePersonalId to read/increase another wallet. NO rules deployed: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38006641128
+- Trusted 10-diamond Node bot/user/manager policy and full private Telegram nonce flow pass CI: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38006720221
+- Safety improvements after QA: bot /start handler rechecks currently ACTIVE directory and DEDA session at callback even after link issued; reward ON readiness now also checks deployed Firebase Telegram webhook via Telegram getWebhookInfo (not merely bot admin); automated place certificate dates match Baghdad midnight (UTC+3).
+- The next-release checked-in rules source now contains explicit **session-and-reserved-personal-share-ID-bound** `deda_diamond_gift_balances` rule, since old accepted 100270 wallet permissions were historically inserted at build time and had been absent from checked-in `firestore.rules`. Clients cannot mint extra wallet units; trusted Admin SDK can atomically credit +10. The original production wallet rules MUST be inspected/backed up and safely merged with the stronger security helper; do not overwrite deployed rules wholesale.
+- CI uses an ephemeral 1-day keystore ONLY to satisfy the historical golden source check; does not sign APK. No real Telegram secret touched or stored.
+- Last accepted device-tested 100327 and stable main remain unchanged. Integrated QA success is NOT production Firebase readiness or tested signed release.
+
+**Remaining release blockers**:
+1. Real Firebase Cloud Functions environment/build and account prerequisites, then secure secrets `DEDA_TELEGRAM_BOT_TOKEN` + `DEDA_TELEGRAM_WEBHOOK_SECRET` provisioning and Telegram setWebhook to the deployed Firebase URL. Owner consent and provider access needed.
+2. The Telegram bot must truly exist, be administrator in @DEDA_Iraq and have a working webhook. Backend stays fail-closed while missing.
+3. Test auto-place 30 s and user forgotten public PIN 10 s against Firebase emulators including race/replay/security, then owner device test. The user-facing PIN flow is already in source but must be verified inside actual reconstructed golden main.dart.
+4. Generate ONE properly production-signed internal APK with a new code >100327 only after all items pass and with explicit owner agreement; 100327 remains fallback.
+5. Final public release only after owner approves that ONE internal APK and Firebase/Play prerequisites. Production access ≠ app already publicly released.
