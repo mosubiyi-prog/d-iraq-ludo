@@ -14,6 +14,8 @@ on:
       - 'functions/deda_pin_auto_recovery_worker.js'
       - 'functions/deda_telegram_reward_policy.js'
       - 'functions/deda_telegram_verified_claim.js'
+      - 'functions/deda_telegram_bot_binding.js'
+      - 'tests/stage14/deda_telegram_bot_binding.test.cjs'
       - 'tests/stage14/deda_telegram_verified_claim.test.cjs'
       - 'tests/stage14/deda_telegram_reward_policy.test.cjs'
       - '.github/workflows/qa-deda-next-four-stage1-place-policy.yml'
@@ -41,7 +43,8 @@ jobs:
           node --check functions/deda_pin_auto_recovery_worker.js
           node --check functions/deda_pin_auto_recovery_policy.js
           node --check functions/deda_telegram_verified_claim.js
-          node --test tests/stage14/deda_place_auto_approval_policy.test.cjs tests/stage14/deda_pin_auto_recovery_policy.test.cjs tests/stage14/deda_telegram_reward_policy.test.cjs tests/stage14/deda_telegram_verified_claim.test.cjs
+          node --check functions/deda_telegram_bot_binding.js
+          node --test tests/stage14/deda_place_auto_approval_policy.test.cjs tests/stage14/deda_pin_auto_recovery_policy.test.cjs tests/stage14/deda_telegram_reward_policy.test.cjs tests/stage14/deda_telegram_verified_claim.test.cjs tests/stage14/deda_telegram_bot_binding.test.cjs
           node --test tests/stage2_social/social_policy.test.cjs tests/stage2_social/trial_runtime.test.cjs
       - name: Assert no Firebase deploy or APK build in stage1
         run: |
