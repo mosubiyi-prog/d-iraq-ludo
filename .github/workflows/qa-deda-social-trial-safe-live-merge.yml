@@ -1,0 +1,89 @@
+name: DEDA Social 100326 Safe Live Rules Merge - EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - deda-trial-live-scheduling-100326-2026-10-09
+    paths:
+      - '.github/workflows/qa-deda-social-trial-safe-live-merge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  current-live-plus-social-isolated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      GCLOUD_PROJECT: demo-deda-social-trial-live-rules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install offline validation tools
+        run: |
+          python3 -m pip install --disable-pip-version-check google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Read-only fetch and surgical merge of the ACTUAL live rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.environ.get('FIREBASE_SERVICE_ACCOUNT_DEDA_25B88') or os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+          if not raw:
+              sys.exit('SAFE_STOP: missing read-only account')
+          cred=service_account.Credentials.from_service_account_info(
+              json.loads(raw),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(cred)
+          root='https://firebaserules.googleapis.com/v1/'
+          release=session.get(root+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          release.raise_for_status()
+          name=release.json().get('rulesetName','')
+          assert name.startswith('projects/deda-25b88/rulesets/')
+          remote=session.get(root+name,timeout=35)
+          remote.raise_for_status()
+          files=remote.json().get('source',{}).get('files',[])
+          live='\n'.join(f.get('content','') for f in files if f.get('name','').endswith('.rules'))
+          sha=lambda s: hashlib.sha256(s.encode()).hexdigest()[:18]
+          if sha(live)!='def3434ab5add714b7':
+              sys.exit('SAFE_STOP: live rules changed; refuse automatic merge.')
+          if 'function isGeneralManager()' not in live or 'match /admin_audit/{auditId}' not in live:
+              sys.exit('SAFE_STOP: unrecognized manager security layout.')
+          if 'match /deda_social_task_public/' in live:
+              sys.exit('SAFE_STOP: social rules already present; manual review.')
+          candidate=Path('firestore.rules').read_text()
+          first='    match /deda_social_admin_state/{taskId} {'
+          end='    match /admin_audit/{auditId} {'
+          if candidate.count(first)!=1 or candidate.count(end)!=1 or live.count(end)!=1:
+              sys.exit('SAFE_STOP: unexpected source format.')
+          addition=candidate[candidate.index(first):candidate.index(end)]
+          assert 'allow read, write: if false' in addition
+          assert 'allow create, update, delete: if false' in addition
+          assert 'allow get, list: if signedIn()' in addition
+          merged=live.replace(end,addition+end,1)
+          if merged.replace(addition,'',1)!=live:
+              sys.exit('SAFE_STOP: non-isolated merge')
+          Path('firestore.rules').write_text(merged)
+          print('READ_ONLY_LIVE_SHA',sha(live))
+          print('PREVIEW_MERGED_SHA',sha(merged))
+          print('NO_DEPLOY; ALL OLD RULES PRESERVED EXACTLY.')
+          PY
+      - name: Validate live+social merged rules with Firebase Emulator
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-social-trial-live-rules "node --test tests/firestore-rules/social-trial-security.test.mjs"
+      - name: Save REVIEW-only merged rules without any deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100326-FIRESTORE-MERGE-PREVIEW-NOT-DEPLOYED
+          path: firestore.rules
+          retention-days: 30
