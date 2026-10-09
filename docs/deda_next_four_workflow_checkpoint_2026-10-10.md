@@ -152,3 +152,8 @@ OWNER DECISION: pause all other Google Play work until this ONE integrated versi
 3. Test auto-place 30 s and user forgotten public PIN 10 s against Firebase emulators including race/replay/security, then owner device test. The user-facing PIN flow is already in source but must be verified inside actual reconstructed golden main.dart.
 4. Generate ONE properly production-signed internal APK with a new code >100327 only after all items pass and with explicit owner agreement; 100327 remains fallback.
 5. Final public release only after owner approves that ONE internal APK and Firebase/Play prerequisites. Production access ≠ app already publicly released.
+
+### Final-build build flag and forgot-PIN screen integration gate
+- The proven 100327 social compact card is intentionally feature-gated by `DedaSocialTaskPreview.visible` and defaults FALSE at compile time. The ONE upcoming internal test APK must specify `--dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true` to expose it; otherwise backend could be fully working while user sees no Telegram page. Keep the daily task display preview flag FALSE.
+- The next-release golden integration QA now explicitly asserts that the **real reconstructed login** retains `DedaPinRecoveryPage`, `DedaPinAuth.recoveryRequest`, and `DedaPinAuth.readRecoveryPin`, ensuring the ready six-digit code can appear on the existing user screen without extra WhatsApp/SMS flow.
+- The PIN **backend transaction** regression includes trusted prior installation, >=10-second mandatory delay, switch OFF, older pending requests, mismatch name, inactive accounts, one/hour throttle, duplicate requests, and emergency anti-admin-reset. All branch-only until Firebase deployment and owner device test.
