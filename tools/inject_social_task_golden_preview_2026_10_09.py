@@ -1,73 +1,48 @@
 #!/usr/bin/env python3
-"""Inject ONLY the gated social UI into the accepted 100319 task list in CI.
+"""Add the isolated social card below daily-login in accepted 100319 UI.
 
-The golden nav build reconstructs main.dart; apply this exact small additive patch
-AFTER that reconstruction. Never patch Firebase/reward logic or repository sources.
+Run ONLY inside CI after the complete accepted navigation reconstruction.
+No edits to daily task engine, reward logic, Firestore or user credentials.
 """
 from pathlib import Path
 
-file = Path('lib/main.dart')
-source = file.read_text(encoding='utf-8')
-before = source
-import_anchor = "import 'deda_backend.dart';"
-assert source.count(import_anchor) == 1, 'Unsafe: golden import marker changed'
-assert "import 'deda_social_task_preview.dart';" not in source
-source = source.replace(import_anchor, import_anchor + "\nimport 'deda_social_task_preview.dart';", 1)
-
-start = "                              return FutureBuilder<List<bool>>(\n"
-assert source.count(start) == 1, 'Unsafe: existing task builder changed'
-assert source.count('final taskId = DedaTaskIds.weekly[index];') == 1
-source = source.replace(
-    start,
-    "                              return Column(\n"
-    "                                children: [\n"
-    "                                  FutureBuilder<List<bool>>(\n",
+file = Path("lib/main.dart")
+src = file.read_text(encoding="utf-8")
+anchor_import = "import 'deda_backend.dart';"
+anchor_card = "_dailyLoginCard(),\n                    const SizedBox(height: 7),"
+assert src.count(anchor_import) == 1, "Missing golden import"
+assert src.count(anchor_card) == 1, "Missing golden daily login"
+assert "DedaSocialTaskCompactCard(" not in src
+assert src.count("final taskId = DedaTaskIds.weekly[index];") == 1
+src = src.replace(
+    anchor_import,
+    anchor_import + "\nimport 'deda_social_task_preview.dart';",
     1,
 )
-
-end = (
-    "                                },\n"
-    "                              );\n"
-    "                            },\n"
-    "                          ),\n"
-    "                        );\n"
-    "                      },\n"
-    "                    ),\n"
-    "                    const SizedBox(height: 7),"
+src = src.replace(
+    anchor_card,
+    """_dailyLoginCard(),
+                    if (DedaSocialTaskPreview.visible) ...[
+                      const SizedBox(height: 6),
+                      DedaSocialTaskCompactCard(
+                        isArabic: DedaLanguageState.isArabic,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => DedaSocialTaskUserPreviewPage(
+                              isArabic: DedaLanguageState.isArabic,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 7),""",
+    1,
 )
-assert source.count(end) == 1, 'Unsafe: task list closing marker changed'
-replacement = (
-    "                                },\n"
-    "                                  ),\n"
-    "                                  if (index == 5 && DedaSocialTaskPreview.visible)\n"
-    "                                    Padding(\n"
-    "                                      padding: const EdgeInsets.only(top: 6, bottom: 6),\n"
-    "                                      child: DedaSocialTaskCompactCard(\n"
-    "                                        isArabic: DedaLanguageState.isArabic,\n"
-    "                                        onTap: () => Navigator.push(\n"
-    "                                          context,\n"
-    "                                          MaterialPageRoute<void>(\n"
-    "                                            builder: (_) => DedaSocialTaskUserPreviewPage(\n"
-    "                                              isArabic: DedaLanguageState.isArabic,\n"
-    "                                            ),\n"
-    "                                          ),\n"
-    "                                        ),\n"
-    "                                      ),\n"
-    "                                    ),\n"
-    "                                ],\n"
-    "                              );\n"
-    "                            },\n"
-    "                          ),\n"
-    "                        );\n"
-    "                      },\n"
-    "                    ),\n"
-    "                    const SizedBox(height: 7),"
+assert src.count("DedaSocialTaskCompactCard(") == 1
+assert src.index("DedaSocialTaskCompactCard(") < src.index(
+    "final taskId = DedaTaskIds.weekly[index];"
 )
-source = source.replace(end, replacement, 1)
-assert source != before
-assert source.count("DedaSocialTaskCompactCard(") == 1
-assert source.count("if (index == 5 && DedaSocialTaskPreview.visible)") == 1
-assert source.count("final taskId = DedaTaskIds.weekly[index];") == 1
-assert "DedaTaskEngine.claimTaskReward(taskId)" in source
-file.write_text(source, encoding='utf-8')
-print('SOCIAL_CARD_AFTER_REVIEW_ONLY: golden tasks unchanged; UI preview is gated')
+assert src.count("final taskId = DedaTaskIds.weekly[index];") == 1
+file.write_text(src, encoding="utf-8")
+print("SOCIAL_GOLDEN_UI: compact card only after login; eight tasks untouched")
