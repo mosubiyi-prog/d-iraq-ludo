@@ -1,0 +1,56 @@
+name: DEDA Stage 9 Shadow Reward Ledger - EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage9-reward-ledger-2026-10-09
+    paths:
+      - 'functions/deda_daily_reward_shadow_ledger.js'
+      - 'tests/firestore-rules/daily-reward-shadow-ledger.test.mjs'
+      - '.github/workflows/qa-deda-daily-reward-ledger-stage9.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-rewards-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 29
+    env:
+      GCLOUD_PROJECT: demo-deda-stage9-shadow-rewards
+    steps:
+      - name: Checkout isolated stage9
+        uses: actions/checkout@v4
+      - name: Guard signed-off app, Firebase security rules, publishers and all old services
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage8-restore-auth-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage8-restore-auth-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage8-restore-auth-qa-2026-10-09 -- lib/ android firestore.rules functions/index.js functions/deda_daily_task_restore_callable.js functions/deda_daily_task_restore.js functions/deda_daily_task_publisher.js functions/package.json pubspec.yaml
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup Java for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Resolve Firebase test dependencies
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Verify emulator-only and no production payout wiring
+        run: |
+          node --check functions/deda_daily_reward_shadow_ledger.js
+          node --check tests/firestore-rules/daily-reward-shadow-ledger.test.mjs
+          ! grep -q 'deda_daily_reward_shadow_ledger' functions/index.js
+          ! grep -q '^exports[.]' functions/deda_daily_reward_shadow_ledger.js
+          grep -q 'STAGE9_EMULATOR_ONLY_DO_NOT_PAY' functions/deda_daily_reward_shadow_ledger.js
+          grep -q 'demo-deda-stage9-shadow-rewards' functions/deda_daily_reward_shadow_ledger.js
+          ! grep -q 'collection("users")' functions/deda_daily_reward_shadow_ledger.js
+          ! grep -q 'collection("admin_wallets")' functions/deda_daily_reward_shadow_ledger.js
+      - name: Run shadow grant and client denial tests on local demo emulator
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage9-shadow-rewards "node --test tests/firestore-rules/daily-reward-shadow-ledger.test.mjs"
+      - name: Confirm no deploy, real credit or APK
+        run: |
+          echo 'STAGE9_SHADOW_ONLY_PASS: no real user/admin wallet changed, no deployment and no APK'
