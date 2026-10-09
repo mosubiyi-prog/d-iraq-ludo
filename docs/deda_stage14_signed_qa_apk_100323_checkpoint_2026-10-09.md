@@ -38,4 +38,13 @@
 6. **لا تختبر تعديل نقاط/ماسّات/عملات حقيقية أو حفظ عروض إنتاجية** لأن هذه الوظائف لم تُفعّل بعد.
 
 ## حالة المرحلة
-- **الاختبار والبناء قيد GitHub Actions**، ولا يجوز إعلان نجاح APK أو حفظ نقطة رجوع "QA" قبل ظهور Build SUCCESS ووجود Artifact صالح فعلًا.
+- **النتيجة النهائية: SUCCESS** في GitHub Actions run `37868453917`.
+- **30 Flutter tests passed قبل بناء APK + 19 Flutter tests passed بعد البناء = 49 اختبارًا ناجحًا في مسار التجميع**، كما نجحت فحوص المصدر والهوية، وحارس الاستعداد للإنتاج أعلن 11 مانعًا ما يزال مطلوبًا قبل الإصدار العام.
+- أمر بناء الملف: `flutter build apk --release --build-number=100323 --dart-define=USE_NEXT_GEN_SDK=true --dart-define=DEDA_DAILY_TASK_DISPLAY_PREVIEW=false`.
+- الملف `build/app/outputs/flutter-apk/app-release.apk` بحجم **70,640,146 بايت**، وتم رفعه بواسطة GitHub Actions Artifact رقم `11589189463` باسم `DEDA-100323-stage14-manager-preview-INTERNAL-ONLY` ومدّة الاحتفاظ 30 يومًا.
+- **SHA256 للـAPK:** `2d6f59825c511474dd9dbb4ed3b6929ac3efbcb2fa905bbf4d55b2b37e78dd9a`. أعيد تنزيل ZIP وفكّه إلى APK مباشر في مساحة المحادثة، ثم تطابقت بصمة SHA256 مع سجل GitHub بالضبط.
+- مسار النسخة المباشرة في المحادثة: `/mnt/data/DEDA-100323-stage14-manager-preview.apk`، وملف ZIP `/mnt/data/DEDA-100323-stage14-manager-preview-INTERNAL-ONLY.zip`.
+- الفحص الأول run `37867144779`: فشل بسبب علامة تهيئة شاشة المستخدم القديمة قبل البناء، وثبتنا العودة المؤقتة إلى `lib/main.dart` من 100319 في مساحة CI فقط.
+- الفحص الثاني run `37867375150`: بناء APK موقّع ناجح و19 اختبارًا ناجحًا، لكن رفع Artifact تعطل بسبب 10 ملاحظات `info` من تنسيق Dart بعد إعادة البناء.
+- الفحص الثالث عالج منع فشل `info` في **فحص ما بعد البناء فقط**، مع بقاء `warning/error` حاسمة ونجاح جميع المراحل ورفع الملف.
+- **لا نشر Firebase أو Google Play، ولا صرف عملات/نقاط/ماسات جديدة على المستخدمين.** معايير المرحلة 13 تمنع الإنتاج حتى معالجة متطلبات الأمن والدفتر والربط الحقيقي.
