@@ -107,3 +107,29 @@ Owner expects rewarded earned diamonds to be VISIBLE. Source-only fix drafted:
 - This defect fix is added to release regression checklist, on top of the FOUR approved features, and is NOT grounds for an intermediate APK.
 
 No production Firestore changes, no user data modifications, no APK yet.
+
+
+## 2026-10-10 — Telegram actual verification/payout source implemented (NO DEPLOY)
+
+A substantial server and client milestone for point 4 on NEXT-FOUR branch ONLY:
+- `functions/deda_telegram_bot_binding.js`: authenticated DEDA user requests a 15-minute, high-entropy /start token. Server resolves actual bot username from Telegram getMe and returns a real deep link dynamically, with per-account one-minute new-link throttle.
+- `functions/index.js`: `dedaStartTelegramVerification` callable, secret-token-protected `dedaTelegramBotWebhook` HTTP receiver, `dedaClaimVerifiedTelegramFollow` callable, GM-only `dedaManageTelegramVerifiedReward` and `dedaTelegramVerifiedRewardReadiness`. All secrets managed by Firebase Functions secrets, NOT mobile APK, GitHub source or Firestore readable data.
+- Webhook accepts a private Telegram /start from the real Telegram user ONLY if the request contains the server-configured Telegram webhook secret and the one-time nonce is unused/not expired. Telegram IDs are never accepted from the Android client's input. Account/Telegram ID binding documents prevent cross-account reuse. User gets a Telegram bot reply after authentic binding.
+- `functions/deda_telegram_verified_claim.js`: membership MUST be proven by live Telegram Bot API `getChatMember` for @DEDA_Iraq; actor must have real authenticated DEDA session and registered owned personal DEDA ID. Exact current Baghdad daily task must be explicitly active in trusted mode and worth EXACTLY 10 diamonds. One atomic Admin SDK transaction adds +10 to EXISTING personal spendable `deda_diamond_gift_balances/{publicId}` and creates unique DEDA account + Telegram ID once-ever claims and audit documents. Never writes/consumes `deda_admin_diamond_wallets`.
+- `functions/deda_telegram_reward_activation.js`: only verified active general manager can switch real reward ON for today's scheduled 10-diamond Telegram task, and only if the bot itself is actually an administrator of the channel; GM can switch OFF immediately even if Telegram API is down. Standard 100327 day documents continue `rewardsEnabled: false` until explicit activation.
+- `lib/deda_telegram_verified_reward_service.dart`, `lib/deda_social_task_preview.dart`: separate "ربط حسابك مع بوت تليجرام" and "تحقق واستلم 10 ماسات" buttons ONLY for server-activated reward task; all preexisting nonpaying published preview behavior remains, no local wallet edits.
+- `lib/deda_admin_social_task_preview_page.dart`: GM's real reward ON/OFF buttons disabled when server/Bot API readiness cannot be verified.
+- `tools/inject_social_task_golden_preview_2026_10_09.py`: future golden APK will refresh actual existing DedaDiamondsWallet after credited claim, avoiding a misleading success message.
+- `firestore.rules`: server-only confidential nonce/binding/claim/audit records, restrict read of active task to exactly the verified 10-diamond state. Changes NOT deployed; live rules must be backed up and surgically merged.
+- Regression tests: `tests/stage14/deda_telegram_verified_claim.test.cjs`, `deda_telegram_bot_binding.test.cjs`, `deda_telegram_reward_activation.test.cjs`; negative tests cover unsigned Telegram payload, no membership, identity reuse, replay, expiry, not GM, Bot not channel administrator, prior payout, wallet ownership mismatch and zero manager-wallet debit.
+- Verified Node backend unit suite passing: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38005496420 (readiness and deployment NOT proven by unit tests).
+- Flutter social UI and client helper analysis passing on earlier snapshot: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38005294122 . Latest enhanced GM buttons and Firestore rules changes have additional QA runs; CHECK final status before claiming complete.
+
+NEW UNRESOLVED DEPENDENCIES:
+1. Owner-controlled Telegram bot must actually exist and be added as ADMIN to the official channel @DEDA_Iraq. Username is resolved automatically via Bot API. Never request BotFather token in chat; use Firebase Secrets.
+2. Real Firebase Cloud Functions deployment currently BLOCKED by Cloud Build / Artifact Registry and relevant Google Cloud onboarding/billing prerequisites. Need owner cooperation and explicit permission for credentials, secret provisioning, registered Telegram webhook and production changes. The new callables are NOT live.
+3. No real Telegram user/owner device claim has been tested end-to-end. Existing 100327 social task remains intentionally nonpaying. Future activated task is a server-controlled state, not client minting.
+4. More integration work needed for the one signed owner-test APK built after all four features work, plus ensure exact accepted navigation and ad-earned wallet fixes survive golden reconstruction. No APK, AAB or Play Production upload has been made.
+5. New place/recovery Cloud Functions triggers have bounded explicit 120s/90s function timeouts to cover 30-second/10-second waits safely.
+
+OWNER DECISION: pause all other Google Play work until this ONE integrated version is tested and approved; only THEN prepare public Production upload. Granted Production access is not actual publication.
