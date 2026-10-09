@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -59,10 +60,29 @@ class _DedaAdminAutomationToggleState
           'general_manager') {
         throw StateError('strict-general-manager-required');
       }
-      final docs = await Future.wait([
+      var docs = await Future.wait([
         _config.get(const GetOptions(source: Source.server)),
         _readiness.get(const GetOptions(source: Source.server)),
       ]);
+      if (docs.last.data()?['ready'] != true) {
+        // An authenticated manager can silently ask the deployed server
+        // to confirm BOTH automation workers are actually available.
+        // If Functions are not deployed, keep the switch disabled.
+        try {
+          await FirebaseFunctions.instance.httpsCallable(
+            'dedaAutomationReadiness',
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: 6),
+            ),
+          ).call();
+          docs = await Future.wait([
+            _config.get(const GetOptions(source: Source.server)),
+            _readiness.get(const GetOptions(source: Source.server)),
+          ]);
+        } catch (_) {
+          // Disabled is safer than pretending timed automation is live.
+        }
+      }
       if (!mounted) return;
       setState(() {
         final value = docs.first.data();
