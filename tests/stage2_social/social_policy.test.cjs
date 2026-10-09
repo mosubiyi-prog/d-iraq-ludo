@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const policy = require("../functions/deda_social_task_stage2.js");
+const policy = require("../../functions/deda_social_task_stage2.js");
 
 const manager = {uid: "gm-test", role: "general_manager",
   active: true, serverVerified: true};
