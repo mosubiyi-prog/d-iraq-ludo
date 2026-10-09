@@ -60,7 +60,17 @@ jobs:
           Path('/tmp/deda_golden_profile_no_apk.sh').write_text(src)
           PY
       - name: Reconstruct full accepted navigation + rewards profile, analyze but DO NOT BUILD
-        run: bash /tmp/deda_golden_profile_no_apk.sh
+        # The original preflight expects a keystore file to exist. Supply only
+        # a disposable NON-KEY placeholder; this job explicitly strips ALL APK
+        # build steps and MUST NEVER sign an app or use production secrets.
+        env:
+          DEDA_KEYSTORE_BASE64: 'Q0ktT05MWS1OT1QtQS1TSUdOSU5HLUtFWQ=='
+          DEDA_KEY_ALIAS: 'CI-NOT-A-KEY'
+          DEDA_KEY_PASSWORD: 'CI-DO-NOT-SIGN'
+          DEDA_STORE_PASSWORD: 'CI-DO-NOT-SIGN'
+        run: |
+          echo 'QA placeholder only. DO NOT build/sign any app.'
+          bash /tmp/deda_golden_profile_no_apk.sh
       - name: Verify ad reward profile math and no profile wallet debits
         run: |
           flutter analyze --no-fatal-infos lib/deda_profile_visible_diamonds.dart
