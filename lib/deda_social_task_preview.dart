@@ -298,9 +298,17 @@ class _DedaSocialTaskUserPreviewPageState
                 ));
               }
               final data = snapshot.data;
-              if (data == null || data['rewardsEnabled'] != false ||
-                  data['rewardClaimMode'] !=
-                    'blocked-until-trusted-proof-and-ssv-ledger') {
+              final previewOnly = data != null &&
+                  data['rewardsEnabled'] == false &&
+                  data['rewardClaimMode'] ==
+                      'blocked-until-trusted-proof-and-ssv-ledger';
+              final verifiedReward = data != null &&
+                  data['rewardsEnabled'] == true &&
+                  data['rewardClaimMode'] ==
+                      'server-verified-telegram-membership' &&
+                  data['rewardUnit'] == 'diamonds' &&
+                  data['rewardAmount'] == 10;
+              if (data == null || (!previewOnly && !verifiedReward)) {
                 return _empty();
               }
               final uri = safeTaskUrl(data);
@@ -339,8 +347,12 @@ class _DedaSocialTaskUserPreviewPageState
                               style: const TextStyle(color: Colors.white)),
                           const SizedBox(height: 10),
                           Text(t(
-                            'المكافأة المحددة: $amount $rewardName (غير قابلة للاستلام حالياً)',
-                            'Configured reward: $amount $rewardName (claim disabled)'),
+                            verifiedReward
+                                ? 'مكافأة الاشتراك المتحقق: $amount $rewardName'
+                                : 'المكافأة المحددة: $amount $rewardName (غير قابلة للاستلام حالياً)',
+                            verifiedReward
+                                ? 'Verified follow reward: $amount $rewardName'
+                                : 'Configured reward: $amount $rewardName (claim disabled)'),
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: Colors.white)),
                           const SizedBox(height: 18),
@@ -361,14 +373,40 @@ class _DedaSocialTaskUserPreviewPageState
                               backgroundColor: const Color(0xFFE8C56C),
                               foregroundColor: const Color(0xFF0B3156)),
                           ),
+                          if (verifiedReward) ...[
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              key: const Key('startTelegramBotVerification'),
+                              onPressed: _verificationBusy
+                                  ? null : _startBotVerification,
+                              icon: const Icon(Icons.verified_user_rounded),
+                              label: Text(t(
+                                'اربط حسابك مع بوت تليجرام',
+                                'Link your Telegram account with the bot')),
+                            ),
+                            const SizedBox(height: 8),
+                            FilledButton.icon(
+                              key: const Key('claimVerifiedTelegramDiamonds'),
+                              onPressed: _verificationBusy
+                                  ? null : _claimVerifiedTelegramDiamonds,
+                              icon: const Icon(Icons.diamond_rounded),
+                              label: Text(t(
+                                'تحقق واستلم 10 ماسات 💎',
+                                'Verify and claim 10 diamonds 💎')),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(t(
-                    'فتح الرابط لا يثبت الاشتراك. لا توجد مكافآت قابلة للصرف بهذه النسخة، ولا خصم من محفظة المدير.',
-                    'Opening the link is not subscription proof; payouts are disabled.'),
+                    verifiedReward
+                        ? 'الاشتراك الحقيقي ورقم تليجرام يتأكد منهما الخادم. المكافأة تُمنح مرة واحدة فقط.'
+                        : 'فتح الرابط لا يثبت الاشتراك. لا توجد مكافآت قابلة للصرف بهذه النسخة، ولا خصم من محفظة المدير.',
+                    verifiedReward
+                        ? 'The server verifies channel membership. The reward can only be claimed once.'
+                        : 'Opening the link is not subscription proof; payouts are disabled.'),
                     textAlign: TextAlign.center),
                   TextButton.icon(
                     onPressed: _refresh,
