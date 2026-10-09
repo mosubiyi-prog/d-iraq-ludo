@@ -1221,3 +1221,25 @@ exports.dedaManageTelegramVerifiedReward = onCall({
     throw new HttpsError("unavailable", "telegram-reward-activation-failed");
   }
 });
+
+
+/**
+ * GM dashboard requires a real deployed worker AND verified Bot API admin
+ * before even offering the owner any live reward activation controls.
+ */
+exports.dedaTelegramVerifiedRewardReadiness = onCall({
+  secrets: [dedaTelegramBotToken],
+  timeoutSeconds: 20,
+}, async (request) => {
+  await requireGeneralManager(request);
+  const botToken = dedaTelegramBotToken.value();
+  if (!botToken) return {ready: false, reason: "bot-not-configured"};
+  try {
+    const botIsAdmin =
+      await telegramRewardActivation.checkBotIsChannelAdmin(botToken);
+    return {ready: botIsAdmin,
+      reason: botIsAdmin ? "bot-channel-admin-confirmed" : "bot-not-channel-admin"};
+  } catch (_) {
+    return {ready: false, reason: "telegram-bot-unreachable"};
+  }
+});
