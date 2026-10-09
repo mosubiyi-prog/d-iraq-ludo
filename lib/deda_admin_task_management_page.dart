@@ -5,6 +5,7 @@ import 'deda_backend.dart';
 import 'deda_daily_task_slots.dart';
 import 'deda_daily_schedule_preview_service.dart';
 import 'deda_daily_login_offer_preview_page.dart';
+import 'deda_admin_social_task_preview_page.dart';
 
 /// Manager-only editor for the EXISTING eight daily task card slots.
 /// This stage saves isolated private drafts. It never publishes a task,
@@ -346,6 +347,32 @@ class _DedaAdminTaskManagementPageState
                                   ),
                                 );
                               },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Card(
+                          key: const Key('socialAdminPreviewOpen'),
+                          color: const Color(0xFF0B3156),
+                          child: ListTile(
+                            leading: const Icon(Icons.people_alt_rounded,
+                              color: Color(0xFFFFD76A)),
+                            title: Text(t('مهام التواصل الاجتماعي',
+                              'Social task management'),
+                              style: const TextStyle(
+                                color: Color(0xFFFFD76A),
+                                fontWeight: FontWeight.w900)),
+                            subtitle: Text(t(
+                              'قسم مستقل: فيس بوك، تلي جرام، يوتيوب، إنستغرام، تيك توك، أخرى. معاينة فقط دون نشر.',
+                              'Separate social section — design preview only, not published.'),
+                              style: const TextStyle(color: Colors.white)),
+                            trailing: const Icon(Icons.chevron_left_rounded,
+                              color: Color(0xFFFFD76A)),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => DedaAdminSocialTaskPreviewPage(
+                                  isArabic: widget.isArabic),
+                              ),
                             ),
                           ),
                         ),
