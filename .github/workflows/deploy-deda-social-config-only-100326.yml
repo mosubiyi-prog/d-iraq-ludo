@@ -23,6 +23,8 @@ jobs:
       GCLOUD_PROJECT: deda-25b88
     steps:
       - uses: actions/checkout@v4
+      - name: Install server dependencies before the preflight Node tests
+        run: npm --prefix functions install --no-audit --no-fund
       - name: Verify isolated live social scope and APK-tested client
         run: |
           set -euo pipefail
