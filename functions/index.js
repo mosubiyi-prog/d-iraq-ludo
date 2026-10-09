@@ -943,6 +943,11 @@ const {onSchedule: dedaOnSchedule} = require("firebase-functions/v2/scheduler");
 const socialTrial = require("./deda_social_trial_runtime.js");
 exports.dedaManageSocialTaskTrial = onCall(async (request) => {
   const actor = await requireGeneralManager(request);
+  // Unlike historical admin UI, the new publishing API does not accept
+  // legacy roleless accounts or aliases as general-manager identity.
+  if (actor.data.role !== "general_manager") {
+    throw new HttpsError("permission-denied", "strict-general-manager-role-required");
+  }
   try {
     return await socialTrial.command(getFirestore(), {
       actor: {
