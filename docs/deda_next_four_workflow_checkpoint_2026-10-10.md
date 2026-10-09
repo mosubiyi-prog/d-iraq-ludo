@@ -53,3 +53,12 @@ MANDATORY invisible security boundary: an arbitrary anonymous requester must nev
 NOTE: Prior strict place duplicate checks and manual suspicious screening are NOT the desired business workflow; revise place automation to eliminate human/content screening once basic authenticated owner and valid request information are guaranteed. Do not silently override the owner's requested approval behavior, and do not pretend unsafe PIN reset is acceptable.
 
 Keep one combined APK release only after working end-to-end. DO NOT deploy or build now.
+
+## Owner clarification on launch phase — 2026-10-10
+
+- Originally DEDA had convenient user self-service forgotten-PIN recovery before administrative review was added. The owner's priority is restoring that self-service convenience, not expanding bureaucracy.
+- Owner explicitly postpones phone-number ownership OTP verification through WhatsApp/SMS to a LATER SCALE-OUT phase once DEDA has significant real downloads; this is not being abandoned and should not be presented as a mandatory user-facing feature for the upcoming APK.
+- The immediate UX should be: user selects Forgot PIN -> receives newly issued 6-digit PIN automatically within ~10s INSIDE DEDA without a staff member, no extra form/OTP/SMS. Place owner is a DEDA user eligible for the same recovery experience.
+- For verified previously registered installations, use pre-existing DEDA trusted-session recovery capability to establish account access invisibly; do not pretend that simply providing a phone + name proves ownership. If secure same-account proof is unavailable, do NOT issue that account's secret to an unrelated requester. Use manual exception/fallback, explain candidly; this boundary cannot be postponed to the SMS rollout.
+- Separate place OWNER requests should be automatically approved/published after ~30s when manager toggle ON, with no manual review of their content, and OFF restores manual. Existing pending requests unaffected.
+- Existing secure channel checks occur in background and are not new user-facing verification steps. Backend deploy limitations still require resolution. No client-only PIN reset, no APK until full test.
