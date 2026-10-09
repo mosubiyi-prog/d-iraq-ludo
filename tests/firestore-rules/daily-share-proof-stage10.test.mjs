@@ -13,7 +13,7 @@ const nodeRequire = createRequire(import.meta.url);
 const fnRequire = createRequire(
     new URL('../../functions/package.json', import.meta.url));
 const {initializeApp, deleteApp} = fnRequire('firebase-admin/app');
-const {getFirestore} = fnRequire('firebase-admin/firestore');
+const {getFirestore, Timestamp: AdminTimestamp} = fnRequire('firebase-admin/firestore');
 const {
   PROJECT, SHADOW_COLLECTIONS, eventId, ledgerId,
 } = nodeRequire('../../functions/deda_daily_reward_shadow_ledger.js');
@@ -97,8 +97,8 @@ async function seedCore({action = SLOT, configUpdates = {}} = {}) {
     titleEn: 'شارك موقعك الشخصي',
     effectiveDay: dayId,
     publicationId: dayId.replace(/-/g, '') + '__' + SLOT,
-    effectiveAt: Timestamp.fromDate(startUtc),
-    publishedAt: Timestamp.fromDate(startUtc),
+    effectiveAt: AdminTimestamp.fromDate(startUtc),
+    publishedAt: AdminTimestamp.fromDate(startUtc),
     sourcePreviewRevision: 4,
     targetCount: 1,
     rewardUnit: 'points',
@@ -251,8 +251,8 @@ test('Altered source after creation, wrong type or misleading fields are rejecte
     senderName: 'مستخدم تجريبي', recipientPublicId: RECIPIENT_ID,
     shareType: 'place', placeId: 'abc', placeName: 'fake',
     latitude: 31.99, longitude: 44.99, durationMinutes: 30,
-    status: 'pending', createdAt: Timestamp.fromDate(new Date()),
-    expiresAt: Timestamp.fromDate(new Date(Date.now() + 1800000)),
+    status: 'pending', createdAt: AdminTimestamp.fromDate(new Date()),
+    expiresAt: AdminTimestamp.fromDate(new Date(Date.now() + 1800000)),
   });
   assert.equal((await verify(validRequest())).outcome, 'no-valid-share');
   await db.collection('deda_location_shares').doc(SOURCE_ID).update({
