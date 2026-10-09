@@ -1,5 +1,5 @@
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
@@ -8,6 +8,9 @@ const {randomInt} = require("node:crypto");
 const {defineSecret} = require("firebase-functions/params");
 const {claimVerifiedTelegramFollow} = require("./deda_telegram_verified_claim.js");
 const dedaTelegramBotToken = defineSecret("DEDA_TELEGRAM_BOT_TOKEN");
+const dedaTelegramWebhookSecret =
+  defineSecret("DEDA_TELEGRAM_WEBHOOK_SECRET");
+const telegramBinding = require("./deda_telegram_bot_binding.js");
 const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
 
 initializeApp();
@@ -1101,4 +1104,85 @@ exports.dedaClaimVerifiedTelegramFollow = onCall({
     throw new HttpsError("unavailable",
         "telegram-verification-retry-later");
   }
+});
+
+
+/**
+ * Create a short-lived, single-use deep link to the ACTUAL deployed bot.
+ * No client may select the accountKey or Telegram user ID.
+ */
+exports.dedaStartTelegramVerification = onCall({
+  secrets: [dedaTelegramBotToken],
+  timeoutSeconds: 30,
+}, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "deda-login-required");
+  }
+  const botToken = dedaTelegramBotToken.value();
+  if (!botToken) {
+    throw new HttpsError("failed-precondition", "telegram-bot-not-provisioned");
+  }
+  try {
+    return await telegramBinding.startVerification(getFirestore(), {
+      uid: request.auth.uid, botToken,
+    });
+  } catch (error) {
+    console.error("DEDA_TELEGRAM_BOT_LINK_START_ERROR",
+        String(error?.name || "Error"));
+    throw new HttpsError("unavailable",
+        "telegram-bot-link-retry-later");
+  }
+});
+
+/**
+ * Private Telegram webhook. Deploy only with BOTH Firebase Secrets set
+ * AND with Telegram setWebhook(secret_token=DEDA_TELEGRAM_WEBHOOK_SECRET).
+ * Every /start nonce maps to a server-authenticated DEDA session and can
+ * be consumed once; Telegram ID comes ONLY from a signed-off webhook.
+ */
+exports.dedaTelegramBotWebhook = onRequest({
+  secrets: [dedaTelegramBotToken, dedaTelegramWebhookSecret],
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).send("POST required");
+    return;
+  }
+  const result = await telegramBinding.acceptBotStart(getFirestore(), {
+    update: req.body,
+    receivedSecret: req.get("X-Telegram-Bot-Api-Secret-Token"),
+    expectedSecret: dedaTelegramWebhookSecret.value(),
+  }).catch((error) => {
+    console.error("DEDA_TELEGRAM_WEBHOOK_PROCESSING_ERROR",
+        String(error?.name || "Error"));
+    return {outcome: "backend-unavailable"};
+  });
+  if (result.outcome === "invalid-telegram-webhook-secret") {
+    res.status(403).send("Forbidden");
+    return;
+  }
+  if (result.outcome === "backend-unavailable") {
+    res.status(503).send("Try again");
+    return;
+  }
+  // Reply only to a genuine consumed binding; do not echo DEDA personal IDs,
+  // Telegram login payload or any tokens into chat.
+  if (result.outcome === "linked" &&
+      dedaTelegramBotToken.value()) {
+    try {
+      await fetch("https://api.telegram.org/bot" +
+          dedaTelegramBotToken.value() + "/sendMessage", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          chat_id: result.chatId,
+          text: "✅ تم ربط حساب تليجرام مع DEDA. ارجع للتطبيق واضغط تحقق من الاشتراك للحصول على مكافأتك 💎",
+        }),
+        signal: AbortSignal.timeout(7000),
+      });
+    } catch (_) {
+      console.warn("DEDA_TELEGRAM_BOT_REPLY_UNAVAILABLE");
+    }
+  }
+  res.status(200).send("OK");
 });
