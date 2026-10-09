@@ -5,7 +5,7 @@ on:
     branches:
       - deda-social-firestore-no-functions-100327-2026-10-09
     paths:
-      - '.github/workflows/qa-deda-social-trial-apk-100327.yml'
+      - '.github/workflows/qa-deda-social-direct-apk-100327.yml'
   workflow_dispatch:
 
 permissions:
@@ -62,7 +62,7 @@ jobs:
           node --check functions/index.js
           node --check functions/deda_social_trial_runtime.js
           node --test tests/stage2_social/social_policy.test.cjs
-          ! grep -E 'firebase[[:space:]]+deploy|flutter[[:space:]]+build[[:space:]]+appbundle' .github/workflows/qa-deda-social-trial-apk-100327.yml
+          ! grep -E 'firebase[[:space:]]+deploy|flutter[[:space:]]+build[[:space:]]+appbundle' .github/workflows/qa-deda-social-direct-apk-100327.yml
       - name: Use accepted 100319 user task core only inside CI build workspace
         run: |
           # Stage6 added a disabled user title-preview StreamBuilder to HEAD.
