@@ -41,3 +41,15 @@ QA UPDATE:
 - Stage1 + Stage2 + Stage4 pure Node policy regression succeeded: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37997911608
 - GM controls Firestore emulator + admin Flutter analyzer + compact responsive Arabic widget test succeeded: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/37997791969
 - Current status remains NOT READY FOR APK because the backend trigger is NOT deployed, ten-second cryptographic PIN verification is NOT built, and verified Telegram real-wallet credit is NOT live.
+
+## Owner scope correction — 2026-10-10 (supersedes cumbersome approvals)
+
+The owner explicitly wants TWO simple manager ON/OFF automation switches, NO added forms, no staff approvals, and no manual review of new place requests:
+A) New place creation submissions after enabling ON -> auto-approved/published after a short 10-to-30-second delay (use 30 seconds as provisional default), without employee review or content/duplicate screening. Existing pending requests must stay untouched. OFF -> existing manual approval.
+B) Existing forgotten user PIN recovery requests -> issue a replacement PIN after 10 seconds while ON, to the requesting user in the existing in-app channel, without SMS, staff review, or extra user-facing verification steps. OFF -> existing manual recovery.
+
+MANDATORY invisible security boundary: an arbitrary anonymous requester must never be able to reset a different account just by knowing its name/phone. The current Firestore recovery request creation path is not sufficient evidence of account ownership (requesterUid/name/phone/installId can be self asserted). Trusted ownership binding or equivalent proof must exist BEFORE automatic issuance; otherwise default safely to manual and be transparent with the owner. Basic schema/identity validation and atomic server writes are implementation safeguards, not the owner-facing manual review he rejects. Do not expose the PIN to a different requester. 10-30 second scheduling itself requires a real trusted execution mechanism; client timers and security rules do not run server jobs.
+
+NOTE: Prior strict place duplicate checks and manual suspicious screening are NOT the desired business workflow; revise place automation to eliminate human/content screening once basic authenticated owner and valid request information are guaranteed. Do not silently override the owner's requested approval behavior, and do not pretend unsafe PIN reset is acceptable.
+
+Keep one combined APK release only after working end-to-end. DO NOT deploy or build now.
