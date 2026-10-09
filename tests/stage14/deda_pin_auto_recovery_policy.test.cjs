@@ -34,7 +34,7 @@ test("off/manual, old pre-toggle requests and first 10 seconds blocked",()=>{
 });
 test("client name + phone + trusted install ID is NOT strong proof",()=>{
   for(const serverProof of [
-    undefined, null, {valid:false,...proof},
+    undefined, null, {...proof,valid:false},
     {...proof,uid:"attacker"}, {...proof,kind:"client-install-id"},
     {...proof,revoked:true},
   ])assert.equal(decide(input({serverProof})).eligible,false);
