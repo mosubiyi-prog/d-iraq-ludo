@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'deda_social_task_preview.dart';
 import 'deda_social_task_live_service.dart';
 
@@ -34,11 +35,58 @@ class _DedaAdminSocialTaskPreviewPageState
   String _remoteStatus = 'new';
   String _serverMessage = '';
   bool _busy = false;
+  bool _telegramBackendReady = false;
 
   @override
   void initState() {
     super.initState();
     _loadRemote();
+    _checkTelegramVerifiedBackend();
+  }
+
+  Future<void> _checkTelegramVerifiedBackend() async {
+    if (Firebase.apps.isEmpty) return;
+    try {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('dedaTelegramVerifiedRewardReadiness')
+          .call(<String, dynamic>{});
+      final values = response.data;
+      if (!mounted) return;
+      setState(() => _telegramBackendReady =
+          values is Map && values['ready'] == true);
+    } catch (_) {
+      if (mounted) setState(() => _telegramBackendReady = false);
+    }
+  }
+
+  Future<void> _toggleTelegramVerifiedReward(String op) async {
+    if (_busy || !_telegramBackendReady) return;
+    setState(() => _busy = true);
+    try {
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('dedaManageTelegramVerifiedReward')
+          .call(<String, dynamic>{'op': op});
+      final values = response.data;
+      final result = values is Map
+          ? (values['outcome'] ?? '').toString() : '';
+      if (!mounted) return;
+      setState(() {
+        _serverMessage = result == 'activated'
+            ? t('تم تفعيل مكافأة تليجرام بعد تحقق الخادم من صلاحية البوت ✅',
+                'Real Telegram reward activated after bot admin verification.')
+            : result == 'deactivated'
+                ? t('تم إيقاف المكافأة الحقيقية فوراً.',
+                    'Real Telegram payout immediately disabled.')
+                : t('لم تتغير حالة المكافأة: $result',
+                    'Reward status not changed: $result');
+      });
+    } catch (_) {
+      if (mounted) setState(() => _serverMessage = t(
+          'الخادم رفض تغيير المكافأة. لا توجد مكافآت جديدة.',
+          'Server rejected reward change. No reward enabled.'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _loadRemote() async {
