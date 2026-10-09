@@ -1,6 +1,7 @@
 "use strict";
 
 const {assess} = require("./deda_place_auto_approval_policy.js");
+const {FieldValue} = require("firebase-admin/firestore");
 
 /**
  * Privileged backend proposal for NEW place auto-approval.
@@ -81,12 +82,7 @@ async function processNewPlace(firestore, {requestId, nowMs = Date.now()}) {
     const day = `${dd}/${mm}/${year}`;
     const message = `تم اعتماد: ${request.placeName}\nرقم الاعتماد: ${number}\nتاريخ الاعتماد: ${day}\nDEDA - الدليل الدقيق`;
     const admin = {uid: "deda-system", name: "DEDA", role: "system"};
-    const createdAt = firestore.constructor.FieldValue ?
-      firestore.constructor.FieldValue.serverTimestamp() : null;
-    // Admin SDK FieldValue comes from firebase-admin/firestore; provide
-    // directly as an injection so tests do not emulate a forbidden user write.
-    const stamp = typeof firestore._dedaServerTimestamp === "function" ?
-      firestore._dedaServerTimestamp() : approvedAt;
+    const stamp = FieldValue.serverTimestamp();
 
     tx.set(counterRef, {value: next, updatedAt: stamp}, {merge: true});
     tx.update(requestRef, {
