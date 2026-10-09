@@ -1,0 +1,158 @@
+name: DEDA Social Approved UI Preview APK 100325 - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - social-tasks-stage2-approved-five-2026-10-09
+    paths:
+      - '.github/workflows/qa-deda-social-preview-apk-100325.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safe-internal-preview-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 58
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - name: Checkout stage14 signed QA only
+        uses: actions/checkout@v4
+      - name: Enforce stage2 allowlist and protect accepted app and live backend
+        run: |
+          git fetch --no-tags origin social-tasks-compact-apk-100324-2026-10-09:refs/remotes/origin/social-tasks-compact-apk-100324-2026-10-09
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git diff --exit-code origin/social-tasks-compact-apk-100324-2026-10-09 -- lib/deda_backend.dart lib/deda_pin_auth.dart lib/deda_admin_task_drafts.dart lib/deda_daily_task_slots.dart lib/deda_daily_schedule_preview_service.dart functions/index.js functions/deda_daily_task_publisher.js functions/deda_daily_reward_shadow_ledger.js android/ firestore.rules firebase.json storage.rules pubspec.yaml
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/deda_backend.dart pubspec.yaml tools/build_100318_user_heading_camera.sh
+          python3 - <<'STAGE2_ALLOWLIST'
+          import subprocess
+          baseline = 'origin/social-tasks-compact-apk-100324-2026-10-09'
+          allowed = {
+            '.github/workflows/qa-deda-social-stage2-approved-five.yml',
+            '.github/workflows/qa-deda-social-preview-apk-100325.yml',
+            'lib/deda_social_task_preview.dart',
+            'lib/deda_admin_social_task_preview_page.dart',
+            'lib/main.dart',
+            'test/deda_social_task_preview_test.dart',
+            'functions/deda_social_task_stage2.js',
+            'functions/deda_social_task_stage2_store.js',
+            'tests/stage2_social/social_policy.test.cjs',
+            'tests/stage2_social/store_policy.test.cjs',
+            'tools/inject_social_task_golden_preview_2026_10_09.py',
+            'docs/deda_social_stage2_approved_five_checkpoint_2026-10-09.md',
+          }
+          actual = set(subprocess.check_output(
+            ['git','diff','--name-only',baseline,'HEAD'],text=True).splitlines())
+          assert actual <= allowed, 'UNEXPECTED_MODIFICATIONS: ' + repr(actual-allowed)
+          print('SAFE_STAGE2_SCOPE', len(actual))
+          STAGE2_ALLOWLIST
+      - name: Set up stable Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter packages
+        run: flutter pub get
+      - name: Preflight UI analyzer and login offer tests before build
+        run: |
+          flutter analyze --no-fatal-infos lib/deda_admin_task_management_page.dart lib/deda_daily_login_offer_preview_page.dart lib/deda_daily_login_offer_preview_policy.dart lib/deda_social_task_preview.dart lib/deda_admin_social_task_preview_page.dart lib/deda_social_task_preview.dart lib/deda_admin_social_task_preview_page.dart
+          flutter test test/deda_social_task_preview_test.dart test/deda_daily_login_offer_preview_policy_test.dart test/deda_daily_login_offer_preview_page_test.dart test/deda_daily_task_slots_test.dart test/deda_daily_schedule_policy_test.dart test/deda_admin_task_drafts_test.dart
+          node --test tests/stage2_social/social_policy.test.cjs tests/stage2_social/store_policy.test.cjs
+      - name: Node 22 for strict stage13 NO RELEASE audit
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Block any Firebase production deployment or reward payout
+        run: |
+          node --test tests/stage13/deda_release_gate.test.cjs
+          node scripts/deda_stage13_release_gate.cjs > /tmp/deda14-release-gate.json
+          node -e 'const r=require("/tmp/deda14-release-gate.json"); if(r.productionDeployApproved!==false || r.productionRolloutStatus!=="blocked" || r.sourceGuardFailures.length) process.exit(1); console.log("SAFE_NO_DEPLOY:",r.blockers.length,"remaining blockers")'
+      - name: Use accepted 100319 user task core only inside CI build workspace
+        run: |
+          # Stage6 added a disabled user title-preview StreamBuilder to HEAD.
+          # The golden 100319 nav/release patch series needs its accepted
+          # 100319 main.dart baseline (and the user never sees that Stage6
+          # title preview in ordinary builds anyway).
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart
+          ! grep -q 'DedaDailyUserTaskDisplay.previewEnabled' lib/main.dart
+          echo 'STAGE14: original 100319 user app restored only in ephemeral CI workspace'
+      - name: Construct test-only 100323 build from proven 100319 signed routine
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          script=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          old='flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true'
+          new='flutter build apk --release --build-number=100325 --dart-define=USE_NEXT_GEN_SDK=true --dart-define=DEDA_DAILY_TASK_DISPLAY_PREVIEW=false --dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true'
+          assert script.count(old)==1,'Proven APK build command changed; refuse unsafe build'
+          assert 'flutter analyze --no-fatal-infos --no-fatal-warnings' in script
+          guard="""
+          echo '== Validate internal-only Stage14 previews after legacy reconstruction =='
+          python3 - <<'STAGE14_SAFE_PREVIEW'
+          from pathlib import Path
+          admin=Path('lib/admin_pages.dart').read_text()
+          task=Path('lib/deda_admin_task_management_page.dart').read_text()
+          login=Path('lib/deda_daily_login_offer_preview_page.dart').read_text()
+          policy=Path('lib/deda_daily_login_offer_preview_policy.dart').read_text()
+          user=Path('lib/main.dart').read_text()
+          display=Path('lib/deda_daily_user_task_display.dart').read_text()
+          assert admin.count('DedaAdminTaskManagementPage(isArabic: ar)')==1,'Admin task entry missing'
+          assert 'stage12LoginPreviewOpen' in task,'Admin login preview entry missing'
+          assert 'DedaDailyLoginOfferPreviewPage(' in task,'Login preview route missing'
+          assert 'عرض نتيجة المحاكاة' in login and '50' in login,'Holiday reward preview missing'
+          assert 'canGrantRewards => false' in policy,'Potential direct payout unsafe'
+          assert 'defaultValue: false' in display,'User title preview default gate changed'
+          assert 'DedaDailyUserTaskDisplay.previewEnabled' not in user,'Stage6 off-by-default user stream leaked into 100319 user core'
+          assert 'static const int pointsPerDailyLogin = 10;' in user,'Legacy user 10-point login changed'
+          assert 'FirebaseFirestore' not in login and 'FirebaseFunctions' not in login,'Admin preview has remote write'
+          print('STAGE14_SAFE_PREVIEW: 100319 navigation restored, stage12 admin preview retained, no payout')
+          STAGE14_SAFE_PREVIEW
+          """
+          marker="echo '== Flutter analyzer =='\n"
+          assert script.count(marker)==1,'Proven post-rebuild test marker changed'
+          social_patch=(
+          "echo '== Inject social card after complete accepted navigation reconstruction =='\n"
+          "python3 tools/inject_social_task_golden_preview_2026_10_09.py\n"
+          "dart format lib/main.dart\n"
+          "python3 - <<'SOCIAL_VERIFY'\n"
+          "from pathlib import Path\n"
+          "s=Path('lib/main.dart').read_text()\n"
+          "assert s.count('DedaSocialTaskCompactCard(')==1\n"
+          "assert s.count('DedaSocialTaskPreview.visible')==1\n"
+          "assert s.index('DedaSocialTaskCompactCard(') < s.index('final taskId = DedaTaskIds.weekly[index];')\n"
+          "assert s.count('final taskId = DedaTaskIds.weekly[index];')==1\n"
+          "assert 'DedaDailyUserTaskDisplay.previewEnabled' not in s\n"
+          "print('SOCIAL_PREVIEW_GATED: inserted after review card, no old task replaced')\n"
+          "SOCIAL_VERIFY\n"
+          )
+          script=script.replace(marker,guard+"\n"+social_patch+"\n"+marker)
+          script=script.replace(old,new)
+          Path('/tmp/deda_social_compact_preview_100325.sh').write_text(script)
+          print('SAFE: golden build routine reused; only versionCode and false preview flag changed')
+          PY
+      - name: Build signed internal APK 100325 with accepted DEDA navigation
+        run: bash /tmp/deda_social_compact_preview_100325.sh
+      - name: Test manager preview after golden Android reconstruction
+        run: |
+          flutter test test/deda_social_task_preview_test.dart test/deda_daily_login_offer_preview_policy_test.dart test/deda_daily_login_offer_preview_page_test.dart test/deda_daily_task_slots_test.dart
+          flutter analyze --no-fatal-infos lib/deda_admin_task_management_page.dart lib/deda_daily_login_offer_preview_page.dart lib/deda_daily_login_offer_preview_policy.dart lib/deda_social_task_preview.dart lib/deda_admin_social_task_preview_page.dart
+      - name: Verify signature output and Android 100325 version
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          sha256sum "$APK" | tee /tmp/deda14-apk-sha256.txt
+          ls -lh "$APK"
+          if command -v apksigner >/dev/null 2>&1; then apksigner verify "$APK"; fi
+          echo 'QA APK versionCode=100325. No Play upload; no Firebase deploy.'
+      - name: Upload one signed APK for owner device testing only
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100325-social-compact-preview-INTERNAL-ONLY
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
