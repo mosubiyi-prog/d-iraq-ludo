@@ -19,6 +19,42 @@ async function checkBotIsChannelAdmin(botToken) {
 }
 
 /**
+ * Bot admin rights alone do not prove that the user's private /start
+ * callbacks will ever reach DEDA. Inspect actual Telegram Bot API webhook
+ * installation before the manager can activate real rewards.
+ */
+async function checkTelegramWebhookReady(botToken, request = fetch) {
+  const response = await request(
+      "https://api.telegram.org/bot" + botToken + "/getWebhookInfo", {
+        signal: AbortSignal.timeout(7000),
+      });
+  if (!response.ok) throw Error("telegram-bot-webhook-unavailable");
+  const body = await response.json();
+  if (body.ok !== true) return false;
+  const endpoint = String(body?.result?.url || "");
+  let parsed;
+  try {
+    parsed = new URL(endpoint);
+  } catch (_) {
+    return false;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+      parsed.search || parsed.hash) return false;
+  const hostname = parsed.hostname.toLowerCase();
+  // The expected Firebase Gen2 Cloud Functions domain or its underlying
+  // Google Cloud Run service. Do NOT trust a merely matching path elsewhere.
+  return (hostname.endsWith(".cloudfunctions.net") &&
+      parsed.pathname === "/dedaTelegramBotWebhook") ||
+      (hostname.endsWith(".run.app") &&
+      hostname.split(".")[0].startsWith("dedatelegrambotwebhook"));
+}
+
+async function checkVerifiedTelegramBotReady(botToken) {
+  const admin = await checkBotIsChannelAdmin(botToken);
+  return admin && await checkTelegramWebhookReady(botToken);
+}
+
+/**
  * Only the real general manager can enable 10-diamond payouts after the bot
  * itself is confirmed ADMIN of @DEDA_Iraq. The historical 100327 trial keeps
  * rewards disabled. GM may disable immediately without a bot API call.
@@ -27,7 +63,7 @@ async function checkBotIsChannelAdmin(botToken) {
  */
 async function manageVerifiedTelegramReward(db, {
   actor, botToken, op, nowMs = Date.now(),
-  botAdminCheck = checkBotIsChannelAdmin,
+  botAdminCheck = checkVerifiedTelegramBotReady,
 }) {
   if (!actor || actor.role !== "general_manager" ||
       actor.active !== true || !actor.uid) {
@@ -87,4 +123,5 @@ async function manageVerifiedTelegramReward(db, {
   }, {maxAttempts: 5});
 }
 
-module.exports = {manageVerifiedTelegramReward, checkBotIsChannelAdmin};
+module.exports = {manageVerifiedTelegramReward, checkBotIsChannelAdmin,
+  checkTelegramWebhookReady, checkVerifiedTelegramBotReady};
