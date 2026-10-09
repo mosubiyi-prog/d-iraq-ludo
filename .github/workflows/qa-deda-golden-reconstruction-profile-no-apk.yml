@@ -25,6 +25,12 @@ jobs:
           git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
           git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
           git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart
+          # Legacy 100278/100279 rebuild scripts structurally rewrite the OLD
+          # admin card. Use the accepted OLD admin source during reconstruction,
+          # then safely restore our NEW compact/admin-toggle source afterward.
+          cp lib/admin_pages.dart /tmp/deda_next_four_admin_pages.dart
+          git fetch --no-tags origin deda-social-firestore-no-functions-100327-2026-10-09:refs/remotes/origin/deda-social-firestore-no-functions-100327-2026-10-09
+          git show origin/deda-social-firestore-no-functions-100327-2026-10-09:lib/admin_pages.dart > lib/admin_pages.dart
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -39,7 +45,19 @@ jobs:
           marker="echo '== Flutter analyzer =='\n"
           build="flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true"
           assert src.count(marker)==1 and src.count(build)==1, "Accepted golden script unexpectedly changed"
-          check="""echo '== Verify newly corrected profile diamonds on REAL reconstructed DEDA code =='
+          check="""echo '== Restore approved NEW responsive administration UI on reconstructed app =='
+          cp /tmp/deda_next_four_admin_pages.dart lib/admin_pages.dart
+          dart format lib/admin_pages.dart
+          python3 - <<'ADMIN_UI_REGRESSION'
+          from pathlib import Path
+          s=Path('lib/admin_pages.dart').read_text()
+          assert 'DedaAdminCompactCard(' in s
+          assert "kind: 'place_auto_approval'" in s
+          assert "kind: 'pin_auto_recovery'" in s
+          assert 'mainAxisExtent:' in s
+          print('PASS: responsive cards and server-gated manager toggles restored after legacy rebuild.')
+          ADMIN_UI_REGRESSION
+          echo '== Verify newly corrected profile diamonds on REAL reconstructed DEDA code =='
           python3 tools/fix_profile_rewarded_diamond_display_next_release.py
           dart format lib/main.dart
           python3 - <<'PROFILE_REGRESSION'
