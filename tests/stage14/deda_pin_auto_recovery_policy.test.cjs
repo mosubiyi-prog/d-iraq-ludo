@@ -12,7 +12,7 @@ const req={
 };
 const setting={enabled:true,enabledAt:ts(now-120000)};
 const proof={valid:true,uid:req.requesterUid,accountKey:req.accountKey,
-  revoked:false,kind:"verified-credential-proof"};
+  revoked:false,kind:"trusted-install-secret-verified-by-server"};
 const input=(patch={})=>({
   request:req,setting,ready:true,serverNow:ts(now),
   serverProof:proof,attemptCountLastHour:1,
@@ -29,10 +29,10 @@ test("off/manual, old pre-toggle requests and first 10 seconds blocked",()=>{
     {ready:false},{setting:{enabled:false,enabledAt:ts(now-120000)}},
     {request:{...req,createdAt:ts(now-130000)}},
     {request:{...req,createdAt:ts(now-9999)}},
-    {request:{...req,status:"review"}},
+    {request:{...req,status:"ready"}},
   ])assert.equal(decide(input(part)).eligible,false);
 });
-test("client name + phone + trusted install ID is NOT strong proof",()=>{
+test("client name/phone and unverified installation are NOT server proof",()=>{
   for(const serverProof of [
     undefined, null, {...proof,valid:false},
     {...proof,uid:"attacker"}, {...proof,kind:"client-install-id"},
@@ -42,8 +42,8 @@ test("client name + phone + trusted install ID is NOT strong proof",()=>{
 test("rate limit, replay and duplicate requests remain manual",()=>{
   for(const p of [
     {attemptCountLastHour:2}, {attemptCountLastHour:0},
-    {latestRequestId:"older-request"}, {request:{...req,riskLevel:"review"}},
-    {request:{...req,accountFound:false}}, {request:{...req,nameMatches:false}},
+    {latestRequestId:"older-request"},
+    {request:{...req,status:"approved"}},
     {request:{...req,type:"admin",status:"new"}},
   ])assert.equal(decide(input(p)).eligible,false);
 });
