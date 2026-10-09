@@ -105,6 +105,9 @@ jobs:
           assert user.index('DedaSocialTaskCompactCard(') < user.index('final taskId = DedaTaskIds.weekly[index];')
           assert 'startTelegramBotVerification' in social
           assert 'claimVerifiedTelegramDiamonds' in social
+          assert 'DedaPinRecoveryPage(' in user, 'user forgot-PIN form not retained'
+          assert 'DedaPinAuth.recoveryRequest(' in user, 'user status listener missing'
+          assert 'DedaPinAuth.readRecoveryPin(' in user, 'new 6-digit PIN never displayed to requester'
           assert user.count('dedaProfileVisibleDiamonds(')==1
           assert 'Timer.periodic(const Duration(milliseconds: 16)' in user
           print('PASS: 8 golden daily/weekly task controls, smooth map, manager earned ad diamonds and Telegram wallet refresh retained in ONE actual Flutter main.dart.')
