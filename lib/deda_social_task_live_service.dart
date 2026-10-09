@@ -196,11 +196,21 @@ class DedaLiveSocialTaskService {
           .collection(_daysPath).doc(docId)
           .get(const GetOptions(source: Source.server));
       final values = snapshot.data();
+      final previewOnly = values != null &&
+          values['rewardsEnabled'] == false &&
+          values['rewardClaimMode'] ==
+              'blocked-until-trusted-proof-and-ssv-ledger';
+      final verifiedReward = values != null &&
+          values['rewardsEnabled'] == true &&
+          values['rewardClaimMode'] ==
+              'server-verified-telegram-membership' &&
+          values['platform'] == 'telegram' &&
+          values['action'] == 'follow' &&
+          values['rewardUnit'] == 'diamonds' &&
+          values['rewardAmount'] == 10;
       if (!snapshot.exists || values == null ||
           values['status'] != 'scheduled' ||
-          values['rewardsEnabled'] != false ||
-          values['rewardClaimMode'] !=
-              'blocked-until-trusted-proof-and-ssv-ledger') {
+          (!previewOnly && !verifiedReward)) {
         return null;
       }
       return values;
