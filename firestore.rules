@@ -1777,6 +1777,62 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // DEDA next release: ONLY the strict active general manager controls
+    // server automation configuration. A separated Admin-SDK-written status
+    // marker is mandatory BEFORE the owner may set either switch to ON.
+    // Server functions must perform all privileged approvals/code resets.
+    match /deda_automation_status/{kind} {
+      allow get: if directSocialAdmin()
+        && kind in ['place_auto_approval', 'pin_auto_recovery'];
+      allow list, create, update, delete: if false;
+    }
+
+    match /deda_automation_settings/{kind} {
+      allow get: if directSocialAdmin()
+        && kind in ['place_auto_approval', 'pin_auto_recovery'];
+      allow list, delete: if false;
+      allow create: if directSocialAdmin()
+        && kind in ['place_auto_approval', 'pin_auto_recovery']
+        && request.resource.data.keys().hasOnly([
+          'enabled', 'enabledAt', 'revision', 'updatedAt', 'changedByUid'
+        ])
+        && request.resource.data.keys().hasAll([
+          'enabled', 'enabledAt', 'revision', 'updatedAt', 'changedByUid'
+        ])
+        && request.resource.data.enabled is bool
+        && request.resource.data.revision == 1
+        && request.resource.data.changedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && (
+          (!request.resource.data.enabled
+            && request.resource.data.enabledAt == null)
+          || (request.resource.data.enabled
+            && request.resource.data.enabledAt == request.time
+            && exists(/databases/$(database)/documents/deda_automation_status/$(kind))
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true)
+        );
+      allow update: if directSocialAdmin()
+        && kind in ['place_auto_approval', 'pin_auto_recovery']
+        && request.resource.data.keys().hasOnly([
+          'enabled', 'enabledAt', 'revision', 'updatedAt', 'changedByUid'
+        ])
+        && request.resource.data.keys().hasAll([
+          'enabled', 'enabledAt', 'revision', 'updatedAt', 'changedByUid'
+        ])
+        && request.resource.data.enabled is bool
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.changedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && (
+          (!request.resource.data.enabled
+            && request.resource.data.enabledAt == null)
+          || (request.resource.data.enabled
+            && request.resource.data.enabledAt == request.time
+            && exists(/databases/$(database)/documents/deda_automation_status/$(kind))
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true)
+        );
+    }
+
     // DEDA 100327: trusted server-time Telegram only; no rewards.
     function directSocialAdmin() {
       return isAdmin() && adminData().keys().hasAll(['role'])
