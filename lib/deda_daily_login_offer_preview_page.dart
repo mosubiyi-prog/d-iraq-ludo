@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'deda_daily_login_offer_preview_policy.dart';
-import 'deda_daily_task_slots.dart';
 
 /// Stage 12 - manager-facing LOCAL preview. It has no Firebase imports,
 /// remote save, scheduling, claim action, or wallet mutation.
