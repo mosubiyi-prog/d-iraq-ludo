@@ -1,0 +1,88 @@
+name: DEDA 100327 Merge Live Rules Read-Only - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-social-firestore-no-functions-100327-2026-10-09
+    paths:
+      - '.github/workflows/qa-deda-social-100327-live-merge-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-merge-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-100327-firestore-no-functions
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python Google Cloud rules RELEASE read-only support
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Verify exact LIVE rules checksum, add two isolated collections only
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.environ.get('DEDA_SA') or os.environ.get('FALLBACK_SA')
+          if not raw: sys.exit('SAFE_STOP: no Firebase read-only credentials')
+          cred=service_account.Credentials.from_service_account_info(
+            json.loads(raw), scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(cred)
+          root='https://firebaserules.googleapis.com/v1/'
+          rel=session.get(root+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          name=rel.json().get('rulesetName','')
+          if not name.startswith('projects/deda-25b88/rulesets/'):
+            sys.exit('SAFE_STOP: unexpected live ruleset')
+          result=session.get(root+name,timeout=35)
+          result.raise_for_status()
+          live='\n'.join(x.get('content','') for x in
+            result.json()['source']['files'] if x.get('name','').endswith('.rules'))
+          sha=lambda s:hashlib.sha256(s.encode()).hexdigest()[:18]
+          print('CURRENT_LIVE_SHA18',sha(live))
+          if sha(live)!='3408852ae0fd2dcd4b':
+            sys.exit('SAFE_STOP: live rules changed; never overwrite this version')
+          cand=Path('firestore.rules').read_text()
+          start='    // DEDA 100327: trusted server-time Telegram only; no rewards.'
+          end='    match /deda_social_admin_state/{taskId} {'
+          if cand.count(start)!=1 or cand.count(end)!=1 or live.count(end)!=1:
+            sys.exit('SAFE_STOP: inconsistent source anchor')
+          addition=cand[cand.index(start):cand.index(end)]
+          assert addition.count('match /deda_social_direct_')==2
+          assert 'request.time' in addition
+          assert 'allow delete: if false' in addition
+          if start in live or 'deda_social_direct_days' in live:
+            sys.exit('SAFE_STOP: direct rules already published; manual review needed')
+          merged=live.replace(end,addition+end,1)
+          if merged.replace(addition,'',1)!=live:
+            sys.exit('SAFE_STOP: preexisting live rules changed')
+          Path('firestore.rules').write_text(merged)
+          print('PREVIEW_MERGED_SHA18',sha(merged))
+          print('NO_FIREBASE_WRITE: future rules only in GitHub runner workspace')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install offline Firebase emulator test SDK
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Test current live merged rules without production change
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions "node --test tests/firestore-rules/social-100327-direct.test.mjs tests/firestore-rules/social-trial-security.test.mjs"
+      - name: Upload review-only merged rules (never deployed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100327-LIVE-RULES-MERGE-REVIEW-ONLY
+          path: firestore.rules
+          retention-days: 30
+          if-no-files-found: error
