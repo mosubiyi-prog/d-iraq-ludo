@@ -7,6 +7,8 @@ on:
     paths:
       - 'firestore.rules'
       - 'lib/admin_pages.dart'
+      - 'lib/deda_admin_compact_card.dart'
+      - 'test/deda_admin_compact_card_test.dart'
       - 'lib/deda_admin_automation_toggle.dart'
       - 'tests/firestore-rules/deda-next-manager-automation-controls.test.mjs'
       - '.github/workflows/qa-deda-next-four-controls-ui-rules.yml'
@@ -42,7 +44,8 @@ jobs:
       - name: Flutter analyzer UI and nearby screens
         run: |
           flutter pub get
-          flutter analyze --no-fatal-infos lib/deda_admin_automation_toggle.dart lib/admin_pages.dart lib/deda_recovery_admin.dart
+          flutter analyze --no-fatal-infos lib/deda_admin_automation_toggle.dart lib/deda_admin_compact_card.dart lib/admin_pages.dart lib/deda_recovery_admin.dart
+          flutter test test/deda_admin_compact_card_test.dart
       - name: Test only, no deployment, no new APK
         run: |
           echo 'Manager automation UI safe-gated until trusted server readiness; no production modification.'
