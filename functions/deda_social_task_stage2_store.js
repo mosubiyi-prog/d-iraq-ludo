@@ -41,14 +41,10 @@ async function authorizedManager(db, authUid) {
   if (!doc.exists || data?.status !== "active") {
     throw Error("general-manager-server-verification-required");
   }
-  policy.saveDraft({
-    draft: {
-      platform: "telegram", action: "follow",
-      title: "authorization check", url: "https://t.me/safe",
-      rewardUnit: "points", rewardAmount: 1,
-      doubleWithRewardedAd: false,
-    }, actor, now: new Date("2026-01-01T00:00:00Z"),
-  });
+  if (actor.role !== "general_manager" || actor.active !== true ||
+      actor.serverVerified !== true) {
+    throw Error("general-manager-server-verification-required");
+  }
   return actor;
 }
 async function save(db, {authUid, taskId, draft, expectedRevision, now}) {
