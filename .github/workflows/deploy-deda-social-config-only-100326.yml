@@ -1,0 +1,160 @@
+name: DEDA 100326 Activate Social Config Only (Guarded Firebase)
+
+on:
+  push:
+    branches:
+      - deda-trial-live-scheduling-100326-2026-10-09
+    paths:
+      - '.github/workflows/deploy-deda-social-config-only-100326.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100326-social-production
+  cancel-in-progress: false
+
+jobs:
+  social-config-activation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      GOOGLE_CLOUD_PROJECT: deda-25b88
+      GCLOUD_PROJECT: deda-25b88
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify isolated live social scope and APK-tested client
+        run: |
+          set -euo pipefail
+          node --check functions/index.js
+          node --check functions/deda_social_trial_runtime.js
+          node --check functions/deda_social_task_stage2.js
+          node --test tests/stage2_social/social_policy.test.cjs tests/stage2_social/trial_runtime.test.cjs
+          python3 - <<'SAFE'
+          from pathlib import Path
+          runtime=Path('functions/deda_social_trial_runtime.js').read_text()
+          index=Path('functions/index.js').read_text()
+          assert runtime.count('rewardsEnabled: false')>=1
+          assert 'collection("users")' not in runtime
+          assert 'collection("admin_wallets")' not in runtime
+          assert 'collection("admin_gift_wallets")' not in runtime
+          assert 'actor.data.role !== "general_manager"' in index
+          assert index.count('exports.dedaManageSocialTaskTrial = onCall(')==1
+          assert index.count('exports.dedaPublishSocialTaskTrial = dedaOnSchedule(')==1
+          assert 'timeZone: "Asia/Baghdad"' in index
+          print('SAFE_SCOPE: only social task config, no payout, no old tasks')
+          SAFE
+      - name: Prepare trusted Firebase deployment credential (never print secrets)
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DEDA_SA:-}" ]; then
+            printf '%s' "$DEDA_SA" > "$RUNNER_TEMP/deda-social-service.json"
+          elif [ -n "${FALLBACK_SA:-}" ]; then
+            printf '%s' "$FALLBACK_SA" > "$RUNNER_TEMP/deda-social-service.json"
+          else
+            echo 'SAFE_STOP: No configured service account for Firebase.' >&2
+            exit 2
+          fi
+          chmod 0600 "$RUNNER_TEMP/deda-social-service.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/deda-social-service.json" >> "$GITHUB_ENV"
+      - name: Python for exact CURRENT deployed rules inspection
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Surgical merge (read-only live fetch, hard-pin old rules SHA)
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          info=json.loads(Path(os.environ['GOOGLE_APPLICATION_CREDENTIALS']).read_text())
+          assert info['project_id']=='deda-25b88', 'SAFE_STOP: unexpected credential project'
+          credential=service_account.Credentials.from_service_account_info(
+            info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(credential)
+          base='https://firebaserules.googleapis.com/v1/'
+          release=session.get(base+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          release.raise_for_status()
+          name=release.json().get('rulesetName','')
+          assert name.startswith('projects/deda-25b88/rulesets/'), 'bad ruleset name'
+          remote=session.get(base+name,timeout=35)
+          remote.raise_for_status()
+          source=remote.json().get('source',{}).get('files',[])
+          live='\n'.join(f['content'] for f in source if f.get('name','').endswith('.rules'))
+          sha=lambda s: hashlib.sha256(s.encode()).hexdigest()[:18]
+          current=sha(live)
+          print('LIVE_RULES_SHA18:',current)
+          if current != 'def3434ab5add714b7':
+            sys.exit('SAFE_STOP: published rules changed from reviewed baseline; no deployment.')
+          candidate=Path('firestore.rules').read_text()
+          first='    match /deda_social_admin_state/{taskId} {'
+          end='    match /admin_audit/{auditId} {'
+          if candidate.count(first)!=1 or candidate.count(end)!=1 or live.count(end)!=1:
+            sys.exit('SAFE_STOP: unexpected match blocks')
+          if 'match /deda_social_task_public/' in live:
+            sys.exit('SAFE_STOP: social rules already present; require review')
+          addition=candidate[candidate.index(first):candidate.index(end)]
+          if addition.count('match /')!=3 or 'allow read, write: if false;' not in addition or 'allow create, update, delete: if false;' not in addition:
+            sys.exit('SAFE_STOP: malformed restricted social rules')
+          merged=live.replace(end,addition+end,1)
+          if merged.replace(addition,'',1)!=live:
+            sys.exit('SAFE_STOP: changed pre-existing live rules')
+          Path('deda-social-100326-live-rules-backup.txt').write_text(live)
+          Path('firestore.rules').write_text(merged)
+          print('MERGED_RULES_SHA18:',sha(merged))
+          assert sha(merged)=='3408852ae0fd2dcd4b', 'SAFE_STOP: unexpected tested merged rules'
+          print('BACKUP_CAPTURED; social blocks only; previous live rules preserved')
+          PY
+      - name: Save original LIVE Firebase rules for recovery BEFORE deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100326-PRE-ACTIVATION-LIVE-RULES-BACKUP
+          path: deda-social-100326-live-rules-backup.txt
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local Firebase emulators and safety test deps
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Retest exact merged CURRENT live rules with local emulator
+        env:
+          GCLOUD_PROJECT: demo-deda-social-trial-live-rules
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-social-trial-live-rules "node --test tests/firestore-rules/social-trial-security.test.mjs"
+      - name: Deploy ONLY 3 isolated social Firestore rules blocks to real project
+        run: |
+          npx --yes firebase-tools@14 deploy --only firestore:rules --project deda-25b88 --non-interactive
+      - name: Deploy ONLY the two social CONFIG Cloud Functions
+        run: |
+          npx --yes firebase-tools@14 deploy --only functions:dedaManageSocialTaskTrial,functions:dedaPublishSocialTaskTrial --project deda-25b88 --non-interactive
+      - name: Verify live rule release and do not create a sample social task
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          info=json.loads(Path(os.environ['GOOGLE_APPLICATION_CREDENTIALS']).read_text())
+          cred=service_account.Credentials.from_service_account_info(
+              info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(cred)
+          base='https://firebaserules.googleapis.com/v1/'
+          rel=session.get(base+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          source=session.get(base+rel.json()['rulesetName'],timeout=35)
+          source.raise_for_status()
+          body='\n'.join(f['content'] for f in source.json()['source']['files'] if f.get('name','').endswith('.rules'))
+          expected=Path('firestore.rules').read_text()
+          assert body==expected, 'Live rules release differs from reviewed social-only addition'
+          print('SOCIAL_LIVE_RULES_VERIFIED')
+          print('NO_SAMPLE_TASK_CREATED; NO_WALLET_CREDITS; NO_DAILY_TASK_CHANGES')
+          PY
