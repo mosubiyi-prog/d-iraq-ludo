@@ -77,3 +77,12 @@ Manager UI / rules security QA https://github.com/mosubiyi-prog/d-iraq-ludo/acti
 
 IMPORTANT: NO NEW APK, NO LIVE FIREBASE CHANGES, NO GOOGLE PLAY ACTION.
 All four owner requests remain under active development. Backend deployment Cloud Build restriction, bot admin/setup and live wallet verification remain to be resolved before integrated APK.
+
+## Verified reward-wallet architecture (release warning)
+
+The accepted build reconstructs personal diamonds through legacy scripts at APK build time:
+- tools/add_diamonds_reward_100259_2026_10_04.py defines a local SharedPreferences-based DedaDiamondsWallet (ad earnings).
+- tools/admin_diamond_backend_100270_2026_10_04.py defines the separate Firestore admin gift wallet and deda_diamond_gift_balances (gift portion of personal diamonds).
+- tools/style_wallet_sync_100275_2026_10_05.py preserves isolated manager personal wallet.
+This means a real Telegram follow reward CANNOT be implemented by merely creating a new server balance not read by the user UI, and MUST NOT reduce or write the manager gift budget. Need a protected one-time social ledger AND a compatible personal-balance presentation/spending path; otherwise claim would falsely appear successful while the user sees zero diamonds.
+The signed 100327 build reconstructs main.dart through tools/build_100318_user_heading_camera.sh with scripts; validate future UI patch on that resulting build workspace, not just the checked-in lib/main.dart. Preserve all accepted navigation checks.
