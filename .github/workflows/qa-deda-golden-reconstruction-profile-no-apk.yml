@@ -1,0 +1,69 @@
+name: DEDA Golden Navigation + Profile Ad Reward Integration - NO APK
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'lib/deda_profile_visible_diamonds.dart'
+      - 'tools/fix_profile_rewarded_diamond_display_next_release.py'
+      - 'test/deda_profile_visible_diamonds_test.dart'
+      - '.github/workflows/qa-deda-golden-reconstruction-profile-no-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconstructed-real-source-without-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact accepted golden 100319 navigation starting point only for CI
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Prepare original golden reconstruction as NO-APK preflight
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          marker="echo '== Flutter analyzer =='\n"
+          build="flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true"
+          assert src.count(marker)==1 and src.count(build)==1, "Accepted golden script unexpectedly changed"
+          check="""echo '== Verify newly corrected profile diamonds on REAL reconstructed DEDA code =='
+          python3 tools/fix_profile_rewarded_diamond_display_next_release.py
+          dart format lib/main.dart
+          python3 - <<'PROFILE_REGRESSION'
+          from pathlib import Path
+          s=Path('lib/main.dart').read_text()
+          assert s.count('dedaProfileVisibleDiamonds(') == 1
+          assert s.count('ordinaryEarnedAndGifted: normalDiamonds') == 1
+          assert s.count('generalManagerPersonal: managerDiamonds') == 1
+          assert 'import \'deda_profile_visible_diamonds.dart\';' in s
+          assert 'hasGeneralManagerPersonalWallet ? managerDiamonds : normalDiamonds' not in s
+          assert 'Timer.periodic(const Duration(milliseconds: 16)' in s, 'Golden live navigation changed'
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in s
+          print('PASS: REAL manager profile now includes +3 ad rewards in displayed diamonds; Golden navigation preserved.')
+          PROFILE_REGRESSION
+          """
+          src=src.replace(marker,check+"\n"+marker)
+          src=src.replace(build,"echo 'NO_APK_BUILT_NO_PRODUCTION_DEPLOY'")
+          Path('/tmp/deda_golden_profile_no_apk.sh').write_text(src)
+          PY
+      - name: Reconstruct full accepted navigation + rewards profile, analyze but DO NOT BUILD
+        run: bash /tmp/deda_golden_profile_no_apk.sh
+      - name: Verify ad reward profile math and no profile wallet debits
+        run: |
+          flutter analyze --no-fatal-infos lib/deda_profile_visible_diamonds.dart
+          flutter test test/deda_profile_visible_diamonds_test.dart
+          test ! -e build/app/outputs/flutter-apk/app-release.apk
+          echo 'No signed APK generated. No Firebase rules or functions deployed.'
