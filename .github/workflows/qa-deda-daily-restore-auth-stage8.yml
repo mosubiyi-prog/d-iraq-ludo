@@ -1,0 +1,54 @@
+name: DEDA Stage 8 Restore Callable Authorization - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - admin-daily-slots-stage8-restore-auth-2026-10-09
+    paths:
+      - 'functions/deda_daily_task_restore_callable.js'
+      - 'tests/firestore-rules/daily-restore-callable.test.mjs'
+      - '.github/workflows/qa-deda-daily-restore-auth-stage8.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-auth-emulator-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 29
+    steps:
+      - name: Checkout protected stage8 branch
+        uses: actions/checkout@v4
+      - name: Guard unchanged application, live rules, publisher and restore engine
+        run: |
+          git fetch --no-tags origin backup-admin-daily-slots-stage7-restore-qa-2026-10-09:refs/remotes/origin/backup-admin-daily-slots-stage7-restore-qa-2026-10-09
+          git diff --exit-code origin/backup-admin-daily-slots-stage7-restore-qa-2026-10-09 -- lib/ android firestore.rules functions/index.js functions/deda_daily_task_publisher.js functions/deda_daily_task_restore.js functions/package.json pubspec.yaml
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set up Java for local Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Firebase dependencies in CI only
+        run: |
+          npm --prefix functions install --no-audit --no-fund
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Syntax and no-production-export guard
+        run: |
+          node --check functions/deda_daily_task_restore_callable.js
+          node --check tests/firestore-rules/daily-restore-callable.test.mjs
+          ! grep -q 'deda_daily_task_restore_callable' functions/index.js
+          ! grep -q 'createUnpublishedRestoreCallable' functions/index.js
+          ! grep -q '^exports[.]' functions/deda_daily_task_restore_callable.js
+          grep -q 'enforceAppCheck: true' functions/deda_daily_task_restore_callable.js
+      - name: Test callable identity security and stage7 regression with Firestore emulator
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage8-restore "node --test tests/firestore-rules/daily-restore-callable.test.mjs tests/firestore-rules/daily-restore.test.mjs"
+      - name: Confirm no live deployment or balance issuing
+        run: |
+          ! grep -q 'admin_wallets' functions/deda_daily_task_restore_callable.js
+          ! grep -q 'rewardAmount:' functions/deda_daily_task_restore_callable.js
+          echo 'STAGE8_AUTH_SAFE: callable code unexported; emulator tests only; no APK or Firebase production deployment'
