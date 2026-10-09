@@ -150,6 +150,28 @@ test("expired token and invalid session fail closed", async () => {
   assert.equal(other.docs.has(`deda_telegram_start_tokens/${NONCE}`), false);
 });
 
+test("revoked DEDA session after nonce issue cannot bind Telegram identity", async () => {
+  for (const doc of [
+    `deda_sessions/${UID}`,
+    `users/${UID}`,
+    `deda_account_directory/${ACCOUNT}`,
+  ]) {
+    const db = initial();
+    await begun(db);
+    if (doc.startsWith("deda_account_directory/")) {
+      db.docs.set(doc, {active: false});
+    } else {
+      db.docs.delete(doc);
+    }
+    const result = await accept(db);
+    assert.equal(result.outcome, "deda-session-revoked-before-telegram-binding");
+    assert.equal(db.docs.has(`deda_telegram_bot_accounts/${ACCOUNT}`), false);
+    assert.equal(db.docs.has(`deda_telegram_bot_identities/${TG_ID}`), false);
+    assert.equal(db.docs.get(`deda_telegram_start_tokens/${NONCE}`).consumed,
+      false);
+  }
+});
+
 test("same Telegram account cannot silently link a different DEDA identity", async () => {
   const db = initial();
   await begun(db);
