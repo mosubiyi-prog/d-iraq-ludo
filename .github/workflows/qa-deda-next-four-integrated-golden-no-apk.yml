@@ -120,7 +120,7 @@ jobs:
           export DEDA_STORE_PASSWORD='QAOnlyTemporaryPass123'
           rm -f /tmp/deda-qa-one-day.jks
           echo 'QA-only ephemeral key supports legacy keytool preflight; no APK.'
-          bash /tmp/deda_golden_profile_no_apk.sh
+          bash /tmp/deda_next_four_integrated_golden_no_apk.sh
       - name: Verify actual manager diamond profile, Telegram user/admin screens, and no APK
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_profile_visible_diamonds.dart lib/deda_social_task_preview.dart lib/deda_social_task_live_service.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart lib/deda_admin_automation_toggle.dart
