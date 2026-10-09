@@ -108,11 +108,26 @@ exports.onSupportRequestUpdated = onDocumentUpdated(
     },
 );
 
+const {processNewPlace} = require("./deda_place_auto_approval_worker.js");
+
 exports.onPlaceRequestCreated = onDocumentCreated(
     "place_requests/{requestId}",
     async (event) => {
       const data = event.data && event.data.data();
       if (!data) return;
+      // Trusted backend ONLY: no switch document means manual review.
+      // A failure in this optional worker never prevents existing alerts.
+      let automationOutcome = "manual";
+      try {
+        const processed = await processNewPlace(getFirestore(), {
+          requestId: event.params.requestId, nowMs: Date.now(),
+        });
+        automationOutcome = processed.outcome;
+      } catch (error) {
+        console.error("DEDA_AUTO_PLACE_SAFE_MANUAL_FALLBACK",
+            event.params.requestId, String(error.message || error));
+      }
+      if (automationOutcome === "auto-approved") return;
       await notifyAdmins(
           "طلب مكان جديد في DEDA",
           data.placeName || "مكان جديد للمراجعة",
