@@ -111,7 +111,7 @@ jobs:
           java-version: '21'
       - name: Install Firestore Emulator test packages
         run: npm --prefix tests/firestore-rules install --no-audit --no-fund
-      - name: Retest EXACT candidate merged rules: 7 new plus 4 old
+      - name: Retest exact candidate with seven new and four old security tests
         run: |
           set -euo pipefail
           GCLOUD_PROJECT=demo-deda-100327-firestore-no-functions npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions "node --test tests/firestore-rules/social-100327-direct.test.mjs"
