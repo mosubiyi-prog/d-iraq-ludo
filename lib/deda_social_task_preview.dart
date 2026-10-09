@@ -182,6 +182,78 @@ class _DedaSocialTaskUserPreviewPageState
     return uri;
   }
 
+  Future<void> _startBotVerification() async {
+    if (_verificationBusy) return;
+    setState(() => _verificationBusy = true);
+    try {
+      final result = await _telegram.beginTelegramLink();
+      if (!mounted) return;
+      final outcome = (result['outcome'] ?? '').toString();
+      final text = (result['botLink'] ?? '').toString();
+      final link = Uri.tryParse(text);
+      if (outcome == 'started' && link != null &&
+          link.scheme == 'https' && link.host == 't.me') {
+        final opened = await launchUrl(
+          link, mode: LaunchMode.externalApplication);
+        if (!mounted) return;
+        if (!opened) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(t('تعذر فتح بوت التحقق.',
+                'Could not open the verification bot.'))));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(t(
+            outcome == 'wait-before-new-link'
+                ? 'انتظر دقيقة قبل طلب رابط جديد.'
+                : 'التحقق عبر تليجرام غير جاهز حالياً.',
+            outcome == 'wait-before-new-link'
+                ? 'Please wait a minute before requesting another link.'
+                : 'Telegram verification is not available yet.'))));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('تعذر الاتصال بخادم التحقق، حاول لاحقاً.',
+            'Verification server unavailable. Try again later.'))));
+    } finally {
+      if (mounted) setState(() => _verificationBusy = false);
+    }
+  }
+
+  Future<void> _claimVerifiedTelegramDiamonds() async {
+    if (_verificationBusy) return;
+    setState(() => _verificationBusy = true);
+    try {
+      final result = await _telegram.claimAfterMembershipCheck();
+      if (!mounted) return;
+      final outcome = (result['outcome'] ?? '').toString();
+      if (outcome == 'awarded') {
+        if (widget.onDiamondsGranted != null) {
+          await widget.onDiamondsGranted!();
+        }
+        if (!mounted) return;
+      }
+      final message = outcome == 'awarded'
+          ? t('مبروك! انضافت 10 ماسات إلى رصيدك 💎',
+              '10 diamonds have been credited to your balance! 💎')
+          : outcome == 'already-rewarded'
+              ? t('استلمت مكافأة تليجرام سابقاً.',
+                  'You already received the Telegram reward.')
+              : t('افتح القناة واشترك واربط حسابك بالبوت، وبعدها حاول مجدداً.',
+                  'Join the channel, link via the bot, then try again.');
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t('فشل التحقق من الخادم. لم تُمنح أي مكافأة.',
+            'Server verification failed. No reward was granted.'))));
+    } finally {
+      if (mounted) setState(() => _verificationBusy = false);
+    }
+  }
+
   Widget _empty() => Center(child: Column(
     mainAxisSize: MainAxisSize.min,
     children: [
