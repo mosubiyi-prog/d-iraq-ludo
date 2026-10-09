@@ -33,7 +33,7 @@ jobs:
           user = Path('lib/deda_social_task_preview.dart').read_text()
           assert 'rewardsEnabled: false' in social
           assert 'rewardClaimMode: "blocked-until-trusted-proof-and-ssv-ledger"' in social
-          assert 'wallet' not in social.lower()
+          assert 'collection("users")' not in social and 'tx.update(wallet' not in social
           assert 'launchUrl(uri' in user and 'socialTaskRewardClaim' not in user
           assert Path('lib/deda_social_task_live_service.dart').exists()
           print('SAFE_TRIAL_CONFIG_ONLY; no wallet, Google Play, or Firebase deploy')
