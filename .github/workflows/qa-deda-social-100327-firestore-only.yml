@@ -31,7 +31,6 @@ jobs:
           ! grep -q 'FirebaseFunctions.instance' lib/deda_social_task_live_service.dart
           grep -q 'Source.server' lib/deda_social_task_live_service.dart
           grep -q "rewardsEnabled': false" lib/deda_social_task_live_service.dart
-          ! grep -q 'firebase deploy' .github/workflows/qa-deda-social-100327-firestore-only.yml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
