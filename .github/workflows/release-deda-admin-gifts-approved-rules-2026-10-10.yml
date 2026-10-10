@@ -1,0 +1,201 @@
+name: DEDA APPROVED Admin Gifts Firewall LIVE RULES ONLY - ONE TIME
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - '.github/workflows/release-deda-admin-gifts-approved-rules-2026-10-10.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-25b88-authorized-gift-security-rule-release
+  cancel-in-progress: false
+
+jobs:
+  owner-authorized-gifts-rules-only:
+    # Owner explicitly approved secure admin-gift Firestore rules release in chat.
+    # Commit marker ensures no accidental unrelated push will redeploy.
+    if: contains(github.event.head_commit.message, '[authorized-gift-rules-release-2026-10-10]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local Firebase Emulator and read-only Google auth tools
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+
+      - name: Fetch ACTUAL CURRENT live rules, preserve rollback release name, SHA-gate release
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.environ.get('DEDA_SA') or os.environ.get('FALLBACK_SA')
+          if not raw:sys.exit('SAFE_STOP: no Firebase account credential')
+          cred=service_account.Credentials.from_service_account_info(
+            json.loads(raw),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(cred)
+          api='https://firebaserules.googleapis.com/v1/'
+          rel=session.get(api+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          ruleset=rel.json().get('rulesetName','')
+          if not ruleset.startswith('projects/deda-25b88/rulesets/'):
+            sys.exit('SAFE_STOP: wrong Firebase project/release')
+          rules=session.get(api+ruleset,timeout=35)
+          rules.raise_for_status()
+          live='\n'.join(f['content'] for f in rules.json()['source']['files']
+                         if f.get('name','').endswith('.rules'))
+          sha=hashlib.sha256(live.encode()).hexdigest()[:18]
+          if sha!='c5b444a132c894e933':
+            sys.exit('SAFE_STOP: published Firestore rules SHA changed, REFUSE DEPLOY')
+          Path('/tmp/deda-actual-live-gift-rules.rules').write_text(live)
+          Path('/tmp/deda-before-gift-release-name.txt').write_text(ruleset)
+          Path('deda-gift-rollback-review').mkdir(exist_ok=True)
+          Path('deda-gift-rollback-review/old-firestore.rules').write_text(live)
+          Path('deda-gift-rollback-review/previous-ruleset-name.txt').write_text(ruleset+'\n')
+          Path('deda-gift-rollback-review/previous-sha18.txt').write_text(sha+'\n')
+          print('PRE_DEPLOY_CURRENT_LIVE_SHA18',sha)
+          print('PRE_DEPLOY_ROLLBACK_RULESET_SAVED')
+          PY
+
+      - name: Surgical merge from current live (changes three gift collections only)
+        run: |
+          set -euo pipefail
+          python3 tools/deda_preview_merge_live_admin_gifts_2026_10_10.py /tmp/deda-actual-live-gift-rules.rules
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          merged=Path('firestore.rules').read_text()
+          sha=hashlib.sha256(merged.encode()).hexdigest()[:18]
+          if sha!='df9fbbbfa30ade3bae':
+            raise SystemExit('SAFE_STOP: merged rules differ from OWNER REVIEWED emulator candidate')
+          assert merged.count('match /deda_diamond_gifts/{giftId}')==1
+          assert merged.count('match /deda_admin_diamond_wallets/{adminUid}')==1
+          assert merged.count('match /deda_diamond_gift_balances/{publicId}')==1
+          print('OWNER_APPROVED_MERGED_CANDIDATE_SHA18',sha)
+          PY
+
+      - name: PRE-DEPLOY Firebase Emulator - 10 real gift and GM personal-wallet security tests
+        env:
+          GCLOUD_PROJECT: demo-deda-admin-gift-manual-claim
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-admin-gift-manual-claim \
+            "node --test tests/firestore-rules/admin-gift-manual-claim.test.mjs"
+
+      - name: PRE-DEPLOY Firebase Emulator - 7 legacy 100327 admin/social regression tests
+        env:
+          GCLOUD_PROJECT: demo-deda-100327-firestore-no-functions
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions \
+            "node --test tests/firestore-rules/social-100327-direct.test.mjs"
+
+      - name: PRE-DEPLOY Firebase Emulator - 5 Telegram reward anti-forgery regression tests
+        env:
+          GCLOUD_PROJECT: demo-deda-next-telegram-verified
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-next-telegram-verified \
+            "node --test tests/firestore-rules/next-telegram-verified.test.mjs"
+
+      - name: Save original LIVE rules and rollback ruleset BEFORE any write
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-BEFORE-AUTHORIZED-ADMIN-GIFT-RULES-ROLLBACK-2026-10-10
+          path: deda-gift-rollback-review/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: LAST-MOMENT pre-deploy compare live SHA and release ID, provision TEMP credentials
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,hashlib,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv('DEDA_SA') or os.getenv('FALLBACK_SA')
+          if not raw:sys.exit('SAFE_STOP: missing service account for authorized deploy')
+          info=json.loads(raw)
+          if info.get('project_id')!='deda-25b88':
+            sys.exit('SAFE_STOP: service account belongs to unexpected project')
+          cred=service_account.Credentials.from_service_account_info(
+            info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          s=AuthorizedSession(cred);api='https://firebaserules.googleapis.com/v1/'
+          rel=s.get(api+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          current=rel.json().get('rulesetName','')
+          previous=Path('/tmp/deda-before-gift-release-name.txt').read_text()
+          if current!=previous:
+            sys.exit('SAFE_STOP: Firestore rules release CHANGED since QA, REFUSE DEPLOY')
+          res=s.get(api+current,timeout=35);res.raise_for_status()
+          live='\n'.join(f['content'] for f in res.json()['source']['files']
+                          if f.get('name','').endswith('.rules'))
+          if hashlib.sha256(live.encode()).hexdigest()[:18]!='c5b444a132c894e933':
+            sys.exit('SAFE_STOP: Firestore rules contents CHANGED since QA')
+          assert hashlib.sha256(Path('firestore.rules').read_bytes()).hexdigest()[:18]=='df9fbbbfa30ade3bae'
+          file=Path(os.environ['RUNNER_TEMP'])/'deda-authorized-gifts-deploy-only.json'
+          file.write_text(raw)
+          file.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'],'a') as fh:
+            fh.write('GOOGLE_APPLICATION_CREDENTIALS='+str(file)+'\n')
+          print('FINAL_PRE_DEPLOY_EXACT_LIVE_SHA_AND_RULESET_MATCH')
+          PY
+
+      - name: OWNER APPROVED - deploy Firestore SECURITY RULES ONLY to deda-25b88
+        run: |
+          set -euo pipefail
+          test -n "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          npx --yes firebase-tools@14 deploy --only firestore:rules --project deda-25b88 --non-interactive
+
+      - name: POST-DEPLOY independent Firebase Rules API GET attestation
+        if: success()
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv('DEDA_SA') or os.getenv('FALLBACK_SA')
+          creds=service_account.Credentials.from_service_account_info(
+            json.loads(raw),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          s=AuthorizedSession(creds);base='https://firebaserules.googleapis.com/v1/'
+          rel=s.get(base+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          name=rel.json()['rulesetName']
+          rule=s.get(base+name,timeout=35);rule.raise_for_status()
+          content='\n'.join(f['content'] for f in rule.json()['source']['files']
+                             if f.get('name','').endswith('.rules'))
+          digest=hashlib.sha256(content.encode()).hexdigest()[:18]
+          print('POST_DEPLOY_ACTUAL_LIVE_SHA18',digest)
+          if digest!='df9fbbbfa30ade3bae':
+            sys.exit('ALERT: post-deploy actual release does not match tested rules; escalate and restore reviewed prior ruleset')
+          print('SUCCESS: verified owner-authorized gift-only rules are NOW LIVE; no user data, APK or Cloud Functions touched')
+          PY
+
+      - name: Delete temporary service credential copy
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deda-authorized-gifts-deploy-only.json"
