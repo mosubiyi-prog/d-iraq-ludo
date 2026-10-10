@@ -25,6 +25,8 @@ jobs:
       DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Verify unchanged backup and explicit server-feature lock
         shell: bash
         run: |
