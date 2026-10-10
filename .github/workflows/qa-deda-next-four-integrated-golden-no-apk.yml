@@ -18,6 +18,7 @@ on:
       - 'lib/admin_pages.dart'
       - 'functions/deda_telegram_verified_claim.js'
       - 'lib/deda_pin_auth.dart'
+      - 'tools/guard_deda_login_busy_indicator_next_release.py'
   workflow_dispatch:
 
 permissions:
@@ -92,6 +93,9 @@ jobs:
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in s
           print('PASS: REAL manager profile now includes +3 ad rewards in displayed diamonds; Golden navigation preserved.')
           PROFILE_REGRESSION
+          echo '== Add clear, short first-login verification progress indicator =='
+          python3 tools/guard_deda_login_busy_indicator_next_release.py
+          dart format lib/main.dart
           echo '== Inject the existing accepted social card with real bot verification links into fully reconstructed main.dart =='
           python3 tools/inject_social_task_golden_preview_2026_10_09.py
           dart format lib/main.dart
@@ -125,6 +129,9 @@ jobs:
           assert 'auth.signInAnonymously()' in pin
           assert '.timeout(const Duration(seconds: 12))' in pin, 'Firebase anonymous first-install auth cannot spin for a minute'
           assert '_loginBusy ? null : login' in user, 'disable duplicate login taps'
+          assert 'DEDA_NEXT_LOGIN_BUSY_INDICATOR_2026_10_10' in user
+          assert "dedaText('جاري التحقق...', 'Checking...')" in user
+          assert 'child: CircularProgressIndicator(' in user, 'must show spinner during first Firebase check'
           print('PASS: 8 golden daily/weekly task controls, smooth map, manager earned ad diamonds and Telegram wallet refresh retained in ONE actual Flutter main.dart.')
           SOCIAL_NEXT_RELEASE
           """
