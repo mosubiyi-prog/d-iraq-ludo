@@ -607,15 +607,37 @@ class _DedaMyGiftsPageState extends State<DedaMyGiftsPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
+              // Clearly identify official DEDA administrative gifts.
+              // A styled DEDA brand mark, not an arbitrary user's avatar.
               CircleAvatar(
-                radius: 23,
+                radius: 26,
                 backgroundColor:
-                    pending ? const Color(0xFFF0E8FF) : const Color(0xFFE7F6EC),
-                child: Icon(
-                  pending ? Icons.card_giftcard_rounded : Icons.check_rounded,
-                  color: pending
-                      ? const Color(0xFF6D3CC7)
-                      : const Color(0xFF16794A),
+                    pending ? const Color(0xFFE9E2FF) : const Color(0xFFE7F6EC),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      'DEDA',
+                      style: TextStyle(
+                        color: pending
+                            ? const Color(0xFF5434A1)
+                            : const Color(0xFF16794A),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Icon(
+                      pending
+                          ? Icons.card_giftcard_rounded
+                          : Icons.check_circle_rounded,
+                      size: 19,
+                      color: pending
+                          ? const Color(0xFF6D3CC7)
+                          : const Color(0xFF16794A),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 10),
@@ -675,6 +697,8 @@ class _DedaMyGiftsPageState extends State<DedaMyGiftsPage> {
               ),
             ),
           const SizedBox(height: 9),
+          // Recipient must explicitly claim; never auto-credit on delivery.
+          // A gift stays pending until the server-backed claim transaction.
           Row(
             children: <Widget>[
               Expanded(
@@ -702,7 +726,8 @@ class _DedaMyGiftsPageState extends State<DedaMyGiftsPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.download_done_rounded, size: 19),
-                  label: Text(dedaText('استلام', 'Receive')),
+                  label: Text(dedaText('استلام الهدية', 'Receive gift')),
+                
                 ),
             ],
           ),
