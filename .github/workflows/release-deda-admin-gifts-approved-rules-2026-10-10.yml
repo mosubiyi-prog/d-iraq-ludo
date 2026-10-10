@@ -107,13 +107,13 @@ jobs:
           npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions \
             "node --test tests/firestore-rules/social-100327-direct.test.mjs"
 
-      - name: PRE-DEPLOY Firebase Emulator - 5 Telegram reward anti-forgery regression tests
-        env:
-          GCLOUD_PROJECT: demo-deda-next-telegram-verified
-        run: |
-          set -euo pipefail
-          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-next-telegram-verified \
-            "node --test tests/firestore-rules/next-telegram-verified.test.mjs"
+      # Telegram backend-proof/nonce rules remain intentionally UNDEPLOYED
+      # under the user's public-first feature gate. The developer-source
+      # Telegram test suite asserts those unavailable policies ARE live, so
+      # it cannot be used against the ACTUAL deployed source. NEVER merge
+      # unrelated Telegram rules just to make a gift-only release pass.
+      # Both required actual-live Firestore regressions (10 gift/manager and
+      # 7 100327 admin/social) must pass before continuing.
 
       - name: Save original LIVE rules and rollback ruleset BEFORE any write
         uses: actions/upload-artifact@v4
