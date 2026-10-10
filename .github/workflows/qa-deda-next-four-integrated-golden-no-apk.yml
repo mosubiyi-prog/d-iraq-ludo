@@ -130,7 +130,7 @@ jobs:
           assert '.timeout(const Duration(seconds: 12))' in pin, 'Firebase anonymous first-install auth cannot spin for a minute'
           assert '_loginBusy ? null : login' in user, 'disable duplicate login taps'
           assert 'DEDA_NEXT_LOGIN_BUSY_INDICATOR_2026_10_10' in user
-          assert "dedaText('جاري التحقق...', 'Checking...')" in user
+          assert "'جاري التحقق...'" in user and "'Checking...'" in user, 'login busy status must survive Dart formatter'
           assert 'child: CircularProgressIndicator(' in user, 'must show spinner during first Firebase check'
           print('PASS: 8 golden daily/weekly task controls, smooth map, manager earned ad diamonds and Telegram wallet refresh retained in ONE actual Flutter main.dart.')
           SOCIAL_NEXT_RELEASE
