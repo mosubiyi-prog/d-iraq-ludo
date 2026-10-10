@@ -2029,6 +2029,65 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(registeredOwner)).data.accountKey ==
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey;
     }
+    // DEDA_LEGACY_GM_PERSONAL_WALLET_PRESERVATION_2026_10_10
+    // Keep previously accepted personal manager test diamonds fully separate
+    // from the administrative 1M gift allowance.
+    function isGeneralManagerPersonalAccount(accountKey) {
+      return signedIn()
+        && accountKey is string
+        && sameAccount(accountKey)
+        && exists(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        )
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        ).data.accountKey == accountKey
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        ).data.active == true
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        ).data.status == 'active'
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        ).data.accessType == 'general_manager_gateway'
+        && get(
+          /databases/$(database)/documents/admin_entry_access/$(accountKey)
+        ).data.allowedRole == 'general_manager';
+    }
+
+    // Personal one-million testing wallet for the authorized general-manager
+    // DEDA phone account. It is completely separate from the admin gift pool.
+    match /deda_gm_personal_diamond_wallets/{accountKey} {
+      allow get: if isGeneralManagerPersonalAccount(accountKey);
+      allow list: if false;
+
+      allow create: if isGeneralManagerPersonalAccount(accountKey)
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.initialBalance == 1000000
+        && request.resource.data.balance == 1000000
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'accountKey', 'initialBalance', 'balance', 'createdAt', 'updatedAt'
+        ]);
+
+      allow update: if isGeneralManagerPersonalAccount(accountKey)
+        && request.resource.data.accountKey == resource.data.accountKey
+        && request.resource.data.initialBalance == resource.data.initialBalance
+        && request.resource.data.initialBalance == 1000000
+        && request.resource.data.balance is int
+        && request.resource.data.balance >= 0
+        && request.resource.data.balance <= resource.data.balance
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'balance', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+
     // DEDA_ADMIN_SECURE_PENDING_GIFTS_2026_10_10
     // This rule set is DEVELOPMENT ONLY until reconciled with LIVE Firebase.
     // All 1,000,000 GM administrative gift diamonds are separate from the
