@@ -157,3 +157,19 @@ OWNER DECISION: pause all other Google Play work until this ONE integrated versi
 - The proven 100327 social compact card is intentionally feature-gated by `DedaSocialTaskPreview.visible` and defaults FALSE at compile time. The ONE upcoming internal test APK must specify `--dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true` to expose it; otherwise backend could be fully working while user sees no Telegram page. Keep the daily task display preview flag FALSE.
 - The next-release golden integration QA now explicitly asserts that the **real reconstructed login** retains `DedaPinRecoveryPage`, `DedaPinAuth.recoveryRequest`, and `DedaPinAuth.readRecoveryPin`, ensuring the ready six-digit code can appear on the existing user screen without extra WhatsApp/SMS flow.
 - The PIN **backend transaction** regression includes trusted prior installation, >=10-second mandatory delay, switch OFF, older pending requests, mismatch name, inactive accounts, one/hour throttle, duplicate requests, and emergency anti-admin-reset. All branch-only until Firebase deployment and owner device test.
+
+
+## NEW pre-launch concern from owner: first-install/login 60-second freeze regression (2026-10-10)
+
+Owner reported an older period when the registration/login screen appeared frozen up to roughly one minute; a previous fix had succeeded. It is essential NOT to reintroduce this when many new users download DEDA.
+
+Actual code assessment:
+- Historical `tools/rewarded_ads_startup_safety_fix_2026_10_02.py` moved AdMob SDK initialization OUT of `main()` and into the rewarded-ad user action. This is the likely past root contributor; do not assume this proves real-world performance.
+- The latest actual accepted golden source reconstructs `lib/main.dart` via the 100318 shell + historical scripts. A new integration-CI check inspects that FINAL rebuilt source, verifying that no `MobileAds.instance.initialize()` or `RewardedAd.load` blocks the first Flutter frame, that role lookup is still `unawaited`, and that the login UI is single-flight.
+- `DedaPinAuth.accountExists` already uses a saved known-account hint first and has an 8-second remote directory timeout; the first-install anonymous Firebase Auth handshake previously had **NO** bound, so it could leave the login action hanging on poor rural data. New dev branch ONLY: `lib/deda_pin_auth.dart` now limits that handshake to 12 seconds and fails safely with the existing retry message. Does NOT open access offline, skip PIN proof, silently create accounts or change the accepted 100327 release.
+- The first DEDA user login button previously had a busy guard but visually showed no loading animation. New idempotent **post-reconstruction** patch `tools/guard_deda_login_busy_indicator_next_release.py` adds a white spinner plus 'جاري التحقق...' while checking the phone. The golden integration workflow runs it only AFTER historical full reconstruction, then analyzes Flutter.
+- New QA assertions ensure the true final rebuilt APK source contains the first-login busy animation, accepted PIN recovery, safely bounded first-install Auth, cached known-account shortcut, short Firestore lookup, and no startup AdMob network initialization. Do not substitute checks on the stale checked-in `main.dart`.
+
+Limits and pending device tests:
+- A successful source check is NOT a cold-start stopwatch, slow-network flight test or mass-download load test. Firebase.init is still awaited on app boot and might cause device-specific delays; on the eventual ONE signed APK, explicitly check first-open with new install, returning user, offline/slow network, auth outage and many repeated login attempts. Do not promise the freeze can never recur or that network services have infinite capacity.
+- No extra APK was created, no production Firebase/Google Play action and no accepted 100327 branch changes.
