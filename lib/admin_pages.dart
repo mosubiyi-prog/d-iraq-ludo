@@ -1256,19 +1256,24 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  // Match the accepted home screen: THREE small, bright
+                  // category-sized cards per row on ordinary phones.
+                  // Tablets can show extra columns without giant tiles.
                   GridView.count(
                     crossAxisCount:
-                        MediaQuery.sizeOf(context).width >= 830
-                            ? 4
-                            : MediaQuery.sizeOf(context).width >= 590
-                                ? 3 : 2,
+                        MediaQuery.sizeOf(context).width >= 980
+                            ? 6
+                            : MediaQuery.sizeOf(context).width >= 740
+                                ? 5
+                                : MediaQuery.sizeOf(context).width >= 590
+                                    ? 4 : 3,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    mainAxisExtent: (178 *
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    mainAxisExtent: (126 *
                             MediaQuery.textScalerOf(context).scale(1.0))
-                        .clamp(178.0, 280.0),
+                        .clamp(126.0, 240.0),
                     children: [
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
