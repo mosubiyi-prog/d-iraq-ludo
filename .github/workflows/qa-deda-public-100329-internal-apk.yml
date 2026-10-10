@@ -1,0 +1,156 @@
+name: DEDA Public First 100329 Compact Colorful Manager Tiles Signed APK - NO PLAY
+
+on:
+  push:
+    branches:
+      - deda-public-launch-safe-deferred-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-public-100329-internal-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: deda-public-owner-apk-100329
+  cancel-in-progress: false
+
+jobs:
+  signed-internal-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify unchanged backup and explicit server-feature lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin deda-social-firestore-no-functions-100327-2026-10-09:refs/remotes/origin/deda-social-firestore-no-functions-100327-2026-10-09
+          git merge-base --is-ancestor origin/deda-social-firestore-no-functions-100327-2026-10-09 HEAD
+          python3 - <<'GUARD'
+          from pathlib import Path
+          g=Path('lib/deda_launch_feature_gates.dart').read_text()
+          assert 'DEDA_SERVER_AUTOMATIONS_LIVE' in g and 'defaultValue: false' in g
+          for p,t in [
+            ('lib/deda_social_task_preview.dart','DedaLaunchFeatureGates.telegramVerifiedRewards'),
+            ('lib/deda_admin_social_task_preview_page.dart','DedaLaunchFeatureGates.telegramVerifiedRewards'),
+            ('lib/deda_admin_automation_toggle.dart','DedaLaunchFeatureGates.serverFeaturesEnabled'),
+          ]:
+              assert t in Path(p).read_text(), 'release gate absent: '+p
+          print('PASS: public first server-feature lock intact, stable 100327 untouched')
+          GUARD
+          for key in DEDA_KEYSTORE_BASE64 DEDA_KEY_ALIAS DEDA_STORE_PASSWORD DEDA_KEY_PASSWORD; do
+            [ -n "$(printenv "$key")" ] || { echo "SAFE_STOP: required existing signing secret not available ($key)"; exit 2; }
+          done
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Fetch Flutter packages and test deferred feature policy
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos lib/deda_launch_feature_gates.dart lib/deda_admin_automation_toggle.dart lib/deda_admin_social_task_preview_page.dart lib/deda_social_task_preview.dart lib/deda_pin_auth.dart
+          flutter test test/deda_launch_feature_gates_test.dart test/deda_social_task_preview_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_admin_compact_card_test.dart
+      - name: Confirm 3-column vivid manager tiles match home-card dimensions
+        run: |
+          python3 - <<'THREE_TILE_GUARD'
+          from pathlib import Path
+          ui=Path('lib/admin_pages.dart').read_text()
+          card=Path('lib/deda_admin_compact_card.dart').read_text()
+          assert "MainAxis" not in "", 'unreachable'
+          assert "                    ? 4 : 3," in ui
+          assert "mainAxisExtent: (126 *" in ui
+          assert "mainAxisSpacing: 8," in ui and "crossAxisSpacing: 8," in ui
+          assert "HSLColor.fromColor(accentColor)" in card
+          assert "gradient: LinearGradient(" in card
+          assert "child: InkWell(" in card and "onTap: onTap," in card
+          assert "Semantics(" in card
+          print('PASS: 3 vivid home-sized admin tiles per row with intact tap semantics.')
+          THREE_TILE_GUARD
+      - name: Reconstruct exact accepted navigation and reinject approved next-release fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          cp lib/admin_pages.dart /tmp/deda_public_new_admin_pages.dart
+          git show origin/deda-social-firestore-no-functions-100327-2026-10-09:lib/admin_pages.dart > lib/admin_pages.dart
+          python3 - <<'MAKE_SCRIPT'
+          from pathlib import Path
+          src=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          marker="echo '== Flutter analyzer =='\n"
+          old='flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true'
+          assert src.count(marker)==1 and src.count(old)==1, 'original navigation script changed'
+          add="""echo '== Restore next-release compact manager UI, no backend services =='
+          cp /tmp/deda_public_new_admin_pages.dart lib/admin_pages.dart
+          dart format lib/admin_pages.dart
+          echo '== Show already-earned ad diamonds and guarded first login progress =='
+          python3 tools/fix_profile_rewarded_diamond_display_next_release.py
+          python3 tools/guard_deda_login_busy_indicator_next_release.py
+          echo '== Keep social channel-link task but never activate payouts =='
+          python3 tools/inject_social_task_golden_preview_2026_10_09.py
+          dart format lib/main.dart
+          python3 - <<'PUBLIC_GATES'
+          from pathlib import Path
+          main=Path('lib/main.dart').read_text()
+          admin=Path('lib/admin_pages.dart').read_text()
+          gates=Path('lib/deda_launch_feature_gates.dart').read_text()
+          assert main.count('DedaSocialTaskCompactCard(')==1
+          assert main.count('dedaProfileVisibleDiamonds(')==1
+          assert 'DEDA_NEXT_LOGIN_BUSY_INDICATOR_2026_10_10' in main
+          assert 'Timer.periodic(const Duration(milliseconds: 16)' in main
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in main
+          assert main.count('final taskId = DedaTaskIds.weekly[index];')==1
+          assert 'DedaPinRecoveryPage(' in main
+          assert 'DedaPinAuth.readRecoveryPin(' in main
+          assert 'DedaAdminCompactCard(' in admin
+          assert "                    ? 4 : 3," in admin
+          assert "mainAxisExtent: (126 *" in admin
+          assert "kind: 'place_auto_approval'" in admin and "kind: 'pin_auto_recovery'" in admin
+          assert 'defaultValue: false' in gates
+          print('PASS: real navigation, 8 tasks, admin, diamonds, manual recovery, server features OFF')
+          PUBLIC_GATES
+          """
+          src=src.replace(marker,add+'\n'+marker)
+          new=('flutter build apk --release --build-number=100329 '
+               '--dart-define=USE_NEXT_GEN_SDK=true '
+               '--dart-define=DEDA_DAILY_TASK_DISPLAY_PREVIEW=false '
+               '--dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true '
+               '--dart-define=DEDA_SERVER_AUTOMATIONS_LIVE=false')
+          src=src.replace(old,new)
+          assert src.count(new)==1
+          Path('/tmp/deda_public_100329_owner_test.sh').write_text(src)
+          print('Prepared 100329 golden APK only; no Firebase deploy, no Play upload')
+          MAKE_SCRIPT
+      - name: Build ONE signed 100329 internal APK using original DEDA signing key
+        run: bash /tmp/deda_public_100329_owner_test.sh
+      - name: Confirm signed APK, tests, version and no backend activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter test test/deda_launch_feature_gates_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_social_task_preview_test.dart test/deda_admin_compact_card_test.dart
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          AAPT="$(find "${ANDROID_HOME:-/opt/android-sdk}/build-tools" -maxdepth 2 -type f -name aapt | sort -V | tail -1)"
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump badging "$APK" | grep -E "package:.*versionCode='100329'"
+          else
+            echo 'aapt not found; built with checked versionCode 100329'
+          fi
+          if command -v apksigner >/dev/null 2>&1; then apksigner verify "$APK"; fi
+          sha256sum "$APK"
+          ls -lh "$APK"
+          echo 'OWNER_TEST_ONLY. NO CLOUD DEPLOY. NO LIVE AUTO PIN. NO LIVE AUTO PLACES. NO VERIFIED TELEGRAM PAYOUT. NO PUBLIC PLAY UPLOAD.'
+      - name: Upload ONE signed owner-test APK only
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100329-PUBLIC-FIRST-OWNER-TEST-NO-SERVER-FEATURES
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          if-no-files-found: error
