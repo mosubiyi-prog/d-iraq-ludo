@@ -70,6 +70,15 @@ before(async()=>{
         role,active,status:active?"active":"disabled",
       });
     }
+    // The manager PERSONAL wallet belongs to a separate DEDA identity.
+    // Its account is not the admin gift budget and must survive rules merge.
+    const adminAccountKey="07790000000";
+    await setDoc(d(db,"users","gm"),{accountKey:adminAccountKey});
+    await setDoc(d(db,"deda_sessions","gm"),{accountKey:adminAccountKey});
+    await setDoc(d(db,"admin_entry_access",adminAccountKey),{
+      accountKey:adminAccountKey,active:true,status:"active",
+      accessType:"general_manager_gateway",allowedRole:"general_manager",
+    });
     for(const [uid,id,key] of [
       ["member",A,"07700000001"],["other",B,"07700000002"],
     ]) {
@@ -92,6 +101,27 @@ before(async()=>{
   guest=env.unauthenticatedContext().firestore();
 });
 after(async()=>{if(env)await env.cleanup();});
+
+test("manager PERSONAL million is protected and separate from the GIFT allowance",async()=>{
+  const personal=(db)=>d(db,"deda_gm_personal_diamond_wallets","07790000000");
+  await assertFails(getDoc(personal(member)));
+  await assertFails(setDoc(personal(staff),{
+    accountKey:"07790000000",initialBalance:1000000,balance:1000000,
+    createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  }));
+  await assertSucceeds(setDoc(personal(gm),{
+    accountKey:"07790000000",initialBalance:1000000,balance:1000000,
+    createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(personal(gm),{
+    balance:999600,updatedAt:serverTimestamp(),
+  }));
+  await assertFails(updateDoc(personal(gm),{
+    balance:1000000,updatedAt:serverTimestamp(),
+  }));
+  assert.equal((await getDoc(personal(gm))).data().balance,999600);
+  await assertFails(getDoc(personal(guest)));
+});
 
 test("only active true GM can create one-million administrative wallet",async()=>{
   for(const c of [staff,member,other,guest,
