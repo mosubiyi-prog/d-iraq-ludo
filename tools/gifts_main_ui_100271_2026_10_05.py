@@ -7,6 +7,15 @@ if marker in text:
     print('100271 gifts main UI already applied')
     raise SystemExit(0)
 
+# The signed DEDA app icon is available in Flutter source offline. Add its
+# helper import only once to the generated main.dart.
+logo_import = "import 'deda_official_gift_logo.dart';\n"
+if logo_import not in text:
+    app_import = "import 'package:firebase_core/firebase_core.dart';\n"
+    if text.count(app_import) != 1:
+        raise SystemExit('Firebase import anchor missing for official gift logo')
+    text = text.replace(app_import, app_import + logo_import, 1)
+
 # Timestamp is used only for human-readable gift dates in the inbox.
 firestore_import = "import 'package:cloud_firestore/cloud_firestore.dart';\n"
 if firestore_import not in text:
@@ -607,38 +616,18 @@ class _DedaMyGiftsPageState extends State<DedaMyGiftsPage> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              // Clearly identify official DEDA administrative gifts.
-              // A styled DEDA brand mark, not an arbitrary user's avatar.
-              CircleAvatar(
-                radius: 26,
-                backgroundColor:
-                    pending ? const Color(0xFFE9E2FF) : const Color(0xFFE7F6EC),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Text(
-                      'DEDA',
-                      style: TextStyle(
-                        color: pending
-                            ? const Color(0xFF5434A1)
-                            : const Color(0xFF16794A),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.3,
-                      ),
+              // Original offline DEDA app emblem, not a temporary badge.
+              Stack(
+                children: <Widget>[
+                  const DedaOfficialGiftLogo(size: 52),
+                  if (!pending)
+                    const PositionedDirectional(
+                      end: 0,
+                      bottom: 0,
+                      child: Icon(Icons.check_circle_rounded,
+                          color: Color(0xFF16794A), size: 19),
                     ),
-                    const SizedBox(height: 1),
-                    Icon(
-                      pending
-                          ? Icons.card_giftcard_rounded
-                          : Icons.check_circle_rounded,
-                      size: 19,
-                      color: pending
-                          ? const Color(0xFF6D3CC7)
-                          : const Color(0xFF16794A),
-                    ),
-                  ],
-                ),
+                ],
               ),
               const SizedBox(width: 10),
               Expanded(
