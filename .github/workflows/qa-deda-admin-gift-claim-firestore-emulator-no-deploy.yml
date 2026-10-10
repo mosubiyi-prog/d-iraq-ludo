@@ -52,5 +52,17 @@ jobs:
           set -euo pipefail
           npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-admin-gift-manual-claim \
             "node --test tests/firestore-rules/admin-gift-manual-claim.test.mjs"
+      - name: Regression - historical Telegram payout anti-forgery is still safe
+        env:
+          GCLOUD_PROJECT: demo-deda-next-telegram-verified
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-next-telegram-verified \
+            "node --test tests/firestore-rules/next-telegram-verified.test.mjs"
+      - name: Regression - existing 100327 manager/social access controls
+        env:
+          GCLOUD_PROJECT: demo-deda-100327-firestore-no-functions
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions \
+            "node --test tests/firestore-rules/social-100327-direct.test.mjs"
       - name: No Firebase deploy, server functions, production data or Google Play writes
         run: echo 'EMULATOR TEST ONLY - do not deploy firestore rules without explicit owner approval'
