@@ -348,10 +348,10 @@ exports.onRecoveryRequestUpdated = onDocumentUpdated(
  * The UI uses this to enable its ON/OFF switches without staff setup.
  */
 exports.dedaAutomationReadiness = onCall(async (request) => {
-  const actor = await requireGeneralManager(request);
-  if (actor.data.role !== "general_manager") {
-    throw new HttpsError("permission-denied", "general-manager-required");
-  }
+  // requireGeneralManager already verifies an active admin and returns the
+  // normalized role directly on actor.role (NOT actor.data.role). An old
+  // mistyped extra .data made the new owner toggles fail on live callable.
+  await requireGeneralManager(request);
   const firestore = getFirestore();
   const stamp = Timestamp.now();
   const batch = firestore.batch();
