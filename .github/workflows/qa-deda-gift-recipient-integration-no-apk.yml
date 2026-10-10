@@ -83,6 +83,9 @@ jobs:
           cp lib/admin_pages.dart /tmp/deda_rebuilt_admin_with_gifts.dart
           cp /tmp/deda_next_four_admin_pages.dart lib/admin_pages.dart
           python3 tools/deda_integrate_verified_gift_recipient_2026_10_10.py
+          # Bind the manager deduction to precisely the gift created in the
+          # same transaction, as mandated by development Firestore rules.
+          python3 tools/deda_harden_admin_gift_debit_2026_10_10.py
           dart format lib/admin_pages.dart lib/deda_backend.dart
           python3 - <<'VERIFY_GIFT_RESTORE'
           from pathlib import Path
@@ -96,6 +99,10 @@ jobs:
           assert "collection('deda_social_profiles')" in b
           assert "social?['avatarStyle']" in b
           assert "collection('deda_admin_diamond_wallets')" in b
+          assert "'lastGiftId': giftRef.id" in b
+          rules=Path('firestore.rules').read_text()
+          assert 'DEDA_ADMIN_SECURE_PENDING_GIFTS_2026_10_10' in rules
+          assert 'validGiftClaim' in rules and 'verifiedDiamondsPersonalOwner' in rules
           assert "collection('deda_diamond_gifts')" in b
           assert 'DedaSocialProgressWallet.spendCoins' not in a
           m=Path('lib/main.dart').read_text()
