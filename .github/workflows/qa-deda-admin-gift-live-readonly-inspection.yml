@@ -1,0 +1,79 @@
+name: DEDA Admin Gifts LIVE Firestore Rules Inspection - GET ONLY
+
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-admin-gift-live-readonly-inspection.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-deployed-rules-get-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install read-only Firebase Rules API dependencies
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Safely INSPECT actual released rules, no updates or deployments
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+
+          raw=os.environ.get('DEDA_SA') or os.environ.get('FALLBACK_SA')
+          if not raw:
+              sys.exit('READ_ONLY_BLOCKED: no account credential; no deployment attempted')
+          info=json.loads(raw)
+          if info.get('type')!='service_account':
+              sys.exit('READ_ONLY_BLOCKED: not service-account JSON')
+          cred=service_account.Credentials.from_service_account_info(
+              info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          session=AuthorizedSession(cred)
+          api='https://firebaserules.googleapis.com/v1/'
+          rel=session.get(api+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          ruleset=rel.json().get('rulesetName','')
+          if not ruleset.startswith('projects/deda-25b88/rulesets/'):
+              sys.exit('READ_ONLY_BLOCKED: unexpected release')
+          response=session.get(api+ruleset,timeout=35)
+          response.raise_for_status()
+          live='\n'.join(f['content'] for f in response.json()['source']['files']
+                  if f.get('name','').endswith('.rules'))
+          local=Path('firestore.rules').read_text(encoding='utf-8')
+          if not live.strip().startswith("rules_version = '2';"):
+              sys.exit('READ_ONLY_BLOCKED: unexpected live rules syntax')
+          sha=lambda x:hashlib.sha256(x.encode()).hexdigest()[:18]
+          print('LIVE_READ_ONLY_SHA18:',sha(live))
+          print('DEV_CANDIDATE_SHA18:',sha(local))
+          print('LIVE_EXACT_DEV_CANDIDATE_MATCH:',live==local)
+          print('LIVE_CHARS:',len(live))
+          sections=[
+            'match /deda_admin_diamond_wallets/{adminUid}',
+            'match /deda_diamond_gifts/{giftId}',
+            'match /deda_diamond_gift_balances/{publicId}',
+            'match /deda_gm_personal_diamond_wallets/{accountKey}',
+            'function verifiedDiamondsPersonalOwner(publicId)',
+            'function currentUserHasShareId(publicId)',
+            'match /deda_telegram_start_tokens/{tokenId}',
+            'match /deda_social_direct_days/{dayId}',
+            'match /deda_social_direct_drafts/{draftId}',
+            'match /admin_audit/{auditId}',
+          ]
+          for marker in sections:
+              print('SECTION:',marker, 'LIVE_COUNT:',live.count(marker),
+                    'DEV_COUNT:',local.count(marker))
+          print('SOURCE_END_MATCHES:',live.count('\n  }\n}\n'))
+          print('READ_ONLY_OK: only Google Firebase Rules API GET; no new release or ruleset created')
+          PY
+      - name: End with no live Firebase writes and no APK
+        run: echo 'NO DEPLOY - check SHA and section counts before planning secure rules migration'
