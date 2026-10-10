@@ -1,0 +1,83 @@
+name: DEDA Admin Gifts Exact LIVE Rules Surgical Merge and Emulator - NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-admin-gift-actual-live-merge-emulator-no-deploy.yml'
+      - 'tools/deda_preview_merge_live_admin_gifts_2026_10_10.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  merge-exact-live-rules-only-in-ci-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-admin-gift-manual-claim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install tools for Firebase GET-only and emulator testing
+        run: |
+          python3 -m pip install --disable-pip-version-check google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: GET live Firebase rules read-only and STRICT SHA match
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,sys
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv('DEDA_SA') or os.getenv('FALLBACK_SA')
+          if not raw: sys.exit('SAFE_STOP: account secret missing')
+          cred=service_account.Credentials.from_service_account_info(json.loads(raw),
+              scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          api='https://firebaserules.googleapis.com/v1/'
+          sess=AuthorizedSession(cred)
+          rel=sess.get(api+'projects/deda-25b88/releases/cloud.firestore',timeout=35)
+          rel.raise_for_status()
+          name=rel.json().get('rulesetName','')
+          if not name.startswith('projects/deda-25b88/rulesets/'):
+              sys.exit('SAFE_STOP: unexpected release')
+          result=sess.get(api+name,timeout=35)
+          result.raise_for_status()
+          live='\n'.join(f['content'] for f in result.json()['source']['files']
+                          if f.get('name','').endswith('.rules'))
+          sha=hashlib.sha256(live.encode()).hexdigest()[:18]
+          if sha!='c5b444a132c894e933':
+              sys.exit('SAFE_STOP: live rules changed, require renewed review')
+          Path('/tmp/deda-live-rules-readonly.rules').write_text(live)
+          print('GET ONLY ACTUAL LIVE SHA',sha)
+          PY
+      - name: REVERSIBLE 3-collection surgical merge ONLY on the runner
+        run: |
+          python3 tools/deda_preview_merge_live_admin_gifts_2026_10_10.py /tmp/deda-live-rules-readonly.rules
+      - name: Security emulator - admin funded gifts and manual recipient claim
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-admin-gift-manual-claim \
+            "node --test tests/firestore-rules/admin-gift-manual-claim.test.mjs"
+      - name: Security emulator - regression on existing 100327 admin/social rules
+        env:
+          GCLOUD_PROJECT: demo-deda-100327-firestore-no-functions
+        run: |
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-100327-firestore-no-functions \
+            "node --test tests/firestore-rules/social-100327-direct.test.mjs"
+      - name: Store merged REVIEW ONLY rules as ephemeral private artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-LIVE-MERGED-ADMIN-GIFTS-REVIEW-NOT-DEPLOYED
+          path: firestore.rules
+          retention-days: 1
+          if-no-files-found: error
+      - name: NEVER deployed; owner signoff required later
+        run: echo 'READ-ONLY LIVE FETCH, LOCAL MERGE, EMULATOR tests only; zero Firebase, Google Play, APK production mutations'
