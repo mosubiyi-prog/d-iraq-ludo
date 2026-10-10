@@ -110,8 +110,10 @@ jobs:
           assert 'DedaPinRecoveryPage(' in main
           assert 'DedaPinAuth.readRecoveryPin(' in main
           assert 'DedaAdminCompactCard(' in admin
-          assert "                    ? 4 : 3," in admin
-          assert "mainAxisExtent: (126 *" in admin
+          import re
+          grid=admin[admin.index('GridView.count('):]
+          assert re.search(r'\?\s*4\s*:\s*3\s*,', grid), '3 phone columns lost'
+          assert re.search(r'mainAxisExtent:\s*\(\s*126\s*\*', grid), 'small 126px tiles lost'
           assert "kind: 'place_auto_approval'" in admin and "kind: 'pin_auto_recovery'" in admin
           assert 'defaultValue: false' in gates
           print('PASS: real navigation, 8 tasks, admin, diamonds, manual recovery, server features OFF')
