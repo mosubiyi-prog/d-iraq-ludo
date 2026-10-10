@@ -30,7 +30,7 @@
 
 ### The user's real experience after an ADMIN gift
 1. Only a permitted general manager may create a signed, server-protected administrative diamond gift to an active recipient `@DEDA-...` selected from the **verified public profile** preview. Creation deducts the manager's **administrative gift allowance only** and stores a `pending` gift plus its immutable audit record. Do not credit recipient on creation.
-2. Recipient opens `هداياي` and sees a **clearly DEDA-branded logo/mark**, administrator sender label, amount in 💎, reason/description, timestamp and gift state `بانتظار الاستلام`. Receiver must see `🎁 استلام الهدية` action. Existing source uses a DEDA-branded mark; a pixel-exact official logo IMAGE is not a committed asset yet and must not be claimed.
+2. Recipient opens `هداياي` and sees a **clearly DEDA-branded logo/mark**, administrator sender label, amount in 💎, reason/description, timestamp and gift state `بانتظار الاستلام`. Receiver must see `🎁 استلام الهدية` action. Source now uses the actual signed DEDA application launcher icon in an offline Dart widget, not a generic or temporary branding placeholder.
 3. **DO NOT auto-claim on login, opening screen, notification or background tasks.** Only recipient pressing `استلام الهدية` invokes `DedaBackend.claimDiamondGift`, which atomically changes `pending→received` and credits the verified recipient's remote spendable diamond balance exactly once. Re-tapping must not mint or duplicate. Refresh local display after accepted transaction. Keep history visible as `تم الاستلام`.
 4. Unclaimed gifts stay pending if recipient offline, even for several days. A duplicate confirmation cannot grant extra diamonds.
 
@@ -41,7 +41,7 @@
 - **NOT ACTIVE:** existing Firestore security rules explicitly forbid client increases to `deda_admin_diamond_wallets/{adminUid}` (except one-time initial 1M create). Do not relax this or introduce self-credit by app clients. No backend/cloud server scheduler was deployed. Refill remains a future protected backend task until service hosting + rules reviewed and tested. Do not promise daily auto refill in owner APK 100329.
 
 ### Current code/test status
-- This branch updates the 100271 gift-inbox source template to use a DEDA-branded pending/received icon and a full `استلام الهدية` button; explicit claim transaction unchanged and must remain user-initiated.
+- This branch updates the 100271 gift-inbox source template to show the **real existing DEDA 100329 launcher emblem** (extracted from signed-owner APK and embedded into `lib/deda_official_gift_logo.dart`, no internet needed), plus a full `استلام الهدية` button; explicit claim transaction unchanged and remains user-initiated. Source test `test/deda_official_gift_logo_test.dart` verifies decoding/rendering.
 - 100329 remains installed owner-accepted, untouched. Rebuilt dev-only gift UI is not in an owner APK, and no Firestore rules have been published or modified by this work.
 
 ## Receiver screen confirmed by owner screenshot (2026-10-10 19:29 Iraq time)
