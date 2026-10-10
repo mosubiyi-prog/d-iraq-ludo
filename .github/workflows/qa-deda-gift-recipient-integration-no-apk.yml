@@ -1,0 +1,210 @@
+name: DEDA Gift Recipient Profile + Secure Admin Gifts Integration - NO APK
+
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-gift-recipient-integration-no-apk.yml'
+      - 'lib/deda_gift_recipient_preview.dart'
+      - 'test/deda_gift_recipient_preview_test.dart'
+      - 'tools/deda_integrate_verified_gift_recipient_2026_10_10.py'
+      - 'lib/deda_launch_feature_gates.dart'
+      - 'test/deda_launch_feature_gates_test.dart'
+      - 'lib/deda_profile_visible_diamonds.dart'
+      - 'tools/fix_profile_rewarded_diamond_display_next_release.py'
+      - 'test/deda_profile_visible_diamonds_test.dart'
+      - '.github/workflows/qa-deda-next-four-integrated-golden-no-apk.yml'
+      - 'tools/inject_social_task_golden_preview_2026_10_09.py'
+      - 'lib/deda_social_task_preview.dart'
+      - 'lib/deda_social_task_live_service.dart'
+      - 'lib/deda_telegram_verified_reward_service.dart'
+      - 'lib/deda_admin_social_task_preview_page.dart'
+      - 'lib/deda_admin_automation_toggle.dart'
+      - 'lib/admin_pages.dart'
+      - 'functions/deda_telegram_verified_claim.js'
+      - 'lib/deda_pin_auth.dart'
+      - 'tools/guard_deda_login_busy_indicator_next_release.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-integrated-real-app-no-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact accepted golden 100319 navigation starting point only for CI
+        run: |
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          git diff --exit-code origin/backup-deda-100319-user-accepted-2026-10-08 -- lib/main.dart
+          # Legacy 100278/100279 rebuild scripts structurally rewrite the OLD
+          # admin card. Use the accepted OLD admin source during reconstruction,
+          # then safely restore our NEW compact/admin-toggle source afterward.
+          cp lib/admin_pages.dart /tmp/deda_next_four_admin_pages.dart
+          cp firestore.rules /tmp/deda_next_four_trusted_rules.snapshot
+          git fetch --no-tags origin deda-social-firestore-no-functions-100327-2026-10-09:refs/remotes/origin/deda-social-firestore-no-functions-100327-2026-10-09
+          git show origin/deda-social-firestore-no-functions-100327-2026-10-09:lib/admin_pages.dart > lib/admin_pages.dart
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Prepare original golden reconstruction as NO-APK preflight
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          marker="echo '== Flutter analyzer =='\n"
+          build="flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true"
+          assert src.count(marker)==1 and src.count(build)==1, "Accepted golden script unexpectedly changed"
+          check="""echo '== Restore approved NEW responsive administration UI on reconstructed app =='
+          cp /tmp/deda_next_four_trusted_rules.snapshot firestore.rules
+          python3 - <<'FIRESTORE_NEXT_RELEASE'
+          from pathlib import Path
+          s=Path('firestore.rules').read_text()
+          assert s.count('match /deda_diamond_gift_balances/{publicId}')==1
+          assert 'verifiedDiamondsPersonalOwner' in s
+          assert 'match /deda_telegram_reward_audit/' in s
+          assert 'match /deda_automation_settings/' in s
+          print('PASS: next-release verified wallet, manager automation and Telegram ledger policies remain exactly once after golden reconstruction.')
+          FIRESTORE_NEXT_RELEASE
+          # Legacy rebuilt admin contains the server-audited 100271 pending
+          # gifts page, which was lost from the current 100329 UI refresh.
+          # Preserve it, restore accepted vivid 3-column admin layout, then
+          # merge only the original gift module and public identity preview.
+          cp lib/admin_pages.dart /tmp/deda_rebuilt_admin_with_gifts.dart
+          cp /tmp/deda_next_four_admin_pages.dart lib/admin_pages.dart
+          python3 tools/deda_integrate_verified_gift_recipient_2026_10_10.py
+          dart format lib/admin_pages.dart lib/deda_backend.dart
+          python3 - <<'VERIFY_GIFT_RESTORE'
+          from pathlib import Path
+          a=Path('lib/admin_pages.dart').read_text()
+          b=Path('lib/deda_backend.dart').read_text()
+          assert a.count('DedaAdminDiamondGiftPage(isArabic: ar)')==1
+          assert a.count('DedaGiftRecipientPreview(')==1
+          assert a.count('mainAxisExtent:')>=1
+          assert "class _DedaAdminDiamondGiftPageState" in a
+          assert 'watchCurrentAdminDiamondGifts()' in a
+          assert "collection('deda_social_profiles')" in b
+          assert "social?['avatarStyle']" in b
+          assert "collection('deda_admin_diamond_wallets')" in b
+          assert "collection('deda_diamond_gifts')" in b
+          assert 'DedaSocialProgressWallet.spendCoins' not in a
+          print('PASS: trusted administrative diamond gift + public recipient ID/profile, friend/coin payout OFF')
+          VERIFY_GIFT_RESTORE
+          python3 - <<'ADMIN_UI_REGRESSION'
+          from pathlib import Path
+          s=Path('lib/admin_pages.dart').read_text()
+          assert 'DedaAdminCompactCard(' in s
+          assert "kind: 'place_auto_approval'" in s
+          assert "kind: 'pin_auto_recovery'" in s
+          assert 'mainAxisExtent:' in s
+          print('PASS: responsive cards and server-gated manager toggles restored after legacy rebuild.')
+          ADMIN_UI_REGRESSION
+          echo '== Verify newly corrected profile diamonds on REAL reconstructed DEDA code =='
+          python3 tools/fix_profile_rewarded_diamond_display_next_release.py
+          dart format lib/main.dart
+          python3 - <<'PROFILE_REGRESSION'
+          from pathlib import Path
+          s=Path('lib/main.dart').read_text()
+          assert s.count('dedaProfileVisibleDiamonds(') == 1
+          assert s.count('ordinaryEarnedAndGifted: normalDiamonds') == 1
+          assert s.count('generalManagerPersonal: managerDiamonds') == 1
+          assert 'deda_profile_visible_diamonds.dart' in s
+          assert 'hasGeneralManagerPersonalWallet ? managerDiamonds : normalDiamonds' not in s
+          assert 'Timer.periodic(const Duration(milliseconds: 16)' in s, 'Golden live navigation changed'
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in s
+          print('PASS: REAL manager profile now includes +3 ad rewards in displayed diamonds; Golden navigation preserved.')
+          PROFILE_REGRESSION
+          echo '== Add clear, short first-login verification progress indicator =='
+          python3 tools/guard_deda_login_busy_indicator_next_release.py
+          dart format lib/main.dart
+          echo '== Inject the existing accepted social card with real bot verification links into fully reconstructed main.dart =='
+          python3 tools/inject_social_task_golden_preview_2026_10_09.py
+          dart format lib/main.dart
+          python3 - <<'SOCIAL_NEXT_RELEASE'
+          from pathlib import Path
+          user=Path('lib/main.dart').read_text()
+          social=Path('lib/deda_social_task_preview.dart').read_text()
+          assert user.count('DedaSocialTaskCompactCard(')==1
+          assert user.count('DedaSocialTaskPreview.visible')==1
+          assert user.count('await DedaDiamondsWallet.load();') >= 1
+          assert user.count('final taskId = DedaTaskIds.weekly[index];')==1
+          assert user.index('DedaSocialTaskCompactCard(') < user.index('final taskId = DedaTaskIds.weekly[index];')
+          assert 'startTelegramBotVerification' in social
+          assert 'claimVerifiedTelegramDiamonds' in social
+          assert 'DedaPinRecoveryPage(' in user, 'user forgot-PIN form not retained'
+          assert 'DedaPinAuth.recoveryRequest(' in user, 'user status listener missing'
+          assert 'DedaPinAuth.readRecoveryPin(' in user, 'new 6-digit PIN never displayed to requester'
+          assert user.count('dedaProfileVisibleDiamonds(')==1
+          assert 'Timer.periodic(const Duration(milliseconds: 16)' in user
+          # REGRESSION: first-time install / login must not wait on ad SDK.
+          startup = user.split('Future<void> main() async {',1)[1].split(
+            'class _DedaCleanPageTransitionsBuilder',1)[0]
+          pin = Path('lib/deda_pin_auth.dart').read_text()
+          assert 'runApp(const DedaApp());' in startup
+          assert 'MobileAds.instance.initialize()' not in startup, 'ad SDK blocks first frame'
+          assert 'RewardedAd.load(' not in startup, 'ad preload blocks first frame'
+          assert 'await DedaTaskEngine.initializeForCurrentAccount();' in startup
+          assert 'unawaited(_refreshGeneralManagerBonus(accountKey));' in user, 'GM role network should not block startup'
+          assert 'prefs.getBool(_knownAccountKey(phone)) == true' in pin, 'known accounts must open PIN page offline without Firestore'
+          assert '.timeout(const Duration(seconds: 8))' in pin, 'directory lookup must be time bounded'
+          assert 'auth.signInAnonymously()' in pin
+          assert '.timeout(const Duration(seconds: 12))' in pin, 'Firebase anonymous first-install auth cannot spin for a minute'
+          assert '_loginBusy ? null : login' in user, 'disable duplicate login taps'
+          assert 'DEDA_NEXT_LOGIN_BUSY_INDICATOR_2026_10_10' in user
+          assert "'جاري التحقق...'" in user and "'Checking...'" in user, 'login busy status must survive Dart formatter'
+          assert 'child: CircularProgressIndicator(' in user, 'must show spinner during first Firebase check'
+          print('PASS: 8 golden daily/weekly task controls, smooth map, manager earned ad diamonds and Telegram wallet refresh retained in ONE actual Flutter main.dart.')
+          SOCIAL_NEXT_RELEASE
+          """
+          src=src.replace(marker,check+"\n"+marker)
+          src=src.replace(build,"echo 'NO_APK_BUILT_NO_PRODUCTION_DEPLOY'")
+          Path('/tmp/deda_next_four_integrated_golden_no_apk.sh').write_text(src)
+          PY
+      - name: Reconstruct full accepted navigation + rewards profile, analyze but DO NOT BUILD
+        # The old 100267 preflight runs "keytool -list" to validate a JKS.
+        # Create a temporary, 1-day QA ONLY keystore IN MEMORY for that check,
+        # never use the production signing secret, never sign or build any APK.
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -noprompt -alias qa-one-day-never-release \
+            -keyalg RSA -keysize 2048 -validity 1 -storetype JKS \
+            -keystore /tmp/deda-qa-one-day.jks \
+            -storepass QAOnlyTemporaryPass123 -keypass QAOnlyTemporaryPass123 \
+            -dname 'CN=DEDA QA Only, OU=Not for Releases, O=Internal CI, C=IQ' > /dev/null 2>&1
+          export DEDA_KEYSTORE_BASE64="$(base64 -w0 /tmp/deda-qa-one-day.jks)"
+          export DEDA_KEY_ALIAS='qa-one-day-never-release'
+          export DEDA_KEY_PASSWORD='QAOnlyTemporaryPass123'
+          export DEDA_STORE_PASSWORD='QAOnlyTemporaryPass123'
+          rm -f /tmp/deda-qa-one-day.jks
+          echo 'QA-only ephemeral key supports legacy keytool preflight; no APK.'
+          bash /tmp/deda_next_four_integrated_golden_no_apk.sh
+      - name: Verify actual manager diamond profile, Telegram user/admin screens, and no APK
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/admin_pages.dart lib/deda_backend.dart lib/deda_gift_recipient_preview.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_profile_visible_diamonds.dart lib/deda_social_task_preview.dart lib/deda_social_task_live_service.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart lib/deda_admin_automation_toggle.dart
+          flutter test test/deda_gift_recipient_preview_test.dart test/deda_launch_feature_gates_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_social_task_preview_test.dart
+          # Public-first launch: saved code stays OFF, user cannot claim rewards
+          # or activate PIN/place 10s/30s services before server installation.
+          python3 - <<'PUBLIC_LAUNCH_SAFETY'
+          from pathlib import Path
+          gate=Path('lib/deda_launch_feature_gates.dart').read_text()
+          social=Path('lib/deda_social_task_preview.dart').read_text()
+          owner=Path('lib/deda_admin_social_task_preview_page.dart').read_text()
+          toggles=Path('lib/deda_admin_automation_toggle.dart').read_text()
+          assert 'defaultValue: false' in gate
+          assert 'DEDA_SERVER_AUTOMATIONS_LIVE' in gate
+          assert 'DedaLaunchFeatureGates.telegramVerifiedRewards &&' in social
+          assert 'DedaLaunchFeatureGates.telegramVerifiedRewards' in owner
+          assert 'DedaLaunchFeatureGates.serverFeaturesEnabled' in toggles
+          assert 'onDiamondsGranted' in Path('lib/main.dart').read_text()
+          print('PASS: Telegram claim, 10s PIN and 30s place automation compile-time OFF; core task/link intact.')
+          PUBLIC_LAUNCH_SAFETY
+          test ! -e build/app/outputs/flutter-apk/app-release.apk
+          echo 'Preview verified with accepted app. NO friend coin/diamond transfer live. No APK, Play, Firebase deploy.'
