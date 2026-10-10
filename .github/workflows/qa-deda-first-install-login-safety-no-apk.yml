@@ -1,0 +1,49 @@
+name: DEDA First Install Login No-Freeze Safety - NO APK
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'lib/deda_pin_auth.dart'
+      - 'tools/guard_deda_login_busy_indicator_next_release.py'
+      - 'tests/stage14/test_login_busy_patch.py'
+      - '.github/workflows/qa-deda-first-install-login-safety-no-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  login-regression-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: New login progress indicator script is safe and idempotent
+        run: |
+          python3 -m py_compile tools/guard_deda_login_busy_indicator_next_release.py
+          python3 -m unittest tests/stage14/test_login_busy_patch.py -v
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Resolve Flutter packages
+        run: flutter pub get
+      - name: Analyze bounded first-install Firebase Auth
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart
+      - name: Prevent unbounded first-user Firebase wait and network bypass
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('lib/deda_pin_auth.dart').read_text()
+          assert src.count('auth.signInAnonymously()') == 1
+          assert src.count('.timeout(const Duration(seconds: 12))') == 1
+          assert '.timeout(const Duration(seconds: 8))' in src
+          assert 'prefs.getBool(_knownAccountKey(phone)) == true' in src
+          assert 'await _provePin(accountKey: accountKey, pin: pin);' in src
+          assert 'await _openSession(accountKey);' in src
+          print('PASS: 12s first-install Firebase anonymous-auth deadline, 8s account directory timeout, offline known-account shortcut, PIN still mandatory.')
+          PY
+      - name: Guarantee source-only changes
+        run: echo 'No APK, Play Store, Cloud Functions or Firebase deployment.'
