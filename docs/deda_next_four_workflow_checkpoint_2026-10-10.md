@@ -173,3 +173,9 @@ Actual code assessment:
 Limits and pending device tests:
 - A successful source check is NOT a cold-start stopwatch, slow-network flight test or mass-download load test. Firebase.init is still awaited on app boot and might cause device-specific delays; on the eventual ONE signed APK, explicitly check first-open with new install, returning user, offline/slow network, auth outage and many repeated login attempts. Do not promise the freeze can never recur or that network services have infinite capacity.
 - No extra APK was created, no production Firebase/Google Play action and no accepted 100327 branch changes.
+
+### First-use login QA results
+- **PASS** isolated first-install PIN login safety + button spinner patch tests + Dart analyzer [GitHub Actions #38007837144](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38007837144).
+- **PASS** earlier full golden reconstruction preserving installed PIN+Telegram+AdMob screens [#38007637322](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38007637322).
+- Initial enlarged integrated CI #38007721703 detected a **test assertion layout issue** after Dart formatter rewrote the literal busy text across lines; the actual login loading patch itself successfully ran and printed PASS. The check now matches the Arabic/English strings independent of formatter whitespace in corrected run #38007989763. This is a CI-only regression, not a released APK failure. Check #38007989763 final status separately.
+- No new device-tested APK has been built and no real load test performed; only source-based guard and analyzer tests, with production accepted 100327 untouched.
