@@ -1,0 +1,36 @@
+name: DEDA Alternative Node Backend Safety - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - 'functions/deda_external_api.js'
+      - 'functions/deda_external_server.js'
+      - 'tests/stage14/deda_external_api.test.cjs'
+      - '.github/workflows/qa-deda-external-backend-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-node-api-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate source without secrets or network
+        run: |
+          node --check functions/deda_external_api.js
+          node --check functions/deda_external_server.js
+          node --test tests/stage14/deda_external_api.test.cjs
+      - name: Confirm startup gate and safe Firebase verification
+        run: |
+          grep -q 'owner-approved' functions/deda_external_server.js
+          grep -q 'verifyIdToken(token,true)' functions/deda_external_server.js
+          grep -q 'background-worker-not-deployed' functions/deda_external_api.js
+          echo 'PASS: source-only test; NO API enable, NO billing, NO deployment, NO APK'
