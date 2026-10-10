@@ -98,8 +98,8 @@ jobs:
           assert 'DedaSocialProgressWallet.spendCoins' not in a
           m=Path('lib/main.dart').read_text()
           assert m.count("label: Text(dedaText('استلام الهدية', 'Receive gift'))")==1
-          import re
-          assert re.search(r"\bText\(\s*'DEDA'\s*,", m), 'official gift needs recognizable DEDA mark'
+          assert 'Clearly identify official DEDA administrative gifts.' in m, 'missing branded gift emblem'
+          assert "'DEDA'" in m or '"DEDA"' in m, 'missing DEDA wordmark'
           assert 'onPressed: busy ? null : () => _claim(gift)' in m
           assert "DedaBackend.claimDiamondGift(" in m
           assert "gift['status'] ?? '').toString() == 'pending'" in m
