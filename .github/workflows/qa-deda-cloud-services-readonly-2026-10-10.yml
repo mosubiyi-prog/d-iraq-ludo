@@ -1,0 +1,88 @@
+name: DEDA Google Cloud Services Readiness - READ ONLY
+
+on:
+  push:
+    branches:
+      - deda-next-four-items-stage0-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-cloud-services-readonly-2026-10-10.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  service-metadata-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DEDA_GOOGLE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_GOOGLE_SA_FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Prepare read-only Python Google API client
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Read project API and billing enablement states (GET only)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+
+          project = 'deda-25b88'
+          raw = os.environ.get('DEDA_GOOGLE_SA') or os.environ.get('DEDA_GOOGLE_SA_FALLBACK')
+          if not raw:
+              print('READ_ONLY_RESULT: UNKNOWN_NO_GITHUB_SERVICE_ACCOUNT')
+              print('No API was enabled, no billing altered, no deployment attempted.')
+              raise SystemExit(0)
+          try:
+              info = json.loads(raw)
+              if info.get('project_id') != project:
+                  print('READ_ONLY_RESULT: UNKNOWN_WRONG_CREDENTIAL_PROJECT')
+                  raise SystemExit(0)
+              credentials = service_account.Credentials.from_service_account_info(
+                  info, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+              session = AuthorizedSession(credentials)
+          except Exception:
+              print('READ_ONLY_RESULT: UNKNOWN_CREDENTIAL_PARSE_OR_AUTH')
+              raise SystemExit(0)
+
+          services = [
+              'cloudbuild.googleapis.com',
+              'artifactregistry.googleapis.com',
+              'cloudfunctions.googleapis.com',
+              'run.googleapis.com',
+              'serviceusage.googleapis.com',
+          ]
+          for service in services:
+              try:
+                  uri = (f'https://serviceusage.googleapis.com/v1/projects/{project}'
+                         f'/services/{service}')
+                  response = session.get(uri, timeout=22)
+                  if response.status_code == 200:
+                      state = response.json().get('state', 'UNKNOWN')
+                      if state not in ['ENABLED', 'DISABLED']:
+                          state = 'UNKNOWN'
+                      print(f'SERVICE {service} = {state}')
+                  else:
+                      print(f'SERVICE {service} = UNKNOWN_HTTP_{response.status_code}')
+              except Exception as exc:
+                  print(f'SERVICE {service} = UNKNOWN_{type(exc).__name__}')
+
+          try:
+              uri = f'https://cloudbilling.googleapis.com/v1/projects/{project}/billingInfo'
+              response = session.get(uri, timeout=22)
+              if response.status_code == 200:
+                  # Do not log billing account ID, payment details or response body.
+                  enabled = response.json().get('billingEnabled')
+                  print('BILLING_ENABLED = ' + ('YES' if enabled is True
+                      else 'NO' if enabled is False else 'UNKNOWN'))
+              else:
+                  print(f'BILLING_ENABLED = UNKNOWN_HTTP_{response.status_code}')
+          except Exception as exc:
+              print(f'BILLING_ENABLED = UNKNOWN_{type(exc).__name__}')
+
+          print('READ_ONLY_FINISHED: Only Google service metadata GET requests.')
+          print('NO_API_ENABLE. NO_BILLING_CHANGE. NO_SECRET_OUTPUT. NO_DEPLOY. NO_APK.')
+          PY
