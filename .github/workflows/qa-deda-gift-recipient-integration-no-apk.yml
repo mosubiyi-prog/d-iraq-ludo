@@ -10,6 +10,8 @@ on:
       - 'test/deda_gift_recipient_preview_test.dart'
       - 'tools/deda_integrate_verified_gift_recipient_2026_10_10.py'
       - 'tools/gifts_main_ui_100271_2026_10_05.py'
+      - 'lib/deda_official_gift_logo.dart'
+      - 'test/deda_official_gift_logo_test.dart'
       - 'lib/deda_launch_feature_gates.dart'
       - 'test/deda_launch_feature_gates_test.dart'
       - 'lib/deda_profile_visible_diamonds.dart'
@@ -98,8 +100,9 @@ jobs:
           assert 'DedaSocialProgressWallet.spendCoins' not in a
           m=Path('lib/main.dart').read_text()
           assert m.count("label: Text(dedaText('استلام الهدية', 'Receive gift'))")==1
-          assert 'Clearly identify official DEDA administrative gifts.' in m, 'missing branded gift emblem'
-          assert "'DEDA'" in m or '"DEDA"' in m, 'missing DEDA wordmark'
+          assert 'Original offline DEDA app emblem, not a temporary badge.' in m, 'gift icon must be official DEDA icon'
+          assert "import 'deda_official_gift_logo.dart';" in m, 'offline logo import missing'
+          assert "DedaOfficialGiftLogo(size: 52)" in m, 'branded gift visual missing'
           assert 'onPressed: busy ? null : () => _claim(gift)' in m
           assert "DedaBackend.claimDiamondGift(" in m
           assert "gift['status'] ?? '').toString() == 'pending'" in m
@@ -196,9 +199,9 @@ jobs:
           bash /tmp/deda_next_four_integrated_golden_no_apk.sh
       - name: Verify actual manager diamond profile, Telegram user/admin screens, and no APK
         run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/admin_pages.dart lib/deda_backend.dart lib/deda_gift_recipient_preview.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/admin_pages.dart lib/deda_backend.dart lib/deda_gift_recipient_preview.dart lib/deda_official_gift_logo.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_profile_visible_diamonds.dart lib/deda_social_task_preview.dart lib/deda_social_task_live_service.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart lib/deda_admin_automation_toggle.dart
-          flutter test test/deda_gift_recipient_preview_test.dart test/deda_launch_feature_gates_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_social_task_preview_test.dart
+          flutter test test/deda_official_gift_logo_test.dart test/deda_gift_recipient_preview_test.dart test/deda_launch_feature_gates_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_social_task_preview_test.dart
           # Public-first launch: saved code stays OFF, user cannot claim rewards
           # or activate PIN/place 10s/30s services before server installation.
           python3 - <<'PUBLIC_LAUNCH_SAFETY'
