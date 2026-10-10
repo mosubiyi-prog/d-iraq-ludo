@@ -70,6 +70,17 @@ class _DedaAdminAutomationToggleState
 
   Future<void> _refresh() async {
     if (!mounted) return;
+    // Public-first launch deliberately has no 10s/30s backend. Do not
+    // query undeployed Firestore collections or show misleading errors.
+    if (!DedaLaunchFeatureGates.serverFeaturesEnabled) {
+      setState(() {
+        _backendReady = false;
+        _enabled = false;
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
     setState(() => _loading = true);
     try {
       final profile = await DedaBackend.currentAdminProfile();
