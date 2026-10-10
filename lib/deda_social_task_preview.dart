@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'deda_social_task_live_service.dart';
 import 'deda_telegram_verified_reward_service.dart';
+import 'deda_launch_feature_gates.dart';
 
 /// Isolated social-task UI: never enters the existing eight task IDs, Firebase,
 /// or the reward ledger. The release build keeps this preview disabled.
@@ -183,7 +184,8 @@ class _DedaSocialTaskUserPreviewPageState
   }
 
   Future<void> _startBotVerification() async {
-    if (_verificationBusy) return;
+    if (_verificationBusy ||
+        !DedaLaunchFeatureGates.telegramVerifiedRewards) return;
     setState(() => _verificationBusy = true);
     try {
       final result = await _telegram.beginTelegramLink();
@@ -222,7 +224,8 @@ class _DedaSocialTaskUserPreviewPageState
   }
 
   Future<void> _claimVerifiedTelegramDiamonds() async {
-    if (_verificationBusy) return;
+    if (_verificationBusy ||
+        !DedaLaunchFeatureGates.telegramVerifiedRewards) return;
     setState(() => _verificationBusy = true);
     try {
       final result = await _telegram.claimAfterMembershipCheck();
@@ -302,7 +305,9 @@ class _DedaSocialTaskUserPreviewPageState
                   data['rewardsEnabled'] == false &&
                   data['rewardClaimMode'] ==
                       'blocked-until-trusted-proof-and-ssv-ledger';
-              final verifiedReward = data != null &&
+              final verifiedReward =
+                  DedaLaunchFeatureGates.telegramVerifiedRewards &&
+                  data != null &&
                   data['rewardsEnabled'] == true &&
                   data['rewardClaimMode'] ==
                       'server-verified-telegram-membership' &&

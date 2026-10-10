@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'deda_social_task_preview.dart';
 import 'deda_social_task_live_service.dart';
+import 'deda_launch_feature_gates.dart';
 
 /// Owner-only social editor with authenticated backend draft/schedule controls.
 /// Config can be published by the server after midnight. Rewards stay blocked.
@@ -45,7 +46,8 @@ class _DedaAdminSocialTaskPreviewPageState
   }
 
   Future<void> _checkTelegramVerifiedBackend() async {
-    if (Firebase.apps.isEmpty) return;
+    if (!DedaLaunchFeatureGates.telegramVerifiedRewards ||
+        Firebase.apps.isEmpty) return;
     try {
       final response = await FirebaseFunctions.instance
           .httpsCallable('dedaTelegramVerifiedRewardReadiness')
@@ -60,7 +62,8 @@ class _DedaAdminSocialTaskPreviewPageState
   }
 
   Future<void> _toggleTelegramVerifiedReward(String op) async {
-    if (_busy || !_telegramBackendReady) return;
+    if (_busy || !_telegramBackendReady ||
+        !DedaLaunchFeatureGates.telegramVerifiedRewards) return;
     setState(() => _busy = true);
     try {
       final response = await FirebaseFunctions.instance
@@ -430,7 +433,8 @@ class _DedaAdminSocialTaskPreviewPageState
             if (_remoteStatus == 'scheduled') ...[
               const SizedBox(height: 12),
               Text(
-                _telegramBackendReady
+                DedaLaunchFeatureGates.telegramVerifiedRewards &&
+                    _telegramBackendReady
                     ? t('✅ بوت تليجرام موثوق وصلاحيات القناة مؤكدة من الخادم.',
                         'Telegram bot administrator rights verified by server.')
                     : t('⏳ مكافأة تليجرام الحقيقية مغلقة حتى تشغيل الخادم وربط البوت كمسؤول بالقناة.',
@@ -441,7 +445,8 @@ class _DedaAdminSocialTaskPreviewPageState
               const SizedBox(height: 7),
               FilledButton.icon(
                 key: const Key('socialEnableVerifiedTelegramReward'),
-                onPressed: _busy || !_telegramBackendReady
+                onPressed: _busy || !_telegramBackendReady ||
+                        !DedaLaunchFeatureGates.telegramVerifiedRewards
                     ? null : () => _toggleTelegramVerifiedReward('enable'),
                 icon: const Icon(Icons.verified_user_rounded),
                 label: Text(t('تفعيل مكافأة الاشتراك المتحقق (10 ماسات)',
@@ -450,7 +455,8 @@ class _DedaAdminSocialTaskPreviewPageState
               const SizedBox(height: 7),
               OutlinedButton.icon(
                 key: const Key('socialDisableVerifiedTelegramReward'),
-                onPressed: _busy || !_telegramBackendReady
+                onPressed: _busy || !_telegramBackendReady ||
+                        !DedaLaunchFeatureGates.telegramVerifiedRewards
                     ? null : () => _toggleTelegramVerifiedReward('disable'),
                 icon: const Icon(Icons.block),
                 label: Text(t('إيقاف صرف مكافأة تليجرام',

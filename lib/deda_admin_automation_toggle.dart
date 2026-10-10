@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_backend.dart';
+import 'deda_launch_feature_gates.dart';
 
 /// General-manager control UI for the two future server automations.
 /// This widget NEVER performs the automation on the handset. Until a trusted
@@ -54,6 +55,7 @@ class _DedaAdminAutomationToggleState
   /// A cached Firestore readiness flag is NOT enough to enable a worker.
   /// Only the trusted deployed callable can refresh it for this session.
   Future<bool> _confirmLiveWorker() async {
+    if (!DedaLaunchFeatureGates.serverFeaturesEnabled) return false;
     try {
       final result = await FirebaseFunctions.instance.httpsCallable(
         'dedaAutomationReadiness',
@@ -103,14 +105,17 @@ class _DedaAdminAutomationToggleState
   }
 
   Future<void> _setEnabled(bool next) async {
-    if (_saving || _loading || (next && !_backendReady)) return;
+    if (_saving || _loading ||
+        (next && (!DedaLaunchFeatureGates.serverFeaturesEnabled ||
+                  !_backendReady))) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
     setState(() => _saving = true);
     try {
       // Revalidate immediately before enabling; disabling must still work
       // during a Cloud Functions outage or if the readiness marker is stale.
-      if (next && !await _confirmLiveWorker()) {
+      if (next && (!DedaLaunchFeatureGates.serverFeaturesEnabled ||
+                   !await _confirmLiveWorker())) {
         throw StateError('worker-not-verified-now');
       }
       final firestore = FirebaseFirestore.instance;
@@ -171,7 +176,10 @@ class _DedaAdminAutomationToggleState
             'New complete requests publish after 30 seconds; old ones stay manual.')
         : t('يصل الرمز بعد 10 ثوانٍ لجهاز مسجّل سابقاً، دون موافقة موظف.',
             '10-second self-recovery for previously trusted devices, no staff step.');
-    final blocked = !_backendReady
+    final blocked = !DedaLaunchFeatureGates.serverFeaturesEnabled
+        ? t('الخدمة التلقائية مؤجّلة إلى تحديث لاحق. العمل اليدوي مستمر.',
+            'Automatic service deferred to a future update. Manual mode works.')
+        : !_backendReady
         ? _enabled
           ? t('تعذر تأكيد الخدمة الآن؛ تقدر تطفّي الأتمتة بأمان.',
               'Service not verified now — you can safely turn automation OFF.')
@@ -203,6 +211,7 @@ class _DedaAdminAutomationToggleState
                         style: const TextStyle(fontSize: 12.5)),
                       value: _enabled,
                       onChanged: _saving || _loading || _error != null ||
+                              (!DedaLaunchFeatureGates.serverFeaturesEnabled && !_enabled) ||
                               (!_backendReady && !_enabled)
                           ? null : _setEnabled,
                     ),
