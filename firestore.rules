@@ -1809,7 +1809,10 @@ service cloud.firestore {
           || (request.resource.data.enabled
             && request.resource.data.enabledAt == request.time
             && exists(/databases/$(database)/documents/deda_automation_status/$(kind))
-            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true)
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.checkedAt is timestamp
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.checkedAt
+                 >= request.time - duration.value(5, 'm'))
         );
       allow update: if directSocialAdmin()
         && kind in ['place_auto_approval', 'pin_auto_recovery']
@@ -1829,7 +1832,10 @@ service cloud.firestore {
           || (request.resource.data.enabled
             && request.resource.data.enabledAt == request.time
             && exists(/databases/$(database)/documents/deda_automation_status/$(kind))
-            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true)
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.ready == true
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.checkedAt is timestamp
+            && get(/databases/$(database)/documents/deda_automation_status/$(kind)).data.checkedAt
+                 >= request.time - duration.value(5, 'm'))
         );
     }
 

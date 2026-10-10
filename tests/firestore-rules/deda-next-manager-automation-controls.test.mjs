@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 import {before,after,test} from "node:test";
 import {initializeTestEnvironment,assertSucceeds,assertFails}
   from "@firebase/rules-unit-testing";
-import {doc,getDoc,setDoc,updateDoc,serverTimestamp}
+import {doc,getDoc,setDoc,updateDoc,serverTimestamp,Timestamp}
   from "firebase/firestore";
 
 const PROJECT="demo-deda-next-manager-automations";
@@ -55,7 +55,9 @@ test("even manager CANNOT switch ON before trusted backend readiness",async()=>{
 });
 test("Admin SDK sets readiness, manager can switch ON and back OFF",async()=>{
   await env.withSecurityRulesDisabled(async ctx=>{
-    await setDoc(status(ctx.firestore(),"place_auto_approval"),{ready:true});
+    await setDoc(status(ctx.firestore(),"place_auto_approval"),{
+      ready:true,checkedAt:serverTimestamp(),
+    });
   });
   await assertSucceeds(updateDoc(setting(gm,"place_auto_approval"),{
     enabled:true,enabledAt:serverTimestamp(),revision:2,
@@ -67,6 +69,23 @@ test("Admin SDK sets readiness, manager can switch ON and back OFF",async()=>{
   }));
   assert.equal((await getDoc(setting(gm,"place_auto_approval"))).data().enabled,false);
 });
+test("stale readiness cannot turn ON; owner may keep or turn switches OFF",async()=>{
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await setDoc(status(ctx.firestore(),"pin_auto_recovery"),{
+      ready:true,checkedAt:Timestamp.fromDate(new Date("2025-01-01T00:00:00Z")),
+    });
+  });
+  await assertFails(updateDoc(setting(gm,"pin_auto_recovery"),{
+    enabled:true,enabledAt:serverTimestamp(),revision:2,
+    updatedAt:serverTimestamp(),changedByUid:"gm",
+  }));
+  await assertSucceeds(updateDoc(setting(gm,"pin_auto_recovery"),{
+    enabled:false,enabledAt:null,revision:2,
+    updatedAt:serverTimestamp(),changedByUid:"gm",
+  }));
+  assert.equal((await getDoc(setting(gm,"pin_auto_recovery"))).data().enabled,false);
+});
+
 test("clients cannot inject payout fields, bypass revision or impersonate actor",async()=>{
   for(const change of [
     {enabled:true,revision:4,changedByUid:"staff",enabledAt:serverTimestamp(),

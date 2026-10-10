@@ -51,6 +51,21 @@ class _DedaAdminAutomationToggleState
     _refresh();
   }
 
+  /// A cached Firestore readiness flag is NOT enough to enable a worker.
+  /// Only the trusted deployed callable can refresh it for this session.
+  Future<bool> _confirmLiveWorker() async {
+    try {
+      final result = await FirebaseFunctions.instance.httpsCallable(
+        'dedaAutomationReadiness',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 6)),
+      ).call();
+      final data = result.data;
+      return data is Map && data['ready'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _refresh() async {
     if (!mounted) return;
     setState(() => _loading = true);
@@ -60,36 +75,20 @@ class _DedaAdminAutomationToggleState
           'general_manager') {
         throw StateError('strict-general-manager-required');
       }
-      var docs = await Future.wait([
+      // Recheck EVERY time, even if an old readiness document says ready.
+      // The callable is deployed last, after both protected workers.
+      final workerConfirmed = await _confirmLiveWorker();
+      final docs = await Future.wait([
         _config.get(const GetOptions(source: Source.server)),
         _readiness.get(const GetOptions(source: Source.server)),
       ]);
-      if (docs.last.data()?['ready'] != true) {
-        // An authenticated manager can silently ask the deployed server
-        // to confirm BOTH automation workers are actually available.
-        // If Functions are not deployed, keep the switch disabled.
-        try {
-          await FirebaseFunctions.instance.httpsCallable(
-            'dedaAutomationReadiness',
-            options: HttpsCallableOptions(
-              timeout: const Duration(seconds: 6),
-            ),
-          ).call();
-          docs = await Future.wait([
-            _config.get(const GetOptions(source: Source.server)),
-            _readiness.get(const GetOptions(source: Source.server)),
-          ]);
-        } catch (_) {
-          // Disabled is safer than pretending timed automation is live.
-        }
-      }
       if (!mounted) return;
       setState(() {
         final value = docs.first.data();
         final readiness = docs.last.data();
         _enabled = value?['enabled'] == true;
         _revision = (value?['revision'] as num?)?.toInt() ?? 0;
-        _backendReady = readiness?['ready'] == true;
+        _backendReady = workerConfirmed && readiness?['ready'] == true;
         _error = null;
         _loading = false;
       });
@@ -104,11 +103,16 @@ class _DedaAdminAutomationToggleState
   }
 
   Future<void> _setEnabled(bool next) async {
-    if (_saving || !_backendReady || _loading) return;
+    if (_saving || _loading || (next && !_backendReady)) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
     setState(() => _saving = true);
     try {
+      // Revalidate immediately before enabling; disabling must still work
+      // during a Cloud Functions outage or if the readiness marker is stale.
+      if (next && !await _confirmLiveWorker()) {
+        throw StateError('worker-not-verified-now');
+      }
       final firestore = FirebaseFirestore.instance;
       final ref = _config;
       await firestore.runTransaction((tx) async {
@@ -116,7 +120,7 @@ class _DedaAdminAutomationToggleState
           tx.get(ref),
           tx.get(_readiness),
         ]);
-        if (snapshots.last.data()?['ready'] != true) {
+        if (next && snapshots.last.data()?['ready'] != true) {
           throw StateError('worker-not-deployed');
         }
         final old = snapshots.first.data();
@@ -168,8 +172,11 @@ class _DedaAdminAutomationToggleState
         : t('يصل الرمز بعد 10 ثوانٍ لجهاز مسجّل سابقاً، دون موافقة موظف.',
             '10-second self-recovery for previously trusted devices, no staff step.');
     final blocked = !_backendReady
-        ? t('خدمة التشغيل التلقائي لم تتفعّل بعد؛ النظام اليدوي مستمر.',
-            'Server worker not active yet — manual workflow remains.')
+        ? _enabled
+          ? t('تعذر تأكيد الخدمة الآن؛ تقدر تطفّي الأتمتة بأمان.',
+              'Service not verified now — you can safely turn automation OFF.')
+          : t('خدمة التشغيل التلقائي لم تتفعّل بعد؛ النظام اليدوي مستمر.',
+              'Server worker not active yet — manual workflow remains.')
         : t(_enabled ? 'مفعّل للطلبات الجديدة' : 'مطفأ — مراجعة يدوية',
             _enabled ? 'ON for new requests' : 'OFF — manual review');
 
@@ -195,7 +202,8 @@ class _DedaAdminAutomationToggleState
                       subtitle: Text(help,
                         style: const TextStyle(fontSize: 12.5)),
                       value: _enabled,
-                      onChanged: _saving || !_backendReady || _error != null
+                      onChanged: _saving || _loading || _error != null ||
+                              (!_backendReady && !_enabled)
                           ? null : _setEnabled,
                     ),
                     Text(_error ?? blocked,
