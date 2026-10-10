@@ -41,6 +41,16 @@ jobs:
       - name: Validate isolated server policy and review cases
         run: |
           node --check functions/index.js
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('functions/index.js').read_text()
+          scope=root.split('exports.dedaAutomationReadiness = onCall(',1)[1].split('const ADMIN_ROLES',1)[0]
+          assert 'await requireGeneralManager(request)' in scope, 'GM backend role authorization missing'
+          assert 'actor.data.role' not in scope, 'GM role reference broken (requireGeneralManager returns actor.role)'
+          assert 'deda_automation_status' in scope
+          assert 'place_auto_approval' in scope and 'pin_auto_recovery' in scope
+          print('PASS: deployed manager activation handshake uses normalized strict GM identity.')
+          PY
           node --check functions/deda_place_auto_approval_worker.js
           node --check functions/deda_place_auto_approval_policy.js
           node --check functions/deda_pin_auto_recovery_worker.js
