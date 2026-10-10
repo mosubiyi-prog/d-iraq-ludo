@@ -17,6 +17,7 @@ on:
       - 'lib/deda_admin_automation_toggle.dart'
       - 'lib/admin_pages.dart'
       - 'functions/deda_telegram_verified_claim.js'
+      - 'lib/deda_pin_auth.dart'
   workflow_dispatch:
 
 permissions:
@@ -110,6 +111,20 @@ jobs:
           assert 'DedaPinAuth.readRecoveryPin(' in user, 'new 6-digit PIN never displayed to requester'
           assert user.count('dedaProfileVisibleDiamonds(')==1
           assert 'Timer.periodic(const Duration(milliseconds: 16)' in user
+          # REGRESSION: first-time install / login must not wait on ad SDK.
+          startup = user.split('Future<void> main() async {',1)[1].split(
+            'class _DedaCleanPageTransitionsBuilder',1)[0]
+          pin = Path('lib/deda_pin_auth.dart').read_text()
+          assert 'runApp(const DedaApp());' in startup
+          assert 'MobileAds.instance.initialize()' not in startup, 'ad SDK blocks first frame'
+          assert 'RewardedAd.load(' not in startup, 'ad preload blocks first frame'
+          assert 'await DedaTaskEngine.initializeForCurrentAccount();' in startup
+          assert 'unawaited(_refreshGeneralManagerBonus(accountKey));' in user, 'GM role network should not block startup'
+          assert 'prefs.getBool(_knownAccountKey(phone)) == true' in pin, 'known accounts must open PIN page offline without Firestore'
+          assert '.timeout(const Duration(seconds: 8))' in pin, 'directory lookup must be time bounded'
+          assert 'auth.signInAnonymously()' in pin
+          assert '.timeout(const Duration(seconds: 12))' in pin, 'Firebase anonymous first-install auth cannot spin for a minute'
+          assert '_loginBusy ? null : login' in user, 'disable duplicate login taps'
           print('PASS: 8 golden daily/weekly task controls, smooth map, manager earned ad diamonds and Telegram wallet refresh retained in ONE actual Flutter main.dart.')
           SOCIAL_NEXT_RELEASE
           """
@@ -137,7 +152,7 @@ jobs:
           bash /tmp/deda_next_four_integrated_golden_no_apk.sh
       - name: Verify actual manager diamond profile, Telegram user/admin screens, and no APK
         run: |
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_profile_visible_diamonds.dart lib/deda_social_task_preview.dart lib/deda_social_task_live_service.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart lib/deda_admin_automation_toggle.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_profile_visible_diamonds.dart lib/deda_social_task_preview.dart lib/deda_social_task_live_service.dart lib/deda_telegram_verified_reward_service.dart lib/deda_admin_social_task_preview_page.dart lib/deda_admin_automation_toggle.dart
           flutter test test/deda_profile_visible_diamonds_test.dart test/deda_social_task_preview_test.dart
           test ! -e build/app/outputs/flutter-apk/app-release.apk
           echo 'Full accepted navigation reconstructed + new Telegram/manager/diamonds integrated. No APK, Google Play or Firebase deploy.'
