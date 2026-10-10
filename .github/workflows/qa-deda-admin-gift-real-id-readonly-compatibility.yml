@@ -1,0 +1,76 @@
+name: DEDA ADMIN Gift Recipient Real-ID Schema Compatibility - GET ONLY
+
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - '.github/workflows/qa-deda-admin-gift-real-id-readonly-compatibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-real-id-schema:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Firebase READ ONLY API dependencies
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Verify authenticated recipient ID schema WITHOUT logging identity or PII
+        env:
+          DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python3 - <<'PY'
+          import json,os,sys,urllib.parse
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv('DEDA_SA') or os.getenv('FALLBACK_SA')
+          if not raw: sys.exit('SAFE_STOP: no Firebase read-only SA')
+          cred=service_account.Credentials.from_service_account_info(json.loads(raw),
+              scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          sess=AuthorizedSession(cred)
+          root='https://firestore.googleapis.com/v1/projects/deda-25b88/databases/(default)/documents/'
+          def get_doc(collection,key):
+              encoded=urllib.parse.quote(key,safe='')
+              result=sess.get(root+collection+'/'+encoded,timeout=25)
+              if result.status_code==404: return None
+              result.raise_for_status()
+              return result.json().get('fields',{})
+          def strfield(fields,name):
+              return (fields or {}).get(name,{}).get('stringValue','')
+          def boolfield(fields,name):
+              return (fields or {}).get(name,{}).get('booleanValue',None)
+          # This public DEDA identifier is already visible in owner-provided
+          # profile screenshot; no private account key / phone / UID printed.
+          share=get_doc('deda_share_ids','@DEDA-AQPYXJ')
+          print('REAL_OWNER_PUBLIC_ID_EXISTS:',share is not None)
+          if share is None:
+              print('SAFE_STOP: need live owner mapping review before enabling gift claims')
+              sys.exit(0)
+          print('PERSONAL_SHARE_KIND:',strfield(share,'kind')=='personal')
+          print('PERSONAL_SHARE_ACTIVE:',boolfield(share,'active') is True)
+          owner=strfield(share,'ownerUid')
+          print('MAPPING_HAS_OWNER_UID:',bool(owner))
+          if not owner:
+              print('SAFE_STOP: ownerUid absent. Must migrate safely before enabling gift-claim rules.')
+              sys.exit(0)
+          source=get_doc('users',owner)
+          print('REGISTERED_OWNER_USER_RECORD_EXISTS:',source is not None)
+          key=strfield(source,'accountKey')
+          print('REGISTERED_OWNER_HAS_ACCOUNT_KEY:',bool(key))
+          print('REGISTERED_OWNER_SHARE_ID_MATCHES:',
+                strfield(source,'sharePersonalId')=='@DEDA-AQPYXJ')
+          session=get_doc('deda_sessions',owner)
+          print('SAVED_ORIGINAL_OWNER_SESSION_EXISTS:',session is not None)
+          if session is not None:
+              print('OWNER_SESSION_ACCOUNT_KEY_MATCHES:',bool(key) and
+                    strfield(session,'accountKey')==key)
+          print('Only presence flags emitted. No private UID, phone, name, account key, token, or record exported.')
+          print('READ ONLY: never deploy or write anything')
+          PY
+      - name: Confirm no mutations
+        run: echo 'Read-only Firestore GET only; no personal data output and no release'
