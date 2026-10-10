@@ -29,7 +29,7 @@ class DedaOfficialGiftLogo extends StatelessWidget {
             fit: BoxFit.cover,
             filterQuality: FilterQuality.medium,
             gaplessPlayback: true,
-            errorBuilder: (_, _, _) => Container(
+            errorBuilder: (context, error, stackTrace) => Container(
               width: size,
               height: size,
               alignment: Alignment.center,
