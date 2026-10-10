@@ -1,0 +1,56 @@
+name: DEDA Secure Admin Gift Send and Manual Claim - Firebase Emulator ONLY
+
+on:
+  push:
+    branches:
+      - deda-gift-verify-recipient-friends-safe-2026-10-10
+    paths:
+      - 'firestore.rules'
+      - 'tests/firestore-rules/admin-gift-manual-claim.test.mjs'
+      - '.github/workflows/qa-deda-admin-gift-claim-firestore-emulator-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  safe-gift-claims-emulator-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-admin-gift-manual-claim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local emulator SDK only
+        run: npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Assert never deploy or build APK and keep separated manager funds
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          rules=Path('firestore.rules').read_text()
+          assert rules.count('DEDA_ADMIN_SECURE_PENDING_GIFTS_2026_10_10')==1
+          assert rules.count('match /deda_diamond_gifts/{giftId}')==1
+          assert rules.count('match /deda_admin_diamond_wallets/{adminUid}')==1
+          assert rules.count('match /deda_diamond_gift_balances/{publicId}')==1
+          assert 'lastClaimGiftId' in rules and 'lastGiftId' in rules
+          assert 'verifiedDiamondsPersonalOwner' in rules
+          assert 'verifiedGiftGeneralManager' in rules
+          assert 'getAfter(userGiftBalancePath(' in rules
+          assert '24-hour replenishment requires future trusted' in rules
+          print('PASS: atomic gifts only; daily automatic refill is not falsely active')
+          PY
+      - name: Actual adversarial Firebase Firestore Rules tests in LOCAL emulator
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-admin-gift-manual-claim \
+            "node --test tests/firestore-rules/admin-gift-manual-claim.test.mjs"
+      - name: No Firebase deploy, server functions, production data or Google Play writes
+        run: echo 'EMULATOR TEST ONLY - do not deploy firestore rules without explicit owner approval'
