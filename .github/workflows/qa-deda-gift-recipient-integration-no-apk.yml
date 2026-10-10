@@ -9,6 +9,7 @@ on:
       - 'lib/deda_gift_recipient_preview.dart'
       - 'test/deda_gift_recipient_preview_test.dart'
       - 'tools/deda_integrate_verified_gift_recipient_2026_10_10.py'
+      - 'tools/gifts_main_ui_100271_2026_10_05.py'
       - 'lib/deda_launch_feature_gates.dart'
       - 'test/deda_launch_feature_gates_test.dart'
       - 'lib/deda_profile_visible_diamonds.dart'
@@ -95,6 +96,13 @@ jobs:
           assert "collection('deda_admin_diamond_wallets')" in b
           assert "collection('deda_diamond_gifts')" in b
           assert 'DedaSocialProgressWallet.spendCoins' not in a
+          m=Path('lib/main.dart').read_text()
+          assert m.count("label: Text(dedaText('استلام الهدية', 'Receive gift'))")==1
+          assert "child: Text(\n                      'DEDA'," in m
+          assert 'onPressed: busy ? null : () => _claim(gift)' in m
+          assert "DedaBackend.claimDiamondGift(" in m
+          assert "gift['status'] ?? '').toString() == 'pending'" in m
+          print('PASS: DEDA gift logo, full details and explicit recipient Receive Gift control retained')
           print('PASS: trusted administrative diamond gift + public recipient ID/profile, friend/coin payout OFF')
           VERIFY_GIFT_RESTORE
           python3 - <<'ADMIN_UI_REGRESSION'
