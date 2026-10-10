@@ -424,14 +424,26 @@ class _DedaMyGiftsPageState extends State<DedaMyGiftsPage> {
         giftId: giftId,
         targetPublicId: _publicId,
       );
-      await DedaDiamondsWallet.load();
+      // The Firestore transaction has already credited the real recipient.
+      // If a profile refresh temporarily fails on weak internet, NEVER
+      // claim the gift failed (which would mislead the receiver into retrying).
+      var balanceRefreshed = false;
+      try {
+        await DedaDiamondsWallet.load();
+        balanceRefreshed = true;
+      } catch (_) {
+        // Server claim and permanent receipt remain successful.
+      }
       if (!mounted) return;
       final amount = ((result['amount'] as num?)?.toInt() ?? 0);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            dedaText('تم استلام $amount 💎 وإضافتها إلى رصيدك.',
-                '$amount 💎 received and added to your balance.'),
+            balanceRefreshed
+                ? dedaText('تم استلام $amount 💎 وإضافتها إلى رصيدك.',
+                    '$amount 💎 received and added to your balance.')
+                : dedaText('تم استلام $amount 💎 بنجاح. سيظهر الرصيد عند تحديثه.',
+                    '$amount 💎 claimed. Balance will appear after refresh.'),
             textAlign: TextAlign.center,
           ),
         ),
