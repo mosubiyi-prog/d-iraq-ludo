@@ -2029,36 +2029,201 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(registeredOwner)).data.accountKey ==
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey;
     }
-    match /deda_diamond_gift_balances/{publicId} {
-      // Rewarded Telegram server worker credits with Admin SDK; the client
-      // may only read its truly owned personal wallet or spend downwards.
-      allow get: if isGeneralManager()
-        || verifiedDiamondsPersonalOwner(publicId);
+    // DEDA_ADMIN_SECURE_PENDING_GIFTS_2026_10_10
+    // This rule set is DEVELOPMENT ONLY until reconciled with LIVE Firebase.
+    // All 1,000,000 GM administrative gift diamonds are separate from the
+    // manager's PERSONAL test wallet and ordinary rewarded-ad diamonds.
+    function verifiedGiftGeneralManager() {
+      return isGeneralManager()
+        && adminData().keys().hasAll(['role'])
+        && adminData().role == 'general_manager';
+    }
+
+    function adminGiftPath(giftId) {
+      return /databases/$(database)/documents/deda_diamond_gifts/$(giftId);
+    }
+
+    function adminGiftWalletPath(adminUid) {
+      return /databases/$(database)/documents/deda_admin_diamond_wallets/$(adminUid);
+    }
+
+    function userGiftBalancePath(publicId) {
+      return /databases/$(database)/documents/deda_diamond_gift_balances/$(publicId);
+    }
+
+    // Each manager has a protected, one-time 1,000,000 pool. An UPDATE can
+    // ONLY decrease it, atomically paired to creation of ONE pending gift.
+    // NO CLIENT CAN REFILL it: 24-hour replenishment requires future trusted
+    // server scheduling, authorization, and an audited transaction.
+    match /deda_admin_diamond_wallets/{adminUid} {
+      allow get: if verifiedGiftGeneralManager()
+        && request.auth.uid == adminUid;
       allow list, delete: if false;
-      // Existing management gifts keep admin's historical ability to credit
-      // only, without allowing recipients to increase the balance.
-      allow create: if isGeneralManager()
-        && request.resource.data.publicId == publicId
-        && request.resource.data.balance is int
-        && request.resource.data.balance > 0
+
+      allow create: if verifiedGiftGeneralManager()
+        && request.auth.uid == adminUid
+        && request.resource.data.adminUid == adminUid
+        && request.resource.data.initialBalance == 1000000
+        && request.resource.data.balance == 1000000
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.keys().hasOnly([
-          'publicId','balance','createdAt','updatedAt'
+          'adminUid', 'initialBalance', 'balance', 'createdAt', 'updatedAt'
         ]);
-      allow update: if
-        request.resource.data.publicId == publicId
-        && resource.data.publicId == publicId
+
+      allow update: if verifiedGiftGeneralManager()
+        && request.auth.uid == adminUid
+        && resource.data.adminUid == adminUid
+        && request.resource.data.adminUid == adminUid
+        && resource.data.initialBalance == 1000000
+        && request.resource.data.initialBalance == 1000000
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.balance is int
+        && request.resource.data.balance >= 0
+        && request.resource.data.balance < resource.data.balance
+        && request.resource.data.lastGiftId is string
+        && request.resource.data.lastGiftId.size() > 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'balance', 'lastGiftId', 'updatedAt'
+        ])
+        && !exists(adminGiftPath(request.resource.data.lastGiftId))
+        && existsAfter(adminGiftPath(request.resource.data.lastGiftId))
+        && getAfter(adminGiftPath(request.resource.data.lastGiftId)).data.giftId ==
+          request.resource.data.lastGiftId
+        && getAfter(adminGiftPath(request.resource.data.lastGiftId)).data.adminUid == adminUid
+        && getAfter(adminGiftPath(request.resource.data.lastGiftId)).data.status == 'pending'
+        && getAfter(adminGiftPath(request.resource.data.lastGiftId)).data.amount ==
+          resource.data.balance - request.resource.data.balance;
+    }
+
+    // Only the owner of the stable personal DEDA ID can claim an existing
+    // pending gift. A claim MUST atomically credit its exact amount to the
+    // recipient balance and write lastClaimGiftId. No client can mint funds.
+    function validGiftClaim(giftId, publicId) {
+      return giftId is string
+        && giftId.size() > 0
+        && exists(adminGiftPath(giftId))
+        && get(adminGiftPath(giftId)).data.status == 'pending'
+        && get(adminGiftPath(giftId)).data.targetPublicId == publicId
+        && get(adminGiftPath(giftId)).data.amount is int
+        && get(adminGiftPath(giftId)).data.amount > 0
+        && getAfter(adminGiftPath(giftId)).data.status == 'received'
+        && getAfter(adminGiftPath(giftId)).data.targetPublicId == publicId
+        && getAfter(adminGiftPath(giftId)).data.claimedAt == request.time;
+    }
+
+    match /deda_diamond_gift_balances/{publicId} {
+      allow get: if verifiedGiftGeneralManager()
+        || verifiedDiamondsPersonalOwner(publicId);
+      allow list, delete: if false;
+
+      allow create: if verifiedDiamondsPersonalOwner(publicId)
+        && request.resource.data.publicId == publicId
+        && request.resource.data.balance is int
+        && request.resource.data.balance > 0
+        && request.resource.data.lastClaimGiftId is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'publicId', 'balance', 'lastClaimGiftId', 'createdAt', 'updatedAt'
+        ])
+        && validGiftClaim(request.resource.data.lastClaimGiftId, publicId)
+        && request.resource.data.balance ==
+          get(adminGiftPath(request.resource.data.lastClaimGiftId)).data.amount;
+
+      allow update: if verifiedDiamondsPersonalOwner(publicId)
+        && request.resource.data.publicId == resource.data.publicId
+        && request.resource.data.publicId == publicId
         && request.resource.data.balance is int
         && request.resource.data.balance >= 0
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['balance','updatedAt'])
         && (
-          (isGeneralManager()
-            && request.resource.data.balance >= resource.data.balance)
-          || (verifiedDiamondsPersonalOwner(publicId)
-            && request.resource.data.balance <= resource.data.balance)
+          // Existing legitimate purchases may only DECREASE this balance.
+          (request.resource.data.balance <= resource.data.balance
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'balance', 'updatedAt'
+            ]))
+          ||
+          // The sole way to increase is claiming ONE existing pending gift.
+          (request.resource.data.balance > resource.data.balance
+            && request.resource.data.lastClaimGiftId is string
+            && validGiftClaim(request.resource.data.lastClaimGiftId, publicId)
+            && request.resource.data.balance == resource.data.balance +
+              get(adminGiftPath(request.resource.data.lastClaimGiftId)).data.amount
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'balance', 'lastClaimGiftId', 'updatedAt'
+            ]))
+        );
+    }
+
+    match /deda_diamond_gifts/{giftId} {
+      // Querying by targetPublicId is required for the 'هداياي' inbox.
+      // A user may never list another user's gifts or use broad queries.
+      allow get, list: if verifiedGiftGeneralManager()
+        || (resource.data.targetPublicId is string
+          && verifiedDiamondsPersonalOwner(resource.data.targetPublicId));
+      allow delete: if false;
+
+      // Manager must create an actual pending gift plus its corresponding
+      // wallet debit in one transaction. Arbitrary "gift" creation is denied.
+      allow create: if verifiedGiftGeneralManager()
+        && request.resource.data.keys().hasOnly([
+          'giftId', 'sourceType', 'adminUid', 'adminName', 'senderLabel',
+          'targetPublicId', 'targetName', 'amount', 'reason', 'status',
+          'createdAt'
+        ])
+        && request.resource.data.giftId == giftId
+        && request.resource.data.sourceType == 'admin'
+        && request.resource.data.adminUid == request.auth.uid
+        && request.resource.data.adminName is string
+        && request.resource.data.adminName.size() > 0
+        && request.resource.data.senderLabel == 'إدارة DEDA'
+        && request.resource.data.targetPublicId is string
+        && request.resource.data.targetPublicId.size() >= 8
+        && request.resource.data.targetName is string
+        && request.resource.data.amount is int
+        && request.resource.data.amount > 0
+        && request.resource.data.amount <= 1000000
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 220
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && exists(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.targetPublicId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.targetPublicId)).data.kind == 'personal'
+        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.targetPublicId)).data.active == true
+        && exists(adminGiftWalletPath(request.auth.uid))
+        && getAfter(adminGiftWalletPath(request.auth.uid)).data.lastGiftId == giftId
+        && getAfter(adminGiftWalletPath(request.auth.uid)).data.balance ==
+          get(adminGiftWalletPath(request.auth.uid)).data.balance -
+            request.resource.data.amount;
+
+      // Only the REAL recipient account may change pending -> received, and
+      // only with the matching atomic balance credit + same lastClaimGiftId.
+      allow update: if resource.data.targetPublicId is string
+        && verifiedDiamondsPersonalOwner(resource.data.targetPublicId)
+        && resource.data.giftId == giftId
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'received'
+        && request.resource.data.claimedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'claimedAt'
+        ])
+        && existsAfter(userGiftBalancePath(resource.data.targetPublicId))
+        && getAfter(userGiftBalancePath(resource.data.targetPublicId)).data.lastClaimGiftId ==
+          giftId
+        && (
+          // Balance existed beforehand: preserve old value, credit once.
+          (exists(userGiftBalancePath(resource.data.targetPublicId))
+            && getAfter(userGiftBalancePath(resource.data.targetPublicId)).data.balance ==
+              get(userGiftBalancePath(resource.data.targetPublicId)).data.balance +
+                resource.data.amount)
+          ||
+          // First gift received: create an exact balance of that amount.
+          (!exists(userGiftBalancePath(resource.data.targetPublicId))
+            && getAfter(userGiftBalancePath(resource.data.targetPublicId)).data.balance ==
+              resource.data.amount)
         );
     }
 
