@@ -39,7 +39,12 @@ class DedaPinAuth {
     if (current != null) {
       await auth.signOut();
     }
-    final credential = await auth.signInAnonymously();
+    // On weak mobile networks a first-install Firebase anonymous handshake
+    // can otherwise keep the login button spinning for a minute or longer.
+    // Fail visibly after a reasonable bound and allow a safe user retry.
+    // Never bypass the server account/PIN check or create a local login.
+    final credential = await auth.signInAnonymously()
+        .timeout(const Duration(seconds: 12));
     final user = credential.user;
     if (user == null) throw StateError('anonymous-auth-failed');
     return user;
