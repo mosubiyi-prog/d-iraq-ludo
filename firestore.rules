@@ -1415,6 +1415,16 @@ service cloud.firestore {
         );
     }
 
+    // DEDA Heartbeat: only verified Cloud Functions Admin SDK handles reactions.
+    // Owner colour publication uses a separate verified callable, not a
+    // client-write exception in published_places.
+    match /deda_place_engagement/{placeId}/users/{accountHash} {
+      allow read, write: if false;
+    }
+    match /deda_place_engagement_totals/{placeId} {
+      allow read, write: if false;
+    }
+
     match /admin_trash_places/{trashId} {
       allow read, create, update, delete: if isGeneralManager();
     }
