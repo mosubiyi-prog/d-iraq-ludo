@@ -51,6 +51,19 @@ void main() {
     expect(likes, 1);
   });
 
+  testWidgets('long real follower counts are visible without layout overflow',
+      (tester) async {
+    await tester.pumpWidget(view(
+      following: false,
+      liked: false,
+      followers: 123456789,
+      follow: () {},
+      like: () {},
+    ));
+    expect(find.text('123456789'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('liked heart is exactly red, follow icon becomes a check',
       (tester) async {
     await tester.pumpWidget(view(
