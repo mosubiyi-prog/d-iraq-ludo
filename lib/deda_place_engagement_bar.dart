@@ -7,6 +7,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
   final bool liked;
   final int followers;
   final bool busy;
+  final bool loadingCount;
   final VoidCallback onFollow;
   final VoidCallback onLike;
 
@@ -16,6 +17,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
     required this.liked,
     required this.followers,
     required this.busy,
+    this.loadingCount = false,
     required this.onFollow,
     required this.onLike,
   });
@@ -77,7 +79,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
                 Text(
-                  '$followers',
+                  loadingCount ? '…' : '$followers',
                   maxLines: 1,
                   overflow: TextOverflow.fade,
                   style: const TextStyle(
