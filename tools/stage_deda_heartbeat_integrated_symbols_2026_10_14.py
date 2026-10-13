@@ -24,6 +24,37 @@ p = once("import 'deda_place_activity_symbol.dart';",
 a=p.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {')
 b=p.index('class PersonalPlacesPage',a)
 owner=p[a:b]
+# Counts must refresh while the approved owner's page is actually visible;
+# no background polling, and never when Firebase reactions are disabled.
+owner=once(
+  """  @override
+  void initState() {
+    super.initState();""",
+  """  Timer? _ownerMetricsTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (DedaPlaceEngagementService.live) {
+      _ownerMetricsTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+        if (!mounted || _status != 'approved' || _metricsLoading) return;
+        if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+            !(ModalRoute.of(context)?.isCurrent ?? false)) return;
+        unawaited(_refreshOwnerMetrics());
+      });
+    }""",
+  'visible-owner metrics periodic refresh',owner
+)
+owner=once(
+  """  @override
+  void dispose() {
+    _nameController.dispose();""",
+  """  @override
+  void dispose() {
+    _ownerMetricsTimer?.cancel();
+    _nameController.dispose();""",
+  'cancel owner metrics periodic refresh',owner
+)
 owner=once(
   """  Future<void> _persistLocalTheme(int index) async {
     final prefs = await SharedPreferences.getInstance();
