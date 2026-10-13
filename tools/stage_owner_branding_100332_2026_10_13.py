@@ -327,8 +327,9 @@ owner=swap(owner,
                           _ownerMetricsDisplay(),""",
     'owner top brand+metrics')
 owner=swap(owner,
-    "      } else {\n        await _loadDraftOnly();\n      }\n      if (!DedaPlacePalette.serverPublishingEnabled) {\n        _placeThemeIndex = DedaPlacePalette.safeIndex(\n          prefs.getInt(_ownerThemeKey),\n        );\n      }\n    } finally {\n      if (mounted) setState(() => _loading = false);\n    }\n    if (mounted && !_loading) {\n      await _refreshOwnerMetrics();\n    }\n  }",
-    'owner metrics refresh on load')
+    "      } else {\\n        await _loadDraftOnly();\\n      }\\n    } finally {\\n      if (mounted) setState(() => _loading = false);\\n    }\\n  }",
+    "      } else {\\n        await _loadDraftOnly();\\n      }\\n      if (!DedaPlacePalette.serverPublishingEnabled) {\\n        _placeThemeIndex = DedaPlacePalette.safeIndex(\\n          prefs.getInt(_ownerThemeKey),\\n        );\\n      }\\n    } finally {\\n      if (mounted) setState(() => _loading = false);\\n    }\\n    if (mounted && !_loading) {\\n      await _refreshOwnerMetrics();\\n    }\\n  }",
+    'owner metrics refresh with local theme restore')
 main=main[:start]+owner+main[end:]
 
 # Existing resubmit rules explicitly enumerate fields, including new optional
