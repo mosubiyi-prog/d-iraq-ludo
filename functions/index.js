@@ -1276,3 +1276,35 @@ exports.dedaSetPlaceTheme = onCall(async (request) => {
     throw new HttpsError(code, String(error.message || "place-theme-failed"));
   }
 });
+
+// DEDA Heartbeat social interactions: server-owned counters; client never
+// updates totals or reactions directly. Still UNDEPLOYED until approved.
+const placeEngagement = require("./deda_place_engagement.js");
+exports.dedaReadPlaceEngagement = onCall(async (request) => {
+  try {
+    return await placeEngagement.readPlaceEngagement(getFirestore(), {
+      placeId: request.data?.placeId, uid: request.auth?.uid || "",
+    });
+  } catch (error) {
+    const allowed = new Set(["invalid-argument", "permission-denied", "not-found"]);
+    const code = allowed.has(error.code) ? error.code : "unavailable";
+    throw new HttpsError(code, code === "unavailable" ?
+        "Unable to load place counts" : String(error.message));
+  }
+});
+exports.dedaSetPlaceEngagement = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "session-required");
+  }
+  try {
+    return await placeEngagement.setPlaceEngagement(getFirestore(), {
+      placeId: request.data?.placeId, uid: request.auth.uid,
+      kind: request.data?.kind, active: request.data?.active,
+    });
+  } catch (error) {
+    const allowed = new Set(["invalid-argument", "permission-denied", "not-found"]);
+    const code = allowed.has(error.code) ? error.code : "unavailable";
+    throw new HttpsError(code, code === "unavailable" ?
+        "Unable to update place reaction" : String(error.message));
+  }
+});
