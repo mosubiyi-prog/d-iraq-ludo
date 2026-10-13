@@ -19,16 +19,16 @@ profile_start = source.index(
 profile_end = source.index("class DedaPublicProfilePreviewPage", profile_start)
 profile = source[profile_start:profile_end]
 
-old_position = """                  _statsRow(),
-                  const SizedBox(height: 14),
-                  _featureGrid(),"""
-new_position = """                  _statsRow(),
-                  const SizedBox(height: 14),
-                  if (_accountType == DedaAccountType.placeOwner) ...<Widget>[
-                    _ownerPlaceCard(),
-                    const SizedBox(height: 14),
-                  ],
-                  _featureGrid(),"""
+old_position = """          _statsRow(),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<int>("""
+new_position = """          _statsRow(),
+          const SizedBox(height: 8),
+          if (_accountType == DedaAccountType.placeOwner) ...<Widget>[
+            _ownerPlaceCard(),
+            const SizedBox(height: 8),
+          ],
+          ValueListenableBuilder<int>("""
 if profile.count(old_position) != 1:
     raise SystemExit("STOP: approved 100330 profile layout anchor changed.")
 profile = profile.replace(old_position, new_position, 1)
