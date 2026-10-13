@@ -327,9 +327,9 @@ main=main[:start]+owner+main[end:]
 # Heartbeat: owner-selected colours are reviewed; phone gallery uploads
 # are explicitly out of scope. The strict rules already allow themeIndex in
 # the verified owner's resubmission without granting logoUrl/photo writes.
-old_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\\n"
+old_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\n"
             "            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'")
-new_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\\n"
+new_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\n"
             "            'submittedByName', 'themeIndex', 'status', 'updatedAt', 'resubmittedAt'")
 if rules.count(new_keys) == 1:
     print('PASS: strict owner palette allowlist already committed')
