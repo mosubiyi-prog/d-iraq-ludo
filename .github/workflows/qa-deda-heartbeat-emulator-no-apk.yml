@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/qa-deda-heartbeat-emulator-no-apk.yml'
       - 'functions/tests/deda_heartbeat_firestore_emulator.test.js'
+      - 'firestore.rules'
   workflow_dispatch:
 
 permissions:
