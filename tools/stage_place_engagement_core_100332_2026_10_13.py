@@ -41,47 +41,60 @@ main = swap(main,
     "            isDedaRegistered: true,\n            isAvailableNow: data['isAvailableNow'] == true,",
     "            isDedaRegistered: true,\n            isAvailableNow: data['isAvailableNow'] == true,\n            publishedPlaceId: (data['id'] ?? '').toString(),",
     'published Firestore ID')
-server += """
-
-// DEDA 100332 staged Cloud Functions. Do not deploy without QA and approval.
-const placeEngagement = require("./deda_place_engagement");
-exports.dedaReadPlaceEngagement = onCall(async (request) => {
-  try {
-    return await placeEngagement.readPlaceEngagement(getFirestore(), {
-      placeId: request.data?.placeId, uid: request.auth?.uid || "",
+# The real branch already exports both trusted functions; reconstruction
+# must NEVER append a duplicate export with the same Firebase function name.
+if 'exports.dedaReadPlaceEngagement' not in server and (
+        'exports.dedaSetPlaceEngagement' not in server):
+    server += """
+    
+    // DEDA 100332 staged Cloud Functions. Do not deploy without QA and approval.
+    const placeEngagement = require("./deda_place_engagement");
+    exports.dedaReadPlaceEngagement = onCall(async (request) => {
+      try {
+        return await placeEngagement.readPlaceEngagement(getFirestore(), {
+          placeId: request.data?.placeId, uid: request.auth?.uid || "",
+        });
+      } catch (error) {
+        throw new HttpsError(error.code || "unavailable",
+            String(error.message || "place-engagement-unavailable"));
+      }
     });
-  } catch (error) {
-    throw new HttpsError(error.code || "unavailable",
-        String(error.message || "place-engagement-unavailable"));
-  }
-});
-exports.dedaSetPlaceEngagement = onCall(async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "session-required");
-  }
-  try {
-    return await placeEngagement.setPlaceEngagement(getFirestore(), {
-      placeId: request.data?.placeId, uid: request.auth.uid,
-      kind: request.data?.kind, active: request.data?.active,
+    exports.dedaSetPlaceEngagement = onCall(async (request) => {
+      if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "session-required");
+      }
+      try {
+        return await placeEngagement.setPlaceEngagement(getFirestore(), {
+          placeId: request.data?.placeId, uid: request.auth.uid,
+          kind: request.data?.kind, active: request.data?.active,
+        });
+      } catch (error) {
+        throw new HttpsError(error.code || "unavailable",
+            String(error.message || "place-engagement-unavailable"));
+      }
     });
-  } catch (error) {
-    throw new HttpsError(error.code || "unavailable",
-        String(error.message || "place-engagement-unavailable"));
-  }
-});
-"""
-rules = swap(rules,
-    '    match /admin_trash_places/{trashId} {',
-    '''    // DEDA 100332: engagement is callable-only (Admin SDK).
-    match /deda_place_engagement/{placeId}/users/{accountHash} {
-      allow read, write: if false;
-    }
-    match /deda_place_engagement_totals/{placeId} {
-      allow read, write: if false;
-    }
-
-    match /admin_trash_places/{trashId} {''',
-    'security rules')
+    """
+elif ('exports.dedaReadPlaceEngagement' in server and
+        'exports.dedaSetPlaceEngagement' in server):
+    print('PASS: callable exports already in source, not duplicated.')
+else:
+    raise RuntimeError('SAFE_STOP: half-installed place engagement exports')
+if 'match /deda_place_engagement_totals/{placeId}' not in rules:
+    rules = swap(rules,
+        '    match /admin_trash_places/{trashId} {',
+        '''    // DEDA 100332: engagement is callable-only (Admin SDK).
+        match /deda_place_engagement/{placeId}/users/{accountHash} {
+          allow read, write: if false;
+        }
+        match /deda_place_engagement_totals/{placeId} {
+          allow read, write: if false;
+        }
+    
+        match /admin_trash_places/{trashId} {''',
+        'security rules')
+else:
+    assert rules.count('match /deda_place_engagement_totals/{placeId}') == 1
+    assert 'allow read, write: if false;' in rules
 places_path.write_text(places)
 main_path.write_text(main)
 functions_path.write_text(server)
