@@ -168,7 +168,8 @@ jobs:
                '--dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true '
                '--dart-define=DEDA_SERVER_AUTOMATIONS_LIVE=false '
                '--dart-define=DEDA_PLACE_ENGAGEMENT_LIVE=false '
-               '--dart-define=DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')
+               '--dart-define=DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false '
+               '--dart-define=DEDA_OWNER_PLACE_BRANDING_LIVE=false')
           src=src.replace(old,new)
           assert src.count(new)==1
           Path('/tmp/deda_owner_place_100332_test_apk.sh').write_text(src)
