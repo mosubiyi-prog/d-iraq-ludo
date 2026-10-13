@@ -87,7 +87,7 @@ test("public colour cannot be overwritten through direct client Firestore writes
 test("actual Firestore transactions survive concurrent follow/like without duplicates", async () => {
   // Explicit emulator-only guard protects against writing any live account.
   assert.match(process.env.FIRESTORE_EMULATOR_HOST || "",
-      /^(127\\.0\\.0\\.1|localhost):[0-9]+$/);
+      /^(127\.0\.0\.1|localhost):[0-9]+$/);
   const {initializeApp, deleteApp} = require("firebase-admin/app");
   const {getFirestore} = require("firebase-admin/firestore");
   const {setPlaceEngagement, readPlaceEngagement} =
