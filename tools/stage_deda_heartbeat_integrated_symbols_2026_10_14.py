@@ -55,6 +55,19 @@ owner=once(
     _nameController.dispose();""",
   'cancel owner metrics periodic refresh',owner
 )
+# Once approved, changing the colour is a permitted standalone action;
+# do NOT require editing/reapproving address, category, route, or other fields.
+owner=once(
+  """            tooltip: dedaText('لون مكانك', 'Place color'),
+            onPressed: _formEditable
+                ? () => setState(() => _paletteOpen = !_paletteOpen)
+                : null,""",
+  """            tooltip: dedaText('لون مكانك', 'Place color'),
+            onPressed: (_formEditable || _status == 'approved')
+                ? () => setState(() => _paletteOpen = !_paletteOpen)
+                : null,""",
+  'owner approved color swatch stays accessible', owner
+)
 owner=once(
   """  Future<void> _persistLocalTheme(int index) async {
     final prefs = await SharedPreferences.getInstance();
