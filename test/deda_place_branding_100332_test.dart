@@ -41,5 +41,6 @@ void main() {
 
   test('logo upload never runs without explicit audited feature flag', () {
     expect(DedaPlaceLogoService.uploadsEnabled, false);
+    expect(DedaPlacePalette.serverPublishingEnabled, false);
   });
 }
