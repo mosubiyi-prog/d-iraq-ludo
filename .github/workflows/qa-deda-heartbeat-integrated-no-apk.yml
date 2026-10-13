@@ -19,6 +19,11 @@ jobs:
   heartbeat-source-and-tests-only:
     runs-on: ubuntu-24.04
     timeout-minutes: 50
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -141,7 +146,7 @@ jobs:
           assert 'DEDA_OWNER_PLACE_BRANDING_LIVE' in palette
           print('PASS: private 100332 feature, no fabricated counts and old owner submit intact')
           PRIVATE_OWNER_100332_GATES
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_place_activity_symbol.dart lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_place_branding_service.dart lib/deda_place_activity_symbol.dart lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
           flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart test/deda_admin_auto_compact_100334_test.dart
           # Fail closed on follower icon strip overflow, even for large real counts.
           node --check functions/index.js
@@ -149,6 +154,8 @@ jobs:
           node --check functions/deda_owner_approval_bell.js
           node --test functions/tests/deda_place_engagement.test.js
           node --test functions/tests/deda_owner_approval_bell.test.js
+          node --test functions/tests/deda_place_branding.test.js
+          node --check functions/deda_place_branding.js
           echo 'PASS: 17-point staging gates, including 100331 owner card, pending branding publication, preserved routes and strict server feature lock'
           python3 - <<'PUBLIC_GATES'
           from pathlib import Path
