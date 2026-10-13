@@ -118,6 +118,30 @@ jobs:
           python3 tools/validate_owner_place_entry_100331_2026_10_13.py
           python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py  # Formatter-safe suggestion validation
           python3 tools/validate_owner_admin_request_flow_100332.py
+          python3 - <<'PRIVATE_OWNER_100332_GATES'
+          from pathlib import Path
+          main = Path('lib/main.dart').read_text()
+          bar = Path('lib/deda_place_engagement_bar.dart').read_text()
+          logo = Path('lib/deda_place_logo.dart').read_text()
+          palette = Path('lib/deda_place_palette.dart').read_text()
+          for needle in (
+              '_selectPlaceWithSocial(',
+              '_hideSocialBar()',
+              'DedaPlaceEngagementBar(',
+              'DedaOwnerPlaceLogo(',
+              '_ownerMetricsDisplay()',
+              'DedaPlaceColorChooser(',
+              'DedaBackend.submitPlace(data)',
+              'DedaBackend.submitPlaceEdit(',
+              'DedaBackend.resubmitPlaceRequest(',
+          ):
+              assert needle in main, 'missing 100332 feature or old submission: '+needle
+          assert 'Color(0xFFE53935)' in bar, 'approved red liked-heart color missing'
+          assert 'DEDA_PLACE_ENGAGEMENT_LIVE' in Path('lib/deda_place_engagement_service.dart').read_text()
+          assert 'DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE' in logo
+          assert 'DEDA_OWNER_PLACE_BRANDING_LIVE' in palette
+          print('PASS: private 100332 feature, no fabricated counts and old owner submit intact')
+          PRIVATE_OWNER_100332_GATES
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
           flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart
           # Fail closed on follower icon strip overflow, even for large real counts.
