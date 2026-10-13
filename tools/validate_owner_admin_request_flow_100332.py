@@ -62,6 +62,9 @@ assert "'themeIndex': _placeThemeIndex" in owner
 assert "if (_placeLogoUrl.isNotEmpty) 'logoUrl': _placeLogoUrl" in owner
 assert 'DedaPlaceLogoService.uploadsEnabled' in owner
 assert 'DedaPlaceEngagementService.live' in owner
+assert "data.remove('themeIndex');" in owner
+assert "data.remove('logoUrl');" in owner
+assert 'DedaPlacePalette.serverPublishingEnabled' in owner
 assert "allow update: if isGeneralManager()" in rules
 assert "'isAvailableNow', 'updatedAt'" in rules
 
