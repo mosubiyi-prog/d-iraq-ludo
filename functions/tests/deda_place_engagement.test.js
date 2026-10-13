@@ -114,3 +114,77 @@ test("count without personal data exposed", async () => {
   assert.deepEqual(result, {following: false, liked: false, followers: 0, likes: 0});
   assert.equal(Object.keys(result).includes("accountKey"), false);
 });
+
+
+// Heartbeat stage 1: regression tests only. FakeDB does not prove contention
+// safety; a Firestore Emulator transaction test is required before LIVE.
+
+test("unauthenticated writes and malformed reactions leave totals unchanged", async () => {
+  const db = seeded();
+  const before = [...db.store.entries()].map(([key, value]) => [key, {...value}]);
+  for (const input of [
+    {uid: "", kind: "follow", active: true},
+    {uid: "not-a-verified-session", kind: "like", active: true},
+    {uid: "uid1", kind: "boost", active: true},
+    {uid: "uid1", kind: "follow", active: "true"},
+  ]) {
+    await assert.rejects(() => engagement.setPlaceEngagement(db, {
+      placeId: "approved_place_01",
+      ...input,
+    }));
+  }
+  assert.deepEqual(
+    [...db.store.entries()].map(([key, value]) => [key, {...value}]),
+    before,
+  );
+});
+
+test("hidden or deleted places never accept reads or reactions", async () => {
+  for (const state of [
+    {published: true, hiddenByManager: true},
+    {published: true, deleted: true},
+    {published: true, status: "deleted"},
+    {published: false, status: "pending"},
+  ]) {
+    const db = seeded();
+    db.store.set("published_places/approved_place_01", state);
+    await assert.rejects(() => engagement.readPlaceEngagement(db, {
+      placeId: "approved_place_01", uid: "uid1",
+    }), /place-not-published/);
+    await assert.rejects(() => engagement.setPlaceEngagement(db, {
+      placeId: "approved_place_01", uid: "uid1",
+      kind: "follow", active: true,
+    }), /place-not-published/);
+    assert.equal(db.store.has("deda_place_engagement_totals/approved_place_01"), false);
+  }
+});
+
+test("multiple follow and unfollow retries do not inflate or underflow totals", async () => {
+  const db = seeded();
+  const args = {placeId: "approved_place_01", uid: "uid1", kind: "follow"};
+  for (let i = 0; i < 4; i++) {
+    const value = await engagement.setPlaceEngagement(db, {...args, active: true});
+    assert.equal(value.followers, 1);
+  }
+  for (let i = 0; i < 4; i++) {
+    const value = await engagement.setPlaceEngagement(db, {...args, active: false});
+    assert.equal(value.followers, 0);
+  }
+  const fromAnonymousRead = await engagement.readPlaceEngagement(db, {
+    placeId: "approved_place_01", uid: "",
+  });
+  assert.equal(fromAnonymousRead.followers, 0);
+  assert.equal(fromAnonymousRead.following, false);
+});
+
+test("untrusted corrupt negative totals are never displayed as negative", async () => {
+  const db = seeded();
+  db.store.set("deda_place_engagement_totals/approved_place_01", {
+    followers: -200, likes: "99999",
+  });
+  const summary = await engagement.readPlaceEngagement(db, {
+    placeId: "approved_place_01", uid: "",
+  });
+  assert.equal(summary.followers, 0);
+  assert.equal(summary.likes, 0);
+});
