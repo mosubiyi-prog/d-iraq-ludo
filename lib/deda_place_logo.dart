@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'deda_place_activity_symbol.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Owner photos remain previews until upload rules are verified and enabled.
@@ -51,6 +52,9 @@ class DedaOwnerPlaceLogo extends StatelessWidget {
   final String localFilePath;
   final String publishedUrl;
   final IconData fallbackIcon;
+  final String categoryCode;
+  final String activityType;
+  final String placeName;
   final Color accent;
   final double radius;
 
@@ -59,14 +63,20 @@ class DedaOwnerPlaceLogo extends StatelessWidget {
     this.localFilePath = '',
     this.publishedUrl = '',
     required this.fallbackIcon,
+    this.categoryCode = 'other',
+    this.activityType = '',
+    this.placeName = '',
     required this.accent,
     this.radius = 40,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fallback = Icon(
-      fallbackIcon,
+    final fallback = DedaPlaceActivitySymbol(
+      categoryCode: categoryCode,
+      activityType: activityType,
+      placeName: placeName,
+      fallbackIcon: fallbackIcon,
       size: radius * 0.90,
       color: accent,
     );
