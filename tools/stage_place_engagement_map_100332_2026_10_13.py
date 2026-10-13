@@ -207,8 +207,13 @@ sec=swap(sec,'''                        (place) => Marker(
                           ),
                         ),''','''                        (place) => Marker(
                           point: place.location,
-                          width: 58,
-                          height: 58,
+                          width: DedaPlaceEngagementService.live &&
+                                  _selectedSocialPlaceId == place.publishedPlaceId
+                              ? 182 : 58,
+                          height: DedaPlaceEngagementService.live &&
+                                  _selectedSocialPlaceId == place.publishedPlaceId
+                              ? 148 : 58,
+                          alignment: Alignment.bottomCenter,
                           rotate: true,
                           child: DedaMapPlaceMarker(
                             place: place,
