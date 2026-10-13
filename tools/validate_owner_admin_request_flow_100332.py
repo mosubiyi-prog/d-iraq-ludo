@@ -68,6 +68,14 @@ assert 'DedaPlacePalette.serverPublishingEnabled' in owner
 assert "allow update: if isGeneralManager()" in rules
 assert "'isAvailableNow', 'updatedAt'" in rules
 
+# No owner photo picker while owner-logo selection is explicitly on hold.
+# Owner category icon remains visible; legacy approved logo (if any) is
+# merely rendered and no local gallery image is copied into a request.
+assert "onPressed: _chooseOwnerLogo" not in owner
+assert "'اختيار شعار للمكان'" not in owner
+assert "localFilePath: ''" in owner
+assert 'DedaOwnerPlaceLogo(' in owner
+
 # No imported logo/engagement service can silently bypass review.
 assert 'DedaBackend.submitPlace(data)' in submitted
 assert "collection('published_places').doc()" not in owner
