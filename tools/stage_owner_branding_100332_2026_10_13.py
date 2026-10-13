@@ -324,28 +324,22 @@ owner=swap(owner,
     'owner metrics refresh with local theme restore')
 main=main[:start]+owner+main[end:]
 
-# Existing resubmit rules explicitly enumerate fields, including new optional
-# reviewed colors and logo URL. Never let the owner edit published data directly.
-rules=swap(rules,
-    "            'description', 'latitude', 'longitude', 'isAvailableNow',\n            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'",
-    "            'description', 'latitude', 'longitude', 'isAvailableNow',\n            'themeIndex', 'logoUrl',\n            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'",
-    'resubmit owner allowlist')
-# New logo upload path: authenticated owner UID only, immutable JPEG image <=1MB.
-# All displayed logos require the approved published_place document logoUrl.
-storage=swap(storage,
-    '    match /support_uploads/{uid}/{fileName} {',
-    '''    match /owner_place_logos/{uid}/{fileName} {
-      allow create: if request.auth != null
-        && request.auth.uid == uid
-        && fileName.matches('^[0-9]{12,18}[.]jpg$')
-        && request.resource.size < 1024 * 1024
-        && request.resource.contentType == 'image/jpeg';
-      allow read: if true;
-      allow update, delete: if false;
-    }
-    match /support_uploads/{uid}/{fileName} {''',
-    'logo storage rules')
-
+# Heartbeat: owner-selected colours are reviewed; phone gallery uploads
+# are explicitly out of scope. The strict rules already allow themeIndex in
+# the verified owner's resubmission without granting logoUrl/photo writes.
+old_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\\n"
+            "            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'")
+new_keys = ("            'description', 'latitude', 'longitude', 'isAvailableNow',\\n"
+            "            'submittedByName', 'themeIndex', 'status', 'updatedAt', 'resubmittedAt'")
+if rules.count(new_keys) == 1:
+    print('PASS: strict owner palette allowlist already committed')
+elif rules.count(old_keys) == 1:
+    rules = rules.replace(old_keys, new_keys, 1)
+else:
+    raise RuntimeError('SAFE STOP: owner palette allowlist unknown')
+# No new storage allowance for gallery photos; prior storage.rules unchanged.
+assert 'match /support_uploads/{uid}/{fileName}' in storage
+assert storage == storage_path.read_text()
 # Only write all four source files once every anchor has been validated.
 main_path.write_text(main)
 places_path.write_text(places)
