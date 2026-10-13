@@ -46,3 +46,16 @@ Do not disturb owner entry paths, old drafts, existing place IDs, submission/edi
 The working branch is separated from the original 100332 tip. Only defensive test/QA documents and automation are permitted in this stage. No APK build, no production publish, no Firebase deploy, no feature flag activation, and no live writes.
 
 **Next:** implement each UI fix narrowly on the reconstructed source path, add server/rules tests separately, record pass/fail for every item, and pause at any failing gate.
+
+## Stage 1 root-cause evidence — owner notification bell (no production mutation)
+
+Confirmed on the staged source:
+- Owner bell queries `owner_place_notifications` by `accountKey`.
+- `DedaBackend.finalizePlaceApproval` creates an owner-bell notice only for `requestType == 'update'` (edit approved); **initial approval writes none**.
+- Automatic approval worker commits status + published place + audit but **no owner-bell notice**.
+- `functions/index.js/onPlaceRequestUpdated` sends owner push/FCM, **not** the database notice that the bell displays.
+- Existing Firestore client rules for `owner_place_notifications` do **not** permit client-written `approved` type. Do not widen client create permissions merely to fix UI.
+- The auto-approved message itself repeats number and date, and the card already separately renders these exact fields.
+
+**Safe repair design (not executed yet):** generate a deterministic, idempotent, **server-authored** owner-notification document on a first-time `place_requests` approval transition, using authenticated request ownership and authoritative approved status. Verify both manual and automatic paths, preserved edit notifications, identity binding, repeat event delivery, existing accounts, and Firestore rules in an emulator; no backend deployment without approval. Historical already-approved records need a separately reviewed, authorized one-time backfill and must never be silently modified.
+
