@@ -113,6 +113,7 @@ jobs:
           python3 tools/stage_place_engagement_map_100332_2026_10_13.py
           # FlutterMap 8: mapController: is mandatory; analyzer blocks invalid API use.
           python3 tools/stage_owner_branding_100332_2026_10_13.py
+          # Owner local palette cannot alter existing admin request schema until reviewed.
           dart format lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
           python3 tools/validate_owner_place_entry_100331_2026_10_13.py
           python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py  # Formatter-safe suggestion validation
