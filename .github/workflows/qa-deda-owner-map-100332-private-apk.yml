@@ -115,9 +115,11 @@ jobs:
           dart format lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
           python3 tools/validate_owner_place_entry_100331_2026_10_13.py
           python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py
+          python3 tools/validate_owner_admin_request_flow_100332.py
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
-          flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart
+          flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart
           node --check functions/index.js
+          node --check functions/deda_place_engagement.js
           node --test functions/tests/deda_place_engagement.test.js
           echo 'PASS: 17-point staging gates, including 100331 owner card, pending branding publication, preserved routes and strict server feature lock'
           python3 - <<'PUBLIC_GATES'
