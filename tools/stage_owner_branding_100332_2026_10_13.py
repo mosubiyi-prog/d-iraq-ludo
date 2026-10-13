@@ -235,8 +235,12 @@ owner=swap(owner,
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // OWNER QA: picture selection intentionally removed until the
+        // user explicitly re-approves a secure image feature. An image
+        // previously selected only as a local preview must never replace
+        // the category icon or be sent to the place review request.
         DedaOwnerPlaceLogo(
-          localFilePath: _placeLogoPreviewPath,
+          localFilePath: '',
           publishedUrl: _placeLogoUrl,
           fallbackIcon: DedaPlaceSuggestions.iconForCategory(
             _categoryCode, _otherCategoryTextController.text,
@@ -244,18 +248,6 @@ owner=swap(owner,
           accent: themeColor,
           radius: 42,
         ),
-        if (_formEditable) ...[
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton.icon(
-              onPressed: _chooseOwnerLogo,
-              icon: const Icon(Icons.photo_camera_outlined),
-              label: Text(dedaText(
-                'اختيار شعار للمكان', 'Choose place logo',
-              )),
-            ),
-          ),
-        ],
       ],
     );
   }
