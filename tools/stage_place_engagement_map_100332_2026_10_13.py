@@ -179,7 +179,7 @@ keypattern=r"                key: ValueKey\(\n                  '\$\{position.la
 match=re.search(keypattern,sec)
 if not match:
     raise RuntimeError('SAFE STOP map key pattern')
-sec=sec[:match.start()]+'''                controller: _placeMapController,
+sec=sec[:match.start()]+'''                mapController: _placeMapController,
                 key: ValueKey(Object.hash(
                   position.latitude, position.longitude, mapStyle,
                 )),
