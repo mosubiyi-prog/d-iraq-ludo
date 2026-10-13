@@ -100,6 +100,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey;
     }
 
+    // Optional approved DEDA place palette — exactly 14 shades.
+    function validPlaceTheme(data) {
+      return !data.keys().hasAny(['themeIndex'])
+        || (data.themeIndex is int
+          && data.themeIndex >= 0
+          && data.themeIndex < 14);
+    }
+
     function sameAccount(accountKey) {
       return signedIn()
         && accountKey is string
@@ -1280,6 +1288,7 @@ service cloud.firestore {
         && request.resource.data.description.size() > 0
         && request.resource.data.latitude is number
         && request.resource.data.longitude is number
+        && validPlaceTheme(request.resource.data)
         && (request.resource.data.category != 'other'
           || (request.resource.data.otherCategoryText is string
             && request.resource.data.otherCategoryText.size() > 0))
@@ -1369,13 +1378,14 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
           && request.resource.data.resubmittedAt == request.time
+          && validPlaceTheme(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'placeName', 'name', 'category', 'categoryLabelAr',
             'categoryLabelEn', 'otherCategory', 'otherCategoryLabelAr',
             'otherCategoryLabelEn', 'otherCategoryText', 'phone',
             'governorate', 'address', 'openingHours', 'hours',
             'description', 'latitude', 'longitude', 'isAvailableNow',
-            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'
+            'submittedByName', 'themeIndex', 'status', 'updatedAt', 'resubmittedAt'
           ])
         );
       allow delete: if isGeneralManager();
