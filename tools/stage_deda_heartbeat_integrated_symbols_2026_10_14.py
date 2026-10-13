@@ -168,9 +168,12 @@ rules_path=Path('firestore.rules')
 rules=rules_path.read_text(encoding='utf-8')
 rules_old="""            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'"""
 rules_new="""            'submittedByName', 'themeIndex', 'status', 'updatedAt', 'resubmittedAt'"""
-if rules.count(rules_old)!=1:
-    raise RuntimeError('SAFE_STOP: owner resubmit Firestore rule has changed')
-rules=rules.replace(rules_old,rules_new,1)
+if rules.count(rules_new) == 1:
+    print('PASS: owner palette resubmit rule already committed')
+elif rules.count(rules_old) == 1:
+    rules=rules.replace(rules_old,rules_new,1)
+else:
+    raise RuntimeError('SAFE_STOP: owner resubmit Firestore rule changed unexpectedly')
 assert 'allow update: if isGeneralManager()' in rules
 assert 'dedaSetPlaceTheme' in Path('functions/index.js').read_text(encoding='utf-8')
 main_path.write_text(p,encoding='utf-8')
