@@ -59,12 +59,13 @@ for needle in (
     'DedaPlaceSuggestions.forName(',
     'ActionChip(',
     'onPressed: () {',
-    "_categoryCode = suggestion.categoryCode;",
     "_otherCategoryTextController.text =",
     'DedaPlaceSuggestions.iconForCategory(',
     "if (_formEditable &&",
 ):
     assert needle in owner, 'Owner suggestion UI missing: ' + needle
+import re
+assert re.search(r'_categoryCode\s*=\s*suggestion\.categoryCode\s*;', owner), 'optional suggestion must change category only after owner taps'
 assert "String _categoryCode = 'restaurant';" in owner
 assert "'category': _categoryCode" in owner
 assert "'otherCategoryText': _categoryCode == 'other'" in owner
