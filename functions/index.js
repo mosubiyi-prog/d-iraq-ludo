@@ -2,7 +2,7 @@ const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/fi
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {initializeApp} = require("firebase-admin/app");
 const {getAuth} = require("firebase-admin/auth");
-const {getFirestore, Timestamp} = require("firebase-admin/firestore");
+const {getFirestore, Timestamp, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {randomInt} = require("node:crypto");
 const {defineSecret} = require("firebase-functions/params");
@@ -12,6 +12,7 @@ const dedaTelegramWebhookSecret =
   defineSecret("DEDA_TELEGRAM_WEBHOOK_SECRET");
 const telegramBinding = require("./deda_telegram_bot_binding.js");
 const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
+const {recordApprovalBellNotice} = require("./deda_owner_approval_bell.js");
 
 initializeApp();
 
@@ -190,6 +191,15 @@ exports.onPlaceRequestUpdated = onDocumentUpdated(
         body = `بدأت إدارة DEDA مراجعة ${after.placeName || "المكان"}.`;
       }
 
+      // DEDA Heartbeat: a real first-time approval belongs in the owner's
+      // persistent bell, not only in a transient FCM push. Idempotent create.
+      // All other notifications, including edit approvals, remain untouched.
+      if (after.status === "approved" && before.status !== "approved") {
+        await recordApprovalBellNotice(getFirestore(), {
+          before, after, requestId: event.params.requestId,
+          stamp: FieldValue.serverTimestamp(),
+        });
+      }
       await notifyOwner(
           after.ownerUid,
           title,
