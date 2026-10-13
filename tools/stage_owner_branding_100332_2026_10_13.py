@@ -273,8 +273,8 @@ owner=swap(owner,
 """,
     'owner state/branding helpers')
 owner=swap(owner,
-    "    _categoryCode = category;\n    }\n    _otherCategoryTextController.text =",
-    "    _categoryCode = category;\n    }\n    _placeThemeIndex = DedaPlacePalette.safeIndex(data['themeIndex']);\n    _placeLogoUrl = (data['logoUrl'] ?? '').toString().trim();\n    _placeLogoPreviewPath = '';\n    _otherCategoryTextController.text =",
+    "      _categoryCode = category;\n    }\n    _otherCategoryTextController.text =",
+    "      _categoryCode = category;\n    }\n    _placeThemeIndex = DedaPlacePalette.safeIndex(data['themeIndex']);\n    _placeLogoUrl = (data['logoUrl'] ?? '').toString().trim();\n    _placeLogoPreviewPath = '';\n    _otherCategoryTextController.text =",
     'owner apply data')
 owner=swap(owner,
     "    _categoryCode = 'restaurant';\n    _latitude = null;",
