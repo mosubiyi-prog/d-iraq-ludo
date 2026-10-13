@@ -22,7 +22,10 @@ p = once("import 'deda_place_activity_symbol.dart';",
          "import 'deda_place_activity_symbol.dart';\nimport 'deda_place_branding_service.dart';",
          'color callable adapter import')
 a=p.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {')
-b=p.index('class PersonalPlacesPage',a)
+# Scope patches to the owner state itself. The intervening personal-place
+# state has its own initState/dispose and must never be touched.
+b=p.index('\nclass ',a+60)
+assert p[b:].startswith('\nclass DedaPersonalPlace'), 'SAFE_STOP owner boundary changed'
 owner=p[a:b]
 # Counts must refresh while the approved owner's page is actually visible;
 # no background polling, and never when Firebase reactions are disabled.
