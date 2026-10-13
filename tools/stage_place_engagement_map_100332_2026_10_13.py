@@ -26,6 +26,7 @@ marker=swap(marker, '  final VoidCallback onTap;',
   final bool selected;
   final DedaPlaceEngagement social;
   final bool busy;
+  final bool socialLoaded;
   final VoidCallback? onFollow;
   final VoidCallback? onLike;''', 'marker props')
 marker=swap(marker,'    required this.onTap,\n  });',
@@ -35,6 +36,7 @@ marker=swap(marker,'    required this.onTap,\n  });',
       following: false, liked: false, followers: 0,
     ),
     this.busy = false,
+    this.socialLoaded = true,
     this.onFollow,
     this.onLike,
   });''', 'marker constructor')
@@ -62,6 +64,7 @@ marker=swap(marker,'''        maxWidth: 162,
                   liked: social.liked,
                   followers: social.followers,
                   busy: busy,
+                  loadingCount: !socialLoaded,
                   onFollow: onFollow!,
                   onLike: onLike!,
                 ),
@@ -79,6 +82,7 @@ sec=swap(sec,'  DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;',
   final MapController _placeMapController = MapController();
   String? _selectedSocialPlaceId;
   bool _socialBusy = false;
+  bool _socialLoaded = false;
   DedaPlaceEngagement _social = const DedaPlaceEngagement(
     following: false, liked: false, followers: 0,
   );
@@ -100,6 +104,7 @@ sec=swap(sec,'  DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;',
         following: false, liked: false, followers: 0,
       );
       _socialBusy = DedaPlaceEngagementService.live;
+      _socialLoaded = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _selectedSocialPlaceId != id) return;
@@ -112,7 +117,10 @@ sec=swap(sec,'  DedaMapStyle mapStyle = DedaPreferences.defaultMapStyle;',
     try {
       final result = await DedaPlaceEngagementService.read(id);
       if (mounted && _selectedSocialPlaceId == id) {
-        setState(() => _social = result);
+        setState(() {
+          _social = result;
+          _socialLoaded = true;
+        });
       }
     } catch (_) {
       // No fabricated count if server is unavailable.
@@ -209,6 +217,7 @@ sec=swap(sec,'''                        (place) => Marker(
                                 _selectedSocialPlaceId == place.publishedPlaceId,
                             social: _social,
                             busy: _socialBusy,
+                            socialLoaded: _socialLoaded,
                             onFollow: () => _reactToSelectedPlace(
                               place.publishedPlaceId, 'follow',
                             ),
