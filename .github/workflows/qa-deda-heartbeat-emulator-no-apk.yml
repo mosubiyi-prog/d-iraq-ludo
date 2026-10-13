@@ -38,17 +38,9 @@ jobs:
           rules=p.read_text()
           marker='    match /admin_trash_places/{trashId} {'
           assert rules.count(marker)==1
-          assert 'match /deda_place_engagement_totals/{placeId}' not in rules
-          rules=rules.replace(marker,"""    match /deda_place_engagement/{placeId}/users/{accountHash} {
-                allow read, write: if false;
-              }
-              match /deda_place_engagement_totals/{placeId} {
-                allow read, write: if false;
-              }
-
-          """+marker,1)
-          p.write_text(rules)
-          print('PASS: explicit deny rules in synthetic emulator only')
+          assert rules.count('match /deda_place_engagement_totals/{placeId}') == 1
+          assert rules.count('match /deda_place_engagement/{placeId}/users/{accountHash}') == 1
+          print('PASS: committed explicit-deny rules loaded in synthetic emulator')
           PY
           npm install --prefix functions --no-save --no-audit --no-fund \
             firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
