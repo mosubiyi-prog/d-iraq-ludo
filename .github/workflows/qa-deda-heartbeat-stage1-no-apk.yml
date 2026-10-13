@@ -6,6 +6,10 @@ on:
       - deda-heartbeat-place-stage1-2026-10-13
     paths:
       - 'functions/deda_place_engagement.js'
+      - 'functions/deda_owner_approval_bell.js'
+      - 'functions/tests/deda_owner_approval_bell.test.js'
+      - 'functions/index.js'
+      - 'tools/stage_deda_heartbeat_owner_ui_100333.py'
       - 'functions/tests/deda_place_engagement.test.js'
       - 'docs/deda_heartbeat_place_stage1_2026_10_13.md'
       - '.github/workflows/qa-deda-heartbeat-stage1-no-apk.yml'
@@ -29,9 +33,15 @@ jobs:
         with:
           node-version: '22'
       - name: Syntax validation of staged Firebase business logic
-        run: node --check functions/deda_place_engagement.js
+        run: |
+          node --check functions/deda_place_engagement.js
+          node --check functions/deda_owner_approval_bell.js
+          node --check functions/index.js
+          python3 -m py_compile tools/stage_deda_heartbeat_owner_ui_100333.py
       - name: Defensive follow and like tests, local FakeDB only
-        run: node --test functions/tests/deda_place_engagement.test.js
+        run: |
+          node --test functions/tests/deda_place_engagement.test.js
+          node --test functions/tests/deda_owner_approval_bell.test.js
       - name: Guard live feature flags and staged-only status
         shell: bash
         run: |
@@ -46,6 +56,7 @@ jobs:
               assert flag in data, f'Missing feature guard: {flag}'
               assert 'defaultValue: false' in data, f'Unsafe default live state: {path}'
           assert 'dedaReadPlaceEngagement' not in Path('functions/index.js').read_text(), 'Unreviewed live endpoint found'
+          assert 'recordApprovalBellNotice' in Path('functions/index.js').read_text(), 'Persistent owner-bell integration missing'
           assert 'dedaSetPlaceEngagement' not in Path('functions/index.js').read_text(), 'Unreviewed live endpoint found'
           print('PASS: default OFF, zero deployment, zero Play publish; backend remains stage-only')
           PY
