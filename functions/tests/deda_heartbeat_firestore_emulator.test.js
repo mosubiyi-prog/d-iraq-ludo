@@ -83,3 +83,51 @@ test("public colour cannot be overwritten through direct client Firestore writes
   await assertFails(updateDoc(doc(owner, "published_places", placeId),
       {themeIndex: 13, updatedAt: serverTimestamp()}));
 });
+
+test("actual Firestore transactions survive concurrent follow/like without duplicates", async () => {
+  // Explicit emulator-only guard protects against writing any live account.
+  assert.match(process.env.FIRESTORE_EMULATOR_HOST || "",
+      /^(127\\.0\\.0\\.1|localhost):[0-9]+$/);
+  const {initializeApp, deleteApp} = require("firebase-admin/app");
+  const {getFirestore} = require("firebase-admin/firestore");
+  const {setPlaceEngagement, readPlaceEngagement} =
+      require("../deda_place_engagement.js");
+  const racePlace="race_place_01";
+  const ids=["race-user-1","race-user-2","race-user-3"];
+  await environment.withSecurityRulesDisabled(async (ctx) => {
+    const db=ctx.firestore();
+    const writes=[
+      setDoc(doc(db,"published_places",racePlace),{
+        published:true,status:"approved",hiddenByManager:false,
+      }),
+    ];
+    for(let i=0;i<ids.length;i++) {
+      const key="96477000001"+String(i);
+      writes.push(setDoc(doc(db,"deda_sessions",ids[i]),{accountKey:key}));
+      writes.push(setDoc(doc(db,"users",ids[i]),{accountKey:key}));
+    }
+    await Promise.all(writes);
+  });
+  const app=initializeApp({projectId},"heartbeat-emulator-count-test");
+  try {
+    const db=getFirestore(app);
+    await Promise.all(ids.map(uid=>setPlaceEngagement(db,{
+      placeId:racePlace,uid,kind:"follow",active:true,
+    })));
+    const count=await readPlaceEngagement(db,{placeId:racePlace,uid:ids[0]});
+    assert.equal(count.followers,3);
+    assert.equal(count.following,true);
+    await Promise.all([
+      setPlaceEngagement(db,{placeId:racePlace,uid:ids[0],kind:"follow",active:true}),
+      setPlaceEngagement(db,{placeId:racePlace,uid:ids[1],kind:"like",active:true}),
+      setPlaceEngagement(db,{placeId:racePlace,uid:ids[2],kind:"like",active:true}),
+    ]);
+    const again=await readPlaceEngagement(db,{placeId:racePlace,uid:ids[1]});
+    assert.equal(again.followers,3);
+    assert.equal(again.likes,2);
+    assert.equal(again.following,true);
+    assert.equal(again.liked,true);
+  } finally {
+    await deleteApp(app);
+  }
+});
