@@ -1254,3 +1254,25 @@ exports.dedaTelegramVerifiedRewardReadiness = onCall({
     return {ready: false, reason: "telegram-bot-unreachable"};
   }
 });
+
+// DEDA Heartbeat staged callable — DO NOT DEPLOY without Firestore Emulator
+// authorization tests and an explicit production-release decision.
+const {setPlaceTheme} = require("./deda_place_branding.js");
+exports.dedaSetPlaceTheme = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "session-required");
+  }
+  try {
+    return await setPlaceTheme(getFirestore(), {
+      uid: request.auth.uid,
+      placeId: request.data?.placeId,
+      themeIndex: request.data?.themeIndex,
+    });
+  } catch (error) {
+    const allowedCodes = new Set([
+      "invalid-argument", "permission-denied", "not-found",
+    ]);
+    const code = allowedCodes.has(error.code) ? error.code : "unavailable";
+    throw new HttpsError(code, String(error.message || "place-theme-failed"));
+  }
+});
