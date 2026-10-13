@@ -46,11 +46,13 @@ class DedaPlaceEngagement {
   final bool following;
   final bool liked;
   final int followers;
+  final int likes;
 
   const DedaPlaceEngagement({
     required this.following,
     required this.liked,
     required this.followers,
+    this.likes = 0,
   });
 
   factory DedaPlaceEngagement.fromMap(Map<String, dynamic> map) {
@@ -59,6 +61,7 @@ class DedaPlaceEngagement {
       following: map['following'] == true,
       liked: map['liked'] == true,
       followers: count < 0 ? 0 : count,
+      likes: ((map['likes'] as num?)?.toInt() ?? 0).clamp(0, 1000000000).toInt(),
     );
   }
 }
