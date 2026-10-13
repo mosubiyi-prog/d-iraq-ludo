@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 /// Exactly seven primary colors, each followed by a pastel variant.
 class DedaPlacePalette {
+  // Until reviewed owner branding fields are supported in LIVE rules,
+  // keep color changes as a local preview rather than mutating requests.
+  static const bool serverPublishingEnabled = bool.fromEnvironment(
+    'DEDA_OWNER_PLACE_BRANDING_LIVE', defaultValue: false,
+  );
   static const List<Color> colors = [
     Color(0xFFD83C46), Color(0xFFFAD7DB),
     Color(0xFF2075CD), Color(0xFFD8E9FF),
