@@ -34,14 +34,14 @@ class DedaPlaceColorChooser extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (int row = 0; row < 7; row++)
-          Row(
+        for (int column = 0; column < 7; column++)
+          Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final index in [row * 2, row * 2 + 1])
+              for (final index in [column * 2, column * 2 + 1])
                 Padding(
                   padding: const EdgeInsets.all(3),
                   child: Semantics(
