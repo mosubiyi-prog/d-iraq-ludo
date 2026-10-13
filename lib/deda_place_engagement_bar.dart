@@ -25,9 +25,9 @@ class DedaPlaceEngagementBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 152,
+      width: 164,
       height: 31,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.98),
         border: Border.all(color: const Color(0xFFDAE5DD)),
@@ -38,7 +38,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
       ),
       child: Row(
         textDirection: TextDirection.rtl,
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
             constraints: const BoxConstraints(minWidth: 32, minHeight: 30),
@@ -67,28 +67,35 @@ class DedaPlaceEngagementBar extends StatelessWidget {
                   : const Color(0xFF7F8A84),
             ),
           ),
-          Tooltip(
-            message: 'عدد متابعي المكان',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.people_alt_outlined,
-                  size: 15,
-                  color: Color(0xFF5C6760),
-                ),
-                const SizedBox(width: 2),
-                Text(
-                  loadingCount ? '…' : '$followers',
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  style: const TextStyle(
-                    color: Color(0xFF4F5953),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+          Expanded(
+            child: Tooltip(
+              message: 'عدد متابعي المكان',
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.people_alt_outlined,
+                    size: 15,
+                    color: Color(0xFF5C6760),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        loadingCount ? '…' : '$followers',
+                        maxLines: 1,
+                        softWrap: false,
+                        style: const TextStyle(
+                          color: Color(0xFF4F5953),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
