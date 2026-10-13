@@ -180,7 +180,9 @@ match=re.search(keypattern,sec)
 if not match:
     raise RuntimeError('SAFE STOP map key pattern')
 sec=sec[:match.start()]+'''                controller: _placeMapController,
-                key: const ValueKey('deda-map-registered-selection'),
+                key: ValueKey(Object.hash(
+                  position.latitude, position.longitude, mapStyle,
+                )),
                 options: MapOptions('''+sec[match.end():]
 sec=swap(sec,'''                  initialCenter: point,
                   // Open the main map at a district-scale overview''','''                  onTap: (_, __) => _hideSocialBar(),
