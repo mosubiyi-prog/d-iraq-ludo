@@ -102,6 +102,12 @@ owner=swap(owner,
   String _categoryCode = 'restaurant';
   int _placeThemeIndex = 4;
   bool _paletteOpen = false;
+  String get _ownerThemeKey => _ownerScopedKey('deda_owner_theme_100332');
+
+  Future<void> _persistLocalTheme(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_ownerThemeKey, index);
+  }
   String _placeLogoUrl = '';
   String _placeLogoPreviewPath = '';
   bool _logoUploading = false;
@@ -265,6 +271,7 @@ owner=swap(owner,
               _placeThemeIndex = index;
               _paletteOpen = false;
             });
+            unawaited(_persistLocalTheme(index));
           },
         ),
     ],
@@ -286,7 +293,7 @@ owner=swap(owner,
     'owner request brand fields')
 owner=swap(owner,
     "    setState(() => _submitting = true);\n    try {\n      final data = _currentData();",
-    "    setState(() => _submitting = true);\n    try {\n      if (!await _uploadPendingLogo()) return;\n      final data = _currentData();",
+    "    setState(() => _submitting = true);\n    try {\n      if (!await _uploadPendingLogo()) return;\n      final data = _currentData();\n      if (!DedaPlacePalette.serverPublishingEnabled) {\n        // Keep reviewed request schema unchanged until live rules are approved.\n        data.remove('themeIndex');\n        data.remove('logoUrl');\n      }",
     'logo upload before submit')
 # Avoid publishing metrics until read, and keep old owner notification buttons.
 owner=swap(owner,
@@ -320,8 +327,7 @@ owner=swap(owner,
                           _ownerMetricsDisplay(),""",
     'owner top brand+metrics')
 owner=swap(owner,
-    "      } else {\n        await _loadDraftOnly();\n      }\n    } finally {\n      if (mounted) setState(() => _loading = false);\n    }\n  }",
-    "      } else {\n        await _loadDraftOnly();\n      }\n    } finally {\n      if (mounted) setState(() => _loading = false);\n    }\n    if (mounted && !_loading) {\n      await _refreshOwnerMetrics();\n    }\n  }",
+    "      } else {\n        await _loadDraftOnly();\n      }\n      if (!DedaPlacePalette.serverPublishingEnabled) {\n        _placeThemeIndex = DedaPlacePalette.safeIndex(\n          prefs.getInt(_ownerThemeKey),\n        );\n      }\n    } finally {\n      if (mounted) setState(() => _loading = false);\n    }\n    if (mounted && !_loading) {\n      await _refreshOwnerMetrics();\n    }\n  }",
     'owner metrics refresh on load')
 main=main[:start]+owner+main[end:]
 
