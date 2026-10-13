@@ -11,6 +11,7 @@ on:
       - 'firestore.rules'
       - 'tools/stage_place_engagement_core_100332_2026_10_13.py'
       - 'tools/stage_deda_heartbeat_integrated_symbols_2026_10_14.py'
+      - 'tools/stage_owner_branding_100332_2026_10_13.py'
   workflow_dispatch:
 
 permissions:
