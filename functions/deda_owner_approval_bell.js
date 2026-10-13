@@ -5,7 +5,8 @@
 // creates an idempotent owner bell notice for first-time approvals.
 function approvalNoticeFields(before, after, requestId) {
   if (!before || !after || before.status === "approved" ||
-      after.status !== "approved") return null;
+      after.status !== "approved" ||
+      String(after.requestType || "").trim() === "update") return null;
   const clean = (v) => String(v == null ? "" : v).trim();
   const id = clean(requestId);
   const ownerUid = clean(after.ownerUid);
