@@ -6,6 +6,8 @@ on:
       - owner-place-profile-entry-100331-test-2026-10-13
     paths:
       - '.github/workflows/qa-deda-owner-place-profile-100331-internal-apk.yml'
+      - 'tools/restore_owner_place_entry_100331_2026_10_13.py'
+      - 'tools/validate_owner_place_entry_100331_2026_10_13.py'
   workflow_dispatch:
 
 permissions:
