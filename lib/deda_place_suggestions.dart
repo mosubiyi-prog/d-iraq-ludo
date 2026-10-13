@@ -301,6 +301,7 @@ class DedaPlaceSuggestions {
       default:
         return Icons.storefront_outlined;
     }
+  }
 
   /// Returns an activity-specific symbol, independent of owner photo uploads.
   /// Known trades use the same symbol in owner profile and on map.
@@ -320,6 +321,5 @@ class DedaPlaceSuggestions {
     if (_contains(value, ['مخبز', 'فرن', 'معجنات'])) return '🥖';
     if (_contains(value, ['غسل سيارات', 'غسيل سيارات', 'مغسلة سيارات', 'car wash'])) return '🚙';
     return '';
-  }
   }
 }
