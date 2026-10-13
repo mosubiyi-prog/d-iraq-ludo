@@ -29,7 +29,8 @@ owner=p[a:b]
 owner=once(
   """  @override
   void initState() {
-    super.initState();""",
+    super.initState();
+    _phoneController.text = DedaPreferences.accountPhone.isNotEmpty""",
   """  Timer? _ownerMetricsTimer;
 
   @override
@@ -42,7 +43,8 @@ owner=once(
             !(ModalRoute.of(context)?.isCurrent ?? false)) return;
         unawaited(_refreshOwnerMetrics());
       });
-    }""",
+    }
+    _phoneController.text = DedaPreferences.accountPhone.isNotEmpty""",
   'visible-owner metrics periodic refresh',owner
 )
 owner=once(
