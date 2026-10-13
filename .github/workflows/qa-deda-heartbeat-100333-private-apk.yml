@@ -1,4 +1,5 @@
 name: DEDA Heartbeat 100333 Secure Owner UI PRIVATE APK - NO PLAY
+# QA retry: owner InputDecoration scoped fix; stop on unexpected anchors.
 
 on:
   push:
