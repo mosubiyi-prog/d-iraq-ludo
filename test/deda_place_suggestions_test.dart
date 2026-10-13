@@ -59,4 +59,42 @@ void main() {
           'other');
     });
   });
+
+  group('DEDA Heartbeat: offline Iraqi professions and emoji identity', () {
+    test('barber pole, women salon and building materials never look like stores', () {
+      expect(DedaPlaceSuggestions.forName('حلاقة الأخوين').single.customArabicType,
+          'حلاقة رجالية');
+      expect(DedaPlaceSuggestions.emojiForCategory('other', 'حلاقة'), '💈');
+      expect(DedaPlaceSuggestions.iconForCategory('other', 'حلاقة'),
+          Icons.content_cut);
+
+      expect(DedaPlaceSuggestions.forName('صالون نسائي زينة').single.customArabicType,
+          'صالون نسائي');
+      expect(DedaPlaceSuggestions.emojiForCategory('other', 'كوافير نسائي'), '💇‍♀️');
+      expect(DedaPlaceSuggestions.forName('محل إنشائية أبو علي')
+          .single.customArabicType, 'مواد بناء');
+      expect(DedaPlaceSuggestions.emojiForCategory('other', 'إنشائية'), '🧱');
+    });
+
+    test('known specific profession wins over generic محل and other shop words', () {
+      expect(DedaPlaceSuggestions.forName('محل تصليح سيارات').single.icon,
+          Icons.car_repair);
+      expect(DedaPlaceSuggestions.forName('محل ملابس الأطفال').single.icon,
+          Icons.checkroom);
+      expect(DedaPlaceSuggestions.forName('محل موبايلات').single.icon,
+          Icons.phone_android);
+      expect(DedaPlaceSuggestions.forName('مخبز باب الحارة').single.icon,
+          Icons.bakery_dining);
+    });
+
+    test('differentiate unknown profession from determined or explicitly typed profession', () {
+      expect(DedaPlaceSuggestions.emojiForCategory('other', 'خدمة مجهولة'), '');
+      expect(DedaPlaceSuggestions.emojiForCategory('other', '', placeName: 'حلاقة الأخوين'),
+          '💈');
+      expect(DedaPlaceSuggestions.emojiForCategory('other', 'خدمة مجهولة',
+          placeName: 'حلاقة الأخوين'), '');
+      expect(DedaPlaceSuggestions.emojiForCategory('pharmacy', 'حلاق'), '');
+      expect(DedaPlaceSuggestions.iconForCategory('pharmacy', ''), Icons.local_pharmacy);
+    });
+  });
 }
