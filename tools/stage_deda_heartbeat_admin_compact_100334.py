@@ -107,7 +107,7 @@ for token in [
   'Future<bool> _confirmLiveWorker() async',
   'Future<void> _setEnabled(bool next) async',
   "kind == 'place_auto_approval'",
-  "kind == 'pin_auto_recovery'",
+  "pin_auto_recovery",
   'DedaBackend.normalizeAdminRole(profile[\'role\'])',
   "if (_place) {",
   'onChanged: canChange ? _setEnabled : null',
