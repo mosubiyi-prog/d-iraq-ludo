@@ -87,24 +87,30 @@ owner = replace_once(
     return InputDecoration(""",
     "owner field accent"
 )
-owner = replace_once(
-    owner,
+# Narrow styling changes to the single original owner InputDecoration.
+# Other form widgets may coincidentally use the same literal colour.
+field_start = owner.index("  InputDecoration _fieldDecoration({")
+field_end = owner.index("  // DEDA_HEARTBEAT_OWNER_UI_100333", field_start)
+field = owner[field_start:field_end]
+field = replace_once(
+    field,
     "prefixIcon: Icon(icon, color: const Color(0xFF17652F)),",
     "prefixIcon: Icon(icon, color: accent),",
     "owner field icon"
 )
-owner = replace_once(
-    owner,
+field = replace_once(
+    field,
     "borderSide: const BorderSide(color: Color(0xFFAAB5AB)),",
     "borderSide: BorderSide(color: accent.withOpacity(0.58)),",
     "owner enabled outline"
 )
-owner = replace_once(
-    owner,
+field = replace_once(
+    field,
     "borderSide: const BorderSide(color: Color(0xFF17652F), width: 2),",
     "borderSide: BorderSide(color: accent, width: 2),",
     "owner focused outline"
 )
+owner = owner[:field_start] + field + owner[field_end:]
 # A genuine count is displayed in full. Disabled backend displays words,
 # never a fabricated zero or a dash that looks like missing real numbers.
 owner = replace_once(
