@@ -37,6 +37,71 @@ class DedaPlaceSuggestions {
     final name = _normalize(placeName);
     if (name.length < 3) return const [];
 
+    // Heartbeat professional activities: specific Iraqi trades BEFORE the
+    // generic "محل/متجر" matcher, so a shop name never hides its trade.
+    if (_contains(name, ['صالون نسائي', 'صالون نسائي', 'كوافير', 'مركز تجميل نسائي', 'تصفيف نسائي', 'حلاقة نسائية', 'حلاق نسائي', 'beauty salon', 'ladies salon'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'صالون نسائي',
+        englishLabel: 'Ladies hair salon', customArabicType: 'صالون نسائي',
+        icon: Icons.face_retouching_natural,
+      )];
+    }
+    if (_contains(name, ['حلاق', 'حلاقة', 'حلاقه', 'صالون رجالي', 'barber', 'barbershop'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'حلاقة رجالية',
+        englishLabel: 'Barber shop', customArabicType: 'حلاقة رجالية',
+        icon: Icons.content_cut,
+      )];
+    }
+    if (_contains(name, ['انشائية', 'إنشائية', 'مواد بناء', 'سمنت', 'اسمنت', 'طابوق', 'حديد تسليح', 'building materials', 'construction supplies'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'مواد بناء / إنشائية',
+        englishLabel: 'Building materials', customArabicType: 'مواد بناء',
+        icon: Icons.construction,
+      )];
+    }
+    if (_contains(name, ['ميكانيكي', 'ميكانيك', 'تصليح سيارات', 'صيانة سيارات', 'كهربائي سيارات', 'auto repair', 'mechanic'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'تصليح سيارات',
+        englishLabel: 'Auto repair', customArabicType: 'تصليح سيارات',
+        icon: Icons.car_repair,
+      )];
+    }
+    if (_contains(name, ['مخبز', 'فرن', 'معجنات', 'bread bakery', 'bakery'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'مخبز',
+        englishLabel: 'Bakery', customArabicType: 'مخبز',
+        icon: Icons.bakery_dining,
+      )];
+    }
+    if (_contains(name, ['ملابس', 'البسة', 'ألبسة', 'بوتيك', 'fashion', 'clothing'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'ملابس',
+        englishLabel: 'Clothing', customArabicType: 'ملابس',
+        icon: Icons.checkroom,
+      )];
+    }
+    if (_contains(name, ['هواتف', 'موبايلات', 'موبايل', 'جوال', 'اتصالات', 'mobile phones', 'phone repair'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'هواتف',
+        englishLabel: 'Mobile phones', customArabicType: 'هواتف',
+        icon: Icons.phone_android,
+      )];
+    }
+    if (_contains(name, ['مكتبة', 'قرطاسية', 'مستلزمات مدرسية', 'stationery', 'bookshop'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'مكتبة / قرطاسية',
+        englishLabel: 'Stationery', customArabicType: 'مكتبة',
+        icon: Icons.menu_book,
+      )];
+    }
+    if (_contains(name, ['خياطة', 'خياط', 'تفصيل ملابس', 'tailor'])) {
+      return const [DedaPlaceSuggestion(
+        categoryCode: 'other', arabicLabel: 'خياطة',
+        englishLabel: 'Tailor', customArabicType: 'خياطة',
+        icon: Icons.design_services,
+      )];
+    }
     if (_contains(name, ['منفذ', 'كي كارد', 'qi card', 'ماستر كارد', 'دفع إلكتروني'])) {
       return const [
         DedaPlaceSuggestion(
@@ -194,7 +259,36 @@ class DedaPlaceSuggestions {
       case 'park':
         return Icons.park;
       case 'other':
-        if (_contains(_normalize(customType), ['غسل', 'غسيل', 'car wash'])) {
+        // Category-specific activity icons (no store-by-default for known trades).
+        final normalized = _normalize(customType);
+        if (_contains(normalized, ['صالون نسائي', 'كوافير', 'تجميل نسائي', 'حلاقة نسائية', 'حلاق نسائي'])) {
+          return Icons.face_retouching_natural;
+        }
+        if (_contains(normalized, ['حلاق', 'حلاقة', 'حلاقه', 'barber'])) {
+          return Icons.content_cut;
+        }
+        if (_contains(normalized, ['انشائية', 'مواد بناء', 'اسمنت', 'سمنت', 'طابوق', 'حديد تسليح'])) {
+          return Icons.construction;
+        }
+        if (_contains(normalized, ['تصليح سيارات', 'ميكانيك', 'صيانة سيارات'])) {
+          return Icons.car_repair;
+        }
+        if (_contains(normalized, ['مخبز', 'فرن', 'معجنات'])) {
+          return Icons.bakery_dining;
+        }
+        if (_contains(normalized, ['ملابس', 'بوتيك', 'البسة'])) {
+          return Icons.checkroom;
+        }
+        if (_contains(normalized, ['هواتف', 'موبايل', 'اتصالات'])) {
+          return Icons.phone_android;
+        }
+        if (_contains(normalized, ['مكتبة', 'قرطاسية'])) {
+          return Icons.menu_book;
+        }
+        if (_contains(normalized, ['خياط', 'خياطة'])) {
+          return Icons.design_services;
+        }
+        if (_contains(normalized, ['غسل', 'غسيل', 'car wash'])) {
           return Icons.local_car_wash;
         }
         if (_contains(_normalize(customType), ['دفع', 'كي كارد', 'بطاقة'])) {
@@ -207,5 +301,25 @@ class DedaPlaceSuggestions {
       default:
         return Icons.storefront_outlined;
     }
+
+  /// Returns an activity-specific symbol, independent of owner photo uploads.
+  /// Known trades use the same symbol in owner profile and on map.
+  /// Empty means use the regular Material icon for this category.
+  static String emojiForCategory(String category, String customType, {String placeName = ''}) {
+    if (category != 'other') return '';
+    final type = _normalize(customType);
+    // Explicit profession takes priority; infer from name only as a fallback.
+    final inferred = type.isEmpty ? forName(placeName) : const <DedaPlaceSuggestion>[];
+    final value = type.isEmpty && inferred.isNotEmpty
+        ? _normalize(inferred.first.customArabicType) : type;
+    if (_contains(value, ['صالون نسائي', 'كوافير', 'تجميل نسائي', 'حلاقة نسائية', 'حلاق نسائي'])) {
+      return '💇‍♀️';
+    }
+    if (_contains(value, ['حلاق', 'حلاقة', 'حلاقه', 'barber'])) return '💈';
+    if (_contains(value, ['انشائية', 'مواد بناء', 'سمنت', 'اسمنت', 'طابوق', 'حديد تسليح'])) return '🧱';
+    if (_contains(value, ['مخبز', 'فرن', 'معجنات'])) return '🥖';
+    if (_contains(value, ['غسل سيارات', 'غسيل سيارات', 'مغسلة سيارات', 'car wash'])) return '🚙';
+    return '';
+  }
   }
 }
