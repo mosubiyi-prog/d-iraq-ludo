@@ -1,0 +1,53 @@
+name: DEDA Heartbeat Stage 1 - Server Regression QA ONLY - NO APK OR DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-heartbeat-place-stage1-2026-10-13
+    paths:
+      - 'functions/deda_place_engagement.js'
+      - 'functions/tests/deda_place_engagement.test.js'
+      - 'docs/deda_heartbeat_place_stage1_2026_10_13.md'
+      - '.github/workflows/qa-deda-heartbeat-stage1-no-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-heartbeat-stage1-safe-qa
+  cancel-in-progress: false
+
+jobs:
+  place-engagement-defensive-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated Node testing, no credentials
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax validation of staged Firebase business logic
+        run: node --check functions/deda_place_engagement.js
+      - name: Defensive follow and like tests, local FakeDB only
+        run: node --test functions/tests/deda_place_engagement.test.js
+      - name: Guard live feature flags and staged-only status
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for path, flag in [
+              ('lib/deda_place_engagement_service.dart', 'DEDA_PLACE_ENGAGEMENT_LIVE'),
+              ('lib/deda_place_logo.dart', 'DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE'),
+              ('lib/deda_place_palette.dart', 'DEDA_OWNER_PLACE_BRANDING_LIVE'),
+          ]:
+              data = Path(path).read_text()
+              assert flag in data, f'Missing feature guard: {flag}'
+              assert 'defaultValue: false' in data, f'Unsafe default live state: {path}'
+          assert 'dedaReadPlaceEngagement' not in Path('functions/index.js').read_text(), 'Unreviewed live endpoint found'
+          assert 'dedaSetPlaceEngagement' not in Path('functions/index.js').read_text(), 'Unreviewed live endpoint found'
+          print('PASS: default OFF, zero deployment, zero Play publish; backend remains stage-only')
+          PY
+      - name: Final safe-stage notice
+        run: echo 'PASS of this job validates isolated server unit tests only. It is NOT Firestore Emulator, Flutter, device, concurrency, or production acceptance. No APK built. No deploy.'
