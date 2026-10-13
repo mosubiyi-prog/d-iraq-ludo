@@ -18,9 +18,43 @@ def once(a,b,description,source=None):
 p = once("import 'deda_place_suggestions.dart';",
          "import 'deda_place_suggestions.dart';\nimport 'deda_place_activity_symbol.dart';",
          'activity symbol import')
+p = once("import 'deda_place_activity_symbol.dart';",
+         "import 'deda_place_activity_symbol.dart';\nimport 'deda_place_branding_service.dart';",
+         'color callable adapter import')
 a=p.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {')
 b=p.index('class PersonalPlacesPage',a)
 owner=p[a:b]
+owner=once(
+  """  Future<void> _persistLocalTheme(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_ownerThemeKey, index);
+  }""",
+  """  Future<void> _persistLocalTheme(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_ownerThemeKey, index);
+    // No production write until separately authorized backend release.
+    if (_status == 'approved' &&
+        _placeId != null &&
+        DedaPlacePalette.serverPublishingEnabled) {
+      try {
+        await DedaPlaceBrandingService.setPublicTheme(
+          placeId: _placeId!,
+          themeIndex: index,
+        );
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(dedaText(
+              'تعذر نشر اللون على الخريطة، بقي محلياً فقط.',
+              'Could not publish color to map; this device only.',
+            )),
+          ));
+        }
+      }
+    }
+  }""",
+  'server saved approved place color, with offline honesty',owner
+)
 owner=once(
   """          fallbackIcon: DedaPlaceSuggestions.iconForCategory(
             _categoryCode, _otherCategoryTextController.text,
@@ -128,6 +162,19 @@ for fixed in ('onLongPress: (_, destination) {','DedaBackend.submitPlace(data)',
               'DedaBackend.resubmitPlaceRequest(', 'DedaBackend.ownerPlaceNotifications(',
               '_buildFixedDriverArrow(navigationArrowAngle)'):
     assert fixed in p, 'SAFE_STOP original owner/navigation lost: '+fixed
+# An owner may resubmit an already reviewed place with a chosen color.
+# Enforce the same exact owner-only key list; no new role or publication rights.
+rules_path=Path('firestore.rules')
+rules=rules_path.read_text(encoding='utf-8')
+rules_old="""            'submittedByName', 'status', 'updatedAt', 'resubmittedAt'"""
+rules_new="""            'submittedByName', 'themeIndex', 'status', 'updatedAt', 'resubmittedAt'"""
+if rules.count(rules_old)!=1:
+    raise RuntimeError('SAFE_STOP: owner resubmit Firestore rule has changed')
+rules=rules.replace(rules_old,rules_new,1)
+assert 'allow update: if isGeneralManager()' in rules
+assert 'dedaSetPlaceTheme' in Path('functions/index.js').read_text(encoding='utf-8')
 main_path.write_text(p,encoding='utf-8')
+rules_path.write_text(rules,encoding='utf-8')
+print('PASS: activity symbol + verified-server color save; owner resubmit rule narrow.')
 print('PASS: automatic Iraqi profession logo reused in owner badge, name, and DEDA map.')
 print('PASS: disabled owner fields retain chosen color; navigation unchanged.')
