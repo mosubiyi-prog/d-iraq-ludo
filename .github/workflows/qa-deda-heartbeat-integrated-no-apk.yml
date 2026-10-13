@@ -7,6 +7,9 @@ on:
       - deda-heartbeat-integrated-stage-2026-10-14
     paths:
       - '.github/workflows/qa-deda-heartbeat-integrated-no-apk.yml'
+      - 'functions/index.js'
+      - 'firestore.rules'
+      - 'tools/stage_place_engagement_core_100332_2026_10_13.py'
   workflow_dispatch:
 
 permissions:
