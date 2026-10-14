@@ -13,3 +13,10 @@
 - Previous 100336 full Flutter **21/21** and 24 Firebase Emulator/Node security tests passed on callable mode. Spark-mode guards additionally test forged/unauthorized atomic totals, cross-account read denial, actual 14-color owner-only updates, verified account-UID rotation, and untouched `users` and `deda_sessions`.
 - Before considering deployment of anything to production: verify **actual currently deployed rules** and narrowly merge/test only the two Spark collections + owner `themeIndex` permission; **DO NOT overwrite** production rules with a local snapshot. Ensure no access regression for existing user accounts or admin capabilities; get owner's explicit approval of the exact deployment scope and Firebase service access. Test two real DEDA accounts before marking live and producing a signed 100336 APK.
 - Spark is billed per database usage / quotas, not "unlimited free" automatically. Monitor reads/writes and avoid excessive reads.
+
+
+## Updated validated isolated QA (2026-10-14)
+
+- [Spark Firestore real rules/transactions run **38602463964**](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38602463964): **SUCCESS — 8 tests passed, 0 failed**. Confirms old user/session documents byte-for-byte unchanged, UID rotation idempotency, two-account simultaneous actions (with bounded read-fresh transaction retries), rejection of both stand-alone and **atomic** count forgeries, 14 owner-only palette colors, rejected unauthorized access, and legacy server-only counters still protected. The first extra concurrency test failed safely, and this final run demonstrates the corrected contention strategy.
+- [Initial Spark client Flutter source workflow **38601807199**](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38601807199): **SUCCESS — 21 Flutter tests and clean analyzer**. The final update to the bounded-retry client is still subject to its newest Flutter QA job.
+- IMPORTANT: both feature flags and the direct mode flag are still OFF by default. This is a tested **staging approach**, NOT a live production rollout. No existing user account, PIN, session, location, approved place, or on-device application was changed.
