@@ -1,0 +1,73 @@
+name: DEDA 100336 Production Firebase Exact-3 IAM Audit - READ ONLY
+on:
+  push:
+    branches: [deda-100336-two-features-stage-2026-10-14]
+    paths: ['.github/workflows/qa-deda-100336-firebase-live-iam-audit.yml']
+permissions:
+  contents: read
+concurrency:
+  group: deda-100336-prod-iam-readonly
+  cancel-in-progress: false
+jobs:
+  read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Validate project-specific credentials and read Cloud Functions metadata only
+        shell: bash
+        run: |
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv("PRIMARY_SA") or os.getenv("SECONDARY_SA")
+          if not raw:
+              print("SAFE_STOP: NO_GITHUB_FIREBASE_SERVICE_ACCOUNT")
+              raise SystemExit(2)
+          try:
+              info=json.loads(raw)
+              assert info.get("type")=="service_account"
+              assert info.get("project_id")=="deda-25b88"
+              credentials=service_account.Credentials.from_service_account_info(
+                  info,scopes=["https://www.googleapis.com/auth/cloud-platform"])
+              client=AuthorizedSession(credentials)
+          except Exception:
+              print("SAFE_STOP: INVALID_OR_WRONG_PROJECT_FIREBASE_SERVICE_ACCOUNT")
+              raise SystemExit(3)
+          urls={
+              "PROJECT_DETAILS":"https://cloudresourcemanager.googleapis.com/v1/projects/deda-25b88",
+              "FUNCTIONS_V2_LIST":"https://cloudfunctions.googleapis.com/v2/projects/deda-25b88/locations/us-central1/functions?pageSize=100",
+          }
+          responses={}
+          for label,url in urls.items():
+              try:
+                  r=client.get(url,timeout=35)
+                  responses[label]=r
+                  print(label,"HTTP_"+str(r.status_code))
+                  if r.status_code!=200:
+                      # Only safe error status code and canonical public error category.
+                      try: print(label+"_CODE",str(r.json().get("error",{}).get("status","UNKNOWN"))[:80])
+                      except Exception: pass
+              except Exception as e:
+                  print(label,"SAFE_STOP_TRANSPORT_"+type(e).__name__)
+                  raise SystemExit(4)
+          r=responses["FUNCTIONS_V2_LIST"]
+          if r.status_code != 200:
+              print("SAFE_STOP: PRODUCTION_FUNCTIONS_READ_NOT_AUTHORIZED. NO_DEPLOY.")
+              raise SystemExit(5)
+          items=r.json().get("functions",[])
+          required=("dedaSetPlaceTheme","dedaReadPlaceEngagement","dedaSetPlaceEngagement")
+          for name in required:
+              found=[x for x in items if x.get("name","").split("/")[-1]==name]
+              print("EXACT_FUNCTION",name,"EXISTS" if found else "NOT_FOUND_IN_REGION")
+              for f in found:
+                  print("EXACT_FUNCTION_STATE",name,str(f.get("state","UNKNOWN")))
+          if r.json().get("nextPageToken"):
+              print("SAFE_STOP: FUNCTION_LIST_INCOMPLETE")
+              raise SystemExit(6)
+          print("READ_ONLY_AUDIT_COMPLETE: NO_RULES, NO_FUNCTIONS, NO_USER_DATA_CHANGED")
+          PY
