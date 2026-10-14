@@ -74,9 +74,10 @@ class DedaPlaceEngagementBar extends StatelessWidget {
           Tooltip(
             message: 'عدد الإعجابات الحقيقي',
             child: SizedBox(
-              width: 28,
+              width: 20,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
                 child: Text(
                   loadingCount ? '…' : '$likes',
                   maxLines: 1,
