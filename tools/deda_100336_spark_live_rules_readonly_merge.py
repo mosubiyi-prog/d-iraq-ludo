@@ -43,43 +43,62 @@ def replace_one(source, old, new, label):
     return source.replace(old, new, 1)
 
 def verified_candidate_merge(live, baseline, candidate):
-    # Fail closed on unexpected edits even within the staged QA candidate.
+    """Add the Spark permissions without replacing any deployed rule."""
     helpers = exact_chunk(candidate, HELP, HELP_END)
     rules = exact_chunk(candidate, NEW, NEW_END)
-    base_owner = exact_chunk(baseline, OWNER, OWNER_END)
-    desired_owner = exact_chunk(candidate, OWNER, OWNER_END)
-
+    original_owner = exact_chunk(baseline, OWNER, OWNER_END)
+    candidate_owner = exact_chunk(candidate, OWNER, OWNER_END)
     if candidate.replace(helpers, "", 1).replace(rules, "", 1).replace(
-        desired_owner, base_owner, 1
+        candidate_owner, original_owner, 1
     ) != baseline:
-        stop("Spark candidate differs from baseline beyond approved scope")
-    for forbidden in [HELP, NEW, "match /deda_spark_reactions/",
-                      "match /deda_spark_totals/"]:
-        if forbidden in live:
-            stop("Spark rules already exist or partial installation detected")
+        stop("staging candidate differs from reviewed Spark scope")
 
-    # Production source may differ outside these exact blocks; preserve it
-    # byte-for-byte. The owner rule is replaced only if its entire baseline
-    # block matches. No blind overwrite of other 1003xx rules.
-    if live.count(HELP_END) != 1 or live.count(NEW_END) != 1:
-        stop("live insertion anchor changed")
-    if "match /deda_place_engagement_totals/" not in live:
-        stop("production legacy interaction path differs; inspect before merge")
-    merged = replace_one(live, base_owner, desired_owner, "owner-place permissions")
-    merged = replace_one(merged, HELP_END, helpers + HELP_END, "helper insertion")
-    merged = replace_one(merged, NEW_END, rules + NEW_END, "Spark insertion")
-    # This is a reversible *exact* merge and proves the entire live baseline
-    # is retained without any other change.
-    reversed_merge = merged.replace(rules, "", 1).replace(helpers, "", 1)
-    reversed_merge = replace_one(
-        reversed_merge, desired_owner, base_owner, "reverse owner permissions"
-    )
-    if reversed_merge != live:
-        stop("the merged candidate does NOT reverse exactly to live")
+    if any(marker in live for marker in (
+        HELP, NEW, "match /deda_spark_reactions/", "match /deda_spark_totals/"
+    )):
+        stop("Spark rules exist or partial installation detected")
+    if live.count(OWNER) != 1:
+        stop("published-place rule missing or ambiguous")
+    first = live.index(OWNER)
+    last = live.find("\n    }", first)
+    if last < 0:
+        stop("published-place block closing brace not found")
+    owner = live[first:last]
+    if "allow update:" not in owner or "allow read:" not in owner:
+        stop("existing owner permissions unrecognized")
+    if "sparkVerified()" in owner:
+        stop("Spark owner permission already present")
+    new_permission = """
+      // DEDA Spark 100336: additive verified-owner palette ONLY.
+      allow update: if sparkVerified()
+        && sparkPublished(placeId)
+        && (resource.data.ownerUid == request.auth.uid
+            || resource.data.accountKey == sparkKey())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'themeIndex'
+        ])
+        && request.resource.data.themeIndex is int
+        && request.resource.data.themeIndex >= 0
+        && request.resource.data.themeIndex < 14;
+"""
+    old_owner = owner + "\n    }"
+    new_owner = owner + new_permission + "\n    }"
+    merged = replace_one(live, old_owner, new_owner, "owner-color addition")
+    import re
+    footer = re.search(r"\n  }\s*\n}\s*\Z", merged)
+    if not footer:
+        stop("production Firestore rules root structure changed")
+    addition = "\n" + helpers + "\n" + rules
+    merged = merged[:footer.start()] + addition + merged[footer.start():]
+    exact_undo = merged.replace(addition, "", 1).replace(new_owner, old_owner, 1)
+    if exact_undo != live:
+        stop("the merged rules do not reverse byte-for-byte to production")
     if merged.count("match /deda_spark_reactions/") != 1 or merged.count(
         "match /deda_spark_totals/"
-    ) != 1:
-        stop("Spark collections repeated or missing")
+    ) != 1 or merged.count("allow update: if sparkVerified()") != 1:
+        stop("unexpected extra Spark permissions")
+    print("ADDITIVE_ONLY_SCOPED_DIFF", True)
+    print("LEGACY_PRODUCTION_RULES_PRESERVED_BYTE_FOR_BYTE", True)
     return merged
 
 def main():
