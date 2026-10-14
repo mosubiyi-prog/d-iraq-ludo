@@ -1,0 +1,44 @@
+name: DEDA 100336 Safe Production Release TEMPLATE QA - NEVER DEPLOY
+on:
+  push:
+    branches: [deda-100336-spark-firestore-safe-stage-2026-10-14]
+    paths:
+      - '.github/workflows/qa-deda-100336-spark-release-template.yml'
+      - 'docs/ops_templates/deploy-deda-100336-spark-firestore-EXPLICIT-APPROVAL-ONLY.yml'
+      - 'tools/deda_100336_spark_release_baseline_guard.py'
+permissions:
+  contents: read
+jobs:
+  validate-template-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact SHA-locked template and explicitly NO active production deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          p=Path('docs/ops_templates/deploy-deda-100336-spark-firestore-EXPLICIT-APPROVAL-ONLY.yml')
+          assert p.is_file(), 'SAFE_STOP template missing'
+          data=yaml.load(p.read_text(), Loader=yaml.BaseLoader)
+          assert data['on']['push']['branches']==['deda-100336-spark-firestore-safe-stage-2026-10-14']
+          assert data['on']['push']['paths']==['.github/workflows/deploy-deda-100336-spark-firestore-approved.yml']
+          assert list(data['jobs'])==['deploy_exactly_scoped_rules']
+          src=p.read_text()
+          assert '--only firestore:rules --project deda-25b88' in src
+          assert '5788863fd1fd27d965ea5ba367fedcfe0fc2f0b530289fd25535ed7c85e2b25e' in src
+          assert 'df9fbbbfa30ade3bae6859e4d8dbc2f84660e3d6b77915d54dd1b5184e0ec8b4' in src
+          assert 'python3 tools/deda_100336_spark_release_baseline_guard.py before' in src
+          assert 'python3 tools/deda_100336_spark_release_baseline_guard.py after' in src
+          assert src.count('functions/node_modules/.bin/firebase deploy')==1
+          assert not Path('.github/workflows/deploy-deda-100336-spark-firestore-approved.yml').exists()
+          import ast
+          ast.parse(Path('tools/deda_100336_spark_live_rules_readonly_merge.py').read_text())
+          ast.parse(Path('tools/deda_100336_spark_release_baseline_guard.py').read_text())
+          print('PASS: INERT template valid; two frozen hashes, emulator, backup, before/after read-only verification')
+          print('PASS: no production workflow exists or can trigger, no rules or account changes')
+          PY
