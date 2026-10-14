@@ -141,7 +141,11 @@ jobs:
           p = Path('tools/validate_owner_place_map_ux_100332_2026_10_13.py')
           old = p.read_text()
           assert old.count("'maxWidth: 140'") == 1, 'SAFE_STOP old map width expectation changed'
-          p.write_text(old.replace("'maxWidth: 140'", "'maxWidth: 170'"))
+          assert old.count('"const Text("') == 1, 'SAFE_STOP old static badge text expectation changed'
+          # Only two UI implementation facts superseded the 100332 validator:
+          # adaptive name width and dynamic DEDA badge text contrast.
+          p.write_text(old.replace("'maxWidth: 140'", "'maxWidth: 170'")
+                          .replace('"const Text("', '"Text("'))
           MAP_100335_LEGACY_WIDTH
           python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py
           python3 tools/validate_owner_admin_request_flow_100332.py
