@@ -75,7 +75,11 @@ assert re.search(r"rotate:\s*true,\s*child:\s*DedaMapPlaceMarker\(", map_body), 
 route=after[route_start:map_start]
 assert "class _DedaIraqDestinationFlag" in route
 assert "_buildFixedDriverArrow(navigationArrowAngle)" in route
-assert re.search(r"point:\s*destinationPoint,[\s\S]{0,180}rotate:\s*true",route), "SAFE_STOP: Iraq flag loses upright rotation"
+# Check the complete destination flag Marker, not a truncated 180-char window.
+flag_start=route.index("point: destinationPoint,")
+flag_end=route.index("_DedaIraqDestinationFlag()",flag_start)
+flag_marker=route[flag_start:flag_end]
+assert re.search(r"\\brotate:\\s*true\\b",flag_marker), "SAFE_STOP: Iraq flag loses upright rotation"
 assert after.count("class _MapReadyPageState extends State<MapReadyPage> {")==1
 assert "DEDA_SERVER_AUTOMATIONS_LIVE" in Path("lib/deda_launch_feature_gates.dart").read_text()
 
