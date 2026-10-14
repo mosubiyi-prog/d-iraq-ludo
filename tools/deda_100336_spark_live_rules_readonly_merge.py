@@ -87,6 +87,8 @@ def verified_candidate_merge(live, baseline, candidate):
     import re
     footer = re.search(r"\n  }\s*\n}\s*\Z", merged)
     if not footer:
+        tail = "".join(char if char in "{} \\n\\t\\r" else "." for char in live[-140:])
+        print("LIVE_TRAILING_STRUCTURE_ONLY", repr(tail))
         stop("production Firestore rules root structure changed")
     addition = "\n" + helpers + "\n" + rules
     merged = merged[:footer.start()] + addition + merged[footer.start():]
