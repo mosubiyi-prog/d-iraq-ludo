@@ -77,10 +77,59 @@ void main() {
         .where((c) => c.decoration is BoxDecoration)
         .map((c) => (c.decoration as BoxDecoration).color)
         .toList();
-    expect(fills, contains(DedaPlacePalette.forIndex(1)),
-        reason: 'Full place-name bubble should have actual selected fill');
-    expect(fills, contains(const Color(0xFF858E88)),
-        reason: 'Unavailable DEDA identity should be muted grey');
+    expect(fills.where((c) => c == const Color(0xFF858E88)).length,
+        greaterThanOrEqualTo(2),
+        reason: 'Inactive NAME fill and DEDA badge must both be grey');
     expect(tester.takeException(), isNull);
   });
+  testWidgets('M05 all 14 owner colors fill name and DEDA badge, grey when absent',
+      (tester) async {
+    for (var index = 0; index < DedaPlacePalette.colors.length; index++) {
+      for (final present in [true, false]) {
+        final place = PlaceInfo(
+          name: 'ماركت',
+          type: 'متجر',
+          location: const LatLng(32.00, 44.00),
+          isDedaRegistered: true,
+          isAvailableNow: present,
+          publishedPlaceId: 'approved_test_place_100336',
+          themeIndex: index,
+        );
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 186,
+                height: 148,
+                child: DedaMapPlaceMarker(
+                  place: place,
+                  icon: Icons.store,
+                  onTap: () {},
+                  onLabelTap: () {},
+                ),
+              ),
+            ),
+          ),
+        ));
+        final target = present
+            ? DedaPlacePalette.forIndex(index)
+            : const Color(0xFF858E88);
+        final decorations = tester.widgetList<Container>(find.byType(Container))
+            .map((w) => w.decoration)
+            .whereType<BoxDecoration>()
+            .toList();
+        final colorFills = decorations.where((d) => d.color == target).length;
+        expect(colorFills, greaterThanOrEqualTo(2),
+            reason: 'Name and DEDA badge fills should match for color $index / present=$present');
+        final ring = decorations.where((d) =>
+            d.shape == BoxShape.circle &&
+            d.border != null &&
+            d.border!.top.color == target).length;
+        expect(ring, greaterThanOrEqualTo(1),
+            reason: 'Photo/activity frame must match the name and DEDA badge');
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
 }
