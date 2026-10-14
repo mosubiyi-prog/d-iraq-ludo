@@ -1,0 +1,99 @@
+# TEMPLATE ONLY. This file lives outside .github/workflows and cannot run.
+# Activate ONLY after the app owner explicitly approves PRODUCTION FIRESTORE RULES.
+# When approved, create .github/workflows/deploy-deda-100336-spark-firestore-approved.yml
+# with this exact content on the guarded DEDA 100336 Spark branch.
+name: DEDA 100336 Spark Explicitly Approved Rules-Only Production Release
+on:
+  push:
+    branches: [deda-100336-spark-firestore-safe-stage-2026-10-14]
+    paths:
+      - '.github/workflows/deploy-deda-100336-spark-firestore-approved.yml'
+permissions:
+  contents: read
+concurrency:
+  group: deda-25b88-spark-firestore-rules-production
+  cancel-in-progress: false
+jobs:
+  deploy_exactly_scoped_rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect current users, apps, sessions, backend and old rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 53447fa63593a8e7b432a4db047e90ed5b8fd267 -- firestore.rules firebase.json functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'OLD_FIREBASE_RULES_AND_BACKEND_SOURCE_UNCHANGED'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install read-only Firebase API dependencies
+        run: python3 -m pip install --quiet google-auth requests
+      - name: Fresh production rules GET and SHA-locked append-only preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100336_spark_live_rules_readonly_merge.py
+          echo 'df9fbbbfa30ade3bae6859e4d8dbc2f84660e3d6b77915d54dd1b5184e0ec8b4  deda-100336-exact-live-firestore-backup.txt' | sha256sum -c -
+          echo '5788863fd1fd27d965ea5ba367fedcfe0fc2f0b530289fd25535ed7c85e2b25e  firestore.spark.live-preview.rules' | sha256sum -c -
+          python3 tools/deda_100336_spark_release_baseline_guard.py before
+      - name: Save exact live production rules BEFORE any mutation
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100336-EXACT-ORIGINAL-LIVE-FIRESTORE-RULES-ROLLBACK
+          path: deda-100336-exact-live-firestore-backup.txt
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Full Firestore Emulator security check on exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          export DEDA_SPARK_RULES_FILE=firestore.spark.live-preview.rules
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.spark.qa.json \
+            --project demo-deda-spark-100336 --only firestore \
+            'node --test functions/tests/deda_spark_firestore_emulator.test.js'
+      - name: Recheck live baseline immediately before PRODUCTION RULES-ONLY deploy
+        run: python3 tools/deda_100336_spark_release_baseline_guard.py before
+      - name: Restrict Firebase CLI to the SAME DEDA service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT_DEDA_25B88:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_DEDA_25B88" > "$RUNNER_TEMP/deda-service-100336.json"
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/deda-service-100336.json"
+          else
+            echo 'SAFE_STOP: no DEDA Firebase service account'
+            exit 2
+          fi
+          chmod 0600 "$RUNNER_TEMP/deda-service-100336.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/deda-service-100336.json" >> "$GITHUB_ENV"
+      - name: Publish ONLY reviewed Firestore security rules, NEVER Cloud Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp firestore.spark.live-preview.rules firestore.rules
+          echo '5788863fd1fd27d965ea5ba367fedcfe0fc2f0b530289fd25535ed7c85e2b25e  firestore.rules' | sha256sum -c -
+          functions/node_modules/.bin/firebase deploy --only firestore:rules --project deda-25b88 --non-interactive
+      - name: Independently READ published rules and compare every byte
+        run: python3 tools/deda_100336_spark_release_baseline_guard.py after
+      - name: Confirm no app publishing or user-account mutation
+        run: |
+          echo 'PRODUCTION_FIRESTORE_RULES_ONLY exact SHA verified. NO FUNCTIONS, NO APK, NO PLAY, NO USERS WRITTEN.'
