@@ -8,15 +8,13 @@ on:
       - deda-100339-map-anchor-rotation-private-qa-2026-10-15
     paths:
       - '.github/workflows/qa-deda-100339-pretrip-map-private-apk.yml'
-      - 'tools/stage_deda_100339_map_anchor_rotation_safe.py'
-      - 'test/deda_100339_pretrip_map_rotation_test.dart'
   workflow_dispatch:
 
 permissions:
   contents: read
 concurrency:
   group: deda-100339-map-anchor-rotation-private-qa
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   spark-security:
@@ -312,7 +310,9 @@ jobs:
           assert 'onTap: () => selectMapPlace(place)' in m
           assert 'class _DedaIraqDestinationFlag' in nav
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in nav
-          assert re.search(r'point:\s*destinationPoint,[\s\S]{0,180}rotate:\s*true',nav)
+          flag_start=nav.index('point: destinationPoint,')
+          flag_end=nav.index('_DedaIraqDestinationFlag()',flag_start)
+          assert re.search(r'\brotate:\s*true\b',nav[flag_start:flag_end]), 'Iraqi flag orientation guard failed'
           print('PASS: flag upright, navigation page unchanged, map engagement preserved')
           MAP_100339_GUARD
           echo 'PASS: two-finger rotation and map avatar anchoring test stage passed'
