@@ -31,3 +31,16 @@ Only after deployed callable verification, security tests, successful Flutter an
 - [Real Firestore Emulator transactions **38594769133**](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38594769133) **SUCCESS**, 8 emulator tests + 16 unit tests with 0 failures.
 - Current checkpoint is **source and emulator QA only**; the feature flags are intentionally not promoted or compiled into a release APK yet. Cloud Function production metadata remains **UNVERIFIED (403)** and no two-account production smoke test has occurred. Do not mark end-to-end feature as complete or offer a 100336 APK with these features switched off.
 - Release requires the app owner's explicit authorization to change production Firebase functions/rules, verification that the connected account has the necessary deployment permissions, then test deployment, production callable verification, and a signed APK with correct flags ON followed by on-device two-account QA. Do not touch Play until later explicit approval.
+
+
+## Production IAM/API activation audit — 2026-10-14
+
+User authorized attempts to activate **only three** callable Cloud Functions: `dedaReadPlaceEngagement`, `dedaSetPlaceEngagement`, and `dedaSetPlaceTheme`. No general Firestore rules deployment or Google Play publication authorized.
+
+Read-only tests ran on GitHub:
+- [First guarded IAM preflight run 38599152130](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38599152130): failed closed; project details HTTP 200, Cloud Functions v2 list HTTP **403 PERMISSION_DENIED**.
+- [Detailed read-only API diagnosis run 38599301537](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38599301537): project details HTTP 200, **Cloud Functions v2 list HTTP 403 PERMISSION_DENIED**; Cloud Functions API **ENABLED**, Cloud Build API **DISABLED**, Cloud Run API **DISABLED**; Cloud Billing API cannot be queried (403 SERVICE_DISABLED). Therefore whether a billing account is linked or Blaze is active remains **UNKNOWN**, not proof of absence.
+- Production deployment was **NOT attempted** because server API reads lack required permission and v2 prerequisites are currently disabled.
+- Neither Cloud Run, Cloud Build, Cloud Billing nor billing plan was activated. These prerequisites may carry billing implications; do not enable without the owner's informed permission.
+- Resolve by checking Firebase plan/billing and using Google Cloud IAM to grant the exact Firebase deploy service account the minimum required capabilities. Re-run guarded IAM preflight and only then consider a narrowly scoped `functions:dedaReadPlaceEngagement,functions:dedaSetPlaceEngagement,functions:dedaSetPlaceTheme` deploy with **no Firestore rules, unrelated functions or data changes**.
+- No fully live 100336 APK is ready. Previous source/emulator tests passing do not override the real production blocker. Never claim deployment or live cross-account verification from them.
