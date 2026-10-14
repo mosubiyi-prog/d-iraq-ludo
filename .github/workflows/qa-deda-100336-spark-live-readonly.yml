@@ -75,4 +75,5 @@ jobs:
             --project demo-deda-spark-100336 --only firestore \
             'node --test functions/tests/deda_spark_firestore_emulator.test.js'
       - name: Explicit no Firebase deploy, no account writes, no APK
-        run: echo 'DONE: READONLY actual production source + exact reversible merge + local emulator. NO PROD WRITES.'
+        run: |
+          echo 'DONE: READONLY actual production source + exact reversible merge + local emulator. NO PROD WRITES.'
