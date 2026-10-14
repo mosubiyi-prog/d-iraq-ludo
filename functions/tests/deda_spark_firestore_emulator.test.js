@@ -9,6 +9,13 @@ const {
 const {doc, getDoc, setDoc, updateDoc, runTransaction, deleteDoc} =
     require("firebase/firestore");
 
+// Read only a known local emulator candidate, never a production endpoint.
+const candidateRules = process.env.DEDA_SPARK_RULES_FILE ||
+    "firestore.spark.qa.rules";
+assert.ok([
+  "firestore.spark.qa.rules",
+  "firestore.spark.live-preview.rules",
+].includes(candidateRules), "SAFE_STOP unknown rules file");
 const projectId = "demo-deda-spark-100336";
 const placeId = "test_approved_place_100336";
 const accountA = "test-account-100336-001";
@@ -65,7 +72,7 @@ test.before(async () => {
   environment=await initializeTestEnvironment({
     projectId,firestore:{
       host:"127.0.0.1",port:8080,
-      rules:fs.readFileSync("firestore.spark.qa.rules","utf8"),
+      rules:fs.readFileSync(candidateRules,"utf8"),
     },
   });
   await environment.withSecurityRulesDisabled(async ctx => {
