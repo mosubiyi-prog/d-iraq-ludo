@@ -22,7 +22,13 @@ function ownerDb(uid="owner-a") {
   return environment.authenticatedContext(uid).firestore();
 }
 async function react(db, kind, enabled, key=accountA) {
-  return runTransaction(db, async tx => {
+  // When concurrent actors update the same aggregate, a stale getAfter
+  // security-rules evaluation can report permission-denied before conflict
+  // detection. Retry a bounded whole transaction with fresh snapshots;
+  // never edit counters without rechecking all rows.
+  for (let attempt=0;attempt<4;attempt++) {
+    try {
+      return await runTransaction(db, async tx => {
     const totalRef=doc(db, ...totalsPath());
     const reactionRef=doc(db, ...reactPath(key));
     // All document reads MUST happen before any transaction writes.
@@ -44,7 +50,13 @@ async function react(db, kind, enabled, key=accountA) {
     tx.set(reactionRef,next);
     tx.set(totalRef,counted);
     return counted;
-  });
+      });
+    } catch (error) {
+      if (error.code!=="permission-denied" || attempt===3) throw error;
+      await new Promise(resolve => setTimeout(resolve, 40*(attempt+1)));
+    }
+  }
+  throw new Error("unreachable-transaction");
 }
 
 test.before(async () => {
