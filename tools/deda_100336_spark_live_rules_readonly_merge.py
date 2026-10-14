@@ -85,11 +85,18 @@ def verified_candidate_merge(live, baseline, candidate):
     new_owner = owner + new_permission + "\n    }"
     merged = replace_one(live, old_owner, new_owner, "owner-color addition")
     import re
-    footer = re.search(r"\n  }\s*\n}\s*\Z", merged)
-    if not footer:
-        tail = "".join(char if char in "{} \\n\\t\\r" else "." for char in live[-140:])
-        print("LIVE_TRAILING_STRUCTURE_ONLY", repr(tail))
-        stop("production Firestore rules root structure changed")
+    # Historical production releases may contain comments AFTER the closing
+    # root braces. Locate the last match+service brace pair and prove that
+    # everything after it is whitespace/comments, never a live rule.
+    candidates = list(re.finditer(r"\n  }\s*\n}", merged))
+    if not candidates:
+        stop("production Firestore database/service closing braces not found")
+    footer = candidates[-1]
+    trailing = merged[footer.end():]
+    stripped = re.sub(r"/\*[\s\S]*?\*/|//[^\n]*|\s+", "", trailing)
+    if stripped or "}" in trailing or "{" in trailing:
+        stop("production trailing rules contain noncomment content")
+    print("TRAILING_COMMENTS_PRESERVED_BYTES", len(trailing))
     addition = "\n" + helpers + "\n" + rules
     merged = merged[:footer.start()] + addition + merged[footer.start():]
     exact_undo = merged.replace(addition, "", 1).replace(new_owner, old_owner, 1)
