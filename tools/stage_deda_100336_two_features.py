@@ -56,6 +56,11 @@ marker=once(marker,
                               ? DedaPlacePalette.foreground(place.themeIndex)
                               : Colors.white,""",
     "dynamic DEDA badge text contrast")
+# Both server-confirmed counters are displayed, never invented.
+marker=once(marker,
+    "followers: social.followers,\n                  busy: busy,",
+    "followers: social.followers,\n                  likes: social.likes,\n                  busy: busy,",
+    "real follower and like totals both passed to the interaction strip")
 # Only published registered DEDA markers are touched. No nearby OSM circles.
 src=src[:start]+marker+src[end:]
 
