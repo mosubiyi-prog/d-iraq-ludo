@@ -253,6 +253,7 @@ jobs:
                '--dart-define=DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false '
                '--dart-define=DEDA_OWNER_PLACE_BRANDING_LIVE=false')
           src=src.replace(old,new)
+          src=src.replace('DEDA 100318 heading-up camera + true arrow APK completed', 'DEDA 100334 integrated private APK completed')
           assert src.count(new)==1
           Path('/tmp/deda_owner_place_100332_test_apk.sh').write_text(src)
           print('Prepared integrated 100334 signed APK; engagement and upload OFF until server QA; no Firebase deploy or Play')
@@ -288,7 +289,19 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
           "$AAPT" dump badging "$APK" > /tmp/deda-100334-manifest.txt
           grep -q "versionCode='100334'" /tmp/deda-100334-manifest.txt
-          grep -q "name='com.diraq.ludo'" /tmp/deda-100334-manifest.txt
+          python3 - <<'VERIFY_PACKAGE'
+          import json, re
+          from pathlib import Path
+          config = json.loads(Path('google-services.json').read_text())
+          packages = {c['client_info']['android_client_info']['package_name']
+                      for c in config['client']
+                      if 'android_client_info' in c.get('client_info', {})}
+          assert packages == {'com.diraq.ludo.d_iraq_ludo'}, 'Firebase package baseline changed'
+          manifest = Path('/tmp/deda-100334-manifest.txt').read_text()
+          match = re.search(r"^package: name='([^']+)' versionCode='([^']+)'", manifest, re.M)
+          assert match and match.group(1) in packages and match.group(2) == '100334', manifest[:500]
+          print('PASS: actual APK package matches Firebase baseline; versionCode 100334')
+          VERIFY_PACKAGE
           mkdir -p private-qa
           cp "$APK" private-qa/DEDA-100334-private.apk
           git rev-parse HEAD > private-qa/source-commit.txt
