@@ -129,7 +129,16 @@ jobs:
           # Owner local palette cannot alter existing admin request schema until reviewed.
           dart format lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
           python3 tools/validate_owner_place_entry_100331_2026_10_13.py
-          python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py  # Formatter-safe suggestion validation
+          # Only the superseded fixed-width assertion differs from 100332.
+          # Keep every other historical map, route, request and owner gate.
+          python3 - <<'MAP_100335_LEGACY_WIDTH'
+          from pathlib import Path
+          p = Path('tools/validate_owner_place_map_ux_100332_2026_10_13.py')
+          old = p.read_text()
+          assert old.count("'maxWidth: 140'") == 1, 'SAFE_STOP old map width expectation changed'
+          p.write_text(old.replace("'maxWidth: 140'", "'maxWidth: 170'"))
+          MAP_100335_LEGACY_WIDTH
+          python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py
           python3 tools/validate_owner_admin_request_flow_100332.py
           python3 - <<'MAP_100335_GUARD'
           from pathlib import Path
