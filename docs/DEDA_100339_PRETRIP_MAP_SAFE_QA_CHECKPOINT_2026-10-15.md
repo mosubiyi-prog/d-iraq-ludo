@@ -42,3 +42,10 @@
 - صُحّح فحص العلم ليقرأ مقطع علامة الوجهة الكامل، ويتحقق من وجود `rotate: true` داخلها فقط؛ لم يُغيَّر رسم العلم ولا منطق ملاحة القيادة.
 - جرى ضبط سير العمل على إلغاء التشغيلات المتكررة `cancel-in-progress: true` والتشغيل عند تحديث workflow فقط.
 - **التشغيل النهائي الجاري أو المعلّق حالياً**: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38655040290 ، commit سير العمل `8a13e2561987d013a5752a654c54916296d8f8c3`. لا إعلان نجاح حتى انتهاء الفحوص والتحقق من Artifact.
+
+## تحليل نهائي لإعداد الدوران – 15 أكتوبر 2026
+- عُثر على السبب الصريح للمنع في `tools/stage_owner_place_map_ux_100332_2026_10_13.py`: كان يُحقن في `MapReadyPage` الإعداد `flags: InteractiveFlag.all & ~InteractiveFlag.rotate`. هذا يستثني حركة الدوران عمداً فقط في خريطة اختيار الوجهة، وليس في `DedaRoutePage`.
+- محاولة 100339 الأولى لإضافة `interactionOptions` جديدة فوق الإعداد القائم أنتجت خطأ `duplicate_named_argument`، فتحقق إيقاف آمن للبناء دون APK. **لا تعديل لملفات Flutter الناتجة محفوظ في المصدر الدائم، ولا نشر أو تثبيت.**
+- التصحيح المعتمد للتجربة: سكربت `tools/stage_deda_100339_map_anchor_rotation_safe.py` الآن **يستبدل إعداد 100332 الموجود نفسه** من `InteractiveFlag.all & ~InteractiveFlag.rotate` إلى `InteractiveFlag.all` مرة واحدة فقط، ولا يضيف إعداداً ثانياً.
+- فحص CI يرفض بقاء القفل القديم أو وجود إعدادين `interactionOptions`، كما يرفض تغيّر `DedaRoutePage` وخسارة `rotate:true` للعلامات والعلم.
+- التشغيل التجريبي التالي: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38655672501 ، ملف QA APK يبقى محظوراً حتى نجاح Flutter tests وتوقيع الحزمة ثم اختبار الهاتف.
