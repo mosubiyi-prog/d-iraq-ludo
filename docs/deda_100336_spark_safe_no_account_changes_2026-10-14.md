@@ -1,0 +1,15 @@
+# DEDA 100336 — Spark/Firestore-only engagement & dynamic owner color (QA stage)
+
+**Branch:** `deda-100336-spark-firestore-safe-stage-2026-10-14` (isolated from Production, `main`, 100335 signed APK and all stored user/owner data). **No APK, no Firebase deploy, no accounts modified.**
+
+## Precisely two approved features
+1. **Like/follow with real totals:** Use `deda_spark_reactions/{placeId}/users/{accountKey}` private reaction booleans, and `deda_spark_totals/{placeId}` public aggregate numbers. Both updates happen in a single Firestore transaction and the accompanying candidate Security Rules validate exact per-user old/new change using `getAfter`. Never read/list any other user's reaction. Identity requires an existing verified `users/{uid}` and `deda_sessions/{uid}` pair for the same DEDA `accountKey`, so rotating the Firebase UID cannot duplicate the reaction. No fake initial counts. Red like/blue follow/gold follower counter UI remains independent of owner palette.
+2. **Fourteen colors:** Verified place owner may update ONLY `themeIndex` (integer 0..13) on an already approved and published place. Existing name, approval history, GPS, status, availability and owner data unchanged. Existing 100336 marker uses owner theme for name/background/icon ring/DEDA badge when available and neutral grey for all when absent.
+
+## Isolation and rollout gates
+- `firestore.rules` and `firebase.json` — **UNCHANGED** (critical legacy routes/account protections).
+- Experimental rules live in **`firestore.spark.qa.rules`** and are used only with **`firebase.spark.qa.json`**, targeting `demo-deda-spark-100336` Firestore Emulator, NOT the actual `deda-25b88` database.
+- Client service modifications are isolated in `lib/deda_place_engagement_service.dart` and `lib/deda_place_branding_service.dart`. Runtime direct mode requires two explicit Dart flags: `DEDA_PLACE_ENGAGEMENT_LIVE=true` and `DEDA_SPARK_FIRESTORE_LIVE=true` (owner color additionally requires `DEDA_OWNER_PLACE_BRANDING_LIVE=true`). Defaults all remain **false**. Existing Firebase Cloud Functions paths remain available in the adapters.
+- Previous 100336 full Flutter **21/21** and 24 Firebase Emulator/Node security tests passed on callable mode. Spark-mode guards additionally test forged/unauthorized atomic totals, cross-account read denial, actual 14-color owner-only updates, verified account-UID rotation, and untouched `users` and `deda_sessions`.
+- Before considering deployment of anything to production: verify **actual currently deployed rules** and narrowly merge/test only the two Spark collections + owner `themeIndex` permission; **DO NOT overwrite** production rules with a local snapshot. Ensure no access regression for existing user accounts or admin capabilities; get owner's explicit approval of the exact deployment scope and Firebase service access. Test two real DEDA accounts before marking live and producing a signed 100336 APK.
+- Spark is billed per database usage / quotas, not "unlimited free" automatically. Monitor reads/writes and avoid excessive reads.
