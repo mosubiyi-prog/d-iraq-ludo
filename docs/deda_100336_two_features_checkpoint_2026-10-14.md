@@ -22,3 +22,12 @@
 - No production Firebase Functions or Firestore rules changed; no public Play publishing; no new test APK distributed.
 
 Only after deployed callable verification, security tests, successful Flutter analyzer/widget tests, **two real different user accounts**, 14-color persistence and status toggles may we sign and hand over one new APK with both flags enabled.
+
+## Completed isolated source QA (2026-10-14)
+
+- [Flutter 100336 full legacy reconstruction and widget run **38595694296**](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38595694296) **SUCCESS**. 21 Flutter widget tests passed, 0 failed. Flutter analyzer completed; 17-stage source, navigation, owner request and old admin guards preserved.
+- Marker tests explicitly verify **all 14** owner palette choices with full name-fill + avatar outline + DEDA badge color, then uniform grey when availability is false.
+- Social bar renders real backend `followers` and `likes` and uses blue/red/gold fixed UI palette. Name/route tap separation retains navigation.
+- [Real Firestore Emulator transactions **38594769133**](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38594769133) **SUCCESS**, 8 emulator tests + 16 unit tests with 0 failures.
+- Current checkpoint is **source and emulator QA only**; the feature flags are intentionally not promoted or compiled into a release APK yet. Cloud Function production metadata remains **UNVERIFIED (403)** and no two-account production smoke test has occurred. Do not mark end-to-end feature as complete or offer a 100336 APK with these features switched off.
+- Release requires the app owner's explicit authorization to change production Firebase functions/rules, verification that the connected account has the necessary deployment permissions, then test deployment, production callable verification, and a signed APK with correct flags ON followed by on-device two-account QA. Do not touch Play until later explicit approval.
