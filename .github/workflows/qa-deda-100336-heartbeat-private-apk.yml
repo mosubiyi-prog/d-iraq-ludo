@@ -344,7 +344,7 @@ jobs:
           cp "$APK" private-qa/DEDA-100336-NABD-AL-TATBIQ-private.apk
           "$APKSIGNER" verify --print-certs "$APK" > private-qa/certificate.txt
           cp /tmp/deda-100336-badging.txt private-qa/manifest.txt
-          sha256sum private-qa/DEDA-100336-private-QA.apk > private-qa/SHA256SUMS
+          sha256sum private-qa/DEDA-100336-NABD-AL-TATBIQ-private.apk > private-qa/SHA256SUMS
           git rev-parse HEAD > private-qa/source-commit.txt
           printf '%s\n' '100336 PRIVATE QA ONLY' 'Spark direct Firestore likes, follows and 14 colours ON for private device testing. Server approval automations and phone photo upload OFF. Do NOT publish to Google Play before owner cross-account QA.' > private-qa/READ-ME-FIRST.txt
           echo 'PASS: signed 100336 APK ONLY for private testing; no Firebase deploy or Google Play publishing.'
