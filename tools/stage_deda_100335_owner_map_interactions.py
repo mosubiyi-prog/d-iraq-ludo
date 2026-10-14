@@ -6,6 +6,7 @@ M01 compact adaptive name, M02 inactive grey identity, M03 independent taps,
 M04 icon-only edit, M05 exactly matching name-field and map-bubble fill.
 """
 from pathlib import Path
+import re
 p = Path("lib/main.dart")
 src = p.read_text(encoding="utf-8")
 STAMP = "// DEDA_100335_OWNER_MAP_QA"
@@ -109,8 +110,8 @@ if not marker.endswith(old_tail):
 marker = marker[:-len(old_tail)] + "    );\n  }\n}\n\n"
 # M01: expanded registered marker 186px must not exceed OverflowBox width.
 # Keep hit testing inside Marker and preserve nearby unregistered 58px markers.
-for old_dim, new_dim in [(r"maxWidth:\\s*180,", "maxWidth: 200,"),
-                         (r"width:\\s*174,", "width: 186,")]:
+for old_dim, new_dim in [(r"maxWidth:\s*180,", "maxWidth: 200,"),
+                         (r"width:\s*174,", "width: 186,")]:
     matches = list(re.finditer(old_dim, marker))
     if len(matches) != 1:
         raise RuntimeError("SAFE_STOP marker width: " + old_dim +
