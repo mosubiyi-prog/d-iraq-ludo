@@ -58,6 +58,10 @@ field = once(field, "                            ).copyWith(\n",
                                 color: DedaPlacePalette.foreground(_placeThemeIndex),
                                 fontWeight: FontWeight.w600,
                               ),
+                              floatingLabelStyle: const TextStyle(
+                                color: Color(0xFF203326),
+                                fontWeight: FontWeight.w700,
+                              ),
 """,
     "M05 real name field fill")
 field = once(field,
@@ -103,12 +107,19 @@ old_tail = "      ),\n    );\n  }\n}\n\n"
 if not marker.endswith(old_tail):
     raise RuntimeError("SAFE_STOP marker closing widgets changed")
 marker = marker[:-len(old_tail)] + "    );\n  }\n}\n\n"
-marker = once(marker,
-    """                        minWidth: 102,
-                        maxWidth: 140,""",
-    """                        minWidth: 0,
-                        maxWidth: 170,""",
-    "M01 shrink-wrap short label; 2 lines for long label")
+# Whitespace around the existing Flutter BoxConstraints varies across
+# reconstruction stages. Match actual old numeric values exactly, not spacing.
+import re
+constraints = list(re.finditer(
+    r"minWidth:\s*102,\s*maxWidth:\s*140,", marker))
+if len(constraints) != 1:
+    excerpt = marker[marker.find("minWidth:")-35:marker.find("minWidth:")+110]
+    raise RuntimeError("SAFE_STOP M01 expected numeric 102/140 once: "
+                       + str(len(constraints)) + " near " + excerpt)
+target = constraints[0]
+marker = (marker[:target.start()] +
+    "minWidth: 0,\n                        maxWidth: 170," +
+    marker[target.end():])
 marker = once(marker,
     "                        color: Colors.white.withOpacity(0.97),",
     """                        // M05 exactly the same palette index as owner name.
