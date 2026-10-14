@@ -1,0 +1,46 @@
+name: DEDA 100335 Firebase Callable LIVE Availability READ ONLY
+on:
+  push:
+    branches: [deda-100335-owner-map-interactions-qa-2026-10-14]
+    paths: ['.github/workflows/qa-deda-100335-live-callables-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-callables:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DEDA_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Read deployed callable function metadata - NO changes
+        shell: bash
+        run: |
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          raw=os.getenv('DEDA_SA') or os.getenv('FALLBACK_SA')
+          if not raw:
+            print('RESULT: UNKNOWN_NO_SERVICE_ACCOUNT');raise SystemExit(0)
+          try:
+            info=json.loads(raw)
+            assert info.get('project_id') == 'deda-25b88'
+            creds=service_account.Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            s=AuthorizedSession(creds)
+          except Exception:
+            print('RESULT: UNKNOWN_AUTH_CONFIG');raise SystemExit(0)
+          for name in ['dedaReadPlaceEngagement','dedaSetPlaceEngagement','dedaSetPlaceTheme']:
+            # GET only; location fixed from Firebase Functions v2 default region.
+            try:
+              url='https://cloudfunctions.googleapis.com/v2/projects/deda-25b88/locations/us-central1/functions/'+name
+              r=s.get(url,timeout=25)
+              status='PRESENT' if r.status_code==200 else 'NOT_DEPLOYED' if r.status_code==404 else 'UNKNOWN_HTTP_'+str(r.status_code)
+              state=r.json().get('state','') if r.status_code==200 else ''
+              print('CALLABLE',name,status,('STATE_'+str(state) if state else ''))
+            except Exception as e:
+              print('CALLABLE',name,'UNKNOWN_'+type(e).__name__)
+          print('READ_ONLY: no deploy, no writes, no secret output')
+          PY
