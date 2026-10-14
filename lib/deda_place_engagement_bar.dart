@@ -6,6 +6,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
   final bool following;
   final bool liked;
   final int followers;
+  final int likes;
   final bool busy;
   final bool loadingCount;
   final VoidCallback onFollow;
@@ -16,6 +17,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
     required this.following,
     required this.liked,
     required this.followers,
+    this.likes = 0,
     required this.busy,
     this.loadingCount = false,
     required this.onFollow,
@@ -50,7 +52,9 @@ class DedaPlaceEngagementBar extends StatelessWidget {
               following
                   ? Icons.how_to_reg_rounded
                   : Icons.person_add_alt_1_rounded,
-              color: const Color(0xFF118452),
+              color: following
+                  ? const Color(0xFF1877D2)
+                  : const Color(0xFF9099A3),
             ),
           ),
           IconButton(
@@ -67,6 +71,24 @@ class DedaPlaceEngagementBar extends StatelessWidget {
                   : const Color(0xFF7F8A84),
             ),
           ),
+          Tooltip(
+            message: 'عدد الإعجابات الحقيقي',
+            child: SizedBox(
+              width: 28,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  loadingCount ? '…' : '$likes',
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: Color(0xFFE53935),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: Tooltip(
               message: 'عدد متابعي المكان',
@@ -75,7 +97,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
                   const Icon(
                     Icons.people_alt_outlined,
                     size: 15,
-                    color: Color(0xFF5C6760),
+                    color: Color(0xFFB8860B),
                   ),
                   const SizedBox(width: 2),
                   Expanded(
@@ -87,7 +109,7 @@ class DedaPlaceEngagementBar extends StatelessWidget {
                         maxLines: 1,
                         softWrap: false,
                         style: const TextStyle(
-                          color: Color(0xFF4F5953),
+                          color: Color(0xFFB8860B),
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                         ),
