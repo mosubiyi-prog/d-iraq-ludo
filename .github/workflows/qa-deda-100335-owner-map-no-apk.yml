@@ -7,6 +7,8 @@ on:
       - deda-100335-owner-map-interactions-qa-2026-10-14
     paths:
       - '.github/workflows/qa-deda-100335-owner-map-no-apk.yml'
+      - 'tools/stage_deda_100335_owner_map_interactions.py'
+      - 'test/deda_map_place_taps_100335_test.dart'
       - 'functions/index.js'
       - 'firestore.rules'
       - 'tools/stage_place_engagement_core_100332_2026_10_13.py'
