@@ -42,3 +42,17 @@
 - Added a separate read-only verifier `tools/deda_100336_spark_release_baseline_guard.py` for the before/after exact snapshots.
 - [Inert template QA run 38606219367](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38606219367) **SUCCESS**, including explicit assertion that the ACTIVE deployment workflow file does not exist.
 - **NEXT: ask for distinct explicit authorization to publish Firestore security rules only** on `deda-25b88`. A general approval to continue coding/QA does not activate production changes. After authorized rules deployment, produce a *private* correctly signed 100336 APK with 3 direct-mode compile-time gates enabled and test with 2 real accounts before any Play update.
+
+
+## LIVE FIRESTORE RULES ACTIVATION COMPLETED — 2026-10-14
+
+**Owner explicitly approved Firestore security rules-only production activation; approved workflow executed successfully**.
+
+- Production project: `deda-25b88`.
+- [Rules-only release run 38606872938](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38606872938): **SUCCESS** — 8/8 Emulator security tests, 0 failures; `firebase deploy --only firestore:rules --project deda-25b88` returned *Deploy complete*.
+- Actual production ruleset independently re-read after release and matched the EXACT SHA-256 `5788863fd1fd27d965ea5ba367fedcfe0fc2f0b530289fd25535ed7c85e2b25e` (the pre-reviewed reversible overlay).
+- Original live rules were SHA-256 `df9fbbbfa30ade3bae6859e4d8dbc2f84660e3d6b77915d54dd1b5184e0ec8b4` and preserved privately as GitHub Actions artifact **`DEDA-100336-EXACT-ORIGINAL-LIVE-FIRESTORE-RULES-ROLLBACK`** ID `11916760596`, expiry 2027-01-12. The release verified original SHA immediately before publishing.
+- Two narrowly scoped new collections `deda_spark_reactions` and `deda_spark_totals` plus owner-only color selection `themeIndex` (0..13) are **live server security rules**. Existing production rules were preserved byte-for-byte and separately augmented.
+- **NO user records, DEDA accounts/sessions/PINs/follows or place data were written** by this rules deployment. No Cloud Functions, APK, Play production release or external permissions changed.
+- **Still pending:** produce one private signed 100336 QA APK with `DEDA_SPARK_FIRESTORE_LIVE=true`, `DEDA_PLACE_ENGAGEMENT_LIVE=true`, `DEDA_OWNER_PLACE_BRANDING_LIVE=true`, keeping `DEDA_SERVER_AUTOMATIONS_LIVE=false` and photo upload gates off. Then validate with two real signed-in DEDA accounts, followers/likes persistence, 14 colors and presence changes, mobile navigation, and errors before recommending any Google Play release.
+- DO NOT redeploy the prior repository `firestore.rules` baseline, which differs from the actual live release; use an exact read-and-merge process on every future rules deployment. The 100336 publish workflow has pinned SHA prechecks and is single-purpose; rerun will fail closed now that live rules have changed.
