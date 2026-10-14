@@ -314,7 +314,7 @@ jobs:
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in nav
           flag_start=nav.index('point: destinationPoint,')
           flag_end=nav.index('_DedaIraqDestinationFlag()',flag_start)
-          assert re.search(r'\brotate:\s*true\b',nav[flag_start:flag_end]), 'Iraqi flag orientation guard failed'
+          assert 'rotate: true' in nav[flag_start:flag_end], 'Iraqi flag orientation guard failed'
           print('PASS: flag upright, navigation page unchanged, map engagement preserved')
           MAP_100339_GUARD
           echo 'PASS: two-finger rotation and map avatar anchoring test stage passed'
