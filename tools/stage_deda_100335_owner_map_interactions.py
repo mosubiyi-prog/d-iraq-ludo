@@ -83,11 +83,11 @@ end = src.index("class DedaPlaceSearchPage extends StatefulWidget", start)
 marker = src[start:end]
 marker = once(marker,
     "  final VoidCallback onTap;\n  final bool selected;",
-    "  final VoidCallback onTap;\n  final VoidCallback onLabelTap;\n  final bool selected;",
+    "  final VoidCallback onTap;\n  final VoidCallback? onLabelTap;\n  final bool selected;",
     "M03 independent callback member")
 marker = once(marker,
     "    required this.onTap,\n    this.selected = false,",
-    "    required this.onTap,\n    required this.onLabelTap,\n    this.selected = false,",
+    "    required this.onTap,\n    this.onLabelTap,\n    this.selected = false,",
     "M03 independent callback constructor")
 marker = once(marker,
     """    final brandColor = DedaPlacePalette.forIndex(place.themeIndex);""",
@@ -150,7 +150,7 @@ marker = once(marker,
                     margin: const EdgeInsets.only(left: 12),""",
     """                  GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: onLabelTap,
+                    onTap: onLabelTap ?? onTap,
                     child: Container(
                       margin: const EdgeInsets.only(left: 12),""",
     "M03 name is a reaction target")
