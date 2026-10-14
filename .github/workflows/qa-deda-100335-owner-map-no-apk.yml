@@ -142,6 +142,7 @@ jobs:
           python3 tools/validate_owner_admin_request_flow_100332.py
           python3 - <<'MAP_100335_GUARD'
           from pathlib import Path
+          import re
           source = Path('lib/main.dart').read_text()
           section = source[source.index('class DedaMapPlaceMarker extends StatelessWidget {'):source.index('class DedaPlaceSearchPage extends StatefulWidget')]
           owner = source[source.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {'):source.index('class DedaPersonalPlace')]
@@ -151,9 +152,9 @@ jobs:
           assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in source
           assert 'onTap: () => selectMapPlace(place)' in source
           assert 'color: DedaPlacePalette.forIndex(place.themeIndex)' in section
-          assert 'fillColor: DedaPlacePalette.forIndex(_placeThemeIndex)' in owner
+          assert re.search(r'fillColor:\s*DedaPlacePalette\.forIndex\(\s*_placeThemeIndex\s*\)', owner)
           assert "label: Text(dedaText('تعديل المكان', 'Edit place'))" not in owner
-          assert "tooltip: dedaText('تعديل المكان', 'Edit place')" in owner
+          assert re.search(r"tooltip:\s*dedaText\(\s*'تعديل المكان'\s*,\s*'Edit place'\s*\)", owner)
           assert 'maxLines: 2' in section
           assert 'Color(0xFF858E88)' in section
           assert 'DedaPlaceEngagementService.live' in source
