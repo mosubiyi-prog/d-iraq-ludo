@@ -33,3 +33,12 @@
 - Full Spark Flutter source QA previously [run 38602498023](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38602498023) **SUCCESS**, 21 Flutter widget tests, analyzer clean, and original navigation/admin/drafts checked.
 - **NOT LIVE YET.** Actual production rule deployment and two-real-user-account device QA are still outstanding. No signed 100336 APK has been built with the direct mode enabled. Never misstate source/emulator QA as a live backend release.
 - **Next gated operation:** obtain the owner's explicit final permission for **Firestore rules-only deployment** (no Functions, no data writes, no Google Play), using the exact LIVE baseline and reviewed preview SHA as dual stop checks; immediately reread published rules afterwards and abort on any baseline drift. A rollout must include a rollback copy of the original live rules, saved before deployment.
+
+
+## Explicit-approval release preparation (still NOT active)
+
+- Prepared an **inert** production-rules-only workflow template at `docs/ops_templates/deploy-deda-100336-spark-firestore-EXPLICIT-APPROVAL-ONLY.yml`. It is **outside** `.github/workflows`, so it cannot trigger or deploy.
+- Release template freezes exact production baseline SHA `df9fbbbfa30ade3bae6859e4d8dbc2f84660e3d6b77915d54dd1b5184e0ec8b4` and additive candidate SHA `5788863fd1fd27d965ea5ba367fedcfe0fc2f0b530289fd25535ed7c85e2b25e`, saves the full original rules with a new private 90-day backup artifact, re-tests the merged preview in the Firestore Emulator, checks production still unchanged *immediately before* the single `firebase deploy --only firestore:rules` command, and independently verifies the deployed rules against the exact preview source afterwards. It has **no Cloud Functions, APK, Google Play or user/account data mutation**.
+- Added a separate read-only verifier `tools/deda_100336_spark_release_baseline_guard.py` for the before/after exact snapshots.
+- [Inert template QA run 38606219367](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38606219367) **SUCCESS**, including explicit assertion that the ACTIVE deployment workflow file does not exist.
+- **NEXT: ask for distinct explicit authorization to publish Firestore security rules only** on `deda-25b88`. A general approval to continue coding/QA does not activate production changes. After authorized rules deployment, produce a *private* correctly signed 100336 APK with 3 direct-mode compile-time gates enabled and test with 2 real accounts before any Play update.
