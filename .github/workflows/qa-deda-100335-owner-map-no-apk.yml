@@ -146,7 +146,7 @@ jobs:
           section = source[source.index('class DedaMapPlaceMarker extends StatelessWidget {'):source.index('class DedaPlaceSearchPage extends StatefulWidget')]
           owner = source[source.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {'):source.index('class DedaPersonalPlace')]
           assert 'DEDA_100335_OWNER_MAP_QA' in source
-          assert 'onLabelTap: onLabelTap' in section
+          assert 'onTap: onLabelTap' in section
           assert 'onTap: onTap' in section
           assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in source
           assert 'onTap: () => selectMapPlace(place)' in source
