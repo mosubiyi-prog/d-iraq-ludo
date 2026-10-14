@@ -44,18 +44,16 @@ marker=once(marker,
     "color: brandColor,",
     "DEDA badge takes exactly same owner/neutral color")
 # The badge must be readable on light and dark palettes alike.
-marker=once(marker,
-    """child: const Text(
-                        'DEDA',
-                        style: TextStyle(
-                          color: Colors.white,""",
-    """child: Text(
-                        'DEDA',
-                        style: TextStyle(
-                          color: active
-                              ? DedaPlacePalette.foreground(place.themeIndex)
-                              : Colors.white,""",
-    "dynamic DEDA badge text contrast")
+badge_pattern=r"child:\s*const Text\(\s*'DEDA',\s*style:\s*TextStyle\(\s*color:\s*Colors\.white,"
+replacement="""child: Text(
+                          'DEDA',
+                          style: TextStyle(
+                            color: active
+                                ? DedaPlacePalette.foreground(place.themeIndex)
+                                : Colors.white,"""
+marker,n=re.subn(badge_pattern,replacement,marker)
+if n != 1:
+    raise RuntimeError("SAFE_STOP 100336 DEDA badge text contrast: "+str(n)+" matches")
 # Both server-confirmed counters are displayed, never invented.
 marker=once(marker,
     "followers: social.followers,\n                  busy: busy,",
