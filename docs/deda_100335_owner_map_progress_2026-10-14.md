@@ -34,3 +34,15 @@ Production: Google Play 100330 — **DO NOT DEPLOY / PUBLISH**.
 ## Actual GitHub results
 
 At checkpoint creation **QA workflows were started but not yet confirmed successful**. Retrieve actual run conclusions; never claim pass based only on dispatch.
+
+## Signed QA delivery checkpoint (2026-10-14)
+
+- Reconstructed Flutter source QA: **SUCCESS**, run [38576228236](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38576228236). Includes Flutter analyzer, marker name-vs-avatar widget interactions, layout, legacy navigation, Node logic and owner request regression.
+- Independent Firestore Emulator security run: **SUCCESS**, run [38568981941](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38568981941).
+- Signed **100335 private QA APK**: **SUCCESS**, run [38576228285](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38576228285), artifact `DEDA-100335-PRIVATE-QA-APK-FEATURE-SERVER-GATED`, artifact ID `11901741723`.
+- APK `DEDA-100335-private-QA.apk`, size **71,527,143 bytes**, SHA256 `d8f345fa8b0784051fc0bab0c67ab6e4c5cf604f88604849c1bcaf43390f493c`, package `com.diraq.ludo.d_iraq_ludo`, versionCode `100335`.
+- APK signing V2 SHA256 certificate `a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a` **matches 100334 private APK** exactly, confirmed independently by inspecting the 100334 archived signature.
+- Production Firebase Cloud Function metadata read-only check returned HTTP **403**, so deployment status could NOT be confirmed. No production Cloud Functions, Firestore rules, user data or Google Play were touched.
+- This signed QA APK was built intentionally with `DEDA_PLACE_ENGAGEMENT_LIVE=false` and `DEDA_OWNER_PLACE_BRANDING_LIVE=false`. Do **NOT** call follow/like counts or cross-account published colors live/finished. The user's requirement for live saved reactions and globally matching owner color remains pending authorized Firebase service verification/deployment, multi-account QA, and a new signed APK with audited gates enabled.
+- Owner can safely test M01 adaptive map labels, M02 muted unavailable badge, M03 separate label and avatar gestures, M04 pencil-only edit button and M05 local owner/map filled color styling in this signed private build. Actual per-owner color propagation to other accounts remains gated.
+- Golden backup and Google Play production still unchanged.
