@@ -173,7 +173,7 @@ jobs:
           print('PASS: private 100332 feature, no fabricated counts and old owner submit intact')
           PRIVATE_OWNER_100332_GATES
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_place_branding_service.dart lib/deda_place_activity_symbol.dart lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
-          flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart test/deda_admin_auto_compact_100334_test.dart
+          flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart test/deda_admin_auto_compact_100334_test.dart test/deda_map_place_taps_100335_test.dart
           # Fail closed on follower icon strip overflow, even for large real counts.
           node --check functions/index.js
           node --check functions/deda_place_engagement.js
