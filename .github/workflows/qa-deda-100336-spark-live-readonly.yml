@@ -1,0 +1,78 @@
+name: DEDA 100336 Spark LIVE Rules Readonly Merge - NO DEPLOY
+on:
+  push:
+    branches: [deda-100336-spark-firestore-safe-stage-2026-10-14]
+    paths:
+      - '.github/workflows/qa-deda-100336-spark-live-readonly.yml'
+      - 'tools/deda_100336_spark_live_rules_readonly_merge.py'
+      - 'functions/tests/deda_spark_firestore_emulator.test.js'
+      - 'firestore.spark.qa.rules'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100336-spark-prod-readonly
+  cancel-in-progress: false
+jobs:
+  live-rules-readonly-then-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Never touch existing Firebase deploy config or production backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 53447fa63593a8e7b432a4db047e90ed5b8fd267 -- firestore.rules firebase.json functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'BASELINE_UNCHANGED: no existing Firestore rules or Cloud Functions modified'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install read-only Firebase Rules REST auth client
+        run: python3 -m pip install --quiet google-auth requests
+      - name: Fetch exact deployed rules with GET, create reversible isolated preview and backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100336_spark_live_rules_readonly_merge.py
+      - name: Verify exact original ruleset backup and diff preview exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s deda-100336-exact-live-firestore-backup.txt
+          test -s firestore.spark.live-preview.rules
+          echo 'ISOLATED_LIVE_BASELINE_RECORDED'
+      - name: Preserve exact live rollback source privately, not publicly
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100336-LIVE-ORIGINAL-RULES-READONLY-BACKUP
+          path: deda-100336-exact-live-firestore-backup.txt
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install isolated Firestore Emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Test EXACT merged production candidate in synthetic emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          export DEDA_SPARK_RULES_FILE=firestore.spark.live-preview.rules
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.spark.qa.json \
+            --project demo-deda-spark-100336 --only firestore \
+            'node --test functions/tests/deda_spark_firestore_emulator.test.js'
+      - name: Explicit no Firebase deploy, no account writes, no APK
+        run: echo 'DONE: READONLY actual production source + exact reversible merge + local emulator. NO PROD WRITES.'
