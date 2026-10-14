@@ -64,6 +64,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('fixed blue follow, golden real followers and distinct like count',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: DedaPlaceEngagementBar(
+            following: true,
+            liked: true,
+            followers: 500,
+            likes: 37,
+            busy: false,
+            onFollow: () {},
+            onLike: () {},
+          ),
+        ),
+      ),
+    ));
+    expect(tester.widget<Icon>(find.byIcon(Icons.how_to_reg_rounded)).color,
+        const Color(0xFF1877D2));
+    expect(tester.widget<Icon>(find.byIcon(Icons.favorite_rounded)).color,
+        const Color(0xFFE53935));
+    expect(tester.widget<Icon>(find.byIcon(Icons.people_alt_outlined)).color,
+        const Color(0xFFB8860B));
+    expect(tester.widget<Text>(find.text('500')).style?.color,
+        const Color(0xFFB8860B));
+    expect(find.text('37'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('liked heart is exactly red, follow icon becomes a check',
       (tester) async {
     await tester.pumpWidget(view(
