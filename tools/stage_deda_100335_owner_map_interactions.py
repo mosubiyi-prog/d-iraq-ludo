@@ -107,6 +107,16 @@ old_tail = "      ),\n    );\n  }\n}\n\n"
 if not marker.endswith(old_tail):
     raise RuntimeError("SAFE_STOP marker closing widgets changed")
 marker = marker[:-len(old_tail)] + "    );\n  }\n}\n\n"
+# M01: expanded registered marker 186px must not exceed OverflowBox width.
+# Keep hit testing inside Marker and preserve nearby unregistered 58px markers.
+for old_dim, new_dim in [(r"maxWidth:\\s*180,", "maxWidth: 200,"),
+                         (r"width:\\s*174,", "width: 186,")]:
+    matches = list(re.finditer(old_dim, marker))
+    if len(matches) != 1:
+        raise RuntimeError("SAFE_STOP marker width: " + old_dim +
+                           " occurrences=" + str(len(matches)))
+    m = matches[0]
+    marker = marker[:m.start()] + new_dim + marker[m.end():]
 # Whitespace around the existing Flutter BoxConstraints varies across
 # reconstruction stages. Match actual old numeric values exactly, not spacing.
 import re
