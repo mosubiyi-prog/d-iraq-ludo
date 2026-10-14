@@ -46,3 +46,27 @@ At checkpoint creation **QA workflows were started but not yet confirmed success
 - This signed QA APK was built intentionally with `DEDA_PLACE_ENGAGEMENT_LIVE=false` and `DEDA_OWNER_PLACE_BRANDING_LIVE=false`. Do **NOT** call follow/like counts or cross-account published colors live/finished. The user's requirement for live saved reactions and globally matching owner color remains pending authorized Firebase service verification/deployment, multi-account QA, and a new signed APK with audited gates enabled.
 - Owner can safely test M01 adaptive map labels, M02 muted unavailable badge, M03 separate label and avatar gestures, M04 pencil-only edit button and M05 local owner/map filled color styling in this signed private build. Actual per-owner color propagation to other accounts remains gated.
 - Golden backup and Google Play production still unchanged.
+
+
+## 2026-10-14 owner on-device correction — M02/M03/M05
+
+Source: User's real on-device screenshots of signed 100335 private QA, not hypothetical UI. **QA FAILED for complete M02/M03/M05** despite passing source build. Do not mark these user acceptance criteria completed.
+
+**M02 + M05 full marker color and persistence:**
+- In owner form, changing the brand color to purple on place «ماركت» filled the owner name field purple. This is only a local preview on 100335, NOT a published Firestore color.
+- On the map the same place still shows a green place-name bubble and green DEDA badge. There is a cross-view mismatch.
+- Desired while `place.isAvailableNow == true`: exact saved owner-selected palette index must color the entire *interior of name bubble*, *outline/ring of the lower avatar*, and *DEDA badge background* in matching actual color, not just a border or small icon. Maintain sufficient foreground contrast.
+- Desired while `place.isAvailableNow == false`: make **all three map elements** name bubble background, avatar ring, and DEDA badge neutral grey (suitable contrasting text); keep place identity, name and icon visible, and retain owner's original chosen palette index without overwriting.
+- Once owner becomes available again, all three return to saved owner color automatically.
+- The map's **إظهار المتواجدين** visibility *filter* is not the owner presence switch: derive greying from the place's actual `isAvailableNow` status, not whether map visibility filter is on/off, route selection, or hours of operation.
+- Cross-account persistence must be validated on two accounts and after restarting the app. Do not launch brand live flag until Cloud Function `dedaSetPlaceTheme` and actual deployed backend/rules are verified secure for owner-only writes. Server status read-only check was HTTP 403. The original 100335 APK is deliberately built with `DEDA_OWNER_PLACE_BRANDING_LIVE=false`, so owner profile's theme is not yet publicly synced.
+- Keep owner's existing floating field label system untouched; it matches all other fields. **No issue** with the field label position.
+
+**M03 follow/like interactions on place-name tap:**
+- QA on 100335 verified tapping the map **NAME** correctly avoids selecting the route, but instead of engagement icons the app only shows the snackbar “التفاعل غير متاح بعد. انتظر تفعيل الخدمة الآمنة.”
+- This is **not complete**; 100335 signed APK intentionally has `DEDA_PLACE_ENGAGEMENT_LIVE=false`.
+- Required: tap NAME opens/closes follow, like and genuine verified aggregate follower / like counters, without camera movements or route calls. Tap the lower avatar/image retains original navigation destination behavior. Blank-map tap hides social panel.
+- Like and follow must be independent owner- and viewer-safe toggle actions via authorized Firebase callable; persist across restarts, two different verified test accounts, with idempotent/concurrent and unreadable user-private edges handled. Never show fake counters or merely enable client flag without verified server function and rules. Cross-account QA mandatory.
+- Maintain current map/navigation behavior and route start unchanged.
+
+**Release gates:** No public Google Play deploy. Validate installed 100335 as QA-only; cloud callable existence/auth permissions and rules must be verified, explicit authorization for production backend changes required, emulator + Flutter regressions and two-account smoke tests, only then new private signed APK. Do not claim entire feature works without end-to-end proof.
