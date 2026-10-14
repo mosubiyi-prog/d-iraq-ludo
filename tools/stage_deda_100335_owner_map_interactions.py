@@ -120,11 +120,17 @@ target = constraints[0]
 marker = (marker[:target.start()] +
     "minWidth: 0,\n                        maxWidth: 170," +
     marker[target.end():])
-marker = once(marker,
-    "                        color: Colors.white.withOpacity(0.97),",
-    """                        // M05 exactly the same palette index as owner name.
-                        color: DedaPlacePalette.forIndex(place.themeIndex),""",
-    "M05 registered map bubble fill")
+# M05 uses the exact old white fill, independent of formatter indentation.
+white_matches = list(re.finditer(
+    r"color:\s*Colors\.white\.withOpacity\(0\.97\),", marker))
+if len(white_matches) != 1:
+    raise RuntimeError("SAFE_STOP M05 white bubble fill: "
+                       + str(len(white_matches)) + " exact old values")
+white = white_matches[0]
+marker = (marker[:white.start()] +
+    "// M05 same physical fill as owner place name\n"
+    "                        color: DedaPlacePalette.forIndex(place.themeIndex),"
+    + marker[white.end():])
 marker = once(marker,
     """                      style: const TextStyle(
                         fontSize: 10,
