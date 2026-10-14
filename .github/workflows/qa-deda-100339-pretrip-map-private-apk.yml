@@ -304,6 +304,8 @@ jobs:
           assert m.count('// DEDA_100339_PRETRIP_MAP_SAFE_QA') == 1
           assert m.count('// DEDA_100339_MAP_AVATAR_COORDINATE') == 1
           assert 'flags: InteractiveFlag.all' in m
+          assert 'InteractiveFlag.all & ~InteractiveFlag.rotate' not in m, '100332 rotate lock still active'
+          assert m.count('interactionOptions: const InteractionOptions(') == 1, 'duplicate pretrip map options'
           assert '0.7162162162162162' in m
           assert re.search(r'rotate:\s*true,\s*child:\s*DedaMapPlaceMarker\(',m)
           assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in m
