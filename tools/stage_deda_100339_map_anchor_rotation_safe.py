@@ -52,19 +52,23 @@ def anchored(m):
 map_body,n=pattern.subn(anchored,map_body)
 assert n==1, f"SAFE_STOP: expected one registered marker anchor, got {n}"
 
-# Scope to MapReadyPage map only. Do not alter DedaRoutePage MapOptions.
-gesture_token="options: MapOptions("
-assert map_body.count(gesture_token)==1, "SAFE_STOP: map options anchor ambiguous"
+# Stage 100332 intentionally disabled rotation in MapReadyPage by removing
+# only InteractiveFlag.rotate. Restore it in that EXISTING interactionOptions,
+# never add a duplicate or change DedaRoutePage's MapOptions.
 assert "mapController: _placeMapController," in map_body, "SAFE_STOP: tested stable map controller removed"
-map_body=map_body.replace(
-    gesture_token,
-    gesture_token+
-    "\n                // DEDA_100339_PRETRIP_MAP_SAFE_QA: explicitly allow two-finger rotation.\n"
-    "                interactionOptions: const InteractionOptions(\n"
-    "                  flags: InteractiveFlag.all,\n"
-    "                ),",
-    1,
+disabled=re.compile(
+    r"interactionOptions:\s*const InteractionOptions\(\s*"
+    r"flags:\s*InteractiveFlag\.all\s*&\s*~InteractiveFlag\.rotate,\s*\),",
+    flags=re.MULTILINE,
 )
+restored=(
+    "// DEDA_100339_PRETRIP_MAP_SAFE_QA: restore two-finger rotation, same other flags.\n"
+    "interactionOptions: const InteractionOptions(\n"
+    "  flags: InteractiveFlag.all,\n"
+    "),"
+)
+map_body,n=disabled.subn(restored,map_body)
+assert n==1, f"SAFE_STOP: expected one explicit 100332 rotate-disabled option, found {n}"
 after=before_all+map_body
 assert after[:map_start]==before_all, "SAFE_STOP: non-pretrip code modified"
 assert hashlib.sha256(after[route_start:map_start].encode()).hexdigest()==before_route_hash, "SAFE_STOP: navigation route mutated"
