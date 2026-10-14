@@ -5,6 +5,7 @@ on:
       - deda-100336-two-features-stage-2026-10-14
     paths:
       - '.github/workflows/qa-deda-100336-firebase-emulator.yml'
+      - 'functions/tests/deda_100336_live_business_emulator.test.js'
   workflow_dispatch:
 permissions:
   contents: read
@@ -48,7 +49,7 @@ jobs:
           export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
           functions/node_modules/.bin/firebase emulators:exec \
             --project demo-deda-heartbeat-rules --only firestore \
-            'node --test functions/tests/deda_heartbeat_firestore_emulator.test.js'
+            'node --test functions/tests/deda_heartbeat_firestore_emulator.test.js functions/tests/deda_100336_live_business_emulator.test.js'
       - name: Client callable business invariants (local synthetic only)
         run: |
           node --test functions/tests/deda_place_engagement.test.js functions/tests/deda_owner_approval_bell.test.js functions/tests/deda_place_branding.test.js
