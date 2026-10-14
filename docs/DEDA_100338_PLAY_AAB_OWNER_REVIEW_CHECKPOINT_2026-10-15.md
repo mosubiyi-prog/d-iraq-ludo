@@ -37,3 +37,15 @@
 - رابط البناء: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38640784131
 - **المتبقي**: مراجعة حالة Google Play Console الحالية ورقم الإصدار الأعلى في كل المسارات، تنزيل AAB ورفعه يدوياً إلى Production وإكمال مراجعة المتجر؛ **لا يوجد نشر تلقائي**. لا تدّعِ أن الإصدار وصل إلى المتجر قبل تأكيد Play Console.
 - لم تُغيَّر بيانات Firebase الإنتاجية ولا `main` ولا النسخة المثبتة لدى المستخدمين؛ تم توثيق النتيجة فقط في هذا التحديث.
+
+## تحديث: APK 100338 قابل للتثبيت على الهاتف – نجاح مؤكد
+- فرع البناء المنفصل: `deda-100338-install-apk-private-2026-10-15`.
+- سير البناء: `.github/workflows/build-deda-100338-makani-install-apk-private.yml`، commit `51f653ad8a8041e511ca1f7bb37a174397311ca4`.
+- تشغيل GitHub Actions: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38643404334 – **completed / success**.
+- وظيفتان ناجحتان: `spark-security` و `signed-private-phone-apk`؛ التوقيع وفحص هوية التطبيق والرقم `100338` ناجحان.
+- Artifact: `DEDA-100338-MAKANI-SIGNED-APK-DIRECT-INSTALL`، ID `11931722985`.
+- الملف المستخرج والمتأكد من SHA256: `DEDA-100338-MAKANI-install.apk` (حوالي 68.2 MiB).
+- SHA256: `745b3f2dc552ac7209140a6121306a6928a585cd381684ba6aa3257a30314f8a`.
+- البناء يعيد نفس ميزات نسخة مكاني 100337 (مثل AAB 100338)، بدون أي تعديلات نشر على Google Play أو Firebase أو بيانات المستخدمين.
+- وُفّر ملف APK المباشر للمستخدم في هذه المحادثة؛ التثبيت على الهاتف **لم يُؤكّد بعد**.
+- للحفاظ على البيانات: يُجرَّب تثبيت APK فوق النسخة الحالية دون حذفها؛ إن تعذر بسبب اختلاف شهادة توقيع Google Play، لا تحذف التطبيق أو تمسح بياناته، بل ارجع لفحص التوافق وبدائل الاختبار.
