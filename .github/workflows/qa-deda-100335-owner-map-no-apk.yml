@@ -153,7 +153,7 @@ jobs:
           assert 'color: DedaPlacePalette.forIndex(place.themeIndex)' in section
           assert 'fillColor: DedaPlacePalette.forIndex(_placeThemeIndex)' in owner
           assert "label: Text(dedaText('تعديل المكان', 'Edit place'))" not in owner
-          assert 'tooltip: dedaText(\'تعديل المكان\', \'Edit place\')' in owner
+          assert "tooltip: dedaText('تعديل المكان', 'Edit place')" in owner
           assert 'maxLines: 2' in section
           assert 'Color(0xFF858E88)' in section
           assert 'DedaPlaceEngagementService.live' in source
