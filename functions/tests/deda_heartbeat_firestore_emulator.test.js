@@ -131,3 +131,37 @@ test("actual Firestore transactions survive concurrent follow/like without dupli
     await deleteApp(app);
   }
 });
+
+test("real owner colour transactions accept all 14 colours and deny impersonation", async () => {
+  const {initializeApp, deleteApp} = require("firebase-admin/app");
+  const {getFirestore} = require("firebase-admin/firestore");
+  const {setPlaceTheme} = require("../deda_place_branding.js");
+  const app = initializeApp({projectId}, "heartbeat-owner-colour-test");
+  try {
+    const db = getFirestore(app);
+    for (let themeIndex = 0; themeIndex < 14; themeIndex++) {
+      const result = await setPlaceTheme(db, {uid: "u-owner", placeId, themeIndex});
+      assert.equal(result.themeIndex, themeIndex);
+      assert.equal((await db.collection("published_places").doc(placeId).get()).data().themeIndex,
+          themeIndex);
+    }
+    await assert.rejects(setPlaceTheme(db, {uid: "u-other", placeId, themeIndex: 0}),
+        {code: "permission-denied"});
+    await assert.rejects(setPlaceTheme(db, {uid: "", placeId, themeIndex: 0}),
+        {code: "permission-denied"});
+    for (const themeIndex of [-1, 14, 1.5, "4"]) {
+      await assert.rejects(setPlaceTheme(db, {uid: "u-owner", placeId, themeIndex}),
+          {code: "invalid-argument"});
+    }
+    const after = (await db.collection("published_places").doc(placeId).get()).data();
+    assert.equal(after.themeIndex, 13);
+    assert.equal(after.status, "approved");
+    assert.equal(after.accountKey, ownerKey);
+    assert.equal(after.published, true);
+    await db.collection("published_places").doc(placeId).update({hiddenByManager: true});
+    await assert.rejects(setPlaceTheme(db, {uid: "u-owner", placeId, themeIndex: 0}),
+        {code: "permission-denied"});
+  } finally {
+    await deleteApp(app);
+  }
+});

@@ -4,7 +4,7 @@ name: DEDA Heartbeat 100334 Compact Admin Place Requests PRIVATE APK - NO PLAY
 on:
   push:
     branches:
-      - deda-heartbeat-admin-compact-100334-2026-10-14
+      - deda-heartbeat-integrated-stage-2026-10-14
     paths:
       - '.github/workflows/qa-deda-heartbeat-100334-private-apk.yml'
   workflow_dispatch:
@@ -16,7 +16,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  signed-play-aab-owner-only:
+  firestore-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare private rules snapshot and emulator dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is the only staged extra rule: client cannot read/write reaction rows.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('firestore.rules')
+          rules=p.read_text()
+          marker='    match /admin_trash_places/{trashId} {'
+          assert rules.count(marker)==1
+          assert rules.count('match /deda_place_engagement_totals/{placeId}') == 1
+          assert rules.count('match /deda_place_engagement/{placeId}/users/{accountHash}') == 1
+          print('PASS: committed explicit-deny rules loaded in synthetic emulator')
+          PY
+          npm install --prefix functions --no-save --no-audit --no-fund \
+            firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Firebase Emulator permission tests — NEVER production
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-heartbeat-rules --only firestore \
+            'node --test functions/tests/deda_heartbeat_firestore_emulator.test.js'
+      - name: Explicit no APK / no deploy evidence
+        run: |
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: synthetic emulator rules security only; no APK/deploy.'
+
+  signed-private-apk:
+    needs: firestore-security
     runs-on: ubuntu-24.04
     timeout-minutes: 85
     env:
@@ -120,6 +163,7 @@ jobs:
           echo '== 100334: move compact auto-approval control above admin requests; category-matched glyph =='
           python3 -m py_compile tools/stage_deda_heartbeat_admin_compact_100334.py
           python3 tools/stage_deda_heartbeat_admin_compact_100334.py
+          python3 tools/stage_deda_heartbeat_integrated_symbols_2026_10_14.py
           # Owner local palette cannot alter existing admin request schema until reviewed.
           dart format lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
           python3 tools/validate_owner_place_entry_100331_2026_10_13.py
@@ -149,7 +193,7 @@ jobs:
           assert 'DEDA_OWNER_PLACE_BRANDING_LIVE' in palette
           print('PASS: private 100332 feature, no fabricated counts and old owner submit intact')
           PRIVATE_OWNER_100332_GATES
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_place_branding_service.dart lib/deda_place_activity_symbol.dart lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
           flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart test/deda_admin_auto_compact_100334_test.dart
           # Fail closed on follower icon strip overflow, even for large real counts.
           node --check functions/index.js
@@ -157,6 +201,8 @@ jobs:
           node --check functions/deda_owner_approval_bell.js
           node --test functions/tests/deda_place_engagement.test.js
           node --test functions/tests/deda_owner_approval_bell.test.js
+          node --test functions/tests/deda_place_branding.test.js
+          node --check functions/deda_place_branding.js
           echo 'PASS: 17-point staging gates, including 100331 owner card, pending branding publication, preserved routes and strict server feature lock'
           python3 - <<'PUBLIC_GATES'
           from pathlib import Path
@@ -209,12 +255,12 @@ jobs:
           src=src.replace(old,new)
           assert src.count(new)==1
           Path('/tmp/deda_owner_place_100332_test_apk.sh').write_text(src)
-          print('Prepared staged 100332 signed APK; engagement and upload OFF until server QA; no Firebase deploy or Play')
+          print('Prepared integrated 100334 signed APK; engagement and upload OFF until server QA; no Firebase deploy or Play')
           MAKE_SCRIPT
-      - name: Build signed 100332 PRIVATE QA APK only AFTER ALL GATES
+      - name: Build signed 100334 PRIVATE QA APK only AFTER ALL GATES
         run: bash /tmp/deda_owner_place_100332_test_apk.sh
 
-      - name: Verify 100332 private APK signing, owner/route integrity, and no deployment
+      - name: Verify 100334 private APK signing, owner/route integrity, and no deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -239,6 +285,16 @@ jobs:
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose "$APK"
           echo '100334 PRIVATE TEST: signed, 17-points staged with social/logo backend safely disabled; 100330 unchanged. No Play or Firebase deployment.'
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          "$AAPT" dump badging "$APK" > /tmp/deda-100334-manifest.txt
+          grep -q "versionCode='100334'" /tmp/deda-100334-manifest.txt
+          grep -q "name='com.diraq.ludo'" /tmp/deda-100334-manifest.txt
+          mkdir -p private-qa
+          cp "$APK" private-qa/DEDA-100334-private.apk
+          git rev-parse HEAD > private-qa/source-commit.txt
+          "$APKSIGNER" verify --print-certs "$APK" > private-qa/signing-certificate.txt
+          cp /tmp/deda-100334-manifest.txt private-qa/manifest.txt
+          sha256sum private-qa/DEDA-100334-private.apk > private-qa/SHA256SUMS
           sha256sum "$APK"
           ls -lh "$APK"
 
@@ -246,6 +302,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DEDA-100334-HEARTBEAT-COMPACT-ADMIN-PRIVATE-TEST-APK-DO-NOT-PUBLISH
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: private-qa/
           retention-days: 30
           if-no-files-found: error
