@@ -170,44 +170,37 @@ service cloud.firestore {
     function sparkTotal(placeId) {
       return /databases/$(database)/documents/deda_spark_totals/$(placeId);
     }
-    function sparkBeforeFollow(placeId) {
-      return exists(sparkReaction(placeId, sparkKey()))
-        && get(sparkReaction(placeId, sparkKey())).data.following == true;
-    }
-    function sparkAfterFollow(placeId) {
-      return existsAfter(sparkReaction(placeId, sparkKey()))
-        && getAfter(sparkReaction(placeId, sparkKey())).data.following == true;
-    }
-    function sparkBeforeLike(placeId) {
-      return exists(sparkReaction(placeId, sparkKey()))
-        && get(sparkReaction(placeId, sparkKey())).data.liked == true;
-    }
-    function sparkAfterLike(placeId) {
-      return existsAfter(sparkReaction(placeId, sparkKey()))
-        && getAfter(sparkReaction(placeId, sparkKey())).data.liked == true;
-    }
-    function sparkFollowDelta(placeId) {
-      return (sparkAfterFollow(placeId) ? 1 : 0)
-        - (sparkBeforeFollow(placeId) ? 1 : 0);
-    }
-    function sparkLikeDelta(placeId) {
-      return (sparkAfterLike(placeId) ? 1 : 0)
-        - (sparkBeforeLike(placeId) ? 1 : 0);
-    }
+    // One cached BEFORE/AFTER comparison per rules evaluation prevents
+    // Firestore's 1000-expression ceiling on concurrent transactions.
     function sparkTotalValid(placeId) {
-      return existsAfter(sparkTotal(placeId))
-        && getAfter(sparkTotal(placeId)).data.followers is int
-        && getAfter(sparkTotal(placeId)).data.likes is int
-        && getAfter(sparkTotal(placeId)).data.followers >= 0
-        && getAfter(sparkTotal(placeId)).data.likes >= 0
-        && getAfter(sparkTotal(placeId)).data.followers ==
-          (exists(sparkTotal(placeId))
-            ? get(sparkTotal(placeId)).data.followers : 0)
-          + sparkFollowDelta(placeId)
-        && getAfter(sparkTotal(placeId)).data.likes ==
-          (exists(sparkTotal(placeId))
-            ? get(sparkTotal(placeId)).data.likes : 0)
-          + sparkLikeDelta(placeId);
+      let reactionPath = sparkReaction(placeId, sparkKey());
+      let totalsPath = sparkTotal(placeId);
+      let oldR = exists(reactionPath)
+        ? get(reactionPath).data
+        : {'following': false, 'liked': false};
+      let newR = existsAfter(reactionPath)
+        ? getAfter(reactionPath).data
+        : {'following': false, 'liked': false};
+      let oldT = exists(totalsPath)
+        ? get(totalsPath).data
+        : {'followers': 0, 'likes': 0};
+      let newT = existsAfter(totalsPath)
+        ? getAfter(totalsPath).data
+        : {'followers': -1, 'likes': -1};
+      return existsAfter(reactionPath)
+        && existsAfter(totalsPath)
+        && newR.following is bool
+        && newR.liked is bool
+        && newT.followers is int
+        && newT.likes is int
+        && newT.followers >= 0
+        && newT.likes >= 0
+        && newT.followers == oldT.followers
+          + (newR.following ? 1 : 0) - (oldR.following ? 1 : 0)
+        && newT.likes == oldT.likes
+          + (newR.liked ? 1 : 0) - (oldR.liked ? 1 : 0)
+        && (newR.following != oldR.following
+          || newR.liked != oldR.liked);
     }
 
     match /admin_invites/{inviteId} {
@@ -1555,10 +1548,7 @@ service cloud.firestore {
         && request.resource.data.likes is int
         && request.resource.data.followers >= 0
         && request.resource.data.likes >= 0
-        && existsAfter(sparkReaction(placeId, sparkKey()))
-        && sparkTotalValid(placeId)
-        && (sparkFollowDelta(placeId) != 0
-            || sparkLikeDelta(placeId) != 0);
+        && sparkTotalValid(placeId);
     }
 
     match /admin_trash_places/{trashId} {
