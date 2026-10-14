@@ -41,6 +41,10 @@ jobs:
           urls={
               "PROJECT_DETAILS":"https://cloudresourcemanager.googleapis.com/v1/projects/deda-25b88",
               "FUNCTIONS_V2_LIST":"https://cloudfunctions.googleapis.com/v2/projects/deda-25b88/locations/us-central1/functions?pageSize=100",
+              "CLOUD_FUNCTIONS_API_STATE":"https://serviceusage.googleapis.com/v1/projects/deda-25b88/services/cloudfunctions.googleapis.com",
+              "CLOUD_BUILD_API_STATE":"https://serviceusage.googleapis.com/v1/projects/deda-25b88/services/cloudbuild.googleapis.com",
+              "CLOUD_RUN_API_STATE":"https://serviceusage.googleapis.com/v1/projects/deda-25b88/services/run.googleapis.com",
+              "BILLING_LINK_STATUS":"https://cloudbilling.googleapis.com/v1/projects/deda-25b88/billingInfo",
           }
           responses={}
           for label,url in urls.items():
@@ -48,9 +52,18 @@ jobs:
                   r=client.get(url,timeout=35)
                   responses[label]=r
                   print(label,"HTTP_"+str(r.status_code))
+                  if r.status_code==200 and label.endswith("_API_STATE"):
+                      print(label+"_VALUE",str(r.json().get("state","UNKNOWN"))[:25])
+                  if r.status_code==200 and label=="BILLING_LINK_STATUS":
+                      print("BILLING_LINK_ENABLED",str(r.json().get("billingEnabled",False)))
                   if r.status_code!=200:
-                      # Only safe error status code and canonical public error category.
-                      try: print(label+"_CODE",str(r.json().get("error",{}).get("status","UNKNOWN"))[:80])
+                      # Print only structured public error codes, not principals, keys, or tokens.
+                      try:
+                          error=r.json().get("error",{})
+                          print(label+"_CODE",str(error.get("status","UNKNOWN"))[:80])
+                          for detail in error.get("details",[]):
+                              if isinstance(detail,dict) and detail.get("reason"):
+                                  print(label+"_REASON",str(detail.get("reason"))[:80])
                       except Exception: pass
               except Exception as e:
                   print(label,"SAFE_STOP_TRANSPORT_"+type(e).__name__)
