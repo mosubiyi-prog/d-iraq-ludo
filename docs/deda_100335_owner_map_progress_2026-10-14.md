@@ -84,3 +84,14 @@ REQUIRED M03: tapping the place NAME opens / closes working Like, Follow, true f
 OWNER PUBLISHING SAFETY: persist selected color to authoritative public-place data only through verified owner-only operations. Deny unauthorized edits; avoid modifying approved coordinates, name, identity, or unrelated Firestore permissions. Current Firebase Cloud Functions metadata read-only check returned HTTP 403, which is NOT proof those callables are deployed. Explicitly obtain user approval before any production Cloud Functions/rules deployment. Do not enable either production feature flag or claim live behavior until endpoints, security and cross-account E2E are verified.
 
 REGRESSION: keep M01 compact adaptive name width and max two lines, M04 icon-only pencil with existing action, approval notification bell, drafts, saved locations, navigation and owner/employee/admin access intact. 100335 private signed APK remains a valid QA artifact but NOT final complete feature delivery. Make a single consolidated corrected signed test build only after all tests pass. No Play publishing without user approval.
+
+
+## M05 clarification — dynamic 14-color owner-managed palette
+
+User explicitly corrected that **purple is an example observed in one test, NOT the permanent or only supported theme**. Approved requirement:
+
+- Inside **«إدارة مكاني»**, the verified owner chooses dynamically from all **14 approved palette swatches** (7 base colors + 7 light variants). This selection must not be hard-coded or limited to purple, or to one business category.
+- Save the **chosen palette index per place** in backend-protected persistent place data, with owner-only modification permissions; if the owner manages different places, each may have its own selected index. No user, non-owner, or unrelated admin may silently mutate it.
+- When the owner changes and saves the color, that very index becomes the single source of truth for the name field, the public map's **entire filled name label**, avatar/ring and the **DEDA badge**. On other signed-in accounts/devices, the correct approved color must appear without a new APK; updates depend on safe backend confirmation and normal UI refresh, not on a fixed code constant.
+- **Present:** use saved color across all of those map elements with legible foreground. **Absent:** all those elements must be grey, irrespective of which color was saved, without overwriting it. When present again, automatically restore the last saved index. Map «إظهار المتواجدين» filter is independent; it does not change presence or saved colors.
+- Preserve existing field label styling, routing gestures, map navigation and drafts. Do not publish the palette feature or claim cross-device synchronization before verifying secure production Firebase callable/rules and running real two-account QA.
