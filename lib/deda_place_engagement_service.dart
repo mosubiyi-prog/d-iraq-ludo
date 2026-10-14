@@ -66,7 +66,13 @@ class DedaPlaceEngagementService {
     final totalsRef = db.collection('deda_spark_totals').doc(placeId);
     final reactionRef = db.collection('deda_spark_reactions').doc(placeId)
         .collection('users').doc(key);
-    return db.runTransaction<DedaPlaceEngagement>((tx) async {
+    // Concurrent account actions can evaluate getAfter against a stale
+    // aggregate before Firestore emits a retryable contention status.
+    // Retry ONLY the entire transaction with new reads; never mutate user,
+    // session or old totals, and never report success without server commit.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await db.runTransaction<DedaPlaceEngagement>((tx) async {
       // Firestore requires every read before the first write.
       final totalsDoc = await tx.get(totalsRef);
       final rowDoc = await tx.get(reactionRef);
@@ -107,7 +113,13 @@ class DedaPlaceEngagementService {
         following: nextFollowing, liked: nextLiked,
         followers: nextFollowers, likes: nextLikes,
       );
-    });
+        });
+      } on FirebaseException catch (error) {
+        if (error.code != 'permission-denied' || attempt == 3) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 60 * (attempt + 1)));
+      }
+    }
+    throw StateError('unreachable-place-transaction');
   }
 
   static Future<DedaPlaceEngagement> read(String placeId) async {
