@@ -118,6 +118,42 @@ test("spoofed totals and reaction-only changes are rejected",async () => {
   await assertFails(deleteDoc(doc(a,...reactPath(accountA))));
 });
 
+test("atomic counterfeit increment cannot follow a genuine account transition",async () => {
+  const a=ownerDb("owner-a");
+  await assertFails(runTransaction(a,async tx=>{
+    const rowRef=doc(a,...reactPath(accountA));
+    const totalsRef=doc(a,...totalsPath());
+    const row=await tx.get(rowRef);
+    const totals=await tx.get(totalsRef);
+    assert.equal(row.exists(),true);
+    tx.set(rowRef,{following:!row.data().following,liked:row.data().liked});
+    tx.set(totalsRef,{
+      followers:totals.data().followers+888888,
+      likes:totals.data().likes,
+    });
+  }));
+  assert.deepEqual((await getDoc(doc(a,...totalsPath()))).data(),
+      {followers:1,likes:1});
+});
+
+test("concurrent authentic actions are atomic and rotated UID cannot double count",async () => {
+  const a=ownerDb("owner-a"),rotated=ownerDb("owner-a-rotated");
+  const b=ownerDb("viewer-b");
+  await Promise.all([
+    react(a,"follow",true,accountA),
+    react(b,"like",true,accountB),
+  ]);
+  let totals=(await getDoc(doc(a,...totalsPath()))).data();
+  assert.deepEqual(totals,{followers:2,likes:2});
+  await Promise.all([
+    react(a,"follow",false,accountA),
+    react(rotated,"follow",false,accountA),
+  ]);
+  totals=(await getDoc(doc(a,...totalsPath()))).data();
+  assert.deepEqual(totals,{followers:1,likes:2});
+  assert.equal((await getDoc(doc(a,...reactPath(accountA)))).data().following,false);
+});
+
 test("palette 0..13 owner only, no changes to name, GPS, requests or presence",async () => {
   const a=ownerDb("owner-a"),b=ownerDb("viewer-b");
   const ref=doc(a,"published_places",placeId);
