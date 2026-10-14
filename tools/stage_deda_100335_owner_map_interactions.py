@@ -154,17 +154,15 @@ marker = once(marker,
                     child: Container(
                       margin: const EdgeInsets.only(left: 12),""",
     "M03 name is a reaction target")
-marker = once(marker,
-    """                      ),
-                  ),
-                  Positioned(
-                    left: 0,""",
-    """                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,""",
-    "M03 close label-only gesture (not route)")
+# Close only the newly added label GestureDetector directly before its
+# unique left-positioned category symbol. Preserve the rest of the marker.
+label_badge = list(re.finditer(
+    r"\n\s*Positioned\(\s*\n\s*left:\s*0,", marker))
+if len(label_badge) != 1:
+    raise RuntimeError("SAFE_STOP M03 name category badge: "
+                       + str(len(label_badge)))
+at = label_badge[0].start()
+marker = marker[:at] + "\n                  )," + marker[at:]
 marker = once(marker,
     """                          color: const Color(0xFF17652F),
                           borderRadius: BorderRadius.circular(6),""",
