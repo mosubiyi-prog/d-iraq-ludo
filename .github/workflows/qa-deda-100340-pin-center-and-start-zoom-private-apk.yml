@@ -326,6 +326,7 @@ jobs:
           flutter test test/deda_100339_pretrip_map_rotation_test.dart test/deda_100340_geo_marker_camera_test.dart test/deda_map_place_taps_100335_test.dart test/deda_place_engagement_bar_test.dart test/deda_makani_100337_test.dart
           python3 - <<'SAFE_100340'
           from pathlib import Path
+          import re
           s=Path('lib/main.dart').read_text()
           route=s[s.index('class DedaRoutePage extends StatefulWidget'):s.index('class _MapReadyPageState extends State<MapReadyPage> {')]
           marker=s[s.index('class _MapReadyPageState extends State<MapReadyPage> {'):]
@@ -336,7 +337,7 @@ jobs:
           assert 'InteractiveFlag.all & ~InteractiveFlag.rotate' not in marker
           assert 'height: place.isDedaRegistered ? 260 : 58' in marker
           assert 'alignment: Alignment.center' in marker
-          assert 'top: place.isDedaRegistered ? 3 : 0' in marker
+          assert re.search(r'top:\s*place\.isDedaRegistered\s*\?\s*3\s*:\s*0', marker), 'geo pin wrapper top offset changed'
           assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in marker
           assert 'onTap: () => selectMapPlace(place)' in marker
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in route
