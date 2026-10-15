@@ -29,3 +29,16 @@
 4. إذا واجه Play Console رفض إصدار أو شهادة أو بلد، توقف واطلب صورة رسالة الرفض؛ لا تُنشئ رقم إصدار جديداً بغير حاجة.
 
 **المسؤول عن النشر العام النهائي:** مالك التطبيق عبر Play Console.
+
+
+## النتيجة النهائية: AAB مُوقّع ومتحقَّق منه
+**GitHub Actions النهائي:** https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38666295959 — `completed / success`، workflow SHA `84be4b657bf869d5d2e4b4716e65ba77fe5ae41e`. كلتا وظيفتي `spark-security` و`signed-private-phone-apk` نجحتا (اسم الوظيفة موروث، لكن الأمر المنفذ `flutter build appbundle --release --build-number=100340`، وليس APK).
+- Artifact رقم `11943270791`: `DEDA-100340-OWNER-ACCEPTED-SIGNED-GOOGLE-PLAY-AAB-NO-AUTO-PUBLISH`.
+- تم تنزيل وفحص الأرشيف/استخراج الملف إلى `/mnt/data/DEDA-100340-MAKANI-GEO-PIN-NAVIGATION-SIGNED-PLAY.aab`؛ هذا مسار الملف المحلي المؤقت لدى ChatGPT.
+- **AAB size:** `72426142 bytes` (~69.07 MiB).
+- **AAB SHA-256:** `88ab46201decd965cfa47bf4f0a0e1090b312a50e61ceca97cfc37815fdbda1c`؛ مطابق لملف `SHA256SUMS` من GitHub Artifact.
+- **شهادة تحميل/توقيع AAB SHA256:** `a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a`، **مطابقة تماماً** للشهادة الموجودة في ملف `certificate.txt` من Artifact الـAPK الذي وافق عليه مالك التطبيق. أكد `keytool` المطابقة على ملف AAB الذي تم تنزيله، ونجح `jarsigner -verify`، مع تنبيهات غير مانعة للتوقيعات القديمة في JarInputStream (خروج صفر).
+- تأكدت من سلامة ZIP داخل AAB و`BundleConfig.pb` و`base/manifest/AndroidManifest.xml` و`base/dex/classes.dex`، ووجود توقيع `META-INF/*.SF`. فحص GitHub تحقق من رقم `100340` وpackage `com.diraq.ludo.d_iraq_ludo` وبقاء خصوصيات الإطلاق المؤجل.
+- يحتوي الأرشيف كذلك `RELEASE_NOTES_AR.txt` و`READ-ME-FIRST.txt` و`upload-certificate.txt` و`source-commit.txt`، ونسخة release notes مستخرجة مؤقتاً إلى `/mnt/data/DEDA-100340-GOOGLE-PLAY-RELEASE-NOTES-AR.txt`.
+- **حالة إصدار المتجر:** الحزمة مكتملة وصالحة للتقديم إلى Google Play Console بناء على فحوص CI والمحلية، لكنها **لم تُرفع ولم تُنشر** في Production بعد. مطلوب من المستخدم التأكد من أعلى versionCode في Play Console ومتطلبات Play App Signing، ثم مراجعة الإنذار/الملاحظات وقبول طرح الإصدار بنفسه.
+- **لا تعدّل نسخة 100340 المعتمدة ولا تولّد 100341 بلا حاجة.** نسخ الرجوع باقية، ولا يوجد نشر Firebase أو تغييرات حسابات المستخدمين.
