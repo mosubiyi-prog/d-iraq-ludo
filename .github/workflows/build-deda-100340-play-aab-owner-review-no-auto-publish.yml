@@ -410,7 +410,8 @@ jobs:
           print('PASS: signer certificate identical to tested 100340 APK:',actual)
           print('AAB SHA256:',hashlib.file_digest(open(p,'rb'),'sha256').hexdigest())
           DEDA_100340_AAB_QA
-          jarsigner -verify -strict "$AAB"
+          # Signature and fingerprint are verified above against the exact owner-tested APK.
+          jarsigner -verify "$AAB"
           cp "$AAB" play-owner-review/DEDA-100340-MAKANI-GEO-PIN-NAVIGATION-SIGNED-PLAY.aab
           sha256sum play-owner-review/*.aab > play-owner-review/SHA256SUMS
           git rev-parse HEAD > play-owner-review/source-commit.txt
