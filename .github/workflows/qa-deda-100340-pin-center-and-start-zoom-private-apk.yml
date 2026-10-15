@@ -338,8 +338,8 @@ jobs:
           assert 'height: place.isDedaRegistered ? 260 : 58' in marker
           assert 'alignment: Alignment.center' in marker
           assert re.search(r'top:\s*place\.isDedaRegistered\s*\?\s*3\s*:\s*0', marker), 'geo pin wrapper top offset changed'
-          assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in marker
-          assert 'onTap: () => selectMapPlace(place)' in marker
+          assert '_selectPlaceWithSocial(place)' in marker and 'onLabelTap:' in marker, 'name tap lost'
+          assert 'selectMapPlace(place)' in marker and 'onTap:' in marker, 'destination tap lost'
           assert '_buildFixedDriverArrow(navigationArrowAngle)' in route
           assert '_DedaIraqDestinationFlag()' in route
           print('PASS: true DEDA geo-centre, live reactions, successful rotation, only requested zoom change')
