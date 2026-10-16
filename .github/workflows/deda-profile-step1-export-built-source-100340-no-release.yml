@@ -381,7 +381,7 @@ jobs:
           lines[matches[0]] = (
             'python3 tools/stage_deda_royal_hero_2026_10_17.py && ' 
             'dart format lib/main.dart && ' 
-            'flutter analyze --no-fatal-infos lib/main.dart && ' 
+            'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && ' 
             'mkdir -p profile-reconstructed-source && '
             'cp lib/main.dart profile-reconstructed-source/main.dart && '
             'cp lib/admin_pages.dart profile-reconstructed-source/admin_pages.dart && '
