@@ -379,6 +379,9 @@ jobs:
           matches=[i for i,line in enumerate(lines) if line.startswith('flutter build appbundle --release --build-number=100340 ')]
           assert len(matches)==1, f'SAFE_STOP: expected exactly one final 100340 AAB build, got {len(matches)}'
           lines[matches[0]] = (
+            'python3 tools/stage_deda_royal_hero_2026_10_17.py && ' 
+            'dart format lib/main.dart && ' 
+            'flutter analyze --no-fatal-infos lib/main.dart && ' 
             'mkdir -p profile-reconstructed-source && '
             'cp lib/main.dart profile-reconstructed-source/main.dart && '
             'cp lib/admin_pages.dart profile-reconstructed-source/admin_pages.dart && '
@@ -401,6 +404,10 @@ jobs:
           grep -q 'dedaProfileVisibleDiamonds(' profile-reconstructed-source/main.dart
           grep -q 'DEDA_100340' profile-reconstructed-source/main.dart
           grep -q 'DedaFramedAvatar' profile-reconstructed-source/main.dart
+          grep -q 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' profile-reconstructed-source/main.dart
+          grep -q '_DedaRoyalProfileBackdropPainter' profile-reconstructed-source/main.dart
+          grep -q 'DedaSocialProgressWallet.xpNotifier' profile-reconstructed-source/main.dart
+          grep -q 'DedaDiamondsWallet.balanceNotifier' profile-reconstructed-source/main.dart
           test ! -f build/app/outputs/bundle/release/app-release.aab
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           echo 'PASS: source only, no Flutter installable built, live backend untouched'
