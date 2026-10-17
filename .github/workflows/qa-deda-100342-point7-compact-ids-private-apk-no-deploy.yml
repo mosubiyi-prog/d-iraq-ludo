@@ -1,0 +1,456 @@
+name: DEDA 100342 Point7 Compact IDs PRIVATE QA APK - NO DEPLOY
+# Reconstruct the proven 100341 source and add point7 compact account ID UI.
+# Compile a PRIVATE Android APK; do not upload to Play or mutate production.
+# No Firebase deployment, no Google Play Console upload, no production mutation.
+
+on:
+  push:
+    branches:
+      - point7-compact-ids-sticky-preview-frames-2026-10-17
+    paths:
+      - '.github/workflows/qa-deda-100342-point7-compact-ids-private-apk-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: deda-100342-point7-private-qa-2026-10-17
+  cancel-in-progress: true
+
+jobs:
+  spark-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Stop if real Firebase rules/deployment paths changed
+        run: |
+          set -euo pipefail
+          test -f firestore.spark.qa.rules
+          test -f firebase.spark.qa.json
+          git diff --quiet 36936f5de99e58cd468f859d99e8204c18a53c52 -- firestore.rules firebase.json functions/index.js || {
+            echo 'SAFE_STOP: existing live configuration was modified'
+            exit 4
+          }
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+      - name: Install emulator test dependencies
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Verify Spark Firestore transactions and existing users remain unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.spark.qa.json \
+            --project demo-deda-spark-100336 --only firestore \
+            'node --test functions/tests/deda_spark_firestore_emulator.test.js'
+      - name: Emulator complete; no production mutation
+        run: |
+          echo 'PASS: synthetic emulated Spark rules, no production account/rule/function mutation.'
+
+  private-qa-apk:
+    needs: spark-security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify unchanged backup, signing secrets and explicit server-feature lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin deda-social-firestore-no-functions-100327-2026-10-09:refs/remotes/origin/deda-social-firestore-no-functions-100327-2026-10-09
+          git merge-base --is-ancestor origin/deda-social-firestore-no-functions-100327-2026-10-09 HEAD
+          python3 - <<'GUARD'
+          from pathlib import Path
+          g=Path('lib/deda_launch_feature_gates.dart').read_text()
+          assert 'DEDA_SERVER_AUTOMATIONS_LIVE' in g and 'defaultValue: false' in g
+          for p,t in [
+            ('lib/deda_social_task_preview.dart','DedaLaunchFeatureGates.telegramVerifiedRewards'),
+            ('lib/deda_admin_social_task_preview_page.dart','DedaLaunchFeatureGates.telegramVerifiedRewards'),
+            ('lib/deda_admin_automation_toggle.dart','DedaLaunchFeatureGates.serverFeaturesEnabled'),
+          ]:
+              assert t in Path(p).read_text(), 'release gate absent: '+p
+          print('PASS: public first server-feature lock intact, stable 100327 untouched')
+          GUARD
+          for key in DEDA_KEYSTORE_BASE64 DEDA_KEY_ALIAS DEDA_STORE_PASSWORD DEDA_KEY_PASSWORD; do
+            [ -n "$(printenv "$key")" ] || { echo "SAFE_STOP missing app signing secret: $key"; exit 2; }
+          done
+          test "$(git rev-parse 36936f5de99e58cd468f859d99e8204c18a53c52)" = "36936f5de99e58cd468f859d99e8204c18a53c52"
+          git diff --quiet 36936f5de99e58cd468f859d99e8204c18a53c52 -- firestore.rules firebase.json functions/index.js || { echo 'SAFE_STOP live backend files changed'; exit 6; }
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Fetch Flutter packages and test deferred feature policy
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos lib/deda_launch_feature_gates.dart lib/deda_admin_automation_toggle.dart lib/deda_admin_social_task_preview_page.dart lib/deda_social_task_preview.dart lib/deda_pin_auth.dart lib/deda_gift_recipient_preview.dart lib/deda_official_gift_logo.dart
+          flutter test test/deda_launch_feature_gates_test.dart test/deda_social_task_preview_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_admin_compact_card_test.dart test/deda_gift_recipient_preview_test.dart test/deda_official_gift_logo_test.dart
+      - name: Confirm 3-column vivid manager tiles match home-card dimensions
+        run: |
+          python3 - <<'THREE_TILE_GUARD'
+          from pathlib import Path
+          ui=Path('lib/admin_pages.dart').read_text()
+          card=Path('lib/deda_admin_compact_card.dart').read_text()
+          assert "MainAxis" not in "", 'unreachable'
+          assert "                    ? 4 : 3," in ui
+          assert "mainAxisExtent: (126 *" in ui
+          assert "mainAxisSpacing: 8," in ui and "crossAxisSpacing: 8," in ui
+          assert "HSLColor.fromColor(accentColor)" in card
+          assert "gradient: LinearGradient(" in card
+          assert "child: InkWell(" in card and "onTap: onTap," in card
+          assert "Semantics(" in card
+          print('PASS: 3 vivid home-sized admin tiles per row with intact tap semantics.')
+          THREE_TILE_GUARD
+      - name: Reconstruct accepted 100330 and inject owner-only card without backend changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100319-user-accepted-2026-10-08:refs/remotes/origin/backup-deda-100319-user-accepted-2026-10-08
+          git show origin/backup-deda-100319-user-accepted-2026-10-08:lib/main.dart > lib/main.dart
+          cp lib/admin_pages.dart /tmp/deda_public_new_admin_pages.dart
+          git show origin/deda-social-firestore-no-functions-100327-2026-10-09:lib/admin_pages.dart > lib/admin_pages.dart
+          python3 - <<'MAKE_SCRIPT'
+          from pathlib import Path
+          src=Path('tools/build_100318_user_heading_camera.sh').read_text()
+          marker="echo '== Flutter analyzer =='\n"
+          old='flutter build apk --release --build-number=100318 --dart-define=USE_NEXT_GEN_SDK=true'
+          assert src.count(marker)==1 and src.count(old)==1, 'original navigation script changed'
+          add="""echo '== Restore next-release compact manager UI, no backend services =='
+          # Preserve legacy reconstructed 100271 manager gift page and
+          # client/server funded transaction, then restore 100329 accepted
+          # three-column colorful admin dashboard.
+          cp lib/admin_pages.dart /tmp/deda_rebuilt_admin_with_gifts.dart
+          cp /tmp/deda_public_new_admin_pages.dart lib/admin_pages.dart
+          python3 tools/deda_integrate_verified_gift_recipient_2026_10_10.py
+          python3 tools/deda_harden_admin_gift_debit_2026_10_10.py
+          dart format lib/admin_pages.dart lib/deda_backend.dart
+          echo '== Show already-earned ad diamonds and guarded first login progress =='
+          python3 tools/fix_profile_rewarded_diamond_display_next_release.py
+          python3 tools/guard_deda_login_busy_indicator_next_release.py
+          echo '== Keep social channel-link task but never activate payouts =='
+          python3 tools/inject_social_task_golden_preview_2026_10_09.py
+          dart format lib/main.dart
+          echo '== Restore owner place profile access (UI only) =='
+          python3 tools/restore_owner_place_entry_100331_2026_10_13.py
+          dart format lib/main.dart
+          python3 tools/validate_owner_place_entry_100331_2026_10_13.py
+          echo '== Stage 100332 owner, map and reviewed logo changes =='
+          python3 -m py_compile tools/stage_owner_place_map_ux_100332_2026_10_13.py tools/stage_place_engagement_core_100332_2026_10_13.py tools/stage_place_engagement_map_100332_2026_10_13.py tools/stage_owner_branding_100332_2026_10_13.py tools/validate_owner_place_map_ux_100332_2026_10_13.py
+          python3 tools/stage_owner_place_map_ux_100332_2026_10_13.py
+          python3 tools/stage_place_engagement_core_100332_2026_10_13.py
+          python3 tools/stage_place_engagement_map_100332_2026_10_13.py
+          # FlutterMap 8: mapController: is mandatory; analyzer blocks invalid API use.
+          python3 tools/stage_owner_branding_100332_2026_10_13.py
+          echo '== Heartbeat UI: deduplicate, vivid fields, long counts, compact AUTO control =='
+          python3 -m py_compile tools/stage_deda_heartbeat_owner_ui_100333.py
+          python3 tools/stage_deda_heartbeat_owner_ui_100333.py
+          echo '== 100334 compact admin stage + Iraqi professional icons =='
+          python3 tools/stage_deda_heartbeat_admin_compact_100334.py
+          python3 tools/stage_deda_heartbeat_integrated_symbols_2026_10_14.py
+          python3 -m py_compile tools/stage_deda_100335_owner_map_interactions.py
+          python3 tools/stage_deda_100335_owner_map_interactions.py
+          python3 -m py_compile tools/stage_deda_100336_two_features.py
+          python3 tools/stage_deda_100336_two_features.py
+          # Owner local palette cannot alter existing admin request schema until reviewed.
+          dart format lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart
+          python3 tools/validate_owner_place_entry_100331_2026_10_13.py
+          # Only the superseded fixed-width assertion differs from 100332.
+          # Keep every other historical map, route, request and owner gate.
+          python3 - <<'MAP_100335_LEGACY_WIDTH'
+          from pathlib import Path
+          p = Path('tools/validate_owner_place_map_ux_100332_2026_10_13.py')
+          old = p.read_text()
+          assert old.count("'maxWidth: 140'") == 1, 'SAFE_STOP old map width expectation changed'
+          assert old.count('"const Text("') == 1, 'SAFE_STOP old static badge text expectation changed'
+          # Only two UI implementation facts superseded the 100332 validator:
+          # adaptive name width and dynamic DEDA badge text contrast.
+          p.write_text(old.replace("'maxWidth: 140'", "'maxWidth: 170'")
+                          .replace('"const Text("', '"Text("'))
+          MAP_100335_LEGACY_WIDTH
+          python3 tools/validate_owner_place_map_ux_100332_2026_10_13.py
+          python3 tools/validate_owner_admin_request_flow_100332.py
+          python3 - <<'MAP_100335_GUARD'
+          from pathlib import Path
+          import re
+          source = Path('lib/main.dart').read_text()
+          section = source[source.index('class DedaMapPlaceMarker extends StatelessWidget {'):source.index('class DedaPlaceSearchPage extends StatefulWidget')]
+          owner = source[source.index('class _OwnerPlacePageState extends State<OwnerPlacePage> {'):source.index('class DedaPersonalPlace')]
+          assert 'DEDA_100335_OWNER_MAP_QA' in source
+          assert 'onTap: onLabelTap' in section
+          assert 'onTap: onTap' in section
+          assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in source
+          assert 'onTap: () => selectMapPlace(place)' in source
+          assert 'color: brandColor' in section
+          assert 'likes: social.likes' in section
+          assert 'DEDA_100336_TWO_FEATURES_QA' in source
+          assert re.search(r'fillColor:\s*DedaPlacePalette\.forIndex\(\s*_placeThemeIndex\s*\)', owner)
+          assert "label: Text(dedaText('تعديل المكان', 'Edit place'))" not in owner
+          assert re.search(r"tooltip:\s*dedaText\(\s*'تعديل المكان'\s*,\s*'Edit place'\s*\)", owner)
+          assert 'maxLines: 2' in section
+          assert 'Color(0xFF858E88)' in section
+          assert 'DedaPlaceEngagementService.live' in source
+          print('PASS 100336 M01-M05 full palette, uniform inactive grey, true counters, and route')
+          MAP_100335_GUARD
+          python3 - <<'PRIVATE_OWNER_100332_GATES'
+          from pathlib import Path
+          main = Path('lib/main.dart').read_text()
+          bar = Path('lib/deda_place_engagement_bar.dart').read_text()
+          logo = Path('lib/deda_place_logo.dart').read_text()
+          palette = Path('lib/deda_place_palette.dart').read_text()
+          for needle in (
+              '_selectPlaceWithSocial(',
+              '_hideSocialBar()',
+              'DedaPlaceEngagementBar(',
+              'DedaOwnerPlaceLogo(',
+              '_ownerMetricsDisplay()',
+              'DedaPlaceColorChooser(',
+              'DedaBackend.submitPlace(data)',
+              'DedaBackend.submitPlaceEdit(',
+              'DedaBackend.resubmitPlaceRequest(',
+          ):
+              assert needle in main, 'missing 100332 feature or old submission: '+needle
+          assert 'Color(0xFFE53935)' in bar, 'approved red liked-heart color missing'
+          assert 'DEDA_PLACE_ENGAGEMENT_LIVE' in Path('lib/deda_place_engagement_service.dart').read_text()
+          assert 'DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE' in logo
+          assert 'DEDA_OWNER_PLACE_BRANDING_LIVE' in palette
+          print('PASS: private 100332 feature, no fabricated counts and old owner submit intact')
+          PRIVATE_OWNER_100332_GATES
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_place_engagement_service.dart lib/deda_place_branding_service.dart lib/deda_place_activity_symbol.dart lib/main.dart lib/places_service.dart lib/deda_place_palette.dart lib/deda_place_logo.dart lib/deda_place_engagement_bar.dart lib/deda_place_engagement_service.dart lib/deda_place_suggestions.dart lib/deda_admin_automation_toggle.dart
+          flutter test test/deda_place_suggestions_test.dart test/deda_place_engagement_bar_test.dart test/deda_place_branding_100332_test.dart test/deda_admin_auto_compact_100334_test.dart test/deda_map_place_taps_100335_test.dart
+          # Fail closed on follower icon strip overflow, even for large real counts.
+          node --check functions/index.js
+          node --check functions/deda_place_engagement.js
+          node --check functions/deda_owner_approval_bell.js
+          node --test functions/tests/deda_place_engagement.test.js
+          node --test functions/tests/deda_owner_approval_bell.test.js
+          node --test functions/tests/deda_place_branding.test.js
+          node --check functions/deda_place_branding.js
+          echo 'PASS: 17-point staging gates, including 100331 owner card, pending branding publication, preserved routes and strict server feature lock'
+          python3 - <<'PUBLIC_GATES'
+          from pathlib import Path
+          main=Path('lib/main.dart').read_text()
+          admin=Path('lib/admin_pages.dart').read_text()
+          gates=Path('lib/deda_launch_feature_gates.dart').read_text()
+          assert main.count('DedaSocialTaskCompactCard(')==1
+          assert main.count('dedaProfileVisibleDiamonds(')==1
+          assert 'DEDA_NEXT_LOGIN_BUSY_INDICATOR_2026_10_10' in main
+          assert 'Timer.periodic(const Duration(milliseconds: 16)' in main
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in main
+          assert main.count('final taskId = DedaTaskIds.weekly[index];')==1
+          assert 'DedaPinRecoveryPage(' in main
+          assert 'DedaPinAuth.readRecoveryPin(' in main
+          assert 'DedaAdminCompactCard(' in admin
+          assert admin.count('DedaAdminDiamondGiftPage(isArabic: ar)')==1, 'manager gift card missing'
+          assert admin.count('DedaGiftRecipientPreview(')==1, 'recipient identity preview missing'
+          assert "class DedaAdminDiamondGiftPage" in admin, 'pending gift transaction screen missing'
+          assert "class _DedaAdminDiamondGiftPageState" in admin
+          assert 'DedaSocialProgressWallet.spendCoins' not in admin, 'unsafe friend/coin gifts should remain OFF'
+          backend=Path('lib/deda_backend.dart').read_text()
+          assert "'lastGiftId': giftRef.id" in backend, 'admin debit not paired to gift'
+          assert "collection('deda_diamond_gifts')" in backend
+          assert "collection('deda_admin_diamond_wallets')" in backend
+          assert "collection('deda_diamond_gift_balances')" in backend
+          assert "DedaOfficialGiftLogo(size: 52)" in main, 'real app logo not present in received gifts'
+          assert main.count("label: Text(dedaText('استلام الهدية', 'Receive gift'))")==1
+          assert 'onPressed: busy ? null : () => _claim(gift)' in main, 'manual-only claim missing'
+          assert "DedaBackend.claimDiamondGift(" in main
+          assert "gift['status'] ?? '').toString() == 'pending'" in main
+          print('PASS: GM can send signed pending gifts; personal ID preview; existing هداياي inbox and explicit user claim')
+          import re
+          grid=admin[admin.index('GridView.count('):]
+          assert re.search(r'\?\s*4\s*:\s*3\s*,', grid), '3 phone columns lost'
+          assert re.search(r'mainAxisExtent:\s*\(\s*126\s*\*', grid), 'small 126px tiles lost'
+          assert "kind: 'place_auto_approval'" in admin and "kind: 'pin_auto_recovery'" in admin
+          assert 'defaultValue: false' in gates
+          print('PASS: real navigation, 8 tasks, admin, diamonds, manual recovery, server features OFF')
+          PUBLIC_GATES
+          echo '== 100337 Makani: move owner entry and keep normal account personal =='
+          python3 -m py_compile tools/stage_deda_makani_100337.py tools/validate_deda_makani_100337.py
+          python3 tools/stage_deda_makani_100337.py
+          dart format lib/main.dart lib/deda_place_engagement_bar.dart
+          python3 tools/validate_deda_makani_100337.py
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_place_engagement_bar.dart
+          flutter test test/deda_place_engagement_bar_test.dart test/deda_makani_100337_test.dart
+          echo 'PASS: 100337 only profile/Makani access and like spacing. No backend or navigation edits.'
+          echo '== DEDA 100339 scoped MapReadyPage geometry and rotation =='
+          python3 -m py_compile tools/stage_deda_100339_map_anchor_rotation_safe.py
+          python3 tools/stage_deda_100339_map_anchor_rotation_safe.py
+          dart format lib/main.dart test/deda_100339_pretrip_map_rotation_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
+          flutter test test/deda_map_place_taps_100335_test.dart test/deda_place_engagement_bar_test.dart test/deda_makani_100337_test.dart test/deda_100339_pretrip_map_rotation_test.dart
+          python3 - <<'MAP_100339_GUARD'
+          from pathlib import Path
+          import re
+          src=Path('lib/main.dart').read_text()
+          start=src.index('class _MapReadyPageState extends State<MapReadyPage> {')
+          nav=src[src.index('class DedaRoutePage extends StatefulWidget'):start]
+          m=src[start:]
+          assert m.count('// DEDA_100339_PRETRIP_MAP_SAFE_QA') == 1
+          assert m.count('// DEDA_100339_MAP_AVATAR_COORDINATE') == 1
+          assert 'flags: InteractiveFlag.all' in m
+          assert 'InteractiveFlag.all & ~InteractiveFlag.rotate' not in m, '100332 rotate lock still active'
+          assert m.count('interactionOptions: const InteractionOptions(') == 1, 'duplicate pretrip map options'
+          assert '0.7162162162162162' in m
+          assert re.search(r'rotate:\s*true,\s*child:\s*DedaMapPlaceMarker\(',m)
+          assert 'onLabelTap: () => _selectPlaceWithSocial(place)' in m
+          assert 'onTap: () => selectMapPlace(place)' in m
+          assert 'class _DedaIraqDestinationFlag' in nav
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in nav
+          flag_start=nav.index('point: destinationPoint,')
+          flag_end=nav.index('_DedaIraqDestinationFlag()',flag_start)
+          assert 'rotate: true' in nav[flag_start:flag_end], 'Iraqi flag orientation guard failed'
+          print('PASS: flag upright, navigation page unchanged, map engagement preserved')
+          MAP_100339_GUARD
+          echo 'PASS: two-finger rotation and map avatar anchoring test stage passed'
+          echo '== 100340 ONLY place circle true geographic pivot, zoom 15.8 to 15.2 =='
+          python3 -m py_compile tools/stage_deda_100340_pin_center_nav_zoom.py
+          python3 tools/stage_deda_100340_pin_center_nav_zoom.py
+          dart format lib/main.dart test/deda_100340_geo_marker_camera_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart test/deda_100340_geo_marker_camera_test.dart
+          flutter test test/deda_100339_pretrip_map_rotation_test.dart test/deda_100340_geo_marker_camera_test.dart test/deda_map_place_taps_100335_test.dart test/deda_place_engagement_bar_test.dart test/deda_makani_100337_test.dart
+          python3 - <<'SAFE_100340'
+          from pathlib import Path
+          import re
+          s=Path('lib/main.dart').read_text()
+          route=s[s.index('class DedaRoutePage extends StatefulWidget'):s.index('class _MapReadyPageState extends State<MapReadyPage> {')]
+          marker=s[s.index('class _MapReadyPageState extends State<MapReadyPage> {'):]
+          assert route.count('final navigationHomeZoom = 15.2;')==1
+          assert 'final navigationHomeZoom = 15.8;' not in route
+          assert 'initialZoom: 11.8' in marker, 'Main map zoom changed!'
+          assert 'flags: InteractiveFlag.all' in marker, 'Pretrip rotation was broken'
+          assert 'InteractiveFlag.all & ~InteractiveFlag.rotate' not in marker
+          assert 'height: place.isDedaRegistered ? 260 : 58' in marker
+          assert 'alignment: Alignment.center' in marker
+          assert re.search(r'top:\s*place\.isDedaRegistered\s*\?\s*3\s*:\s*0', marker), 'geo pin wrapper top offset changed'
+          assert '_selectPlaceWithSocial(place)' in marker and 'onLabelTap:' in marker, 'name tap lost'
+          assert 'selectMapPlace(place)' in marker and 'onTap:' in marker, 'destination tap lost'
+          assert '_buildFixedDriverArrow(navigationArrowAngle)' in route
+          assert '_DedaIraqDestinationFlag()' in route
+          print('PASS: true DEDA geo-centre, live reactions, successful rotation, only requested zoom change')
+          SAFE_100340
+          echo 'PASS: 100340 pin geometry and start zoom tests complete; now build private APK only'
+          """
+          src=src.replace(marker,add+'\n'+marker)
+          new=('flutter build appbundle --release --build-number=100340 '
+               '--dart-define=USE_NEXT_GEN_SDK=true '
+               '--dart-define=DEDA_DAILY_TASK_DISPLAY_PREVIEW=false '
+               '--dart-define=DEDA_SOCIAL_TASKS_UI_PREVIEW=true '
+               '--dart-define=DEDA_SERVER_AUTOMATIONS_LIVE=false '
+               '--dart-define=DEDA_PLACE_ENGAGEMENT_LIVE=true '
+               '--dart-define=DEDA_SPARK_FIRESTORE_LIVE=true '
+               '--dart-define=DEDA_OWNER_PLACE_BRANDING_LIVE=true '
+               '--dart-define=DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')
+          assert new.count('--dart-define=DEDA_SERVER_AUTOMATIONS_LIVE=false') == 1
+          assert new.count('--dart-define=DEDA_PLACE_ENGAGEMENT_LIVE=true') == 1
+          assert new.count('--dart-define=DEDA_SPARK_FIRESTORE_LIVE=true') == 1
+          assert new.count('--dart-define=DEDA_OWNER_PLACE_BRANDING_LIVE=true') == 1
+          assert new.count('--dart-define=DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false') == 1
+          src=src.replace(old,new)
+          assert src.count(new)==1
+          Path('/tmp/deda_100340_play_aab.sh').write_text(src)
+          print('Prepared signed 100340 Play AAB with EXACT accepted phone source and defines; NO Firebase deploy or Play auto-publish')
+          MAKE_SCRIPT
+      - name: Convert 100340 AAB compile to isolated profile private APK only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PRIVATE_PROFILE_QA'
+          from pathlib import Path
+          f=Path('/tmp/deda_100340_play_aab.sh')
+          lines=f.read_text().splitlines()
+          matches=[i for i,line in enumerate(lines) if line.startswith('flutter build appbundle --release --build-number=100340 ')]
+          assert len(matches)==1, 'SAFE_STOP: original signed Play bundle build command missing or duplicated'
+          original=lines[matches[0]]
+          apk_command=original.replace('flutter build appbundle --release --build-number=100340 ',
+              'flutter build apk --release --build-number=100342 ',1)
+          assert apk_command.count('DEDA_SERVER_AUTOMATIONS_LIVE=false')==1
+          assert apk_command.count('DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')==1
+          lines[matches[0]] = (
+              'python3 tools/stage_deda_royal_hero_2026_10_17.py && '
+              'python3 tools/stage_deda_royal_avatars_step1_2026_10_17.py && '
+              'python3 tools/stage_deda_point7_compact_ids_100342.py && '
+              'dart format lib/main.dart && '
+              'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && '
+              'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_point7_compact_ids_100342_test.dart && '
+              'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '
+              'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
+              + apk_command + ' || { echo "SAFE_STOP: royal avatar test or private APK build failed" >&2; exit 1; }'
+          )
+          f.write_text('\n'.join(lines)+'\n')
+          assert 'flutter build appbundle --release --build-number=100340 ' not in f.read_text()
+          print('SAFE: private signed APK only, same accepted defines, no Play or Firebase deployment')
+          PRIVATE_PROFILE_QA
+      - name: Reconstruct safe 100340, apply royal hero, test and compile private signed APK
+        run: bash /tmp/deda_100340_play_aab.sh
+      - name: Verify signed profile private APK, preserve Play release
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          grep -q '^flutter.versionCode=100342$' android/local.properties
+          grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
+          grep -q 'deda_point7_change_id_requires_verified_registry' lib/main.dart
+          grep -q 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' lib/main.dart
+          grep -q 'DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17' lib/main.dart
+          grep -q 'dedaProfileVisibleDiamonds(' lib/main.dart
+          grep -q 'DedaDiamondsWallet.balanceNotifier' lib/main.dart
+          grep -q 'DedaSocialProgressWallet.xpNotifier' lib/main.dart
+          python3 - <<'VERIFY_PRIVATE_PROFILE'
+          from pathlib import Path
+          import zipfile, json, hashlib
+          p=Path('build/app/outputs/flutter-apk/app-release.apk')
+          assert p.stat().st_size>1000000
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              assert {'AndroidManifest.xml','classes.dex'} <= set(z.namelist())
+              files=set(z.namelist())
+              expected={
+                  'deda_avatar_male_royal.jpg': 'a78adc468b63d9897c6adba887dfe81f37ba97b0aa99c212563387b5f820710f',
+                  'deda_avatar_female_royal.jpg': '46e6eeb18eb05eaeeabf5706ac910be127f50f2865e48277c79027db4a95f2f2',
+                  'deda_avatar_couple_royal.jpg': '8c3f0d39a8e5c582979494efea04de54b0949654f56e90629d9333aa9789f14a'
+              }
+              for n,digest in expected.items():
+                  matches=[a for a in files if a.endswith('/deda_royal_avatars/'+n)]
+                  assert len(matches)==1, 'Royal asset missing from APK: '+n
+                  assert hashlib.sha256(z.read(matches[0])).hexdigest()==digest, 'Royal asset altered in APK: '+n
+          c=json.loads(Path('google-services.json').read_text())
+          packages={x['client_info']['android_client_info']['package_name'] for x in c['client']
+                    if 'android_client_info' in x.get('client_info',{})}
+          assert packages == {'com.diraq.ludo.d_iraq_ludo'}
+          print('PASS: package identity, valid Android APK, no AAB, original release branch untouched')
+          print('APK SHA256:',hashlib.sha256(p.read_bytes()).hexdigest())
+          VERIFY_PRIVATE_PROFILE
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --verbose "$APK"
+          mkdir -p private-profile-test
+          cp "$APK" private-profile-test/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk
+          sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
+          git rev-parse HEAD > private-profile-test/source-commit.txt
+          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100342. Compact IDs UI preview; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
+          echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
+      - name: Upload signed private profile QA APK, NOT FOR PLAY
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY
+          path: private-profile-test/
+          retention-days: 21
+          if-no-files-found: error
