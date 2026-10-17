@@ -54,7 +54,10 @@ class _DedaStartupGateState extends State<DedaStartupGate> {
   @override
   void initState() {
     super.initState();
-    unawaited(_start());
+    // Always paint the first Flutter frame before any plugin/cache work.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_start());
+    });
   }
 
   void _progress(String phase) {
