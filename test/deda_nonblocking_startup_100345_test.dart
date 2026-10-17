@@ -19,7 +19,7 @@ void main() {
     boot.completeError(StateError('simulated local startup failure'));
     await tester.pump();
     expect(find.byKey(const Key('deda_startup_error')), findsOneWidget);
-    expect(find.textContaining('بياناتك محفوظة'), findsOneWidget);
+    expect(find.textContaining('لا تحذف التطبيق ولا تمسح بياناته'), findsOneWidget);
     expect(find.byKey(const Key('deda_startup_retry')), findsOneWidget);
   });
 
