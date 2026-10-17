@@ -64,8 +64,13 @@ void main() {
       const MaterialApp(home: Scaffold(body: DedaAvatarPortrait(style: 0, size: 100))));
     expect(find.byType(Image), findsOneWidget);
     final img = tester.widget<Image>(find.byType(Image));
-    expect(img.image, isA<AssetImage>());
-    expect((img.image as AssetImage).assetName, contains('deda_avatar_male_royal.jpg'));
+    // Image.asset may wrap AssetImage in ResizeImage for cacheWidth; both
+    // representations still load the approved JPEG from Flutter assets.
+    final provider = img.image is ResizeImage
+        ? (img.image as ResizeImage).imageProvider
+        : img.image;
+    expect(provider, isA<AssetImage>());
+    expect((provider as AssetImage).assetName, contains('deda_avatar_male_royal.jpg'));
     expect(img.fit, BoxFit.cover);
   });
 
