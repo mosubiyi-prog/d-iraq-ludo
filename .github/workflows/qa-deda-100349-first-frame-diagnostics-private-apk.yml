@@ -381,7 +381,7 @@ jobs:
           assert 'await DedaPreferences.load()' not in main
           assert "await SharedPreferences.getInstance().timeout" in s
           assert 'DedaTaskEngine.initializeForCurrentAccount()' in s
-          assert "prefs.clear()" not in s and "prefs.remove(_loggedInKey)" not in s
+          assert 'prefs.clear()' not in main and 'prefs.remove(' not in main
           assert 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' not in s
           assert "return const DedaApp();" in s
           print('PASS: immediate first Flutter frame; no startup data clear or royal features')
