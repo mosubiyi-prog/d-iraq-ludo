@@ -23,6 +23,19 @@ void main() {
     expect(find.byKey(const Key('deda_startup_retry')), findsOneWidget);
   });
 
+  testWidgets('shows safely categorized local timeout without leaking account values',
+      (tester) async {
+    await tester.pumpWidget(DedaStartupGate(
+      initializeForTesting: () async {
+        throw TimeoutException('underlying sensitive debug message');
+      },
+    ));
+    await tester.pump();
+    expect(find.byKey(const Key('deda_startup_error')), findsOneWidget);
+    expect(find.text('انتهت مهلة الانتظار'), findsOneWidget);
+    expect(find.textContaining('underlying sensitive'), findsNothing);
+  });
+
   testWidgets('retry does not delete local account or reset progress',
       (tester) async {
     var attempts = 0;
