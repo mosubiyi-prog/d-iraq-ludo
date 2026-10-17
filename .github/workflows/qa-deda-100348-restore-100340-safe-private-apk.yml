@@ -413,7 +413,7 @@ jobs:
           APK="$APK" APKSIGNER="$APKSIGNER" python3 - <<'SIGNER_100348_QA'
           import os, re, subprocess
           out=subprocess.check_output([os.environ['APKSIGNER'],'verify','--print-certs',os.environ['APK']],text=True)
-          m=re.search(r'(?im)Signer #1 certificate SHA-256 digest:\\s*([a-f0-9:]+)',out)
+          m=re.search(r'(?im)Signer #1 certificate SHA-256 digest:\s*([a-f0-9:]+)',out)
           assert m, 'APK certificate digest not found'
           actual=m.group(1).replace(':','').lower()
           expected='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
@@ -424,7 +424,7 @@ jobs:
           cp "$APK" private-recovery-test/DEDA-100348-RESTORED-100340-SAFE-PRIVATE-QA.apk
           sha256sum private-recovery-test/*.apk > private-recovery-test/SHA256SUMS.txt
           git rev-parse HEAD > private-recovery-test/source-commit.txt
-          printf '%s\\n' \
+          printf '%s\n' \
             'DEDA 100348 — user-requested rescue build of PHONE-APPROVED 100340. No 100341-100347 avatar/frame/ID changes. VersionCode increased only for a data-preserving in-place UPDATE above 100347.' \
             'DO NOT UNINSTALL DEDA OR CLEAR STORAGE. Install only as an UPDATE on the SAME phone; cancel if installer requests uninstall/data deletion or shows signature mismatch.' \
             'CI success verifies source, build and APK signature but cannot prove the app opens with existing device-local data. If green splash persists, stop further installs and capture exact log from device; never delete app data.' \
