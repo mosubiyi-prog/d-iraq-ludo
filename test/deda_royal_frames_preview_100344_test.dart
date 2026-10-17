@@ -17,9 +17,14 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: DedaEditProfilePage()));
 
     final locked = find.byKey(const Key('deda_royal_frame_tile_3'));
+    // The frames gallery is below the screen fold inside a lazy ListView.
+    // Scroll until built; never assume an off-screen widget exists yet.
+    await tester.scrollUntilVisible(
+      locked, 220,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(locked, findsOneWidget);
-    await tester.ensureVisible(locked);
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.tap(locked);
     await tester.pump();
     expect(find.byKey(const Key('deda_royal_frame_preview_only_badge')),
