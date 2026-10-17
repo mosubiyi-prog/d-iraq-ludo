@@ -28,7 +28,7 @@ These are the original three 1536x1536 JPEG bytes the owner approved; not re-gen
 ## Current QA
 - Patch file committed as `tools/stage_deda_royal_avatars_step1_2026_10_17.py`, commit `d4223a678ac5e14f63d506435f8f6f4611067782`. Local guard comparison PASS for all protected wallet functions, avatar migration, and three assets.
 - Additional Flutter tests committed `test/deda_royal_avatar_choice_100341_test.dart`, commit `35288f1baeb9ac2bf42699593e9247672f26c3e5`; these require execution in rebuilt-source CI before release approval.
-- GitHub Action QA for private 100341 signed APK (NOT FOR PLAY): https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38988733315 . Started in queued/in_progress state; **do not claim success until checked**.
+- GitHub Action QA for private 100341 signed APK (NOT FOR PLAY): https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38988987835 . The initial QA command failed on workflow Python formatting; corrected on a follow-up commit, and full migration/diamond tests are included. Current QA run 38988987835 is pending/in progress; **do not claim success until checked**.
 - Workflow `.github/workflows/qa-deda-profile-step1-royal-hero-private-apk-no-deploy.yml` compiles private APK v100341 and verifies image SHA256 from inside final APK; only after source rebuild + safety checks. Code of UI and image status cannot be validated visually until a real phone screenshot from signed APK is inspected and owner accepts it.
 
 ## Immediate next steps
