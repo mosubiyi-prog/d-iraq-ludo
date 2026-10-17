@@ -9,6 +9,8 @@ on:
       - point7-compact-ids-sticky-preview-frames-2026-10-17
     paths:
       - '.github/workflows/qa-deda-100342-point7-compact-ids-private-apk-no-deploy.yml'
+      - 'test/deda_point7_compact_ids_100342_test.dart'
+      - 'tools/stage_deda_point7_compact_ids_100342.py'
   workflow_dispatch:
 
 permissions:
