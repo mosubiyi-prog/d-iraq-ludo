@@ -31,9 +31,17 @@ These are the original three 1536x1536 JPEG bytes the owner approved; not re-gen
 - GitHub Action QA for private 100341 signed APK (NOT FOR PLAY): https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38988987835 . The initial QA command failed on workflow Python formatting; corrected on a follow-up commit, and full migration/diamond tests are included. Current QA run 38988987835 is pending/in progress; **do not claim success until checked**.
 - Workflow `.github/workflows/qa-deda-profile-step1-royal-hero-private-apk-no-deploy.yml` compiles private APK v100341 and verifies image SHA256 from inside final APK; only after source rebuild + safety checks. Code of UI and image status cannot be validated visually until a real phone screenshot from signed APK is inspected and owner accepts it.
 
+## 2026-10-17 01:15 UTC | Owner return, current QA correction
+- Inspected completed QA run [38988987835](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38988987835): `spark-security` succeeded, `private-qa-apk` failed. Royal migration and wallet suite reported 13 passing tests, 1 failing test. The sole failure was a widget assertion that expected `AssetImage`, whereas Flutter wrapped that provider in `ResizeImage` due to the deliberately configured `cacheWidth`. Other avatar migration and visible-diamond tests passed.
+- The previous job step was marked successful because the script's `&&` command chain stopped before `flutter build apk`, but its subsequent shell commands returned zero; the actual APK was **not built or uploaded**. The verify step correctly failed on missing APK. This was not a signed-artifact or production release failure.
+- Test assertion corrected to inspect `ResizeImage.imageProvider` when wrapped: commit `c440fded7efce68833d2811b5d0ebc25cf8da169`.
+- Private workflow now fails closed if tests or build fail, rather than falsely reporting success: commit `cba386d3bd4de12108df4c553e39cd0171c31bb6`.
+- Fresh private QA run [38990051627](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/38990051627), head `cba386d3bd4de12108df4c553e39cd0171c31bb6`, was **in_progress** when checked. Do not label it passed until jobs, signed APK verification, and artifact are checked.
+- Stable backup branch and Google Play untouched; no live Firebase deploy, no approval to publish.
+
 ## Immediate next steps
-1. Check QA run 38988733315 result and job logs. If failed, diagnose/fix without touching stable branch or real data.
-2. Run new Flutter migration test file in post-reconstruction context (CI) for old image preservation and all three selected choices.
-3. Verify private APK signature/package/version and included images; provide direct download only if built successfully.
-4. Ask owner to try on test device and share screenshots of edit gallery, each large portrait inside frame, and main profile. Owner approval required.
-5. Save exact SHA/build/test outcome in `/DEDA/Project_Checkpoints` for chat recovery. Do not publish to Play without explicit approval.
+1. Inspect QA run 38990051627 completion and jobs; if failed, diagnose/fix on working branch only.
+2. Confirm all Flutter migration/diamond tests pass in the reconstructed-source CI, then inspect signed private 100341 APK signature, package/version, SHA256 and all three approved image hashes.
+3. Share the private artifact if and only if the new run passes and uploads it; do not upload to Google Play.
+4. Ask owner to try on test device and share screenshots of edit gallery, large portraits inside frame, and main profile. Owner approval required.
+5. Record exact final SHA/build/test outcome in `/DEDA/Project_Checkpoints` for chat recovery.
