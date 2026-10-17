@@ -32,11 +32,17 @@ p = old.index(prefix)
 begin = p + len(prefix)
 portrait = old.find("                child: DedaFramedAvatar(", begin)
 assert portrait > begin, "SAFE_STOP actual portrait preview missing"
-close = "            ),\n"
-end_preview = old.find(close, portrait)
-assert end_preview > portrait, "SAFE_STOP portrait container not closed"
-end_preview += len(close)
+# Stop at the next top-level widget (the read-only ID card added in
+# 100341), NOT at an inner closing paren of Center/DedaFramedAvatar.
+next_widget = """            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+"""
+assert old.count(next_widget) == 1, "SAFE_STOP read-only ID anchor moved"
+end_preview = old.index(next_widget, portrait)
 preview = old[begin:end_preview]
+assert preview.rstrip().endswith("),"), "SAFE_STOP portrait root not complete"
+assert preview.count("DedaFramedAvatar(") == 1
 assert preview.startswith("            Container(\n")
 assert preview.count("constraints: const BoxConstraints(minHeight: 166),") == 1
 assert preview.count("size: 142,") == 1
