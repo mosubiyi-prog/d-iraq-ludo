@@ -22,7 +22,7 @@ Date: 2026-10-17; state: **work in progress, NOT approved/released**.
 
 ## Still NOT done (critical)
 - Real authoritative owned premium identifiers and safe switching, original ID/aliases, all ID-based routing, Firebase rules + Emulator tests. No backend update was made.
-- Sticky fixed-size avatar preview under edit appbar with scrolled image/frame choices and temporary locked-frame previews.
+- Sticky fixed-size avatar preview source patch now STAGED at `tools/stage_deda_sticky_edit_preview_100343.py` (commit `02f00ad9e99f0c8b57966e1c9d08388a5ccb8ce9`) and test `test/deda_sticky_edit_preview_100343_test.dart` (commit `bc06038d67de1aa7f215df29a55c25ecf029b0bd`). **Not yet executed by CI or approved on a phone**. Temporary locked-frame previews remain pending.
 - Three premium transparent royal frames (850x850 WebP from user: 1000097470.webp, 1000097473.webp, 1000097486.webp), precise inner aperture, elegant animated shimmer, three free legacy frames unchanged on first row, paid preview-only frames on next row; no prices until owner sets them after remaining frames.
 - Full Flutter integration and real-device screenshots/user acceptance. No Play upload.
 
