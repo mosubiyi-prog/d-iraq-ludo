@@ -19,16 +19,41 @@ void main() {
       final expected = oldStyle <= 2 ? oldStyle + 6 : oldStyle;
       expect(DedaPreferences.profileAvatarStyle, expected);
       var prefs = await SharedPreferences.getInstance();
-      expect(prefs.getInt(key), expected);
-      expect(prefs.getBool(migration), isTrue);
+      // 100346: existing choice is mapped in memory without any storage
+      // write during app startup. The old raw value is not destroyed.
+      expect(prefs.getInt(key), oldStyle);
+      expect(prefs.getBool(migration), isNull);
 
-      // A second launch must NOT transform an already migrated selection.
+      // On next start the same original choice remains visible.
       await DedaPreferences.load();
       prefs = await SharedPreferences.getInstance();
       expect(DedaPreferences.profileAvatarStyle, expected);
-      expect(prefs.getInt(key), expected);
+      expect(prefs.getInt(key), oldStyle);
+      expect(prefs.getBool(migration), isNull);
     });
   }
+
+  test('explicit appearance save persists the resolved classic avatar once', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'deda_phone_v1': phone,
+      key: 1,
+    });
+    await DedaPreferences.load();
+    expect(DedaPreferences.profileAvatarStyle, 7);
+    var prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt(key), 1);
+    expect(prefs.getBool(migration), isNull);
+    await DedaPreferences.setProfileAppearance(
+      avatarStyle: DedaPreferences.profileAvatarStyle,
+      frameStyle: 0,
+      backgroundStyle: 0,
+    );
+    prefs = await SharedPreferences.getInstance();
+    expect(prefs.getInt(key), 7);
+    expect(prefs.getBool(migration), isTrue);
+    await DedaPreferences.load();
+    expect(DedaPreferences.profileAvatarStyle, 7);
+  });
 
   test('fresh account defaults to new royalty, then persists its choice', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
