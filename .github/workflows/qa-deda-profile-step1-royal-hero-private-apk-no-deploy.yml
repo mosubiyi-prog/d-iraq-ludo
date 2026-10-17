@@ -387,6 +387,7 @@ jobs:
               'python3 tools/stage_deda_royal_avatars_step1_2026_10_17.py && '
               'dart format lib/main.dart && '
               'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && '
+              'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart && '
               'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '
               'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
               + apk_command
