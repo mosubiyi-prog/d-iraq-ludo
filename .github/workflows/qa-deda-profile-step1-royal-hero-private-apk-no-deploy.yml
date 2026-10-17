@@ -383,10 +383,12 @@ jobs:
           assert apk_command.count('DEDA_SERVER_AUTOMATIONS_LIVE=false')==1
           assert apk_command.count('DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')==1
           lines[matches[0]] = (
-              'python3 tools/stage_deda_royal_hero_2026_10_17.py && '\n              'python3 tools/stage_deda_royal_avatars_step1_2026_10_17.py && '
+              'python3 tools/stage_deda_royal_hero_2026_10_17.py && '
+              'python3 tools/stage_deda_royal_avatars_step1_2026_10_17.py && '
               'dart format lib/main.dart && '
               'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && '
-              'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '\n              'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
+              'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '
+              'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
               + apk_command
           )
           f.write_text('\n'.join(lines)+'\n')
