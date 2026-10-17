@@ -1,4 +1,4 @@
-name: DEDA 100345 Startup Recovery + Royal Frames PRIVATE QA APK - NO DEPLOY
+name: DEDA 100346 Local Restore Recovery + Royal Frames PRIVATE QA APK - NO DEPLOY
 # Reconstruct the proven 100341 source and add point7 compact account ID UI.
 # Compile a PRIVATE Android APK; do not upload to Play or mutate production.
 # No Firebase deployment, no Google Play Console upload, no production mutation.
@@ -16,6 +16,8 @@ on:
       - 'tools/stage_deda_sticky_edit_preview_100343.py'
       - 'tools/stage_deda_royal_frames_preview_100344.py'
       - 'tools/stage_deda_nonblocking_startup_100345.py'
+      - 'tools/stage_deda_100346_read_only_startup_avatar_diagnostics.py'
+      - 'test/deda_royal_avatar_choice_100341_test.dart'
       - 'test/deda_nonblocking_startup_100345_test.dart'
       - 'test/deda_royal_frames_preview_100344_test.dart'
       - 'assets/deda_royal_frames/**'
@@ -26,7 +28,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: deda-100345-safe-first-frame-qa-2026-10-17
+  group: deda-100346-safe-local-restore-qa-2026-10-17
   cancel-in-progress: true
 
 jobs:
@@ -391,7 +393,7 @@ jobs:
           assert len(matches)==1, 'SAFE_STOP: original signed Play bundle build command missing or duplicated'
           original=lines[matches[0]]
           apk_command=original.replace('flutter build appbundle --release --build-number=100340 ',
-              'flutter build apk --release --build-number=100345 ',1)
+              'flutter build apk --release --build-number=100346 ',1)
           assert apk_command.count('DEDA_SERVER_AUTOMATIONS_LIVE=false')==1
           assert apk_command.count('DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')==1
           lines[matches[0]] = (
@@ -402,6 +404,7 @@ jobs:
               'python3 tools/stage_deda_sticky_edit_preview_100343.py && '
               'python3 tools/stage_deda_royal_frames_preview_100344.py && '
               'python3 tools/stage_deda_nonblocking_startup_100345.py && '
+               'python3 tools/stage_deda_100346_read_only_startup_avatar_diagnostics.py && '
               'dart format lib/main.dart && '
               'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && '
               'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_point7_compact_ids_100342_test.dart test/deda_point7_royal_inline_100343_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_frames_preview_100344_test.dart test/deda_nonblocking_startup_100345_test.dart && '
@@ -422,7 +425,8 @@ jobs:
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -s "$APK"
           test ! -f build/app/outputs/bundle/release/app-release.aab
-          grep -q '^flutter.versionCode=100345$' android/local.properties
+          grep -q '^flutter.versionCode=100346$' android/local.properties
+          grep -q 'DEDA_100346_READ_ONLY_AVATAR_MIGRATION' lib/main.dart
           grep -q 'DEDA_100345_NONBLOCKING_STARTUP_DIAGNOSTICS' lib/main.dart
           grep -q 'DEDA_100344_OWNER_EXACT_ROYAL_FRAMES_PREVIEW_ONLY' lib/main.dart
           grep -q 'deda_royal_frame_preview_only_badge' lib/main.dart
@@ -472,15 +476,15 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
           mkdir -p private-profile-test
-          cp "$APK" private-profile-test/DEDA-100345-SAFE-STARTUP-ROYAL-FRAMES-QA.apk
+          cp "$APK" private-profile-test/DEDA-100346-LOCAL-RESTORE-ROYAL-FRAMES-QA.apk
           sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
           git rev-parse HEAD > private-profile-test/source-commit.txt
-          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100345. Nonblocking Flutter startup with visible local-state error and retry; observed 100344 device stuck at native splash. Root cause still needs on-device verification. Royal navy/gold inline IDs and sticky preview. EXACT original gold/ruby/emerald paid frames show temporary preview ONLY, with soft animation. No new price or purchase. Premium ID switching remains disabled pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
+          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100346. Conservative read-only avatar migration during startup and sanitized storage error categorization; no local data reset. Nonblocking Flutter startup with visible local-state error and retry; observed 100344 device stuck at native splash. Root cause still needs on-device verification. Royal navy/gold inline IDs and sticky preview. EXACT original gold/ruby/emerald paid frames show temporary preview ONLY, with soft animation. No new price or purchase. Premium ID switching remains disabled pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
           echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
       - name: Upload signed private profile QA APK, NOT FOR PLAY
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100345-STARTUP-RECOVERY-ROYAL-FRAMES-PRIVATE-APK-NO-PLAY
+          name: DEDA-100346-LOCAL-RESTORE-ROYAL-FRAMES-PRIVATE-APK-NO-PLAY
           path: private-profile-test/
           retention-days: 21
           if-no-files-found: error
