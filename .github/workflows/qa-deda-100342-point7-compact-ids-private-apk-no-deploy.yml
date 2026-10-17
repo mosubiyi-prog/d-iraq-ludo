@@ -1,4 +1,4 @@
-name: DEDA 100342 Point7 Compact IDs PRIVATE QA APK - NO DEPLOY
+name: DEDA 100347 Clean 100342 Baseline RESTORE PRIVATE QA APK - NO DEPLOY
 # Reconstruct the proven 100341 source and add point7 compact account ID UI.
 # Compile a PRIVATE Android APK; do not upload to Play or mutate production.
 # No Firebase deployment, no Google Play Console upload, no production mutation.
@@ -6,7 +6,7 @@ name: DEDA 100342 Point7 Compact IDs PRIVATE QA APK - NO DEPLOY
 on:
   push:
     branches:
-      - point7-compact-ids-sticky-preview-frames-2026-10-17
+      - point7-stable342-recovery-ids-2026-10-17
     paths:
       - '.github/workflows/qa-deda-100342-point7-compact-ids-private-apk-no-deploy.yml'
       - 'test/deda_point7_compact_ids_100342_test.dart'
@@ -16,7 +16,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: deda-100342-point7-private-qa-2026-10-17
+  group: deda-100347-clean342-baseline-private-qa-2026-10-17
   cancel-in-progress: true
 
 jobs:
@@ -381,7 +381,7 @@ jobs:
           assert len(matches)==1, 'SAFE_STOP: original signed Play bundle build command missing or duplicated'
           original=lines[matches[0]]
           apk_command=original.replace('flutter build appbundle --release --build-number=100340 ',
-              'flutter build apk --release --build-number=100342 ',1)
+              'flutter build apk --release --build-number=100347 ',1)
           assert apk_command.count('DEDA_SERVER_AUTOMATIONS_LIVE=false')==1
           assert apk_command.count('DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')==1
           lines[matches[0]] = (
@@ -408,7 +408,7 @@ jobs:
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -s "$APK"
           test ! -f build/app/outputs/bundle/release/app-release.aab
-          grep -q '^flutter.versionCode=100342$' android/local.properties
+          grep -q '^flutter.versionCode=100347$' android/local.properties
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
           grep -q 'deda_point7_change_id_requires_verified_registry' lib/main.dart
           grep -q 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' lib/main.dart
@@ -444,15 +444,15 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
           mkdir -p private-profile-test
-          cp "$APK" private-profile-test/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk
+          cp "$APK" private-profile-test/DEDA-100347-RESTORED-100342-BASELINE-PRIVATE-QA.apk
           sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
           git rev-parse HEAD > private-profile-test/source-commit.txt
-          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100342. Compact IDs UI preview; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
+          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100347. Unmodified 100342 feature stages rebuilt as Android APK for diagnosing prior 100346 device startup. No new ID switching or frame patches. Compact IDs UI preview; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
           echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
       - name: Upload signed private profile QA APK, NOT FOR PLAY
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY
+          name: DEDA-100347-RESTORED-100342-BASELINE-PRIVATE-APK-NO-PLAY
           path: private-profile-test/
           retention-days: 21
           if-no-files-found: error
