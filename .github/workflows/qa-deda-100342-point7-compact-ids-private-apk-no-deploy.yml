@@ -1,4 +1,4 @@
-name: DEDA 100343 Royal Inline IDs & Sticky Preview PRIVATE QA APK - NO DEPLOY
+name: DEDA 100344 Original Royal Frames, Sticky & IDs PRIVATE QA APK - NO DEPLOY
 # Reconstruct the proven 100341 source and add point7 compact account ID UI.
 # Compile a PRIVATE Android APK; do not upload to Play or mutate production.
 # No Firebase deployment, no Google Play Console upload, no production mutation.
@@ -14,6 +14,9 @@ on:
       - 'tools/stage_deda_point7_compact_ids_100342.py'
       - 'tools/stage_deda_point7_royal_inline_100343.py'
       - 'tools/stage_deda_sticky_edit_preview_100343.py'
+      - 'tools/stage_deda_royal_frames_preview_100344.py'
+      - 'test/deda_royal_frames_preview_100344_test.dart'
+      - 'assets/deda_royal_frames/**'
       - 'test/deda_point7_royal_inline_100343_test.dart'
       - 'test/deda_sticky_edit_preview_100343_test.dart'
   workflow_dispatch:
@@ -21,7 +24,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: deda-100343-point7-sticky-private-qa-2026-10-17
+  group: deda-100344-royal-frames-private-qa-2026-10-17
   cancel-in-progress: true
 
 jobs:
@@ -386,7 +389,7 @@ jobs:
           assert len(matches)==1, 'SAFE_STOP: original signed Play bundle build command missing or duplicated'
           original=lines[matches[0]]
           apk_command=original.replace('flutter build appbundle --release --build-number=100340 ',
-              'flutter build apk --release --build-number=100343 ',1)
+              'flutter build apk --release --build-number=100344 ',1)
           assert apk_command.count('DEDA_SERVER_AUTOMATIONS_LIVE=false')==1
           assert apk_command.count('DEDA_OWNER_PLACE_LOGO_UPLOADS_LIVE=false')==1
           lines[matches[0]] = (
@@ -395,9 +398,10 @@ jobs:
               'python3 tools/stage_deda_point7_compact_ids_100342.py && '
               'python3 tools/stage_deda_point7_royal_inline_100343.py && '
               'python3 tools/stage_deda_sticky_edit_preview_100343.py && '
+              'python3 tools/stage_deda_royal_frames_preview_100344.py && '
               'dart format lib/main.dart && '
               'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart && '
-              'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_point7_compact_ids_100342_test.dart test/deda_point7_royal_inline_100343_test.dart test/deda_sticky_edit_preview_100343_test.dart && '
+              'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_point7_compact_ids_100342_test.dart test/deda_point7_royal_inline_100343_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_frames_preview_100344_test.dart && '
               'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '
               'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
               + apk_command + ' || { echo "SAFE_STOP: royal avatar test or private APK build failed" >&2; exit 1; }'
@@ -415,7 +419,9 @@ jobs:
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -s "$APK"
           test ! -f build/app/outputs/bundle/release/app-release.aab
-          grep -q '^flutter.versionCode=100343$' android/local.properties
+          grep -q '^flutter.versionCode=100344$' android/local.properties
+          grep -q 'DEDA_100344_OWNER_EXACT_ROYAL_FRAMES_PREVIEW_ONLY' lib/main.dart
+          grep -q 'deda_royal_frame_preview_only_badge' lib/main.dart
           grep -q 'DEDA_100343_POINT7_ROYAL_INLINE_OWNED_IDS' lib/main.dart
           grep -q 'DEDA_100343_STICKY_EDIT_PROFILE_PREVIEW' lib/main.dart
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
@@ -439,6 +445,15 @@ jobs:
                   'deda_avatar_female_royal.jpg': '46e6eeb18eb05eaeeabf5706ac910be127f50f2865e48277c79027db4a95f2f2',
                   'deda_avatar_couple_royal.jpg': '8c3f0d39a8e5c582979494efea04de54b0949654f56e90629d9333aa9789f14a'
               }
+              royal_frames = {
+                  'deda_frame_gold_royal.webp': 'a31029b56a4a989feaec25a119b58a8a90c378e6ba3159705d2d5e537f4f299e',
+                  'deda_frame_ruby_royal.webp': 'dbd02ca458cf9e94e3a0005134d2b61cb0bdaaf7729893a8cbfe5f75123c249f',
+                  'deda_frame_emerald_royal.webp': '9ae19c51cbc7394299b361cb1f8dd07e015898b43e4ecaca0fdb0f4b207a12b5',
+              }
+              for name, digest in royal_frames.items():
+                  names=[a for a in files if a.endswith('/deda_royal_frames/'+name)]
+                  assert len(names)==1, 'Original owner frame not packaged: '+name
+                  assert hashlib.sha256(z.read(names[0])).hexdigest()==digest, 'Original owner frame bytes changed: '+name
               for n,digest in expected.items():
                   matches=[a for a in files if a.endswith('/deda_royal_avatars/'+n)]
                   assert len(matches)==1, 'Royal asset missing from APK: '+n
@@ -453,15 +468,15 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
           mkdir -p private-profile-test
-          cp "$APK" private-profile-test/DEDA-100343-ROYAL-INLINE-STICKY-PRIVATE-QA.apk
+          cp "$APK" private-profile-test/DEDA-100344-ROYAL-FRAMES-INLINE-STICKY-PRIVATE-QA.apk
           sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
           git rev-parse HEAD > private-profile-test/source-commit.txt
-          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100343. Royal navy-and-gold inline IDs; real switching remains DISABLED pending server validation. Sticky portrait preview staged. Royal frame originals not yet staged. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
+          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100344. Royal navy/gold inline IDs and sticky preview. EXACT original gold/ruby/emerald paid frames show temporary preview ONLY, with soft animation. No new price or purchase. Premium ID switching remains disabled pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
           echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
       - name: Upload signed private profile QA APK, NOT FOR PLAY
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100343-ROYAL-INLINE-STICKY-SIGNED-PRIVATE-APK-NO-PLAY
+          name: DEDA-100344-ORIGINAL-ROYAL-FRAMES-PRIVATE-APK-NO-PLAY
           path: private-profile-test/
           retention-days: 21
           if-no-files-found: error
