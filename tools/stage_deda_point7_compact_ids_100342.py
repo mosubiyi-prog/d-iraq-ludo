@@ -134,14 +134,70 @@ new_methods = r'''
               const SizedBox(width: 2),
               TextButton(
                 key: const Key('deda_point7_edit_profile_action'),
-                onPressed: () async {
-                  final changed = await Navigator.push<bool>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DedaEditProfilePage(),
+                onPressed: () {
+                  // DEDA_100343_IDENTIFIER_EDIT_NEVER_OPENS_APPEARANCE
+                  // This opens IDENTIFIER details only, never the photo
+                  // and frame gallery. No fake owned IDs or switch writes.
+                  final liveId = DedaBackend
+                      .personalShareIdForPhone(DedaPreferences.phone)
+                      .trim();
+                  showModalBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (sheetContext) => SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+                        child: Column(
+                          key: const Key('deda_identifier_management_sheet'),
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            Text(
+                              dedaText('إدارة معرّفاتي', 'Manage my identifiers'),
+                              style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(dedaText(
+                              'المعرّف الشخصي الأصلي • فعّال',
+                              'Original personal identifier • Active',
+                            )),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF8DE),
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: Directionality(
+                                textDirection: TextDirection.ltr,
+                                child: Text(liveId.isEmpty ? '—' : liveId,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              dedaText(
+                                'إضافة المعرّفات المميزة المملوكة واستبدال المعرّف قيد الربط والتحقق. لا يتم تغيير أي معرّف أو رصيد من هنا.',
+                                'Verified premium ownership and switching are not connected yet. No identifier or balance is changed here.',
+                              ),
+                              style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF626F6B)),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              child: Text(dedaText('إغلاق', 'Close')),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   );
-                  if (changed == true && mounted) setState(() {});
                 },
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 5),
