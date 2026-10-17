@@ -430,7 +430,7 @@ jobs:
           assert 'deda_startup_failure_kind' in root
           assert 'DEDA_100346_READ_ONLY_AVATAR_MIGRATION' not in root
           assert 'DEDA_100344_OWNER_EXACT_ROYAL_FRAMES_PREVIEW_ONLY' not in root
-          assert "await DedaPreferences.load();" in root
+          assert "await DedaPreferences.load().timeout(" in root
           gates=Path('lib/deda_launch_feature_gates.dart').read_text()
           assert 'defaultValue: false' in gates
           # No production changes or migration; compile exactly owner-tested 100340.
