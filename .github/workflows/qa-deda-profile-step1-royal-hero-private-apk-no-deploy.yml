@@ -390,7 +390,7 @@ jobs:
               'flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart && '
               'grep -q DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17 lib/main.dart && '
               'grep -q DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17 lib/main.dart && '
-              + apk_command
+              + apk_command + ' || { echo "SAFE_STOP: royal avatar test or private APK build failed" >&2; exit 1; }'
           )
           f.write_text('\n'.join(lines)+'\n')
           assert 'flutter build appbundle --release --build-number=100340 ' not in f.read_text()
