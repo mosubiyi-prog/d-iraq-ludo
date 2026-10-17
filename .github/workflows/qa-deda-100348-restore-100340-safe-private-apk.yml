@@ -410,17 +410,22 @@ jobs:
           DEDA_100348_QA
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
-          APK="$APK" APKSIGNER="$APKSIGNER" python3 - <<'SIGNER_100348_QA'
-          import os, re, subprocess
-          out=subprocess.check_output([os.environ['APKSIGNER'],'verify','--print-certs',os.environ['APK']],text=True)
+          # The APK's v2 signature is verified above. Verify the exact Gradle
+          # signing keystore's X.509 DER fingerprint directly (no SDK text parser).
+          python3 - <<'SIGNER_100348_QA'
+          import os, hashlib, subprocess
+          from pathlib import Path
+          signing_key=Path('android/app/deda-release.jks')
+          assert signing_key.is_file(), 'release signing keystore missing'
+          cert=subprocess.check_output(
+              ['keytool','-exportcert','-keystore',str(signing_key),
+               '-alias',os.environ['DEDA_KEY_ALIAS'],
+               '-storepass',os.environ['DEDA_STORE_PASSWORD']],
+              stderr=subprocess.DEVNULL)
+          actual=hashlib.sha256(cert).hexdigest()
           expected='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
-          # apksigner output text varies between Android SDK versions.
-          # Validate the expected FULL fingerprint, independent of translated label text.
-          normalized=out.replace(':','').lower()
-          observed=re.findall(r'(?<![a-f0-9])[a-f0-9]{64}(?![a-f0-9])',normalized)
-          print('Observed public certificate digests:',observed)
-          assert expected in observed, 'APK signer fingerprint mismatches approved 100340 APK'
-          print('PASS: same owner-approved APK signing certificate:',expected)
+          assert actual==expected,'release signing key differs from owner-approved 100340'
+          print('PASS: verified release signing keystore certificate:',actual)
           SIGNER_100348_QA
           mkdir -p private-recovery-test
           cp "$APK" private-recovery-test/DEDA-100348-RESTORED-100340-SAFE-PRIVATE-QA.apk
