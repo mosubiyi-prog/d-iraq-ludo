@@ -80,7 +80,7 @@ class Point12CheckoutTests(unittest.TestCase):
     def test_double_tap_busy_guard_and_retries_same_request_key(self):
         s=self.mod.upgraded_widget()
         self.assertIn("if (_purchaseBusy || _freshOwned.contains(style)",s)
-        self.assertIn("if (confirmed != true || !mounted || _purchaseBusy",s)
+        self.assertIn("if (confirmed != true || !mounted || _accountEpoch != openingEpoch || _purchaseBusy",s)
         self.assertIn("_requestIds.putIfAbsent(",s)
         self.assertIn("setState(() => _purchaseBusy = true);",s)
         self.assertIn("setState(() => _purchaseBusy = false);",s)
