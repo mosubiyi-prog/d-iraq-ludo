@@ -13,7 +13,12 @@ void main() {
     });
     await DedaPreferences.load();
     final before = DedaPreferences.profileFrameStyle;
-    await tester.pumpWidget(const MaterialApp(home: DedaEditProfilePage()));
+    await tester.pumpWidget(const MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(disableAnimations: true),
+        child: DedaEditProfilePage(),
+      ),
+    ));
 
     final pinned = find.byKey(const Key('deda_sticky_preview_avatar_card'));
     final gallery = find.byKey(const Key('deda_edit_profile_scroll_choices'));
@@ -48,8 +53,6 @@ void main() {
       find.descendant(of: pinned, matching: find.byType(DedaFramedAvatar)).first,
     );
     expect(displayed.frameStyle, 3);
-    expect(find.byType(ShaderMask), findsWidgets,
-        reason: 'A locked royal frame must have the animated shimmer layer');
     expect(tester.getTopLeft(pinned).dy, closeTo(y, 0.5));
 
     final second = find.byKey(const ValueKey('deda_frame_slot_4'));
@@ -59,5 +62,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.getTopLeft(pinned).dy, closeTo(y, 0.5));
     expect(DedaPreferences.profileFrameStyle, before);
+  });
+
+  testWidgets('ornament shimmer works without moving the portrait',
+      (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DedaFramedAvatar(avatarStyle: 0, frameStyle: 3, size: 142),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byType(ShaderMask), findsWidgets);
+    expect(find.byType(DedaAvatarPortrait), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }
