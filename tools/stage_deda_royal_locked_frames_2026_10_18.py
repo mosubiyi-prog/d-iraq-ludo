@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """DEDA point two: replace locked frame slots 3..5 only, preview before purchase.
 Run after the exact verified 100342 source is reconstructed. No backend writes.
-Requires user's exact original images in assets/deda_royal_frames_originals.zip.
+Requires user's exact original 850px images in assets/deda_royal_frames/.
 """
 from pathlib import Path
-from zipfile import ZipFile
 import hashlib
 
 MAIN=Path("lib/main.dart")
 PUB=Path("pubspec.yaml")
-ARCHIVE=Path("assets/deda_royal_frames_originals.zip")
 DEST=Path("assets/deda_royal_frames")
 MARKER="DEDA_ROYAL_LOCKED_FRAMES_2026_10_18"
 ASSETS={
@@ -26,13 +24,11 @@ old=MAIN.read_text(encoding="utf-8")
 pub=PUB.read_text(encoding="utf-8")
 if MARKER in old or "DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY" not in old or "DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17" not in old or "DEDA_100343_STICKY_EDIT_PROFILE_PREVIEW" not in old:
     raise SystemExit("SAFE_STOP wrong base source or patch already applied")
-if not ARCHIVE.is_file(): raise SystemExit("SAFE_STOP exact original frame bundle missing")
-with ZipFile(ARCHIVE) as z:
-    if set(z.namelist())!=set(ASSETS) or len(z.namelist())!=3:
-        raise SystemExit("SAFE_STOP archive contains unexpected files")
-    frames={name:z.read(name) for name in ASSETS}
 for name,(length,digest) in ASSETS.items():
-    data=frames[name]
+    path=DEST/name
+    if not path.is_file():
+        raise SystemExit("SAFE_STOP exact original frame missing: "+str(path))
+    data=path.read_bytes()
     if len(data)!=length or hashlib.sha256(data).hexdigest()!=digest or data[:4]!=b"RIFF" or data[8:12]!=b"WEBP":
         raise SystemExit("SAFE_STOP source frame changed: "+name)
 
@@ -282,8 +278,6 @@ pub=replace_once(pub,"    - assets/deda_royal_avatars/deda_avatar_male_royal.jpg
 "    - assets/deda_royal_avatars/deda_avatar_male_royal.jpg\n"+
 "".join("    - assets/deda_royal_frames/"+name+"\n" for name in ASSETS),
 "approved image assets declaration")
-DEST.mkdir(parents=True,exist_ok=True)
-for name,data in frames.items(): (DEST/name).write_bytes(data)
 MAIN.write_text(text,encoding="utf-8")
 PUB.write_text(pub,encoding="utf-8")
 print("PASS: same 6 frame slots, 3 exact user-supplied royal assets in locked 3..5")
