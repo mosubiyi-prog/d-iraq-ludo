@@ -9,6 +9,7 @@ Compact glyph/title layout applies ONLY to this store tile; all other
 _featureCard callers render with the same defaults and dimensions as before.
 """
 from pathlib import Path
+import re
 
 MAIN = Path("lib/main.dart")
 STATE = "class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {"
@@ -82,8 +83,31 @@ def apply(src: str) -> str:
         if any(method.count(old) for old, _, _ in METHOD_EDITS):
             raise ValueError("SAFE_STOP: partial featureCard changes")
         return src
+    # Accepted 100356 source is repeatedly dart-formatted while reconstructed.
+    # Stage8's original literal came from the old 100263 generator (unformatted),
+    # so only ALLOW whitespace-only layout changes; never match another card.
+    original_tile = OLD_TILE
     if grid.count(OLD_TILE) != 1:
-        raise ValueError("SAFE_STOP: original 100263 purple Photos card not found exactly once")
+        candidates = list(re.finditer(
+            r'(?ms)^[ \\t]*icon:\\s*Icons\\.photo_library_rounded,.*?'
+            r'onTap:\\s*\\(\\)\\s*=>\\s*_showPhase2Notice\\(.*?'
+            r'^\\s*\\),',
+            grid,
+        ))
+        if len(candidates) != 1:
+            raise ValueError(
+                "SAFE_STOP: original purple Photos card ambiguous after 100356 "
+                "formatting; match-count=" + str(len(candidates))
+            )
+        original_tile = candidates[0].group(0)
+        canonical = lambda value: re.sub(r'\\s+', '', value)
+        if canonical(original_tile) != canonical(OLD_TILE):
+            title = grid.count("title: dedaText('الصور', 'Photos')")
+            subtitle = grid.count("subtitle: dedaText('قسم مستقل للصور لاحقًا', 'Dedicated photos area later')")
+            raise ValueError(
+                "SAFE_STOP: original Photos card CONTENT changed, not merely "
+                f"formatted (title={title}, subtitle={subtitle}); no replacement"
+            )
     if grid.count("        Row(\n") != 3:
         raise ValueError("SAFE_STOP: profile grid row count changed")
     for needle in (
@@ -95,7 +119,7 @@ def apply(src: str) -> str:
     ):
         if grid.count(needle) != 1:
             raise ValueError("SAFE_STOP: other profile grid tile missing: " + needle)
-    grid2 = grid.replace(OLD_TILE, NEW_TILE, 1)
+    grid2 = grid.replace(original_tile, NEW_TILE, 1)
     method2 = method
     for old, new, reason in METHOD_EDITS:
         if method2.count(old) != 1:
@@ -110,7 +134,7 @@ def apply(src: str) -> str:
     reconstructed = method2
     for old, new, _ in reversed(METHOD_EDITS):
         reconstructed = reconstructed.replace(new, old, 1)
-    if reconstructed != method or grid2.replace(NEW_TILE, OLD_TILE, 1) != grid:
+    if reconstructed != method or grid2.replace(NEW_TILE, original_tile, 1) != grid:
         raise ValueError("SAFE_STOP: edit leaked to other elements")
     modified_profile = profile[:g] + grid2 + method2 + profile[e:]
     modified_source = src[:a] + modified_profile + src[b:]
