@@ -417,7 +417,7 @@ jobs:
           # Each staging command must be its own shell line: bash -e does NOT
           # necessarily abort a long && list when earlier element fails.
           # Previously point8 SAFE_STOP was followed by misleading success echo.
-          lines[matches[0]] = '\\n'.join(steps)
+          lines[matches[0]] = '\n'.join(steps)
           script = 'set -e\n' + '\n'.join(lines) + '\n'
           # Block ANY remaining actual Flutter app build command before running.
           assert not re.search(r'^\s*flutter build (apk|appbundle)\b',script,re.M), 'SAFE_STOP an Android build was left in the source-only job'
