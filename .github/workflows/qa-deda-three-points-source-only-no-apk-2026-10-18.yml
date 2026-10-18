@@ -1,0 +1,101 @@
+name: DEDA three points STATIC QA ONLY - NO APK NO AAB NO DEPLOY
+# Runs lightweight source/asset verification on the isolated staging branch.
+# NO Flutter build, NO Firebase access or deployments and NO signing secrets.
+on:
+  push:
+    branches:
+      - deda-ids-staged-no-build-2026-10-18
+    paths:
+      - 'tools/stage_deda_point7_compact_ids_100342.py'
+      - 'tools/stage_deda_royal_locked_frames_2026_10_18.py'
+      - 'tools/stage_deda_three_royal_backgrounds_2026_10_18.py'
+      - 'assets/deda_royal_frames/**'
+      - 'assets/deda_royal_backgrounds/**'
+      - 'test/deda_point7_compact_ids_100342_test.dart'
+      - 'test/deda_locked_royal_frame_preview_2026_10_18_test.dart'
+      - 'test/deda_three_royal_backgrounds_2026_10_18_test.dart'
+      - '.github/workflows/qa-deda-three-points-source-only-no-apk-2026-10-18.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-code-and-original-art:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout isolated branch only
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail closed if original reference or production files changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse --verify 'refs/remotes/origin/backup-deda-100342-phone-verified-exact-ci-2026-10-18'
+          git diff --quiet \
+            origin/backup-deda-100342-phone-verified-exact-ci-2026-10-18 \
+            HEAD -- lib/main.dart lib/deda_backend.dart pubspec.yaml \
+            firestore.rules firebase.json functions/ android/
+          echo 'PASS: protected production source, accounts, rules and signing unchanged'
+
+      - name: Check Python patch syntax only (do not execute app build)
+        run: |
+          python3 -m py_compile \
+            tools/stage_deda_point7_compact_ids_100342.py \
+            tools/stage_deda_sticky_edit_preview_100343.py \
+            tools/stage_deda_royal_locked_frames_2026_10_18.py \
+            tools/stage_deda_three_royal_backgrounds_2026_10_18.py
+
+      - name: Validate 3 original frames and 2 exact new artworks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          files = {
+            'assets/deda_royal_frames/royal_frame_0.webp':
+              (259300, '9ae19c51cbc7394299b361cb1f8dd07e015898b43e4ecaca0fdb0f4b207a12b5'),
+            'assets/deda_royal_frames/royal_frame_1.webp':
+              (260184, 'a31029b56a4a989feaec25a119b58a8a90c378e6ba3159705d2d5e537f4f299e'),
+            'assets/deda_royal_frames/royal_frame_2.webp':
+              (247938, 'dbd02ca458cf9e94e3a0005134d2b61cb0bdaaf7729893a8cbfe5f75123c249f'),
+            'assets/deda_royal_backgrounds/deda_royal_bg_emerald.webp':
+              (16198, '744f1a731b0611fc47b7685a78a6f81b319e066869c7f831f4a84b93dc343f5c'),
+            'assets/deda_royal_backgrounds/deda_royal_bg_burgundy.webp':
+              (13350, '5efd143d3ae5ab2ab6e3c0a4c2e98105398fa0428e7530f2acf085e957db4b9b'),
+          }
+          for filename, (size, sha) in files.items():
+            data = Path(filename).read_bytes()
+            assert len(data) == size, filename + ' size mismatch'
+            assert hashlib.sha256(data).hexdigest() == sha, filename + ' SHA256 mismatch'
+            assert data[:4] == b'RIFF' and data[8:12] == b'WEBP', filename + ' not WebP'
+          print('PASS: all 5 image assets are original and byte-perfect')
+          PY
+
+      - name: Ensure background gallery/save, no false activation and frame previews
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          ids=Path('tools/stage_deda_point7_compact_ids_100342.py').read_text()
+          frames=Path('tools/stage_deda_royal_locked_frames_2026_10_18.py').read_text()
+          backgrounds=Path('tools/stage_deda_three_royal_backgrounds_2026_10_18.py').read_text()
+          assert 'deda_point7_inline_id_manager' in ids
+          assert 'deda_point7_activate_requires_verified_ownership' in ids
+          assert 'onPressed: null' in ids
+          assert "0xFFFFF8DE" not in ids
+          assert 'DedaRoyalFrameMotion' in frames
+          assert '_previewFrameStyle' in frames
+          assert 'DedaDiamondsWallet.spend(' not in frames
+          assert 'List<Widget>.generate(9, (index)' in backgrounds
+          assert 'profileBackgroundStyle = backgroundStyle.clamp(0, 8).toInt()' in backgrounds
+          assert 'deda_sticky_preview_avatar_card' in backgrounds
+          assert 'deda_profile_saved_background_art' in backgrounds
+          assert 'await DedaPreferences.setProfileAppearance(' in backgrounds
+          assert "DedaRoyalBackgroundArtwork" in backgrounds
+          assert "children: List<Widget>.generate(6, (index) {" in backgrounds
+          print('PASS: all 3 points' + ' static evidence present; NO BUILD')
+          PY
