@@ -1,0 +1,138 @@
+name: DEDA «إنت كدها» Point 6 - Profile ID slot integration - NO APK
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point6-profile-slot-no-apk.yml'
+      - 'tools/stage_deda_intakadha_point6_profile_id_slot_2026_10_18.py'
+      - 'test/test_deda_intakadha_point6_profile_id_slot_2026_10_18.py'
+      - 'test/deda_intakadha_point6_profile_slot_widget_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-intakadha-point6-source-only
+  cancel-in-progress: true
+jobs:
+  verified-source-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect phone-verified 100356 reference and only approve point2-6 source staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+              ["git","diff","--name-only","4373b8b30eadc5a284554ca7c021c350e0732caf","HEAD"],
+              text=True).splitlines())
+          allowed={
+              "docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18.md",
+              "tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py",
+              "test/test_deda_intakadha_point2_member_caption_2026_10_18.py",
+              ".github/workflows/qa-deda-intakadha-point2-caption-source-only-no-apk.yml",
+              "tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+              "test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+              ".github/workflows/qa-deda-intakadha-point3-name-level-source-only-no-apk.yml",
+              "tools/stage_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py",
+              "test/test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py",
+              ".github/workflows/qa-deda-intakadha-point4-rectangular-id-source-only-no-apk.yml",
+              "tools/stage_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py",
+              "test/test_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py",
+              "test/deda_intakadha_point5_visual_widget_test.dart",
+              ".github/workflows/qa-deda-intakadha-point5-four-id-artworks-no-apk.yml",
+              "tools/stage_deda_intakadha_point6_profile_id_slot_2026_10_18.py",
+              "test/test_deda_intakadha_point6_profile_id_slot_2026_10_18.py",
+              "test/deda_intakadha_point6_profile_slot_widget_test.dart",
+              ".github/workflows/qa-deda-intakadha-point6-profile-slot-no-apk.yml",
+          }
+          assert changed.issubset(allowed), f"SAFE_STOP unexpected production modification: {sorted(changed - allowed)}"
+          assert "lib/main.dart" not in changed
+          assert not any(n.startswith(("android/", "assets/", "functions/")) for n in changed)
+          print("PASS: saved 100356 binary source head unchanged; no account/backend/Play files changed")
+          PY
+      - name: Test exact original profile reconstruction and stages 2 through 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py \
+            tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py \
+            tools/stage_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py \
+            tools/stage_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py \
+            tools/stage_deda_intakadha_point6_profile_id_slot_2026_10_18.py \
+            test/test_deda_intakadha_point6_profile_id_slot_2026_10_18.py
+          for suite in 2 3 4 5 6; do
+            case "$suite" in
+              2) pattern=test_deda_intakadha_point2_member_caption_2026_10_18.py ;;
+              3) pattern=test_deda_intakadha_point3_name_level_layout_2026_10_18.py ;;
+              4) pattern=test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py ;;
+              5) pattern=test_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py ;;
+              6) pattern=test_deda_intakadha_point6_profile_id_slot_2026_10_18.py ;;
+            esac
+            python3 -m unittest discover -s test -p "$pattern" -v
+          done
+          echo "PASS: account identifier is never changed and user only sees paid card once ownership is verified"
+          echo "PASS: no APK, no Firestore deploy, no Google Play publish"
+  flutter-widget-visual-copy:
+    needs: verified-source-integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Compile ONLY isolated point5 + 6 Flutter widgets and test both states
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-id-point6-fixture/lib" "$RUNNER_TEMP/deda-id-point6-fixture/test"
+          python3 - "$RUNNER_TEMP/deda-id-point6-fixture/lib/deda_premium_id_point6_fixture.dart" <<'PY'
+          import ast
+          from pathlib import Path
+          import sys
+          chunks=[]
+          for filename, variable in (
+              ("tools/stage_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py", "ARTWORK"),
+              ("tools/stage_deda_intakadha_point6_profile_id_slot_2026_10_18.py", "WIDGET"),
+          ):
+              root=ast.parse(Path(filename).read_text(encoding="utf-8"))
+              values=[node.value.value for node in root.body
+                      if isinstance(node, ast.Assign) and isinstance(node.value,ast.Constant)
+                      and any(isinstance(t,ast.Name) and t.id==variable for t in node.targets)]
+              assert len(values)==1, "SAFE_STOP: point5/6 stage source changed"
+              chunks.append(values[0])
+          Path(sys.argv[1]).write_text("import 'package:flutter/material.dart';\n" + "\n".join(chunks),encoding="utf-8")
+          print("PASS: extracted exact source of point5 and point6 widgets without app data")
+          PY
+          cp test/deda_intakadha_point6_profile_slot_widget_test.dart "$RUNNER_TEMP/deda-id-point6-fixture/test/"
+          cat > "$RUNNER_TEMP/deda-id-point6-fixture/pubspec.yaml" <<'YAML'
+          name: deda_premium_id_point6_fixture
+          description: Protected DEDA profile ID card display and copy tests, no backend
+          version: 0.0.1
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+          flutter:
+            uses-material-design: true
+          YAML
+          cd "$RUNNER_TEMP/deda-id-point6-fixture"
+          dart format lib/deda_premium_id_point6_fixture.dart test/deda_intakadha_point6_profile_slot_widget_test.dart
+          flutter pub get
+          flutter test test/deda_intakadha_point6_profile_slot_widget_test.dart --reporter expanded
+          echo "PASS: free legacy ID and paid-if-owned four cards show correctly, copy action works"
+          echo "PASS: 50dp, responsive, no Firebase, no APK"
