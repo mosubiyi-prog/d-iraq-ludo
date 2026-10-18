@@ -1,0 +1,112 @@
+name: DEDA 100352 EXACT working 100342 in-place recovery PRIVATE QA - NO FLUTTER BUILD NO PLAY
+on:
+  push:
+    branches:
+      - deda-100352-exact-342-inplace-recovery-no-build-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-100352-exact342-safe-recovery-no-build-no-play.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  exactly-phone-working-342-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no app source, backend, or Play release changes; protect signing inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet c904188a3e281d489d811216bd1b970739dcf2af -- lib android functions firestore.rules firebase.json pubspec.yaml pubspec.lock
+          for key in DEDA_KEYSTORE_BASE64 DEDA_KEY_ALIAS DEDA_STORE_PASSWORD DEDA_KEY_PASSWORD; do
+            test -n "$(printenv "$key")" || { echo "SAFE_STOP: missing signing secret $key"; exit 2; }
+          done
+          python3 -m py_compile tools/deda_100352_repackage_exact_342_for_safe_inplace_upgrade.py
+          echo 'PASS: 100342 source untouched; no production files or Google Play action'
+      - name: Retrieve SHA256-pinned ORIGINAL phone-verified 100342 binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda352/source
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda352/source
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda352/source/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+      - name: Patch ONLY original Android versionCode, ZIP align, sign with SAME original certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          ORIGINAL=/tmp/deda352/source/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk
+          UNSIGNED=/tmp/deda352/unsigned.apk
+          ALIGNED=/tmp/deda352/aligned.apk
+          SIGNED=/tmp/deda352/recovery-100352.apk
+          python3 tools/deda_100352_repackage_exact_342_for_safe_inplace_upgrade.py "$ORIGINAL" "$UNSIGNED"
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
+          test -n "$ZIPALIGN" && test -n "$APKSIGNER" && test -n "$AAPT"
+          "$ZIPALIGN" -f -p 4 "$UNSIGNED" "$ALIGNED"
+          printf '%s' "$DEDA_KEYSTORE_BASE64" | base64 -d > /tmp/deda352/existing-release.jks
+          test -s /tmp/deda352/existing-release.jks
+          "$APKSIGNER" sign \
+            --ks /tmp/deda352/existing-release.jks \
+            --ks-key-alias "$DEDA_KEY_ALIAS" \
+            --ks-pass env:DEDA_STORE_PASSWORD \
+            --key-pass env:DEDA_KEY_PASSWORD \
+            --out "$SIGNED" "$ALIGNED"
+          "$APKSIGNER" verify --verbose "$SIGNED"
+          "$ZIPALIGN" -c -p 4 "$SIGNED"
+          "$APKSIGNER" verify --print-certs "$ORIGINAL" > /tmp/deda352/original-cert.txt
+          "$APKSIGNER" verify --print-certs "$SIGNED" > /tmp/deda352/recovery-cert.txt
+          python3 - <<'VERIFY_SIGNATURE'
+          import re
+          from pathlib import Path
+          marker='certificate SHA-256 digest:'
+          def cert(file):
+              s=Path(file).read_text()
+              c=[line.rsplit(marker,1)[1].strip().lower() for line in s.splitlines() if marker in line]
+              assert len(c)==1 and re.fullmatch(r'[0-9a-f]{64}',c[0]),'SAFE_STOP: invalid single-certificate digest'
+              return c[0]
+          old=cert('/tmp/deda352/original-cert.txt')
+          new=cert('/tmp/deda352/recovery-cert.txt')
+          assert old==new,'SAFE_STOP: 100352 certificate is NOT original 100342!'
+          print('PASS: original 100342 and new 100352 exact signing certificate identical')
+          VERIFY_SIGNATURE
+          "$AAPT" dump badging "$SIGNED" | grep -m1 '^package:' | tee /tmp/deda352/package.txt
+          grep -q "name='com.diraq.ludo.d_iraq_ludo'" /tmp/deda352/package.txt
+          grep -q "versionCode='100352'" /tmp/deda352/package.txt
+          python3 - <<'VERIFY_PAYLOAD'
+          import hashlib, zipfile
+          original='/tmp/deda352/source/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk'
+          signed='/tmp/deda352/recovery-100352.apk'
+          with zipfile.ZipFile(original) as a, zipfile.ZipFile(signed) as b:
+              assert b.testzip() is None
+              assert set(a.namelist()) == set(b.namelist()),'SAFE_STOP original APK entries changed'
+              for name in a.namelist():
+                  if name=='AndroidManifest.xml':
+                      before=a.read(name); after=b.read(name)
+                      assert len(before)==len(after)==31168
+                      assert all(before[i]==after[i] for i in range(len(before)) if not 16676<=i<16680)
+                  else:
+                      assert a.read(name)==b.read(name),'SAFE_STOP source APK data changed: '+name
+          print('PASS: original 100342 Flutter AOT, classes.dex, assets and resources exact bytes retained')
+          print('100352 APK SHA-256:',hashlib.sha256(open(signed,'rb').read()).hexdigest())
+          VERIFY_PAYLOAD
+          echo 'PASS: safe higher-versionCode signed recovery; no new Dart code or Android executable'
+      - name: Upload recovery APK for private phone test; NOT Google Play
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100352-EXACT-100342-INPLACE-RECOVERY-SIGNED-PRIVATE-APK-NO-PLAY
+          path: /tmp/deda352/recovery-100352.apk
+          retention-days: 21
+          if-no-files-found: error
