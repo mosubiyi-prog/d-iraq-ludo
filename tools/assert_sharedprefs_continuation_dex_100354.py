@@ -28,13 +28,13 @@ def uleb(b, i):
     raise AssertionError("Invalid DEX uleb")
 
 def dex_methods(blob):
-    assert blob.startswith(b"dex\\n"), "SAFE_STOP: invalid DEX header"
+    assert blob.startswith(b"dex\n"), "SAFE_STOP: invalid DEX header"
     count, offset = u32(blob, 0x38), u32(blob, 0x3c)
     strings = []
     for n in range(count):
         i = u32(blob, offset + 4 * n)
         _, i = uleb(blob, i)
-        strings.append(blob[i:blob.index(b"\\0", i)].decode("utf-8", errors="replace"))
+        strings.append(blob[i:blob.index(b"\0", i)].decode("utf-8", errors="replace"))
     count, offset = u32(blob, 0x40), u32(blob, 0x44)
     types = [strings[u32(blob, offset + 4 * n)] for n in range(count)]
     count, offset = u32(blob, 0x48), u32(blob, 0x4c)
