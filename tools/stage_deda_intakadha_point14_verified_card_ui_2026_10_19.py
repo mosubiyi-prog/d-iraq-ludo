@@ -95,7 +95,7 @@ class DedaPoint14VerifiedBridge {
       if (generation != _epoch || _identity != identifier) return false;
       if (!result.validFor(identifier) || result.active != color ||
           !result.owned.contains(color)) {
-        notifier.value = null;
+        // Failed confirmation must not replace the last verified profile style.
         return false;
       }
       // A successful setActive response alone is not enough: re-read server.
@@ -103,15 +103,14 @@ class DedaPoint14VerifiedBridge {
       if (generation != _epoch || _identity != identifier) return false;
       if (!verified.validFor(identifier) ||
           verified.active != color || !verified.owned.contains(color)) {
-        notifier.value = null;
+        // Preserve previous verified decoration until a successful refetch.
         return false;
       }
       notifier.value = verified;
       return true;
     } catch (_) {
-      if (generation == _epoch && _identity == identifier) {
-        notifier.value = null;
-      }
+      // Network/server failure on Use leaves old verified selection visible.
+      // Account switches still clear it independently in _bindIdentity.
       return false;
     }
   }
