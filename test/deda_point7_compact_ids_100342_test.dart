@@ -25,12 +25,14 @@ void main() {
     expect(find.byKey(const Key('deda_point7_current_id_chip')),
         findsOneWidget);
     expect(find.text(personalId), findsOneWidget);
+    expect(find.byKey(const Key('deda_point7_inline_id_manager')),
+        findsNothing);
     expect(tester.getSize(card).height, lessThanOrEqualTo(126.0));
-    expect(find.byKey(const Key('deda_point7_edit_profile_action')),
+    expect(find.byKey(const Key('deda_point7_edit_identifier_action')),
         findsOneWidget);
   });
 
-  testWidgets('Point7 cannot activate an unverified premium ID',
+  testWidgets('Point7 switch opens management but cannot activate without registry',
       (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'deda_phone_v1': '07712345678',
@@ -39,11 +41,37 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(home: DedaAccountInfoPage()),
     );
-    final switchButton = tester.widget<TextButton>(
-      find.byKey(
-          const Key('deda_point7_change_id_requires_verified_registry')),
+    expect(find.byType(DedaEditProfilePage), findsNothing);
+    await tester.tap(
+      find.byKey(const Key('deda_point7_switch_opens_id_manager')),
     );
-    expect(switchButton.onPressed, isNull,
-        reason: 'No client-only fake switch or Firebase mutation allowed');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('deda_point7_inline_id_manager')),
+        findsOneWidget);
+    expect(find.byType(DedaEditProfilePage), findsNothing,
+        reason: 'ID management must never open frames/portrait editing');
+    final activate = tester.widget<OutlinedButton>(
+      find.byKey(const Key('deda_point7_activate_requires_verified_ownership')),
+    );
+    expect(activate.onPressed, isNull,
+        reason: 'No unverified local ID activation or backend mutation');
+  });
+
+  testWidgets('Point7 edit stays on account page instead of frames',
+      (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'deda_phone_v1': '07712345678',
+    });
+    await DedaPreferences.load();
+    await tester.pumpWidget(
+      const MaterialApp(home: DedaAccountInfoPage()),
+    );
+    await tester.tap(
+      find.byKey(const Key('deda_point7_edit_identifier_action')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('deda_point7_inline_id_manager')),
+        findsOneWidget);
+    expect(find.byType(DedaEditProfilePage), findsNothing);
   });
 }
