@@ -34,13 +34,13 @@ REPLACEMENTS = (
         1,
     ),
     (
-        "                      child: Container(\n"
+        "                        child: Container(\n"
         "                          constraints: const BoxConstraints(maxWidth: 320),\n"
         "                          padding: const EdgeInsets.symmetric(\n"
         "                            horizontal: 13,\n"
         "                            vertical: 7,\n"
         "                          ),",
-        "                      child: Container(\n"
+        "                        child: Container(\n"
         "                          width: (width - (compact ? 34.0 : 44.0)).clamp(0.0, 320.0).toDouble(),\n"
         "                          height: 50,\n"
         "                          alignment: Alignment.center,\n"
