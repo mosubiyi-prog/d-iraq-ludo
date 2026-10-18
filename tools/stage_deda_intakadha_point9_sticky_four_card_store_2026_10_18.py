@@ -69,12 +69,20 @@ class DedaIdentifierStorePage extends StatelessWidget {
                   color: Color(0xFF563976),
                 ),
               ),
-              Text(
-                dedaText('تصميم البطاقة: 5,000 ماسة', 'Card design: 5,000 diamonds'),
-                style: const TextStyle(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF654C7B),
+              const SizedBox(width: 6),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text(
+                    dedaText('تصميم البطاقة: 5,000 ماسة', 'Card design: 5,000 diamonds'),
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF654C7B),
+                    ),
+                  ),
                 ),
               ),
             ],
