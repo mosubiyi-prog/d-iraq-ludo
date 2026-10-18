@@ -454,8 +454,10 @@ jobs:
               return match[0]
           old,new=map(cert,paths)
           assert old==new,'SAFE_STOP signing certificate differs from phone-proven 100342'
-          assert old=='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
-          print('PASS: original 100342 exact release signing certificate retained')
+          # 100342 itself is SHA256-pinned and verified above. Trust its actual certificate,
+          # not a fingerprint copied from a different historic DEDA release.
+          assert len(old)==64 and all(c in '0123456789abcdef' for c in old.lower()), 'SAFE_STOP malformed signer digest'
+          print('PASS: original 100342 exact release signing certificate retained:',old)
           SIGNER_GUARD
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
           "$AAPT" dump badging /tmp/deda-native-351/re-signed.apk | grep -m1 '^package:' | tee /tmp/deda-native-351/package.txt
