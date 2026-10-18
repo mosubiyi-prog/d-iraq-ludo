@@ -272,4 +272,29 @@ void main() {
     expect(btn.onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('failed Use keeps the previously server-verified royal card visible',
+      (tester) async {
+    phoneSize(tester, 390, 950);
+    var calls = 0;
+    DedaPoint14VerifiedBridge.readRemote = () async => snapshot(
+      owned: {DedaPremiumIdCardColor.royal, DedaPremiumIdCardColor.gold},
+      active: DedaPremiumIdCardColor.royal,
+    );
+    DedaPoint14VerifiedBridge.activateRemote = (color) async {
+      calls++;
+      throw StateError('simulated-offline');
+    };
+    await tester.pumpWidget(app(width: 390));
+    await tester.pumpAndSettle();
+    expect(tester.widget<DedaProfileVerifiedIdCardSlot>(
+      find.byType(DedaProfileVerifiedIdCardSlot).first,
+    ).verifiedOwnedColor, DedaPremiumIdCardColor.royal);
+    await tapUse(tester, 'gold');
+    expect(calls, 1);
+    expect(tester.widget<DedaProfileVerifiedIdCardSlot>(
+      find.byType(DedaProfileVerifiedIdCardSlot).first,
+    ).verifiedOwnedColor, DedaPremiumIdCardColor.royal);
+    expect(tester.takeException(), isNull);
+  });
 }
