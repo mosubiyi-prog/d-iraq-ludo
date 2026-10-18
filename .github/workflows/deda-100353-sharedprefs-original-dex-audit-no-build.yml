@@ -1,0 +1,46 @@
+name: DEDA 100353 shared_preferences original APK DEX audit NO BUILD NO PLAY
+on:
+  push:
+    branches:
+      - deda-100353-sharedprefs-original-dex-audit-2026-10-18
+    paths:
+      - '.github/workflows/deda-100353-sharedprefs-original-dex-audit-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit-original-apk-binary-methods:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve SHA256-pinned original APKs, never build or sign
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda-dex-audit/342 /tmp/deda-dex-audit/353 /tmp/deda-dex-audit/results
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY -D /tmp/deda-dex-audit/342
+          gh run download 39130004366 -R mosubiyi-prog/d-iraq-ludo -n DEDA-100353-THREE-POINTS-PRIVATE-SIGNED-OWNER-REVIEW-NO-PLAY -D /tmp/deda-dex-audit/353
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda-dex-audit/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+          echo 'd978eb7909d892e05591244865b3801c7ddc26b2b9b42f8992f80eb27299123c  /tmp/deda-dex-audit/353/DEDA-100353-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk' | sha256sum -c -
+          echo 'PASS immutable originals verified; no APK repackage, app source write, deploy or Play'
+      - name: Examine runtime method definitions and references inside DEX
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check androguard==4.1.3
+          python3 tools/diagnose_sharedpreferences_apk_dex_2026_10_18.py \
+            /tmp/deda-dex-audit/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk \
+            /tmp/deda-dex-audit/353/DEDA-100353-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk \
+            2>&1 | tee /tmp/deda-dex-audit/results/SHAREDPREFERENCES_APK_DEX_AUDIT.txt
+      - name: Preserve diagnosis text ONLY, NO APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100353-SHAREDPREFERENCES-DEX-DIAGNOSIS-NO-APK
+          path: /tmp/deda-dex-audit/results/
+          if-no-files-found: warn
+          retention-days: 14
