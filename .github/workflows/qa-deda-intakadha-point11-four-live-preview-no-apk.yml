@@ -1,0 +1,138 @@
+name: DEDA «إنت كدها» Point 11 - Tap ID previews all four fixed cards - NO APK
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point11-four-live-preview-no-apk.yml'
+      - 'tools/stage_deda_intakadha_point11_tap_preview_four_cards_2026_10_19.py'
+      - 'test/test_deda_intakadha_point11_four_live_previews_2026_10_19.py'
+      - 'test/deda_intakadha_point11_four_live_previews_widget_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-intakadha-point11-no-apk
+  cancel-in-progress: true
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect original 100356 and allow ONLY reviewed point2 through point11 source stages
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'PY'
+          import re, subprocess
+          changed=set(subprocess.check_output(
+              ["git","diff","--name-only","4373b8b30eadc5a284554ca7c021c350e0732caf","HEAD"],
+              text=True).splitlines())
+          permitted=(
+              r"docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18\.md",
+              r"tools/stage_deda_intakadha_point(?:[2-9]|10|11)_[a-z0-9_]+_2026_10_(?:18|19)\.py",
+              r"test/test_deda_intakadha_point(?:[2-9]|10|11)_[a-z0-9_]+_2026_10_(?:18|19)\.py",
+              r"test/deda_intakadha_point(?:[5-9]|10|11)_[a-z0-9_]+\.dart",
+              r"\.github/workflows/qa-deda-intakadha-point(?:[2-9]|10|11)-[a-z0-9-]+\.yml",
+              r"catalogs/DEDA_ID_GROUP_002_CANDIDATES_100_NO_SALES_2026-10-18\.json",
+          )
+          unexpected=[p for p in changed if not any(re.fullmatch(rule,p) for rule in permitted)]
+          assert not unexpected, f"SAFE_STOP unexpected app/backend/files changed: {unexpected}"
+          assert not any(p.startswith(("lib/","android/","assets/","functions/","firestore")) for p in changed)
+          print("PASS: 100356 immutable, no app accounts, live IDs, badges, balances or Play changes")
+          PY
+      - name: Verify point2 through point11 exact source regressions and local-only preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            tools/stage_deda_intakadha_point11_tap_preview_four_cards_2026_10_19.py \
+            test/test_deda_intakadha_point11_four_live_previews_2026_10_19.py
+          for i in 2 3 4 5 6 7 8 9 10 11; do
+            case "$i" in
+              2) file=test_deda_intakadha_point2_member_caption_2026_10_18.py ;;
+              3) file=test_deda_intakadha_point3_name_level_layout_2026_10_18.py ;;
+              4) file=test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py ;;
+              5) file=test_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py ;;
+              6) file=test_deda_intakadha_point6_profile_id_slot_2026_10_18.py ;;
+              7) file=test_deda_intakadha_point7_four_card_management_2026_10_18.py ;;
+              8) file=test_deda_intakadha_point8_photos_to_id_shop_2026_10_18.py ;;
+              9) file=test_deda_intakadha_point9_sticky_store_2026_10_18.py ;;
+              10) file=test_deda_intakadha_point10_group002_catalog_2026_10_18.py ;;
+              11) file=test_deda_intakadha_point11_four_live_previews_2026_10_19.py ;;
+            esac
+            python3 -m unittest discover -s test -p "$file" -v
+          done
+          echo "PASS: 4 preview foils respond to one selected ID, no ownership/purchase changes"
+  flutter-real-widget-qa:
+    needs: source-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Flutter-test selected IDs appear on four pinned foils using exact staged artwork/store
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-point11/lib" "$RUNNER_TEMP/deda-point11/test"
+          python3 - "$RUNNER_TEMP/deda-point11/lib/deda_point11_four_live_previews_fixture.dart" <<'PY'
+          import ast,json,sys,importlib.util
+          from pathlib import Path
+          def extract(filename, name):
+              tree=ast.parse(Path(filename).read_text(encoding="utf-8"))
+              found=[s.value.value for s in tree.body if isinstance(s,ast.Assign)
+                and isinstance(s.value,ast.Constant)
+                and any(isinstance(t,ast.Name) and t.id==name for t in s.targets)]
+              assert len(found)==1, "SAFE_STOP changed approved source "+name
+              return found[0]
+          def module(filename, name):
+              spec=importlib.util.spec_from_file_location(name,filename)
+              mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+              return mod
+          a=extract("tools/stage_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py","ARTWORK")
+          p=extract("tools/stage_deda_intakadha_point9_sticky_four_card_store_2026_10_18.py","PAGE")
+          m10=module("tools/stage_deda_intakadha_point10_group002_candidates_2026_10_18.py","deda_p10_fixture")
+          m11=module("tools/stage_deda_intakadha_point11_tap_preview_four_cards_2026_10_19.py","deda_p11_fixture")
+          data=json.loads(Path("catalogs/DEDA_ID_GROUP_002_CANDIDATES_100_NO_SALES_2026-10-18.json").read_text(encoding="utf-8"))
+          ids=m10.validate_catalog(data)
+          assert p.count(m10.OLD_HEADING)==1 and p.count(m10.OLD_SUBTITLE)==1
+          page=p.replace(m10.OLD_HEADING,m10.NEW_HEADING,1).replace(m10.OLD_SUBTITLE,m10.NEW_SUBTITLE,1)
+          for old,new,count,desc in m11.REPLACEMENTS:
+              assert page.count(old)==count, "SAFE_STOP "+desc
+              page=page.replace(old,new,count)
+          code="import 'package:flutter/material.dart';\nString dedaText(String ar, String en)=>ar;\n"
+          code+=a+"\n"+m10.dart_block(ids)+"\n"+page
+          Path(sys.argv[1]).write_text(code,encoding="utf-8")
+          print("PASS: generated exact point5/9/10/11 Flutter preview source, not app accounts")
+          PY
+          cp test/deda_intakadha_point11_four_live_previews_widget_test.dart "$RUNNER_TEMP/deda-point11/test/"
+          cat > "$RUNNER_TEMP/deda-point11/pubspec.yaml" <<'YAML'
+          name: deda_point11_four_preview_fixture
+          description: DEDA secure local preview of candidate IDs in four pinned cards
+          version: 0.0.1
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+          flutter:
+            uses-material-design: true
+          YAML
+          cd "$RUNNER_TEMP/deda-point11"
+          dart format lib/deda_point11_four_live_previews_fixture.dart test/deda_intakadha_point11_four_live_previews_widget_test.dart
+          flutter pub get
+          flutter test test/deda_intakadha_point11_four_live_previews_widget_test.dart --reporter expanded
+          echo "PASS: all four cards preview same tapped candidate; original ID restored on reopen"
+          echo "PASS: no APK/Play/Firebase writes, no diamonds charged, no user ownership modified"
