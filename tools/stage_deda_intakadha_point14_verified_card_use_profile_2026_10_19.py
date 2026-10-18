@@ -99,7 +99,7 @@ class DedaVerifiedIdCardsState {
   }
 
   static DedaVerifiedIdCardSnapshot? forIdentifier(String identifier) {
-    _invalidateIfAccountChanged();
+    // Build is read-only: never notify listeners during a widget build.
     final snap = notifier.value;
     if (snap == null || snap.accountUid != _uid ||
         snap.publicId != identifier || !snap.serverConfirmed ||
