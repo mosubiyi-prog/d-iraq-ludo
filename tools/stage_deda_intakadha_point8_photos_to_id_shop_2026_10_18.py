@@ -33,17 +33,17 @@ METHOD_EDITS = (
     ),
     (
         "                width: 46,\n                height: 46,",
-        "                width: compactContent ? 34 : 46,\n                height: compactContent ? 34 : 46,",
+        "                width: compactContent ? 24 : 46,\n                height: compactContent ? 24 : 46,",
         "make store icon smaller without resizing card",
     ),
     (
         "                child: Icon(icon, color: Colors.white, size: 26),",
-        "                child: Icon(icon, color: Colors.white, size: compactContent ? 21 : 26),",
+        "                child: Icon(icon, color: Colors.white, size: compactContent ? 18 : 26),",
         "scale store icon without changing the other icons",
     ),
     (
         "              const SizedBox(width: 9),",
-        "              SizedBox(width: compactContent ? 5 : 9),",
+        "              SizedBox(width: compactContent ? 3 : 9),",
         "store only: narrow icon/text spacer",
     ),
     (
@@ -53,7 +53,7 @@ METHOD_EDITS = (
     ),
     (
         "                        fontSize: 16,\n                      ),\n                    ),\n                    const SizedBox(height: 4),",
-        "                        fontSize: compactContent ? 12.5 : 16,\n                      ),\n                    ),\n                    const SizedBox(height: 4),",
+        "                        fontSize: compactContent ? 11.5 : 16,\n                      ),\n                    ),\n                    const SizedBox(height: 4),",
         "store-only smaller text, old cards unchanged",
     ),
     (
