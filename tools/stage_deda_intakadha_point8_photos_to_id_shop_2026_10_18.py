@@ -47,14 +47,9 @@ METHOD_EDITS = (
         "store only: narrow icon/text spacer",
     ),
     (
-        "                      title,\n                      maxLines: 1,\n                      overflow: TextOverflow.ellipsis,\n                      style: const TextStyle(",
-        "                      title,\n                      maxLines: compactContent ? 2 : 1,\n                      overflow: TextOverflow.ellipsis,\n                      style: TextStyle(",
-        "display full two-line Arabic shop name",
-    ),
-    (
-        "                        fontSize: 16,\n                      ),\n                    ),\n                    const SizedBox(height: 4),",
-        "                        fontSize: compactContent ? 11.5 : 16,\n                      ),\n                    ),\n                    const SizedBox(height: 4),",
-        "store-only smaller text, old cards unchanged",
+        "                    Text(\n                      title,\n                      maxLines: 1,\n                      overflow: TextOverflow.ellipsis,\n                      style: const TextStyle(\n                        color: Colors.white,\n                        fontWeight: FontWeight.w900,\n                        fontSize: 16,\n                      ),\n                    ),",
+        "                    if (compactContent)\n                      FittedBox(\n                        fit: BoxFit.scaleDown,\n                        alignment: AlignmentDirectional.centerStart,\n                        child: Text(\n                          title.replaceFirst(' ', '\\n'),\n                          maxLines: 2,\n                          style: const TextStyle(\n                            color: Colors.white,\n                            fontWeight: FontWeight.w900,\n                            fontSize: 13,\n                          ),\n                        ),\n                      )\n                    else\n                      Text(\n                        title,\n                        maxLines: 1,\n                        overflow: TextOverflow.ellipsis,\n                        style: const TextStyle(\n                          color: Colors.white,\n                          fontWeight: FontWeight.w900,\n                          fontSize: 16,\n                        ),\n                      ),",
+        "store-only 2-line fitted title; other cards retain original Text byte-for-byte",
     ),
     (
         "              const Icon(\n                Icons.chevron_left_rounded,\n                color: Colors.white,\n                size: 22,\n              ),",
