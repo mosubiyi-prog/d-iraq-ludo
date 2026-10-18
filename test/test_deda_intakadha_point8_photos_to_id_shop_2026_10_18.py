@@ -81,7 +81,7 @@ class IdentifierStoreTileTests(unittest.TestCase):
         self.assertEqual(feature_grid.count("compactContent: true,"), 1)
         self.assertIn("bool compactContent = false,", feat_method)
         self.assertIn("maxLines: compactContent ? 2 : 1", feat_method)
-        self.assertIn("fontSize: compactContent ? 12.5 : 16,", feat_method)
+        self.assertIn("fontSize: compactContent ? 11.5 : 16,", feat_method)
         self.assertIn("if (!compactContent)", feat_method)
 
     def test_coming_soon_notice_does_not_navigate_into_wrong_editor(self):
