@@ -1,0 +1,78 @@
+name: DEDA Point 13 Atomic ID Card Firebase Emulator - NO DEPLOY
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js
+      - test/deda_intakadha_point13_firebase_atomic_checkout_emulator.test.js
+      - .github/workflows/qa-deda-intakadha-point13-firestore-atomic-no-deploy.yml
+permissions:
+  contents: read
+concurrency:
+  group: deda-point13-emulator-qa
+  cancel-in-progress: true
+jobs:
+  atomic-purchase-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Protect 100356, prevent accidental production integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = 4373b8b30eadc5a284554ca7c021c350e0732caf
+          python3 - <<'PY'
+          import subprocess,re
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only',
+             '4373b8b30eadc5a284554ca7c021c350e0732caf','HEAD'],
+            text=True).splitlines())
+          patterns=[
+            r'docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18\.md',
+            r'catalogs/DEDA_ID_GROUP_002_CANDIDATES_100_NO_SALES_2026-10-18\.json',
+            r'tools/stage_deda_intakadha_point(?:[2-9]|1[0-2])_[a-z0-9_]+_2026_10_(?:18|19)\.py',
+            r'tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19\.js',
+            r'test/test_deda_intakadha_point(?:[2-9]|1[0-2])_[a-z0-9_]+_2026_10_(?:18|19)\.py',
+            r'test/deda_intakadha_point(?:[5-9]|1[0-2])_[a-z0-9_]+\.dart',
+            r'test/deda_intakadha_point13_firebase_atomic_checkout_emulator\.test\.js',
+            r'\.github/workflows/qa-deda-intakadha-point(?:[2-9]|1[0-3])-[a-z0-9-]+\.yml',
+          ]
+          unexpected=[p for p in changed if not any(re.fullmatch(rule,p) for rule in patterns)]
+          assert not unexpected, f'SAFE_STOP unauthorized production/source changes: {unexpected}'
+          assert not any(x.startswith(('functions/','firestore','lib/','android/','assets/')) for x in changed)
+          print('PASS: original phone-verified 100356 and live Firebase Functions/rules untouched')
+          PY
+          node --check tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js
+          node --check test/deda_intakadha_point13_firebase_atomic_checkout_emulator.test.js
+          test "$(grep -c 'deda_intakadha_point13_atomic_id_card_checkout' functions/index.js || true)" = 0
+      - name: Install disposable Firebase emulator dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-save --no-audit --no-fund \
+            firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Run real Firestore Emulator transactions and security-rule tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-point13-atomic-ledger --only firestore \
+            'node --test test/deda_intakadha_point13_firebase_atomic_checkout_emulator.test.js'
+      - name: Verify no APK or live deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: Firebase emulator-only, no APK, no Google Play, no Cloud Function deploy'
