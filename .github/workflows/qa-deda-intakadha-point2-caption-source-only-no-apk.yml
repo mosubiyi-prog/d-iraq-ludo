@@ -1,0 +1,55 @@
+name: DEDA «إنت كدها» Point 2 - Remove member caption SOURCE ONLY - NO APK
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point2-caption-source-only-no-apk.yml'
+      - 'tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py'
+      - 'test/test_deda_intakadha_point2_member_caption_2026_10_18.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-intakadha-point2-source-only
+  cancel-in-progress: true
+jobs:
+  point2-exact-caption-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify protected 100356 backup and point2 scope only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100356-phone-ui-verified-2026-10-18
+          git cat-file -e 4373b8b30eadc5a284554ca7c021c350e0732caf^{commit}
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'SCOPE'
+          import subprocess
+          baseline = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          altered = set(subprocess.check_output(
+              ["git", "diff", "--name-only", baseline, "HEAD"], text=True,
+          ).splitlines())
+          allowed = {
+              "docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18.md",
+              "tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py",
+              "test/test_deda_intakadha_point2_member_caption_2026_10_18.py",
+              ".github/workflows/qa-deda-intakadha-point2-caption-source-only-no-apk.yml",
+          }
+          assert altered.issubset(allowed), f"SAFE_STOP unexpected source/backend changes: {sorted(altered - allowed)}"
+          assert "lib/main.dart" not in altered
+          assert not any(n.startswith(("android/", "functions/")) for n in altered)
+          print("PASS: 100356 backup remains identical; no backend, account or app source modified")
+          SCOPE
+      - name: Validate point2 injection and regression tests without building app
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py test/test_deda_intakadha_point2_member_caption_2026_10_18.py
+          python3 -m unittest -v test/test_deda_intakadha_point2_member_caption_2026_10_18.py
+          echo 'PASS: point2 exactly and only removes member caption, its icon and unused vertical gap'
+          echo 'PASS: no APK, no Play publishing, no Firebase deploy, no real account access'
