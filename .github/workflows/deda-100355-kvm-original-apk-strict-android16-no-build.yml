@@ -38,7 +38,10 @@ jobs:
           test -c /dev/kvm || { echo 'SAFE_STOP: host lacks KVM device'; exit 52; }
           sudo chmod a+rw /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm || { echo 'SAFE_STOP: runner still cannot open KVM'; exit 53; }
-          "$ANDROID_HOME/emulator/emulator" -accel-check | tee /tmp/deda355/results/kvm-accel-check.txt
+          # Emulator binaries are installed by the Android emulator runner action itself.
+          # Do not call the emulator here before setup; that produced exit 127.
+          ls -l /dev/kvm | tee /tmp/deda355/results/kvm-permissions.txt
+          echo 'PASS: non-root runner can access KVM. Emulator action will check hardware acceleration after setup.'
       - name: Prepare strict Android16 smoke; never allow silent Flutter errors
         shell: bash
         run: |
