@@ -84,7 +84,7 @@ void main() {
     ));
     expect(find.text('@DEDA-ABABAB'), findsOneWidget);
     expect(find.textContaining('الشراء والتفعيل غير متاحين'), findsOneWidget);
-    final card = tester.widget<ListTile>(find.byType(ListTile).single);
+    final card = tester.widget<ListTile>(find.byType(ListTile).first);
     expect(card.onTap, isNull);
     expect(tester.takeException(), isNull);
   });
