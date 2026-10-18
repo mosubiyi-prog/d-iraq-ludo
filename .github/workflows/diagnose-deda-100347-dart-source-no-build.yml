@@ -4,19 +4,6 @@ name: DEDA 100347 diagnosis of staged Dart syntax - NO APK
 # No Firebase deployment, no Google Play upload, no production mutation.
 
 on:
-  push:
-    branches:
-      - deda-ids-staged-no-build-2026-10-18
-    paths:
-      - '.github/workflows/diagnose-deda-100347-dart-source-no-build.yml'
-      - 'test/deda_point7_compact_ids_100342_test.dart'
-      - 'tools/stage_deda_point7_compact_ids_100342.py'
-      - 'tools/stage_deda_royal_locked_frames_2026_10_18.py'
-      - 'tools/stage_deda_three_royal_backgrounds_2026_10_18.py'
-      - 'test/deda_locked_royal_frame_preview_2026_10_18_test.dart'
-      - 'test/deda_three_royal_backgrounds_2026_10_18_test.dart'
-      - 'assets/deda_royal_frames/**'
-      - 'assets/deda_royal_backgrounds/**'
   workflow_dispatch:
 
 permissions:
