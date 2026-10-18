@@ -197,8 +197,16 @@ def apply(src: str) -> str:
             raise ValueError("SAFE_STOP: duplicated original card control: " + reason)
         method2 = method2.replace(actual, new, 1)
         applied.append((actual, new))
-    if "height: 102," not in method2 or "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2:
-        raise ValueError("SAFE_STOP: tile size or purple palette unexpectedly lost")
+    # The historical polish script targets its FIRST 112px occurrence, which
+    # may be a different component. The accepted phone source is authoritative:
+    # preserve THIS feature card's Ink height byte-for-byte, whether 102 or 112.
+    old_height = re.search(r'\bInk\(\s*height:\s*(\d+),', method)
+    new_height = re.search(r'\bInk\(\s*height:\s*(\d+),', method2)
+    if (old_height is None or new_height is None or
+            old_height.group(1) != new_height.group(1) or
+            int(old_height.group(1)) not in (102, 112) or
+            "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2):
+        raise ValueError("SAFE_STOP: accepted grid size or purple palette changed")
     if method2.count("title.replaceFirst") != 1 or method2.count("FittedBox(") != 2:
         raise ValueError("SAFE_STOP: store label wrapping not enabled")
     # This is a pure source patch. Fully reversing the approved substitutions
