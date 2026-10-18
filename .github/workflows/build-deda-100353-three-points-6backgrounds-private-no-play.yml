@@ -9,6 +9,7 @@ on:
       - deda-three-points-6backgrounds-safe-100353-2026-10-18
     paths:
       - '.github/workflows/build-deda-100353-three-points-6backgrounds-private-no-play.yml'
+      - 'test/deda_three_royal_backgrounds_2026_10_18_test.dart'
   workflow_dispatch:
 
 permissions:
