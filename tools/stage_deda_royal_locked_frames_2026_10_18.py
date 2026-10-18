@@ -24,7 +24,7 @@ def replace_once(src, old, new, label):
 
 old=MAIN.read_text(encoding="utf-8")
 pub=PUB.read_text(encoding="utf-8")
-if MARKER in old or "DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY" not in old or "DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17" not in old:
+if MARKER in old or "DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY" not in old or "DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17" not in old or "DEDA_100343_STICKY_EDIT_PROFILE_PREVIEW" not in old:
     raise SystemExit("SAFE_STOP wrong base source or patch already applied")
 if not ARCHIVE.is_file(): raise SystemExit("SAFE_STOP exact original frame bundle missing")
 with ZipFile(ARCHIVE) as z:
@@ -116,7 +116,7 @@ a=text.index("class _DedaEditProfilePageState extends State<DedaEditProfilePage>
 b=text.index("class DedaAccountInfoPage extends StatefulWidget {",a)
 edit=text[a:b]
 edit=replace_once(edit,"  late int _frameStyle;\n","  late int _frameStyle;\n  int? _previewFrameStyle;\n","preview state")
-edit=replace_once(edit,"frameStyle: _frameStyle,\n                  size: 142,","frameStyle: _previewFrameStyle ?? _frameStyle,\n                  size: 142,","fixed card preview")
+edit=replace_once(edit,"frameStyle: _frameStyle,\n                  size: 126,","frameStyle: _previewFrameStyle ?? _frameStyle,\n                  size: 126,","fixed card preview")
 edit=replace_once(edit,"final selected = free && _frameStyle == index;","final selected = _previewFrameStyle == index ||\n                        (_previewFrameStyle == null && free && _frameStyle == index);","selection")
 edit=replace_once(edit,
 """onTap: free
