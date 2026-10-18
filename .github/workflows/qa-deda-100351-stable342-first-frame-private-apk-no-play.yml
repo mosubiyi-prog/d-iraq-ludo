@@ -442,21 +442,27 @@ jobs:
           "$APKSIGNER" verify --verbose /tmp/deda-native-351/re-signed.apk
           "$ZIPALIGN" -c -p 4 /tmp/deda-native-351/re-signed.apk
           python3 - "$ORIGINAL" /tmp/deda-native-351/re-signed.apk <<'SIGNER_GUARD'
-          import subprocess, sys
           import pathlib
+          import re
+          import subprocess
+          import sys
           paths=sys.argv[1:]
           sdk=pathlib.Path(__import__('os').environ['ANDROID_HOME'])/'build-tools'
           signer=str(sorted(sdk.glob('*/apksigner'),key=lambda p:list(map(int,p.parent.name.split('.'))))[-1])
           def cert(path):
               out=subprocess.check_output([signer,'verify','--print-certs',path],text=True)
-              match=[x.split(':',1)[1].strip() for x in out.splitlines() if 'certificate SHA-256 digest:' in x]
+              match=[x.split(':',1)[1].strip().lower() for x in out.splitlines() if 'certificate SHA-256 digest:' in x]
               assert len(match)==1,'SAFE_STOP signer certificate missing'
-              return match[0]
+              # Android tools may print the same SHA-256 digest as 64 hex chars or 32 colon-delimited bytes.
+              raw=match[0]
+              assert re.fullmatch(r'(?:[0-9a-f]{64}|(?:[0-9a-f]{2}:){31}[0-9a-f]{2})',raw), (
+                  f'SAFE_STOP invalid certificate fingerprint format (length {len(raw)})')
+              return raw.replace(':','')
           old,new=map(cert,paths)
           assert old==new,'SAFE_STOP signing certificate differs from phone-proven 100342'
-          # 100342 itself is SHA256-pinned and verified above. Trust its actual certificate,
-          # not a fingerprint copied from a different historic DEDA release.
-          assert len(old)==64 and all(c in '0123456789abcdef' for c in old.lower()), 'SAFE_STOP malformed signer digest'
+          # The original 100342 APK is already pinned by its exact binary SHA-256 above.
+          # We require byte-perfect certificate identity, never an arbitrary comparison target.
+          assert re.fullmatch(r'[0-9a-f]{64}',old),'SAFE_STOP malformed normalized certificate digest'
           print('PASS: original 100342 exact release signing certificate retained:',old)
           SIGNER_GUARD
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)
