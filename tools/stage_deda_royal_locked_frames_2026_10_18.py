@@ -130,6 +130,10 @@ edit=replace_once(edit,
                           : () => setState(() => _previewFrameStyle = index),""",
 "non-owning locked frame preview")
 edit=replace_once(edit,
+"return InkWell(\n                      onTap: free",
+"return InkWell(\n                      key: ValueKey('deda_frame_slot_$index'),\n                      onTap: free",
+"testable unchanged six frame slots")
+edit=replace_once(edit,
 "                                  : dedaText('مقفول', 'Locked'),",
 """                                  : (index == 3
                                       ? dedaText('زمردي ملكي', 'Royal emerald')
