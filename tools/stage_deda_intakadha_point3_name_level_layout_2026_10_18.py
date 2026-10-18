@@ -93,8 +93,10 @@ def apply(source: str) -> str:
             raise ValueError("SAFE_STOP: inconsistent point3 status; do not modify")
         return source
     for name in PROTECTED:
-        if hero.count(name) != 1:
-            raise ValueError("SAFE_STOP: protected element missing/ambiguous: " + name)
+        # Original username is read twice (blank-check and trimmed value).
+        # Guard its presence and verify exact original count AFTER the patch.
+        if hero.count(name) < 1:
+            raise ValueError("SAFE_STOP: protected element absent: " + name)
     original = hero
     for old, new, description in REPLACEMENTS:
         if hero.count(old) != 1:
