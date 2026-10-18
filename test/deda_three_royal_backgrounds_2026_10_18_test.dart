@@ -6,7 +6,7 @@ import '../lib/main.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('all six legacy colors remain in their original positions', () {
+  test('all existing saved palette values remain stable (six visible options)', () {
     expect(dedaProfileBackgroundColors(0),
         <Color>[const Color(0xFFF4FBF2), const Color(0xFFDCEEDD)]);
     expect(dedaProfileBackgroundColors(1),
@@ -48,7 +48,7 @@ void main() {
     );
   });
 
-  testWidgets('all nine options use the same edit page and live pinned preview',
+  testWidgets('exactly six backgrounds, three original plus royal, with pinned preview',
       (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'deda_phone_v1': '07712345678',
@@ -65,7 +65,7 @@ void main() {
     final initialY = tester.getTopLeft(pinned).dy;
 
     // Scroll to the last row; the sticky avatar never scrolls away.
-    final last = find.byKey(const ValueKey<String>('deda_background_tile_8'));
+    final last = find.byKey(const ValueKey<String>('deda_background_tile_5'));
     for (var attempt = 0; attempt < 14 && last.evaluate().isEmpty; attempt++) {
       await tester.drag(choices, const Offset(0, -180));
       await tester.pump();
@@ -73,6 +73,9 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 170));
     expect(last, findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('deda_background_tile_6')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('deda_background_tile_7')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('deda_background_tile_8')), findsNothing);
     await tester.ensureVisible(last);
     await tester.tap(last);
     await tester.pump();
