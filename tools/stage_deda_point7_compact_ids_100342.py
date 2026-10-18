@@ -49,9 +49,13 @@ new_methods = r'''
       margin: const EdgeInsets.only(top: 9),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        border: Border.all(color: const Color(0xFFE6D7A2)),
-        borderRadius: BorderRadius.circular(14),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: <Color>[Color(0xFF213D60), Color(0xFF10213A)],
+        ),
+        border: Border.all(color: const Color(0xFFB99A60)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -59,7 +63,7 @@ new_methods = r'''
           Text(
             dedaText('إدارة المعرّفات', 'Manage identifiers'),
             style: const TextStyle(
-              color: Color(0xFF775606),
+              color: Color(0xFFFFE5AC),
               fontSize: 14,
               fontWeight: FontWeight.w900,
             ),
@@ -67,7 +71,7 @@ new_methods = r'''
           const SizedBox(height: 8),
           Text(
             dedaText('المعرّف الأصلي المحفوظ', 'Preserved original ID'),
-            style: const TextStyle(fontSize: 11, color: Color(0xFF536577)),
+            style: const TextStyle(fontSize: 11, color: Color(0xFFC9D7E7)),
           ),
           Directionality(
             textDirection: TextDirection.ltr,
@@ -75,7 +79,7 @@ new_methods = r'''
               originalId,
               style: const TextStyle(
                 fontSize: 16,
-                color: Color(0xFF283C5B),
+                color: Color(0xFFFFE4A3),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -86,12 +90,16 @@ new_methods = r'''
               'المعرّفات المميزة المملوكة: لا يمكن عرض ملكيتها أو تفعيلها قبل ربطها بسجل موثوق. لن يتغير معرّفك الحالي.',
               'Owned premium IDs require a trusted ownership registry before listing or activation. Your current ID remains unchanged.',
             ),
-            style: const TextStyle(fontSize: 11.5, color: Color(0xFF626F6B)),
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFFD8E4EC)),
           ),
           const SizedBox(height: 8),
           OutlinedButton(
             key: const Key('deda_point7_activate_requires_verified_ownership'),
             onPressed: null,
+            style: OutlinedButton.styleFrom(
+              disabledForegroundColor: const Color(0xFFD4C5A4),
+              side: const BorderSide(color: Color(0xFF8F7953)),
+            ),
             child: Text(dedaText('التفعيل بعد التحقق', 'Activate after verification')),
           ),
         ],
@@ -108,9 +116,18 @@ new_methods = r'''
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8DE),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE8C966), width: 1.1),
+        // Deep sapphire with champagne-gold trim, no old yellow background.
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: <Color>[Color(0xFF112B50), Color(0xFF254C71), Color(0xFF101F3A)],
+          stops: <double>[0, 0.54, 1],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFCEAE70), width: 1.25),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: Color(0x21162955), blurRadius: 8, offset: Offset(0, 3)),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -119,7 +136,7 @@ new_methods = r'''
           Row(
             children: <Widget>[
               const Icon(Icons.badge_outlined,
-                  color: Color(0xFF976A08), size: 18),
+                  color: Color(0xFFFFD991), size: 18),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -127,7 +144,7 @@ new_methods = r'''
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF775606),
+                    color: Color(0xFFFFE8B9),
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
@@ -137,13 +154,13 @@ new_methods = r'''
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE3F1E2),
+                  color: const Color(0xFF224D42),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   dedaText('الأصلي • فعّال', 'Original • active'),
                   style: const TextStyle(
-                    color: Color(0xFF26632E),
+                    color: Color(0xFFDBF8E5),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                   ),
@@ -161,10 +178,12 @@ new_methods = r'''
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                        color: const Color(0xFFD8BE72)),
+                    // Integrated dark glass ID field, not a white pill.
+                    gradient: const LinearGradient(
+                      colors: <Color>[Color(0xFF213857), Color(0xFF102039)],
+                    ),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: const Color(0xFFB69B65)),
                   ),
                   child: Directionality(
                     textDirection: TextDirection.ltr,
@@ -176,7 +195,7 @@ new_methods = r'''
                       style: const TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF283C5B),
+                        color: Color(0xFFFFEDC2),
                       ),
                     ),
                   ),
@@ -189,6 +208,7 @@ new_methods = r'''
                 key: const Key('deda_point7_switch_opens_id_manager'),
                 onPressed: _toggleIdentifierManagement,
                 style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFE8D4AF),
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   minimumSize: const Size(54, 34),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -203,6 +223,7 @@ new_methods = r'''
                 key: const Key('deda_point7_edit_identifier_action'),
                 onPressed: _toggleIdentifierManagement,
                 style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFFFE3A3),
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   minimumSize: const Size(48, 34),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -264,5 +285,5 @@ for guarded in ("class DedaDiamondsWallet {",
                 "class DedaAccountInfoPage extends StatefulWidget"):
     assert guarded in result, "SAFE_STOP protected source section absent: " + guarded
 file.write_text(result, encoding="utf-8")
-print("PASS: compact real-ID point7 card added to account info; no backend writes")
+print("PASS: sapphire-gold ID card replaces yellow and white containers; no backend writes")
 print("PASS: replacement disabled until real ownership/routing verified; phone/type retained")
