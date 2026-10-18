@@ -29,15 +29,14 @@
 - This is staging code only, **not an installed/validated release**. Repeating motion test now uses bounded pumps; pumpAndSettle on an infinite animation was deliberately removed.
 
 ### Mandatory exact source artwork (no approximations or generated replacements)
-Bundle must be uploaded to repository as:
-assets/deda_royal_frames_originals.zip
+The exact three original 850×850 transparent WebP files are now committed directly to GitHub in assets/deda_royal_frames/royal_frame_0.webp, royal_frame_1.webp, and royal_frame_2.webp; the stage validates each SHA256 and no longer needs a ZIP.
 
 It must contain exactly these three files at ZIP root:
 - royal_frame_0.webp | 259300 bytes | SHA256 9ae19c51cbc7394299b361cb1f8dd07e015898b43e4ecaca0fdb0f4b207a12b5
 - royal_frame_1.webp | 260184 bytes | SHA256 a31029b56a4a989feaec25a119b58a8a90c378e6ba3159705d2d5e537f4f299e
 - royal_frame_2.webp | 247938 bytes | SHA256 dbd02ca458cf9e94e3a0005134d2b61cb0bdaaf7729893a8cbfe5f75123c249f
 
-**BLOCKER:** The ZIP was prepared from the original user-uploaded files and independently verified (WebP RGBA 850×850 and exact hashes) in the assistant workspace and archived at `/DEDA/LAB_Backups/deda_royal_frames_originals_2026-10-18.zip` in the user's ChatGPT Library, but is **not yet in the GitHub repo**. GitHub source-stage scripts are now updated but the source chain is not integrated/QA-passed until the binary is uploaded. No build was performed.
+**RESOLVED:** Three original WebP art files are uploaded to this development branch, exact sizes/SHA256 confirmed. Backup ZIP remains archived in /DEDA/LAB_Backups. GitHub static QA verifies all five approved assets.
 
 ### Exact staging order after full 100342 source reconstruction:
 1. tools/stage_deda_royal_hero_2026_10_17.py
@@ -45,6 +44,7 @@ It must contain exactly these three files at ZIP root:
 3. tools/stage_deda_point7_compact_ids_100342.py
 4. tools/stage_deda_sticky_edit_preview_100343.py
 5. tools/stage_deda_royal_locked_frames_2026_10_18.py
+6. tools/stage_deda_three_royal_backgrounds_2026_10_18.py
 
 These are **final downstream stages** only; preserve all earlier historical source reconstruction stages from the accepted 100342 workflow. The stage is fail-closed if original artwork, hash, or expected source anchor is missing.
 
@@ -56,5 +56,20 @@ These are **final downstream stages** only; preserve all earlier historical sour
 - Static binary hash and 3-slot guard.
 - Later, after owner approval ONLY: signed APK build and real install/cold-launch/login/admin test on phone, plus restore check.
 
+## Point 3 — nine background choices, three royal + six original
+- Legacy six background colors and their indices 0..5 remain identical.
+- New choice 6 is the already-approved midnight-blue/purple royal profile starfield (reuses DEDA's own original backdrop painter).
+- Choice 7 is the emerald–teal navy gold-waves wallpaper at assets/deda_royal_backgrounds/deda_royal_bg_emerald.webp (16198 bytes, SHA256 744f1a731b0611fc47b7685a78a6f81b319e066869c7f831f4a84b93dc343f5c).
+- Choice 8 is the burgundy rose-gold wallpaper at assets/deda_royal_backgrounds/deda_royal_bg_burgundy.webp (13350 bytes, SHA256 5efd143d3ae5ab2ab6e3c0a4c2e98105398fa0428e7530f2acf085e957db4b9b).
+- Nine tiles in existing 2-column Wrap; selecting a tile updates only the fixed edit-page preview, no implicit save.
+- The Save button persists selected 0..8 in the EXISTING per-phone deda_profile_background_v1_ key; reopening/loading from account keeps the chosen background. The saved real profile hero displays it behind the original avatar, ID, level and badge.
+- No changes to user account identifiers, friends, transactions, diamonds, XP, navigation, backend or release behavior.
+
+### Validation before creating a release
+- GitHub static code/art QA passed without APK or AAB.
+- Full reconstructed Flutter-source/test-only workflow: qa-deda-three-points-reconstruction-flutter-test-no-apk.yml. Check completion separately; static checks alone are not on-device validation.
+- Deferred Dart widget tests include test/deda_three_royal_backgrounds_2026_10_18_test.dart, plus point 1/2 tests.
+- NOTIFY owner and review all 3 points before any APK/AAB construction. Build/release ONLY after owner's explicit go-ahead.
+- Following approved build, test Android install, signature, cold start, login, admin, and stored account/background state on the phone.
 ## Safety
 Do not modify the stable 100342 branch, main, existing accounts, Firebase rules, functions or balances. Never mark source staging as on-device success. Continue adding agreed points to this same working branch, one at a time.
