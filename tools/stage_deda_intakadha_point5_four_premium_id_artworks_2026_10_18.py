@@ -60,7 +60,7 @@ class _DedaIdFoil {
 
 /// Responsive 50px royal nameplate, modeled on owner's 4-color ID reference.
 /// Live [identifier] is kept separate from the painted crown/gems, so the
-/// original account ID can appear without baking @DEDA-2020 into artwork.
+/// original account ID can appear without baking a sample ID into artwork.
 /// Appearance only: buying, use and ownership belong to later approved stages.
 class DedaPremiumIdCard extends StatelessWidget {
   final String identifier;
