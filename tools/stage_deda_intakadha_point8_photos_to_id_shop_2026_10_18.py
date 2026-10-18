@@ -48,9 +48,9 @@ METHOD_EDITS = (
         "Store-only 18px glyph, preserve accepted 100356 23px default",
     ),
     (
-        r'''              const SizedBox(width: 6),''',
-        r'''              SizedBox(width: compactContent ? 3 : 6),''',
-        "Store-only tight gap, preserve accepted 100356 6px default",
+        r'''              const SizedBox(width: 9),''',
+        r'''              SizedBox(width: compactContent ? 3 : 9),''',
+        "Store-only tight gap, preserve actual source 9px spacer",
     ),
     (
         r'''                    FittedBox(
