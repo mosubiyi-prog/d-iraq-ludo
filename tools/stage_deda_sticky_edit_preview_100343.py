@@ -32,11 +32,27 @@ p = old.index(prefix)
 begin = p + len(prefix)
 portrait = old.find("                child: DedaFramedAvatar(", begin)
 assert portrait > begin, "SAFE_STOP actual portrait preview missing"
-close = "            ),\n"
-end_preview = old.find(close, portrait)
-assert end_preview > portrait, "SAFE_STOP portrait container not closed"
-end_preview += len(close)
+# Read through the balanced OUTER preview Container. The previous early
+# substring search stopped at a nested closing widget and silently generated
+# invalid Dart; never leave the parent Container/Padding unclosed.
+opening = old.find("Container(", begin, portrait)
+assert opening >= begin, "SAFE_STOP outer preview Container missing"
+depth = 0
+closing = -1
+for pos in range(opening + len("Container"), len(old)):
+    char = old[pos]
+    if char == '(':
+        depth += 1
+    elif char == ')':
+        depth -= 1
+        if depth == 0:
+            closing = pos
+            break
+assert closing > portrait, "SAFE_STOP full avatar Container never closed"
+assert old[closing:closing + 3] == "),\n", "SAFE_STOP outer preview closing syntax changed"
+end_preview = closing + 3
 preview = old[begin:end_preview]
+assert preview.endswith("            ),\n"), "SAFE_STOP preview Container was truncated"
 assert preview.startswith("            Container(\n")
 assert preview.count("constraints: const BoxConstraints(minHeight: 166),") == 1
 assert preview.count("size: 142,") == 1
