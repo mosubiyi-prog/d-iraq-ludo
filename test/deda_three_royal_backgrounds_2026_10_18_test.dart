@@ -77,6 +77,16 @@ void main() {
     expect(find.byKey(const ValueKey<String>('deda_background_tile_7')), findsNothing);
     expect(find.byKey(const ValueKey<String>('deda_background_tile_8')), findsNothing);
     await tester.ensureVisible(last);
+    await tester.pump(const Duration(milliseconds: 220));
+    // A found widget can still lie below the 600px test viewport; hit-test it
+    // only once its actual centre is on-screen. Infinite ornamental animations
+    // mean pumpAndSettle() must NOT be used here.
+    for (var n = 0; n < 12 && tester.getCenter(last).dy >= 580; n++) {
+      await tester.drag(choices, const Offset(0, -150));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(tester.getCenter(last).dy, lessThan(580));
     await tester.tap(last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 240));
