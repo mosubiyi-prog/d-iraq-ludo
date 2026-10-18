@@ -131,37 +131,10 @@ jobs:
                 ),
               );
             }
-          """[:-0] if False else """
-          import 'package:flutter/material.dart';
-
-          class DedaPoint8StoreTileFixture extends StatelessWidget {
-            final double width;
-            final bool compact;
-            final VoidCallback onTap;
-            const DedaPoint8StoreTileFixture({
-              super.key, required this.width, required this.compact, required this.onTap,
-            });
-            @override
-            Widget build(BuildContext context) {
-              return SizedBox(
-                width: width,
-                child: _featureCard(
-                  icon: compact ? Icons.storefront_rounded : Icons.edit_rounded,
-                  title: compact ? 'متجر المعرّفات' : 'تعديل الملف',
-                  subtitle: compact ? 'معرّفات مميزة' : 'بيانات الحساب وإعداداته',
-                  colors: compact
-                      ? const <Color>[Color(0xFF914BE1), Color(0xFF6530B7)]
-                      : const <Color>[Color(0xFF0877C9), Color(0xFF07579B)],
-                  compactContent: compact, onTap: onTap,
-                ),
-              );
-            }
           """
-          # Insert the original _featureCard method INSIDE the fixture class,
-          # not as a separate replacement or imitation.
-          idx=fixture.rfind("\n          }")
-          assert idx>=0
-          fixture=fixture[:idx] + "\n" + method + fixture[idx:]
+          # Include the exact approved _featureCard() method inside the
+          # throwaway widget class, then close the class declaration.
+          fixture += "\n" + method + "\n}\n"
           Path(sys.argv[1]).write_text(fixture,encoding="utf-8")
           print("PASS: Flutter fixture generated from exact real 100261/100263 source and stage8 changes")
           PY
