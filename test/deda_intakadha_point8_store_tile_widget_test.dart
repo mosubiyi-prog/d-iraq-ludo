@@ -29,12 +29,12 @@ void main() {
       await tester.pumpWidget(sample(
         viewport: width, compact: true, onTap: () {},
       ));
-      expect(find.text('متجر المعرّفات'), findsOneWidget);
+      expect(find.text('متجر\nالمعرّفات'), findsOneWidget);
       expect(find.text('معرّفات مميزة'), findsOneWidget);
       expect(find.byIcon(Icons.storefront_rounded), findsOneWidget);
       expect(find.byIcon(Icons.chevron_left_rounded), findsNothing);
       final title = tester.renderObject<RenderParagraph>(
-        find.text('متجر المعرّفات'),
+        find.text('متجر\nالمعرّفات'),
       );
       expect(title.didExceedMaxLines, false,
           reason: 'Arabic identifier-store label must not truncate at $width dp');
@@ -67,7 +67,7 @@ void main() {
     await tester.pumpWidget(sample(
       viewport: 360, compact: true, onTap: () => taps++,
     ));
-    await tester.tap(find.text('متجر المعرّفات'));
+    await tester.tap(find.text('متجر\nالمعرّفات'));
     await tester.pump();
     expect(taps, 1);
     expect(tester.takeException(), isNull);
