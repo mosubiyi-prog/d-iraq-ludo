@@ -107,7 +107,7 @@ void main() {
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
     await confirmUse(tester);
-    expect(find.textContaining('تبقى'), findsWidgets);
+    expect(find.textContaining('سيبقى المعرّف الأصلي'), findsOneWidget);
     await tester.tap(find.byKey(const Key('deda_point15_cancel_switch')));
     await tester.pumpAndSettle();
     expect(switches, 0);
