@@ -1,0 +1,134 @@
+name: DEDA «إنت كدها» Point14 Verified Card Use - NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point14-verified-card-use-no-deploy.yml'
+      - 'tools/deda_intakadha_point14_verified_card_activation_2026_10_19.js'
+      - 'tools/stage_deda_intakadha_point14_verified_card_ui_2026_10_19.py'
+      - 'test/deda_intakadha_point14_verified_activation_emulator.test.js'
+      - 'test/test_deda_intakadha_point14_profile_link_2026_10_19.py'
+      - 'test/deda_intakadha_point14_verified_card_ui_widget_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-point14-verified-ui
+  cancel-in-progress: true
+jobs:
+  protected-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point14 exact regenerated source safety and no backend deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'PY'
+          import re,subprocess
+          files=subprocess.check_output(['git','diff','--name-only','4373b8b30eadc5a284554ca7c021c350e0732caf','HEAD'],text=True).splitlines()
+          permitted=[
+            r'docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18\.md',
+            r'catalogs/DEDA_ID_GROUP_002_CANDIDATES_100_NO_SALES_2026-10-18\.json',
+            r'tools/stage_deda_intakadha_point(?:[2-9]|1[0-4])_[a-z0-9_]+_2026_10_(?:18|19)\.py',
+            r'tools/deda_intakadha_point1[34]_[a-z0-9_]+_2026_10_19\.js',
+            r'test/test_deda_intakadha_point(?:[2-9]|1[0-4])_[a-z0-9_]+_2026_10_(?:18|19)\.py',
+            r'test/deda_intakadha_point(?:[5-9]|1[0-4])_[a-z0-9_]+\.dart',
+            r'test/deda_intakadha_point1[34]_[a-z0-9_]+\.test\.js',
+            r'\.github/workflows/qa-deda-intakadha-point(?:[2-9]|1[0-4])-[a-z0-9-]+\.yml',
+          ]
+          unexpected=[f for f in files if not any(re.fullmatch(p,f) for p in permitted)]
+          assert not unexpected, f'SAFE_STOP other source changed: {unexpected}'
+          assert not any(f.startswith(('lib/','android/','functions/','assets/','firestore')) for f in files)
+          print('PASS: 100356 phone baseline untouched, no functions/rules/wallet/source changes')
+          PY
+          node --check tools/deda_intakadha_point14_verified_card_activation_2026_10_19.js
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point14_profile_link_2026_10_19.py' -v
+  flutter-verified-id:
+    needs: protected-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Test approved Flutter profile/account card ownership components
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/point14/lib" "$RUNNER_TEMP/point14/test"
+          python3 - "$RUNNER_TEMP/point14/lib/deda_point14_owned_card_fixture.dart" <<'PY'
+          import ast,importlib.util,sys
+          from pathlib import Path
+          def literal(path,name):
+              tree=ast.parse(Path(path).read_text(encoding='utf-8'))
+              values=[n.value.value for n in tree.body if isinstance(n,ast.Assign)
+                      and isinstance(n.value,ast.Constant)
+                      and any(isinstance(t,ast.Name) and t.id==name for t in n.targets)]
+              assert len(values)==1, 'SAFE_STOP historical source diverged '+name
+              return values[0]
+          path='tools/stage_deda_intakadha_point12_safe_card_checkout_2026_10_19.py'
+          spec=importlib.util.spec_from_file_location('point12fixture',path)
+          p12=importlib.util.module_from_spec(spec);spec.loader.exec_module(p12)
+          art=literal('tools/stage_deda_intakadha_point5_four_premium_id_artworks_2026_10_18.py','ARTWORK')
+          chip=literal('tools/stage_deda_intakadha_point6_profile_id_slot_2026_10_18.py','WIDGET')
+          bridge=literal('tools/stage_deda_intakadha_point14_verified_card_ui_2026_10_19.py','WIDGET')
+          source="import 'package:flutter/material.dart';\nString dedaText(String ar,String en)=>ar;\n"
+          Path(sys.argv[1]).write_text(source+art+'\n'+chip+'\n'+p12.upgraded_widget()+'\n'+bridge,encoding='utf-8')
+          print('PASS: test real staged 100356 Flutter components without account writes')
+          PY
+          cp test/deda_intakadha_point14_verified_card_ui_widget_test.dart "$RUNNER_TEMP/point14/test/"
+          cat > "$RUNNER_TEMP/point14/pubspec.yaml" <<'YAML'
+          name: deda_p14_verified_preview
+          description: Isolated original DEDA ID card ownership test
+          version: 0.0.1
+          environment:
+            sdk: '>=3.4.0 <4.0.0'
+          dependencies:
+            flutter:
+              sdk: flutter
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+          flutter:
+            uses-material-design: true
+          YAML
+          cd "$RUNNER_TEMP/point14"
+          dart format lib test
+          flutter pub get
+          flutter test --reporter expanded
+  firestore-owned-activation:
+    needs: protected-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Firebase Emulator only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-save --no-audit --no-fund \
+            firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Verify durable activation, account boundaries and Firestore rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-point14-verified-card-use --only firestore \
+            'node --test test/deda_intakadha_point14_verified_activation_emulator.test.js'
+          test ! -e build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no APK, Firebase production writes or deployment'
