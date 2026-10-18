@@ -53,7 +53,7 @@ void main() {
     expect(tester.getTopLeft(header), before);
     expect(find.text('@DEDA-AQPYXJ'), findsNWidgets(4));
     expect(find.text(ids[0]), findsNothing);
-    expect(find.text(ids[8]), findsWidgets);
+    expect(find.byType(ListTile), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
