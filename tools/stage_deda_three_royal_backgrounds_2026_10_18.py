@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DEDA point 3: retain six legacy background choices, add three royal options.
+"""DEDA point 3: SIX visible choices (three original + three royal); preserve all original stored IDs.
 
 Run after proven 100342 source reconstruction, royal avatar hero, sticky edit
 preview and the locked royal frame stage. Changes only background choice UI,
@@ -11,7 +11,7 @@ import hashlib
 
 MAIN = Path("lib/main.dart")
 PUBSPEC = Path("pubspec.yaml")
-marker = "// DEDA_POINT3_NINE_BACKGROUNDS_2026_10_18"
+marker = "// DEDA_POINT3_SIX_VISIBLE_BACKGROUNDS_2026_10_18"
 a_assets = {
     "assets/deda_royal_backgrounds/deda_royal_bg_emerald.webp":
         (16198, "744f1a731b0611fc47b7685a78a6f81b319e066869c7f831f4a84b93dc343f5c"),
@@ -44,7 +44,7 @@ for asset, (length, sha256) in a_assets.items():
     if binary[:4] != b"RIFF" or binary[8:12] != b"WEBP":
         raise SystemExit("SAFE_STOP non-WebP image: " + asset)
 
-# Preserve EXACT old six colors and their indices. Append three new options.
+# Preserve all legacy saved styles 0..5; six visible UI tiles offer originals 0..2 and royals 6..8.
 palette_old = """    [Color(0xFFFFF5F6), Color(0xFFF0DBDE)],
   ];
   return backgrounds[style.abs() % backgrounds.length];
@@ -86,7 +86,7 @@ source = exactly(
 # Shared original royal paint for style 6, exact two art files for styles 7/8.
 # The profile and editor both use the SAME surface so chosen artwork matches.
 royal_component = r'''
-// DEDA_POINT3_NINE_BACKGROUNDS_2026_10_18
+// DEDA_POINT3_SIX_VISIBLE_BACKGROUNDS_2026_10_18
 class DedaRoyalBackgroundArtwork extends StatelessWidget {
   final int style;
   final Color glow;
@@ -159,13 +159,22 @@ old_hero_overlay = """              Positioned.fill(
                   ),
                 ),
               ),"""
-new_hero_overlay = """              Positioned.fill(
-                child: DedaRoyalBackgroundArtwork(
-                  key: const Key('deda_profile_saved_background_art'),
-                  style: DedaPreferences.profileBackgroundStyle,
-                  glow: savedColors.last,
-                ),
-              ),"""
+new_hero_overlay = """              if (DedaPreferences.profileBackgroundStyle >= 6)
+                Positioned.fill(
+                  child: DedaRoyalBackgroundArtwork(
+                    key: const Key('deda_profile_saved_background_art'),
+                    style: DedaPreferences.profileBackgroundStyle,
+                    glow: savedColors.last,
+                  ),
+                )
+              else
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _DedaRoyalProfileBackdropPainter(
+                      glow: savedColors.last,
+                    ),
+                  ),
+                ),"""
 hero = exactly(hero, old_hero_overlay, new_hero_overlay,
                "saved royal background on profile card")
 source = source[:hero_start] + hero + source[hero_end:]
@@ -226,16 +235,36 @@ new_center = """child: Stack(
 card_region = center_pattern.sub(lambda _: new_center, card_region, count=1)
 edit = edit[:card_pos] + card_region + edit[preview_end:]
 
-# Modify ONLY the 'background from DEDA' grid: 6 existing exact choices +
-# 3 new available colors. Do not change the separate SIX avatar/frame grids.
+# Modify ONLY the six background UI slots: first three old, last three royal.
+# Existing users with saved 3..5 keep their old background until they explicitly select/save.
+# The six avatar/frame choices remain untouched.
 bg_start = edit.index("'الخلفية من داخل DEDA'")
 bg_end = edit.index("            const SizedBox(height: 22),", bg_start)
 bg_block = edit[bg_start:bg_end]
 bg_block = exactly(
     bg_block,
     "children: List<Widget>.generate(6, (index) {",
-    "children: List<Widget>.generate(9, (index) {",
-    "background choice count only",
+    """children: List<Widget>.generate(6, (index) {
+                    final style = index < 3 ? index : index + 3;""",
+    "six visible choices only",
+)
+bg_block = exactly(
+    bg_block,
+    "final selected = _backgroundStyle == index;",
+    "final selected = _backgroundStyle == style;",
+    "mapped style selection",
+)
+bg_block = exactly(
+    bg_block,
+    "onTap: () => setState(() => _backgroundStyle = index),",
+    "onTap: () => setState(() => _backgroundStyle = style),",
+    "mapped style preview on tap",
+)
+bg_block = exactly(
+    bg_block,
+    "colors: dedaProfileBackgroundColors(index),",
+    "colors: dedaProfileBackgroundColors(style),",
+    "mapped style color",
 )
 bg_block = exactly(
     bg_block,
@@ -255,7 +284,7 @@ bg_block = exactly(
                                 size: 27,
                               )
                             : null,""",
-    """                        child: index < 6
+    """                        child: index < 3
                             ? (selected
                                 ? const Icon(
                                     Icons.check_circle,
@@ -266,7 +295,7 @@ bg_block = exactly(
                             : Stack(
                                 fit: StackFit.expand,
                                 children: <Widget>[
-                                  DedaRoyalBackgroundArtwork(style: index),
+                                  DedaRoyalBackgroundArtwork(style: style),
                                   if (selected)
                                     const Center(
                                       child: Icon(
@@ -307,6 +336,6 @@ pubspec = exactly(
 # Immutable backup identity, Firestore and release signing unaffected.
 MAIN.write_text(source, encoding="utf-8")
 PUBSPEC.write_text(pubspec, encoding="utf-8")
-print("PASS: 6 original backgrounds retained + 3 royal options in 9-style grid")
-print("PASS: tapping updates pinned preview; saving and reloading 0..8 works")
+print("PASS: only SIX backgrounds visible, three original and three royal; legacy storage retained")
+print("PASS: six choices map to 0..2 and 6..8; old saved 3..5 stay undisturbed")
 print("PASS: profiles render actual saved royal art; no purchases or account changes")
