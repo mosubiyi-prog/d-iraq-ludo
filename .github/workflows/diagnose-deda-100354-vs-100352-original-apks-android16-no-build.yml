@@ -1,0 +1,119 @@
+name: DEDA 100354 Android16 startup smoke vs PHONE-VERIFIED 100352 - NO BUILD
+on:
+  push:
+    branches:
+      - deda-100354-original-apk-android16-smoke-no-build-2026-10-18
+    paths:
+      - '.github/workflows/diagnose-deda-100354-vs-100352-original-apks-android16-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-binaries-android16-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exact signed 100352 and 100354 APKs; verify published bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda_smoke354/352 /tmp/deda_smoke354/354 /tmp/deda_smoke354/results
+          gh run download 39125918067 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100352-EXACT-100342-INPLACE-RECOVERY-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda_smoke354/352
+          gh run download 39138601155 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100354-THREE-POINTS-PRIVATE-SIGNED-OWNER-REVIEW-NO-PLAY \
+            -D /tmp/deda_smoke354/354
+          echo '51140df6f357823a620d98d5efe2756bae8042f0c029f39919860b2321ab6277  /tmp/deda_smoke354/352/recovery-100352.apk' | sha256sum -c -
+          echo 'd217e6ebb559f7c1a2643d0c02e5c184be3b1f986806d56139e36f54bb60bc90  /tmp/deda_smoke354/354/DEDA-100354-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk' | sha256sum -c -
+          echo 'PASS exact original APKs, no app build and no signing changes'
+      - name: Verify acceleration on disposable runner
+        run: |
+          sudo usermod -a -G kvm "$USER"
+          ls -l /dev/kvm
+      - name: Prepare isolated Android 16 run with original files and offline emulator
+        shell: bash
+        run: |
+          cat > /tmp/deda_smoke354/diagnose.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          root=/tmp/deda_smoke354
+          pkg=com.diraq.ludo.d_iraq_ludo
+          a352="$root/352/recovery-100352.apk"
+          a354="$root/354/DEDA-100354-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk"
+          out="$root/results"
+          mkdir -p "$out"
+          echo "API $(adb shell getprop ro.build.version.sdk)" > "$out/emulator.txt"
+          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+          adb shell svc wifi disable || true
+          adb shell svc data disable || true
+          scenario() {
+            local label="$1" seconds="$2"
+            adb shell am force-stop "$pkg" || true
+            adb logcat -c
+            adb shell monkey -p "$pkg" 1 > "$out/$label-launch.txt" 2>&1 || true
+            sleep "$seconds"
+            adb shell pidof "$pkg" > "$out/$label-pid.txt" || true
+            adb shell dumpsys activity activities > "$out/$label-activity.txt" || true
+            adb logcat -d -v threadtime > "$out/$label-logcat.txt" || true
+            grep -Eai -C 4 'DEDA 100354|startup failed|shared.?preferences|MissingPluginException|PlatformException|channel-error|FlutterJNI|I/flutter|E/flutter|FATAL EXCEPTION|AndroidRuntime|StateError|Unhandled Exception|DedaStartupGate|Exception' "$out/$label-logcat.txt" | tail -n 700 > "$out/$label-focused.txt" || true
+            adb exec-out screencap -p > "$out/$label-screen.png" || true
+            adb shell am force-stop "$pkg" || true
+            echo "$label process: $(cat "$out/$label-pid.txt" 2>/dev/null || true)"
+            grep -Eai 'DEDA 100354 startup failed|MissingPluginException|SharedPreferences|FATAL EXCEPTION|E/flutter|PlatformException' "$out/$label-focused.txt" | tail -n 24 || true
+          }
+          echo '=== 100354 clean disposable emulator: FIRST ==='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$a354" > "$out/354-clean-install.txt" 2>&1
+          scenario 354-clean 27
+          echo '=== Original phone-verified 100352 on same clean emulator ==='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$a352" > "$out/352-clean-install.txt" 2>&1
+          scenario 352-clean 27
+          echo '=== 100354 updated in place over 100352 emulator data (no clearing) ==='
+          adb install -r "$a354" > "$out/354-update-install.txt" 2>&1
+          scenario 354-updated 27
+          # Runtime gate: verify the original shared_preferences linkage failure is gone.
+          # This is not a phone acceptance test; screen captures and logs remain available.
+          for label in 354-clean 354-updated; do
+            if test ! -s "$out/$label-pid.txt"; then
+              echo "SAFE_STOP: $label app process not observed" >&2
+              exit 61
+            fi
+            if grep -q 'NoSuchMethodError' "$out/$label-logcat.txt"; then
+              echo "SAFE_STOP: $label contains NoSuchMethodError" >&2
+              exit 62
+            fi
+            if grep -q 'MissingPluginException.*SharedPreferences' "$out/$label-logcat.txt"; then
+              echo "SAFE_STOP: $label SharedPreferences plugin missing" >&2
+              exit 63
+            fi
+            echo "PASS: $label process observed, no NoSuchMethodError in logcat"
+          done
+          echo 'DONE: only disposable offline emulator used; real user data never accessed'
+          SCRIPT
+          chmod +x /tmp/deda_smoke354/diagnose.sh
+      - name: Cold start and in-place update to 100354 on Android 16 (NO BUILD)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disk-size: 6G
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash /tmp/deda_smoke354/diagnose.sh
+      - name: Preserve on-emulator screen captures and error logs, NO APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100354-352-ANDROID16-SMOKE-LOGS-NO-APK
+          path: /tmp/deda_smoke354/results/
+          if-no-files-found: warn
+          retention-days: 14
