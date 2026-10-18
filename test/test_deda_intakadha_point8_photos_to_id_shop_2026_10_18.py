@@ -80,8 +80,12 @@ class IdentifierStoreTileTests(unittest.TestCase):
         feat_method = after[after.index(self.p8.CARD):after.index(self.p8.BIO)]
         self.assertEqual(feature_grid.count("compactContent: true,"), 1)
         self.assertIn("bool compactContent = false,", feat_method)
-        self.assertIn("maxLines: compactContent ? 2 : 1", feat_method)
-        self.assertIn("fontSize: compactContent ? 11.5 : 16,", feat_method)
+        self.assertIn("if (compactContent)", feat_method)
+        self.assertIn("FittedBox(", feat_method)
+        self.assertIn("title.replaceFirst(' ',", feat_method)
+        self.assertIn("maxLines: 2,", feat_method)
+        self.assertIn("fontSize: 13,", feat_method)
+        self.assertIn("fontSize: 16,", feat_method)
         self.assertIn("if (!compactContent)", feat_method)
 
     def test_coming_soon_notice_does_not_navigate_into_wrong_editor(self):
