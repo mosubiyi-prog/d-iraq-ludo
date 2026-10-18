@@ -68,14 +68,10 @@ new_renderer=r'''    final safeStyle = frameStyle.clamp(0, 5).toInt();
               ),
             ),
             Positioned.fill(
-              child: IgnorePointer(
-                child: Image.asset(
-                  'assets/deda_royal_frames/royal_frame_' +
-                      (safeStyle - 3).toString() + '.webp',
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.high,
-                  gaplessPlayback: true,
-                ),
+              child: _DedaRoyalFrameMotion(
+                size: size,
+                asset: 'assets/deda_royal_frames/royal_frame_' +
+                    (safeStyle - 3).toString() + '.webp',
               ),
             ),
           ],
@@ -84,7 +80,124 @@ new_renderer=r'''    final safeStyle = frameStyle.clamp(0, 5).toInt();
     }
     return SizedBox('''
 section=replace_once(section,anchor,new_renderer,"locked only renderer")
-text=old[:start]+section+old[end:]
+# Match the LAB motion: gentle 5.4-second wave on ornaments + five phased
+# diamond glints. Both effects are clipped by the PNG/WebP ornament alpha.
+# Neither portrait pixels nor actual frame geometry is animated.
+motion = r'''
+class _DedaRoyalFrameMotion extends StatefulWidget {
+  final double size;
+  final String asset;
+
+  const _DedaRoyalFrameMotion({
+    required this.size,
+    required this.asset,
+  });
+
+  @override
+  State<_DedaRoyalFrameMotion> createState() => _DedaRoyalFrameMotionState();
+}
+
+class _DedaRoyalFrameMotionState extends State<_DedaRoyalFrameMotion>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _motion;
+
+  @override
+  void initState() {
+    super.initState();
+    _motion = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 5400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  Widget _diamondGlint(double phase, double px, double py, int index) {
+    final point = (phase + index * 0.19) % 1.0;
+    final rise = point < 0.5 ? point * 2.0 : (1.0 - point) * 2.0;
+    final opacity = ((rise - 0.72) * 2.5).clamp(0.0, 0.60).toDouble();
+    return Positioned(
+      left: widget.size * (px - 0.037),
+      top: widget.size * (py - 0.037),
+      width: widget.size * 0.074,
+      height: widget.size * 0.074,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: opacity,
+          child: Icon(
+            Icons.auto_awesome,
+            size: widget.size * 0.074,
+            color: const Color(0xFFFDF6E5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Image.asset(
+      widget.asset,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      gaplessPlayback: true,
+    );
+    // Respect accessibility reduced motion.
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) return base;
+    return AnimatedBuilder(
+      animation: _motion,
+      child: base,
+      builder: (context, art) {
+        final phase = _motion.value;
+        return RepaintBoundary(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Positioned.fill(child: art!),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.40,
+                    child: ShaderMask(
+                      blendMode: BlendMode.srcIn,
+                      shaderCallback: (bounds) => LinearGradient(
+                        begin: Alignment(-2.9 + phase * 5.0, -1),
+                        end: Alignment(-2.0 + phase * 5.0, 1),
+                        colors: const <Color>[
+                          Color(0x00FFFFFF),
+                          Color(0xC0FFFFFF),
+                          Color(0x00FFFFFF),
+                        ],
+                        stops: const <double>[0, 0.50, 1],
+                      ).createShader(bounds),
+                      child: Image.asset(
+                        widget.asset,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              _diamondGlint(phase, 0.50, 0.16, 0),
+              _diamondGlint(phase, 0.22, 0.39, 1),
+              _diamondGlint(phase, 0.78, 0.39, 2),
+              _diamondGlint(phase, 0.50, 0.70, 3),
+              _diamondGlint(phase, 0.69, 0.67, 4),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+'''
+text=old[:start]+section+motion+old[end:]
 
 # Remove the opaque veil covering the image. Keep a small corner lock.
 a=text.index("class DedaProfileFramePreview extends StatelessWidget {")
