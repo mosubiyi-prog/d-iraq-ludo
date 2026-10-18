@@ -10,7 +10,7 @@ import ast
 from pathlib import Path
 
 MAIN = Path("lib/main.dart")
-STAGE7 = Path("tools/stage_deda_intakadha_point7_four_cards_id_management_2026_10_18.py")
+STAGE7 = Path(__file__).resolve().parent / "stage_deda_intakadha_point7_four_cards_id_management_2026_10_18.py"
 POINT11 = "// DEDA_INTAKADHA_POINT11_FOUR_CARDS_LIVE_ID_PREVIEW_2026_10_19"
 ACCOUNT = "class _DedaAccountInfoPageState extends State<DedaAccountInfoPage> {"
 ACCOUNT_END = "class DedaDiamondsState {"
