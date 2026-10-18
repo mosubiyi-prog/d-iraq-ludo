@@ -9,7 +9,7 @@ const {createHash} = require("node:crypto");
 
 const PRICE = 5000;
 const COLORS = Object.freeze(["gold", "diamond", "royal", "pink"]);
-const ID_PATTERN = /^[A-Z0-9_-]{8,80}$/;
+const ID_PATTERN = /^[A-Za-z0-9_-]{8,80}$/;
 const ACCOUNT_PATTERN = /^[A-Za-z0-9_-]{4,160}$/;
 const PERSONAL_ID_PATTERN = /^@DEDA-[A-Z0-9]{6}$/;
 
