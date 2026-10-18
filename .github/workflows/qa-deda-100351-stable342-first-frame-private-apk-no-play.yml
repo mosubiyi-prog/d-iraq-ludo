@@ -437,9 +437,9 @@ jobs:
           set -euo pipefail
           python3 -m py_compile tools/deda_100351_restore_original_342_native.py
           mkdir -p /tmp/deda-native-351/orig /tmp/deda-native-351/drift
-          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
-            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
-            -D /tmp/deda-native-351/orig
+          # The preflight step already fetched and SHA256-verified 100342.
+          # Reuse the exact pinned artifact in this job; gh refuses to extract over the same filename.
+          test -s /tmp/deda-native-351/orig/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk
           gh run download 39035869855 -R mosubiyi-prog/d-iraq-ludo \
             -n DEDA-100343-ROYAL-INLINE-STICKY-SIGNED-PRIVATE-APK-NO-PLAY \
             -D /tmp/deda-native-351/drift
