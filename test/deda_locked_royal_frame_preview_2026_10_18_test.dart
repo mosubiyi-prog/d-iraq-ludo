@@ -33,7 +33,7 @@ void main() {
       scrollable: find.descendant(
         of: gallery,
         matching: find.byType(Scrollable),
-      ),
+      ).first,
     );
     await tester.pumpAndSettle();
     for (var index = 0; index < 6; index++) {
