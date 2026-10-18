@@ -9,14 +9,6 @@ on:
       - deda-ids-staged-no-build-2026-10-18
     paths:
       - '.github/workflows/build-deda-100347-private-owner-review-2026-10-18.yml'
-      - 'test/deda_point7_compact_ids_100342_test.dart'
-      - 'tools/stage_deda_point7_compact_ids_100342.py'
-      - 'tools/stage_deda_royal_locked_frames_2026_10_18.py'
-      - 'tools/stage_deda_three_royal_backgrounds_2026_10_18.py'
-      - 'test/deda_locked_royal_frame_preview_2026_10_18_test.dart'
-      - 'test/deda_three_royal_backgrounds_2026_10_18_test.dart'
-      - 'assets/deda_royal_frames/**'
-      - 'assets/deda_royal_backgrounds/**'
   workflow_dispatch:
 
 permissions:
@@ -430,7 +422,7 @@ jobs:
               private_apk,
           ]
           lines[matches[0]]=' && '.join(stages)
-          script='\n'.join(lines)+'\n'
+          script='set -e\n'+'\n'.join(lines)+'\n'
           assert not re.search(r'^\s*flutter build appbundle\b',script,re.M)
           assert script.count('flutter build apk --release --build-number=100347 ')==1
           assert 'firebase deploy ' not in script and 'gradlew assemble' not in script
@@ -443,7 +435,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash /tmp/deda_100340_play_aab.sh
+          bash -e /tmp/deda_100340_play_aab.sh
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
           grep -q 'DEDA_ROYAL_LOCKED_FRAMES_2026_10_18' lib/main.dart
           grep -q 'DEDA_POINT3_NINE_BACKGROUNDS_2026_10_18' lib/main.dart
