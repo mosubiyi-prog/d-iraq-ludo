@@ -21,6 +21,16 @@ void main() {
     expect(gallery, findsOneWidget);
     final y = tester.getTopLeft(pinned).dy;
 
+    // Frame gallery is below the six portraits in a lazy ListView.
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('deda_frame_slot_3')),
+      175.0,
+      scrollable: find.descendant(
+        of: gallery,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
     for (var index = 0; index < 6; index++) {
       expect(find.byKey(ValueKey('deda_frame_slot_$index')), findsOneWidget);
     }
