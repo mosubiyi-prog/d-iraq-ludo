@@ -1,0 +1,67 @@
+name: DEDA «إنت كدها» Point 4 - Rectangular ID card geometry ONLY - NO APK
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point4-rectangular-id-source-only-no-apk.yml'
+      - 'tools/stage_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py'
+      - 'test/test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-intakadha-point4-source-only
+  cancel-in-progress: true
+jobs:
+  point4-rectangular-card-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect original 100356 and ensure only approved stage 2-4 sources changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ["git","diff","--name-only","4373b8b30eadc5a284554ca7c021c350e0732caf","HEAD"],
+            text=True).splitlines())
+          allowed={
+            "docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18.md",
+            "tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py",
+            "test/test_deda_intakadha_point2_member_caption_2026_10_18.py",
+            ".github/workflows/qa-deda-intakadha-point2-caption-source-only-no-apk.yml",
+            "tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+            "test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+            ".github/workflows/qa-deda-intakadha-point3-name-level-source-only-no-apk.yml",
+            "tools/stage_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py",
+            "test/test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py",
+            ".github/workflows/qa-deda-intakadha-point4-rectangular-id-source-only-no-apk.yml",
+          }
+          assert changed.issubset(allowed), f"SAFE_STOP: disallowed modified files {sorted(changed-allowed)}"
+          assert "lib/main.dart" not in changed
+          assert not any(x.startswith(("android/","functions/","assets/")) for x in changed)
+          print("PASS: phone-verified 100356 backup protected; no backend, assets or app base changed")
+          PY
+      - name: Run 2 + 3 + 4 isolated generated-profile test suites with no APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py \
+            tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py \
+            tools/stage_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py \
+            test/test_deda_intakadha_point2_member_caption_2026_10_18.py \
+            test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py \
+            test/test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point2_member_caption_2026_10_18.py' -v
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point3_name_level_layout_2026_10_18.py' -v
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point4_rectangular_id_geometry_2026_10_18.py' -v
+          echo "PASS: ID rectangle up to 320px x 50px, responsive, copy remains, no asset or wallet change"
+          echo "PASS: no APK generated, no Firebase deploy, no Google Play publication"
