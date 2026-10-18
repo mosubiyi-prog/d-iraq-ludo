@@ -229,8 +229,10 @@ def apply(source: str) -> str:
     if MARKER in source:
         if source.count(MARKER) != 1 or WIDGET not in source or account.count(NEW_BUTTON) != 1:
             raise ValueError("SAFE_STOP: partial or non-identical stage7")
-        if account.count(ORIGINAL_BUTTON) != 0:
-            raise ValueError("SAFE_STOP: old account ID manager button not replaced")
+        # NEW_BUTTON deliberately retains the existing disabled activation
+        # control verbatim; this is NOT a duplicate old control.
+        if account.count("deda_point7_activate_requires_verified_ownership") != 1:
+            raise ValueError("SAFE_STOP: original locked activation control duplicated")
         return source
     if "class DedaPremiumIdCardsManagementPanel extends" in source:
         raise ValueError("SAFE_STOP: conflicting ID card management component")
