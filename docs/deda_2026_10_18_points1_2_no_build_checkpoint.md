@@ -9,6 +9,7 @@
 ## Point 1 — Identifier management UI, safely staged
 - In Account Information > My identifiers, Edit and Switch open a panel **on the same page** (not the portrait/frame editor).
 - Original deterministic personal DEDA ID remains unchanged.
+- User-requested re-design completed in staging: no yellow outer tile or white ID field. Both are integrated sapphire-to-navy gradients with gold outlines; RTL actions, LTR full @DEDA code, and original active status remain intact. Inline management panel matches the same palette.
 - Real premium ownership enumeration and global activation are **NOT implemented**, pending verified account ownership and all share/friend consumers. Disabled activation prevents fake switching.
 - Stage modified only: tools/stage_deda_point7_compact_ids_100342.py
 - Deferred widget tests: test/deda_point7_compact_ids_100342_test.dart
@@ -20,11 +21,12 @@
   - slot 4: royal gold, exact uploaded 850×850 RGBA WebP
   - slot 5: royal rose, exact uploaded 850×850 RGBA WebP
 - Uniform interior geometry calibrated against the transparent center: portrait box at x=26%, y=29.2%, width=48%, height=32.5%; BoxFit.cover **inside clipped oval**; ornaments overlay without stretching photo.
+- LAB-inspired smooth ornament motion is now coded: a 5.4s diagonal ray sweep clipped to the original ornament alpha and five independently phased soft diamond glints; fixed frame geometry, avatar face, and profile card DO NOT shift. Honor reduced-motion accessibility setting.
 - Same saved avatar for all three; do not shift or change image preference.
 - Locked tiles remain visibly locked but NOT veiled, so artwork and photo are visible.
 - Tapping a locked tile only sets local _previewFrameStyle, with pinned hero preview; it never persists a frame, makes a purchase, spends coins/diamonds, changes the owner's inventory or touches Firebase.
 - Both gallery and public-profile renderers share DedaFramedAvatar; free renderer branch is untouched.
-- This is staging code only, **not an installed/validated release**.
+- This is staging code only, **not an installed/validated release**. Repeating motion test now uses bounded pumps; pumpAndSettle on an infinite animation was deliberately removed.
 
 ### Mandatory exact source artwork (no approximations or generated replacements)
 Bundle must be uploaded to repository as:
@@ -35,7 +37,7 @@ It must contain exactly these three files at ZIP root:
 - royal_frame_1.webp | 260184 bytes | SHA256 a31029b56a4a989feaec25a119b58a8a90c378e6ba3159705d2d5e537f4f299e
 - royal_frame_2.webp | 247938 bytes | SHA256 dbd02ca458cf9e94e3a0005134d2b61cb0bdaaf7729893a8cbfe5f75123c249f
 
-**BLOCKER:** The ZIP was prepared from the original user-uploaded files but is not yet in the GitHub repo; code integration must not be labeled complete until the exact archive is committed and static/Flutter widget tests pass. No build was performed.
+**BLOCKER:** The ZIP was prepared from the original user-uploaded files and independently verified (WebP RGBA 850×850 and exact hashes) in the assistant workspace and archived at `/DEDA/LAB_Backups/deda_royal_frames_originals_2026-10-18.zip` in the user's ChatGPT Library, but is **not yet in the GitHub repo**. GitHub source-stage scripts are now updated but the source chain is not integrated/QA-passed until the binary is uploaded. No build was performed.
 
 ### Exact staging order after full 100342 source reconstruction:
 1. tools/stage_deda_royal_hero_2026_10_17.py
@@ -48,7 +50,7 @@ These are **final downstream stages** only; preserve all earlier historical sour
 
 ### Deferred QA
 - Flutter analyze reconstructed lib/main.dart.
-- Widget test test/deda_point7_compact_ids_100342_test.dart.
+- Widget test test/deda_point7_compact_ids_100342_test.dart (includes assertions for no yellow/white ID card).
 - Widget test test/deda_sticky_edit_preview_100343_test.dart.
 - Widget test test/deda_locked_royal_frame_preview_2026_10_18_test.dart.
 - Static binary hash and 3-slot guard.
