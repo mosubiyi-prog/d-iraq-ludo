@@ -93,7 +93,12 @@ jobs:
           signed='/tmp/deda352/recovery-100352.apk'
           with zipfile.ZipFile(original) as a, zipfile.ZipFile(signed) as b:
               assert b.testzip() is None
-              assert set(a.namelist()) == set(b.namelist()),'SAFE_STOP original APK entries changed'
+              missing=set(a.namelist())-set(b.namelist())
+              added=set(b.namelist())-set(a.namelist())
+              assert not missing,'SAFE_STOP original app entries removed: '+repr(sorted(missing))
+              # Signing/build tooling may add META-INF metadata, but no new app code/assets.
+              assert all(n.startswith('META-INF/') for n in added),'SAFE_STOP unexpected new app payload: '+repr(sorted(added))
+              print('New signing metadata only:', sorted(added))
               for name in a.namelist():
                   if name=='AndroidManifest.xml':
                       before=a.read(name); after=b.read(name)
