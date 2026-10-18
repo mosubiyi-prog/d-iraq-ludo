@@ -8,6 +8,7 @@ void main() {
     DedaIdCardPurchaseGateway? purchase,
     DedaIdCardOwnedRefresh? refresh,
     Set<DedaPremiumIdCardColor> owned = const <DedaPremiumIdCardColor>{},
+    String id = '@DEDA-AQPYXJ',
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -16,7 +17,7 @@ void main() {
             child: SizedBox(
               width: 320,
               child: DedaPremiumIdCardsManagementPanel(
-                identifier: '@DEDA-AQPYXJ',
+                identifier: id,
                 serverVerifiedOwnedColors: owned,
                 verifiedActiveColor: null,
                 onActivateVerified: null,
@@ -179,4 +180,50 @@ void main() {
     expect(tester.widget<OutlinedButton>(buy('gold')).onPressed, isNull);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('owned state resets when identifier owner changes without remount',
+      (tester) async {
+    final fake = (DedaPremiumIdCardColor style, String key) async =>
+        confirmed(style);
+    final refresher = () async =>
+        <DedaPremiumIdCardColor>{DedaPremiumIdCardColor.gold};
+    await tester.pumpWidget(fixture(purchase: fake, refresh: refresher));
+    await openGoldDialog(tester);
+    await tester.tap(find.byKey(const Key('deda_point12_confirm_purchase')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<OutlinedButton>(buy('gold')).onPressed, isNull);
+    await tester.pumpWidget(fixture(
+      id: '@DEDA-SECOND',
+      purchase: fake,
+      refresh: refresher,
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.widget<OutlinedButton>(buy('gold')).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('late remote receipt for old account never grants new account',
+      (tester) async {
+    final waiting = Completer<DedaIdCardPurchaseReceipt>();
+    var refreshCalls = 0;
+    final buyGateway = (DedaPremiumIdCardColor style, String key) => waiting.future;
+    final reload = () async {
+      refreshCalls++;
+      return <DedaPremiumIdCardColor>{DedaPremiumIdCardColor.gold};
+    };
+    await tester.pumpWidget(fixture(purchase: buyGateway, refresh: reload));
+    await openGoldDialog(tester);
+    await tester.tap(find.byKey(const Key('deda_point12_confirm_purchase')));
+    await tester.pump();
+    await tester.pumpWidget(fixture(
+      id: '@DEDA-SECOND',
+      purchase: buyGateway,
+      refresh: reload,
+    ));
+    waiting.complete(confirmed(DedaPremiumIdCardColor.gold));
+    await tester.pumpAndSettle();
+    expect(refreshCalls, 0);
+    expect(tester.widget<OutlinedButton>(buy('gold')).onPressed, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
 }
