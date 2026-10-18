@@ -25,7 +25,10 @@ void main() {
     final initialY = tester.getTopLeft(preview).dy;
 
     await tester.drag(gallery, const Offset(0, -520));
-    await tester.pumpAndSettle();
+    // Ornamental animation keeps producing frames by design; check the
+    // fixed card after bounded layout pumps rather than pumpAndSettle().
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
     expect(find.byKey(const Key('deda_sticky_preview_avatar_card')),
         findsOneWidget);
     expect(tester.getTopLeft(preview).dy, closeTo(initialY, 0.5));
