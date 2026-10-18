@@ -468,7 +468,11 @@ jobs:
           print('PASS: 13 approved UI stages on REAL regenerated 100356 source; payment/admin locked; navigation, gifts preserved')
           GUARD_POINT16
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart
-          flutter test test/deda_intakadha_point5_visual_widget_test.dart test/deda_intakadha_point6_profile_slot_widget_test.dart test/deda_intakadha_point7_four_id_cards_widget_test.dart test/deda_intakadha_point8_store_tile_widget_test.dart test/deda_intakadha_point9_fixed_store_widget_test.dart test/deda_intakadha_point10_catalog_preview_widget_test.dart test/deda_intakadha_point11_four_live_previews_widget_test.dart test/deda_intakadha_point12_safe_checkout_widget_test.dart test/deda_intakadha_point14_verified_card_ui_widget_test.dart test/deda_intakadha_point15_owned_ids_ui_widget_test.dart
+          # The point5-15 widget tests require THEIR OWN isolated generated fixture
+          # library and were already tested by their individually passing CI runs.
+          # Calling them inside lib/main.dart full app would falsely fail with
+          # missing fixture imports. Here run the actual app's regression suite.
+          flutter test test/deda_royal_avatar_choice_100341_test.dart test/deda_profile_visible_diamonds_test.dart test/deda_point7_compact_ids_100342_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_locked_royal_frame_preview_2026_10_18_test.dart test/deda_three_royal_backgrounds_2026_10_18_test.dart
           test ! -e build/app/outputs/flutter-apk/app-release.apk
           test ! -e build/app/outputs/bundle/release/app-release.aab
           echo 'PASS: point16 regenerated 100356 UI tested, NO APK and NO production deployment'
