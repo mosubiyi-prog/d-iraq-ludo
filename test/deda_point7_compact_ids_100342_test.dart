@@ -24,6 +24,18 @@ void main() {
     expect(card, findsOneWidget);
     expect(find.byKey(const Key('deda_point7_current_id_chip')),
         findsOneWidget);
+    final outer = tester.widget<Container>(card);
+    final outerDecoration = outer.decoration! as BoxDecoration;
+    expect(outerDecoration.gradient, isNotNull,
+        reason: 'The former yellow account tile must be replaced');
+    expect(outerDecoration.color, isNull);
+    final field = tester.widget<Container>(
+      find.byKey(const Key('deda_point7_current_id_chip')),
+    );
+    final fieldDecoration = field.decoration! as BoxDecoration;
+    expect(fieldDecoration.gradient, isNotNull,
+        reason: 'The former white identifier field must be replaced');
+    expect(fieldDecoration.color, isNull);
     expect(find.text(personalId), findsOneWidget);
     expect(find.byKey(const Key('deda_point7_inline_id_manager')),
         findsNothing);
