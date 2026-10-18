@@ -89,7 +89,7 @@ jobs:
           assert "0xFFFFF8DE" not in ids
           assert 'DedaRoyalFrameMotion' in frames
           assert '_previewFrameStyle' in frames
-          assert 'DedaDiamondsWallet.spend(' not in frames
+          assert '"DedaDiamondsWallet.spend(" in edit' in frames  # fail-closed debt guard inside staged edit UI
           assert 'List<Widget>.generate(9, (index)' in backgrounds
           assert 'profileBackgroundStyle = backgroundStyle.clamp(0, 8).toInt()' in backgrounds
           assert 'deda_sticky_preview_avatar_card' in backgrounds
