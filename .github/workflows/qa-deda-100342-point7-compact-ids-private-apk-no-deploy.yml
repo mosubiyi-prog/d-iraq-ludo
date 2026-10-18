@@ -410,7 +410,8 @@ jobs:
           test ! -f build/app/outputs/bundle/release/app-release.aab
           grep -q '^flutter.versionCode=100342$' android/local.properties
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
-          grep -q 'deda_point7_change_id_requires_verified_registry' lib/main.dart
+          grep -q 'deda_point7_inline_id_manager' lib/main.dart
+          grep -q 'deda_point7_activate_requires_verified_ownership' lib/main.dart
           grep -q 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' lib/main.dart
           grep -q 'DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17' lib/main.dart
           grep -q 'dedaProfileVisibleDiamonds(' lib/main.dart
