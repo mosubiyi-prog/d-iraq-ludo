@@ -6,7 +6,7 @@ name: DEDA 3 points reconstructed Flutter tests ONLY - NO APK NO AAB NO DEPLOY
 on:
   push:
     branches:
-      - deda-ids-staged-no-build-2026-10-18
+      - deda-three-points-6backgrounds-safe-100353-2026-10-18
     paths:
       - '.github/workflows/qa-deda-three-points-reconstruction-flutter-test-no-apk.yml'
       - 'test/deda_point7_compact_ids_100342_test.dart'
@@ -424,7 +424,7 @@ jobs:
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
           grep -q 'DEDA_100343_STICKY_EDIT_PROFILE_PREVIEW' lib/main.dart
           grep -q 'DEDA_ROYAL_LOCKED_FRAMES_2026_10_18' lib/main.dart
-          grep -q 'DEDA_POINT3_NINE_BACKGROUNDS_2026_10_18' lib/main.dart
+          grep -q 'DEDA_POINT3_SIX_VISIBLE_BACKGROUNDS_2026_10_18' lib/main.dart
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           echo 'PASS: UI/integration widget checks executed; no signed or unsigned Android package created'
