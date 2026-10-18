@@ -80,6 +80,57 @@ def validate_catalog(document):
         raise ValueError("SAFE_STOP: proposed IDs changed from privately cross-checked 100")
     return ["@DEDA-" + v for v in values]
 
+def assert_no_known_collisions(candidates, *, reserved_admin, other_groups, known_user_ids):
+    """Validate an explicitly supplied snapshot; NEVER substitute for live Firebase.
+
+    Required complete private 100 admin-exclusive manifest, previous groups,
+    and a known-user snapshot. Lack of any source fails closed, rather than
+    pretending a static public catalog guarantees ownership or availability.
+    The caller is responsible for obtaining an authoritative live snapshot
+    and an atomic server transaction before any identifier can be sold.
+    """
+    if reserved_admin is None or other_groups is None or known_user_ids is None:
+        raise ValueError("SAFE_STOP: missing private reserved/groups/users snapshot")
+    if not isinstance(reserved_admin, list) or len(reserved_admin) != 100:
+        raise ValueError("SAFE_STOP: exact private reserved 100 manifest required")
+    if not isinstance(other_groups, list) or not isinstance(known_user_ids, list):
+        raise ValueError("SAFE_STOP: other groups and known-user snapshots must be lists")
+
+    def normalize(value):
+        if not isinstance(value, str):
+            raise ValueError("SAFE_STOP: identifier must be text")
+        name = value.upper()
+        if name.startswith("@DEDA-"):
+            name = name[6:]
+        if re.fullmatch("[A-Z0-9]{4,}", name) is None:
+            raise ValueError("SAFE_STOP: malformed reserved/owned/other-group identifier")
+        return "@DEDA-" + name
+
+    reserved = [normalize(x) for x in reserved_admin]
+    if len(set(reserved)) != 100:
+        raise ValueError("SAFE_STOP: duplicate in private reserved manifest")
+    occupied = set(reserved)
+    for group in other_groups:
+        if not isinstance(group, list):
+            raise ValueError("SAFE_STOP: previous group is not a list")
+        names = [normalize(x) for x in group]
+        if len(names) != len(set(names)):
+            raise ValueError("SAFE_STOP: duplicate within previous group")
+        if occupied.intersection(names):
+            raise ValueError("SAFE_STOP: reserved/existing group overlap")
+        occupied.update(names)
+    owned = [normalize(x) for x in known_user_ids]
+    if len(owned) != len(set(owned)):
+        raise ValueError("SAFE_STOP: duplicate ID in known existing users")
+    occupied.update(owned)
+    checked = [normalize(x) for x in candidates]
+    if len(checked) != len(set(checked)):
+        raise ValueError("SAFE_STOP: duplicate candidate")
+    clashes = set(checked).intersection(occupied)
+    if clashes:
+        raise ValueError("SAFE_STOP: candidate collides with a reserved/group/user identifier")
+    return True
+
 def dart_block(identifiers):
     lines = [
         MARKER,
