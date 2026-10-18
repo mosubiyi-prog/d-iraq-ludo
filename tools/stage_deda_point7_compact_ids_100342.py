@@ -31,6 +31,74 @@ new_methods = r'''
   // DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY
   // A genuinely LIVE personal identifier; no fake premium ownership list.
   // The active-owned-ID backend is explicitly NOT ready for switching.
+
+  // ID MANAGEMENT stays on Account Info, never opens the portrait/frame editor.
+  // No premium activation or local ownership claim until a trusted registry is
+  // available and ALL existing DEDA share-ID consumers are migrated safely.
+  bool _showIdentifierManagement = false;
+
+  void _toggleIdentifierManagement() {
+    setState(() {
+      _showIdentifierManagement = !_showIdentifierManagement;
+    });
+  }
+
+  Widget _identifierManagementPanel(String originalId) {
+    return Container(
+      key: const Key('deda_point7_inline_id_manager'),
+      margin: const EdgeInsets.only(top: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        border: Border.all(color: const Color(0xFFE6D7A2)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            dedaText('إدارة المعرّفات', 'Manage identifiers'),
+            style: const TextStyle(
+              color: Color(0xFF775606),
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            dedaText('المعرّف الأصلي المحفوظ', 'Preserved original ID'),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF536577)),
+          ),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: SelectableText(
+              originalId,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF283C5B),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            dedaText(
+              'المعرّفات المميزة المملوكة: لا يمكن عرض ملكيتها أو تفعيلها قبل ربطها بسجل موثوق. لن يتغير معرّفك الحالي.',
+              'Owned premium IDs require a trusted ownership registry before listing or activation. Your current ID remains unchanged.',
+            ),
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFF626F6B)),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            key: const Key('deda_point7_activate_requires_verified_ownership'),
+            onPressed: null,
+            child: Text(dedaText('التفعيل بعد التحقق', 'Activate after verification')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _ownedIdsCompactCard() {
     final originalId =
         DedaBackend.personalShareIdForPhone(DedaPreferences.phone).trim();
@@ -118,9 +186,8 @@ new_methods = r'''
               // Do not pretend that a locally drawn selection changes the
               // stable UID or resolves ID-based friends / location sharing.
               TextButton(
-                key: const Key(
-                    'deda_point7_change_id_requires_verified_registry'),
-                onPressed: null,
+                key: const Key('deda_point7_switch_opens_id_manager'),
+                onPressed: _toggleIdentifierManagement,
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   minimumSize: const Size(54, 34),
@@ -133,16 +200,8 @@ new_methods = r'''
               ),
               const SizedBox(width: 2),
               TextButton(
-                key: const Key('deda_point7_edit_profile_action'),
-                onPressed: () async {
-                  final changed = await Navigator.push<bool>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const DedaEditProfilePage(),
-                    ),
-                  );
-                  if (changed == true && mounted) setState(() {});
-                },
+                key: const Key('deda_point7_edit_identifier_action'),
+                onPressed: _toggleIdentifierManagement,
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 5),
                   minimumSize: const Size(48, 34),
@@ -155,6 +214,8 @@ new_methods = r'''
               ),
             ],
           ),
+          if (_showIdentifierManagement)
+            _identifierManagementPanel(displayId),
         ],
       ),
     );
@@ -189,9 +250,11 @@ account = account.replace(
 assert "DedaPreferences.setAccountType(type)" in account, \
     "SAFE_STOP legacy account-type update lost"
 assert "DedaPreferences.phone," in account, "SAFE_STOP phone display lost"
-assert "onPressed: null" in account and \
-    "deda_point7_change_id_requires_verified_registry" in account, \
-    "SAFE_STOP disallowed unverified ID switch"
+assert "deda_point7_activate_requires_verified_ownership" in account and \
+    "onPressed: null" in account, \
+    "SAFE_STOP disallowed unverified premium activation"
+assert "DedaEditProfilePage()" not in account, \
+    "SAFE_STOP ID editor must not navigate to portraits/frames"
 result = source[:a] + account + source[b:]
 assert result[:a] == source[:a] and result[a + len(account):] == source[b:], \
     "SAFE_STOP non-account code change"
