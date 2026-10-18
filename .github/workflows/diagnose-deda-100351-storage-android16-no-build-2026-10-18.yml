@@ -1,0 +1,101 @@
+name: DEDA 100351 Android16 local storage diagnosis - NO BUILD OR DEPLOY
+on:
+  push:
+    branches:
+      - deda-100351-storage-runtime-diagnosis-2026-10-18
+    paths:
+      - '.github/workflows/diagnose-deda-100351-storage-android16-no-build-2026-10-18.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-binaries-android16-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exact signed 100342 and 100351 APKs; verify published bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda_storage/342 /tmp/deda_storage/351 /tmp/deda_storage/results
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda_storage/342
+          gh run download 39123084212 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda_storage/351
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda_storage/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+          echo '8023246a29f89639a3db557d3a4d10703647300fcb39b6b6ea412554a7477d40  /tmp/deda_storage/351/DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-QA.apk' | sha256sum -c -
+          echo 'PASS exact original APKs, no app build and no signing changes'
+      - name: Verify acceleration on disposable runner
+        run: |
+          sudo usermod -a -G kvm "$USER"
+          ls -l /dev/kvm
+      - name: Prepare isolated Android 16 run with original files and offline emulator
+        shell: bash
+        run: |
+          cat > /tmp/deda_storage/diagnose.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          root=/tmp/deda_storage
+          pkg=com.diraq.ludo.d_iraq_ludo
+          a342="$root/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk"
+          a351="$root/351/DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-QA.apk"
+          out="$root/results"
+          mkdir -p "$out"
+          echo "API $(adb shell getprop ro.build.version.sdk)" > "$out/emulator.txt"
+          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+          adb shell svc wifi disable || true
+          adb shell svc data disable || true
+          scenario() {
+            local label="$1" seconds="$2"
+            adb shell am force-stop "$pkg" || true
+            adb logcat -c
+            adb shell monkey -p "$pkg" 1 > "$out/$label-launch.txt" 2>&1 || true
+            sleep "$seconds"
+            adb shell pidof "$pkg" > "$out/$label-pid.txt" || true
+            adb logcat -d -v threadtime > "$out/$label-logcat.txt" || true
+            grep -Eai -C 4 'DEDA 100351|startup failed|shared.?preferences|MissingPluginException|PlatformException|channel-error|FlutterJNI|I/flutter|E/flutter|FATAL EXCEPTION|AndroidRuntime|StateError|Unhandled Exception|DedaStartupGate|Exception' "$out/$label-logcat.txt" | tail -n 700 > "$out/$label-focused.txt" || true
+            adb exec-out screencap -p > "$out/$label-screen.png" || true
+            adb shell am force-stop "$pkg" || true
+            echo "$label process: $(cat "$out/$label-pid.txt" 2>/dev/null || true)"
+            grep -Eai 'DEDA 100351 startup failed|MissingPluginException|SharedPreferences|FATAL EXCEPTION' "$out/$label-focused.txt" | tail -n 24 || true
+          }
+          echo '=== 100351 clean disposable emulator ==='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$a351" > "$out/351-clean-install.txt" 2>&1
+          scenario 351-clean 38
+          echo '=== Original phone-verified 100342 on same clean emulator ==='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$a342" > "$out/342-clean-install.txt" 2>&1
+          scenario 342-clean 30
+          echo '=== 100351 updated in place over 100342 emulator data (no clearing) ==='
+          adb install -r "$a351" > "$out/351-update-install.txt" 2>&1
+          scenario 351-updated 40
+          echo 'DONE: only disposable offline emulator used; real user data never accessed'
+          SCRIPT
+          chmod +x /tmp/deda_storage/diagnose.sh
+      - name: Cold start and in-place update to 100351 on Android 16 (NO BUILD)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disk-size: 6G
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash /tmp/deda_storage/diagnose.sh
+      - name: Preserve on-emulator screen captures and error logs, NO APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100351-342-ANDROID16-STORAGE-RUNTIME-LOGS-NO-APK
+          path: /tmp/deda_storage/results/
+          if-no-files-found: warn
+          retention-days: 14
