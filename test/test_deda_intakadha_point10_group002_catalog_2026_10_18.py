@@ -132,6 +132,35 @@ class Group002CatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SAFE_STOP"):
             self.mod.apply(modified, self.catalog)
 
+    def test_collision_guard_rejects_reserved_previous_groups_and_existing_users(self):
+        reserved = [f"R{i:03d}" for i in range(100)]
+        other = [["@DEDA-ZZZZZZ", "@DEDA-XYXYXY"]]
+        self.assertTrue(self.mod.assert_no_known_collisions(
+            self.ids, reserved_admin=reserved, other_groups=other,
+            known_user_ids=["@DEDA-AQPYXJ"]))
+        for changed_reserved, changed_groups, changed_users in (
+            (reserved[:-1] + ["ABABAB"], other, []),
+            (reserved, [["@DEDA-ABABAB"]], []),
+            (reserved, other, ["@deda-ababab"]),
+        ):
+            with self.assertRaisesRegex(ValueError, "SAFE_STOP"):
+                self.mod.assert_no_known_collisions(
+                    self.ids, reserved_admin=changed_reserved,
+                    other_groups=changed_groups, known_user_ids=changed_users)
+
+    def test_fail_closed_without_all_three_collision_sources(self):
+        for item in (
+            dict(reserved_admin=None, other_groups=[], known_user_ids=[]),
+            dict(reserved_admin=[], other_groups=[], known_user_ids=[]),
+            dict(reserved_admin=["A001"] * 100, other_groups=[], known_user_ids=[]),
+            dict(reserved_admin=[f"R{i:03d}" for i in range(100)],
+                 other_groups=None, known_user_ids=[]),
+            dict(reserved_admin=[f"R{i:03d}" for i in range(100)],
+                 other_groups=[], known_user_ids=None),
+        ):
+            with self.assertRaisesRegex(ValueError, "SAFE_STOP"):
+                self.mod.assert_no_known_collisions(self.ids, **item)
+
     def test_disposable_cli_does_not_touch_real_code_or_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
