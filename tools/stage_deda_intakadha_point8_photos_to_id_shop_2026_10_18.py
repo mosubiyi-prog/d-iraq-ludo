@@ -3,7 +3,7 @@
 
 After reconstructed 100356 + approved stages 2..7, swap the EMPTY purple
 Photos card with "متجر المعرّفات", keeping its original grid location,
-112dp height, purple gradient, neighbor cards, data, and navigation untouched.
+102dp accepted height, purple gradient, neighbor cards, data, and navigation untouched.
 Stage9 builds store page; for now tapping opens an honest coming-soon notice.
 Compact glyph/title layout applies ONLY to this store tile; all other
 _featureCard callers render with the same defaults and dimensions as before.
@@ -28,34 +28,87 @@ OLD_TILE = "                icon: Icons.photo_library_rounded,\n                
 NEW_TILE = "                // DEDA_INTAKADHA_POINT8_PHOTOS_TILE_BECOMES_ID_SHOP_2026_10_18\n                icon: Icons.storefront_rounded,\n                title: dedaText('متجر المعرّفات', 'Identifier store'),\n                subtitle: dedaText('معرّفات مميزة', 'Premium identifiers'),\n                colors: const <Color>[Color(0xFF914BE1), Color(0xFF6530B7)],\n                compactContent: true,\n                onTap: () => _showPhase2Notice(\n                  'متجر المعرّفات قيد التجهيز. التصفح والشراء يتفعّلان بعد إكمال المتجر والتحقق من الملكية.',\n                  'The identifier store is being prepared. Browsing and purchases will open after the store and ownership checks are ready.',\n                ),"
 METHOD_EDITS = (
     (
-        "    required VoidCallback onTap,\n  }) {",
-        "    required VoidCallback onTap,\n    bool compactContent = false,\n  }) {",
-        "opt-in compact title, default false for all other cards",
+        r'''    required VoidCallback onTap,
+  }) {''',
+        r'''    required VoidCallback onTap,
+    bool compactContent = false,
+  }) {''',
+        "Opt-in store-only compact mode, unchanged default for existing buttons",
     ),
     (
-        "                width: 46,\n                height: 46,",
-        "                width: compactContent ? 24 : 46,\n                height: compactContent ? 24 : 46,",
-        "make store icon smaller without resizing card",
+        r'''                width: 40,
+                height: 40,''',
+        r'''                width: compactContent ? 24 : 40,
+                height: compactContent ? 24 : 40,''',
+        "Store-only 24px icon circle, preserve accepted 100356 40px default",
     ),
     (
-        "                child: Icon(icon, color: Colors.white, size: 26),",
-        "                child: Icon(icon, color: Colors.white, size: compactContent ? 18 : 26),",
-        "scale store icon without changing the other icons",
+        r'''                child: Icon(icon, color: Colors.white, size: 23),''',
+        r'''                child: Icon(icon, color: Colors.white, size: compactContent ? 18 : 23),''',
+        "Store-only 18px glyph, preserve accepted 100356 23px default",
     ),
     (
-        "              const SizedBox(width: 9),",
-        "              SizedBox(width: compactContent ? 3 : 9),",
-        "store only: narrow icon/text spacer",
+        r'''              const SizedBox(width: 6),''',
+        r'''              SizedBox(width: compactContent ? 3 : 6),''',
+        "Store-only tight gap, preserve accepted 100356 6px default",
     ),
     (
-        "                    Text(\n                      title,\n                      maxLines: 1,\n                      overflow: TextOverflow.ellipsis,\n                      style: const TextStyle(\n                        color: Colors.white,\n                        fontWeight: FontWeight.w900,\n                        fontSize: 16,\n                      ),\n                    ),",
-        "                    if (compactContent)\n                      FittedBox(\n                        fit: BoxFit.scaleDown,\n                        alignment: AlignmentDirectional.centerStart,\n                        child: Text(\n                          title.replaceFirst(' ', '\\n'),\n                          maxLines: 2,\n                          style: const TextStyle(\n                            color: Colors.white,\n                            fontWeight: FontWeight.w900,\n                            fontSize: 13,\n                          ),\n                        ),\n                      )\n                    else\n                      Text(\n                        title,\n                        maxLines: 1,\n                        overflow: TextOverflow.ellipsis,\n                        style: const TextStyle(\n                          color: Colors.white,\n                          fontWeight: FontWeight.w900,\n                          fontSize: 16,\n                        ),\n                      ),",
-        "store-only 2-line fitted title; other cards retain original Text byte-for-byte",
+        r'''                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15.5,
+                        ),
+                      ),
+                    ),''',
+        r'''                    if (compactContent)
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          title.replaceFirst(' ', '\n'),
+                          maxLines: 2,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      )
+                    else
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15.5,
+                          ),
+                        ),
+                      ),''',
+        "Store 2 lines, preserve accepted 100356 FittedBox/title/font for ALL other buttons",
     ),
     (
-        "              const Icon(\n                Icons.chevron_left_rounded,\n                color: Colors.white,\n                size: 22,\n              ),",
-        "              if (!compactContent)\n                const Icon(\n                  Icons.chevron_left_rounded,\n                  color: Colors.white,\n                  size: 22,\n                ),",
-        "store-only remove redundant chevron to make long title legible",
+        r'''              const Icon(
+                Icons.chevron_left_rounded,
+                color: Colors.white,
+                size: 22,
+              ),''',
+        r'''              if (!compactContent)
+                const Icon(
+                  Icons.chevron_left_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),''',
+        "Store-only hide chevron; keep it on all original profile tiles",
     ),
 )
 
@@ -144,9 +197,9 @@ def apply(src: str) -> str:
             raise ValueError("SAFE_STOP: duplicated original card control: " + reason)
         method2 = method2.replace(actual, new, 1)
         applied.append((actual, new))
-    if "height: 112," not in method2 or "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2:
+    if "height: 102," not in method2 or "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2:
         raise ValueError("SAFE_STOP: tile size or purple palette unexpectedly lost")
-    if method2.count("title.replaceFirst") != 1 or method2.count("FittedBox(") != 1:
+    if method2.count("title.replaceFirst") != 1 or method2.count("FittedBox(") != 2:
         raise ValueError("SAFE_STOP: store label wrapping not enabled")
     # This is a pure source patch. Fully reversing the approved substitutions
     # must reproduce the original profile byte-for-byte.
