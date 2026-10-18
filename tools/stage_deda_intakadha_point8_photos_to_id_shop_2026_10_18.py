@@ -89,7 +89,7 @@ def apply(src: str) -> str:
         return src
     if grid.count(OLD_TILE) != 1:
         raise ValueError("SAFE_STOP: original 100263 purple Photos card not found exactly once")
-    if grid.count("          Row(\n") != 3:
+    if grid.count("        Row(\n") != 3:
         raise ValueError("SAFE_STOP: profile grid row count changed")
     for needle in (
         "title: dedaText('تعديل الملف', 'Edit profile')",
