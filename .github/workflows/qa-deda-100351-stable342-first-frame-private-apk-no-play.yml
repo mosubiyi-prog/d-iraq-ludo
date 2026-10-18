@@ -411,55 +411,7 @@ jobs:
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -s "$APK"
           test ! -f build/app/outputs/bundle/release/app-release.aab
-          grep -q '^flutter.versionCode=100351
-          grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
-          grep -q 'deda_point7_change_id_requires_verified_registry' lib/main.dart
-          grep -q 'DEDA_ROYAL_PROFILE_HERO_LAYOUT_ONLY_2026_10_17' lib/main.dart
-          grep -q 'DEDA_ROYAL_THREE_AVATARS_STEP1_2026_10_17' lib/main.dart
-          grep -q 'dedaProfileVisibleDiamonds(' lib/main.dart
-          grep -q 'DedaDiamondsWallet.balanceNotifier' lib/main.dart
-          grep -q 'DedaSocialProgressWallet.xpNotifier' lib/main.dart
-          python3 - <<'VERIFY_PRIVATE_PROFILE'
-          from pathlib import Path
-          import zipfile, json, hashlib
-          p=Path('build/app/outputs/flutter-apk/app-release.apk')
-          assert p.stat().st_size>1000000
-          with zipfile.ZipFile(p) as z:
-              assert z.testzip() is None
-              assert {'AndroidManifest.xml','classes.dex'} <= set(z.namelist())
-              files=set(z.namelist())
-              expected={
-                  'deda_avatar_male_royal.jpg': 'a78adc468b63d9897c6adba887dfe81f37ba97b0aa99c212563387b5f820710f',
-                  'deda_avatar_female_royal.jpg': '46e6eeb18eb05eaeeabf5706ac910be127f50f2865e48277c79027db4a95f2f2',
-                  'deda_avatar_couple_royal.jpg': '8c3f0d39a8e5c582979494efea04de54b0949654f56e90629d9333aa9789f14a'
-              }
-              for n,digest in expected.items():
-                  matches=[a for a in files if a.endswith('/deda_royal_avatars/'+n)]
-                  assert len(matches)==1, 'Royal asset missing from APK: '+n
-                  assert hashlib.sha256(z.read(matches[0])).hexdigest()==digest, 'Royal asset altered in APK: '+n
-          c=json.loads(Path('google-services.json').read_text())
-          packages={x['client_info']['android_client_info']['package_name'] for x in c['client']
-                    if 'android_client_info' in x.get('client_info',{})}
-          assert packages == {'com.diraq.ludo.d_iraq_ludo'}
-          print('PASS: package identity, valid Android APK, no AAB, original release branch untouched')
-          print('APK SHA256:',hashlib.sha256(p.read_bytes()).hexdigest())
-          VERIFY_PRIVATE_PROFILE
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
-          "$APKSIGNER" verify --verbose "$APK"
-          mkdir -p private-profile-test
-          cp "$APK" private-profile-test/DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-QA.apk
-          sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
-          git rev-parse HEAD > private-profile-test/source-commit.txt
-          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100351. Stable 100342 with safe visible startup and retry; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
-          echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
-      - name: Upload signed private profile QA APK, NOT FOR PLAY
-        uses: actions/upload-artifact@v4
-        with:
-          name: DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-APK-NO-PLAY
-          path: private-profile-test/
-          retention-days: 21
-          if-no-files-found: error
- android/local.properties
+          grep -q '^flutter.versionCode=100351$' android/local.properties
           grep -q 'DEDA_100351_NONBLOCKING_STARTUP_DIAGNOSTICS' lib/main.dart
           grep -q 'DedaStartupGate' lib/main.dart
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
@@ -494,14 +446,14 @@ jobs:
           print('PASS: package identity, valid Android APK, no AAB, original release branch untouched')
           print('APK SHA256:',hashlib.sha256(p.read_bytes()).hexdigest())
           VERIFY_PRIVATE_PROFILE
-          # Exact native executable guard: keep original 100342 Android plugin layer.
+          # Verify native classes match the accepted working 100342 binary.
           python3 - <<'NATIVE_GUARD_342'
           import zipfile, hashlib
           with zipfile.ZipFile('build/app/outputs/flutter-apk/app-release.apk') as a:
               got=hashlib.sha256(a.read('classes.dex')).hexdigest()
           expected='9a0daefeb0cc218711309358ddf46bd45349164dcdc9dc30ea927153df19841e'
-          assert got==expected, f'SAFE_STOP native Android classes.dex drifted from phone-proven 100342: {got}'
-          print('PASS: original 100342 native Android dex preserved')
+          assert got==expected, f'SAFE_STOP native Android classes.dex differs from accepted 100342: {got}'
+          print('PASS: exact native Android dex of proven 100342')
           NATIVE_GUARD_342
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           "$APKSIGNER" verify --verbose "$APK"
@@ -509,7 +461,7 @@ jobs:
           cp "$APK" private-profile-test/DEDA-100351-STABLE342-STARTUP-RESCUE-PRIVATE-QA.apk
           sha256sum private-profile-test/*.apk > private-profile-test/SHA256SUMS.txt
           git rev-parse HEAD > private-profile-test/source-commit.txt
-          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100351. Stable 100342 with safe visible startup and retry; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
+          printf '%s\n' 'PRIVATE USER REVIEW APK ONLY. VersionCode 100351. Stable 100342 with visible startup and safe retry; owned-ID switching remains DISABLED pending server validation. NO Google Play submission.' 'Do not uninstall a live DEDA installation to test. Use a dedicated test device after checking version/signature compatibility.' 'Only the top profile hero appearance was restyled. Actual owner screenshots required for approval.' > private-profile-test/READ-ME-FIRST.txt
           echo 'PASS: signed APK for private QA; NO Play upload, NO Firebase deploy'
       - name: Upload signed private profile QA APK, NOT FOR PLAY
         uses: actions/upload-artifact@v4
