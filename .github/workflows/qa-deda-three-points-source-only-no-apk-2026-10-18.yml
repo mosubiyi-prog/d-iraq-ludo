@@ -4,7 +4,7 @@ name: DEDA three points STATIC QA ONLY - NO APK NO AAB NO DEPLOY
 on:
   push:
     branches:
-      - deda-ids-staged-no-build-2026-10-18
+      - deda-three-points-6backgrounds-safe-100353-2026-10-18
     paths:
       - 'tools/stage_deda_point7_compact_ids_100342.py'
       - 'tools/stage_deda_royal_locked_frames_2026_10_18.py'
@@ -90,7 +90,8 @@ jobs:
           assert 'DedaRoyalFrameMotion' in frames
           assert '_previewFrameStyle' in frames
           assert '"DedaDiamondsWallet.spend(" in edit' in frames  # fail-closed debt guard inside staged edit UI
-          assert 'List<Widget>.generate(9, (index)' in backgrounds
+          assert 'List<Widget>.generate(6, (index)' in backgrounds
+          assert 'final style = index < 3 ? index : index + 3;' in backgrounds
           assert 'profileBackgroundStyle = backgroundStyle.clamp(0, 8).toInt()' in backgrounds
           assert 'deda_sticky_preview_avatar_card' in backgrounds
           assert 'deda_profile_saved_background_art' in backgrounds
