@@ -90,11 +90,25 @@ class HeroNameLevelLayoutTests(unittest.TestCase):
             self.p3.apply(wrong)
 
     def test_robust_to_background_overlay_stage(self):
-        modified = self.p2source.replace(
-            "painter: _DedaRoyalProfileBackdropPainter(",
-            "painter: _DedaRoyalProfileBackdropPainter(",
-        )
-        self.assertEqual(self.p3.apply(modified), self.p3.apply(self.p2source))
+        # Use the ACTUAL royal-background patch strings from the deployed
+        # 100356 reconstruction stage, not an unrelated stand-in.
+        bg = ROOT / "tools/stage_deda_three_royal_backgrounds_2026_10_18.py"
+        tree = ast.parse(bg.read_text(encoding="utf-8"))
+        named = {}
+        for stmt in tree.body:
+            if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Constant):
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name) and target.id in ("old_hero_overlay", "new_hero_overlay"):
+                        named[target.id] = stmt.value.value
+        self.assertEqual(set(named), {"old_hero_overlay", "new_hero_overlay"})
+        before = named["old_hero_overlay"]
+        after = named["new_hero_overlay"]
+        self.assertEqual(self.p2source.count(before), 1)
+        updated_background = self.p2source.replace(before, after, 1)
+        final = self.p3.apply(updated_background)
+        self.assertIn("DedaRoyalBackgroundArtwork", final)
+        self.assertIn(after, final)
+        self.assertEqual(final.replace(after, before, 1), self.p3.apply(self.p2source))
 
     def test_idempotence_duplicate_detection(self):
         once = self.p3.apply(self.p2source)
