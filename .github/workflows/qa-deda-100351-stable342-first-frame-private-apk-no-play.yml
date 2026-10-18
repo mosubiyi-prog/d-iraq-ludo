@@ -403,6 +403,30 @@ jobs:
           assert 'flutter build appbundle --release --build-number=100340 ' not in f.read_text()
           print('SAFE: private signed APK only, same accepted defines, no Play or Firebase deployment')
           PRIVATE_PROFILE_QA
+      - name: Preflight original 100342 signer digest parser before costly APK build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda-native-351/orig
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda-native-351/orig
+          ORIGINAL=/tmp/deda-native-351/orig/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda-native-351/orig/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$ORIGINAL" > /tmp/deda-native-351/cert-output.txt
+          python3 - <<'CERT_PREFLIGHT'
+          import re
+          from pathlib import Path
+          marker='certificate SHA-256 digest:'
+          lines=[line.rsplit(marker,1)[1].strip().lower() for line in Path('/tmp/deda-native-351/cert-output.txt').read_text().splitlines() if marker in line]
+          assert len(lines)==1,'SAFE_STOP: 100342 signer certificate count unexpected'
+          assert re.fullmatch(r'[0-9a-f]{64}',lines[0]),f'SAFE_STOP: 100342 certificate format invalid, extracted length={len(lines[0])}'
+          print('PASS: SHA256-pinned original 100342 signer output parsed correctly BEFORE expensive build.')
+          CERT_PREFLIGHT
       - name: Reconstruct safe 100340, apply royal hero, test and compile private signed APK
         run: bash /tmp/deda_100340_play_aab.sh
       - name: Restore exact 100342 native executable in 100351 and re-sign with approved key
@@ -448,15 +472,15 @@ jobs:
           paths=sys.argv[1:]
           sdk=pathlib.Path(__import__('os').environ['ANDROID_HOME'])/'build-tools'
           signer=str(sorted(sdk.glob('*/apksigner'),key=lambda p:list(map(int,p.parent.name.split('.'))))[-1])
-          prefix='Signer #1 certificate SHA-256 digest:'
+          import re
+          marker='certificate SHA-256 digest:'
           def cert(path):
-              # apksigner itself verifies the APK and identifies the certificate.
+              # Verify APK cryptographically and parse the SHA-256 digest from the last marker.
               out=subprocess.check_output([signer,'verify','--print-certs',path],text=True)
-              lines=[line.strip() for line in out.splitlines() if line.strip().startswith(prefix)]
+              lines=[line.rsplit(marker,1)[1].strip().lower() for line in out.splitlines() if marker in line]
               assert len(lines)==1,'SAFE_STOP expected exactly one Android release signing certificate'
-              raw=lines[0][len(prefix):].strip().lower()
-              assert raw,'SAFE_STOP signer certificate digest missing'
-              return raw
+              assert re.fullmatch(r'[0-9a-f]{64}',lines[0]),'SAFE_STOP malformed signing certificate digest'
+              return lines[0]
           old,new=map(cert,paths)
           # The reference 100342 APK must pass the EXACT SHA-256 pin above.
           # Verify equality of its reported certificate with the newly signed APK.
