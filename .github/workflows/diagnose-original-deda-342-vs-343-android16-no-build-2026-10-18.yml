@@ -1,0 +1,103 @@
+name: DEDA original 342 vs 343 Android 16 cold-start diagnosis - NO BUILD
+on:
+  push:
+    branches:
+      - deda-native-342-343-android16-runtime-audit-2026-10-18
+    paths:
+      - '.github/workflows/diagnose-original-deda-342-vs-343-android16-no-build-2026-10-18.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  original-apk-runtime-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original signed APK artifacts, byte verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda_diag/342 /tmp/deda_diag/343
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda_diag/342
+          gh run download 39035869855 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100343-ROYAL-INLINE-STICKY-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda_diag/343
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda_diag/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+          echo '2a6f47d0e0a57b406f1834443b4b735dfc82e58164bc711f781e7e587629c04d  /tmp/deda_diag/343/DEDA-100343-ROYAL-INLINE-STICKY-PRIVATE-QA.apk' | sha256sum -c -
+          echo 'PASS: original 342 and 343 binaries authenticated'
+
+      - name: Allow hardware acceleration
+        run: |
+          sudo usermod -a -G kvm "$USER"
+          ls -l /dev/kvm
+
+      - name: Prepare cold launch diagnostic script
+        shell: bash
+        run: |
+          cat > /tmp/deda_diag/cold_start.sh <<'ENDSCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          pkg=com.diraq.ludo.d_iraq_ludo
+          dir=/tmp/deda_diag
+          mkdir -p "$dir/results"
+          echo "Android API: $(adb shell getprop ro.build.version.sdk)" | tee "$dir/results/emulator_info.txt"
+          test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
+          # No original user information on this clean Android emulator.
+          # Explicitly disconnect to avoid touching real Firebase accounts.
+          adb shell svc wifi disable || true
+          adb shell svc data disable || true
+          for v in 342 343; do
+            echo "===== original APK $v ====="
+            if [ "$v" = 342 ]; then
+              apk="$dir/342/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk"
+            else
+              apk="$dir/343/DEDA-100343-ROYAL-INLINE-STICKY-PRIVATE-QA.apk"
+            fi
+            adb uninstall "$pkg" >/dev/null 2>&1 || true
+            adb install "$apk" | tee "$dir/results/$v-install.txt"
+            adb shell am force-stop "$pkg" || true
+            adb logcat -c
+            adb shell monkey -p "$pkg" 1 > "$dir/results/$v-launch.txt" 2>&1 || true
+            sleep 18
+            adb shell pidof "$pkg" > "$dir/results/$v-process.txt" || true
+            adb logcat -d -v threadtime > "$dir/results/$v-logcat.txt" || true
+            grep -Eai -C 2 \
+              'FATAL EXCEPTION|AndroidRuntime|PlatformException|MissingPluginException|SharedPreferences|FlutterJNI|flutter:|Exception|channel-error|Could not establish connection' \
+              "$dir/results/$v-logcat.txt" | tail -n 550 \
+              > "$dir/results/$v-errors-focused.txt" || true
+            adb exec-out screencap -p > "$dir/results/$v-screen.png" || true
+            adb shell am force-stop "$pkg" || true
+          done
+          echo 'PASS: both original signed APKs exercised on Android 16; NO new build'
+          ENDSCRIPT
+          chmod +x /tmp/deda_diag/cold_start.sh
+
+      - name: Android 16 cold-start both ORIGINAL APKs without building
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash /tmp/deda_diag/cold_start.sh
+
+      - name: Keep diagnostic screenshots and logcat without app artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-ORIGINAL-342-343-ANDROID16-RUNTIME-LOGS-NO-APK
+          path: /tmp/deda_diag/results/
+          if-no-files-found: warn
+          retention-days: 14
