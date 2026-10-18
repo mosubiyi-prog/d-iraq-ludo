@@ -89,9 +89,9 @@ def apply(src: str) -> str:
     original_tile = OLD_TILE
     if grid.count(OLD_TILE) != 1:
         candidates = list(re.finditer(
-            r'(?ms)^[ \\t]*icon:\\s*Icons\\.photo_library_rounded,.*?'
-            r'onTap:\\s*\\(\\)\\s*=>\\s*_showPhase2Notice\\(.*?'
-            r'^\\s*\\),',
+            r'(?ms)^[ \t]*icon:\s*Icons\.photo_library_rounded,.*?'
+            r'onTap:\s*\(\)\s*=>\s*_showPhase2Notice\(.*?'
+            r'^\s*\),',
             grid,
         ))
         if len(candidates) != 1:
@@ -100,7 +100,7 @@ def apply(src: str) -> str:
                 "formatting; match-count=" + str(len(candidates))
             )
         original_tile = candidates[0].group(0)
-        canonical = lambda value: re.sub(r'\\s+', '', value)
+        canonical = lambda value: re.sub(r'\s+', '', value)
         if canonical(original_tile) != canonical(OLD_TILE):
             title = grid.count("title: dedaText('الصور', 'Photos')")
             subtitle = grid.count("subtitle: dedaText('قسم مستقل للصور لاحقًا', 'Dedicated photos area later')")
