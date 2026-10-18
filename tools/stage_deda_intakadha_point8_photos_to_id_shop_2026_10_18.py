@@ -103,7 +103,7 @@ def apply(src: str) -> str:
         method2 = method2.replace(old, new, 1)
     if "height: 112," not in method2 or "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2:
         raise ValueError("SAFE_STOP: tile size or purple palette unexpectedly lost")
-    if method2.count("compactContent ? 2 : 1") != 1:
+    if method2.count("title.replaceFirst") != 1 or method2.count("FittedBox(") != 1:
         raise ValueError("SAFE_STOP: store label wrapping not enabled")
     # This is a pure source patch. Fully reversing the approved substitutions
     # must reproduce the original profile byte-for-byte.
