@@ -1,0 +1,56 @@
+name: DEDA «إنت كدها» Point 3 - Raise name, slim lower level - SOURCE ONLY NO APK
+on:
+  push:
+    branches:
+      - deda-intakadha-ids-cards-stage1-2026-10-18
+    paths:
+      - '.github/workflows/qa-deda-intakadha-point3-name-level-source-only-no-apk.yml'
+      - 'tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py'
+      - 'test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-intakadha-point3-source-only
+  cancel-in-progress: true
+jobs:
+  point3-layout-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect exact phone-verified 100356 and all runtime/account paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = "4373b8b30eadc5a284554ca7c021c350e0732caf"
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ["git","diff","--name-only","4373b8b30eadc5a284554ca7c021c350e0732caf","HEAD"],
+            text=True).splitlines())
+          allowed={
+            "docs/DEDA_INTAKADHA_16_POINTS_STAGE1_CHECKPOINT_2026-10-18.md",
+            "tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py",
+            "test/test_deda_intakadha_point2_member_caption_2026_10_18.py",
+            ".github/workflows/qa-deda-intakadha-point2-caption-source-only-no-apk.yml",
+            "tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+            "test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py",
+            ".github/workflows/qa-deda-intakadha-point3-name-level-source-only-no-apk.yml",
+          }
+          assert changed.issubset(allowed), f"SAFE_STOP: disallowed changed files {sorted(changed-allowed)}"
+          assert "lib/main.dart" not in changed
+          print("PASS: backup 100356 unchanged; no raw UI, server, purchases, Play or Firebase files modified")
+          PY
+      - name: Run point2 and point3 focused tests on disposable historical hero
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/stage_deda_intakadha_point2_remove_member_2026_10_18.py tools/stage_deda_intakadha_point3_name_level_layout_2026_10_18.py test/test_deda_intakadha_point2_member_caption_2026_10_18.py test/test_deda_intakadha_point3_name_level_layout_2026_10_18.py
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point2_member_caption_2026_10_18.py' -v
+          python3 -m unittest discover -s test -p 'test_deda_intakadha_point3_name_level_layout_2026_10_18.py' -v
+          echo "PASS: name raised 6px; gold level lowered 6px and slimmed 8px; total hero vertical budget unchanged"
+          echo "PASS: NO APK BUILD, no Google Play, no backend or wallet changes"
