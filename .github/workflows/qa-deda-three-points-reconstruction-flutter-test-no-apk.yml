@@ -408,7 +408,7 @@ jobs:
                 'test/deda_three_royal_backgrounds_2026_10_18_test.dart'
           ]
           lines[matches[0]] = ' && '.join(steps)
-          script = '\n'.join(lines) + '\n'
+          script = 'set -e\n' + '\n'.join(lines) + '\n'
           # Block ANY remaining actual Flutter app build command before running.
           assert not re.search(r'^\s*flutter build (apk|appbundle)\b',script,re.M), 'SAFE_STOP an Android build was left in the source-only job'
           assert 'flutter build apk --release' not in script
@@ -420,7 +420,7 @@ jobs:
       - name: Reconstruct known-good 100342 and run three-point Flutter tests (no APK)
         run: |
           set -euo pipefail
-          bash /tmp/deda_100340_play_aab.sh
+          bash -e /tmp/deda_100340_play_aab.sh
           grep -q 'DEDA_100342_POINT7_COMPACT_IDS_UI_ONLY' lib/main.dart
           grep -q 'DEDA_100343_STICKY_EDIT_PROFILE_PREVIEW' lib/main.dart
           grep -q 'DEDA_ROYAL_LOCKED_FRAMES_2026_10_18' lib/main.dart
