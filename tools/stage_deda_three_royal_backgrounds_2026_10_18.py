@@ -180,14 +180,28 @@ edit = source[start:end]
 card_pos = edit.index("key: const Key('deda_sticky_preview_avatar_card')")
 preview_end = edit.index("key: const Key('deda_edit_profile_scroll_choices')", card_pos)
 card_region = edit[card_pos:preview_end]
-old_center = """              child: Center(
-                child: DedaFramedAvatar(
-                  avatarStyle: _avatarStyle,
-                  frameStyle: _previewFrameStyle ?? _frameStyle,
-                  size: 126,
-                ),
-              ),"""
-new_center = """              child: Stack(
+# Whitespace-tolerant anchored match. The prior sticky-preview stage preserves
+# the fixed card, but its indentation differs after reconstructed formatting.
+# Match the actual DedaFramedAvatar once inside the fixed preview only.
+import re
+center_pattern = re.compile(
+    r"child:\s*Center\(\s*child:\s*DedaFramedAvatar\(\s*"
+    r"avatarStyle:\s*_avatarStyle,\s*"
+    r"frameStyle:\s*(?P<frame>[^,]+),\s*"
+    r"size:\s*126,\s*\),\s*\),",
+    re.M,
+)
+center_matches = list(center_pattern.finditer(card_region))
+if len(center_matches) != 1:
+    raise SystemExit(
+        "SAFE_STOP pinned edit avatar anchor absent/ambiguous: "
+        + str(len(center_matches)) + " matches; context: "
+        + card_region[max(0, card_region.find("DedaFramedAvatar(")-140):
+                      card_region.find("DedaFramedAvatar(")+280]
+    )
+if "_previewFrameStyle" not in center_matches[0].group("frame"):
+    raise SystemExit("SAFE_STOP preserve point2 unowned-frame preview selection")
+new_center = """child: Stack(
                 fit: StackFit.expand,
                 children: <Widget>[
                   if (_backgroundStyle >= 6)
@@ -209,8 +223,7 @@ new_center = """              child: Stack(
                   ),
                 ],
               ),"""
-card_region = exactly(card_region, old_center, new_center,
-                      "pinned live edit preview remains fixed")
+card_region = center_pattern.sub(lambda _: new_center, card_region, count=1)
 edit = edit[:card_pos] + card_region + edit[preview_end:]
 
 # Modify ONLY the 'background from DEDA' grid: 6 existing exact choices +
