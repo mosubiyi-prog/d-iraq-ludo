@@ -45,6 +45,22 @@ def restore(original_path, staged_path, output_path):
         assert set(NATIVE_LIBS).issubset(old_names & new_names)
         assert {"AndroidManifest.xml", "classes.dex"}.issubset(old_names & new_names)
         assert sha256(old.read("classes.dex")) == NATIVE_342_SHA256
+        # Android manifest MUST be identical byte-for-byte except versionCode.
+        # This guarantees the new APK did not change permissions, components,
+        # exported services, native plugin declarations, or application id.
+        old_manifest = old.read("AndroidManifest.xml")
+        new_manifest = new.read("AndroidManifest.xml")
+        original_version = (100342).to_bytes(4, "little")
+        assert old_manifest.count(original_version) == 1, (
+            "SAFE_STOP original manifest version marker changed")
+        allowed_versions = {100343, 100351}  # proof APK, then target release
+        version_candidates = [
+            v for v in allowed_versions
+            if new_manifest == old_manifest.replace(
+                original_version, v.to_bytes(4, "little"), 1)
+        ]
+        assert len(version_candidates) == 1, (
+            "SAFE_STOP Android manifest differs beyond approved versionCode")
         before_dex = sha256(new.read("classes.dex"))
         assert before_dex in {NATIVE_342_SHA256, NATIVE_DRIFT_SHA256}, (
             "SAFE_STOP: unexpected new native code, inspect before patch: " + before_dex)
