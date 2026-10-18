@@ -64,11 +64,23 @@ new_renderer=r'''    final safeStyle = frameStyle.clamp(0, 5).toInt();
               ),
             ),
             Positioned.fill(
-              child: _DedaRoyalFrameMotion(
-                size: size,
-                asset: 'assets/deda_royal_frames/royal_frame_' +
-                    (safeStyle - 3).toString() + '.webp',
-              ),
+              // Lightweight thumbnails show the exact frame artwork without
+              // three perpetual off-screen tickers in the selection gallery.
+              // The pinned >=120px preview and actual profile still shimmer.
+              child: size < 120.0
+                  ? IgnorePointer(
+                      child: Image.asset(
+                        'assets/deda_royal_frames/royal_frame_' +
+                            (safeStyle - 3).toString() + '.webp',
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+                    )
+                  : _DedaRoyalFrameMotion(
+                      size: size,
+                      asset: 'assets/deda_royal_frames/royal_frame_' +
+                          (safeStyle - 3).toString() + '.webp',
+                    ),
             ),
           ],
         ),
