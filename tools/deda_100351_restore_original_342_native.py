@@ -6,6 +6,7 @@ Inputs: original-342.apk staged-351.apk output-unsigned.apk
 This produces an UNSIGNED staging ZIP only. Release signing must follow.
 No Firebase, account, Play or source app data is accessed.
 """
+import copy
 import hashlib
 import sys
 import zipfile
@@ -75,9 +76,9 @@ def restore(original_path, staged_path, output_path):
                 ):
                     continue
                 data = old.read(name) if name in NATIVE_FILES else new.read(name)
-                out.writestr(info, data)
+                out.writestr(copy.copy(info), data)
             for name in sorted(orig_services):
-                out.writestr(old.getinfo(name), old.read(name))
+                out.writestr(copy.copy(old.getinfo(name)), old.read(name))
         with zipfile.ZipFile(output_path) as result:
             assert result.testzip() is None, "SAFE_STOP: patched APK damaged"
             assert sha256(result.read("classes.dex")) == NATIVE_342_SHA256
