@@ -37,7 +37,9 @@ void main() {
     final premium = find.byKey(const ValueKey('deda_frame_slot_3'));
     await tester.ensureVisible(premium);
     await tester.tap(premium);
-    await tester.pumpAndSettle();
+    // The sparkle loops forever by design: never pumpAndSettle after selecting.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.byKey(const Key('deda_locked_frame_preview_only_notice')),
         findsOneWidget);
     expect(DedaPreferences.profileFrameStyle, before,
@@ -46,12 +48,15 @@ void main() {
       find.descendant(of: pinned, matching: find.byType(DedaFramedAvatar)).first,
     );
     expect(displayed.frameStyle, 3);
+    expect(find.byType(ShaderMask), findsWidgets,
+        reason: 'A locked royal frame must have the animated shimmer layer');
     expect(tester.getTopLeft(pinned).dy, closeTo(y, 0.5));
 
     final second = find.byKey(const ValueKey('deda_frame_slot_4'));
     await tester.ensureVisible(second);
     await tester.tap(second);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(tester.getTopLeft(pinned).dy, closeTo(y, 0.5));
     expect(DedaPreferences.profileFrameStyle, before);
   });
