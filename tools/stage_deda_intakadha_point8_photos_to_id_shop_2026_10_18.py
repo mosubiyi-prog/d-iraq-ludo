@@ -121,10 +121,29 @@ def apply(src: str) -> str:
             raise ValueError("SAFE_STOP: other profile grid tile missing: " + needle)
     grid2 = grid.replace(original_tile, NEW_TILE, 1)
     method2 = method
+    applied = []
     for old, new, reason in METHOD_EDITS:
+        actual = old
         if method2.count(old) != 1:
-            raise ValueError("SAFE_STOP: original card template diverged: " + reason)
-        method2 = method2.replace(old, new, 1)
+            # Flutter's formatter may change whitespace (line-wrap, indentation)
+            # of the feature-card function. Only accept the EXACT same Dart
+            # non-whitespace tokens as the audited approved pre-format snippet.
+            compressed = ''.join(c for c in method2 if not c.isspace())
+            target = ''.join(c for c in old if not c.isspace())
+            count = compressed.count(target)
+            if count != 1:
+                raise ValueError("SAFE_STOP: original card template diverged: " + reason)
+            locations = [i for i, c in enumerate(method2) if not c.isspace()]
+            index = compressed.index(target)
+            start = locations[index]
+            end = locations[index + len(target) - 1] + 1
+            actual = method2[start:end]
+            if ''.join(c for c in actual if not c.isspace()) != target:
+                raise ValueError("SAFE_STOP: card contains semantic differences: " + reason)
+        if method2.count(actual) != 1:
+            raise ValueError("SAFE_STOP: duplicated original card control: " + reason)
+        method2 = method2.replace(actual, new, 1)
+        applied.append((actual, new))
     if "height: 112," not in method2 or "Color(0xFF914BE1), Color(0xFF6530B7)" not in grid2:
         raise ValueError("SAFE_STOP: tile size or purple palette unexpectedly lost")
     if method2.count("title.replaceFirst") != 1 or method2.count("FittedBox(") != 1:
@@ -132,8 +151,10 @@ def apply(src: str) -> str:
     # This is a pure source patch. Fully reversing the approved substitutions
     # must reproduce the original profile byte-for-byte.
     reconstructed = method2
-    for old, new, _ in reversed(METHOD_EDITS):
-        reconstructed = reconstructed.replace(new, old, 1)
+    for actual, new in reversed(applied):
+        if reconstructed.count(new) != 1:
+            raise ValueError("SAFE_STOP: lost exact point8 replacement on rollback")
+        reconstructed = reconstructed.replace(new, actual, 1)
     if reconstructed != method or grid2.replace(NEW_TILE, original_tile, 1) != grid:
         raise ValueError("SAFE_STOP: edit leaked to other elements")
     modified_profile = profile[:g] + grid2 + method2 + profile[e:]
