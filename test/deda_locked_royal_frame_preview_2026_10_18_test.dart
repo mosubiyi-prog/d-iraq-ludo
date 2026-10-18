@@ -26,20 +26,18 @@ void main() {
     expect(gallery, findsOneWidget);
     final y = tester.getTopLeft(pinned).dy;
 
-    // Frame gallery is below the six portraits in a lazy ListView.
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('deda_frame_slot_3')),
-      175.0,
-      scrollable: find.descendant(
-        of: gallery,
-        matching: find.byType(Scrollable),
-      ).first,
-    );
-    await tester.pumpAndSettle();
+    // Gallery choices live in a scrolling list; scroll its viewport instead
+    // of using scrollUntilVisible with an ambiguous nested Scrollable.
+    final premium = find.byKey(const ValueKey('deda_frame_slot_3'));
+    for (var attempt = 0; attempt < 12 && premium.evaluate().isEmpty; attempt++) {
+      await tester.drag(gallery, const Offset(0, -170));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 190));
+    }
+    expect(premium, findsOneWidget);
     for (var index = 0; index < 6; index++) {
       expect(find.byKey(ValueKey('deda_frame_slot_$index')), findsOneWidget);
     }
-    final premium = find.byKey(const ValueKey('deda_frame_slot_3'));
     await tester.ensureVisible(premium);
     await tester.tap(premium);
     // The sparkle loops forever by design: never pumpAndSettle after selecting.
