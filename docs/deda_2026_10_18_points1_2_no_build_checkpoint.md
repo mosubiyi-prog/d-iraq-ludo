@@ -1,9 +1,10 @@
 # DEDA checkpoint — 18 Oct 2026 — NO BUILD
 
 ## Verified reference and branch
-- Immutable accepted phone version: 100342
+- Accepted phone-running reference: EXACT original 100342 code now installed as versionCode 100352. Preserve independent backup-deda-100352-phone-verified-2026-10-18 and the original 100342 reference.
 - Protected recovery branch: backup-deda-100342-phone-verified-exact-ci-2026-10-18
-- Separate working branch: deda-ids-staged-no-build-2026-10-18
+- Original morning working branch: deda-ids-staged-no-build-2026-10-18 (unchanged)
+- Corrected isolated branch: deda-three-points-6backgrounds-safe-100353-2026-10-18
 - No APK, no AAB, no Firebase deploy, no Play publishing until the owner asks.
 
 ## Point 1 — Identifier management UI, safely staged
@@ -56,20 +57,23 @@ These are **final downstream stages** only; preserve all earlier historical sour
 - Static binary hash and 3-slot guard.
 - Later, after owner approval ONLY: signed APK build and real install/cold-launch/login/admin test on phone, plus restore check.
 
-## Point 3 — nine background choices, three royal + six original
-- Legacy six background colors and their indices 0..5 remain identical.
+## Point 3 — exactly SIX visible backgrounds: 3 original + 3 royal
+- All existing saved background values 0..5 retain their original data and rendering. The visible selector shows existing 0..2, replacing the three remaining visible slots with royal saved styles 6..8; thus six tiles only. Saved old styles 3..5 are not silently changed on upgrade.
 - New choice 6 is the already-approved midnight-blue/purple royal profile starfield (reuses DEDA's own original backdrop painter).
 - Choice 7 is the emerald–teal navy gold-waves wallpaper at assets/deda_royal_backgrounds/deda_royal_bg_emerald.webp (16198 bytes, SHA256 744f1a731b0611fc47b7685a78a6f81b319e066869c7f831f4a84b93dc343f5c).
 - Choice 8 is the burgundy rose-gold wallpaper at assets/deda_royal_backgrounds/deda_royal_bg_burgundy.webp (13350 bytes, SHA256 5efd143d3ae5ab2ab6e3c0a4c2e98105398fa0428e7530f2acf085e957db4b9b).
-- Nine tiles in existing 2-column Wrap; selecting a tile updates only the fixed edit-page preview, no implicit save.
-- The Save button persists selected 0..8 in the EXISTING per-phone deda_profile_background_v1_ key; reopening/loading from account keeps the chosen background. The saved real profile hero displays it behind the original avatar, ID, level and badge.
+- Exactly SIX tiles in the existing 2-column Wrap: slot 0/1/2 maps to legacy style 0/1/2, and slot 3/4/5 maps to royal style 6/7/8; tapping updates only the fixed edit-page preview, no implicit save.
+- Save persists selected style 0..2 or 6..8 using the SAME per-phone deda_profile_background_v1_ key; earlier saved styles 3..5 still load unchanged. Profile hero shows royal artwork ONLY for newly saved royal styles; original backdrops render as before. The edit preview stays pinned above scrollable backgrounds/frames/avatars.
 - No changes to user account identifiers, friends, transactions, diamonds, XP, navigation, backend or release behavior.
 
 ### Validation before creating a release
 - GitHub static code/art QA passed without APK or AAB.
-- Full reconstructed Flutter-source/test-only workflow: qa-deda-three-points-reconstruction-flutter-test-no-apk.yml. Check completion separately; static checks alone are not on-device validation.
+- Full reconstructed Flutter-source/test-only workflow: qa-deda-three-points-reconstruction-flutter-test-no-apk.yml on the NEW 100353 isolated branch. Check completion separately; source/static checks alone are not on-device validation.
 - Deferred Dart widget tests include test/deda_three_royal_backgrounds_2026_10_18_test.dart, plus point 1/2 tests.
 - NOTIFY owner and review all 3 points before any APK/AAB construction. Build/release ONLY after owner's explicit go-ahead.
 - Following approved build, test Android install, signature, cold start, login, admin, and stored account/background state on the phone.
 ## Safety
 Do not modify the stable 100342 branch, main, existing accounts, Firebase rules, functions or balances. Never mark source staging as on-device success. Continue adding agreed points to this same working branch, one at a time.
+
+## Correction approved by owner later on 18 Oct
+The owner explicitly requested the original six background slots NOT grow to nine. Three existing appearances and three new royal background appearances in those six slots. Royal locked frames replace only slots 3..5 and stay visible OVER avatar in preview. No backend or user wallet mutation. The six portrait choices are three royal + three classic. No QA APK should be delivered as working without actual Android cold-start/upgrade verification.
