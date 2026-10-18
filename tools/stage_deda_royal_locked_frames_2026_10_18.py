@@ -103,7 +103,18 @@ class _DedaRoyalFrameMotionState extends State<_DedaRoyalFrameMotion>
     _motion = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 5400),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Do not keep an infinite ticker running for reduced-motion users/tests.
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _motion.stop();
+    } else if (!_motion.isAnimating) {
+      _motion.repeat();
+    }
   }
 
   @override
