@@ -66,18 +66,17 @@ void main() {
 
     // Scroll to the last row; the sticky avatar never scrolls away.
     final last = find.byKey(const ValueKey<String>('deda_background_tile_8'));
-    await tester.scrollUntilVisible(
-      last,
-      165,
-      scrollable: find.descendant(
-        of: choices,
-        matching: find.byType(Scrollable),
-      ).first,
-    );
-    await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 14 && last.evaluate().isEmpty; attempt++) {
+      await tester.drag(choices, const Offset(0, -180));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 190));
+    }
+    await tester.pump(const Duration(milliseconds: 170));
     expect(last, findsOneWidget);
+    await tester.ensureVisible(last);
     await tester.tap(last);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 240));
     expect(tester.getTopLeft(pinned).dy, closeTo(initialY, 0.5));
     expect(
       find.descendant(
