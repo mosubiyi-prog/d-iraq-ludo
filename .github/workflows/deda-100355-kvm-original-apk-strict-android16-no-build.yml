@@ -1,0 +1,138 @@
+name: DEDA 100355 Recheck ORIGINAL APK Android16 with KVM - NO BUILD
+on:
+  push:
+    branches: [deda-100355-kotlin-intrinsics-runtime-safe-2026-10-18]
+    paths: ['.github/workflows/deda-100355-kvm-original-apk-strict-android16-no-build.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  android16-kvm-runtime-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch EXACT already built and signed 100355 plus proven 100352; no rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda355/build /tmp/deda355/reference /tmp/deda355/results
+          gh run download 39146283980 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100355-THREE-POINTS-PRIVATE-SIGNED-OWNER-REVIEW-NO-PLAY \
+            -D /tmp/deda355/build
+          gh run download 39125918067 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100352-EXACT-100342-INPLACE-RECOVERY-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda355/reference
+          echo '51140df6f357823a620d98d5efe2756bae8042f0c029f39919860b2321ab6277  /tmp/deda355/reference/recovery-100352.apk' | sha256sum -c -
+          test -s /tmp/deda355/build/DEDA-100355-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk
+          python3 tools/assert_kotlin_coroutine_dex_100355.py /tmp/deda355/build/DEDA-100355-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk
+          sha256sum /tmp/deda355/build/*.apk > /tmp/deda355/results/binary.sha256
+          echo 'PASS: exact existing signed 100355, never rebuilt or resigned'
+      - name: Confirm nested KVM permission and acceleration before Android16 startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo 'SAFE_STOP: host lacks KVM device'; exit 52; }
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm || { echo 'SAFE_STOP: runner still cannot open KVM'; exit 53; }
+          "$ANDROID_HOME/emulator/emulator" -accel-check | tee /tmp/deda355/results/kvm-accel-check.txt
+      - name: Prepare strict Android16 smoke; never allow silent Flutter errors
+        shell: bash
+        run: |
+          cat > /tmp/deda355/strict.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          root=/tmp/deda355
+          pkg=com.diraq.ludo.d_iraq_ludo
+          apk="$root/build/DEDA-100355-THREE-POINTS-OWNER-PRIVATE-SIGNED.apk"
+          old="$root/reference/recovery-100352.apk"
+          out="$root/results"
+          mkdir -p "$out"
+          adb wait-for-device
+          sdk="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+          test "$sdk" = 36 || { echo "SAFE_STOP: API level $sdk is not Android 16"; exit 60; }
+          echo "Android API $sdk" > "$out/device.txt"
+          # Offline disposable emulator prevents touching real user data.
+          adb shell svc wifi disable || true
+          adb shell svc data disable || true
+          launch() {
+            label="$1"
+            adb shell am force-stop "$pkg" || true
+            adb logcat -c
+            adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > "$out/$label-launch.txt" 2>&1
+            sleep 35
+            pid="$(adb shell pidof "$pkg" | tr -d '\r' | awk '{print $1}')"
+            echo "$pid" > "$out/$label-pid.txt"
+            adb logcat -d -v threadtime > "$out/$label-logcat.txt"
+            adb shell dumpsys activity activities > "$out/$label-activities.txt" || true
+            adb shell dumpsys window > "$out/$label-windows.txt" || true
+            adb exec-out screencap -p > "$out/$label-screen.png" || true
+            if test -z "$pid"; then
+              echo "SAFE_STOP: $label DEDA process exited after launch" >&2
+              return 71
+            fi
+            awk -v pid="$pid" '$3 == pid { print }' "$out/$label-logcat.txt" > "$out/$label-app-pid-logcat.txt"
+            # Unlike broken 100354 smoke: DO NOT gate only on NoSuchMethodError.
+            if grep -Eai 'Unhandled Exception|PlatformException|ClassNotFoundException|NoSuchMethodError|MissingPluginException|\[ERROR:flutter|E/flutter|FATAL EXCEPTION' "$out/$label-app-pid-logcat.txt"; then
+              echo "SAFE_STOP: $label Flutter startup exception in DEDA PID $pid" >&2
+              return 72
+            fi
+            # Cross-check package-specific AndroidRuntime fatal diagnostics as well.
+            if grep -q "Process: $pkg," "$out/$label-logcat.txt"; then
+              echo "SAFE_STOP: $label AndroidRuntime fatal crash for DEDA" >&2
+              return 73
+            fi
+            if grep -Eai 'ANR in com\.diraq\.ludo\.d_iraq_ludo|ANR in system|Process system isn.t responding' "$out/$label-logcat.txt"; then
+              echo "SAFE_STOP: $label app/system ANR; emulator test inconclusive, do not release" >&2
+              return 74
+            fi
+            grep -E 'mResumedActivity|topResumedActivity|mCurrentFocus|mFocusedApp' "$out/$label-activities.txt" "$out/$label-windows.txt" | tail -n 15 > "$out/$label-focus.txt" || true
+            if ! grep -q "$pkg" "$out/$label-focus.txt"; then
+              echo "SAFE_STOP: $label DEDA was not foreground after startup" >&2
+              return 75
+            fi
+            echo "PASS: $label no Flutter errors, process alive, DEDA foreground" | tee "$out/$label-result.txt"
+          }
+          echo '=== 100355 clean install ==='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$apk" | tee "$out/355-clean-install.txt"
+          launch 355-clean
+          echo '=== 100352 known phone-signed install ==='
+          adb uninstall "$pkg"
+          adb install "$old" | tee "$out/352-original-install.txt"
+          # Seed startup on 100352; app data and signing must survive in-place upgrade.
+          adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > "$out/352-launch.txt" 2>&1 || true
+          sleep 8
+          adb shell am force-stop "$pkg" || true
+          echo '=== 100355 signed update IN PLACE over 100352 ==='
+          adb install -r "$apk" | tee "$out/355-updated-install.txt"
+          launch 355-updated
+          echo 'PASS: strict 100355 clean and in-place Android 16 runtime checks' | tee "$out/summary.txt"
+          SCRIPT
+          chmod +x /tmp/deda355/strict.sh
+      - name: Android16 KVM hardware-accelerated FIRST LAUNCH and IN-PLACE UPGRADE
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash /tmp/deda355/strict.sh
+      - name: Archive exact Android logcat, activity, screen captures, and exit reason
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100355-ANDROID16-KVM-STRICT-RUNTIME-LOGS-NO-APK
+          path: /tmp/deda355/results/
+          if-no-files-found: warn
+          retention-days: 14
