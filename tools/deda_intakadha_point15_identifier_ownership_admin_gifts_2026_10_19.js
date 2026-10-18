@@ -14,6 +14,7 @@ const ORIGINAL_PATTERN = /^@DEDA-[A-Z0-9]{6}$/;
 const PREMIUM_PATTERN = /^@DEDA-[A-Z0-9]{4,12}$/;
 const DESIGN_COLORS = Object.freeze(["gold", "diamond", "royal", "pink"]);
 const MAX_OWNED = 250;
+const validatedCatalogs = new WeakSet();
 
 function reject(code, reason) {
   const err = new Error(reason);
@@ -151,10 +152,12 @@ function privateReservedCatalog(names) {
     reject("failed-precondition", "verified-private-100-admin-catalog-required");
   }
   const allowed = new Set(names.map(name => "@DEDA-" + name));
-  return Object.freeze({
+  const catalog = Object.freeze({
     contains(identifier) {return allowed.has(identifier);},
     count: allowed.size,
   });
+  validatedCatalogs.add(catalog);
+  return catalog;
 }
 
 async function adminGrantReservedIdentifier(db, {
@@ -163,7 +166,8 @@ async function adminGrantReservedIdentifier(db, {
   validateIdentifier(identifier);
   if (!ORIGINAL_PATTERN.test(recipientOriginalId || "") ||
       !DESIGN_COLORS.includes(color) ||
-      !privateCatalog || privateCatalog.count !== 100 ||
+      !privateCatalog || !validatedCatalogs.has(privateCatalog) ||
+      privateCatalog.count !== 100 ||
       typeof privateCatalog.contains !== "function" ||
       !privateCatalog.contains(identifier)) {
     reject("permission-denied", "only-owner-private-admin-catalog-grants");
