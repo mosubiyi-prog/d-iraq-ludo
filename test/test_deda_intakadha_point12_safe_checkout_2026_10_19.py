@@ -109,6 +109,19 @@ class Point12CheckoutTests(unittest.TestCase):
             self.mod.apply(bad)
         self.assertEqual(self.done.count(self.mod.MARKER),1)
 
+    def test_cross_account_switch_clears_owned_and_ignores_late_receipt(self):
+        ui = self.mod.upgraded_widget()
+        for token in (
+            "void didUpdateWidget(",
+            "oldWidget.identifier != widget.identifier",
+            "_accountEpoch++;",
+            "_freshOwned.clear();",
+            "_requestIds.clear();",
+            "_accountEpoch != openingEpoch",
+            "_accountEpoch == openingEpoch",
+        ):
+            self.assertIn(token, ui, token)
+
     def test_previous_use_button_retained_unmodified(self):
         self.assertIn("'deda_intakadha_point7_use_' + style.name",self.done)
         self.assertIn("onTap: () => setState(() => _preview = style)",self.done)
