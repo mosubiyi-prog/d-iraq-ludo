@@ -1,0 +1,11 @@
+{
+  "kind": "DEDA_ADMIN_EXCLUSIVE_CATALOG_ENCRYPTED",
+  "version": 1,
+  "alg": "AES-256-GCM",
+  "compression": "zlib",
+  "aad": "DEDA|STAGE19|GROUP001|OWNER_ADMIN100|v1",
+  "nonce_b64": "4mB4PhBxK4ASqa+h",
+  "ciphertext_b64": "j/ig6YXEZRbaHdm7UiyYYebIg9YX416hc5DFBfEGGO+ZUbFEVQhpTJ4ecxiRdkInBpn0WoNjzuBEq7VABspl7yH4ir7lOM/vSgURd+Y7bgKsibjmZ6MJfcbnvj2eMLWJiXPLiCWUYf+SmwYBdaYTMqwfSo1Pp+9ex/eUxATGz3ggov3yC/63L/W3EIWxoZjzuRzzxZUKUAXxJWoFdOMqh2wO05h9rOGCdlLzdnvdOz87NX8HAcNhGnTXggrLbdpm3ISQ2cZ3x9HXF+t6MCViFdXRTYJA8mqZd6jgnjvN1yKfJWJfqTofcdZUaxVxcwn59lE0twtG1/gb/m5RDFH5WKwEmrFnD0KKRzLXB9Pknu+nsooliFVNUnTpMKKSuS+hNTOFHou85ty3GE6zC4QJJZBDCOazZK6vkIIvjZAm1jDZHenOuuUyHqE6bROrtY7iNFHrZoorFTu4HxyZSn+9dZLc1pDNHgk/XYQ98IMP8V7+jsJSP7nGzQ09BLtJ9xxs6vA=",
+  "expected_count": 100,
+  "policy": "owner-private-key-server-only;never-ship-plaintext-or-key"
+}
