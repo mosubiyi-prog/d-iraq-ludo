@@ -13,6 +13,7 @@ const REQUEST_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const ORIGINAL_RE = /^@DEDA-[A-Z0-9]{6}$/;
 const SALE_RE = /^@DEDA-[A-Z0-9]{6}$/;
 const SUFFIX_RE = /^[A-Z0-9]{6}$/;
+const EXCLUSIVE_SUFFIX_RE = /^[A-Z0-9]{4,12}$/;
 const MAX_OWNED = 250;
 const approvedCatalogInstances = new WeakSet();
 
@@ -33,11 +34,11 @@ function balance(value) {
   }
   return value;
 }
-function safeSuffixes(values, expectedCount, label) {
+function safeSuffixes(values, expectedCount, label, pattern = SUFFIX_RE) {
   if (!Array.isArray(values) ||
       (expectedCount === null ? values.length < 1 || values.length > 100
         : values.length !== expectedCount) ||
-      !values.every(x => typeof x === "string" && SUFFIX_RE.test(x)) ||
+      !values.every(x => typeof x === "string" && pattern.test(x)) ||
       new Set(values).size !== values.length) {
     fail("failed-precondition", "invalid-" + label + "-catalog");
   }
@@ -47,7 +48,7 @@ function safeSuffixes(values, expectedCount, label) {
 // OWNER-REVIEWED server inputs only, NEVER caller input or raw proposal JSON.
 // The constructor deliberately fails without an entire private reserved 100.
 function createApprovedSaleCatalog({approvedSuffixes, reservedSuffixes} = {}) {
-  const reserved = safeSuffixes(reservedSuffixes, 100, "private-reserved");
+  const reserved = safeSuffixes(reservedSuffixes, 100, "private-reserved", EXCLUSIVE_SUFFIX_RE);
   const approved = safeSuffixes(approvedSuffixes, null, "approved-sale");
   for (const identifier of approved) {
     if (reserved.has(identifier)) {
