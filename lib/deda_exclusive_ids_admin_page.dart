@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_backend.dart';
 
@@ -50,6 +52,86 @@ class DedaExclusiveAdminSnapshot {
 }
 
 class DedaExclusiveAdminBridge {
+  // Server callable is NOT currently deployed. Builds default to false:
+  // the exclusive catalog remains hidden, never guess client-side data.
+  static const bool serverReadFlag =
+      bool.fromEnvironment('DEDA_STAGE19_MANAGER100_READ_LIVE',
+          defaultValue: false);
+
+  static void installReadOnlyBridgeIfApproved() {
+    if (!serverReadFlag || readRemote != null) return;
+    readRemote = () async {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) {
+        throw StateError('verified-login-required');
+      }
+      final call = FirebaseFunctions.instance.httpsCallable(
+        'dedaStage19Exclusive100Read',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 40)),
+      );
+      final response = await call.call(<String, dynamic>{});
+      final data = response.data;
+      if (data is! Map) throw StateError('verified-server-response-required');
+      final map = Map<String, dynamic>.from(data);
+      if (map['serverConfirmed'] != true ||
+          map['total'] != 100 ||
+          map['identifiers'] is! List ||
+          map['history'] is! List) {
+        throw StateError('unverified-admin100-response');
+      }
+      final rawRows = map['identifiers'] as List;
+      final rawHistory = map['history'] as List;
+      if (rawRows.length != 100) {
+        throw StateError('admin100-count-mismatch');
+      }
+      final identifiers = <DedaExclusiveAdminId>[];
+      for (final row in rawRows) {
+        if (row is! Map) throw StateError('invalid-admin100-row');
+        final id = Map<String, dynamic>.from(row);
+        if (id['sequence'] is! int ||
+            id['identifier'] is! String ||
+            id['status'] is! String ||
+            (id['permanentColor'] != null &&
+                id['permanentColor'] is! String) ||
+            (id['ownerOriginalId'] != null &&
+                id['ownerOriginalId'] is! String)) {
+          throw StateError('invalid-admin100-row');
+        }
+        identifiers.add(DedaExclusiveAdminId(
+          sequence: id['sequence'] as int,
+          identifier: id['identifier'] as String,
+          status: id['status'] as String,
+          permanentColor: id['permanentColor'] as String?,
+          ownerOriginalId: id['ownerOriginalId'] as String?,
+        ));
+      }
+      final history = <DedaExclusiveAdminGrant>[];
+      for (final row in rawHistory) {
+        if (row is! Map) throw StateError('invalid-admin100-history');
+        final h = Map<String, dynamic>.from(row);
+        if (h['identifier'] is! String ||
+            h['recipientOriginalId'] is! String ||
+            h['color'] is! String ||
+            h['kind'] is! String ||
+            h['grantedAt'] is! String) {
+          throw StateError('invalid-admin100-history');
+        }
+        history.add(DedaExclusiveAdminGrant(
+          identifier: h['identifier'] as String,
+          recipientOriginalId: h['recipientOriginalId'] as String,
+          color: h['color'] as String,
+          kind: h['kind'] as String,
+          grantedAt: DateTime.parse(h['grantedAt'] as String),
+        ));
+      }
+      return DedaExclusiveAdminSnapshot(
+        serverConfirmed: true,
+        total: 100,
+        identifiers: identifiers,
+        history: history,
+      );
+    };
+  }
   // Inject ONLY real, authenticated Firebase Callable clients AFTER audited
   // server release. No raw Firestore client writes, local grant or test data.
   static Future<DedaExclusiveAdminSnapshot> Function()? readRemote;
@@ -152,6 +234,7 @@ class _DedaExclusiveIdsAdminPageState
       _draftColors.clear();
     });
     if (!allowed) return;
+    DedaExclusiveAdminBridge.installReadOnlyBridgeIfApproved();
     final read = DedaExclusiveAdminBridge.readRemote;
     if (read == null) {
       setState(() {
