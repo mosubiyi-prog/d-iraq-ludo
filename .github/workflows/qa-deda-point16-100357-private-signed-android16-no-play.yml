@@ -4,9 +4,13 @@ name: DEDA Point16 100357 Signed PRIVATE APK Android16 Strict - NO PLAY
 # No Firebase deployment, no Google Play upload, no production mutation.
 
 on:
+  push:
+    branches:
+      - deda-intakadha-point16-backend-bridge-qa-2026-10-19
+    paths:
+      - '.github/workflows/qa-deda-point16-100357-private-signed-android16-no-play.yml'
   workflow_dispatch:
-# DRAFT ONLY: explicitly activate push trigger after verified full Flutter run.
-# Never deploy Firebase or Play.
+# OWNER-AUTHORIZED PRIVATE signed QA APK only. NEVER Firebase/Play deploy.
 
 permissions:
   contents: read
