@@ -36,9 +36,9 @@ function make(flags = {}) {
 const authorized = data => ({auth: {uid: "verified_1"},
   app: {appId: "appcheck-ok"}, data});
 
-test("all 11 callable names exist, all AppCheck enforced, no eager secrets", () => {
+test("all 12 callable names exist, all AppCheck enforced, no eager secrets", () => {
   const {result, calls} = make();
-  assert.equal(Object.keys(result).length, 11);
+  assert.equal(Object.keys(result).length, 12);
   assert.equal(typeof result.dedaStage19Exclusive100Read, "function");
   assert.equal(typeof result.dedaStage19Exclusive100SelfUse, "function");
   assert.equal(typeof result.dedaStage19Exclusive100Grant, "function");
