@@ -12,7 +12,7 @@ function make(flags = {}) {
   const result = createLazyOwner19Callables({
     onCall: (opts, handler) => {
       assert.equal(opts.enforceAppCheck, true);
-      assert.equal(opts.secrets.length, 1);
+      assert.ok(Array.isArray(opts.secrets) && [0, 1].includes(opts.secrets.length));
       return handler;
     },
     HttpsError, flags,
@@ -79,4 +79,37 @@ test("authenticated approved manager use loads server-only catalog; no data spil
   assert.equal(calls.decrypt, 1);
   assert.equal(calls.db, 1);
   assert.equal(seen,"attempted");
+});
+
+test("ordinary 5k card purchase and read never need secret 100-list", async () => {
+  const {result, calls} = make({
+    point16: {read: true, cardPurchase: true},
+  });
+  // Mock DB intentionally fails: this still proves the request gets through
+  // the correct purchase route WITHOUT decrypting or reading the GM catalog.
+  await assert.rejects(result.dedaPremiumBuyCard(authorized({
+    color: "gold", requestId: "test_request_123456",
+  })), err => err.code === "internal");
+  await assert.rejects(result.dedaPremiumReadCards(authorized({})),
+    err => err.code === "internal");
+  assert.equal(calls.secret, 0);
+  assert.equal(calls.decrypt, 0);
+  assert.equal(calls.manifest, 0);
+  assert.equal(calls.sale, 0);
+  assert.equal(calls.db, 2);
+});
+
+test("wallet checkout still requires valid auth and AppCheck before DB", async () => {
+  const {result, calls} = make({
+    point16: {read: true, cardPurchase: true},
+  });
+  await assert.rejects(result.dedaPremiumBuyCard({
+    data: {color: "gold", requestId: "test_request_123456"},
+  }), err => err.code === "unauthenticated");
+  await assert.rejects(result.dedaPremiumBuyCard({
+    auth: {uid: "verified_1"},
+    data: {color: "gold", requestId: "test_request_123456"},
+  }), err => err.code === "permission-denied");
+  assert.equal(calls.secret, 0);
+  assert.equal(calls.db, 0);
 });
