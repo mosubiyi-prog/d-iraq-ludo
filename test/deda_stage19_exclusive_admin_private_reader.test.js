@@ -88,6 +88,10 @@ test("gifted identifier keeps one permanent color and has immutable dated histor
     identifier:id, accountKey: recipientKey, originalId:recipient,
     status:"owned", acquisition:"general_manager_gift", assignedColor:"royal",
   });
+  db.put("deda_owned_identifier_aliases/" + id, {
+    identifier:id, accountKey: recipientKey, originalId:recipient,
+    kind:"permanent_alias",
+  });
   db.put("deda_admin_identifier_grants/" + hash(recipientKey + ":" + id), {
     accountKey:recipientKey, identifier:id, originalId:recipient,
     color:"royal",createdAt:new Date("2026-10-19T11:00:00.000Z"),
@@ -105,6 +109,10 @@ test("gifted identifier keeps one permanent color and has immutable dated histor
 
 test("tampered fixed color or missing audit receipt fail closed", async () => {
   const db=setup(), id="@DEDA-A001";
+  db.put("deda_owned_identifier_aliases/" + id, {
+    identifier:id, accountKey:"account_B",
+    originalId:"@DEDA-Z9Y8X7", kind:"permanent_alias",
+  });
   db.put("deda_owned_identifier_registry/"+id,{
     identifier:id,status:"owned",accountKey:"account_B",
     originalId:"@DEDA-Z9Y8X7",assignedColor:"purple",
