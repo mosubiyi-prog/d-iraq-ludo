@@ -218,6 +218,25 @@ test("even after gift, fixed color cannot be changed and owner cannot be replace
   assert.equal(read.identifiers[3].permanentColor,"royal");
   assert.equal(read.identifiers[3].ownerOriginalId,ORIGINAL_B);
 });
+test("catalog NEVER claims 'available' when global original-share or alias collisions exist",async()=>{
+  await reset();
+  const g=gateway({read:true});
+  await db.collection("deda_share_ids").doc(ids[20]).set({
+    publicId:ids[20],ownerUid:UID_B,kind:"personal",active:true,
+  });
+  await assert.rejects(g.handle("read",call()),
+    e=>e.code==="failed-precondition" &&
+      e.message==="exclusive-id-original-share-collision");
+  await db.collection("deda_share_ids").doc(ids[20]).delete();
+  await db.collection("deda_owned_identifier_aliases").doc(ids[21]).set({
+    identifier:ids[21],originalId:ORIGINAL_B,accountKey:KEY_B,
+    kind:"permanent_alias",
+  });
+  await assert.rejects(g.handle("read",call()),
+    e=>e.code==="failed-precondition" &&
+      e.message==="exclusive-id-orphan-alias");
+});
+
 test("client Firestore SDK cannot grant a reserved ID by bypassing callables",async()=>{
   await reset();
   const client=env.authenticatedContext(UID_B).firestore();
