@@ -70,4 +70,6 @@ jobs:
     needs: [verify-protection, real-firestore-emulator]
     runs-on: ubuntu-24.04
     steps:
-      - run: echo 'PASS: STAGE19 private source emulator only; NO deployment or APK'
+      - name: Final no-deploy checkpoint
+        run: |
+          echo 'PASS: STAGE19 private source emulator only; NO deployment or APK'
