@@ -9,6 +9,9 @@ on:
       - deda-100359-jamal-owner-sandbox-full-private-apk-2026-10-19
     paths:
       - '.github/workflows/qa-deda-100359-jamal-owner-private-sandbox-signed-android16-no-play.yml'
+      - 'lib/deda_owner_review_sandbox_stage31.dart'
+      - 'test/deda_100359_owner_sandbox_widget_test.dart'
+      - 'tools/stage_deda_100359_owner_private_sandbox_after_point17_2026_10_19.py'
   workflow_dispatch:
 # OWNER-AUTHORIZED PRIVATE signed QA APK only. NEVER Firebase/Play deploy.
 
