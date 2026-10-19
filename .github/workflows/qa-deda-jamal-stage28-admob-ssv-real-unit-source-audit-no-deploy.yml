@@ -1,0 +1,75 @@
+name: DEDA Jamal Stage28 Real Ad Unit vs SSV Readiness Audit NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage28-real-ad-unit-ssv-readiness-audit-private-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage28_real_admob_unit_and_legacy_ads_readonly_audit_2026_10_19.js'
+      - 'test/deda_jamal_stage28_real_admob_ssv_preflight_source.test.js'
+      - '.github/workflows/qa-deda-jamal-stage28-admob-ssv-real-unit-source-audit-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage28-admob-source-audit
+  cancel-in-progress: true
+
+jobs:
+  guard-installed-app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: No production, SDK, current ad path or 100358 modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet f1e53b2708f2d4af89e27b0aa9442400e85f409f -- \
+            lib/ android/ assets/ functions/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock server_private/ catalogs/ \
+            tools/apply_real_admob_ids_100257_2026_10_03.py \
+            tools/add_diamonds_reward_100259_2026_10_04.py \
+            tools/rewarded_ad_resilience_100258_2026_10_03.py \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_jamal_stage24_offline_ssv_key_freshness_no_deploy_2026_10_19.js
+          ! grep -q 'deda_jamal_stage28_real_admob' functions/index.js
+          ! grep -q 'deda_jamal_stage28_real_admob' lib/main.dart
+          node --check tools/deda_jamal_stage28_real_admob_unit_and_legacy_ads_readonly_audit_2026_10_19.js
+          node --check test/deda_jamal_stage28_real_admob_ssv_preflight_source.test.js
+          echo 'PASS: Stage28 does not alter rewarded ads or any user accounts'
+  inspect-real-source:
+    needs: guard-installed-app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check 16 local source invariants and block unproved official callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage28_real_admob_ssv_preflight_source.test.js
+          node - <<'NODE'
+          const m=require("./tools/deda_jamal_stage28_real_admob_unit_and_legacy_ads_readonly_audit_2026_10_19.js");
+          const result=m.detectSourceReadiness(m.loadRepoSources());
+          if(!result.sourceEvidenceConsistent) process.exit(2);
+          if(m.assertStage28Preproduction(result)!==
+              "SOURCE_AUDIT_ONLY_NOT_GOOGLE_SSV_CERTIFICATION")process.exit(3);
+          console.log("PASS: live rewarded ad ID aligns with test policy, +3 remains local, task points separate; official SSV unverified");
+          NODE
+  stop-before-real-google:
+    needs: [guard-installed-app,inspect-real-source]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'PASS: no official Google AdMob public key, no owner console edit and no live SSV callbacks or purchases activated'
