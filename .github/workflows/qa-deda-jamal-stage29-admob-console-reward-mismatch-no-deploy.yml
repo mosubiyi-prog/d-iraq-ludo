@@ -1,0 +1,77 @@
+name: DEDA Jamal Stage29 AdMob Reward +5 POINTS versus +3 DIAMONDS NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage29-admob-console-points-vs-diamonds-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage29_console_reward_contract_vs_diamond_gate_2026_10_19.js'
+      - 'test/deda_jamal_stage29_console_reward_vs_diamonds_no_deploy.test.js'
+      - '.github/workflows/qa-deda-jamal-stage29-admob-console-reward-mismatch-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage29-console-5points-3diamonds
+  cancel-in-progress: true
+
+jobs:
+  immutable-production-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Do not alter AdMob, phone APK, rewards, Firestore, owner catalog or sales
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 091870c9113d9a29afb2081698268c8f01b69d28 -- \
+            lib/ android/ assets/ functions/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock server_private/ catalogs/ \
+            tools/apply_real_admob_ids_100257_2026_10_03.py \
+            tools/add_diamonds_reward_100259_2026_10_04.py \
+            tools/rewarded_ad_resilience_100258_2026_10_03.py \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js
+          ! grep -q 'deda_jamal_stage29_console_reward' functions/index.js
+          ! grep -q 'deda_jamal_stage29_console_reward' lib/main.dart
+          node --check tools/deda_jamal_stage29_console_reward_contract_vs_diamond_gate_2026_10_19.js
+          node --check test/deda_jamal_stage29_console_reward_vs_diamonds_no_deploy.test.js
+          echo 'PASS: Stage29 cannot modify existing advertising or any balance'
+  reward-policy-lock:
+    needs: immutable-production-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 20 offline tests, reject wrong reward type and no official SSV claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage29_console_reward_vs_diamonds_no_deploy.test.js
+          node - <<'NODE'
+          const p=require('./tools/deda_jamal_stage29_console_reward_contract_vs_diamond_gate_2026_10_19.js');
+          const s=p.reviewConsoleVsCurrentSource();
+          if(s.liveRewardGrantAllowed||s.liveDiamondCheckoutAllowed||
+            s.officialGoogleSSVVerified||s.observedConsole.ssvCallbackConfigured)process.exit(1);
+          if(s.mismatch.recordedRewardAmountDiffersFromStage22Demo!==true||
+            s.mismatch.recordedRewardItemDiffersFromStage22Demo!==true)process.exit(2);
+          console.log('PASS: 5 DEDA Points never silently credited as 3 diamonds; official verification still CLOSED');
+          NODE
+  no-live-deploy:
+    needs: [immutable-production-guard,reward-policy-lock]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'PASS: No live AdMob edits, callback URL, production signature key, APK, Firebase deploy or rewards'
