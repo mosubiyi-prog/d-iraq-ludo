@@ -135,13 +135,15 @@ async function checkoutVerifiedIdentifier(db, {
         .collection("requests").doc(requestId);
     const giftRef = db.collection("deda_diamond_gift_balances").doc(original);
     const gmAccessRef = db.collection("admin_entry_access").doc(key);
+    const gmAdminRef = db.collection("admins").doc(uid);
     const gmWalletRef = db.collection("deda_gm_personal_diamond_wallets").doc(key);
 
     const [ledgerSnap, regSnap, aliasSnap, collisionSnap, saleSnap,
-      receiptSnap, giftSnap, gmAccessSnap, gmWalletSnap] = await Promise.all([
+      receiptSnap, giftSnap, gmAccessSnap, gmAdminSnap, gmWalletSnap] = await Promise.all([
       tx.get(ledgerRef), tx.get(registeredRef), tx.get(aliasRef),
       tx.get(collisionRef), tx.get(saleRef), tx.get(receiptRef),
-      tx.get(giftRef), tx.get(gmAccessRef), tx.get(gmWalletRef),
+      tx.get(giftRef), tx.get(gmAccessRef), tx.get(gmAdminRef),
+      tx.get(gmWalletRef),
     ]);
     if (receiptSnap.exists) {
       const old = data(receiptSnap);
@@ -181,13 +183,17 @@ async function checkoutVerifiedIdentifier(db, {
     }
     const gifts = giftSnap.exists ? balance(gifted.balance) : 0;
     const gmAccess = data(gmAccessSnap), gmWallet = data(gmWalletSnap);
+    const currentGM = data(gmAdminSnap);
     if (gmWalletSnap.exists && gmWallet.accountKey !== key) {
       fail("failed-precondition", "gm-personal-wallet-owner-mismatch");
     }
     const isGM = gmAccessSnap.exists && gmAccess.accountKey === key &&
         gmAccess.active === true && gmAccess.status === "active" &&
         gmAccess.allowedRole === "general_manager" &&
-        gmAccess.accessType === "general_manager_gateway";
+        gmAccess.accessType === "general_manager_gateway" &&
+        gmAdminSnap.exists && currentGM.active === true &&
+        currentGM.status === "active" &&
+        currentGM.role === "general_manager";
     const personal = isGM && gmWalletSnap.exists ? balance(gmWallet.balance) : 0;
     if (PRICE_DIAMONDS > gifts + personal) {
       fail("failed-precondition", "insufficient-verified-diamonds-local-excluded");
