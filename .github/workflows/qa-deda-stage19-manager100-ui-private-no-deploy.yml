@@ -9,6 +9,8 @@ on:
       - 'lib/deda_admin_compact_card.dart'
       - 'lib/deda_exclusive_ids_admin_page.dart'
       - 'test/deda_stage19_exclusive_admin_tile_test.dart'
+      - 'tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js'
+      - 'test/deda_stage19_exclusive_admin_private_reader.test.js'
       - '.github/workflows/qa-deda-stage19-manager100-ui-private-no-deploy.yml'
   workflow_dispatch:
 
@@ -38,6 +40,7 @@ jobs:
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           ! grep -q 'deda_exclusive_ids_admin_page.dart' functions/index.js
+          ! grep -q 'deda_stage19_private_exclusive_catalog_reader' functions/index.js
           grep -q 'DedaAdminCompactCard(' lib/admin_pages.dart
           grep -q 'deda_stage19_admin100_dashboard_tile' lib/admin_pages.dart
           grep -q "DedaBackend.normalizeAdminStatus(profile) == 'active'" lib/admin_pages.dart
@@ -52,6 +55,15 @@ jobs:
           grep -q 'DedaExclusiveAdminBridge.grantToUserRemote == null' lib/deda_exclusive_ids_admin_page.dart
           grep -q 'DedaExclusiveAdminBridge.useForManagerRemote == null' lib/deda_exclusive_ids_admin_page.dart
           echo 'PASS: manager only tile, private remote-only catalog and dormant grants, untouched prod'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify private 100 catalog server reader and access proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js
+          node --test test/deda_stage19_exclusive_admin_private_reader.test.js
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
