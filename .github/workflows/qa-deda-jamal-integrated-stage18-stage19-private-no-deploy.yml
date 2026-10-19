@@ -1,0 +1,87 @@
+name: 'DEDA جمال التطبيق المتكاملة — Stage18 + Stage19 integration QA PRIVATE'
+on:
+  push:
+    branches:
+      - deda-stage19-jamal-alttatbiq-almutakamila-private-2026-10-19
+    paths:
+      - 'lib/**'
+      - 'tools/**'
+      - 'test/**'
+      - '.github/workflows/qa-deda-jamal-integrated-stage18-stage19-private-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage18-stage19-source-integration-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  node-checkout-and-manager-safe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Immutable production guard: NO purchase, admin gift, secret or Play deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 23f3c83da641133db3bac491e53eba9ee1b7e695 -- \
+            functions/index.js firestore.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart android/ assets/ pubspec.yaml pubspec.lock
+          ! grep -q 'deda_stage19_encrypted_admin100_callable_gateway' functions/index.js
+          ! grep -q 'deda_stage19_private_exclusive_catalog_reader' functions/index.js
+          ! grep -q 'DEDA_STAGE19_ADMIN100_AES_KEY_B64' lib/main.dart
+          ! grep -q 'DEDA_STAGE19_ADMIN100_AES_KEY_B64' functions/index.js
+          ! grep -q '"SALEM"' lib/deda_exclusive_ids_admin_page.dart
+          grep -q "defaultValue: false" lib/deda_exclusive_ids_admin_page.dart
+          test -f server_private/catalogs/DEDA_GROUP001_ADMIN100_AES256GCM_2026-10-19.enc.json
+          echo 'PASS: no prod checkout/grants/wallet/API/Android changes; no key in client'
+      - name: Combined Stage18 10,000 diamond proposal and Stage19 secure manager sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+          node --test test/deda_stage18_atomic_identifier_checkout_unit.test.js
+          node --test test/deda_stage19_exclusive_admin_private_reader.test.js
+          node --test test/deda_stage19_exclusive_fixed_color_actions.test.js
+          node --test test/deda_stage19_encrypted_original100_loader.test.js
+          node --test test/deda_stage19_encrypted_admin100_gateway.test.js
+          echo 'PASS: Stage18 checkout plus Stage19 manager catalogs and permanent colors remain isolated'
+
+  flutter-admin-cards-and-colors:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Analyze exclusive card integrated with existing admin and storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/admin_pages.dart lib/deda_admin_compact_card.dart \
+            lib/deda_exclusive_ids_admin_page.dart \
+            test/deda_stage19_exclusive_admin_tile_test.dart
+          flutter test \
+            test/deda_stage19_exclusive_admin_tile_test.dart \
+            test/deda_admin_compact_card_test.dart
+          echo 'PASS: app admin tile palette, same-size cards and safe dormant color preview'
+
+  no-deploy-checkpoint:
+    needs: [node-checkout-and-manager-safe, flutter-admin-cards-and-colors]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: CI assurance
+        run: |
+          echo 'PASS: Jamal-app stage18 + stage19 source integration; NO APK, sale, live gift or Firebase deploy'
