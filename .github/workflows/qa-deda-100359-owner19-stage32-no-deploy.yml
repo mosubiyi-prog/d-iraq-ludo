@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/qa-deda-100359-owner19-stage32-no-deploy.yml'
       - 'tools/deda_100359_owner19_combined_gateway_private_2026_10_19.js'
+      - 'tools/deda_100359_stage41_verified_sale_list_private_2026_10_20.js'
+      - 'test/deda_100359_stage41_verified_sale_list.test.js'
       - 'tools/deda_100359_owner19_lazy_server_callables_PRIVATE_NOT_EXPORTED_2026_10_19.js'
       - 'test/deda_100359_owner19_lazy_server_secrets_stage33.test.js'
       - 'lib/deda_exclusive_ids_admin_page.dart'
@@ -55,6 +57,7 @@ jobs:
           node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
           node --test test/deda_100359_owner19_combined_gateway_stage32.test.js
           node --test test/deda_100359_owner19_lazy_server_secrets_stage33.test.js
+          node --test test/deda_100359_stage41_verified_sale_list.test.js
           python3 -m py_compile tools/stage_deda_100360_compact_four_real_foils_after_100359.py
           python3 -m unittest discover -s test -p 'test_deda_stage35_compact_foils.py'
           python3 -m unittest discover -s test -p 'test_deda_stage38_remove_fake_owner_lab.py'
