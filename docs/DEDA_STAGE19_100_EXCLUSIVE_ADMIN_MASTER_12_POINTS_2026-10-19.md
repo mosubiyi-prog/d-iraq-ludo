@@ -54,3 +54,12 @@ Important: Each checked item means actually implemented and verified; adding a U
 - Combined security/source QA run 39247331980: **SUCCESS**. 7/7 isolated server-reader unit tests and 6/6 Flutter widget tests passed (13 tests across independent suites). No live reads/debits/writes, APK/AAB, Firebase/Play deployment.
 - User-authorized #2 and #3 UI finished and tested. #4 remains IN PROGRESS: private catalog is NOT injected or deployed yet; the actual 100 records do not appear in phone UI until authenticated server API is complete. #5/#6/#9 have interface shells only, not usable verified live data/actions.
 - Important: manager gifts and self-use with immutable one-time color, secure server audits, app-wide profile/alias integrity, Firebase Emulator race tests, and owner-only signed phone APK remain pending as points #7–12. Do not mark them done prematurely.
+
+
+## Latest checkpoint: Staged permanent-color actions — 2026-10-19
+- New private source-only module: tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js.
+- It reuses the verified point15 atomic admin gift transaction with immutable assignedColor. Its separate admin self-use transaction verifies current manager credentials, original account and registered ID, exclusive owner-only private catalog membership, all global ID collisions and previous ownership ledger; then writes registry/alias, owned-list active ID and dated self-use receipt as ONE transaction. This is STAGED only, NOT deployed or wired to 100358.
+- New isolated tests test/deda_stage19_exclusive_fixed_color_actions.test.js: reject unauthorized users, reserved list omissions, wrong palette choices, repeat gifts/recolors, and preserve original ID after successful self-use.
+- GitHub Actions run 39247903405: SUCCESS — 7/7 private-catalog reader tests, 7/7 self-use/gift tests, 6/6 Flutter widgets, 20/20 across separate suites. This is NOT full Firebase Emulator race validation.
+- Color draft choice on page is local preview only. No permanent colors / gift transactions happen on-device because the action bridges remain null. No production Firebase mutation, no Google Play, no APK.
+- Before production wiring: AppCheck-enforced callable layer, owner-private catalog secret, real Firestore emulator transaction race tests, dated grant-read contracts, compatibility with alias/search/share and fixed-color profile display, and explicit owner approval.
