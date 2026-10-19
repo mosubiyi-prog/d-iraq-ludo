@@ -63,3 +63,16 @@ Important: Each checked item means actually implemented and verified; adding a U
 - GitHub Actions run 39247903405: SUCCESS — 7/7 private-catalog reader tests, 7/7 self-use/gift tests, 6/6 Flutter widgets, 20/20 across separate suites. This is NOT full Firebase Emulator race validation.
 - Color draft choice on page is local preview only. No permanent colors / gift transactions happen on-device because the action bridges remain null. No production Firebase mutation, no Google Play, no APK.
 - Before production wiring: AppCheck-enforced callable layer, owner-private catalog secret, real Firestore emulator transaction race tests, dated grant-read contracts, compatibility with alias/search/share and fixed-color profile display, and explicit owner approval.
+
+## 2026-10-19 — OWNER ORIGINAL 100 ENCRYPTED AND STAGED (NOT LIVE)
+- The original ChatGPT Library JSON and numbered TXT were verified from original sources: exactly 100 unique valid names, exactly the same sequence as 001..100, first SALEM and last 2020; no duplicates, omissions or renames.
+- Public repository contains only the AES-256-GCM authenticated-encryption ciphertext at server_private/catalogs/DEDA_GROUP001_ADMIN100_AES256GCM_2026-10-19.enc.json. No plaintext list or 256-bit AES key in repo or Android.
+- Python AES-GCM encryption/decryption verified locally against Node AES-GCM decryption: 100/100 original order intact.
+- Private key exists as an owner-only local backup in current container; attempted ChatGPT Library upload returned container_session_expired. It is NOT backed up to Library yet. Owner must securely retain/export the key before activation. Do not falsely claim a private Library backup.
+- New server-only files: tools/deda_stage19_private_admin100_decrypt_server_only_2026_10_19.js and tools/deda_stage19_encrypted_admin100_callable_gateway_2026_10_19.js. Server authenticates current manager, checks AppCheck and allows full manager catalog read only with separate explicit flag. ALL server read/use/gift flags are OFF by default.
+- Flutter manager screen now includes dormant Firebase Functions reader compiled OFF by default via DEDA_STAGE19_MANAGER100_READ_LIVE=false; verifies serverConfirmed and exact 100 count. No names embedded in APK, and no real self-use/gift is enabled.
+- GitHub Actions 39253410123 SUCCESS: 7/7 private manager reader + 7/7 manager fixed-color action + 6/6 AES-GCM integrity + 7/7 callable gateway + 6/6 Flutter widgets = 33/33 tests passed, zero fails. NOT full Firestore Emulator race validation.
+- #4 is PARTIALLY DONE: genuine original 100 are safely staged encrypted and server/client read paths prepared, but absent in the current installed Android admin screen until secret-manager deployment and audited manager-only Callable are approved. Do not mark as live or visible.
+- #5/#6/#9 interface shells already exist but depend on authenticated read; #7/#8 are tested server prototypes only; #10-12 pending.
+- No Firebase production deployment, Google Play publication, APK/AAB build, wallet changes, original identifier changes or live gifts.
+- NEVER commit or log the owner-held key, plaintext list, complete names, phones, UID, or personal data.
