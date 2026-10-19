@@ -27,5 +27,11 @@
 ## فحص Flutter ثم APK خاص
 
 - Workflow مصدر حقيقي: `.github/workflows/qa-deda-point16-client-bridge-full-reconstruction-no-apk.yml` يعيد بناء 100356 ويطبق مراحل 2–15 وجسر 16، ثم يحلل Flutter ويجري فحوص الواجهة والملاحة والملف. فحص `spark-security` نجح؛ **نتيجة التوافق النهائي تُقرأ من GitHub run نفسه وليس من توقعاتنا**. لا APK في هذا المسار.
-- مسودة بناء خاصة لم تُفعّل تلقائيًا: `.github/workflows/qa-deda-point16-100357-private-signed-android16-no-play.yml` — `workflow_dispatch` فقط حتى اعتماد الفحص المصدر. هدفها **100357** موقعة بنفس هوية 100356، بوابات `DEDA_PREMIUM_IDS_SERVER_LIVE=false` و`DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false`، ثم فحص Android 16 strict clean launch والترقية داخل محاكي من 100352. لا توليد AAB ولا نشر Play أو Firebase. يجب مراجعة workflow وسجل التوقيع والفحوص قبل مشاركة APK مع المالك.
+- **بعد نجاح المصدر الكامل 39182017754** تم تشغيل بناء النسخة الخاصة 100357 على GitHub run `39182575850`: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39182575850. مسار البناء الخاص `.github/workflows/qa-deda-point16-100357-private-signed-android16-no-play.yml` ذو تفعيل push على فرع QA فقط، وهو بناء خاص لا نشر Firebase ولا Play. لم يثبت نجاحه أو إنتاج APK في لحظة تسجيل هذا التحديث؛ يُفحص سجله أولًا. هدفها **100357** موقعة بنفس هوية 100356، بوابات `DEDA_PREMIUM_IDS_SERVER_LIVE=false` و`DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false`، ثم فحص Android 16 strict clean launch والترقية داخل محاكي من 100352. لا توليد AAB ولا نشر Play أو Firebase. يجب مراجعة workflow وسجل التوقيع والفحوص قبل مشاركة APK مع المالك.
 - لسلامة البيانات: **لا حذف للتطبيق ولا مسح بياناته**. ممنوع وصف أي Build ناجح بأنه آمن للهاتف قبل إثبات تشغيله من سجلات Android 16 وتحديثه داخل المحاكي وملفات SHA256 والتوقيع.
+
+## نتائج QA مؤكدة قبل توقيع APK
+
+- GitHub Actions `39182017754`: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39182017754 — نجاح مصدر 100356 كامل بعد مراحل 2–15+16، 23/23 Flutter app tests ناجحة، وتحليل المصدر أكمل بــ229 ملاحظة غير قاتلة. `spark-security` ناجح. لم ينشأ APK في هذا الاختبار.
+- GitHub Actions `39182017862`: 14/14 Firebase Emulator، Python guard suite والمصادقة وAppCheck والـ alias والماسات والـ 100 محجوزة. لم تنشر وظائف حقيقية.
+- نسخة بناء خاصة **100357** تحت الاختبار، مع عزل مفاتيح تفعيل `DEDA_PREMIUM_IDS_SERVER_LIVE=false` و`DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false`، لا ملف APK صالح للمستخدم حتى نجاح التوقيع/Android16 strict.
