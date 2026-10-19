@@ -15,6 +15,8 @@ const {createStage19ManagerActions} =
   require("./deda_stage19_private_fixed_color_manager_actions_2026_10_19.js");
 const {createPrivate100AdminReader} =
   require("./deda_stage19_private_exclusive_catalog_reader_2026_10_19.js");
+const {readAvailableApprovedIdentifiers} =
+  require("./deda_100359_stage41_verified_sale_list_private_2026_10_20.js");
 
 const UID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const ID_RE = /^@DEDA-[A-Z0-9]{6}$/;
@@ -25,6 +27,7 @@ const OWNER_NAMES = Object.freeze({
   gmSelfUse: "dedaStage19Exclusive100SelfUse",
   gmGift: "dedaStage19Exclusive100Grant",
   buyIdentifier: "dedaPremiumBuyIdentifier",
+  listSale: "dedaPremiumListAvailableIdentifiers",
 });
 const METHODS = Object.freeze(Object.keys(OWNER_NAMES));
 function reject(code) {
@@ -100,6 +103,7 @@ function createOwner19Gateway({
     gmSelfUse: flags.gmSelfUse === true,
     gmGift: flags.gmGift === true,
     buyIdentifier: flags.buyIdentifier === true,
+    listSale: flags.listSale === true,
   });
   async function handle(method, request) {
     if (!METHODS.includes(method)) reject("unimplemented");
@@ -129,6 +133,13 @@ function createOwner19Gateway({
         color: data.color, recipientOriginalId: data.recipientOriginalId,
       }), ["serverConfirmed", "identifier", "permanentColor",
         "recipientOriginalId"]);
+    }
+    if (method === "listSale") {
+      shape(data, []);
+      return responseSubset(await readAvailableApprovedIdentifiers(db, {
+        approvedCatalog: saleCatalog,
+        approvedSuffixes: approvedSellableSuffixes,
+      }), ["serverConfirmed", "priceDiamonds", "identifiers"]);
     }
     if (method === "buyIdentifier") {
       shape(data, ["identifier", "requestId"]);
