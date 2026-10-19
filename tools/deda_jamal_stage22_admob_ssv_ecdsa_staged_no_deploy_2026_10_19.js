@@ -49,8 +49,16 @@ function iraqDay(ms){
   return new Date(ms+3*3600000).toISOString().slice(0,10);
 }
 function requireStagedRuntime(db){
-  if(!db||typeof db.runTransaction!=="function")
-    stop("unavailable","server-database-required");
+  // Stage22 signed callback shape is NOT certified against official Google
+  // AdMob SSV yet. Hard stop unless BOTH local emulator and exact demo project.
+  // The module must not be reusable against real Firestore by accident.
+  if(!process.env.FIRESTORE_EMULATOR_HOST ||
+      !/^(127\\.0\\.0\\.1|localhost):[0-9]+$/.test(
+        process.env.FIRESTORE_EMULATOR_HOST) ||
+      process.env.GCLOUD_PROJECT!=="demo-deda-stage22-ssv-fakeprovider" ||
+      !db||typeof db.runTransaction!=="function"){
+    stop("unavailable","STAGE22_OFFLINE_ECDSA_EMULATOR_ONLY");
+  }
 }
 function approvedPolicy(policy){
   if(!policy||typeof policy!=="object" ||
