@@ -43,3 +43,20 @@ This is a durable record of verified **code staging**, not a claim that the owne
 
 ## Restart instructions for a lost ChatGPT conversation
 Read this checkpoint and the master 19 checklist; verify working-branch head and current Actions runs (especially `39320364898`). Continue only from GitHub branch and immutable backup; preserve original 100359 owner phone install. Do NOT start another mock simulator. Do NOT declare finished or give user a new APK until the complete 19-point server/client/phone acceptance evidence is real.
+
+
+## Owner continuation (20 October 2026) — NO CLAIM OF 19 FEATURES COMPLETE
+
+- Owner explicitly requested ALL 19 agreed corrections, one fully integrated *real* signed phone version, without further fake purchases/grants. Keep 19-point master acceptance list UNCHANGED.
+- Stage37 `39326964122`: **SUCCESS** — true signed-100359 source reconstructed on GitHub without APK build, four actual premium artworks preserved in compact layout; mock purchase/grant lab navigation removed; GM preview linked to original DedaPremiumIdCard renderer; Flutter analyzer/integration suite green. This verifies UI *source* only, not phone experience or backend.
+- Stage38 source: `tools/stage_deda_100360_remove_fake_store_sandbox.py` deletes the RAM fake 25k laboratory from final consumer-store routing (not customer data). Verified staged test.
+- Stage39 source: `tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py` reuses full gold/diamond/royal/pink foil instead of plain coloured border in GM manager preview. It is reconstructed against real Flutter source, avoids a duplicated fake rendering implementation.
+- Stage41 real stock server module `tools/deda_100359_stage41_verified_sale_list_private_2026_10_20.js`: only server-owner-approved Group002 inventory priced exactly 10k; filters global registry, alias, legacy public ID collisions. Gateway adds `dedaPremiumListAvailableIdentifiers` (AppCheck/auth) behind OFF default flag `listSale`; staged checks at `test/deda_100359_stage41_verified_sale_list.test.js`.
+- Stage41 security workflow `39327415409`: **SUCCESS** (all staged unit/security tests; no production deployment).
+- Stage42 private Flutter UI `lib/deda_stage42_verified_sale_panel.dart` and surgical reconstructed-shop patch `tools/stage_deda_100360_verified_group002_only_store.py`:
+  * If server/client live flags BOTH enabled AFTER authorized release: replaces *mock candidate* list with **server-confirmed** Group002 stock, fixed 10k, confirmation dialog, immutable idempotency request ID on retry, Firestore transaction receipt and cross-account-safe owned-ID readback, no local wallet decrease.
+  * If server flags disabled: no fake sale or wallet-debit claims; original 100359 preview-only list remains as historical non-purchasable preview.
+  * Stage42 source compile/reconstruction workflow `39328083133` started; **CHECK result before marking it valid**.
+- No new APK or real Firebase deploy, no real premium purchases, diamonds, grant, alias or group001 admin actions have been enabled. Owner's old 100359 phone version remains unchanged.
+- Release hard blockers still exist: server-only original-100 decryption key/Secret Manager provisioning, public Group002 owner-approved inventory, verifiable wallet provenance including 1M GM test balance versus donor pool, AppCheck-enabled signed release configuration, alias/share compatibility, permanent style on recipient profile, secured history, emulator races, APK install/upgrade and owner phone checks. **Do not bypass any gate, do not represent green CI as live ownership**.
+- Current working branch remains `deda-100359-19-issues-staged-private-no-deploy-2026-10-19`, original immutable phone backup `backup-deda-100359-phone-open-before-19-fixes-2026-10-19`.
