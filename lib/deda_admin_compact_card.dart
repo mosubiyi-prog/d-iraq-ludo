@@ -15,6 +15,7 @@ class DedaAdminCompactCard extends StatelessWidget {
     required this.onTap,
     this.accentColor = const Color(0xFF17652F),
     this.backgroundColor = const Color(0xDDF4F8F1),
+    this.exclusiveNavyTurquoise = false,
   });
 
   final IconData icon;
@@ -23,6 +24,9 @@ class DedaAdminCompactCard extends StatelessWidget {
   final VoidCallback onTap;
   final Color accentColor;
   final Color backgroundColor;
+  /// Only the exclusive manager ID tile uses this palette.
+  /// Default false preserves all existing management cards unmodified.
+  final bool exclusiveNavyTurquoise;
 
   @override
   Widget build(BuildContext context) {
@@ -31,9 +35,15 @@ class DedaAdminCompactCard extends StatelessWidget {
       final palette = HSLColor.fromColor(accentColor)
           .withSaturation(0.77)
           .withLightness(0.43);
-      final vivid = palette.toColor();
-      final bright = palette.withLightness(0.56).toColor();
-      final dark = palette.withLightness(0.26).toColor();
+      final vivid = exclusiveNavyTurquoise
+          ? const Color(0xFF103E50)
+          : palette.toColor();
+      final bright = exclusiveNavyTurquoise
+          ? const Color(0xFF169EA9)
+          : palette.withLightness(0.56).toColor();
+      final dark = exclusiveNavyTurquoise
+          ? const Color(0xFF071D31)
+          : palette.withLightness(0.26).toColor();
 
       return Semantics(
         button: true,
