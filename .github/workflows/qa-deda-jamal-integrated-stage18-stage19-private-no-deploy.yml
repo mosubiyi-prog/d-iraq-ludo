@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Immutable production guard: NO purchase, admin gift, secret or Play deployed
+      - name: 'Immutable production guard: NO purchase, admin gift, secret or Play deployed'
         shell: bash
         run: |
           set -euo pipefail
