@@ -53,7 +53,7 @@ function requireStagedRuntime(db){
   // AdMob SSV yet. Hard stop unless BOTH local emulator and exact demo project.
   // The module must not be reusable against real Firestore by accident.
   if(!process.env.FIRESTORE_EMULATOR_HOST ||
-      !/^(127\\.0\\.0\\.1|localhost):[0-9]+$/.test(
+      !/^(127[.]0[.]0[.]1|localhost):[0-9]+$/.test(
         process.env.FIRESTORE_EMULATOR_HOST) ||
       process.env.GCLOUD_PROJECT!=="demo-deda-stage22-ssv-fakeprovider" ||
       !db||typeof db.runTransaction!=="function"){
