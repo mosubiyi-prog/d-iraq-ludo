@@ -1,0 +1,65 @@
+name: DEDA Jamal Stage24 SSV Offline Key Authority Expiry QA NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage24-ssv-key-trust-offline-private-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage24_offline_ssv_key_freshness_no_deploy_2026_10_19.js'
+      - 'test/deda_jamal_stage24_ssv_offline_key_rotation_and_expiry.test.js'
+      - '.github/workflows/qa-deda-jamal-stage24-ssv-key-rotation-offline-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage24-only-key-rotation-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  protect-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: No release, Firebase, real wallet, key or Android changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 40bae152233da7feae9bb2edd9c8466b25c9d0d2 -- \
+            functions/ lib/ android/ assets/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock server_private/ catalogs/ \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js
+          ! grep -q 'deda_jamal_stage24_offline_ssv_key' functions/index.js
+          node --check tools/deda_jamal_stage24_offline_ssv_key_freshness_no_deploy_2026_10_19.js
+          node --check test/deda_jamal_stage24_ssv_offline_key_rotation_and_expiry.test.js
+          echo 'PASS: no Google key downloaded; no prod wallet credit, app install, purchase or deploy'
+  offline-key-rotation:
+    needs: protect-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test test-only P256 public-key freshness and substitution denial
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage24_ssv_offline_key_rotation_and_expiry.test.js
+          echo 'PASS: offline generated key trust model only, not official Google AdMob SSV'
+  private-checkpoint:
+    needs: [protect-production,offline-key-rotation]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: No real cashback or purchases activated
+        run: |
+          echo 'PASS: Stage24 demo-only SSV key checks; production AdMob reward remains OFF'
