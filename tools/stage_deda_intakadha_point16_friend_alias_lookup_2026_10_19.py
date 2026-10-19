@@ -6,6 +6,7 @@ friends, messages and old IDs stay bound to their original UID/public ID.
 No original DEDA business logic or Firestore rules change in the repository.
 """
 from pathlib import Path
+import re
 
 MAIN = Path("lib/deda_social_service.dart")
 MARKER = "// DEDA_INTAKADHA_POINT16_READONLY_SOCIAL_ALIAS_FALLBACK_DEFAULT_OFF"
@@ -84,23 +85,47 @@ class DedaPoint16SocialAliasCompat {
 
 '''
 
+def exact_or_whitespace_only(source: str, target: str, label: str) -> str:
+    if source.count(target) == 1:
+        return target
+    # The full app reconstruction formats Dart in earlier historical stages.
+    # Accept only identical Dart tokens with whitespace changed; never alter
+    # imports, search permissions, friend ownership or route semantics.
+    compact = lambda x: re.sub(r"\\s+", "", x)
+    view, wanted = compact(source), compact(target)
+    if view.count(wanted) != 1:
+        raise ValueError(
+            "SAFE_STOP: social " + label + " has semantic differences, "
+            "normalized-count=" + str(view.count(wanted))
+        )
+    positions = [i for i, c in enumerate(source) if not c.isspace()]
+    start = view.index(wanted)
+    actual = source[positions[start]:positions[start + len(wanted) - 1] + 1]
+    if compact(actual) != wanted or source.count(actual) != 1:
+        raise ValueError("SAFE_STOP: social " + label + " ambiguous")
+    return actual
+
 def apply(source: str) -> str:
     if MARKER in source:
         if source.count(MARKER) != 1 or \
                 source.count(NEW_LOOKUP) != 1 or source.count(LOOKS_NEW) != 1:
             raise ValueError("SAFE_STOP: modified partially enabled alias route")
         return source
-    tokens = [IMPORT, LOOKS_OLD, OLD_LOOKUP, "class DedaSocialProfile {"]
-    if any(source.count(t) != 1 for t in tokens) or NEW_IMPORT in source:
-        raise ValueError("SAFE_STOP: read-only social route changed")
-    updated = source.replace(IMPORT, IMPORT + NEW_IMPORT, 1)
-    updated = updated.replace(LOOKS_OLD, LOOKS_NEW, 1)
-    updated = updated.replace(OLD_LOOKUP, NEW_LOOKUP, 1)
-    updated = updated.replace("class DedaSocialProfile {", ALIAS + "class DedaSocialProfile {", 1)
+    if NEW_IMPORT in source:
+        raise ValueError("SAFE_STOP: alias import already present without marker")
+    anchor = exact_or_whitespace_only(source, IMPORT, "import")
+    reg = exact_or_whitespace_only(source, LOOKS_OLD, "original-ID-regex")
+    lookup = exact_or_whitespace_only(source, OLD_LOOKUP, "original-friend-query")
+    profile = exact_or_whitespace_only(
+        source, "class DedaSocialProfile {", "profile-class")
+    updated = source.replace(anchor, anchor + NEW_IMPORT, 1)
+    updated = updated.replace(reg, LOOKS_NEW, 1)
+    updated = updated.replace(lookup, NEW_LOOKUP, 1)
+    updated = updated.replace(profile, ALIAS + profile, 1)
     restored = (updated.replace(ALIAS, "", 1)
-        .replace(NEW_LOOKUP, OLD_LOOKUP, 1)
-        .replace(LOOKS_NEW, LOOKS_OLD, 1)
-        .replace(IMPORT + NEW_IMPORT, IMPORT, 1))
+        .replace(NEW_LOOKUP, lookup, 1)
+        .replace(LOOKS_NEW, reg, 1)
+        .replace(anchor + NEW_IMPORT, anchor, 1))
     if restored != source or "defaultValue: false" not in ALIAS:
         raise ValueError("SAFE_STOP: social alias patch touched unrelated logic")
     return updated
