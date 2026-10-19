@@ -21,7 +21,7 @@ const {createStage19ExclusiveGateway} =
   require("../tools/deda_stage19_encrypted_admin100_callable_gateway_2026_10_19.js");
 
 const PROJECT_ID = "demo-deda-stage19-owner100-races";
-const names = Array.from({length:100},(_,i)=>"Q"+String(i+1).padStart(3,"0"));
+const names = ["SALEM", ...Array.from({length:98},(_,i)=>"Q"+String(i+2).padStart(3,"0")), "2020"];
 const ids = names.map(n=>"@DEDA-"+n);
 const KEY_A = "stage19_admin_account";
 const KEY_B = "stage19_user_account";
