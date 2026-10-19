@@ -175,6 +175,57 @@ test("globally existing personal/share ID blocks purchase, no diamond debit",asy
   await assert.rejects(buy(a),e=>e.code==="already-exists");
   assert.equal(await giftBalance(a),14000);
 });
+test("GM personal verified diamonds combine with gift balance, exact 10k receipt",async()=>{
+  await init();
+  await db.collection("deda_diamond_gift_balances").doc(a.original)
+    .update({balance:3000});
+  await db.collection("admin_entry_access").doc(a.key).set({
+    accountKey:a.key,status:"active",active:true,
+    allowedRole:"general_manager",accessType:"general_manager_gateway",
+  });
+  await db.collection("admins").doc(a.uid).set({
+    status:"active",active:true,role:"general_manager",
+  });
+  await db.collection("deda_gm_personal_diamond_wallets").doc(a.key).set({
+    accountKey:a.key,balance:8000,
+  });
+  const bought=await buy(a,idA,"verified_gm_purchase_1");
+  assert.equal(bought.diamondsCharged,10000);
+  assert.equal(await giftBalance(a),0);
+  assert.equal((await db.collection("deda_gm_personal_diamond_wallets")
+    .doc(a.key).get()).data().balance,1000);
+  const receipt=(await db.collection("deda_id_purchase_requests")
+    .doc(hash(a.key)).collection("requests")
+    .doc("verified_gm_purchase_1").get()).data();
+  assert.equal(receipt.giftCharged,3000);
+  assert.equal(receipt.gmPersonalCharged,7000);
+});
+
+test("revoked GM with stale old admin access CANNOT debit personal GM wallet",async()=>{
+  await init();
+  await db.collection("deda_diamond_gift_balances").doc(a.original)
+    .update({balance:3000});
+  await db.collection("admin_entry_access").doc(a.key).set({
+    accountKey:a.key,status:"active",active:true,
+    allowedRole:"general_manager",accessType:"general_manager_gateway",
+  });
+  await db.collection("admins").doc(a.uid).set({
+    status:"active",active:true,role:"employee",
+  });
+  await db.collection("deda_gm_personal_diamond_wallets").doc(a.key).set({
+    accountKey:a.key,balance:9000,
+  });
+  await assert.rejects(buy(a,idA,"revoked_gm_purchase_1"),
+    e=>e.code==="failed-precondition");
+  assert.equal(await giftBalance(a),3000);
+  assert.equal((await db.collection("deda_gm_personal_diamond_wallets")
+    .doc(a.key).get()).data().balance,9000);
+  assert.equal((await db.collection("deda_verified_id_sale_catalog")
+    .doc(idA).get()).data().status,"verified_available");
+  assert.equal((await db.collection("deda_owned_identifier_registry")
+    .doc(idA).get()).exists,false);
+});
+
 test("client Firestore rules cannot forge purchases, own registry, sales or balance",async()=>{
   await init();
   const client=env.authenticatedContext(a.uid).firestore();
