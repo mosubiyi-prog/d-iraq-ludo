@@ -33,8 +33,8 @@ def original_step(text, name):
     if not lines or any(line and not line.startswith("          ") for line in lines):
         raise RuntimeError("SAFE_STOP run source malformed")
     script = "\n".join(line[10:] if line else "" for line in lines) + "\n"
-    if "firebase deploy " in script or "gh workflow run" in script:
-        raise RuntimeError("SAFE_STOP unsafe source operation")
+    if re.search(r"^\s*(?:firebase\s+deploy|gh\s+workflow\s+run)\b", script, re.M):
+        raise RuntimeError("SAFE_STOP unsafe executable command")
     return script
 
 def main():
@@ -59,6 +59,8 @@ def main():
         "echo 'QA-ONLY: build command disabled; NO APK produced'", 1)
     if re.search(r"^flutter build (?:apk|appbundle)\b", adjusted, re.M):
         raise RuntimeError("SAFE_STOP build unexpectedly remains enabled")
+    if re.search(r"^\s*(?:firebase\s+deploy|gh\s+workflow\s+run)\b", adjusted, re.M):
+        raise RuntimeError("SAFE_STOP live deploy command exists")
     REBUILT.write_text(adjusted)
     print("PASS original signed-build source reconstruction extracted; final APK build disabled", flush=True)
 
