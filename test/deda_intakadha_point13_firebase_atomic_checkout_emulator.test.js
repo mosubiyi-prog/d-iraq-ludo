@@ -71,6 +71,11 @@ async function makeAccount({
         {accountKey: key, balance: gm, initialBalance: 1000000});
   }
   if (eligibleGM) {
+    // Purchase must verify the CURRENT canonical GM role, not only a stale
+    // historical admin-entry allowlist.
+    batch.set(db.collection("admins").doc(userId), {
+      role: "general_manager", active: true, status: "active",
+    });
     batch.set(db.collection("admin_entry_access").doc(key), {
       accountKey: key, allowedRole: "general_manager",
       accessType: "general_manager_gateway", status: "active", active: true,
@@ -176,6 +181,17 @@ test("GM personal and gift remote wallets can be atomically split without admin 
   const receipt = (await a.receiptRoot.doc("t00000030-gold").get()).data();
   assert.equal(receipt.giftCharged, 2500);
   assert.equal(receipt.gmPersonalCharged, 2500);
+});
+
+test("revoked GM with old gateway allowlist cannot spend personal 5000-card wallet", async () => {
+  const a = await makeAccount({gifted: 200, gm: 1000000, eligibleGM: true});
+  await db.collection("admins").doc(a.uid).update({role: "employee"});
+  await assert.rejects(checkoutIdCard(db, {
+    uid: a.uid, color: "pink", requestId: "t00000031-revoked",
+  }), errorCode("failed-precondition"));
+  assert.equal(cash(await a.giftRef.get()), 200);
+  assert.equal(cash(await a.gmRef.get()), 1000000);
+  assert.equal((await a.entitlementRef.get()).exists, false);
 });
 
 test("unauthorized ordinary user cannot spend a manager-only personal wallet", async () => {
