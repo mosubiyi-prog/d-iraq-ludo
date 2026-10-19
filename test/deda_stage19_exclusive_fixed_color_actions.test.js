@@ -51,6 +51,8 @@ function seed() {
   db.put("deda_share_ids/"+orig,{
     kind:"personal",active:true,publicId:orig,ownerUid:"uid_A",
   });
+  db.put("admins/uid_A",{active:true,status:"active",
+    role:"general_manager"});
   db.put("admin_entry_access/"+key,{
     accountKey:key,active:true,status:"active",
     allowedRole:"general_manager",accessType:"general_manager_gateway",
