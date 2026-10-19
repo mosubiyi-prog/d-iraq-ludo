@@ -35,6 +35,8 @@ function setup(manager = true) {
   db.put("deda_share_ids/" + orig, {
     kind: "personal", publicId: orig, active: true, ownerUid: "uid_A",
   });
+  db.put("admins/uid_A", {active: true, status: "active",
+    role: manager ? "general_manager" : "employee"});
   db.put("admin_entry_access/" + account, {
     accountKey: account, active: true, status: "active",
     allowedRole: manager ? "general_manager" : "employee",
