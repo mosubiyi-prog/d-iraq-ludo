@@ -12,6 +12,7 @@ on:
       - '.github/workflows/qa-deda-point16-client-bridge-full-reconstruction-no-apk.yml'
       - 'tools/stage_deda_intakadha_point**'
       - 'test/test_deda_intakadha_point**'
+      - 'test/deda_point7_compact_ids_100342_test.dart'
   workflow_dispatch:
 
 permissions:
