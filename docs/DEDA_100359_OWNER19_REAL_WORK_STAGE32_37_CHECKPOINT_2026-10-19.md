@@ -63,3 +63,10 @@ Read this checkpoint and the master 19 checklist; verify working-branch head and
 
 ## Key provisioning blocker — private original 100
 - Owner Library `/DEDA/LAB_Backups/DEDA_100_IDENTIFIERS_BACKUP.json` retains exactly 100 unique original names, first SALEM, last 2020; old AES key was NOT confirmed persisted in Library/Secret Manager. A newly encrypted catalog cannot be activated until its corresponding private key is durably stored and manually supplied to Secret Manager. Never commit/copy the key, plaintext names or original JSON to public GitHub, app assets, CI logs or APK. Keep existing encrypted release and immutable rollback unchanged until secure key provisioning is verified.
+
+
+## Single-release policy (owner's instruction)
+- Do NOT deliver repetitive unfinished APKs. Preserve one versioned source line based on accepted installed 100359 until ALL 19 agreed features have end-to-end proof; then build ONE new signed private Android 16 owner-review APK with in-place update, without Play auto-publish.
+- Mandatory full Firestore Emulator workflow `39329305426` started on 2026-10-20: 5k card purchase, 10k approved ID sale, GM permanent-color grants, concurrent conflicting ownership and session/security denials. **Result was pending when this checkpoint was authored; verify final conclusion before citing success.**
+- Production backend remains unchanged, no real balances/grants affected. Group001 server decryption key is not provisioned; neither read nor self-use nor gift can function live until owner-authorized secure provisioning. All frontend/server stage switches default OFF.
+- Exact 19-point acceptance document `docs/DEDA_100359_19_ISSUES_OWNER_ACCEPTANCE_GATE_2026-10-19.md` remains the single authority; no stage marked green simply on mock or compilation tests.
