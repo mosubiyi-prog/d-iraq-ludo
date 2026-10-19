@@ -24,3 +24,11 @@
 
 ## Release blocker
 Do not install or publish a stage17 APK without full source verification, signed Android16 clean-and-upgrade smoke, real backend price/ownership reconciliation, and owner approval. Do not erase app data or reset user accounts.
+
+## Final point17 source QA after scoped test repair — confirmed green
+- First run 39233332725 failed exactly one stale point7 widget expectation: the ORIGINAL ID now correctly appears in two separate screen locations (compact blue account card and verified-owned list below it). Existing test wrongly asserted only one occurrence globally; 22/23 app tests passed, and source analyzer completed with nonfatal legacy warnings.
+- Isolated regression correction: test/deda_point7_compact_ids_100342_test.dart now checks precisely one original ID in each intended slot and explicitly checks the paid card panel is absent from Account Info.
+- Workflow path trigger was updated to include that test and launched new QA.
+- VERIFIED successful full source-only GitHub Actions run 39235640150: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39235640150. BOTH jobs success: spark-security and source-flutter-qa. Logs explicitly report 23/23 passing Flutter tests, strict stage17 patch output, original source reconstruct, and NO APK/AAB or live deployment.
+- Run validated commit d58903b82fa295719497f3e145a28250e1e46334.
+- Production and previously signed APKs NOT updated. No user account/diamond mutations were performed. App release and real payments stay blocked by server wallet, ID inventory, AppCheck, alias/share and phone smoke gates.
