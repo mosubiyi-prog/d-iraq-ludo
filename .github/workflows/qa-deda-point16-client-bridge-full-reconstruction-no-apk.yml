@@ -1,4 +1,4 @@
-name: DEDA Point16 full 100356 source + dormant client bridge STRICT - NO APK NO DEPLOY
+name: DEDA Point17 blue My IDs + safe card store + dormant 10000 / 5000 STRICT - NO APK NO DEPLOY
 # Reconstruct the proven 100341 source and add point7 compact account ID UI.
 # This workflow NEVER builds an Android APK or AAB. It only checks the staged Flutter source.
 # No Firebase deployment, no Google Play upload, no production mutation.
@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - deda-intakadha-point16-backend-bridge-qa-2026-10-19
+      - deda-ids-shop-bluecard-stage17-private-2026-10-19
     paths:
       - '.github/workflows/qa-deda-point16-client-bridge-full-reconstruction-no-apk.yml'
       - 'tools/stage_deda_intakadha_point**'
@@ -16,7 +17,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: deda-point16-client-bridge-full-flutter
+  group: deda-point17-blue-card-store-full-flutter
   cancel-in-progress: true
 
 jobs:
@@ -406,6 +407,8 @@ jobs:
               'python3 tools/stage_deda_intakadha_point15_owned_ids_admin_grants_ui_2026_10_19.py',
               'python3 tools/stage_deda_intakadha_point16_authenticated_flutter_calls_2026_10_19.py',
               'python3 tools/stage_deda_intakadha_point16_friend_alias_lookup_2026_10_19.py',
+              'python3 -m py_compile tools/stage_deda_intakadha_point17_store_blue_owned_2026_10_19.py',
+              'python3 tools/stage_deda_intakadha_point17_store_blue_owned_2026_10_19.py',
               'flutter pub get',
               'dart format lib/main.dart lib/deda_social_service.dart',
               'flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_social_service.dart',
@@ -474,6 +477,15 @@ jobs:
           assert "static Future<DedaPoint15OwnedIdsSnapshot> Function()? readRemote;" in source
           assert "class DedaPremiumIdCardsManagementPanel extends StatefulWidget" in source
           assert "class DedaPoint15OwnedIdentifierPanel extends StatefulWidget" in source
+          assert source.count('DEDA_STAGE17_STORE_CARDS_BLUE_OWNED_IDS_2026_10_19')==1
+          assert 'DedaPoint17ShopCardAction(' in source
+          assert 'السعر 10,000 ماسة' in source
+          assert '5,000 ماسة' in source
+          account=source[source.index('class _DedaAccountInfoPageState extends State<DedaAccountInfoPage> {'):source.index('class DedaDiamondsState {')]
+          assert account.count('DedaPoint15OwnedIdentifierPanel(')==1
+          assert 'DedaPoint14VerifiedAccountPanel(' not in account
+          assert 'deda_point7_compact_owned_ids_card' in account
+          assert source.count('DedaPoint17ShopCardAction(')==2  # class constructor and UI call
           assert "_buildFixedDriverArrow(navigationArrowAngle)" in source
           assert "DedaBackend.claimDiamondGift(" in source
           assert 'Timer.periodic(const Duration(milliseconds: 16)' in source
