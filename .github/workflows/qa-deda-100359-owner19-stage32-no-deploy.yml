@@ -8,6 +8,7 @@ on:
       - 'tools/deda_100359_owner19_combined_gateway_private_2026_10_19.js'
       - 'tools/deda_100359_owner19_lazy_server_callables_PRIVATE_NOT_EXPORTED_2026_10_19.js'
       - 'test/deda_100359_owner19_lazy_server_secrets_stage33.test.js'
+      - 'lib/deda_exclusive_ids_admin_page.dart'
       - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
       - 'test/deda_100359_owner19_combined_gateway_stage32.test.js'
       - 'docs/DEDA_100359_19_ISSUES_OWNER_ACCEPTANCE_GATE_2026-10-19.md'
@@ -55,3 +56,19 @@ jobs:
           node --test test/deda_stage19_exclusive_fixed_color_actions.test.js
           node --test test/deda_stage19_encrypted_original100_loader.test.js
           echo 'PASS: staging-only offline checks; live wallet and GM grants remain OFF.'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Verify staged manager page compiles and write gates remain OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'DEDA_STAGE32_MANAGER100_ACTIONS_LIVE' lib/deda_exclusive_ids_admin_page.dart
+          grep -q "defaultValue: false" lib/deda_exclusive_ids_admin_page.dart
+          grep -q 'dedaStage19Exclusive100SelfUse' lib/deda_exclusive_ids_admin_page.dart
+          grep -q 'dedaStage19Exclusive100Grant' lib/deda_exclusive_ids_admin_page.dart
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_exclusive_ids_admin_page.dart
+          flutter test test/deda_stage19_exclusive_admin_tile_test.dart
+          echo 'PASS: manager UI compiles; GM live read/grant/use require explicit separately gated deployment.'
