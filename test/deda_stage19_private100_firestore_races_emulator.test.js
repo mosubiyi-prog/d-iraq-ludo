@@ -240,6 +240,28 @@ test("catalog NEVER claims 'available' when global original-share or alias colli
       e.message==="exclusive-id-orphan-alias");
 });
 
+test("canonical admin role revocation immediately denies private list, self-use and gifts",async()=>{
+  await reset();
+  const g=gateway({read:true,managerUse:true,gift:true});
+  // Leave earlier admin_entry_access allowlisted, to prove a stale
+  // gateway record alone can NEVER retain exclusive privileges.
+  await db.collection("admins").doc(UID_A).update({role:"employee"});
+  const actions=[
+    ["read",{}],
+    ["selfUse",{identifier:ids[7],color:"pink"}],
+    ["gift",{identifier:ids[8],color:"royal",
+      recipientOriginalId:ORIGINAL_B}],
+  ];
+  for(const [method,data] of actions) {
+    await assert.rejects(g.handle(method,call(UID_A,data)),
+      e=>e.code==="permission-denied");
+  }
+  for(const id of [ids[7],ids[8]]) {
+    assert.equal((await db.collection("deda_owned_identifier_registry")
+      .doc(id).get()).exists,false);
+  }
+});
+
 test("client Firestore SDK cannot grant a reserved ID by bypassing callables",async()=>{
   await reset();
   const client=env.authenticatedContext(UID_B).firestore();
