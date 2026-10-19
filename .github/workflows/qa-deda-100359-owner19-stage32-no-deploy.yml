@@ -9,6 +9,8 @@ on:
       - 'tools/deda_100359_owner19_lazy_server_callables_PRIVATE_NOT_EXPORTED_2026_10_19.js'
       - 'test/deda_100359_owner19_lazy_server_secrets_stage33.test.js'
       - 'lib/deda_exclusive_ids_admin_page.dart'
+      - 'tools/stage_deda_100360_compact_four_real_foils_after_100359.py'
+      - 'test/test_deda_stage35_compact_foils.py'
       - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
       - 'test/deda_100359_owner19_combined_gateway_stage32.test.js'
       - 'docs/DEDA_100359_19_ISSUES_OWNER_ACCEPTANCE_GATE_2026-10-19.md'
@@ -47,6 +49,8 @@ jobs:
           node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
           node --test test/deda_100359_owner19_combined_gateway_stage32.test.js
           node --test test/deda_100359_owner19_lazy_server_secrets_stage33.test.js
+          python3 -m py_compile tools/stage_deda_100360_compact_four_real_foils_after_100359.py
+          python3 -m unittest test/test_deda_stage35_compact_foils.py
       - name: Existing atomic card, ID, admin and 100-private regressions
         shell: bash
         run: |
