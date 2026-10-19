@@ -13,6 +13,8 @@ on:
       - 'test/test_deda_stage35_compact_foils.py'
       - 'tools/stage_deda_100360_remove_fake_store_sandbox.py'
       - 'test/test_deda_stage38_remove_fake_owner_lab.py'
+      - 'tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py'
+      - 'test/test_deda_stage39_gm_real_foil_integration.py'
       - 'tools/stage_deda_100360_remove_fake_store_sandbox.py'
       - 'test/test_deda_stage38_remove_fake_sandbox.py'
       - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
@@ -56,6 +58,7 @@ jobs:
           python3 -m py_compile tools/stage_deda_100360_compact_four_real_foils_after_100359.py
           python3 -m unittest discover -s test -p 'test_deda_stage35_compact_foils.py'
           python3 -m unittest discover -s test -p 'test_deda_stage38_remove_fake_owner_lab.py'
+          python3 -m unittest discover -s test -p 'test_deda_stage39_gm_real_foil_integration.py'
           python3 -m py_compile tools/stage_deda_100360_remove_fake_store_sandbox.py
           python3 -m unittest discover -s test -p 'test_deda_stage38_remove_fake_sandbox.py'
       - name: Existing atomic card, ID, admin and 100-private regressions
