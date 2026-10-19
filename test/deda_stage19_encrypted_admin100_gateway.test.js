@@ -56,9 +56,12 @@ function seed(manager=true) {
   return db;
 }
 const authed={auth:{uid:"u_admin"},app:{appId:"test-app"},data:{}};
-function svc(db,flags={}) {return createStage19ExclusiveGateway({
-  db,...manifest(),flags,
-});}
+function svc(db,flags={}) {
+  const {privateKeyB64,encryptedCatalog}=manifest();
+  return createStage19ExclusiveGateway({
+    db, encryptedCatalog, ownerPrivateKeyB64:privateKeyB64, flags,
+  });
+}
 
 test("all 100 hidden while stage19 read flag off, even GM",async()=>{
   await assert.rejects(svc(seed()).handle("read",authed),
