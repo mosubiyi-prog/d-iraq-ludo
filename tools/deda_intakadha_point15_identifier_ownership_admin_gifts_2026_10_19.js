@@ -162,6 +162,7 @@ function privateReservedCatalog(names) {
 
 async function adminGrantReservedIdentifier(db, {
   adminUid, recipientOriginalId, identifier, color, privateCatalog,
+  requireCanonicalManager = false,
 }) {
   validateIdentifier(identifier);
   if (!ORIGINAL_PATTERN.test(recipientOriginalId || "") ||
@@ -182,6 +183,19 @@ async function adminGrantReservedIdentifier(db, {
         access.allowedRole !== "general_manager" ||
         access.accessType !== "general_manager_gateway") {
       reject("permission-denied", "only-verified-general-manager-can-grant");
+    }
+    // Stage19 hardened option: old gateway stays disabled/unchanged;
+    // stage19 must prove the current canonical admins/<auth UID> role in the
+    // SAME Firestore transaction that grants an immutable identifier.
+    if (requireCanonicalManager === true) {
+      const currentAdmin = await tx.get(
+          db.collection("admins").doc(adminUid));
+      const current = record(currentAdmin);
+      if (!currentAdmin.exists || current.active !== true ||
+          current.status !== "active" ||
+          current.role !== "general_manager") {
+        reject("permission-denied", "stage19-current-general-manager-required");
+      }
     }
 
     // Recipient selected by ORIGINAL registered public ID, not client-supplied
