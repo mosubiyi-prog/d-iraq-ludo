@@ -32,8 +32,8 @@
 
 ## Execution checkpoints
 - [x] #1 Verified safe base, created standalone private work branch and recovery branch.
-- [ ] #2 Admin-only dashboard tile and route.
-- [ ] #3 Colors and page background.
+- [x] #2 Admin-only dashboard tile and route.
+- [x] #3 Colors and page background.
 - [ ] #4 Manager-authenticated server catalogue read (private source stays private).
 - [ ] #5 Single-card 50px preview list.
 - [ ] #6 Color selection before commitment.
@@ -45,3 +45,12 @@
 - [ ] #12 Private signed APK, Android 16 and owner phone testing.
 
 Important: Each checked item means actually implemented and verified; adding a UI preview never means backend grant or real purchase are enabled.
+
+
+## VERIFIED checkpoint after first stage19 batch — 2026-10-19
+- UI branch GitHub Actions run 39246736431: success, 6/6 Flutter widget tests pass. Owner-approved manager-only tile is added to lib/admin_pages.dart, exactly the same DedaAdminCompactCard footprint as existing cards, using opt-in exclusiveNavyTurquoise palette; no existing cards styled differently.
+- Admin page lib/deda_exclusive_ids_admin_page.dart: soft blue-gray background; navy/turquoise header; 📜 dated-grants history action physically TOP-LEFT; one 50px single preview card per server-verified exclusive ID; four draft color chips; proposed self-use and gift actions are DISABLED until audited production Callables. No sensitive IDs embedded in code or APK.
+- Separate staged reader tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js checks authenticated general-manager session, entire 100 owner-private list, unique original order, ownership and fixed color, and dated receipt. Requires private manifest injection SERVER-ONLY, no Firebase production exports.
+- Combined security/source QA run 39247331980: **SUCCESS**. 7/7 isolated server-reader unit tests and 6/6 Flutter widget tests passed (13 tests across independent suites). No live reads/debits/writes, APK/AAB, Firebase/Play deployment.
+- User-authorized #2 and #3 UI finished and tested. #4 remains IN PROGRESS: private catalog is NOT injected or deployed yet; the actual 100 records do not appear in phone UI until authenticated server API is complete. #5/#6/#9 have interface shells only, not usable verified live data/actions.
+- Important: manager gifts and self-use with immutable one-time color, secure server audits, app-wide profile/alias integrity, Firebase Emulator race tests, and owner-only signed phone APK remain pending as points #7–12. Do not mark them done prematurely.
