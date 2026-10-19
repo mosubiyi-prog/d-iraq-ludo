@@ -43,3 +43,11 @@ Date: 2026-10-19. **This is a named WORKING BRANCH, NOT A SIGNED/INSTALLED APK, 
 5. Perform real Emulator and Flutter/navigation regression tests, then generate ONE signed private APK with same signer/Android16 cold-start & in-place update. Owner real-phone approval before Play upload.
 
 Master 12-point contract remains: `docs/DEDA_STAGE19_100_EXCLUSIVE_ADMIN_MASTER_12_POINTS_2026-10-19.md`.
+
+## 2026-10-19: Current canonical manager revocation protection (QA success)
+- All Stage19 read, self-use and gift operations now independently require canonical admins/<authUID> to remain active, status active and role general_manager. Prior admin_entry_access allowlist remains necessary, but is not sufficient.
+- For self-use and gifting the canonical role proof is read within the SAME Firestore transaction that writes exclusive ID and its lifetime color. Gift protection added as an opt-in option to the staged point15 backend; default legacy behavior unchanged.
+- Dedicated Firestore Emulator test revokes admins/<uid> role to employee while leaving the older entry-access record present; full 100 catalog read, self-use and gift are all blocked. No registry writes take place.
+- Firestore Emulator run 39258585160 PASS 10/10, including role revocation, collisions, 10-way concurrent gift contention, and immutable lifetime colors.
+- Stage18+Stage19 source integration run 39258585219 SUCCESS (39 Node tests and 6 Flutter widget tests). NOTE: these are staged/off in production, not real checkout/owner grants.
+- Production functions/index.js and Android release/source were not changed. Next gate remains owner-approved, secret-manager-backed live callable and wallet/alias rollout; no automatic release.
