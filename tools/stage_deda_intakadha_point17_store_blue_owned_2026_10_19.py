@@ -12,7 +12,7 @@ MARKER = "// DEDA_STAGE17_STORE_CARDS_BLUE_OWNED_IDS_2026_10_19"
 ACCOUNT = "class _DedaAccountInfoPageState extends State<DedaAccountInfoPage> {"
 ACCOUNT_END = "class DedaDiamondsState {"
 SHOP = "class _DedaIdentifierStorePageState extends State<DedaIdentifierStorePage> {"
-SHOP_END = "class DedaPoint10CandidateGroup002 {"
+SHOP_END = "class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {"
 OLD_ACCOUNT_PAID = """          DedaPoint14VerifiedAccountPanel(
             identifier: originalId,
           ),
