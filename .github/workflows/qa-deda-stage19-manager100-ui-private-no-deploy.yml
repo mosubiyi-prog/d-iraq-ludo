@@ -11,6 +11,8 @@ on:
       - 'test/deda_stage19_exclusive_admin_tile_test.dart'
       - 'tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js'
       - 'test/deda_stage19_exclusive_admin_private_reader.test.js'
+      - 'tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js'
+      - 'test/deda_stage19_exclusive_fixed_color_actions.test.js'
       - '.github/workflows/qa-deda-stage19-manager100-ui-private-no-deploy.yml'
   workflow_dispatch:
 
@@ -41,6 +43,7 @@ jobs:
           test ! -f build/app/outputs/bundle/release/app-release.aab
           ! grep -q 'deda_exclusive_ids_admin_page.dart' functions/index.js
           ! grep -q 'deda_stage19_private_exclusive_catalog_reader' functions/index.js
+          ! grep -q 'deda_stage19_private_fixed_color_manager_actions' functions/index.js
           grep -q 'DedaAdminCompactCard(' lib/admin_pages.dart
           grep -q 'deda_stage19_admin100_dashboard_tile' lib/admin_pages.dart
           grep -q "DedaBackend.normalizeAdminStatus(profile) == 'active'" lib/admin_pages.dart
@@ -64,6 +67,8 @@ jobs:
           set -euo pipefail
           node --check tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js
           node --test test/deda_stage19_exclusive_admin_private_reader.test.js
+          node --check tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js
+          node --test test/deda_stage19_exclusive_fixed_color_actions.test.js
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
