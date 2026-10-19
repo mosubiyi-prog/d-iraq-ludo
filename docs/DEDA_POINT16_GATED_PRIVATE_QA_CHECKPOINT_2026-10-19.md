@@ -35,3 +35,13 @@
 - GitHub Actions `39182017754`: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39182017754 — نجاح مصدر 100356 كامل بعد مراحل 2–15+16، 23/23 Flutter app tests ناجحة، وتحليل المصدر أكمل بــ229 ملاحظة غير قاتلة. `spark-security` ناجح. لم ينشأ APK في هذا الاختبار.
 - GitHub Actions `39182017862`: 14/14 Firebase Emulator، Python guard suite والمصادقة وAppCheck والـ alias والماسات والـ 100 محجوزة. لم تنشر وظائف حقيقية.
 - نسخة بناء خاصة **100357** تحت الاختبار، مع عزل مفاتيح تفعيل `DEDA_PREMIUM_IDS_SERVER_LIVE=false` و`DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false`، لا ملف APK صالح للمستخدم حتى نجاح التوقيع/Android16 strict.
+
+
+## نتيجة بناء 100357 الموقّع وفحص Android16 — تصحيح بيئة CI
+
+- Run `39182575850` بتاريخ 2026-10-19: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39182575850 — **نجحت** وظيفتا `spark-security` و`private-signed-apk`، لكن الفحص الشامل انتهى Failure لأن **خطوة محاكي Android 16 فشلت قبل بدء المحاكي**.
+- APK الأصلي النهائي الناتج **موجود فعليًا في Artifact `12157421726`**، اسمه `DEDA-100357-ALL-POINTS-PRIVATE-SIGNED-OWNER-REVIEW-NO-PLAY`، وفي داخله `DEDA-100357-ALL-POINTS-OWNER-PRIVATE-SIGNED.apk`. الحجم المضغوط للأثر نحو 38MB. تاريخ الصلاحية المعلن حتى 2026-11-09.
+- بصمة SHA256 **لـAPK وليس ZIP الأثر**: `f5659a118c6345bca0703e22a4905275278279f246d344270450c459d74bad04`؛ `versionCode=100357` و`packageName=com.diraq.ludo.d_iraq_ludo`. تقرير APKSigner: مطابق لنفس شهادة توقيع 100342 المرجعية التي استُخدمت كأساس موثّق لتحديث 100356. فحص Kotlin/R8 DEX نجح. رسالة log القديمة تقول `versionCode=100356` بشكل نص ثابت لكن إثبات `aapt` يعرض بوضوح 100357.
+- فشل Android16 JOB ليس فشل تشغيل DEDA: خطوة `Verify emulator acceleration really usable` تحققت من `/dev/kvm` ثم حاولت تنفيذ `$ANDROID_HOME/emulator/emulator -accel-check` **قبل تثبيت Android Emulator SDK**، فأرجعت `No such file or directory` وexit127. **لم تبدأ أي عملية cold start أو in-place upgrade**، ولذلك لا يجوز القول إن 100357 ناجحة/فاشلة على Android16.
+- أُنشئ smoke مستقل لا يعيد بناء أو توقيع APK `.github/workflows/qa-deda-point16-100357-android16-smoke-existing-apk-no-rebuild.yml` على نفس فرع QA. يستخدم بالضبط APK السابق بعد SHA256، ويثبّت المحاكي عبر `android-emulator-runner` قبل فحص KVM، ويختبر clean install ثم الترقية 100352→100357 بدون مسح بيانات أثناء الترقية، ويحفظ سجلات Flutter PID والتطبيق. Run **`39186312722`**: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39186312722. انتظر نتيجته الموثقة قبل إرسال APK للمستخدم.
+- إلى أن ينجح تشغيل Android16 ويُراجَع فحص الحسابات: **100357 ليس بعد نسخة للتثبيت على هاتف المالك**. عدم نشر Firebase أو Play؛ بوابتا شراء ID وتبديل alias مطفأتان أصلًا.
