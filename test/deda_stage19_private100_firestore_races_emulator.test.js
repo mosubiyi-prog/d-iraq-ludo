@@ -71,6 +71,9 @@ async function reset() {
   b.set(db.collection("deda_share_ids").doc(ORIGINAL_A),{
     publicId:ORIGINAL_A,kind:"personal",ownerUid:UID_A,active:true,
   });
+  b.set(db.collection("admins").doc(UID_A),{
+    active:true,status:"active",role:"general_manager",
+  });
   b.set(db.collection("admin_entry_access").doc(KEY_A),{
     accountKey:KEY_A,active:true,status:"active",
     allowedRole:"general_manager",accessType:"general_manager_gateway",
