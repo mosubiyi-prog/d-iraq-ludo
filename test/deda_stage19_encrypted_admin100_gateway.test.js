@@ -48,6 +48,8 @@ function seed(manager=true) {
   db.put("deda_share_ids/"+original,{
     kind:"personal",active:true,publicId:original,ownerUid:"u_admin",
   });
+  db.put("admins/u_admin",{active:true,status:"active",
+    role:manager?"general_manager":"employee"});
   db.put("admin_entry_access/account_admin",{
     accountKey:"account_admin",active:true,status:"active",
     allowedRole:manager?"general_manager":"employee",
