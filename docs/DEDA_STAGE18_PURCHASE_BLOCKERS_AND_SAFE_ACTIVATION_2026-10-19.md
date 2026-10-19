@@ -34,3 +34,12 @@ H. Production deployment and wallet mutations ONLY on explicit owner approval, n
 - Proven 100358 signed original APK SHA256: 02a4147f81c4fbe1fc9f7a8580a9b128af021e2707393c2b740a4a3d80d5ad6d
 - Verified run: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39236929321, success.
 - NO application package rebuilt or deployed as part of this Stage18 audit. Real shop remains fail-closed.
+
+## Stage18 isolated checkout prototype — VERIFIED 2026-10-19
+- New PRIVATE staged server module: tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+- New mock transaction unit tests: test/deda_stage18_atomic_identifier_checkout_unit.test.js
+- CI workflow: .github/workflows/qa-deda-stage18-id-checkout-unit-private-no-deploy.yml
+- GitHub run: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39241689780 — SUCCESS; 12/12 isolated Node unit tests PASS, 0 failed.
+- Tests: mandatory private reserved-100 manifest, explicit owner-approved public inventory, exactly 10,000 diamonds, atomic mocked entitlement/wallet sale, request replay idempotency, duplicate buyers, insufficient server wallet, invalid session, price spoofing and cross-product request-id conflicts.
+- Scope: Mocked unit transactions, NOT Firestore Emulator transaction-race validation yet. A valid staged prototype is NOT permission for public launch. Existing DEDA 100358 and production functions/index.js unchanged.
+- Open release blockers: verified public inventory review; full earnable diamond balance migration; callable wiring/permissions/AppCheck; real Firestore Emulator concurrent tests; Android phone acceptance and owner deployment approval.
