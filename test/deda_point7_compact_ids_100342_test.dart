@@ -36,7 +36,18 @@ void main() {
     expect(fieldDecoration.gradient, isNotNull,
         reason: 'The former white identifier field must be replaced');
     expect(fieldDecoration.color, isNull);
-    expect(find.text(personalId), findsOneWidget);
+    // Point17 intentionally shows the original ID in BOTH the blue card
+    // and the verified-owned list below. Validate each exact slot, not an
+    // obsolete global count of one.
+    final ownedPanel =
+        find.byKey(const Key('deda_point15_owned_identifiers_panel'));
+    expect(ownedPanel, findsOneWidget);
+    expect(find.descendant(of: card, matching: find.text(personalId)),
+        findsOneWidget);
+    expect(find.descendant(of: ownedPanel, matching: find.text(personalId)),
+        findsOneWidget);
+    expect(find.byType(DedaPoint14VerifiedAccountPanel), findsNothing,
+        reason: 'Paid card purchase/use UI belongs in the store, not editing');
     expect(find.byKey(const Key('deda_point7_inline_id_manager')),
         findsNothing);
     expect(tester.getSize(card).height, lessThanOrEqualTo(126.0));
