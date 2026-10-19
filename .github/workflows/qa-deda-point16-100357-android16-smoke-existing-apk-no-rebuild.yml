@@ -127,6 +127,14 @@ jobs:
           echo 'PASS: strict 100357 clean and in-place Android 16 runtime checks' | tee "$out/summary.txt"
           SCRIPT
           chmod +x /tmp/deda355/strict.sh
+      - name: Grant KVM access BEFORE Android16 emulator starts (runner-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo 'SAFE_STOP: runner has no KVM; cannot run x86_64 emulator'; exit 91; }
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm || { echo 'SAFE_STOP: no KVM access after chmod'; exit 92; }
+          echo 'PASS: /dev/kvm readable/writable before launching x86_64 emulator'
       - name: Run original new signed APK on isolated Android16 emulator, NO REBUILD
         uses: reactivecircus/android-emulator-runner@v2
         with:
