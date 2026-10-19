@@ -1,0 +1,52 @@
+name: DEDA جمال التطبيق المتكاملة Stage20 Diamond Source Audit READ ONLY PRIVATE
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage20-diamond-source-audit-no-wallet-write-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage20_diamond_source_audit_readonly_2026_10_19.js'
+      - 'test/deda_jamal_stage20_diamond_source_audit_readonly.test.js'
+      - 'test/deda_jamal_stage20_diamond_source_firestore_emulator.test.js'
+      - '.github/workflows/qa-deda-jamal-stage20-diamond-sources-readonly-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage20-readonly-source-audit
+  cancel-in-progress: true
+
+jobs:
+  source-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify untouched existing released sources and NO wallet mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 173bf968d01b50836fc0cd698f4d15f7881c908e -- \
+            lib/main.dart lib/deda_backend.dart android/ assets/ firestore.rules \
+            functions/index.js functions/deda_telegram_verified_claim.js \
+            functions/deda_daily_reward_shadow_ledger.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            pubspec.yaml pubspec.lock
+          ! grep -q 'deda_jamal_stage20_diamond_source_audit' functions/index.js
+          node --check tools/deda_jamal_stage20_diamond_source_audit_readonly_2026_10_19.js
+          node --check test/deda_jamal_stage20_diamond_source_audit_readonly.test.js
+          echo 'PASS: no production edits, no wallet updates, no Android APK or purchase deploy'
+      - name: Audit diamonds from historical local ads, telegram, tasks and manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage20_diamond_source_audit_readonly.test.js
+          echo 'PASS: read-only diamond-source model; no local reward migration'
