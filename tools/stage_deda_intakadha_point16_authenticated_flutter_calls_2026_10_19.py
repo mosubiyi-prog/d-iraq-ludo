@@ -237,7 +237,7 @@ def apply(source: str) -> str:
     if any(source.count(token) != 1 for token in required) or source.count(ACCOUNT) != 1:
         raise ValueError("SAFE_STOP: exact approved point14+15 reconstructed source required")
     if MARKER in source:
-        if (source.count(MARKER) != 1 or source.count(NEW_PAYMENTS) != 1 or \
+        if source.count(MARKER) != 1 or source.count(NEW_PAYMENTS) != 1 or \
                 source.count(PROFILE_INIT_NEW) != 2 or \
                 source.count(OWNED_INIT_NEW) != 1:
             raise ValueError("SAFE_STOP: incomplete or altered point16 transport")
