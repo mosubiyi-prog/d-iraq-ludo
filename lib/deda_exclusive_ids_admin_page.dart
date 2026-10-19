@@ -132,6 +132,54 @@ class DedaExclusiveAdminBridge {
       );
     };
   }
+  // Explicitly controlled by BOTH owner-reviewed server AND private APK
+  // rollout. The signed 100359 APK does not set either action flag.
+  static const bool serverActionsFlag =
+      bool.fromEnvironment('DEDA_STAGE32_MANAGER100_ACTIONS_LIVE',
+          defaultValue: false);
+
+  static void installVerifiedActionsIfApproved() {
+    if (!serverReadFlag || !serverActionsFlag || readRemote == null) return;
+    useForManagerRemote ??= (identifier, color) async {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) throw StateError('verified-login-required');
+      final result = await FirebaseFunctions.instance.httpsCallable(
+        'dedaStage19Exclusive100SelfUse',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 40)),
+      ).call(<String, dynamic>{'identifier': identifier, 'color': color});
+      if (FirebaseAuth.instance.currentUser?.uid != uid ||
+          result.data is! Map) throw StateError('manager-session-changed');
+      final verified = Map<String, dynamic>.from(result.data as Map);
+      if (verified['serverConfirmed'] != true ||
+          verified['identifier'] != identifier ||
+          verified['permanentColor'] != color ||
+          verified['activeId'] != identifier) {
+        throw StateError('unverified-admin-self-use');
+      }
+    };
+    grantToUserRemote ??= (identifier, color, recipientOriginalId) async {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) throw StateError('verified-login-required');
+      final result = await FirebaseFunctions.instance.httpsCallable(
+        'dedaStage19Exclusive100Grant',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 40)),
+      ).call(<String, dynamic>{
+        'identifier': identifier,
+        'color': color,
+        'recipientOriginalId': recipientOriginalId,
+      });
+      if (FirebaseAuth.instance.currentUser?.uid != uid ||
+          result.data is! Map) throw StateError('manager-session-changed');
+      final verified = Map<String, dynamic>.from(result.data as Map);
+      if (verified['serverConfirmed'] != true ||
+          verified['identifier'] != identifier ||
+          verified['permanentColor'] != color ||
+          verified['recipientOriginalId'] != recipientOriginalId) {
+        throw StateError('unverified-admin-grant');
+      }
+    };
+  }
+
   // Inject ONLY real, authenticated Firebase Callable clients AFTER audited
   // server release. No raw Firestore client writes, local grant or test data.
   static Future<DedaExclusiveAdminSnapshot> Function()? readRemote;
@@ -235,6 +283,7 @@ class _DedaExclusiveIdsAdminPageState
     });
     if (!allowed) return;
     DedaExclusiveAdminBridge.installReadOnlyBridgeIfApproved();
+    DedaExclusiveAdminBridge.installVerifiedActionsIfApproved();
     final read = DedaExclusiveAdminBridge.readRemote;
     if (read == null) {
       setState(() {
