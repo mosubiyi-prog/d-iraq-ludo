@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --quiet backup-deda-stage19-original100-encrypted33-green-2026-10-19 -- \
+          git diff --quiet 23f3c83da641133db3bac491e53eba9ee1b7e695 -- \
             functions/index.js firestore.rules firebase.json \
             lib/main.dart lib/deda_backend.dart android/ assets/ \
             pubspec.yaml pubspec.lock
