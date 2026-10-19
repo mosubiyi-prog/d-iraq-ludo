@@ -7,6 +7,8 @@
 // separate audited owner release, no automatic mutation of real accounts.
 const {createOwner19Gateway, OWNER_NAMES} =
   require("./deda_100359_owner19_combined_gateway_private_2026_10_19.js");
+const {createPoint16Gateway} =
+  require("./deda_intakadha_point16_gated_callable_gateway_2026_10_19.js");
 
 const STAGE16 = Object.freeze({
   readCards: "dedaPremiumReadCards",
@@ -64,6 +66,16 @@ function createLazyOwner19Callables({
       // These two preconditions happen BEFORE secret value or catalog access.
       requirePrincipal(req);
       if (!approved(method, flags)) throw secureError("unavailable");
+      // Ordinary card/owned-ID actions do not require the owner-exclusive
+      // Group001 catalog or its Secret Manager key. Their existing strict
+      // Point16 gateway still checks uid, AppCheck, fixed price and receipt.
+      // Reserve the secret strictly for 100-owner operations and GM grants.
+      if (Object.hasOwn(STAGE16, method) && method !== "adminGrant") {
+        const ordinary = createPoint16Gateway({
+          db: getFirestore(), flags: flags.point16 || {},
+        });
+        return await ordinary.handle(method, req);
+      }
       const key = secret.value();
       if (typeof key !== "string" || key.length === 0) {
         throw secureError("unavailable");
@@ -77,10 +89,9 @@ function createLazyOwner19Callables({
         approvedSellableSuffixes: saleNames,
         flags,
       });
-      const result = Object.hasOwn(OWNER_NAMES, method) ?
+      return Object.hasOwn(OWNER_NAMES, method) ?
         await gateway.handle(method, req) :
         await gateway.stage16.handle(method, req);
-      return result;
     } catch (err) {
       const safe = new Set(["unauthenticated", "permission-denied",
         "invalid-argument", "failed-precondition", "unavailable",
@@ -92,9 +103,12 @@ function createLazyOwner19Callables({
   }
   const methods = {...OWNER_NAMES, ...STAGE16};
   for (const [method, name] of Object.entries(methods)) {
+    const needsOwnerSecret = Object.hasOwn(OWNER_NAMES, method) ||
+      method === "adminGrant";
     callables[name] = onCall({
       enforceAppCheck: true,
-      secrets: [secret],
+      // Card purchases can be released independently of the GM catalog.
+      secrets: needsOwnerSecret ? [secret] : [],
       memory: "256MiB",
       timeoutSeconds: 60,
     }, req => wrap(method, req));
