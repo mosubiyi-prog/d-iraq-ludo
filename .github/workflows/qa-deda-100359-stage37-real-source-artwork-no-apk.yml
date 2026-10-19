@@ -10,6 +10,8 @@ on:
       - 'tools/stage_deda_100360_remove_fake_store_sandbox.py'
       - 'tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py'
       - 'test/deda_100360_original_shop_and_manager_foils_integration_test.dart'
+      - 'tools/stage_deda_100360_verified_group002_only_store.py'
+      - 'lib/deda_stage42_verified_sale_panel.dart'
   workflow_dispatch:
 permissions:
   contents: read
@@ -71,8 +73,9 @@ jobs:
           python3 tools/stage_deda_100360_compact_four_real_foils_after_100359.py
           python3 tools/stage_deda_100360_remove_fake_store_sandbox.py
           python3 tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py
+          python3 tools/stage_deda_100360_verified_group002_only_store.py
           dart format lib/main.dart lib/deda_exclusive_ids_admin_page.dart
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_exclusive_ids_admin_page.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_exclusive_ids_admin_page.dart lib/deda_stage42_verified_sale_panel.dart
           flutter test test/deda_100360_original_shop_and_manager_foils_integration_test.dart \
             test/deda_stage19_exclusive_admin_tile_test.dart
           python3 - <<'PY'
@@ -87,6 +90,8 @@ jobs:
           assert "for (final style in DedaPremiumIdCardColor.values)" in shop
           assert "height: 50" in shop, "original 50dp foil was changed"
           assert "DEDA_PREMIUM_IDS_SERVER_LIVE" in src, "server flag lost"
+          assert src.count("DEDA_100360_SERVER_VERIFIED_GROUP002_INSTEAD_OF_MOCK_CANDIDATES")==1
+          assert "DedaStage42VerifiedSalePanel(" in src
           assert "DedaOwnerQaSandboxPage()" not in src, "fake purchase lab still reachable"
           manager=Path('lib/deda_exclusive_ids_admin_page.dart').read_text()
           assert "DEDA_100360_ADMIN_USES_ORIGINAL_FOUR_FULL_FOILS" in manager
