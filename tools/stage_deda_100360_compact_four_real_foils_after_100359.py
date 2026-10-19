@@ -54,9 +54,16 @@ def apply(source: str) -> str:
         raise ValueError("SAFE_STOP: store boundaries missing or duplicated")
     a, b = source.index(STORE_BEGIN), source.index(STORE_END)
     store = source[a:b]
-    if store.count(METHOD) != 1 or store.count(METHOD_END) != 1:
-        raise ValueError("SAFE_STOP: approved store card method differs")
-    m, e = store.index(METHOD), store.index(METHOD_END)
+    if store.count(METHOD) != 1:
+        raise ValueError(
+            f"SAFE_STOP: expected one real _fixedCard; found {store.count(METHOD)}"
+        )
+    m = store.index(METHOD)
+    # The page can contain other top-level widgets before the profile class.
+    # Only the first build() after the exact _fixedCard() is this method's end.
+    e = store.find(METHOD_END, m)
+    if e == -1 or e <= m:
+        raise ValueError("SAFE_STOP: no matching store build() after _fixedCard")
     card = store[m:e]
     for marker in (
         "DedaPremiumIdCard(",
