@@ -1,0 +1,70 @@
+name: DEDA Jamal Stage30 Private SSV Server Receiver Local QA NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage30-ssv-private-server-entrypoint-off-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage30_ssv_offline_server_gateway_not_exported_2026_10_19.js'
+      - 'test/deda_jamal_stage30_ssv_offline_server_gateway_transport.test.js'
+      - '.github/workflows/qa-deda-jamal-stage30-ssv-server-local-transport-private-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage30-private-ssv-gateway
+  cancel-in-progress: true
+
+jobs:
+  preserve-live-admob:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: No installed phone, existing ads, Firestore/wallet, backend, or shop edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet f61b67f594103244fe759de11e9f862d5213dca1 -- \
+            lib/ android/ assets/ functions/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock server_private/ catalogs/ \
+            tools/apply_real_admob_ids_100257_2026_10_03.py \
+            tools/add_diamonds_reward_100259_2026_10_04.py \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_jamal_stage29_console_reward_contract_vs_diamond_gate_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+          ! grep -q 'deda_jamal_stage30_ssv_offline_server_gateway' functions/index.js
+          ! grep -q 'deda_jamal_stage30_ssv_offline_server_gateway' lib/main.dart
+          node --check tools/deda_jamal_stage30_ssv_offline_server_gateway_not_exported_2026_10_19.js
+          node --check test/deda_jamal_stage30_ssv_offline_server_gateway_transport.test.js
+          echo 'PASS: no actual Google SSV callback URL, payment, Firebase deploy or user wallet changes'
+  local-node-http:
+    needs: preserve-live-admob
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Local HTTP callback and Firebase v2 factory emulator-mode stubs only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage30_ssv_offline_server_gateway_transport.test.js
+          echo 'PASS: offline test HTTP server rejects fake signed payouts and 5-point reward mismatch'
+  no-deploy:
+    needs: [preserve-live-admob,local-node-http]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Explicit no publishing
+        run: |
+          echo 'Stage30 is a DRAFT SERVER transport, NOT Google SSV verified, NO actual callback URL and NO production deployment'
