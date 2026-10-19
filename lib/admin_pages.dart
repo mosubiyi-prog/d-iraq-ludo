@@ -14,6 +14,7 @@ import 'deda_backend.dart';
 import 'deda_admin_task_management_page.dart';
 import 'deda_admin_automation_toggle.dart';
 import 'deda_admin_compact_card.dart';
+import 'deda_exclusive_ids_admin_page.dart';
 import 'deda_recovery_admin.dart';
 import 'prize_winner_pages.dart';
 
@@ -1275,6 +1276,25 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                             MediaQuery.textScalerOf(context).scale(1.0))
                         .clamp(126.0, 240.0),
                     children: [
+                      // STAGE19: General manager ONLY. Same DedaAdminCompactCard
+                      // geometry as all dashboard tiles; entry re-verifies
+                      // admin role and status from the backend before reading.
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                          'general_manager' &&
+                          DedaBackend.normalizeAdminStatus(profile) == 'active')
+                        DedaAdminCompactCard(
+                          key: const Key('deda_stage19_admin100_dashboard_tile'),
+                          icon: Icons.verified_user_outlined,
+                          title: t('إدارة المعرّفات الحصرية',
+                                   'Exclusive identifier management'),
+                          subtitle: t('الـ100 الحصرية • منح وسجل',
+                                      '100 private IDs • grants and history'),
+                          accentColor: const Color(0xFF103E50),
+                          exclusiveNavyTurquoise: true,
+                          onTap: () => _open(
+                            DedaExclusiveIdsAdminPage(isArabic: ar),
+                          ),
+                        ),
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
                           'general_manager')
                         _dashboardCard(
