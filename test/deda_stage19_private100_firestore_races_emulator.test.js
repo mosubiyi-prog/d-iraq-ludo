@@ -262,6 +262,52 @@ test("canonical admin role revocation immediately denies private list, self-use 
   }
 });
 
+test("real Firestore: Secret Manager read-only Cloud Callable returns 100 only for current GM",async()=>{
+  await reset();
+  const {createReadOnlyStage19Callable} = require(
+    "../functions/stage19_private/stage19_owner100_readonly_NOT_EXPORTED.js");
+  const {decryptOwnerPrivate100} = require(
+    "../tools/deda_stage19_private_admin100_decrypt_server_only_2026_10_19.js");
+  const {createPrivate100AdminReader} = require(
+    "../tools/deda_stage19_private_exclusive_catalog_reader_2026_10_19.js");
+  const fixture=fakeEncrypted100();
+  let secretReads=0;
+  class HttpsError extends Error {
+    constructor(code,msg) {super(msg);this.code=code;}
+  }
+  const exports=createReadOnlyStage19Callable({
+    onCall:(options,handler)=>({options,handler}),
+    HttpsError,
+    defineSecret:(name)=>{
+      assert.equal(name,"DEDA_STAGE19_ADMIN100_AES_KEY_B64");
+      return {value:()=>{secretReads++;
+        return fixture.ownerPrivateKeyB64;}};
+    },
+    getFirestore:()=>db,
+    encryptedCatalog:fixture.encryptedCatalog,
+    decryptCatalog:decryptOwnerPrivate100,
+    createReader:createPrivate100AdminReader,
+  });
+  assert.deepEqual(Object.keys(exports),["dedaStage19Exclusive100Read"]);
+  const fn=exports.dedaStage19Exclusive100Read;
+  assert.equal(fn.options.enforceAppCheck,true);
+  assert.equal(fn.options.secrets.length,1);
+  const list=await fn.handler(call());
+  assert.equal(list.total,100);
+  assert.deepEqual(list.identifiers.map(x=>x.identifier),ids);
+  assert.equal(secretReads,1);
+  await db.collection("admins").doc(UID_A).update({status:"disabled"});
+  await assert.rejects(fn.handler(call()),e=>
+    e.code==="permission-denied" &&
+    !e.message.includes(fixture.ownerPrivateKeyB64));
+  const previous=secretReads;
+  await assert.rejects(fn.handler({...call(),app:null}),e=>
+    e.code==="permission-denied");
+  await assert.rejects(fn.handler(call(UID_A,{role:"general_manager"})),e=>
+    e.code==="invalid-argument");
+  assert.equal(secretReads,previous);
+});
+
 test("client Firestore SDK cannot grant a reserved ID by bypassing callables",async()=>{
   await reset();
   const client=env.authenticatedContext(UID_B).firestore();
