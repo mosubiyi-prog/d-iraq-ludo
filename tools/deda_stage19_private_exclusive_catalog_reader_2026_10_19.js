@@ -72,17 +72,41 @@ function createPrivate100AdminReader(db, privateSuffixes) {
           fail("permission-denied", "admin-original-id-owner-mismatch");
         }
         // Only after verified manager credentials do we inspect exclusive IDs.
-        const registries = await Promise.all(identifiers.map(id =>
-          tx.get(db.collection("deda_owned_identifier_registry").doc(id))));
+        // An ID without a registry is NOT necessarily available.
+        // Existing public share IDs and aliases can collide globally.
+        // Refuse the *entire* list until collisions are resolved server-side;
+        // never promise availability based on a missing registry alone.
+        const [registries, aliases, shares] = await Promise.all([
+          Promise.all(identifiers.map(id =>
+            tx.get(db.collection("deda_owned_identifier_registry").doc(id)))),
+          Promise.all(identifiers.map(id =>
+            tx.get(db.collection("deda_owned_identifier_aliases").doc(id)))),
+          Promise.all(identifiers.map(id =>
+            tx.get(db.collection("deda_share_ids").doc(id)))),
+        ]);
         const rows = [];
         const history = [];
         for (let i = 0; i < identifiers.length; i++) {
           const identifier = identifiers[i];
           const reg = record(registries[i]);
+          if (shares[i].exists) {
+            fail("failed-precondition", "exclusive-id-original-share-collision");
+          }
           if (!registries[i].exists) {
+            if (aliases[i].exists) {
+              fail("failed-precondition", "exclusive-id-orphan-alias");
+            }
             rows.push({sequence: i + 1, identifier, status: "available",
               permanentColor: null, ownerOriginalId: null});
             continue;
+          }
+          const alias = record(aliases[i]);
+          if (!aliases[i].exists ||
+              alias.kind !== "permanent_alias" ||
+              alias.accountKey !== reg.accountKey ||
+              alias.originalId !== reg.originalId ||
+              alias.identifier !== identifier) {
+            fail("failed-precondition", "exclusive-id-alias-proof-missing");
           }
           if (reg.identifier !== identifier || reg.status !== "owned" ||
               !COLORS.has(reg.assignedColor) ||
