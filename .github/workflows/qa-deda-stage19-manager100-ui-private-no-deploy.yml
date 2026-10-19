@@ -13,6 +13,11 @@ on:
       - 'test/deda_stage19_exclusive_admin_private_reader.test.js'
       - 'tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js'
       - 'test/deda_stage19_exclusive_fixed_color_actions.test.js'
+      - 'server_private/catalogs/DEDA_GROUP001_ADMIN100_AES256GCM_2026-10-19.enc.json'
+      - 'tools/deda_stage19_private_admin100_decrypt_server_only_2026_10_19.js'
+      - 'tools/deda_stage19_encrypted_admin100_callable_gateway_2026_10_19.js'
+      - 'test/deda_stage19_encrypted_original100_loader.test.js'
+      - 'test/deda_stage19_encrypted_admin100_gateway.test.js'
       - '.github/workflows/qa-deda-stage19-manager100-ui-private-no-deploy.yml'
   workflow_dispatch:
 
@@ -44,6 +49,9 @@ jobs:
           ! grep -q 'deda_exclusive_ids_admin_page.dart' functions/index.js
           ! grep -q 'deda_stage19_private_exclusive_catalog_reader' functions/index.js
           ! grep -q 'deda_stage19_private_fixed_color_manager_actions' functions/index.js
+          ! grep -q 'deda_stage19_encrypted_admin100_callable_gateway' functions/index.js
+          ! grep -q 'deda_stage19_private_admin100_decrypt_server_only' functions/index.js
+          ! grep -q '"SALEM"' lib/deda_exclusive_ids_admin_page.dart
           grep -q 'DedaAdminCompactCard(' lib/admin_pages.dart
           grep -q 'deda_stage19_admin100_dashboard_tile' lib/admin_pages.dart
           grep -q "DedaBackend.normalizeAdminStatus(profile) == 'active'" lib/admin_pages.dart
@@ -69,6 +77,8 @@ jobs:
           node --test test/deda_stage19_exclusive_admin_private_reader.test.js
           node --check tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js
           node --test test/deda_stage19_exclusive_fixed_color_actions.test.js
+          node --test test/deda_stage19_encrypted_original100_loader.test.js
+          node --test test/deda_stage19_encrypted_admin100_gateway.test.js
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
