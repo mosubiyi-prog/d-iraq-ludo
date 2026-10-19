@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          dart format --output=none --set-exit-if-changed \
+          dart format \
             lib/deda_owner_diamond_provenance_preview_stage25.dart \
             test/deda_owner_diamond_provenance_stage25_test.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings \
