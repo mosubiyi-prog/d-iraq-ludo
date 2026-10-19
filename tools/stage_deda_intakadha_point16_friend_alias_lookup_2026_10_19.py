@@ -91,7 +91,7 @@ def exact_or_whitespace_only(source: str, target: str, label: str) -> str:
     # The full app reconstruction formats Dart in earlier historical stages.
     # Accept only identical Dart tokens with whitespace changed; never alter
     # imports, search permissions, friend ownership or route semantics.
-    compact = lambda x: re.sub(r"\\s+", "", x)
+    compact = lambda x: re.sub(r"\s+", "", x)
     view, wanted = compact(source), compact(target)
     if view.count(wanted) != 1:
         raise ValueError(
