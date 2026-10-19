@@ -1,0 +1,81 @@
+name: DEDA Point16 Authenticated Callable Gateway + Alias Emulator - NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-intakadha-point16-backend-bridge-qa-2026-10-19
+    paths:
+      - tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js
+      - test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js
+      - .github/workflows/qa-deda-intakadha-point16-gated-server-alias-emulator-no-deploy.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-point16-gated-callable-server-emulator
+  cancel-in-progress: true
+jobs:
+  secure-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect 100356 signing/navigation, real wallets and production functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin backup-deda-100356-phone-ui-verified-2026-10-18
+          test "$(git rev-parse origin/backup-deda-100356-phone-ui-verified-2026-10-18)" = 4373b8b30eadc5a284554ca7c021c350e0732caf
+          git diff --quiet 4373b8b30eadc5a284554ca7c021c350e0732caf -- \
+            lib android assets functions firestore.rules storage.rules firebase.json \
+            pubspec.yaml pubspec.lock
+          test -f tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js
+          test -f test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js
+          test ! -e catalogs/DEDA_RESERVED_100_ADMIN_ONLY_GROUP001_2026-10-19.json
+          if grep -q "deda_intakadha_point16_gated_callable_gateway" functions/index.js; then
+            echo "SAFE_STOP: point16 gateway exported in production"; exit 1
+          fi
+          node --check tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js
+          node --check test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js').read_text()
+          for c in ('enforceAppCheck: true','read: flags.read === true',
+            'cardPurchase: flags.cardPurchase === true',
+            'adminGrant: flags.adminGrant === true',
+            'resolveIdentifierAlias', 'const uid = verifyPrincipal(request)'):
+            assert c in s, 'SAFE_STOP missing closed secure gateway guard: ' + c
+          for forbidden in ("firebase deploy","initializeApp(","process.env.DEDA_ADMIN_IDS",
+            "exports.dedaPremiumBuyCard ="):
+            assert forbidden not in s, 'SAFE_STOP active deployment or admin secret'
+          print('PASS: premium callable source isolated from production, AppCheck required, all feature switches off')
+          PY
+  firestore-auth-rules-emulator:
+    needs: secure-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install dependencies into throwaway runner only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Test 14 identities, wallets, app check, role, private catalog and alias cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-point16-gateway --only firestore \
+            'node --test test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js'
+  guarded-only:
+    needs: [secure-source, firestore-auth-rules-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "PASS STAGING-ONLY API. No Firebase callable exported, no APK, no production account changes."
