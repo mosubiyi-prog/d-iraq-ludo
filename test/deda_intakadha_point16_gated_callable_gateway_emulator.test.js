@@ -232,7 +232,7 @@ test("alias resolves to original ID only, never location, UID or account key",as
  }
  assert.deepEqual(await g.handle("resolveAlias",call(gm,{
    identifier:"@DEDA-UNKNOWN",
- }),{originalId:null});
+ })),{originalId:null});
 });
 test("no public identity or location leak on unauthenticated alias request",async()=>{
  const owner=await registered();
