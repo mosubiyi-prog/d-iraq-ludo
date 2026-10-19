@@ -1,0 +1,78 @@
+name: DEDA Jamal Stage27 AdMob SSV PRE-OFFICIAL Signature Contract Audit NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage27-admob-signature-contract-audit-private-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage27_admob_signature_contract_audit_no_deploy_2026_10_19.js'
+      - 'test/deda_jamal_stage27_ssv_signature_preofficial_audit.test.js'
+      - '.github/workflows/qa-deda-jamal-stage27-ssv-contract-preofficial-private-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-stage27-ssv-preofficial-contract-audit
+  cancel-in-progress: true
+
+jobs:
+  release-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Never alter the existing owner Android app, rewards or real wallets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 6d7d2f3d4c06403f4bd56c863ae31c43005d41d5 -- \
+            lib/ android/ assets/ functions/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock server_private/ catalogs/ \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_jamal_stage24_offline_ssv_key_freshness_no_deploy_2026_10_19.js \
+            tools/deda_jamal_stage26_reward_receipt_status_readonly_2026_10_19.js
+          ! grep -q 'deda_jamal_stage27_admob_signature' functions/index.js
+          ! grep -q 'deda_jamal_stage27_admob_signature' lib/main.dart
+          node --check tools/deda_jamal_stage27_admob_signature_contract_audit_no_deploy_2026_10_19.js
+          node --check test/deda_jamal_stage27_ssv_signature_preofficial_audit.test.js
+          echo 'PASS: Stage27 is review-only, no deploy, no user balance changes'
+  signed-message-tests:
+    needs: release-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Locally generated fake EC key signature attack/negative tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/deda_jamal_stage27_ssv_signature_preofficial_audit.test.js
+          node - <<'NODE'
+          const {
+            inspectStage27SignatureContract,
+            readRepoSources,assertNotProductionReady,
+          }=require("./tools/deda_jamal_stage27_admob_signature_contract_audit_no_deploy_2026_10_19.js");
+          const report=inspectStage27SignatureContract(readRepoSources());
+          if(!report.sourceGuardConsistent)process.exit(31);
+          if(assertNotProductionReady(report)!==
+              "RELEASE_BLOCKED_OFFICIAL_GOOGLE_EVIDENCE_MISSING")process.exit(32);
+          console.log("PASS: current Google origin still UNVERIFIED; real payments/purchases remain OFF");
+          NODE
+  safe-finish:
+    needs: [release-guard,signed-message-tests]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: No production AdMob verification certification
+        run: |
+          echo 'Stage27 demonstrates offline fake-key negative vectors, NOT official Google SSV compliance.'
+          echo 'No real AdMob callback, no valid Google keys and no Firebase/Play deploy were involved.'
