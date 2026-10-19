@@ -67,9 +67,12 @@ def apply(source: str) -> str:
     ):
         if card.count(marker) != 1:
             raise ValueError("SAFE_STOP: lost approved artwork/price/action "+marker)
-    if card.count(ACTION) != 1 or card.count(ROW_TAIL) != 1:
-        raise ValueError("SAFE_STOP: expected four-card label/price/action layout absent")
-    changed = card.replace(ACTION, "", 1).replace(ROW_TAIL, ROW_TAIL_NEW, 1)
+    if card.count(ACTION) != 1:
+        raise ValueError("SAFE_STOP: exactly one verified shop action expected")
+    without_action = card.replace(ACTION, "", 1)
+    if without_action.count(ROW_TAIL) != 1:
+        raise ValueError("SAFE_STOP: approved price row and card tail differ")
+    changed = without_action.replace(ROW_TAIL, ROW_TAIL_NEW, 1)
     # Forensic diff whitelist: stripping the moved action restores old method.
     restored = changed.replace(ROW_TAIL_NEW, ROW_TAIL, 1)
     insert_anchor = "        ],\n      ),\n    );\n  }\n\n"
