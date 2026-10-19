@@ -98,13 +98,13 @@ test("callables declare enforced AppCheck, private secret and expected names", (
     HttpsError,
     secret: {value: () => "fake-secret-never-used"},
   });
-  assert.equal(Object.keys(OWNER_NAMES).length, 4);
+  assert.equal(Object.keys(OWNER_NAMES).length, 5);
   for (const functionName of Object.values(OWNER_NAMES)) {
     assert.equal(typeof callables[functionName], "function");
   }
   assert.equal(callables.dedaPremiumReadCards instanceof Function, true);
   assert.ok(recorded.every(opts => opts.enforceAppCheck === true));
-  assert.ok(recorded.filter(opts => Array.isArray(opts.secrets)).length === 4);
+  assert.ok(recorded.filter(opts => Array.isArray(opts.secrets)).length === 5);
   assert.equal(fs.readFileSync("functions/index.js", "utf8")
     .includes("deda_100359_owner19_combined_gateway_private"), false);
 });
