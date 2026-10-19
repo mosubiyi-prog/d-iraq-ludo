@@ -66,7 +66,9 @@ void main() {
     await tester.tap(find.byKey(const Key('deda_stage31_card_gold')));
     await tester.pump();
     expect(find.textContaining('ماسات الاختبار: 20000'), findsOneWidget);
-    expect(find.byKey(const Key('deda_stage31_status')), findsOneWidget);
+    // Status lives below fold in this scrollable preview: check the actual
+    // visible transition, not a lazily built offscreen status widget.
+    expect(find.text('استخدام'), findsOneWidget);
     await tester.tap(find.byKey(const Key('deda_stage31_card_gold')));
     await tester.pump();
     expect(find.textContaining('لون البطاقة: ذهبي'), findsOneWidget);
