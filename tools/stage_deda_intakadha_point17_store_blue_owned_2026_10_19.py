@@ -285,7 +285,7 @@ def apply(source: str) -> str:
         "'السعر 10,000 ماسة — الشراء بعد تحقق الخادم من التوفر',",
         "all candidate identifier prices")
     store = replace_once(store,
-        "'Unverified candidate — no purchase or activation',",
+        "'Unverified candidate — purchasing and activation disabled',",
         "'10,000 diamonds per ID — checkout awaits verified availability',",
         "english 10000 price")
     source = source[:a] + store + source[b:]
