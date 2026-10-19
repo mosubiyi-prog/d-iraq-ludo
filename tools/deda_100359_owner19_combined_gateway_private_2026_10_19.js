@@ -18,6 +18,7 @@ const {createPrivate100AdminReader} =
 
 const UID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const ID_RE = /^@DEDA-[A-Z0-9]{6}$/;
+const RESERVED_RE = /^@DEDA-[A-Z0-9]{4,12}$/;
 const REQUEST_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const OWNER_NAMES = Object.freeze({
   readExclusive: "dedaStage19Exclusive100Read",
@@ -50,6 +51,11 @@ function shape(input, keys) {
 }
 function verifiedId(id) {
   if (typeof id !== "string" || !ID_RE.test(id)) reject("invalid-argument");
+}
+function verifiedReservedId(id) {
+  if (typeof id !== "string" || !RESERVED_RE.test(id)) {
+    reject("invalid-argument");
+  }
 }
 function verifiedColor(color) {
   if (!["gold", "diamond", "royal", "pink"].includes(color)) {
@@ -108,7 +114,7 @@ function createOwner19Gateway({
     }
     if (method === "gmSelfUse") {
       shape(data, ["identifier", "color"]);
-      verifiedId(data.identifier); verifiedColor(data.color);
+      verifiedReservedId(data.identifier); verifiedColor(data.color);
       return responseSubset(await manager.selfUse({
         adminUid: uid, identifier: data.identifier, color: data.color,
       }), ["serverConfirmed", "identifier", "permanentColor", "activeId",
@@ -116,7 +122,7 @@ function createOwner19Gateway({
     }
     if (method === "gmGift") {
       shape(data, ["identifier", "color", "recipientOriginalId"]);
-      verifiedId(data.identifier); verifiedId(data.recipientOriginalId);
+      verifiedReservedId(data.identifier); verifiedId(data.recipientOriginalId);
       verifiedColor(data.color);
       return responseSubset(await manager.gift({
         adminUid: uid, identifier: data.identifier,
