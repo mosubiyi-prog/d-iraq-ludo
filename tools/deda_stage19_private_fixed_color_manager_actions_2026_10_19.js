@@ -58,17 +58,21 @@ function createStage19ManagerActions(db, privateSuffixes) {
       }
       const shareRef = db.collection("deda_share_ids").doc(originalId);
       const accessRef = db.collection("admin_entry_access").doc(key);
-      const [shareSnap, accessSnap] = await Promise.all([
+      const [shareSnap, accessSnap, adminSnap] = await Promise.all([
         tx.get(shareRef), tx.get(accessRef),
+        tx.get(db.collection("admins").doc(adminUid)),
       ]);
       const share = data(shareSnap), access = data(accessSnap);
+      const admin = data(adminSnap);
       if (!shareSnap.exists || share.publicId !== originalId ||
           share.kind !== "personal" || share.active !== true ||
           typeof share.ownerUid !== "string" || !share.ownerUid ||
           !accessSnap.exists || access.accountKey !== key ||
           access.active !== true || access.status !== "active" ||
           access.allowedRole !== "general_manager" ||
-          access.accessType !== "general_manager_gateway") {
+          access.accessType !== "general_manager_gateway" ||
+          !adminSnap.exists || admin.active !== true ||
+          admin.status !== "active" || admin.role !== "general_manager") {
         fail("permission-denied", "verified-general-manager-required");
       }
       const originalOwner = await tx.get(
@@ -173,6 +177,7 @@ function createStage19ManagerActions(db, privateSuffixes) {
     // validates manager role and rejects all global collisions.
     const verified = await adminGrantReservedIdentifier(db, {
       adminUid, recipientOriginalId, identifier, color, privateCatalog,
+      requireCanonicalManager: true,
     });
     if (verified.serverConfirmed !== true ||
         verified.giftedIdentifier !== identifier ||
