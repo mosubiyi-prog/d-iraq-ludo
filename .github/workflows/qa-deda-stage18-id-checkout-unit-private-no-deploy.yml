@@ -1,0 +1,57 @@
+name: DEDA stage18 10000 diamond ID checkout PRIVATE unit security - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-stage18-secure-diamond-id-checkout-private-2026-10-19
+    paths:
+      - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
+      - 'test/deda_stage18_atomic_identifier_checkout_unit.test.js'
+      - '.github/workflows/qa-deda-stage18-id-checkout-unit-private-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-stage18-private-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  isolated-id-purchase-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail if shipping, production Firebase, or Android files were changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 082a5f3ea08e33f4e9252e8fda977cc7b74037e1 -- \
+            firestore.rules firebase.json functions/index.js lib/main.dart \
+            lib/deda_social_service.dart android/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          grep -q 'PRIVATE / NOT DEPLOYED' docs/DEDA_STAGE18_PURCHASE_BLOCKERS_AND_SAFE_ACTIVATION_2026-10-19.md
+          ! grep -q 'deda_stage18_private_atomic_identifier_checkout_2026_10_19.js' functions/index.js
+          echo 'PASS: current shipping app, user wallets and production functions are untouched'
+      - name: Check source and run staged-only Node purchase invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+          node --check test/deda_stage18_atomic_identifier_checkout_unit.test.js
+          node --test test/deda_stage18_atomic_identifier_checkout_unit.test.js
+      - name: Assert real shop checkout still fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'DEDA_PREMIUM_IDS_SERVER_LIVE' tools/stage_deda_intakadha_point16_authenticated_flutter_calls_2026_10_19.py
+          grep -q 'defaultValue: false' tools/stage_deda_intakadha_point16_authenticated_flutter_calls_2026_10_19.py
+          grep -q 'proposal_only_not_for_sale' catalogs/DEDA_ID_GROUP_002_CANDIDATES_100_NO_SALES_2026-10-18.json
+          echo 'PASS: stage18 tests ONLY, no live purchases, no APK, no deployments'
