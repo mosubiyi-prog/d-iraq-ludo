@@ -6,6 +6,9 @@ on:
     paths:
       - tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js
       - test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js
+      - tools/stage_deda_intakadha_point16_authenticated_flutter_calls_2026_10_19.py
+      - tools/stage_deda_intakadha_point16_friend_alias_lookup_2026_10_19.py
+      - test/test_deda_intakadha_point16_dormant_flutter_bridges_2026_10_19.py
       - .github/workflows/qa-deda-intakadha-point16-gated-server-alias-emulator-no-deploy.yml
   workflow_dispatch:
 permissions:
@@ -38,6 +41,8 @@ jobs:
           fi
           node --check tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js
           node --check test/deda_intakadha_point16_gated_callable_gateway_emulator.test.js
+          python3 -m py_compile             tools/stage_deda_intakadha_point16_authenticated_flutter_calls_2026_10_19.py             tools/stage_deda_intakadha_point16_friend_alias_lookup_2026_10_19.py
+          python3 -m unittest discover -s test             -p 'test_deda_intakadha_point16_dormant_flutter_bridges_2026_10_19.py' -v
           python3 - <<'PY'
           from pathlib import Path
           s=Path('tools/deda_intakadha_point16_gated_callable_gateway_2026_10_19.js').read_text()
