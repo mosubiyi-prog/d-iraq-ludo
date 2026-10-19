@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/qa-deda-100359-owner19-stage32-no-deploy.yml'
       - 'tools/deda_100359_owner19_combined_gateway_private_2026_10_19.js'
+      - 'tools/deda_100359_owner19_lazy_server_callables_PRIVATE_NOT_EXPORTED_2026_10_19.js'
+      - 'test/deda_100359_owner19_lazy_server_secrets_stage33.test.js'
       - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
       - 'test/deda_100359_owner19_combined_gateway_stage32.test.js'
       - 'docs/DEDA_100359_19_ISSUES_OWNER_ACCEPTANCE_GATE_2026-10-19.md'
@@ -40,8 +42,10 @@ jobs:
         run: |
           set -euo pipefail
           node --check tools/deda_100359_owner19_combined_gateway_private_2026_10_19.js
+          node --check tools/deda_100359_owner19_lazy_server_callables_PRIVATE_NOT_EXPORTED_2026_10_19.js
           node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
           node --test test/deda_100359_owner19_combined_gateway_stage32.test.js
+          node --test test/deda_100359_owner19_lazy_server_secrets_stage33.test.js
       - name: Existing atomic card, ID, admin and 100-private regressions
         shell: bash
         run: |
