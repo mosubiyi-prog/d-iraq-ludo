@@ -72,12 +72,14 @@ async function checkoutIdCard(db, {uid, color, requestId}) {
         .doc(hash).collection("requests").doc(requestId);
     const giftRef = db.collection("deda_diamond_gift_balances").doc(publicId);
     const gmEntryRef = db.collection("admin_entry_access").doc(key);
+    const canonicalGmRef = db.collection("admins").doc(uid);
     const gmWalletRef = db.collection("deda_gm_personal_diamond_wallets").doc(key);
 
-    const [shareSnap, receiptSnap, ownedSnap, giftedSnap, gmEntrySnap, gmSnap] =
-        await Promise.all([
+    const [shareSnap, receiptSnap, ownedSnap, giftedSnap, gmEntrySnap,
+      canonicalGmSnap, gmSnap] = await Promise.all([
           tx.get(shareRef), tx.get(receiptRef), tx.get(entitlementRef),
-          tx.get(giftRef), tx.get(gmEntryRef), tx.get(gmWalletRef),
+          tx.get(giftRef), tx.get(gmEntryRef),
+          tx.get(canonicalGmRef), tx.get(gmWalletRef),
         ]);
     const share = recordOf(shareSnap);
     if (!shareSnap.exists || share.kind !== "personal" ||
@@ -129,10 +131,14 @@ async function checkoutIdCard(db, {uid, color, requestId}) {
     const giftBalance = giftedSnap.exists ? safeBalance(giftData.balance) : 0;
 
     const entry = recordOf(gmEntrySnap);
+    const canonicalGm = recordOf(canonicalGmSnap);
     const eligibleGM = gmEntrySnap.exists &&
         entry.accountKey === key && entry.active === true &&
         entry.status === "active" && entry.allowedRole === "general_manager" &&
-        entry.accessType === "general_manager_gateway";
+        entry.accessType === "general_manager_gateway" &&
+        canonicalGmSnap.exists && canonicalGm.active === true &&
+        canonicalGm.status === "active" &&
+        canonicalGm.role === "general_manager";
     const personal = recordOf(gmSnap);
     if (gmSnap.exists && personal.accountKey !== key) {
       reject("failed-precondition", "manager-wallet-account-mismatch");
