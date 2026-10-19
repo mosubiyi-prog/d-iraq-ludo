@@ -1,0 +1,77 @@
+name: DEDA Jamal Stage26 Account-Safe Readonly Reward Receipt Emulator NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-jamal-stage26-reward-receipt-status-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_jamal_stage26_reward_receipt_status_readonly_2026_10_19.js'
+      - 'test/deda_jamal_stage26_reward_receipt_status_firestore_emulator.test.js'
+      - '.github/workflows/qa-deda-jamal-stage26-readonly-ad-receipt-status-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-jamal-stage26-reward-receipt-qa
+  cancel-in-progress: true
+
+jobs:
+  guard-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Preserve all account, ad, wallet, purchase and owner encryption files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 50b32699e2aab4ee516a1df5761df1b62618ee44 -- \
+            functions/ lib/ android/ assets/ firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock catalogs/ server_private/ \
+            tools/deda_jamal_stage22_admob_ssv_ecdsa_staged_no_deploy_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+          ! grep -q 'deda_jamal_stage26_reward_receipt' functions/index.js
+          ! grep -q 'deda_jamal_stage26_reward_receipt' lib/main.dart
+          node --check tools/deda_jamal_stage26_reward_receipt_status_readonly_2026_10_19.js
+          node --check test/deda_jamal_stage26_reward_receipt_status_firestore_emulator.test.js
+          echo 'PASS: Stage26 cannot overwrite 63 displayed diamonds or deploy real reward/purchase'
+  firestore-demo-receipt-readback:
+    needs: guard-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install throwaway Firebase test SDK and Firestore Emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Verify pending signed DEMO receipt state without any reward writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          export GCLOUD_PROJECT=demo-deda-stage22-ssv-fakeprovider
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-stage22-ssv-fakeprovider --only firestore \
+            'node --test test/deda_jamal_stage26_reward_receipt_status_firestore_emulator.test.js'
+          echo 'PASS: Stage26 fake-provider receipt STATUS only, no live Google SSV or purchases'
+  private-no-deploy:
+    needs: [guard-original, firestore-demo-receipt-readback]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prevent production confusion
+        run: |
+          echo 'PASS: no APK, no AdMob configuration, no Firebase/Play deployment, no real user balance touched'
