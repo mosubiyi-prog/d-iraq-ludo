@@ -53,18 +53,23 @@ function createPrivate100AdminReader(db, privateSuffixes) {
             session.uid !== uid || session.accountKey !== key) {
           fail("permission-denied", "verified-admin-session-required");
         }
-        const [shareSnap, accessSnap] = await Promise.all([
+        const [shareSnap, accessSnap, canonicalAdminSnap] = await Promise.all([
           tx.get(db.collection("deda_share_ids").doc(original)),
           tx.get(db.collection("admin_entry_access").doc(key)),
+          tx.get(db.collection("admins").doc(uid)),
         ]);
         const share = record(shareSnap), access = record(accessSnap);
+        const canonicalAdmin = record(canonicalAdminSnap);
         if (!shareSnap.exists || share.kind !== "personal" ||
             share.publicId !== original || share.active !== true ||
             typeof share.ownerUid !== "string" || !share.ownerUid ||
             !accessSnap.exists || access.accountKey !== key ||
             access.active !== true || access.status !== "active" ||
             access.allowedRole !== "general_manager" ||
-            access.accessType !== "general_manager_gateway") {
+            access.accessType !== "general_manager_gateway" ||
+            !canonicalAdminSnap.exists || canonicalAdmin.active !== true ||
+            canonicalAdmin.status !== "active" ||
+            canonicalAdmin.role !== "general_manager") {
           fail("permission-denied", "verified-general-manager-only");
         }
         const originalOwner = await tx.get(users.doc(share.ownerUid));
