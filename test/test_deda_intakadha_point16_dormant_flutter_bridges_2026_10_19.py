@@ -52,7 +52,7 @@ class Point16Bridges(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"SAFE_STOP"):
             phone.apply(phone_fixture().replace(phone.OLD_PAYMENTS,"",1))
         with self.assertRaisesRegex(ValueError,"SAFE_STOP"):
-            phone.apply(phone_fixture().replace("point14","unapproved",1))
+            phone.apply(phone_fixture().replace("POINT14","POINT99",1))
     def test_phone_imports_added_just_once(self):
         full=phone.apply(phone_fixture())
         self.assertEqual(full.count(phone.MORE_IMPORTS),1)
@@ -78,8 +78,7 @@ class Point16Bridges(unittest.TestCase):
     def test_no_activation_of_unverified_readonly_lookup(self):
         with self.assertRaisesRegex(ValueError,"SAFE_STOP"):
             social.apply((ROOT/"lib/deda_social_service.dart").read_text().replace(
-                "static Future<DedaSocialProfile?> findByPublicId(String raw) async {",
-                "static Future<DedaSocialProfile?> findByPublicId(String raw) async /* altered */ {"))
+                social.OLD_LOOKUP, "", 1))
     def test_four_to_twelve_char_support_without_original_account_id_mutation(self):
         self.assertIn("{4,12}",social.LOOKS_NEW)
         self.assertIn("{6}",social.ALIAS)
