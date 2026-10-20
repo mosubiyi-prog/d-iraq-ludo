@@ -15,7 +15,7 @@ assert.equal(process.env.GCLOUD_PROJECT,PROJECT);
 const req=createRequire(resolve(__dirname,"../functions/package.json"));
 const {initializeApp,deleteApp}=req("firebase-admin/app");
 const {getFirestore}=req("firebase-admin/firestore");
-const {createOwner19Stage59PrivateRoutes,OWNER19,STAGE16,ROUTES}=require;
+const {createOwner19Stage59PrivateRoutes,OWNER19,STAGE16,ROUTES}=require(
   "../tools/deda_owner19_stage59_all_server_routes_PRIVATE_NOT_EXPORTED_2026_10_20.js");
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const privateSuffixes=Array.from({length:100},(_,i)=>
