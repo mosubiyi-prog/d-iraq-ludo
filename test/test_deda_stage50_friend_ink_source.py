@@ -91,7 +91,7 @@ class Stage50ExactOriginalFriendInkTest(unittest.TestCase):
         original = assembled_original()
         dart_formatted = original.replace(
             "fontSize: 12.5))",
-            "fontSize: 11.5,\\n                  ),\\n                )",
+            "fontSize: 11.5,\n                  ),\n                )",
             1,
         )
         changed = s.apply(dart_formatted)
