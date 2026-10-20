@@ -110,6 +110,28 @@ RULE="""
            request.resource.data.recipientOriginalId
         && getAfter(stage71CatalogPath(identifier)).data.grantedAt == request.time;
     }
+    match /deda_stage71_active_identifier/{originalId} {
+      // Canonical original account remains intact; switching selects only a
+      // permanently owned ID. Neither foreign aliases nor invented aliases
+      // can be activated by the phone.
+      allow get: if stage71SelfRecipient(originalId);
+      allow list, delete: if false;
+      allow create, update: if stage71SelfRecipient(originalId)
+        && request.resource.data.originalId == originalId
+        && request.resource.data.activeId is string
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'originalId','activeId','updatedAt'
+        ])
+        && (
+          request.resource.data.activeId == originalId ||
+          (
+            exists(stage71RegistryPath(request.resource.data.activeId))
+            && get(stage71RegistryPath(request.resource.data.activeId)).data.recipientOriginalId == originalId
+          )
+        );
+    }
+
 
 """
 
