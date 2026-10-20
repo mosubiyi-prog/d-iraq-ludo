@@ -12,6 +12,9 @@ const UID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const REQUEST_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const ORIGINAL_RE = /^@DEDA-[A-Z0-9]{6}$/;
 const SALE_RE = /^@DEDA-[A-Z0-9]{6}$/;
+// Existing account inventory can also include owner-exclusive Group001 IDs
+// of 4–12 characters. Only NEW Group002 sale selections stay six-character.
+const OWNED_RE = /^@DEDA-[A-Z0-9]{4,12}$/;
 const SUFFIX_RE = /^[A-Z0-9]{6}$/;
 const EXCLUSIVE_SUFFIX_RE = /^[A-Z0-9]{4,12}$/;
 const MAX_OWNED = 250;
@@ -74,7 +77,7 @@ function validateOwnedLedger(snapshot, key, original) {
       !Array.isArray(row.ownedIds) || row.ownedIds[0] !== original ||
       row.ownedIds.length < 1 || row.ownedIds.length > MAX_OWNED ||
       new Set(row.ownedIds).size !== row.ownedIds.length ||
-      !row.ownedIds.every(x => typeof x === "string" && SALE_RE.test(x)) ||
+      !row.ownedIds.every(x => typeof x === "string" && OWNED_RE.test(x)) ||
       !row.ownedIds.includes(row.activeId)) {
     fail("failed-precondition", "unverified-owned-identifier-ledger");
   }
