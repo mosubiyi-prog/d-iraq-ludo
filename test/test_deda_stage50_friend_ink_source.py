@@ -87,6 +87,20 @@ class Stage50ExactOriginalFriendInkTest(unittest.TestCase):
         self.assertIn("fontSize: 11.5", changed)
         self.assertEqual(changed.count("fontSize: 12.5"), 0)
 
+    def test_real_dart_format_trailing_comma_and_font_size_11_5(self):
+        original = assembled_original()
+        dart_formatted = original.replace(
+            "fontSize: 12.5))",
+            "fontSize: 11.5,\\n                  ),\\n                )",
+            1,
+        )
+        changed = s.apply(dart_formatted)
+        self.assertEqual(
+            changed.count("DedaStage50VerifiedFriendInkBadge("), 3)
+        self.assertIn("fontSize: 11.5,", changed)
+        self.assertEqual(
+            changed.count("fontSize: 12.5"), 0)
+
     def test_whitespace_only_variants_are_accepted_not_forged_ids(self):
         original = assembled_original()
         normalized = original.replace(
