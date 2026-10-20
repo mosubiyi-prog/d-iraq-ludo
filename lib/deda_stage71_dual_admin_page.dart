@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'deda_backend.dart';
 import 'deda_stage71_free_manager_200_service.dart';
@@ -125,8 +126,17 @@ class _DedaStage71DualAdminPageState
       // Never derive ownership from entered phone/name/anonymous UID.
       // Manager's own canonical ID comes from authenticated Firestore profile.
       if (profile == null) return;
-      final id = await DedaBackend.currentUserOriginalShareId();
-      target = id;
+      final db = FirebaseFirestore.instance;
+      final verified = await Future.wait([
+        db.collection('users').doc(current.uid).get(),
+        db.collection('deda_sessions').doc(current.uid).get(),
+      ]);
+      if (FirebaseAuth.instance.currentUser?.uid != current.uid) return;
+      final account = verified[0].data() ?? {};
+      final session = verified[1].data() ?? {};
+      if (account['accountKey'] == null ||
+          account['accountKey'] != session['accountKey']) return;
+      target = account['sharePersonalId'] as String?;
     }
     if (!mounted || target == null ||
         !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(target)) return;
