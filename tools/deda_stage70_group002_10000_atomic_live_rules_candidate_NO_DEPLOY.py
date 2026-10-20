@@ -50,37 +50,43 @@ RULE = """
       allow list: if signedIn() && request.query.limit <= 100;
       allow create, update, delete: if false;
     }
+    function stage70ApprovedStock(identifier) {
+      let item = get(stage70StockPath(identifier)).data;
+      return item.identifier == identifier
+        && item.group == '002'
+        && item.approved == true
+        && item.priceDiamonds == 10000
+        && item.status == 'available';
+    }
+    function stage70ExactWalletDebit(publicId, receiptId) {
+      let path = /databases/$(database)/documents/deda_diamond_gift_balances/$(publicId);
+      let previous = get(path).data;
+      let current = getAfter(path).data;
+      return previous.balance >= 10000
+        && current.balance == previous.balance - 10000
+        && current.lastPurchaseReceiptId == receiptId;
+    }
     match /deda_stage70_group002_registry/{identifier} {
-      // Globally unique immutable registry = receipt and verified ownership.
+      // The unique immutable ownership record doubles as checkout receipt.
       allow get: if signedIn();
-      allow list: if false;
-      allow update, delete: if false;
-      allow create: if stage70SaleIdFormat(identifier)
+      allow list, update, delete: if false;
+      allow create: if signedIn()
+        && stage70SaleIdFormat(identifier)
         && request.resource.data.publicId is string
-        && verifiedDiamondsPersonalOwner(request.resource.data.publicId)
         && request.resource.data.identifier == identifier
         && request.resource.data.kind == 'group002'
         && request.resource.data.cost == 10000
         && request.resource.data.receiptId ==
-          request.resource.data.publicId + '__' + identifier
+           request.resource.data.publicId + '__' + identifier
         && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly([
           'identifier','publicId','kind','cost','receiptId','createdAt'
         ])
-        && exists(stage70StockPath(identifier))
-        && get(stage70StockPath(identifier)).data.group == '002'
-        && get(stage70StockPath(identifier)).data.approved == true
-        && get(stage70StockPath(identifier)).data.priceDiamonds == 10000
-        && get(stage70StockPath(identifier)).data.status == 'available'
-        && getAfter(
-          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
-        ).data.lastPurchaseReceiptId == request.resource.data.receiptId
-        && getAfter(
-          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
-        ).data.balance == get(
-          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
-        ).data.balance - 10000;
+        && stage70ApprovedStock(identifier)
+        && stage70ExactWalletDebit(
+          request.resource.data.publicId,request.resource.data.receiptId);
     }
+
 
 """
 WALLET_ALLOW = """
