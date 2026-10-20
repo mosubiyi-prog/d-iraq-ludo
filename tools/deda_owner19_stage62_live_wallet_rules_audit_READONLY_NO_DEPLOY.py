@@ -17,6 +17,7 @@ import sys
 PROJECT = "deda-25b88"
 ROOT = "https://firebaserules.googleapis.com/v1/"
 SOURCE = Path("firestore.rules")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from deda_owner19_stage52_wallet_rules_candidate_OFFLINE_NO_DEPLOY import (
     candidate, inspect,
 )
