@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'deda_backend.dart';
 import 'deda_stage71_free_manager_200_service.dart';
+import 'deda_stage71_free_owned_use_profile.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
 
 /// Original DEDA luxury artwork + exactly 2 equal-width vertical catalog
@@ -172,11 +173,28 @@ class _DedaStage71DualAdminPageState
       await DedaStage71Admin200.assign(
         row: row, recipientOriginalId: target, selfUse: !gift,
       );
+      // A manager self-use must also mark their newly owned ID as active.
+      // Once-only ownership remains valid even if the separate active
+      // display update loses the network response.
+      var activationConfirmed = gift;
+      if (!gift) {
+        try {
+          await DedaStage71OwnedIdentifierService.use(
+            target, row.identifier,
+          );
+          activationConfirmed = true;
+        } catch (_) {
+          activationConfirmed = false;
+        }
+      }
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_text('تم توثيق الاستخدام أو المنح بالخادم',
-              'Use/grant verified on the server')),
+          content: Text(activationConfirmed
+              ? _text('تم تأكيد الاستخدام أو المنح وحفظ الملكية',
+                  'Grant and ownership confirmed')
+              : _text('تم تثبيت الملكية. افتح معرّفاتي واضغط استخدام لتفعيله.',
+                  'Ownership confirmed. Activate it in My IDs.')),
         ));
       }
     } catch (_) {
