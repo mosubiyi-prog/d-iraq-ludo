@@ -6,6 +6,8 @@
 // An explicitly reviewed server configuration must supply ALL 100 reserved
 // Group001 suffixes and individually owner-approved sellable Group002 suffixes.
 const {createHash} = require("node:crypto");
+const {rejectIfUnprovenManagerPersonalSpending} = require(
+  "./deda_owner19_stage55_gm_wallet_source_lock_2026_10_20.js");
 const PRICE_DIAMONDS = 10000;
 const ACCOUNT_RE = /^[A-Za-z0-9_-]{4,160}$/;
 const UID_RE = /^[A-Za-z0-9_-]{1,160}$/;
@@ -204,6 +206,7 @@ async function checkoutVerifiedIdentifier(db, {
     }
     const fromGift = Math.min(gifts, PRICE_DIAMONDS);
     const fromGM = PRICE_DIAMONDS - fromGift;
+    rejectIfUnprovenManagerPersonalSpending(fromGM);
 
     // Verify all older premium IDs before touching wallet/ownership.
     for (const prior of ledger.ownedIds.slice(1)) {
