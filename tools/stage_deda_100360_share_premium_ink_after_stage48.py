@@ -66,7 +66,6 @@ def apply(source: str) -> str:
     for required in (
         "Future<void> _showDedaIdCard() async {",
         "Future<void> _shareDedaId() async {",
-        "Future<void> _copyDedaId() async {",
         "class DedaShareLocationPage extends StatefulWidget",
         "DEDA_OWNER19_STAGE48_PROFILE_ACTIVE_ID_FIXED_INK_NO_DEPLOY",
     ):
@@ -80,6 +79,11 @@ def apply(source: str) -> str:
     if not (start < a < b < end):
         raise ValueError("SAFE_STOP: matched share ID outside QR dialog")
     protected = source[start:end]
+    # Rebuilt 100359 can have another profile state with its own _copyDedaId.
+    # Scope protection to THIS QR dialog, not a count across all classes.
+    if source.count("Future<void> _copyDedaId() async {") < 1 or \
+            "onPressed: _copyDedaId" not in protected:
+        raise ValueError("SAFE_STOP: canonical QR copy action unavailable")
     for token in (
         "data: id,", "'https://wa.me/?text",
         # WhatsApp lives in previous method; only guarantee QR/copy actions
