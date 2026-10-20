@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_backend.dart';
+import 'deda_verified_identifier_ink.dart';
 
 /// STAGE19 PRIVATE UI. Sensitive member names are NEVER embedded in the APK.
 /// Only an authenticated, AppCheck-enforced server endpoint may supply records.
@@ -436,7 +437,12 @@ class _DedaExclusiveIdsAdminPageState
                           final record = history[i];
                           final utc = record.grantedAt.toUtc().toIso8601String();
                           return ListTile(
-                            title: Text(record.identifier),
+                            title: DedaVerifiedIdentifierText(
+                              identifier: record.identifier,
+                              serverConfirmed: _snapshot?.serverConfirmed == true,
+                              permanentColor: record.color,
+                              style: const TextStyle(fontWeight: FontWeight.w900),
+                            ),
                             subtitle: Text(
                               (record.kind == 'self_used'
                                   ? _t('استخدام المدير العام', 'Manager self-use')
