@@ -189,6 +189,11 @@ class _DedaStage48ActiveInkProfileSlotState
         p.accountUid != uid || p.originalId != widget.originalId) {
       return widget.fallback;
     }
+    // A verified read of the ordinary original ID must not replace the
+    // approved legacy profile card or its cosmetic appearance.
+    if (p.activeId == p.originalId && p.permanentColor == null) {
+      return widget.fallback;
+    }
     final activeId = p.activeId;
     void copyActiveId() {
       // Only the id returned by the current verified account can be copied.
