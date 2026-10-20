@@ -150,7 +150,15 @@ jobs:
           grep -q 'DEDA_OWNER19_STAGE50_FRIEND_INK_THREE_PUBLIC_SURFACES_NO_DEPLOY' lib/main.dart
           grep -q 'DEDA_100360_COMPACT_REAL_FOILS_MERGED_PRICE_AND_ACTION' lib/main.dart
           test ! -f build/app/outputs/bundle/release/app-release.aab
-          python3 tools/keep_kotlin_runtime_for_100356_private.py
+          # The EXACT accepted 100359 reconstruction ALREADY runs the
+          # Kotlin 100356 keep-rule patch. Verify it is installed ONCE, rather
+          # than attempting a second patch that correctly SAFE_STOPs.
+          test -f android/app/proguard-rules.pro
+          test -f android/app/build.gradle.kts
+          test "$(grep -Fc 'DEDA_100356_KEEP_KOTLIN_CONTINUATION_RUNTIME_NAME' android/app/build.gradle.kts)" -eq 1
+          test "$(grep -Fc -- '-keep interface kotlin.coroutines.Continuation { *; }' android/app/proguard-rules.pro)" -eq 1
+          test "$(grep -Fc -- '-keep class kotlin.** { *; }' android/app/proguard-rules.pro)" -eq 1
+          test "$(grep -Fc 'proguardFiles("proguard-rules.pro")' android/app/build.gradle.kts)" -eq 1
           flutter build apk --release --build-number=100360 \
             --dart-define=USE_NEXT_GEN_SDK=true \
             --dart-define=DEDA_DAILY_TASK_DISPLAY_PREVIEW=false \
