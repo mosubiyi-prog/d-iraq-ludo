@@ -9,6 +9,7 @@ on:
       - 'lib/deda_stage71_free_id_cards.dart'
       - 'lib/deda_stage71_free_manager_200_service.dart'
       - 'lib/deda_stage71_dual_admin_page.dart'
+      - 'lib/deda_stage71_free_owned_use_profile.dart'
       - 'test/deda_stage71_four_free_cards_dual200_widget_test.dart'
       - 'tools/stage_deda_owner_place_cross_device_recovery_stage64.py'
       - 'test/deda_stage64_owner_place_cross_device_firestore_emulator.test.js'
@@ -117,13 +118,13 @@ jobs:
           python3 tools/stage_deda_100359_stage71_free_4_cards_dual_admin200.py
           dart format lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage71_free_id_cards.dart lib/deda_stage71_dual_admin_page.dart \
-            lib/deda_stage71_free_manager_200_service.dart lib/admin_pages.dart \
+            lib/deda_stage71_free_manager_200_service.dart lib/deda_stage71_free_owned_use_profile.dart lib/admin_pages.dart \
             lib/deda_stage48_verified_active_profile_ink.dart lib/deda_verified_identifier_ink.dart \
             lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart \
             lib/deda_stage51_verified_friend_alias_search.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage71_free_id_cards.dart lib/deda_stage71_dual_admin_page.dart \
-            lib/deda_stage71_free_manager_200_service.dart lib/admin_pages.dart \
+            lib/deda_stage71_free_manager_200_service.dart lib/deda_stage71_free_owned_use_profile.dart lib/admin_pages.dart \
             lib/deda_stage42_verified_sale_panel.dart lib/deda_stage48_verified_active_profile_ink.dart \
             lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart \
             lib/deda_stage51_verified_friend_alias_search.dart
@@ -177,7 +178,10 @@ jobs:
           manager=Path('lib/deda_exclusive_ids_admin_page.dart').read_text()
           assert "DEDA_100360_ADMIN_USES_ORIGINAL_FOUR_FULL_FOILS" in manager
           assert "DedaPremiumIdCard(" in manager, "GM artwork still fake border"
-          assert src.count('DEDA_STAGE71_OWNER_APPROVED_FOUR_FREE_CARDS_TWO_ADMIN100_NO_PURCHASE') == 1\n          assert src.count('DedaStage71FreeProfileFoil(') == 1\n          assert 'readOnlyCatalog: const <String>[],' in src\n          assert 'تصميم البطاقة: مجاني' in shop\n          assert 'تصميم البطاقة: 5,000 ماسة' not in shop\n          admin_source=Path('lib/admin_pages.dart').read_text()\n          assert 'DedaStage71DualAdminPage(isArabic: ar)' in admin_source\n          assert 'DedaExclusiveIdsAdminPage(isArabic: ar)' not in admin_source\n          dual=Path('lib/deda_stage71_dual_admin_page.dart').read_text()\n          assert 'deda_stage71_two_equal_vertical_columns' in dual\n          assert "_column('001')" in dual and "_column('002')" in dual\n          assert 'ChoiceChip(' not in dual\n          print('PASS: TRUE 100359 signed source, four original FREE foils + profile, real 100+100 GM-only columns')
+          assert src.count('DEDA_STAGE71_OWNER_APPROVED_FOUR_FREE_CARDS_TWO_ADMIN100_NO_PURCHASE') == 1\n          assert src.count('DedaStage71FreeProfileFoil(') == 1
+          assert src.count('DedaStage71ActiveProfileFoil(') == 1
+          assert src.count('DedaStage71OwnedIdsPanel(') == 1
+          assert "import 'deda_stage71_free_owned_use_profile.dart';" in src\n          assert 'readOnlyCatalog: const <String>[],' in src\n          assert 'تصميم البطاقة: مجاني' in shop\n          assert 'تصميم البطاقة: 5,000 ماسة' not in shop\n          admin_source=Path('lib/admin_pages.dart').read_text()\n          assert 'DedaStage71DualAdminPage(isArabic: ar)' in admin_source\n          assert 'DedaExclusiveIdsAdminPage(isArabic: ar)' not in admin_source\n          dual=Path('lib/deda_stage71_dual_admin_page.dart').read_text()\n          assert 'deda_stage71_two_equal_vertical_columns' in dual\n          assert "_column('001')" in dual and "_column('002')" in dual\n          assert 'ChoiceChip(' not in dual\n          print('PASS: TRUE 100359 signed source, four original FREE foils + profile, real 100+100 GM-only columns')
           PY
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
