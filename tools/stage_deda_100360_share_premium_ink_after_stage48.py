@@ -71,7 +71,7 @@ def apply(source: str) -> str:
         "DEDA_OWNER19_STAGE48_PROFILE_ACTIVE_ID_FIXED_INK_NO_DEPLOY",
     ):
         if source.count(required) != 1:
-            raise ValueError("SAFE_STOP: historical share or Stage48 proof missing")
+            raise ValueError("SAFE_STOP: share source marker count " + str(source.count(required)) + " for " + required)
     if source.count(IMPORT) != 0:
         raise ValueError("SAFE_STOP: unexpected Stage49 import")
     a, b, before = exact_spacing_only(source, ORIGINAL)
