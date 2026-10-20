@@ -1,0 +1,40 @@
+name: DEDA Stage68 REAL LIVE Spark Checkout Rules Compatibility READ ONLY NO DEPLOY
+on:
+  push:
+    branches: [deda-owner20-firestore-only-shop-stage66-no-deploy-2026-10-21]
+    paths:
+      - '.github/workflows/qa-deda-stage68-live-checkout-rules-readonly-no-deploy.yml'
+      - 'tools/deda_stage68_live_wallet_checkout_rules_compat_READONLY.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare-live-wallet-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_STAGE68_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE68_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Safeguard published app sources, wallet and live Firestore
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 2587f0cf260e1c9ca1768baa5ccad880fbb1d15c -- \
+            functions/index.js firestore.rules firebase.json storage.rules lib/main.dart \
+            lib/deda_backend.dart android/ assets/ server_private/
+          python3 -m py_compile tools/deda_stage68_live_wallet_checkout_rules_compat_READONLY.py
+          echo 'PASS No production change'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read published Firebase rules booleans only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_stage68_live_wallet_checkout_rules_compat_READONLY.py
+          echo 'PASS Read-only live policy review without exposing identities'
