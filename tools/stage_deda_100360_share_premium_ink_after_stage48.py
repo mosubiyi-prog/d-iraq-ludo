@@ -32,7 +32,7 @@ ADDITION = """            // DEDA_OWNER19_STAGE49_ORIGINAL_QR_PLUS_VERIFIED_PREM
             // WhatsApp text and copy buttons below remain unchanged.
             DedaStage49VerifiedShareIdBadge(
               originalId: id,
-              isArabic: DedaPreferences.language == DedaLanguage.arabic,
+              isArabic: DedaLanguageState.isArabic,
             ),
 """
 
