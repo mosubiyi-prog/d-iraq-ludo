@@ -1,0 +1,43 @@
+name: DEDA owner19 Stage47 verified active identifier ink backend NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage47_verified_active_ink_private_2026_10_20.js'
+      - 'test/deda_owner19_stage47_verified_active_ink.test.js'
+      - '.github/workflows/qa-deda-owner19-stage47-active-ink-read-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage47-private-verified-ink
+  cancel-in-progress: true
+jobs:
+  read-only-ink-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert production app, server and encrypted manifest untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 1f6a4cfe89768b66cd29f3d4ce3c2966a63d91fd -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart android/ server_private/ assets/
+          ! grep -q "stage47_verified_active_ink_private" functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no production hooks or APK'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify active ID color from trusted server ownership only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage47_verified_active_ink_private_2026_10_20.js
+          node --test test/deda_owner19_stage47_verified_active_ink.test.js
+          echo 'PASS: authenticated, AppCheck required, no client-provided color, no writes'
