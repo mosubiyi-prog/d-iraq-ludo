@@ -1,0 +1,52 @@
+name: DEDA owner19 Stage50 Flutter friend ID premium glyphs NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'lib/deda_stage50_verified_friend_ink_badge.dart'
+      - 'test/deda_owner19_stage50_friend_ink_widget_test.dart'
+      - '.github/workflows/qa-deda-owner19-stage50-friend-ink-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage50-friend-ink-flutter-qa
+  cancel-in-progress: true
+jobs:
+  friend-ink-fallback-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert no production app or user/private changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 7dad5759f54e300949f25068fd4715493a101e8a -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart \
+            android/ server_private/ assets/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no live social/search/share changes'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Test public friend profile color from server proof only
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/deda_stage50_verified_friend_ink_badge.dart \
+            test/deda_owner19_stage50_friend_ink_widget_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/deda_stage50_verified_friend_ink_badge.dart \
+            test/deda_owner19_stage50_friend_ink_widget_test.dart
+          flutter test test/deda_owner19_stage50_friend_ink_widget_test.dart \
+            test/deda_owner19_stage46_verified_identifier_ink_test.dart \
+            test/deda_owner19_stage49_verified_share_ink_test.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: recipient/friend ID glyph colors authenticated, fallback intact, NO DEPLOY'
