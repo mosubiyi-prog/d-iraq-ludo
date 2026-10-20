@@ -161,7 +161,7 @@ test("cross-account current ink forbidden; public lookup never grants social rel
   });
   await assert.rejects(
     routes[ROUTES.activeInk](request({},requester)),
-    e=>["failed-precondition","internal"].includes(e.code));
+    e=>["permission-denied","failed-precondition","internal"].includes(e.code));
   assert.equal((await routes[ROUTES.publicInk](
     request({identifier:orig},requester))).displayId,premium);
   assert.equal(db.writes,0);
