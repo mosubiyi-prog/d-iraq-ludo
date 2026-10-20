@@ -33,14 +33,19 @@ SCOPES = (
 )
 
 
-def find_exact_lexical(source: str, candidate: str) -> tuple[int, int, str]:
+def find_exact_lexical(source: str, candidate: str, surface: str) -> tuple[int, int, str]:
     tokens = re.findall(
         r'[A-Za-z_][A-Za-z_0-9]*|[0-9]+(?:\.[0-9]+)?|[^\w\s]',
         candidate)
     expression = re.compile(r'\s*'.join(re.escape(token) for token in tokens))
     matches = list(expression.finditer(source))
     if len(matches) != 1:
-        raise ValueError("SAFE_STOP: friend ID source not unique or changed")
+        # Only a STATIC Dart widget excerpt; never user/account records.
+        near = re.search(r'Text\(\s*(?:dedaId|profile\.publicId)', source)
+        excerpt = source[near.start():near.start() + 360] if near else 'missing-original-text'
+        raise ValueError("SAFE_STOP: " + surface +
+                         " friend ID format changed; exact matches=" +
+                         str(len(matches)) + "; static widget=" + repr(excerpt))
     found = matches[0]
     return found.start(), found.end(), source[found.start():found.end()]
 
@@ -71,7 +76,7 @@ def apply(source: str) -> str:
         last_index = source.index(last, first_index + len(first)) if last \
             else len(source)
         area = source[first_index:last_index]
-        i, j, actual = find_exact_lexical(area, candidate)
+        i, j, actual = find_exact_lexical(area, candidate, first)
         left, right = first_index + i, first_index + j
         # ONLY the original ID Text() is wrapped. Original text remains byte
         # identical as widget.fallback. No alternative ID is written anywhere.
