@@ -1,0 +1,48 @@
+name: DEDA Stage60 REAL Firebase Functions Metadata READONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage60_production_firebase_metadata_READONLY_NO_DEPLOY.py'
+      - '.github/workflows/qa-deda-owner19-stage60-real-firebase-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage60-production-metadata-readonly
+  cancel-in-progress: true
+jobs:
+  backend-exists-without-touching-accounts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_STAGE60_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE60_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify no checkout or user data updates occurred
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 08b95723c805686c40ade5eca2c1a82452daa908 -- \
+            functions/index.js functions/package.json \
+            firestore.rules firebase.json storage.rules android/ \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_exclusive_ids_admin_page.dart \
+            server_private/ assets/ pubspec.yaml
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: never changed live users, rules, functions, keys or app'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect LIVE DEDA Functions metadata ONLY via existing authorized service account
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_owner19_stage60_production_firebase_metadata_READONLY_NO_DEPLOY.py
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_owner19_stage60_production_firebase_metadata_READONLY_NO_DEPLOY.py
+          echo 'PASS: official Firebase metadata read only; no account and no deployment'
