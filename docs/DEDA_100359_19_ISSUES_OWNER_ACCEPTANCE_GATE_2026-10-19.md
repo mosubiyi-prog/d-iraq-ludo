@@ -34,7 +34,7 @@ Owner tested signed 100359 on phone: Android starts, profile survives, but premi
 18. [ ] Real owner functional cycle: buy/use card, verify exact art, buy ID, grant/switch, logout/reopen/re-authenticate, verify identity/friends and balances. Emulator alone insufficient.
 19. [ ] Android 16 clean startup + in-place upgrade with original release signer/hash, app foreground + actual nonwhite UI screenshots, no Flutter exceptions, no changes to production data, manual owner approval before Play.
 
-## Current verified state on 100359
+## Additional P0 gate raised by real user report (20 Oct 2026) — NEVER waive\n20. [ ] **New phone / same owner:** after authenticated DEDA PIN/account recovery on a replacement Android device, the original approved place is re-discovered from Firestore, appears in Manage My Place, retains original immutable place ID/approval/photos/colors/likes/followers, and owner-only editing and notifications work. A new Firebase UID must not hide the old place or permit account takeover, same-name/phone-text-only matching, duplicate publication or silent deletion. Confirm exact live rules/index/session and manual owner-phone end-to-end test. See `docs/DEDA_STAGE64_OWNER_PLACE_CROSS_DEVICE_P0_2026-10-20.md`.\n\n**Release is blocked by BOTH original 19 gates and new owner-place P0 #20.** Source staging is not proof of live recovery.\n\n## Current verified state on 100359
 - Confirmed: signed build + Android16 clean and in-place upgrade success; phone shows home UI.
 - Failed in owner screenshots: #1,#2,#3,#4,#5,#6,#7,#8,#9,#10,#11,#12,#13,#14,#15,#16,#17,#18 as feature-completeness checks.
 - No new release passes this gate just because CI/build/smoke succeeds. Document actual test evidence per row before claiming green.
