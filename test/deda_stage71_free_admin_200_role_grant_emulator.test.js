@@ -127,3 +127,21 @@ test("no manager impersonation, duplicate grant or unknown recipient",async()=>{
   await assertSucceeds(grant(db,groupOne,recipient.original));
   await assertFails(grant(db,groupOne,recipient.original));
 });
+
+test("recipient can activate a granted alias and go back to original, strangers cannot",async()=>{
+  await assertSucceeds(grant(as(manager),groupOne,recipient.original));
+  const db=as(recipient);
+  const path=doc(db,"deda_stage71_active_identifier",recipient.original);
+  await assertSucceeds(setDoc(path,{originalId:recipient.original,
+    activeId:groupOne,updatedAt:serverTimestamp()}));
+  assert.equal((await getDoc(path)).data().activeId,groupOne);
+  await assertFails(setDoc(path,{originalId:recipient.original,
+    activeId:groupTwo,updatedAt:serverTimestamp()}));
+  await assertFails(setDoc(doc(as(other),"deda_stage71_active_identifier",
+    recipient.original),{originalId:recipient.original,
+    activeId:groupOne,updatedAt:serverTimestamp()}));
+  await assertSucceeds(setDoc(path,{originalId:recipient.original,
+    activeId:recipient.original,updatedAt:serverTimestamp()}));
+  assert.equal((await getDoc(path)).data().activeId,recipient.original);
+});
+
