@@ -76,14 +76,21 @@ def patch_main(src:str)->str:
     # Formerly-for-sale Group002 moved to manager section. Never show its
     # candidates publicly even when the profile routes pass a catalog in.
     import re
-    pattern = re.compile(
-        r"(key:\s*const\s+Key\('deda_point9_scrollable_identifiers_below_cards'\).*?itemCount:)\s*.*?(,\s*itemBuilder:)",
-        re.S,
-    )
-    matches=list(pattern.finditer(shop))
-    if len(matches)!=1:
-        raise ValueError('SAFE_STOP_STAGE71_EXPECTED_ONE_PUBLIC_CATALOG_SCROLLER_'+str(len(matches)))
-    shop=pattern.sub(lambda m:m.group(1)+' 0'+m.group(2),shop,count=1)
+    # Exactly one candidate list widget exists in the approved store. The
+    # former-sale catalog belongs in Admin now; zero visible public rows.
+    if shop.count('ListView.builder(')!=1 or shop.count('itemCount:')!=1:
+        raise ValueError('SAFE_STOP_STAGE71_GROUP002_LIST_COUNT')
+    first=shop.index('ListView.builder(')
+    count=shop.index('itemCount:',first)
+    builder=shop.index('itemBuilder:',count)
+    comma=shop.rfind(',',count,builder)
+    if comma < count or 'DedaPoint10CandidateGroup002.identifiers' in shop[count:comma]:
+        # The source may reference an old immutable candidate list, but the
+        # hidden list must still be fully isolated from all other widgets.
+        pass
+    if comma < count or not shop[comma+1:builder].strip()=='':
+        raise ValueError('SAFE_STOP_STAGE71_UNKNOWN_PUBLIC_LIST_STRUCTURE')
+    shop=shop[:count]+'itemCount: 0,'+shop[comma+1:]
     result=src[:a]+shop+src[b:]
     # Cosmetic previews only; catalog proposals stay within protected admin.
     route=re.compile(r'readOnlyCatalog\s*:\s*DedaPoint10CandidateGroup002\s*\.\s*identifiers\s*,')
