@@ -53,10 +53,10 @@ class Stage50ExactOriginalFriendInkTest(unittest.TestCase):
         generated = Path(
             "tools/social_system_consolidated_100269_2026_10_04.py"
         ).read_text(encoding="utf-8")
-        normalized = re.sub(r"\\s+", "", generated)
+        normalized = re.sub(r"\s+", "", generated)
         for first, _, expected, _ in s.SCOPES:
             self.assertIn(first, generated)
-            self.assertIn(re.sub(r"\\s+", "", expected), normalized)
+            self.assertIn(re.sub(r"\s+", "", expected), normalized)
 
     def test_fails_closed_on_ambiguous_or_modified_friend_widgets(self):
         original = assembled_original()
