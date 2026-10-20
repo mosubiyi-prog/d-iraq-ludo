@@ -22,7 +22,7 @@ class Stage49ExactQrTest(unittest.TestCase):
         self.assertEqual(changed.count(stage.MARKER), 1)
         self.assertEqual(changed.count(stage.IMPORT), 1)
         self.assertEqual(changed.count("DedaStage49VerifiedShareIdBadge("), 1)
-        self.assertEqual(changed.count("isArabic: DedaLanguageState.isArabic"), 1)
+        self.assertIn("isArabic: DedaLanguageState.isArabic", stage.ADDITION)
         self.assertIn("data: id,", changed)
         self.assertIn("'https://wa.me/?text", changed)
         self.assertIn("onPressed: _shareDedaId", changed)
