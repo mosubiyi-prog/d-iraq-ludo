@@ -1,0 +1,64 @@
+name: DEDA owner19 Stage51 private canonical friend search QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/stage_deda_100360_friend_alias_search_after_stage50.py'
+      - 'test/test_deda_stage51_friend_alias_source.py'
+      - 'lib/deda_stage51_verified_friend_alias_search.dart'
+      - 'test/deda_owner19_stage51_friend_alias_widget_test.dart'
+      - '.github/workflows/qa-deda-owner19-stage51-search-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage51-client-search
+  cancel-in-progress: true
+jobs:
+  exact-source-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No release, Firebase, accounts or location changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet bc25bb00f9ff31d8414c4c45fd0e37716b3f9fea -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart \
+            android/ assets/ server_private/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+      - name: Test original friend search is retained while feature OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/stage_deda_100360_friend_alias_search_after_stage50.py
+          python3 -m unittest discover -s test -p 'test_deda_stage51_friend_alias_source.py'
+          echo 'PASS: only canonical Add Friend ID lookup touched in gated source'
+  flutter-client-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Validate forged alias rejection and original lookup while OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/deda_stage51_verified_friend_alias_search.dart \
+            test/deda_owner19_stage51_friend_alias_widget_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/deda_stage51_verified_friend_alias_search.dart \
+            test/deda_owner19_stage51_friend_alias_widget_test.dart
+          flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart \
+            test/deda_owner19_stage50_friend_ink_widget_test.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: zero live purchases, friend requests or Firebase writes'
