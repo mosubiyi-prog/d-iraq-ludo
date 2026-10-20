@@ -1,0 +1,44 @@
+name: DEDA owner19 Stage45 offline AES key preflight tests NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - '.github/workflows/qa-deda-owner19-stage45-offline-key-no-deploy.yml'
+      - 'tools/deda_owner19_private100_key_preflight_OFFLINE_ONLY.js'
+      - 'test/deda_owner19_stage45_offline_key_preflight.test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage45-private100-key-check
+  cancel-in-progress: true
+jobs:
+  offline-key-shape-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Stop if production or encrypted data changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 1a06983f2cb681d7b6bd8bfc6e9c59ef5004cfd0 -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart android/ server_private/ assets/
+          test ! -f .deda-private/key.txt
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no owner key in repo and no live changes'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Synthetic-only local cryptography and permission tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_private100_key_preflight_OFFLINE_ONLY.js
+          node --check test/deda_owner19_stage45_offline_key_preflight.test.js
+          node --test test/deda_owner19_stage45_offline_key_preflight.test.js
+          echo 'PASS: synthetic only, no real owner key, no Firebase or Play deployment'
