@@ -8,6 +8,7 @@ from pathlib import Path
 MAIN=Path('lib/main.dart')
 ADMIN=Path('lib/admin_pages.dart')
 M_IMPORT="import 'deda_stage71_free_id_cards.dart';\n"
+OWNED_IMPORT="import 'deda_stage71_free_owned_use_profile.dart';\n"
 A_IMPORT="import 'deda_stage71_dual_admin_page.dart';\n"
 MARK="// DEDA_STAGE71_OWNER_APPROVED_FOUR_FREE_CARDS_TWO_ADMIN100_NO_PURCHASE"
 S_BEGIN="class _DedaIdentifierStorePageState extends State<DedaIdentifierStorePage> {"
@@ -28,7 +29,9 @@ PROFILE_FALLBACK="""fallback: DedaPoint14VerifiedProfileSlot(
                         width: (width - (compact ? 34.0 : 44.0)).clamp(0.0, 320.0).toDouble(),
                         compact: compact,
                       ),"""
-FREE_FALLBACK="""fallback: DedaStage71FreeProfileFoil(
+FREE_FALLBACK="""fallback: DedaStage71ActiveProfileFoil(
+                        originalId: id,
+                        fallback: DedaStage71FreeProfileFoil(
                         originalId: id,
                         onCopy: _copyDedaId,
                         fallback: DedaPoint14VerifiedProfileSlot(
@@ -37,7 +40,19 @@ FREE_FALLBACK="""fallback: DedaStage71FreeProfileFoil(
                           width: (width - (compact ? 34.0 : 44.0)).clamp(0.0, 320.0).toDouble(),
                           compact: compact,
                         ),
+                        ),
                       ),"""
+
+ORIGINAL_OWNED_PANEL="""            DedaPoint15OwnedIdentifierPanel(
+              originalId: DedaBackend.personalShareIdForPhone(
+                DedaPreferences.phone,
+              ).trim(),
+            ),"""
+NEW_OWNED_PANEL="""            DedaStage71OwnedIdsPanel(
+              originalId: DedaBackend.personalShareIdForPhone(
+                DedaPreferences.phone,
+              ).trim(),
+            ),"""
 
 def once(s, a, b, label):
     n=s.count(a)
@@ -77,11 +92,16 @@ def patch_main(src:str)->str:
         raise ValueError('SAFE_STOP_STAGE71_EXTRA_PUBLIC_CATALOG_ROUTE')
     result=once(result,PROFILE_FALLBACK,FREE_FALLBACK,
                 'PROFILE_FREE_ORIGINAL_FOIL')
+    result=once(result,ORIGINAL_OWNED_PANEL,NEW_OWNED_PANEL,
+                'OWNED_IDS_GIFT_AND_USE')
+
     result=once(result,"import 'package:flutter/material.dart';\n",
-        "import 'package:flutter/material.dart';\n"+M_IMPORT,
+        "import 'package:flutter/material.dart';\n"+M_IMPORT+OWNED_IMPORT,
         'MAIN_IMPORT')
     if result.count('DedaStage71FreeCardAction(')!=1 or \
-       result.count('DedaStage71FreeProfileFoil(')!=1:
+       result.count('DedaStage71FreeProfileFoil(')!=1 or \
+       result.count('DedaStage71ActiveProfileFoil(')!=1 or \
+       result.count('DedaStage71OwnedIdsPanel(')!=1:
         raise ValueError('SAFE_STOP_STAGE71_MISSING_FREE_ACTION')
     return result.replace('class DedaPoint17ShopCardAction',
         'class DedaPoint17ShopCardAction',1).replace(
