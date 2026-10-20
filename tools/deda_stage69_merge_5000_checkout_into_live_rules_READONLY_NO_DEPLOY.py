@@ -96,6 +96,19 @@ def main():
         print('PASS_STAGE69_LIVE_POLICY_READ_AND_EPHEMERAL_ADDITIVE_CARD_PATCH')
         print('PASS_NO_LIVE_RULE_OR_USER_WRITE_OR_ORIGINAL100_EXPOSURE')
         return 0
+    except ValueError as err:
+        # These static reason strings contain NO live policy or credentials.
+        safe = {'SAFE_STOP_WALLET_NOT_EXACT_ONCE_OR_ALREADY_PATCHED',
+                'SAFE_STOP_CANNOT_PROTECT_HISTORIC_CLAIM',
+                'SAFE_STOP_UNCONTROLLED_WALLET_WRITES',
+                'SAFE_STOP_NO_ORIGINAL_OWNER_PROOF',
+                'SAFE_STOP_EXISTING_RECEIPT_ROUTE',
+                'SAFE_STOP_FIRESTORE_RULES_VERSION_CHANGED',
+                'SAFE_STOP_STAGE69_MERGE_MISMATCH',
+                'SAFE_STOP_UNRELATED_LIVE_POLICY_CHANGE',
+                'no_wallet_opening', 'wallet_unclosed'}
+        print('SAFE_STOP_STAGE69_REASON', str(err) if str(err) in safe else 'UNKNOWN_POLICY_MISMATCH')
+        return 3
     except Exception:
         print('SAFE_STOP_STAGE69_CANNOT_ADAPT_PUBLISHED_RULES')
         return 3
