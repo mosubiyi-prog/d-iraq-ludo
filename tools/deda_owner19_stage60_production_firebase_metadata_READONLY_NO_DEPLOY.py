@@ -67,10 +67,11 @@ def main():
         obj=firestore.json()
         print("PRODUCTION_FIRESTORE_DB_PRESENT",obj.get("name","").endswith(
             "/databases/(default)"))
-        print("PRODUCTION_FIRESTORE_DB_STATE",str(obj.get("appEngineIntegrationMode","UNSPECIFIED"))[:35])
+        print("PRODUCTION_FIRESTORE_APP_ENGINE_INTEGRATION",str(obj.get("appEngineIntegrationMode","UNSPECIFIED"))[:35])
     function_names={}
     page=None
     count=0
+    function_list_authorized=True
     while True:
         url=(f"https://cloudfunctions.googleapis.com/v2/projects/{PROJECT}/"
              f"locations/{REGION}/functions?pageSize=100")
@@ -82,8 +83,17 @@ def main():
             return 5
         print("PRODUCTION_FUNCTIONS_METADATA_HTTP",safe_code(response))
         if response.status_code!=200:
+            function_list_authorized=False
+            # Error metadata codes ONLY, never service account/user details.
+            try:
+                for item in response.json().get("error",{}).get("details",[]):
+                    reason=str(item.get("reason",""))[:45]
+                    if reason and reason.replace("_","").isalnum():
+                        print("FUNCTIONS_LIST_BLOCK_REASON",reason)
+            except Exception:
+                pass
             print("SAFE_STOP_FUNCTION_LIST_NOT_AUTHORIZED_OR_UNAVAILABLE")
-            return 6
+            break
         value=response.json()
         for row in value.get("functions",[]):
             if not isinstance(row,dict):continue
@@ -100,6 +110,11 @@ def main():
         print("REQUIRED_PREMIUM_CALLABLE",name,
             "ACTIVE" if state=="ACTIVE" else
             "PRESENT_NOT_ACTIVE" if state else "NOT_DEPLOYED")
+    functions_api=get(f"https://serviceusage.googleapis.com/v1/projects/{PROJECT}/services/cloudfunctions.googleapis.com")
+    if functions_api:
+        print("CLOUD_FUNCTIONS_API_METADATA_HTTP",safe_code(functions_api))
+        if functions_api.status_code==200:
+            print("CLOUD_FUNCTIONS_API_STATE",str(functions_api.json().get("state","UNKNOWN"))[:25])
     billing=get(f"https://cloudbilling.googleapis.com/v1/projects/{PROJECT}/billingInfo")
     if billing:
         print("PRODUCTION_BILLING_METADATA_HTTP",safe_code(billing))
@@ -109,7 +124,7 @@ def main():
     ready=all(function_names.get(name)=="ACTIVE" for name in EXPECTED)
     print("ALL_15_BACKEND_ROUTES_LIVE",ready)
     print("PREMIUM_PURCHASE_RELEASE_APPROVED",False)
-    return 0
+    return 0 if function_list_authorized else 6
 
 if __name__=="__main__":
     sys.exit(main())
