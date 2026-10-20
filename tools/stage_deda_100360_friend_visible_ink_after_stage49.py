@@ -37,7 +37,17 @@ def find_exact_lexical(source: str, candidate: str, surface: str) -> tuple[int, 
     tokens = re.findall(
         r'[A-Za-z_][A-Za-z_0-9]*|[0-9]+(?:\.[0-9]+)?|[^\w\s]',
         candidate)
-    expression = re.compile(r'\s*'.join(re.escape(token) for token in tokens))
+    # Earlier royal/social UI polish changed only the original font size.
+    # Permit a compact, readable 10..16.5sp size WITHOUT modifying it;
+    # every ID token, ownership source, color and widget action stays exact.
+    parts = []
+    for i, token in enumerate(tokens):
+        if i >= 2 and tokens[i - 2:i] == ['fontSize', ':'] and \
+                re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', token):
+            parts.append(r'1[0-6](?:\.5)?')
+        else:
+            parts.append(re.escape(token))
+    expression = re.compile(r'\s*'.join(parts))
     matches = list(expression.finditer(source))
     if len(matches) != 1:
         # Only a STATIC Dart widget excerpt; never user/account records.
