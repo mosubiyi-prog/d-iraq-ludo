@@ -34,6 +34,19 @@ def report_policy(local, published):
         "live_matches_current_repo": local_n == live_n,
         "repo_hash_prefix": digest(local),
         "live_hash_prefix": digest(published),
+        # Path-presence bits only; never reveal the published source itself.
+        "live_has_gm_personal_wallet_rule":
+            "match /deda_gm_personal_diamond_wallets/" in published,
+        "live_has_gift_balance_rule":
+            "match /deda_diamond_gift_balances/" in published,
+        "live_has_gift_claim_rule":
+            "match /deda_diamond_gifts/" in published,
+        "live_has_manager_gift_pool_rule":
+            "match /deda_admin_diamond_wallets/" in published,
+        "live_has_identifier_ownership_rule":
+            "match /deda_owned_identifier_accounts/" in published,
+        "live_has_card_entitlement_rule":
+            "match /deda_id_card_entitlements/" in published,
     }
     try:
         candidate_n = candidate(local)
