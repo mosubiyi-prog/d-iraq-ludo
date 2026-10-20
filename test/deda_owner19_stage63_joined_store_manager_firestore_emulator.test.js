@@ -15,7 +15,7 @@ assert.equal(process.env.GCLOUD_PROJECT,PROJECT);
 const req=createRequire(resolve(__dirname,"../functions/package.json"));
 const {initializeApp,deleteApp}=req("firebase-admin/app");
 const {getFirestore}=req("firebase-admin/firestore");
-const {createOwner19Stage59PrivateRoutes,OWNER19,STAGE16}=require(
+const {createOwner19Stage59PrivateRoutes,OWNER19,STAGE16,ROUTES}=require;
   "../tools/deda_owner19_stage59_all_server_routes_PRIVATE_NOT_EXPORTED_2026_10_20.js");
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const privateSuffixes=Array.from({length:100},(_,i)=>
@@ -226,4 +226,48 @@ test("manager grants 5th reserved ID with fixed color, true history and recipien
   const verified=await call(OWNER19.adminRead,manager.uid,{});
   assert.equal(verified.history.length,5);
   assert.ok(secretTouches>0); // server-only synthetic catalog; no real key.
+});
+
+
+test("public/friend/profile verified ink survives gift and resolves the ORIGINAL account",async()=>{
+  const gifted="@DEDA-"+privateSuffixes[4];
+  const active=await call(ROUTES.activeInk,buyer.uid,{});
+  assert.equal(active.serverConfirmed,true);
+  assert.equal(active.originalId,buyer.id);
+  assert.equal(active.activeId,gifted);
+  assert.equal(active.permanentColor,"pink");
+
+  for(const wanted of [buyer.id,gifted]){
+    const visible=await call(ROUTES.publicInk,manager.uid,{
+      identifier:wanted,
+    });
+    assert.deepEqual({
+      confirmed:visible.serverConfirmed,
+      requested:visible.requestedId,
+      displayed:visible.displayId,
+      fixedInk:visible.permanentColor,
+    },{
+      confirmed:true,requested:wanted,displayed:gifted,fixedInk:"pink",
+    });
+  }
+
+  const friend=await call(ROUTES.friendAlias,manager.uid,{
+    identifier:gifted,
+  });
+  assert.equal(friend.serverConfirmed,true);
+  assert.equal(friend.requestedId,gifted);
+  assert.equal(friend.originalId,buyer.id);
+  const lookup=await call(ROUTES.friendAlias,manager.uid,{
+    identifier:buyer.id,
+  });
+  assert.equal(lookup.originalId,buyer.id);
+  for(const payload of [active,friend,lookup]){
+    assert.ok(!Object.hasOwn(payload,"accountKey"));
+    assert.ok(!Object.hasOwn(payload,"phone"));
+    assert.ok(!Object.hasOwn(payload,"balance"));
+    assert.ok(!Object.hasOwn(payload,"location"));
+  }
+  const finalWallet=(await db.collection("deda_diamond_gift_balances")
+    .doc(buyer.id).get()).data().balance;
+  assert.equal(finalWallet,15000);
 });
