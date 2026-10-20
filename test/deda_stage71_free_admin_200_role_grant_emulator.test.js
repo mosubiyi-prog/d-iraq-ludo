@@ -10,7 +10,7 @@ const {createRequire}=require("node:module");
 const req=createRequire(resolve(__dirname,"../functions/package.json"));
 const {initializeTestEnvironment,assertFails,assertSucceeds}=
   req("@firebase/rules-unit-testing");
-const {doc,setDoc,getDoc,getDocs,query,collection,limit,writeBatch,serverTimestamp}=
+const {doc,setDoc,getDoc,getDocs,query,collection,where,limit,writeBatch,serverTimestamp}=
   req("firebase/firestore");
 const projectId="demo-deda-stage71-free-admin200";
 assert.equal(process.env.GCLOUD_PROJECT,projectId);
@@ -162,4 +162,19 @@ test("GM-only initial import creates a real immutable inventory row; outsiders c
     identifier:manager.original,group:"002",sequence:100,
     baseColor:"gold",status:"available",
   }));
+});
+
+test("gifted recipient can query ONLY own 200-ID registry by original ID",async()=>{
+  await assertSucceeds(grant(as(manager),groupOne,recipient.original));
+  await assertSucceeds(grant(as(manager),groupTwo,other.original));
+  const inbox=await assertSucceeds(getDocs(query(
+    collection(as(recipient),"deda_stage71_granted_registry"),
+    where("recipientOriginalId","==",recipient.original),limit(200)
+  )));
+  assert.equal(inbox.docs.length,1);
+  assert.equal(inbox.docs[0].id,groupOne);
+  await assertFails(getDocs(query(
+    collection(as(recipient),"deda_stage71_granted_registry"),
+    where("recipientOriginalId","==",other.original),limit(200)
+  )));
 });
