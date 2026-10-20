@@ -9,7 +9,7 @@ const {createRequire}=require("node:module");
 const req=createRequire(path.resolve(__dirname,"../functions/package.json"));
 const {initializeTestEnvironment,assertFails,assertSucceeds}=
   req("@firebase/rules-unit-testing");
-const {doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp}=
+const {doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp}=
   req("firebase/firestore");
 const host=process.env.FIRESTORE_EMULATOR_HOST||"";
 const candidate=process.env.DEDA_STAGE52_RULES_CANDIDATE||"";
@@ -98,14 +98,9 @@ test("signed-in GM cannot debit personal test million itself",async()=>{
   const current=await assertSucceeds(getDoc(doc(client,gmWallet)));
   assert.equal(current.data().balance,1000000);
 });
-test("GM cannot create another 1-million personal wallet from phone",async()=>{
+test("authorized GM cannot self-mint 1 million when wallet is missing",async()=>{
   await env.withSecurityRulesDisabled(async context=>{
-    const seeded=context.firestore();
-    await setDoc(doc(seeded,"admin_entry_access/stage52_account_002"),{
-      accountKey:"stage52_account_002",active:true,status:"active",
-      accessType:"general_manager_gateway",allowedRole:"general_manager",
-    });
-    // sameAccount checks current auth account: original access must remain.
+    await deleteDoc(doc(context.firestore(),gmWallet));
   });
   await assertFails(setDoc(doc(client,gmWallet),{
     accountKey:person.account,balance:1000000,initialBalance:1000000,
@@ -128,7 +123,14 @@ test("original gift claim still credits wallet EXACTLY ONCE in atomic batch",asy
   await assertSucceeds(batch.commit());
   const after=await assertSucceeds(getDoc(doc(client,giftWallet)));
   assert.equal(after.data().balance,1100);
-  await assertFails(batch.commit());
+  const replay=writeBatch(client);
+  replay.update(doc(client,"deda_diamond_gifts/"+giftId),{
+    status:"received",claimedAt:serverTimestamp(),
+  });
+  replay.update(doc(client,giftWallet),{
+    balance:1200,lastClaimGiftId:giftId,updatedAt:serverTimestamp(),
+  });
+  await assertFails(replay.commit());
 });
 test("other unauthenticated visitor cannot read or debit gift balances",async()=>{
   await assertFails(getDoc(doc(db,giftWallet)));
