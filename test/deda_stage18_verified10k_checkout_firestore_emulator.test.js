@@ -240,3 +240,68 @@ test("client Firestore rules cannot forge purchases, own registry, sales or bala
       diamondsCharged:0,
   }));
 });
+
+
+test("Stage53 mixed exclusive 4-character GM gift and new 6-character sale coexist in ONE account",async()=>{
+  await init();
+  const exclusive="@DEDA-ABCD";
+  await db.collection("deda_owned_identifier_accounts")
+    .doc(hash(a.key)).set({
+      accountKey:a.key,originalId:a.original,
+      activeId:exclusive,ownedIds:[a.original,exclusive],
+    });
+  await db.collection("deda_owned_identifier_registry").doc(exclusive).set({
+    identifier:exclusive,accountKey:a.key,originalId:a.original,
+    status:"owned",acquisition:"general_manager_gift",assignedColor:"diamond",
+  });
+  await db.collection("deda_owned_identifier_aliases").doc(exclusive).set({
+    identifier:exclusive,accountKey:a.key,originalId:a.original,
+    kind:"permanent_alias",
+  });
+  await db.collection("deda_admin_identifier_grants")
+    .doc(hash(a.key+":"+exclusive)).set({
+      identifier:exclusive,accountKey:a.key,originalId:a.original,
+      color:"diamond",
+    });
+  const sale=await buy(a,idA,"stage53_exclusive_sale_001");
+  assert.equal(sale.serverConfirmed,true);
+  assert.equal(sale.diamondsCharged,10000);
+  assert.equal(await giftBalance(a),4000);
+  const after=(await db.collection("deda_owned_identifier_accounts")
+    .doc(hash(a.key)).get()).data();
+  assert.deepEqual(after.ownedIds,[a.original,exclusive,idA]);
+  assert.equal(after.activeId,exclusive);
+  assert.equal((await db.collection("deda_admin_identifier_grants")
+    .doc(hash(a.key+":"+exclusive)).get()).data().color,"diamond");
+  const retry=await buy(a,idA,"stage53_exclusive_sale_001");
+  assert.deepEqual(retry,sale);
+  assert.equal(await giftBalance(a),4000);
+  const secondReq=await buy(a,idB,"stage53_exclusive_sale_002")
+    .then(v=>v,e=>e);
+  assert.equal(secondReq.code,"failed-precondition");
+  assert.equal(await giftBalance(a),4000);
+});
+
+test("Stage53 cannot buy Group001 short name, even if present in client-selected style",async()=>{
+  await init();
+  await assert.rejects(buy(a,"@DEDA-ABCD","stage53_fake_sale_001"),
+    e=>e.code==="permission-denied");
+  assert.equal(await giftBalance(a),14000);
+});
+
+test("Stage53 cannot charge wallet for forged short ID ownership or oversized ID",async()=>{
+  for(const badId of ["@DEDA-A","@DEDA-ABCDEFGHIJKLM"]){
+    await init();
+    await db.collection("deda_owned_identifier_accounts")
+      .doc(hash(a.key)).set({
+        accountKey:a.key,originalId:a.original,
+        activeId:badId,ownedIds:[a.original,badId],
+      });
+    const current=await buy(a,idA,"stage53_bad_owner_req_001")
+      .then(v=>v,e=>e);
+    assert.equal(current.code,"failed-precondition");
+    assert.equal(await giftBalance(a),14000);
+    assert.equal((await db.collection("deda_owned_identifier_registry")
+      .doc(idA).get()).exists,false);
+  }
+});
