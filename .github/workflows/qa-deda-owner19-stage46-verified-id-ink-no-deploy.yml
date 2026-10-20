@@ -1,0 +1,57 @@
+name: DEDA owner19 Stage46 verified ID letter colors source QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'lib/deda_verified_identifier_ink.dart'
+      - 'lib/deda_exclusive_ids_admin_page.dart'
+      - 'test/deda_owner19_stage46_verified_identifier_ink_test.dart'
+      - '.github/workflows/qa-deda-owner19-stage46-verified-id-ink-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage46-verified-id-ink-no-deploy
+  cancel-in-progress: true
+jobs:
+  verify-glyphs-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert release and server original files are not changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 1f6a4cfe89768b66cd29f3d4ce3c2966a63d91fd -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart android/ server_private/ assets/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS: text ink only, no Firebase, no wallet, no Play build'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Verify true lettering, fallback and protected manager history
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/deda_verified_identifier_ink.dart \
+            lib/deda_exclusive_ids_admin_page.dart \
+            test/deda_owner19_stage46_verified_identifier_ink_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/deda_verified_identifier_ink.dart \
+            lib/deda_exclusive_ids_admin_page.dart \
+            test/deda_owner19_stage46_verified_identifier_ink_test.dart
+          flutter test \
+            test/deda_owner19_stage46_verified_identifier_ink_test.dart \
+            test/deda_owner19_stage43_snapshot_guard_test.dart \
+            test/deda_stage19_exclusive_admin_tile_test.dart
+          grep -q "DedaVerifiedIdentifierText" lib/deda_exclusive_ids_admin_page.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: immutable-color glyphs verified, no APK, NO DEPLOY'
