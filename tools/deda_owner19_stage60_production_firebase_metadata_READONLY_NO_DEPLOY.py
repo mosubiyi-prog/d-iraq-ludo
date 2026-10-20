@@ -108,8 +108,9 @@ def main():
     for name in EXPECTED:
         state=function_names.get(name)
         print("REQUIRED_PREMIUM_CALLABLE",name,
+            "UNVERIFIED_IAM_403" if not function_list_authorized else
             "ACTIVE" if state=="ACTIVE" else
-            "PRESENT_NOT_ACTIVE" if state else "NOT_DEPLOYED")
+            "PRESENT_NOT_ACTIVE" if state else "NOT_FOUND_IN_ACCESSIBLE_REGION")
     functions_api=get(f"https://serviceusage.googleapis.com/v1/projects/{PROJECT}/services/cloudfunctions.googleapis.com")
     if functions_api:
         print("CLOUD_FUNCTIONS_API_METADATA_HTTP",safe_code(functions_api))
@@ -121,7 +122,7 @@ def main():
         if billing.status_code==200:
             print("PRODUCTION_BILLING_ENABLED",billing.json().get("billingEnabled") is True)
     print("VERIFIED_METADATA_ONLY_NO_ACCOUNT_QUERY_NO_WALLET_WRITE_NO_DEPLOY")
-    ready=all(function_names.get(name)=="ACTIVE" for name in EXPECTED)
+    ready=function_list_authorized and all(function_names.get(name)=="ACTIVE" for name in EXPECTED)
     print("ALL_15_BACKEND_ROUTES_LIVE",ready)
     print("PREMIUM_PURCHASE_RELEASE_APPROVED",False)
     return 0 if function_list_authorized else 6
