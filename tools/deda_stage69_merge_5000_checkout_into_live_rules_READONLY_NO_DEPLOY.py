@@ -14,6 +14,7 @@ import hashlib
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from deda_stage66_firestore_only_card_checkout_candidate_NO_DEPLOY import RULE
+from deda_owner19_stage52_wallet_rules_candidate_OFFLINE_NO_DEPLOY import GIFT_CLIENT_DECREASE, GIFT_LEGIT_CLAIM
 from deda_stage68_live_wallet_checkout_rules_compat_READONLY import (
     PROJECT, API
 )
@@ -42,6 +43,17 @@ def candidate(active:str)->str:
     wallet=active[p:end+1]
     if 'allow update:' not in wallet and 'allow write:' not in wallet:
         raise ValueError('SAFE_STOP_CANNOT_PROTECT_HISTORIC_CLAIM')
+    # Critical live defect independently proven by the emulator:
+    # Current published rules allow an unreceipted wallet-only client decrease.
+    # This must be eliminated *before* the new receipt allowance is added,
+    # otherwise another OR allow-update branch bypasses card ownership.
+    if wallet.count(GIFT_CLIENT_DECREASE) != 1:
+        raise ValueError('SAFE_STOP_UNRECEIPTED_DEBIT_CLAUSE_NOT_EXACT')
+    if wallet.count(GIFT_LEGIT_CLAIM) != 1:
+        raise ValueError('SAFE_STOP_VERIFIED_GIFT_CLAIM_CHANGED')
+    hardened_wallet=wallet.replace(GIFT_CLIENT_DECREASE,'',1)
+    if 'balance <= resource.data.balance' in hardened_wallet:
+        raise ValueError('SAFE_STOP_UNRECEIPTED_DEBIT_REMAINS')
     if 'allow write: if true' in wallet or 'allow update: if true' in wallet:
         raise ValueError('SAFE_STOP_UNCONTROLLED_WALLET_WRITES')
     if active.count('function verifiedDiamondsPersonalOwner(publicId) {')!=1:
@@ -57,11 +69,15 @@ def candidate(active:str)->str:
         && stage66CardSpend(publicId);
 """
     # Add isolated rules/functions at the SAME scope as the wallet match.
-    result=active[:p]+RULE+active[p:end]+extra+active[end:]
+    # Replace ONLY the known unsafe wallet clause, preserving real gift-claim
+    # logic word for word. Never blanket replace active published rules.
+    amended_wallet=hardened_wallet[:-1]+extra+hardened_wallet[-1:]
+    result=active[:p]+RULE+amended_wallet+active[end+1:]
     if result.count(MARK)!=1 or result.count('STAGE69_SPARK_ADDITIVE_CARD_ALLOWANCE_OFFLINE_ONLY')!=1:
         raise ValueError('SAFE_STOP_STAGE69_MERGE_MISMATCH')
     # Revert generated changes byte-for-byte to prove old live rules untouched.
     reconstructed=result.replace(RULE,'',1).replace(extra,'',1)
+    reconstructed=reconstructed.replace(hardened_wallet,wallet,1)
     if reconstructed!=active:
         raise ValueError('SAFE_STOP_UNRELATED_LIVE_POLICY_CHANGE')
     return result
@@ -102,6 +118,9 @@ def main():
         safe = {'SAFE_STOP_WALLET_NOT_EXACT_ONCE_OR_ALREADY_PATCHED',
                 'SAFE_STOP_CANNOT_PROTECT_HISTORIC_CLAIM',
                 'SAFE_STOP_UNCONTROLLED_WALLET_WRITES',
+                'SAFE_STOP_UNRECEIPTED_DEBIT_CLAUSE_NOT_EXACT',
+                'SAFE_STOP_VERIFIED_GIFT_CLAIM_CHANGED',
+                'SAFE_STOP_UNRECEIPTED_DEBIT_REMAINS',
                 'SAFE_STOP_NO_ORIGINAL_OWNER_PROOF',
                 'SAFE_STOP_EXISTING_RECEIPT_ROUTE',
                 'SAFE_STOP_FIRESTORE_RULES_VERSION_CHANGED',
