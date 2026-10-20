@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'deda_backend.dart';
 import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage71_free_owned_use_profile.dart';
-import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
+import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor,
+    DedaPoint10CandidateGroup002;
 
 /// Original DEDA luxury artwork + exactly 2 equal-width vertical catalog
 /// columns, 100 immutable original GM IDs each. No prices or color pickers.
@@ -28,6 +30,8 @@ class _DedaStage71DualAdminPageState
   String? _ownerUid;
   int _generation = 0;
   bool _committing = false;
+  bool _importing = false;
+  int _importProgress = 0;
 
   String _text(String ar, String en) => widget.isArabic ? ar : en;
   DedaPremiumIdCardColor _foil(DedaStage71AdminId row) {
@@ -74,6 +78,68 @@ class _DedaStage71DualAdminPageState
       if (mounted && generation == _generation) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  Future<void> _importFromPrivateBackup() async {
+    if (_importing || _committing || !DedaStage71Admin200.enabled) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final answer = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_text('تفعيل مجموعتي المعرّفات',
+            'Activate both identifier groups')),
+        content: Text(_text(
+          'انسخ ملف DEDA_100_IDENTIFIERS_BACKUP.json الأصلي كاملًا. '
+          'سأستورد الـ100 الحصرية من النسخة الخاصة، '
+          'وأضيف 100 المجموعة الثانية من التطبيق. '
+          'لا توجد أسعار أو ماسات، ولا يمكن إعادة تعيين أي معرّف ممنوح.',
+          'Copy the complete original private 100 JSON backup. '
+          'The app imports those plus the 100 former-sale identifiers. '
+          'No diamonds and no reassignment of gifted IDs.',
+        )),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(_text('إلغاء', 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(_text('استيراد من النسخة المنسوخة', 'Import clipboard')),
+          ),
+        ],
+      ),
+    );
+    if (answer != true || !mounted ||
+        FirebaseAuth.instance.currentUser?.uid != uid) return;
+    setState(() { _importing=true; _importProgress=0; });
+    try {
+      final clipboard=await Clipboard.getData(Clipboard.kTextPlain);
+      final text=clipboard?.text?.trim() ?? '';
+      if (text.isEmpty) throw StateError('missing-original100-clipboard');
+      await DedaStage71Admin200.importOwnerTwoGroups(
+        ownerBackupJson: text,
+        formerlySaleGroup002: DedaPoint10CandidateGroup002.identifiers,
+        progress:(current, total) {
+          if (mounted && FirebaseAuth.instance.currentUser?.uid==uid) {
+            setState(()=>_importProgress=current);
+          }
+        },
+      );
+      await _load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_text('تم تأكيد تسجيل الـ200 معرّف بأمان.',
+          'All 200 IDs confirmed on the server.')),
+      ));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_text('الاستيراد غير مكتمل؛ النسخة الأصلية محفوظة. '
+            'أعد المحاولة بنفس الملف ولا تغيّر المعرفات.',
+            'Import not complete. Retry with the same private backup.')),
+      ));
+    } finally {
+      if (mounted) setState(()=>_importing=false);
     }
   }
 
@@ -337,8 +403,16 @@ class _DedaStage71DualAdminPageState
       backgroundColor: navy, foregroundColor: Colors.white,
       title: Text(_text('إدارة الـ200 معرّف', 'Manage 200 IDs')),
       actions: [
+        IconButton(
+          key: const Key('deda_stage71_private_two_groups_import'),
+          icon: const Icon(Icons.file_upload_outlined),
+          onPressed: _importing || _loading ||
+                  !DedaStage71Admin200.enabled ? null : _importFromPrivateBackup,
+          tooltip: _text('استيراد الـ200 من النسخة الخاصة',
+              'Import original private 200'),
+        ),
         IconButton(icon: const Icon(Icons.refresh),
-          onPressed: _loading ? null : _load),
+          onPressed: _loading || _importing ? null : _load),
       ],
     ),
     body: Column(children: [
@@ -362,7 +436,12 @@ class _DedaStage71DualAdminPageState
           )),
         ]),
       ),
-      if (_loading) const LinearProgressIndicator(),
+      if (_loading || _importing) const LinearProgressIndicator(),
+      if (_importing) Padding(
+        padding: const EdgeInsets.all(4),
+        child: Text('$_importProgress / 200',
+          textAlign: TextAlign.center),
+      ),
       Expanded(child: _rows == null
         ? Center(child: Padding(
             padding: const EdgeInsets.all(16),
