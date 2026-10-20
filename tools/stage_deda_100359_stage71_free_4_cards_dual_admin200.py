@@ -58,14 +58,24 @@ def patch_main(src:str)->str:
     shop=once(shop,SHOP_ACTION,FREE_ACTION,'FOUR_FREE_CARD_ACTION')
     shop=once(shop,"'تصميم البطاقة: 5,000 ماسة'",
               "'تصميم البطاقة: مجاني'",'AR_CARD_PRICE')
-    # An approved, formerly-for-sale Group002 list now belongs ONLY in GM admin.
-    # The original candidate Dart class remains intact for deterministic
-    # private inventory reconciliation, but NO consumer storefront offers it.
-    # Keep the existing scroll layout, only remove the consumer list.
+    # Formerly-for-sale Group002 moved to manager section. Never show its
+    # candidates publicly even when the profile routes pass a catalog in.
+    import re
+    pattern = re.compile(
+        r'(key:\\s*const\\s+Key\\(\\\'deda_point9_scrollable_identifiers_below_cards\\\'\\).*?'
+        r'itemCount:)\\s*.*?(,\\s*itemBuilder:)',
+        re.S,
+    )
+    matches=list(pattern.finditer(shop))
+    if len(matches)!=1:
+        raise ValueError('SAFE_STOP_STAGE71_EXPECTED_ONE_PUBLIC_CATALOG_SCROLLER_'+str(len(matches)))
+    shop=pattern.sub(lambda m:m.group(1)+' 0'+m.group(2),shop,count=1)
     result=src[:a]+shop+src[b:]
-    result=once(result,
-        'readOnlyCatalog: DedaPoint10CandidateGroup002.identifiers,',
-        'readOnlyCatalog: const <String>[],','NO_PUBLIC_GROUP002_LIST')
+    # Cosmetic previews only; catalog proposals stay within protected admin.
+    route=re.compile(r'readOnlyCatalog\\s*:\\s*DedaPoint10CandidateGroup002\\s*\\.\\s*identifiers\\s*,')
+    result,n=route.subn('readOnlyCatalog: const <String>[],',result)
+    if n>1:
+        raise ValueError('SAFE_STOP_STAGE71_EXTRA_PUBLIC_CATALOG_ROUTE')
     result=once(result,PROFILE_FALLBACK,FREE_FALLBACK,
                 'PROFILE_FREE_ORIGINAL_FOIL')
     result=once(result,"import 'package:flutter/material.dart';\n",
