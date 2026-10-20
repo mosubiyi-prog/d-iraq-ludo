@@ -145,3 +145,21 @@ test("recipient can activate a granted alias and go back to original, strangers 
   assert.equal((await getDoc(path)).data().activeId,recipient.original);
 });
 
+
+test("GM-only initial import creates a real immutable inventory row; outsiders cannot seed extras",async()=>{
+  const gm=as(manager),visitor=as(other);
+  const imported="@DEDA-NEW100";
+  const payload={identifier:imported,group:"002",sequence:100,
+    baseColor:"gold",status:"available"};
+  await assertFails(setDoc(catalog(visitor,imported),payload));
+  await assertFails(setDoc(catalog(gm,imported),{
+    ...payload,baseColor:"pink",
+  }));
+  await assertSucceeds(setDoc(catalog(gm,imported),payload));
+  assert.equal((await getDoc(catalog(gm,imported))).data().status,"available");
+  await assertFails(setDoc(catalog(gm,imported),payload));
+  await assertFails(setDoc(catalog(gm,manager.original),{
+    identifier:manager.original,group:"002",sequence:100,
+    baseColor:"gold",status:"available",
+  }));
+});
