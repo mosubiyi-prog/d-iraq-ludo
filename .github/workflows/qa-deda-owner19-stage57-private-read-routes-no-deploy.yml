@@ -1,0 +1,53 @@
+name: DEDA owner19 Stage57 joined Flutter ID read routes PRIVATE NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage57_joined_verified_read_routes_PRIVATE_NO_DEPLOY_2026_10_20.js'
+      - 'test/deda_owner19_stage57_unified_readonly_callables.test.js'
+      - '.github/workflows/qa-deda-owner19-stage57-private-read-routes-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage57-private-read-bridge
+  cancel-in-progress: true
+jobs:
+  mock-callables-contract-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert entire live app, backend, wallets and catalog protected
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 1cb4c59f59b75df7ab67130f1a5669126fca41ce -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_stage48_verified_active_profile_ink.dart \
+            lib/deda_stage50_verified_friend_ink_badge.dart \
+            lib/deda_stage51_verified_friend_alias_search.dart \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            android/ server_private/ assets/
+          ! grep -q 'stage57_joined_verified_read_routes' functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: 100359, wallets, private admin100 and live Functions untouched'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate exact Flutter function names, safe DTOs, AppCheck and OFF flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage57_joined_verified_read_routes_PRIVATE_NO_DEPLOY_2026_10_20.js
+          node --check test/deda_owner19_stage57_unified_readonly_callables.test.js
+          node --test test/deda_owner19_stage57_unified_readonly_callables.test.js \
+            test/deda_owner19_stage47_verified_active_ink.test.js \
+            test/deda_owner19_stage50_public_ink.test.js \
+            test/deda_owner19_stage51_friend_alias.test.js
+          echo 'PASS: read-only three routes match existing Flutter, never deployed'
