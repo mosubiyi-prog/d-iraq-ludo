@@ -72,15 +72,15 @@ def apply(source: str) -> str:
     # semantic tokens of the approved widget, allowing whitespace ONLY.
     # Never match an arbitrary identifier or another method's widget.
     lexical_tokens = re.findall(
-        r'[A-Za-z_][A-Za-z_0-9]*|[0-9]+(?:\\.[0-9]+)?|[^\\w\\s]',
+        r'[A-Za-z_][A-Za-z_0-9]*|[0-9]+(?:\.[0-9]+)?|[^\w\s]',
         ORIGINAL,
     )
-    expression = re.compile(r'\\s*'.join(re.escape(t) for t in lexical_tokens))
+    expression = re.compile(r'\s*'.join(re.escape(t) for t in lexical_tokens))
     matches = list(expression.finditer(source))
     if len(matches) != 1:
         raise ValueError("SAFE_STOP: approved original hero slot not unique")
     match = matches[0]
-    start = source.rfind("\\n", 0, match.start()) + 1
+    start = source.rfind("\n", 0, match.start()) + 1
     if source[start:match.start()].strip():
         raise ValueError("SAFE_STOP: profile call has unexpected prefix")
     hero_begin = source.find("Widget _profileHeroCard()")
@@ -89,7 +89,7 @@ def apply(source: str) -> str:
             hero_begin < start < match.end() < hero_end):
         raise ValueError("SAFE_STOP: matched widget outside profile hero")
     old_slot = source[start:match.end()]
-    mat = "import 'package:flutter/material.dart';\\n"
+    mat = "import 'package:flutter/material.dart';\n"
     if source.count(mat) != 1:
         raise ValueError("SAFE_STOP: material import unexpectedly different")
     result = source[:start] + REPLACEMENT + source[match.end():]
