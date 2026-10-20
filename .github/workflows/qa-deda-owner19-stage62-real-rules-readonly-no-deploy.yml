@@ -1,0 +1,53 @@
+name: DEDA Stage62 Live Wallet Rules Audit READ ONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage62_live_wallet_rules_audit_READONLY_NO_DEPLOY.py'
+      - 'test/test_deda_owner19_stage62_live_wallet_rules_audit.py'
+      - '.github/workflows/qa-deda-owner19-stage62-real-rules-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage62-live-rules-readonly-no-deploy
+  cancel-in-progress: true
+jobs:
+  compare-actual-published-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_STAGE62_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE62_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify original source, Firestore production rules and catalog unmodified
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 6322360cd3f68845000aea03b2111efa1a59e6fb -- \
+            firestore.rules firebase.json functions/index.js functions/package.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            android/ assets/ server_private/
+          ! grep -q stage62_live_wallet_rules functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS production Firebase configuration, users and app source unmodified'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test Stage52 wallet permission contract without any credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_deda_owner19_stage62_live_wallet_rules_audit.py'
+          python3 -m unittest discover -s test -p 'test_deda_owner19_stage52_wallet_rules_candidate.py'
+      - name: Read only the actual published Firebase rules and print boolean wallet policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_owner19_stage62_live_wallet_rules_audit_READONLY_NO_DEPLOY.py
+          echo 'PASS audited actual published rule clauses; NO DEPLOY, no wallet read, no user changes'
