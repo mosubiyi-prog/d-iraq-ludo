@@ -1,0 +1,47 @@
+name: DEDA owner19 Stage50 friend-view public premium ink NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage50_public_verified_ink_private_2026_10_20.js'
+      - 'test/deda_owner19_stage50_public_ink.test.js'
+      - '.github/workflows/qa-deda-owner19-stage50-public-ink-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage50-public-ink-private-qa
+  cancel-in-progress: true
+jobs:
+  verified-public-ink-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check immutable production code and user assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 7dad5759f54e300949f25068fd4715493a101e8a -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            android/ assets/ server_private/
+          ! grep -q 'stage50_public_verified_ink' functions/index.js
+          test ! -f .deda-private/key.txt
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: unexported callable; unchanged app, wallet, locations, owner secret'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Public identifier colors always from signed server receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage50_public_verified_ink_private_2026_10_20.js
+          node --check test/deda_owner19_stage50_public_ink.test.js
+          node --test test/deda_owner19_stage50_public_ink.test.js
+          node --test test/deda_owner19_stage47_verified_active_ink.test.js
+          echo 'PASS: friend-visible colors authenticated, no location/wallet leak, NO DEPLOY'
