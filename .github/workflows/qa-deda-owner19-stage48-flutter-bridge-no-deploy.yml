@@ -1,0 +1,52 @@
+name: DEDA owner19 Stage48 standalone Flutter active-ID bridge QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'lib/deda_stage48_verified_active_profile_ink.dart'
+      - 'lib/deda_verified_identifier_ink.dart'
+      - 'test/deda_owner19_stage48_active_profile_ink_test.dart'
+      - '.github/workflows/qa-deda-owner19-stage48-flutter-bridge-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage48-standalone-flutter
+  cancel-in-progress: true
+jobs:
+  no-deploy-active-id-profile-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert accepted Flutter app and production Firebase unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 4cfab809ce0f1a4bceaf9451187d61358e0ee22f -- \
+            functions/index.js firestore.rules firebase.json storage.rules \
+            lib/main.dart lib/deda_backend.dart android/ assets/ server_private/
+          echo 'PASS: never modify production app or accounts'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Validate verified UID response, profile fallback and ink widgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/deda_stage48_verified_active_profile_ink.dart \
+            lib/deda_verified_identifier_ink.dart \
+            test/deda_owner19_stage48_active_profile_ink_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/deda_stage48_verified_active_profile_ink.dart \
+            lib/deda_verified_identifier_ink.dart \
+            test/deda_owner19_stage48_active_profile_ink_test.dart
+          flutter test test/deda_owner19_stage48_active_profile_ink_test.dart \
+            test/deda_owner19_stage46_verified_identifier_ink_test.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: secured stage48 widgets, no actual Firebase calls, NO DEPLOY'
