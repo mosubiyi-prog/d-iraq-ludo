@@ -1,0 +1,56 @@
+name: DEDA Stage63 REAL Joined Store and Admin Firestore E2E PRIVATE NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'test/deda_owner19_stage63_joined_store_manager_firestore_emulator.test.js'
+      - '.github/workflows/qa-deda-owner19-stage63-joined-store-manager-emulator-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage63-full-firebase-flow-emulator-no-deploy
+  cancel-in-progress: true
+jobs:
+  protect-original-app:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Block ALL production mutations, owner keys, app changes and Play
+        run: |
+          set -euo pipefail
+          git diff --quiet f653388a90d6aac4d9d3a3558b89ed9b69d84fef -- \
+            functions/index.js functions/package.json firestore.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            server_private/ android/ assets/ pubspec.yaml
+          ! grep -q stage63_joined_store functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: personal wallets, exclusive100 encrypted catalog, source app UNCHANGED'
+  joined-real-firestore-emulator:
+    needs: protect-original-app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 36
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Firebase EMULATOR tools, no credentials and no deploy
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: REAL Firestore transaction and 15-route callable session
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GCLOUD_PROJECT=demo-deda-stage63-owner-e2e
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-stage63-owner-e2e --only firestore \
+            'node --test test/deda_owner19_stage63_joined_store_manager_firestore_emulator.test.js'
+          echo 'PASS: backend 5k/10k purchases and 4-color GM grant HISTORY on disposable Firestore only'
