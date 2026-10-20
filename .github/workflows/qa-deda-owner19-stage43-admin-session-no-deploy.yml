@@ -1,0 +1,51 @@
+name: DEDA owner19 Stage43 admin session and immutable-audit guards NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'lib/deda_exclusive_ids_admin_page.dart'
+      - 'test/deda_owner19_stage43_snapshot_guard_test.dart'
+      - 'test/deda_stage19_exclusive_admin_tile_test.dart'
+      - '.github/workflows/qa-deda-owner19-stage43-admin-session-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage43-admin-session-no-deploy
+  cancel-in-progress: true
+jobs:
+  verify-private-manager-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert baseline, backend, secrets and app publishing unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 1a06983f2cb681d7b6bd8bfc6e9c59ef5004cfd0 -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart android/ server_private/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS: No production functions, app code, secrets, billing or rules updated'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Validate stage43 source and synthetic audit tests only
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format lib/deda_exclusive_ids_admin_page.dart test/deda_owner19_stage43_snapshot_guard_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings \
+            lib/deda_exclusive_ids_admin_page.dart test/deda_owner19_stage43_snapshot_guard_test.dart
+          flutter test test/deda_owner19_stage43_snapshot_guard_test.dart \
+            test/deda_stage19_exclusive_admin_tile_test.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS: Manager UI fail-closed invariants tested; NO APK, NO FIREBASE/PLAY DEPLOY'
