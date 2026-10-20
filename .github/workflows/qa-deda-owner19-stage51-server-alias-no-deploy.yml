@@ -1,0 +1,45 @@
+name: DEDA owner19 Stage51 canonical friend alias resolver NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage51_friend_original_alias_private_2026_10_20.js'
+      - 'test/deda_owner19_stage51_friend_alias.test.js'
+      - '.github/workflows/qa-deda-owner19-stage51-server-alias-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage51-canonical-resolver
+  cancel-in-progress: true
+jobs:
+  secured-canonical-alias-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard production/Firebase original unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet bc25bb00f9ff31d8414c4c45fd0e37716b3f9fea -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart \
+            android/ assets/ server_private/
+          ! grep -q 'stage51_friend_original_alias_private' functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no production server or friendships/accounts mutated'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test read-only alias ownership and backwards-compatible lookup
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage51_friend_original_alias_private_2026_10_20.js
+          node --test test/deda_owner19_stage51_friend_alias.test.js
+          node --test test/deda_owner19_stage50_public_ink.test.js
+          echo 'PASS: verified canonical friend alias without location/wallet disclosure or deploy'
