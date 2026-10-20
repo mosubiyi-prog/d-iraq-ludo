@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/qa-deda-stage69-actual-live-rules-spark-card-emulator-no-deploy.yml'
       - 'tools/deda_stage69_merge_5000_checkout_into_live_rules_READONLY_NO_DEPLOY.py'
+      - 'test/deda_stage69_live_spark_gift_claim_preservation.test.js'
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,7 +45,7 @@ jobs:
           python3 tools/deda_stage69_merge_5000_checkout_into_live_rules_READONLY_NO_DEPLOY.py
       - name: Install isolated local rules emulator
         run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
-      - name: Drive 6 original-client atomic tests on exact CURRENT live policy plus isolated candidate
+      - name: Prove real published wallet preserves one-time gifts and secure 5k purchases in emulator
         shell: bash
         run: |
           set -euo pipefail
@@ -52,5 +53,5 @@ jobs:
           export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
           functions/node_modules/.bin/firebase emulators:exec \
             --project demo-deda-stage66-spark-card-only --only firestore \
-            'node --test test/deda_stage66_firestore_only_spark_card_checkout_emulator.test.js'
-          echo 'PASS currently PUBLISHED policy + isolated new receipt allowance on emulator only; no live deploy'
+            'node --test test/deda_stage66_firestore_only_spark_card_checkout_emulator.test.js test/deda_stage69_live_spark_gift_claim_preservation.test.js'
+          echo 'PASS currently PUBLISHED policy, FIXED unreceipted-debit path, unchanged legitimate gift claim, isolated 5k card receipts; emulator only, no live deploy'
