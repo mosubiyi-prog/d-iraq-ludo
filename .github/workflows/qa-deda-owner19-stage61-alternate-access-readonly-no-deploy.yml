@@ -1,0 +1,45 @@
+name: DEDA Stage61 Alternative Firebase IAM READ ONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage61_alternate_firebase_iam_readonly_2026_10_20.py'
+      - '.github/workflows/qa-deda-owner19-stage61-alternate-access-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage61-alternate-access-readonly-no-deploy
+  cancel-in-progress: true
+jobs:
+  readonly-alternatives:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_STAGE61_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE61_FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Protect production functions and customer accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet b8eb8bb79253c5935d72cd0758fd15350515dd5c -- \
+            functions/index.js firestore.rules firebase.json storage.rules \
+            lib/main.dart lib/deda_backend.dart android/ assets/ server_private/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: immutable official app, catalog, and production backend'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run IAM self-permission and Firebase alternate read metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_owner19_stage61_alternate_firebase_iam_readonly_2026_10_20.py
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_owner19_stage61_alternate_firebase_iam_readonly_2026_10_20.py
+          echo 'PASS: alternate access tested without asking owner for missing country'
