@@ -1,0 +1,73 @@
+name: DEDA owner19 Stage54 purchase receipt provenance READ ONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage54_purchase_receipt_audit_private_2026_10_20.js'
+      - 'test/deda_owner19_stage54_receipt_ownership_readonly.test.js'
+      - 'test/deda_owner19_stage54_receipt_firestore_emulator.test.js'
+      - '.github/workflows/qa-deda-owner19-stage54-receipts-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage54-audit-no-deploy
+  cancel-in-progress: true
+jobs:
+  source-and-owner-receipt-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Immutable real app, wallet policies and owner private catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 45c17519caea836570bf32884294ef981790cf6b -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            android/ server_private/ assets/
+          ! grep -q 'stage54_purchase_receipt_audit_private' functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: actual production app, wallets and encrypted exclusive catalog untouched'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit forged receipts and same-account wallet proof without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage54_purchase_receipt_audit_private_2026_10_20.js
+          node --check test/deda_owner19_stage54_receipt_ownership_readonly.test.js
+          node --test test/deda_owner19_stage54_receipt_ownership_readonly.test.js
+          echo 'PASS: no receipt with counterfeit split or ownership approved'
+  actual-generated-receipts-emulator:
+    needs: source-and-owner-receipt-unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable emulator-only tools, no credentials
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Real receipt integration from server-produced 5k and 10k purchases
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GCLOUD_PROJECT=demo-deda-owner19-stage54-receipt
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-owner19-stage54-receipt --only firestore \
+            'node --test test/deda_owner19_stage54_receipt_firestore_emulator.test.js'
+          echo 'PASS: reconciled purchases read-only; no extra debit, no Firebase deploy'
