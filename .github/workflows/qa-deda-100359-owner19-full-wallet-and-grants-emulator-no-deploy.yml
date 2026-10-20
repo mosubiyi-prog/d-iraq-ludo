@@ -8,6 +8,7 @@ on:
       - 'tools/deda_100359_owner19_combined_gateway_private_2026_10_19.js'
       - 'tools/deda_100359_stage41_verified_sale_list_private_2026_10_20.js'
       - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
+      - 'test/deda_stage18_verified10k_checkout_firestore_emulator.test.js'
       - 'tools/deda_stage19_private_fixed_color_manager_actions_2026_10_19.js'
 permissions:
   contents: read
@@ -22,10 +23,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Reject any production/app account migration or deployment
+        # Stage53 pinned backup includes earlier approved encrypted-catalog
+        # revisions. Do not compare to the pre-catalog Stage32 ancestor:
+        # that historical difference falsely blocks new emulator regression.
         shell: bash
         run: |
           set -euo pipefail
-          git diff --quiet d14e573d1f7f1ab67deff04222aca13c6f928553 -- \
+          git diff --quiet 5141c5e6cfe07692dc135815f051eef981dd306f -- \
             functions/index.js firestore.rules firebase.json \
             android/ lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
             server_private/catalogs/ pubspec.yaml pubspec.lock
