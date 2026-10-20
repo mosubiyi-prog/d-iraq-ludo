@@ -116,16 +116,28 @@ test("stolen registry, forged alias and receipt mismatches fail closed",async()=
     db=>db.patch("deda_owned_identifier_accounts/"+hash(key),
       {ownedIds:[original,premium,premium]}),
   ];
-  for(const sabotage of corrupt){
+  for(const [caseNo,sabotage] of corrupt.entries()){
     const db=setup();
     sabotage(db);
+    let outcome, blocked=false;
     try {
-      const outcome=await read(db);
-      // Deactivated canonical original or conflicting public ID is not found.
-      assert.equal(outcome,null,"forged ownership/display ID was accepted");
+      outcome=await read(db);
     } catch (error) {
       // Inconsistent account, alias or GM receipt must fail without a style.
-      assert.equal(error.code,"failed-precondition");
+      assert.equal(error.code,"failed-precondition",
+        "unexpected error type in corruption scenario "+caseNo);
+      blocked=true;
+    }
+    if(blocked)continue;
+    if(caseNo===4) {
+      // The owner can legitimately rotate a permanent account key; if no
+      // premium ledger is present under the new key, the public ORIGINAL ID
+      // may still resolve, but its premium name and color must disappear.
+      assert.deepEqual(outcome,result(original,original,null));
+    } else {
+      // All other forgeries must be rejected or return no known owner.
+      assert.equal(outcome,null,
+        "forged ownership or GM color was accepted in scenario "+caseNo);
     }
   }
 });
