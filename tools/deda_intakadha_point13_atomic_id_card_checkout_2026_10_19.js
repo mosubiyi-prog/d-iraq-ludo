@@ -6,6 +6,8 @@
 // Tested only against demo- Firestore Emulator data.
 
 const {createHash} = require("node:crypto");
+const {rejectIfUnprovenManagerPersonalSpending} = require(
+  "./deda_owner19_stage55_gm_wallet_source_lock_2026_10_20.js");
 
 const PRICE = 5000;
 const COLORS = Object.freeze(["gold", "diamond", "royal", "pink"]);
@@ -153,6 +155,7 @@ async function checkoutIdCard(db, {uid, color, requestId}) {
     }
     const fromGifts = Math.min(giftBalance, charge);
     const fromGm = charge - fromGifts;
+    rejectIfUnprovenManagerPersonalSpending(fromGm);
     const transactionId = accountHash(key + ":" + requestId + ":" + color);
     const now = new Date();
 
