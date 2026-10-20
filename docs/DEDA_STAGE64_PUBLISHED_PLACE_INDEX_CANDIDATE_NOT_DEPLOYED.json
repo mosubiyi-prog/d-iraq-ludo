@@ -1,0 +1,17 @@
+{
+  "warning": "STAGE64_CANDIDATE_ONLY_NO_FIREBASE_DEPLOY_OR_AUTO_APPLY",
+  "project": "deda-25b88",
+  "purpose": "Query published_places WHERE accountKey == authenticatedSession.accountKey AND published == true on replacement phone",
+  "indexes": [
+    {
+      "collectionGroup": "published_places",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "accountKey", "order": "ASCENDING"},
+        {"fieldPath": "published", "order": "ASCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": [],
+  "releaseGate": "Review real deployed indexes, verify if an equivalent index already exists, explicitly approve any index creation; NEVER auto-deploy from this candidate."
+}
