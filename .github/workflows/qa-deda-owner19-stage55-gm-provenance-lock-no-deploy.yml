@@ -1,0 +1,47 @@
+name: DEDA owner19 Stage55 GM test-million spend source lock NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage55_gm_wallet_source_lock_2026_10_20.js'
+      - 'tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js'
+      - 'tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js'
+      - 'test/deda_owner19_stage55_gm_wallet_source_lock.test.js'
+      - '.github/workflows/qa-deda-owner19-stage55-gm-provenance-lock-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage55-wallet-test-million-no-deploy
+  cancel-in-progress: true
+jobs:
+  gm-provenance-never-test-wallet-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm immutable production code, wallet rules, user records and reserved100
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 6bf913061224c3eab850469aefa270516288dfa0 -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            android/ server_private/ assets/ pubspec.yaml pubspec.lock
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no production account, APK, wallet data or encrypted private IDs changed'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify only DEMO local emulator may exercise self-minted GM spend
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage55_gm_wallet_source_lock_2026_10_20.js
+          node --check tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js
+          node --check tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js
+          node --test test/deda_owner19_stage55_gm_wallet_source_lock.test.js
+          echo 'PASS: no eligible GM test-million live spend, all genuine gift-only paths preserved'
