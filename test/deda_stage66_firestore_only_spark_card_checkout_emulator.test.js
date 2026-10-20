@@ -90,7 +90,12 @@ test("stranger cannot debit the wallet, invent a receipt, or claim another user'
   await reset();
   const db=client(stranger.uid);
   await assertFails(checkout(db,"royal"));
-  assert.equal((await env.withSecurityRulesDisabled(ctx=>getDoc(wallet(ctx.firestore())))).data().balance,15000);
+  let balanceAfterDeniedAttempt;
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const snapshot=await getDoc(wallet(ctx.firestore()));
+    balanceAfterDeniedAttempt=snapshot.data().balance;
+  });
+  assert.equal(balanceAfterDeniedAttempt,15000);
 });
 test("insufficient funds do not create ownership",async()=>{
   await reset(4000);
