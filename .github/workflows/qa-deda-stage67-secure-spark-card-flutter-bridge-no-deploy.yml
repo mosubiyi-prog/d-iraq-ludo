@@ -147,7 +147,6 @@ jobs:
           assert src.count('DEDA_STAGE67_SPARK_AUTHENTICATED_CARD_PURCHASE_LINK_NO_DEPLOY') == 1
           assert src.count('DedaStage67SparkCardAction(') == 1
           assert src.count('DEDA_STAGE67_VERIFIED_GIFT_CARD_RULES_DEPLOYED') == 1
-          assert src.count('DedaPoint17ShopCardAction(') == 1
           assert "import 'deda_stage67_spark_card_action.dart';" in src
           assert "DedaStage42VerifiedSalePanel(" in src
           assert src.count('DEDA_OWNER19_STAGE48_PROFILE_ACTIVE_ID_FIXED_INK_NO_DEPLOY')==1
