@@ -19,6 +19,14 @@ RULE="""
     // STAGE71_FREE_DUAL_200_ROLE_AND_UNIQUE_GRANT_NO_DEPLOY
     // Protected GROUP001 identities are in manager-only collection, never in
     // source code, APK or client-side static lists.
+    function stage71Manager() {
+      return isAdmin()
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'general_manager'
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey ==
+           get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey;
+    }
     function stage71CatalogPath(id) {
       return /databases/$(database)/documents/deda_stage71_admin_catalog/$(id);
     }
@@ -40,11 +48,11 @@ RULE="""
            get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey;
     }
     match /deda_stage71_admin_catalog/{identifier} {
-      allow get, list: if isGeneralManager();
+      allow get, list: if stage71Manager();
       // Original 200 are provisioned ONLY by a trusted Admin SDK, never a
       // normal phone client or a user possessing a general manager title.
       allow create, delete: if false;
-      allow update: if isGeneralManager()
+      allow update: if stage71Manager()
         && resource.data.status == 'available'
         && request.resource.data.status in ['gifted','self_used']
         && request.resource.data.recipientOriginalId is string
@@ -66,16 +74,16 @@ RULE="""
     }
     match /deda_stage71_granted_registry/{identifier} {
       // Read by manager or the true original account owner; no client changes.
-      allow get: if isGeneralManager() || (
+      allow get: if stage71Manager() || (
         signedIn() && resource.data.recipientOriginalId is string &&
         stage71SelfRecipient(resource.data.recipientOriginalId)
       );
-      allow list: if isGeneralManager() || (
+      allow list: if stage71Manager() || (
         signedIn() && resource.data.recipientOriginalId is string &&
         stage71SelfRecipient(resource.data.recipientOriginalId)
       );
       allow update, delete: if false;
-      allow create: if isGeneralManager()
+      allow create: if stage71Manager()
         && exists(stage71CatalogPath(identifier))
         && get(stage71CatalogPath(identifier)).data.status == 'available'
         && get(stage71CatalogPath(identifier)).data.identifier == identifier
