@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -85,6 +87,105 @@ class DedaStage71Admin200 {
     }
     // Published Firestore rules independently enforce this role on EACH read.
     return uid;
+  }
+
+  /// On-device one-time ORIGINAL owner backup import. Group001 input exists
+  /// only in the GM's clipboard / private Library, NEVER embedded in APK or
+  /// public GitHub. Group002 input is the exact 100 formerly offered for sale.
+  /// All 200 create writes are restricted by published GM+PIN Rules, and
+  /// existing rows are NEVER overwritten or reset after a gift.
+  static Future<void> importOwnerTwoGroups({
+    required String ownerBackupJson,
+    required List<String> formerlySaleGroup002,
+    void Function(int completed, int total)? progress,
+  }) async {
+    final uid = await _managerUid();
+    final raw = jsonDecode(ownerBackupJson);
+    if (raw is! Map ||
+        raw['format'] != 'DEDA_LAB_IDS' ||
+        raw['version'] != 1 ||
+        raw['identifiers'] is! List ||
+        (raw['identifiers'] as List).length != 100 ||
+        formerlySaleGroup002.length != 100) {
+      throw StateError('original-100-backup-required');
+    }
+    final originalNames = <String>[];
+    for (final item in raw['identifiers'] as List) {
+      if (item is! Map || item['name'] is! String ||
+          item['tier'] != 'gold') {
+        throw StateError('private-100-backup-corrupted');
+      }
+      final suffix=(item['name'] as String)
+          .replaceFirst(RegExp(r'^@DEDA-'), '').toUpperCase();
+      if (!RegExp(r'^[A-Z0-9]{4,12}$').hasMatch(suffix)) {
+        throw StateError('private-identifier-invalid');
+      }
+      originalNames.add('@DEDA-$suffix');
+    }
+    if (originalNames.first != '@DEDA-SALEM' ||
+        originalNames.last != '@DEDA-2020') {
+      throw StateError('not-original-100-sequence');
+    }
+    final second = <String>[];
+    for (final candidate in formerlySaleGroup002) {
+      if (!RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(candidate)) {
+        throw StateError('second100-invalid-identifier');
+      }
+      second.add(candidate);
+    }
+    final union = [...originalNames, ...second];
+    if (union.toSet().length != 200) {
+      throw StateError('duplicate-between-original-100-and-second-100');
+    }
+    final db = FirebaseFirestore.instance;
+    final collection = db.collection(DedaStage71Admin200.collection);
+    final planned = <Map<String, Object>>[];
+    for (final group in ['001','002']) {
+      final items = group == '001' ? originalNames : second;
+      for (var i=0;i<100;i++) {
+        planned.add({
+          'identifier':items[i],
+          'group':group,
+          'sequence':i+1,
+          'baseColor':'gold',
+          'status':'available',
+        });
+      }
+    }
+    // Small batches stay under Firestore Rules access-call limits, and can
+    // resume without resetting a granted item on intermittent rural internet.
+    var completed=0;
+    for (var i=0;i<planned.length;i+=3) {
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('admin-session-changed-during-import');
+      }
+      final batch=db.batch();
+      var hasWrites=false;
+      for (final data in planned.skip(i).take(3)) {
+        final id=data['identifier']! as String;
+        final ref=collection.doc(id);
+        final existing=await ref.get();
+        if (existing.exists) {
+          final old=existing.data()!;
+          for (final key in ['identifier','group','sequence','baseColor']) {
+            if(old[key] != data[key]) {
+              throw StateError('existing-reserved-identifier-mismatch');
+            }
+          }
+          if(!{'available','gifted','self_used'}.contains(old['status'])) {
+            throw StateError('existing-reserved-id-invalid-status');
+          }
+        } else {
+          hasWrites=true;
+          batch.set(ref,data);
+        }
+      }
+      if(hasWrites) await batch.commit();
+      completed+= (i+3<=planned.length ? 3 : planned.length-i);
+      progress?.call(completed,planned.length);
+    }
+    final verified=await read();
+    if(verified.length!=200) throw StateError('import-readback-incomplete');
   }
 
   static Future<List<DedaStage71AdminId>> read() async {
