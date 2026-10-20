@@ -136,7 +136,7 @@ jobs:
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           echo 'PASS: no signed APK, no Play, no Firebase deploy and no user balances changed'
-- name: Compile PRIVATE 100360 heartbeat UI APK with EVERY premium server feature OFF
+      - name: Compile PRIVATE 100360 heartbeat UI APK with EVERY premium server feature OFF
         shell: bash
         run: |
           set -euo pipefail
