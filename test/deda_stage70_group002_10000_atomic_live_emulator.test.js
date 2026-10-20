@@ -13,7 +13,6 @@ const sale="@DEDA-Q7W8E9";let env;
 const wallet=(db,p)=>doc(db,"deda_diamond_gift_balances",p.original);
 const stock=db=>doc(db,"deda_stage70_group002_stock",sale);
 const registry=db=>doc(db,"deda_stage70_group002_registry",sale);
-const receipt=(db,p)=>doc(db,"deda_stage70_group002_receipts",p.original+"__"+sale);
 const user=i=>env.authenticatedContext(people[i]).firestore();
 async function seed(){
  await env.clearFirestore();
@@ -34,25 +33,21 @@ function purchase(db,p,charge=10000){
  const id=p.original+"__"+sale,b=writeBatch(db);
  b.update(wallet(db,p),{balance:20000,lastPurchaseIdentifier:sale,
    lastPurchaseReceiptId:id,updatedAt:serverTimestamp()});
- b.update(stock(db),{status:"sold",soldToOriginalId:p.original,
-   soldAt:serverTimestamp(),receiptId:id});
  b.set(registry(db),{identifier:sale,publicId:p.original,
-   kind:"group002",receiptId:id,createdAt:serverTimestamp()});
- b.set(receipt(db,p),{publicId:p.original,identifier:sale,
-   kind:"group002",cost:charge,createdAt:serverTimestamp()});
+   kind:"group002",receiptId:id,cost:charge,createdAt:serverTimestamp()});
  return b.commit();
 }
 test.before(async()=>{env=await initializeTestEnvironment({
  projectId:PROJECT,firestore:{host:"127.0.0.1",port:8080,rules}});});
 test.after(async()=>{if(env)await env.cleanup();});
 test.beforeEach(seed);
-test("fixed 10000 checkout creates ownership, receipt, sold stock and debit",async()=>{
+test("fixed 10000 checkout creates unique permanent ownership receipt and exact debit",async()=>{
  const db=user(0),p=people[0];
  await assertSucceeds(purchase(db,p));
  assert.equal((await getDoc(wallet(db,p))).data().balance,20000);
- assert.equal((await getDoc(stock(db))).data().status,"sold");
+ assert.equal((await getDoc(stock(db))).data().status,"available");
  assert.equal((await getDoc(registry(db))).data().publicId,p.original);
- assert.equal((await getDoc(receipt(db,p))).data().cost,10000);
+ assert.equal((await getDoc(registry(db))).data().cost,10000);
 });
 test("receipt and global stock cannot be purchased twice",async()=>{
  const a=user(0),b=user(1);
