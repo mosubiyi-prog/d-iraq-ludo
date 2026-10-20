@@ -117,8 +117,14 @@ class _DedaStage71FreeCardActionState extends State<DedaStage71FreeCardAction> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<DedaPremiumIdCardColor?>(
+  Widget build(BuildContext context) {
+    if (!DedaStage71FreeCards.originalIdPattern.hasMatch(widget.originalId)) {
+      return const SizedBox(
+        height: 34,
+        child: OutlinedButton(onPressed: null, child: Text('استخدام')),
+      );
+    }
+    return ValueListenableBuilder<DedaPremiumIdCardColor?>(
         valueListenable: DedaStage71FreeCards.notifier(widget.originalId),
         builder: (context, active, child) => SizedBox(
           height: 34,
@@ -132,6 +138,7 @@ class _DedaStage71FreeCardActionState extends State<DedaStage71FreeCardAction> {
           ),
         ),
       );
+  }
 }
 
 /// Keep original ID and its Copy callback. Only the decorative foil changes.
