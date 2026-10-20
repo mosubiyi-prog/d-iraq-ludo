@@ -13,7 +13,17 @@ def original_source():
     src = Path("lib/main.dart").read_text(encoding="utf-8")
     assert src.count("Future<void> _showDedaIdCard() async {") == 1
     assert stage.MARKER not in src
-    return src + "\n// DEDA_OWNER19_STAGE48_PROFILE_ACTIVE_ID_FIXED_INK_NO_DEPLOY\n"
+    prior = "DEDA_OWNER19_STAGE48_PROFILE_ACTIVE_ID_FIXED_INK_NO_DEPLOY"
+    count = src.count(prior)
+    if count == 0:
+        # Checked-in raw main.dart is intentionally pre-Stage48; synthetic
+        # prerequisite only when the reconstructed app is not available.
+        return src + "\n// " + prior + "\n"
+    if count != 1:
+        raise AssertionError("SAFE_STOP: Stage48 marker ambiguous")
+    # In full original-100359 reconstruction Stage48 is already present.
+    # Do not invent a SECOND private profile wrapper marker.
+    return src
 
 class Stage49ExactQrTest(unittest.TestCase):
     def test_only_the_existing_qr_dialog_gains_a_verified_visual_label(self):
