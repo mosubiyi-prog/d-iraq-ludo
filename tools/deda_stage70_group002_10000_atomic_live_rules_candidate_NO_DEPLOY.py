@@ -20,134 +20,66 @@ MARKER='STAGE70_GROUP002_FIXED_10000_SPARK_NO_DEPLOY'
 OUT=Path('/tmp/deda-stage70-candidate.rules')
 RULE = """
     // STAGE70_GROUP002_FIXED_10000_SPARK_NO_DEPLOY
-    // Group001 manager exclusive100 NEVER appears here.
+    // 2-document atomic wallet and unique ownership receipt; no GM secrets.
     function stage70StockPath(identifier) {
       return /databases/$(database)/documents/deda_stage70_group002_stock/$(identifier);
     }
     function stage70RegistryPath(identifier) {
       return /databases/$(database)/documents/deda_stage70_group002_registry/$(identifier);
     }
-    function stage70ReceiptPath(receiptId) {
-      return /databases/$(database)/documents/deda_stage70_group002_receipts/$(receiptId);
-    }
-    function stage70SaleReceiptId(publicId, identifier) {
-      return publicId + '__' + identifier;
-    }
     function stage70SaleIdFormat(identifier) {
-      return identifier is string
-        && identifier.matches('^@DEDA-[A-Z0-9]{6}$');
+      return identifier is string && identifier.matches('^@DEDA-[A-Z0-9]{6}$');
     }
     function stage70Spend(publicId) {
       let id = request.resource.data.get('lastPurchaseIdentifier', '');
-      let receiptId = stage70SaleReceiptId(publicId,id);
       return stage70SaleIdFormat(id)
-        && request.resource.data.lastPurchaseReceiptId == receiptId
-        && resource.data.balance is int
         && resource.data.balance >= 10000
         && request.resource.data.balance == resource.data.balance - 10000
+        && request.resource.data.lastPurchaseReceiptId == publicId + '__' + id
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'balance', 'updatedAt', 'lastPurchaseIdentifier',
-          'lastPurchaseReceiptId'
+          'balance','updatedAt','lastPurchaseIdentifier','lastPurchaseReceiptId'
         ])
-        && exists(stage70StockPath(id))
-        && get(stage70StockPath(id)).data.approved == true
-        && get(stage70StockPath(id)).data.group == '002'
-        && get(stage70StockPath(id)).data.priceDiamonds == 10000
-        && get(stage70StockPath(id)).data.status == 'available'
         && !exists(stage70RegistryPath(id))
-        && !exists(stage70ReceiptPath(receiptId))
-        && existsAfter(stage70StockPath(id))
-        && getAfter(stage70StockPath(id)).data.status == 'sold'
-        && getAfter(stage70StockPath(id)).data.soldToOriginalId == publicId
-        && getAfter(stage70StockPath(id)).data.receiptId == receiptId
         && existsAfter(stage70RegistryPath(id))
         && getAfter(stage70RegistryPath(id)).data.publicId == publicId
-        && getAfter(stage70RegistryPath(id)).data.receiptId == receiptId
-        && existsAfter(stage70ReceiptPath(receiptId))
-        && getAfter(stage70ReceiptPath(receiptId)).data.publicId == publicId
-        && getAfter(stage70ReceiptPath(receiptId)).data.identifier == id
-        && getAfter(stage70ReceiptPath(receiptId)).data.cost == 10000;
+        && getAfter(stage70RegistryPath(id)).data.cost == 10000;
     }
     match /deda_stage70_group002_stock/{identifier} {
-      // An actual owner-approved inventory is pre-provisioned by a trusted
-      // administrator, NOT by any client. Nothing auto-publishes fake stock.
+      // Inventory approval can be written only by trusted Admin SDK.
       allow get: if signedIn();
       allow list: if signedIn() && request.query.limit <= 100;
-      allow create, delete: if false;
-      allow update: if request.resource.data.soldToOriginalId is string
-        && verifiedDiamondsPersonalOwner(request.resource.data.soldToOriginalId)
-        && stage70SaleIdFormat(identifier)
-        && resource.data.identifier == identifier
-        && resource.data.group == '002'
-        && resource.data.approved == true
-        && resource.data.priceDiamonds == 10000
-        && resource.data.status == 'available'
-        && request.resource.data.status == 'sold'
-        && request.resource.data.soldAt == request.time
-        && request.resource.data.receiptId ==
-          stage70SaleReceiptId(request.resource.data.soldToOriginalId, identifier)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status','soldToOriginalId','soldAt','receiptId'
-        ])
-        && !exists(stage70RegistryPath(identifier))
-        && existsAfter(stage70RegistryPath(identifier))
-        && getAfter(stage70RegistryPath(identifier)).data.publicId ==
-          request.resource.data.soldToOriginalId
-        && existsAfter(stage70ReceiptPath(request.resource.data.receiptId))
-        && getAfter(stage70ReceiptPath(request.resource.data.receiptId)).data.cost == 10000;
+      allow create, update, delete: if false;
     }
     match /deda_stage70_group002_registry/{identifier} {
+      // Globally unique immutable registry = receipt and verified ownership.
       allow get: if signedIn();
-      allow list: if signedIn() && request.query.limit <= 100
-        && verifiedDiamondsPersonalOwner(resource.data.publicId);
+      allow list: if false;
       allow update, delete: if false;
       allow create: if stage70SaleIdFormat(identifier)
-        && request.resource.data.identifier == identifier
         && request.resource.data.publicId is string
         && verifiedDiamondsPersonalOwner(request.resource.data.publicId)
-        && request.resource.data.kind == 'group002'
-        && request.resource.data.receiptId ==
-          stage70SaleReceiptId(request.resource.data.publicId,identifier)
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.keys().hasOnly([
-          'identifier','publicId','kind','receiptId','createdAt'
-        ])
-        && exists(stage70StockPath(identifier))
-        && get(stage70StockPath(identifier)).data.status == 'available'
-        && existsAfter(stage70StockPath(identifier))
-        && getAfter(stage70StockPath(identifier)).data.status == 'sold'
-        && getAfter(stage70StockPath(identifier)).data.soldToOriginalId ==
-          request.resource.data.publicId
-        && existsAfter(stage70ReceiptPath(request.resource.data.receiptId))
-        && getAfter(stage70ReceiptPath(request.resource.data.receiptId)).data.identifier == identifier;
-    }
-    match /deda_stage70_group002_receipts/{receiptId} {
-      allow get: if verifiedDiamondsPersonalOwner(resource.data.publicId);
-      allow list, update, delete: if false;
-      allow create: if request.resource.data.publicId is string
-        && verifiedDiamondsPersonalOwner(request.resource.data.publicId)
-        && stage70SaleIdFormat(request.resource.data.identifier)
-        && receiptId == stage70SaleReceiptId(
-          request.resource.data.publicId,request.resource.data.identifier)
+        && request.resource.data.identifier == identifier
         && request.resource.data.kind == 'group002'
         && request.resource.data.cost == 10000
+        && request.resource.data.receiptId ==
+          request.resource.data.publicId + '__' + identifier
         && request.resource.data.createdAt == request.time
         && request.resource.data.keys().hasOnly([
-          'publicId','identifier','kind','cost','createdAt'
+          'identifier','publicId','kind','cost','receiptId','createdAt'
         ])
-        && exists(stage70StockPath(request.resource.data.identifier))
-        && get(stage70StockPath(request.resource.data.identifier)).data.status == 'available'
-        && existsAfter(stage70StockPath(request.resource.data.identifier))
-        && getAfter(stage70StockPath(request.resource.data.identifier)).data.status == 'sold'
-        && getAfter(stage70StockPath(request.resource.data.identifier)).data.receiptId == receiptId
-        && existsAfter(stage70RegistryPath(request.resource.data.identifier))
-        && getAfter(stage70RegistryPath(request.resource.data.identifier)).data.publicId ==
-          request.resource.data.publicId
-        && existsAfter(
-          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId))
+        && exists(stage70StockPath(identifier))
+        && get(stage70StockPath(identifier)).data.group == '002'
+        && get(stage70StockPath(identifier)).data.approved == true
+        && get(stage70StockPath(identifier)).data.priceDiamonds == 10000
+        && get(stage70StockPath(identifier)).data.status == 'available'
         && getAfter(
           /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
-          ).data.lastPurchaseReceiptId == receiptId;
+        ).data.lastPurchaseReceiptId == request.resource.data.receiptId
+        && getAfter(
+          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
+        ).data.balance == get(
+          /databases/$(database)/documents/deda_diamond_gift_balances/$(request.resource.data.publicId)
+        ).data.balance - 10000;
     }
 
 """
