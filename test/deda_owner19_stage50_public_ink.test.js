@@ -119,10 +119,14 @@ test("stolen registry, forged alias and receipt mismatches fail closed",async()=
   for(const sabotage of corrupt){
     const db=setup();
     sabotage(db);
-    const outcome=await read(db);
-    // Deactivated canonical original is not found; forged data fails closed.
-    if(outcome===null)continue;
-    assert.fail("forged ownership/display ID was accepted");
+    try {
+      const outcome=await read(db);
+      // Deactivated canonical original or conflicting public ID is not found.
+      assert.equal(outcome,null,"forged ownership/display ID was accepted");
+    } catch (error) {
+      // Inconsistent account, alias or GM receipt must fail without a style.
+      assert.equal(error.code,"failed-precondition");
+    }
   }
 });
 test("Group002 purchased ID never inherits GM lifetime color",async()=>{
