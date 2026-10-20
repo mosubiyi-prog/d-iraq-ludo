@@ -62,8 +62,7 @@ def patch_main(src:str)->str:
     # candidates publicly even when the profile routes pass a catalog in.
     import re
     pattern = re.compile(
-        r'(key:\\s*const\\s+Key\\(\\\'deda_point9_scrollable_identifiers_below_cards\\\'\\).*?'
-        r'itemCount:)\\s*.*?(,\\s*itemBuilder:)',
+        r"(key:\s*const\s+Key\('deda_point9_scrollable_identifiers_below_cards'\).*?itemCount:)\s*.*?(,\s*itemBuilder:)",
         re.S,
     )
     matches=list(pattern.finditer(shop))
@@ -72,7 +71,7 @@ def patch_main(src:str)->str:
     shop=pattern.sub(lambda m:m.group(1)+' 0'+m.group(2),shop,count=1)
     result=src[:a]+shop+src[b:]
     # Cosmetic previews only; catalog proposals stay within protected admin.
-    route=re.compile(r'readOnlyCatalog\\s*:\\s*DedaPoint10CandidateGroup002\\s*\\.\\s*identifiers\\s*,')
+    route=re.compile(r'readOnlyCatalog\s*:\s*DedaPoint10CandidateGroup002\s*\.\s*identifiers\s*,')
     result,n=route.subn('readOnlyCatalog: const <String>[],',result)
     if n>1:
         raise ValueError('SAFE_STOP_STAGE71_EXTRA_PUBLIC_CATALOG_ROUTE')
