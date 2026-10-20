@@ -55,6 +55,6 @@ jobs:
           export GCLOUD_PROJECT=demo-deda-stage70-group002-spark
           export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
           functions/node_modules/.bin/firebase emulators:exec \
-            --project demo-deda-stage66-spark-card-only --only firestore \
+            --project demo-deda-stage70-group002-spark --only firestore \
             'node --test test/deda_stage70_group002_10000_atomic_live_emulator.test.js'
           echo 'PASS currently PUBLISHED policy, FIXED unreceipted-debit path, unchanged legitimate gift claim, isolated 5k card receipts; emulator only, no live deploy'
