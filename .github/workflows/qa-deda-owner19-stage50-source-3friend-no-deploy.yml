@@ -1,0 +1,39 @@
+name: DEDA owner19 Stage50 friend source three UI spots NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/stage_deda_100360_friend_visible_ink_after_stage49.py'
+      - 'test/test_deda_stage50_friend_ink_source.py'
+      - '.github/workflows/qa-deda-owner19-stage50-source-3friend-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage50-three-friend-source
+  cancel-in-progress: true
+jobs:
+  friend-three-ID-wrappers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No production account, sharing, or app code touched
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 7dad5759f54e300949f25068fd4715493a101e8a -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            android/ server_private/ assets/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+      - name: Exact surgical friend card, search result and public profile QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/stage_deda_100360_friend_visible_ink_after_stage49.py
+          python3 -m unittest discover -s test -p 'test_deda_stage50_friend_ink_source.py'
+          echo 'PASS: only three public friend ID text placements changed in staged source, NO DEPLOY'
