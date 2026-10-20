@@ -1,0 +1,72 @@
+name: DEDA owner19 Stage56 GM midnight million refill PRIVATE NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage56_gm_personal_midnight_refill_PRIVATE_NO_DEPLOY_2026_10_20.js'
+      - 'test/deda_owner19_stage56_gm_midnight_refill.test.js'
+      - 'test/deda_owner19_stage56_gm_midnight_firestore_emulator.test.js'
+      - '.github/workflows/qa-deda-owner19-stage56-gm-midnight-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner19-stage56-midnight-no-deploy
+  cancel-in-progress: true
+jobs:
+  source-provenance-midnight-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact stage56 backup and unchanged production
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 828f4433b2706de4a4fea0e2e35d8052637a9c98 -- \
+            functions/index.js firestore.rules firebase.json storage.rules \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            android/ server_private/ assets/
+          ! grep -q stage56_gm_personal_midnight_refill functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: no production money, card checkout, signed APK, rules or owner secret changed'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test Baghdad midnight date, exactly-once, cap, privilege, donation separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage56_gm_personal_midnight_refill_PRIVATE_NO_DEPLOY_2026_10_20.js
+          node --test test/deda_owner19_stage56_gm_midnight_refill.test.js
+          echo 'PASS: 950k at 23:59, +50k after 00 Iraq, once per day, schedule OFF'
+  real-firestore-race-midnight-emulator:
+    needs: source-provenance-midnight-qa
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable Firebase emulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 firebase-tools@14
+      - name: Two simultaneous manager refill requests and revoked owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GCLOUD_PROJECT=demo-deda-owner19-stage56-midnight
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-owner19-stage56-midnight --only firestore \
+            'node --test test/deda_owner19_stage56_gm_midnight_firestore_emulator.test.js'
+          echo 'PASS: real transaction conflict exactly once; no production credit or deploy'
