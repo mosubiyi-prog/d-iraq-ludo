@@ -19,7 +19,9 @@ def synthetic_source():
                 "DEDA_100360_SERVER_VERIFIED_GROUP002_INSTEAD_OF_MOCK_CANDIDATES",
             )) + "\n" +
             "class _DedaProfilePhase2PageState {\n" +
-            m.ORIGINAL + "\n}\n")
+            "  Widget _profileHeroCard() {\n" +
+            m.ORIGINAL + "\n  }\n" +
+            "  Widget _avatar(double size) {}\n}\n")
 
 
 class Stage48FailClosedTest(unittest.TestCase):
