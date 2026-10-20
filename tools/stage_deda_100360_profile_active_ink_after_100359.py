@@ -7,6 +7,7 @@ profile hero ID slot and one import. No Firebase deploy, APK, wallet or grant.
 Both client read/live flags remain OFF unless separately owner-authorized.
 """
 from pathlib import Path
+import re
 
 MAIN = Path("lib/main.dart")
 IMPORT = "import 'deda_stage48_verified_active_profile_ink.dart';\n"
@@ -65,14 +66,36 @@ def apply(source: str) -> str:
     for token in required:
         if source.count(token) != 1:
             raise ValueError("SAFE_STOP: prior accepted stage missing/duplicate: " + token)
-    if source.count(ORIGINAL) != 1 or source.count(IMPORT) != 0:
-        raise ValueError("SAFE_STOP: exact original profile ID chip not found")
-    mat = "import 'package:flutter/material.dart';\n"
+    if source.count(IMPORT) != 0:
+        raise ValueError("SAFE_STOP: profile ink import already exists")
+    # 100359 final source is dart-formatted after point14. Match the exact
+    # semantic tokens of the approved widget, allowing whitespace ONLY.
+    # Never match an arbitrary identifier or another method's widget.
+    lexical_tokens = re.findall(
+        r'[A-Za-z_][A-Za-z_0-9]*|[0-9]+(?:\\.[0-9]+)?|[^\\w\\s]',
+        ORIGINAL,
+    )
+    expression = re.compile(r'\\s*'.join(re.escape(t) for t in lexical_tokens))
+    matches = list(expression.finditer(source))
+    if len(matches) != 1:
+        raise ValueError("SAFE_STOP: approved original hero slot not unique")
+    match = matches[0]
+    start = source.rfind("\\n", 0, match.start()) + 1
+    if source[start:match.start()].strip():
+        raise ValueError("SAFE_STOP: profile call has unexpected prefix")
+    hero_begin = source.find("Widget _profileHeroCard()")
+    hero_end = source.find("Widget _avatar(", hero_begin)
+    if hero_begin < 0 or hero_end < 0 or not (
+            hero_begin < start < match.end() < hero_end):
+        raise ValueError("SAFE_STOP: matched widget outside profile hero")
+    old_slot = source[start:match.end()]
+    mat = "import 'package:flutter/material.dart';\\n"
     if source.count(mat) != 1:
         raise ValueError("SAFE_STOP: material import unexpectedly different")
-    result = source.replace(ORIGINAL, REPLACEMENT, 1)
+    result = source[:start] + REPLACEMENT + source[match.end():]
     result = result.replace(mat, mat + IMPORT, 1)
-    if result.replace(REPLACEMENT, ORIGINAL, 1).replace(IMPORT, "", 1) != source:
+    if result.replace(REPLACEMENT, old_slot, 1).replace(
+            IMPORT, "", 1) != source:
         raise ValueError("SAFE_STOP: unrelated source would be changed")
     # The only place promoted to active ID is the account-authenticated hero.
     # The original 50px premium art, sign-in, wallet and share routes stay in place.
