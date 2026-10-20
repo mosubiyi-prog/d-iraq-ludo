@@ -23,7 +23,8 @@ OUT=Path('/tmp/deda-stage66-candidate.rules')
 MARK='STAGE66_FIRESTORE_ONLY_CANDIDATE_NO_DEPLOY'
 
 def match_end(src:str,from_index:int)->int:
-    opening=src.find('{',from_index)
+    # WALLET includes {publicId} before the REAL block opener.
+    opening=src.find('{',from_index+len(WALLET)-1)
     if opening < 0: raise ValueError('no_wallet_opening')
     depth=0
     for j in range(opening,len(src)):
