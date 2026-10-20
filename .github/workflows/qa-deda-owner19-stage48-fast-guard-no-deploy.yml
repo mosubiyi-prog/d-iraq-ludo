@@ -1,0 +1,36 @@
+name: DEDA owner19 Stage48 fast profile patch source safety NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/stage_deda_100360_profile_active_ink_after_100359.py'
+      - 'test/test_deda_stage48_real_profile_active_ink.py'
+      - '.github/workflows/qa-deda-owner19-stage48-fast-guard-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-profile-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify protected existing source remains unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 4cfab809ce0f1a4bceaf9451187d61358e0ee22f -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart android/ assets/ server_private/
+          echo 'PASS: no production or owner baseline mutation'
+      - name: Test exact semantic extraction of approved formatted profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/stage_deda_100360_profile_active_ink_after_100359.py
+          python3 -m unittest discover -s test -p 'test_deda_stage48_real_profile_active_ink.py'
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: original hero safe-only staged patch; no APK, Firebase or Play deployment'
