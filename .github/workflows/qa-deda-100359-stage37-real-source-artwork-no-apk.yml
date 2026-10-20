@@ -21,6 +21,10 @@ on:
       - 'tools/stage_deda_100360_share_premium_ink_after_stage48.py'
       - 'test/test_deda_owner19_stage49_original_qr_share.py'
       - 'test/deda_owner19_stage49_verified_share_ink_test.dart'
+      - 'tools/stage_deda_100360_friend_visible_ink_after_stage49.py'
+      - 'test/test_deda_stage50_friend_ink_source.py'
+      - 'lib/deda_stage50_verified_friend_ink_badge.dart'
+      - 'test/deda_owner19_stage50_friend_ink_widget_test.dart'
   workflow_dispatch:
 permissions:
   contents: read
@@ -94,17 +98,20 @@ jobs:
           python3 tools/stage_deda_100360_profile_active_ink_after_100359.py
           python3 -m unittest discover -s test -p 'test_deda_owner19_stage49_original_qr_share.py'
           python3 tools/stage_deda_100360_share_premium_ink_after_stage48.py
+          python3 -m unittest discover -s test -p 'test_deda_stage50_friend_ink_source.py'
+          python3 tools/stage_deda_100360_friend_visible_ink_after_stage49.py
           dart format lib/main.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage48_verified_active_profile_ink.dart lib/deda_verified_identifier_ink.dart \
-            lib/deda_stage49_verified_share_id_badge.dart
+            lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage42_verified_sale_panel.dart lib/deda_stage48_verified_active_profile_ink.dart \
-            lib/deda_stage49_verified_share_id_badge.dart
+            lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart
           flutter test test/deda_100360_original_shop_and_manager_foils_integration_test.dart \
             test/deda_stage19_exclusive_admin_tile_test.dart \
             test/deda_owner19_stage48_active_profile_ink_test.dart \
             test/deda_owner19_stage46_verified_identifier_ink_test.dart \
-            test/deda_owner19_stage49_verified_share_ink_test.dart
+            test/deda_owner19_stage49_verified_share_ink_test.dart \
+            test/deda_owner19_stage50_friend_ink_widget_test.dart
           python3 - <<'PY'
           from pathlib import Path
           src=Path('lib/main.dart').read_text()
@@ -126,6 +133,10 @@ jobs:
           assert 'onTap: copyVerifiedId' in src, 'copy must follow verified active ID'
           assert src.count('DEDA_OWNER19_STAGE49_ORIGINAL_QR_PLUS_VERIFIED_PREMIUM_INK') == 1
           assert src.count('DedaStage49VerifiedShareIdBadge(') == 1
+          assert src.count('DEDA_OWNER19_STAGE50_FRIEND_INK_THREE_PUBLIC_SURFACES_NO_DEPLOY') == 1
+          assert src.count('DedaStage50VerifiedFriendInkBadge(') == 3
+          assert 'class DedaFriendPublicProfilePage extends StatelessWidget' in src
+          assert 'DedaSocialService.findByPublicId(' in src
           assert "data: id," in src and 'onPressed: _shareDedaId' in src and 'onPressed: _copyDedaId' in src
           assert "DedaOwnerQaSandboxPage()" not in src, "fake purchase lab still reachable"
           manager=Path('lib/deda_exclusive_ids_admin_page.dart').read_text()
