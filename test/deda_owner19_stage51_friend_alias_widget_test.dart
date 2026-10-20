@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_stage51_verified_friend_alias_search.dart';
+import 'package:d_iraq_ludo/deda_social_service.dart';
 
 void main() {
   const original = '@DEDA-A1B2C3';
@@ -45,14 +46,19 @@ void main() {
       () {
     expect(DedaStage51FriendSearch.enabled, isFalse);
     expect(DedaStage51FriendSearch.acceptsInput(original), isTrue);
-    expect(DedaStage51FriendSearch.acceptsInput('@DEDA-ABCD'), isFalse);
+    // Earlier point16 already expanded the original social validator to
+    // four-character aliases. Release OFF must honor whichever accepted
+    // social baseline is currently reconstructed, not silently narrow it.
+    expect(DedaStage51FriendSearch.acceptsInput('@DEDA-ABCD'),
+        DedaSocialService.looksLikePersonalId('@DEDA-ABCD'));
     expect(DedaStage51FriendSearch.acceptsInput(special), isTrue);
     expect(DedaStage51FriendSearch.acceptsInput('unverified'), isFalse);
   });
 
-  test('disallowed premium-only search cannot make a network request', () async {
+  test('invalid unregistered syntax cannot make a network request', () async {
     expect(DedaStage51FriendSearch.enabled, isFalse);
-    expect(await DedaStage51FriendSearch.findByUserInput('@DEDA-ABCD'),
-        isNull);
+    // One character cannot be a canonical or a premium ID in any accepted
+    // source version, so no Firebase instance can be consulted in this test.
+    expect(await DedaStage51FriendSearch.findByUserInput('@DEDA-A'), isNull);
   });
 }
