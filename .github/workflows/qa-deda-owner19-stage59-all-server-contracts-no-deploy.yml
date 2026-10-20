@@ -1,0 +1,49 @@
+name: DEDA owner19 Stage59 All Premium API Contracts No Live Deployment
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - 'tools/deda_owner19_stage59_all_server_routes_PRIVATE_NOT_EXPORTED_2026_10_20.js'
+      - 'test/deda_owner19_stage59_all_routes_contract.test.js'
+      - '.github/workflows/qa-deda-owner19-stage59-all-server-contracts-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage59-joined-api-contracts-private-no-deploy
+  cancel-in-progress: true
+jobs:
+  private-15-route-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse production or owner data modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet c042fa4e22e551a4e7e39f5f14a274020addcfe3 -- \
+            functions/index.js firestore.rules firebase.json storage.rules \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_exclusive_ids_admin_page.dart \
+            lib/deda_stage42_verified_sale_panel.dart \
+            tools/deda_intakadha_point13_atomic_id_card_checkout_2026_10_19.js \
+            tools/deda_stage18_private_atomic_identifier_checkout_2026_10_19.js \
+            android/ assets/ server_private/
+          ! grep -q 'stage59_all_server_routes' functions/index.js
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS: original app/Firebase/balances/private-100 unchanged'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check all 15 API names and unexported backend security gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check tools/deda_owner19_stage59_all_server_routes_PRIVATE_NOT_EXPORTED_2026_10_20.js
+          node --test test/deda_owner19_stage59_all_routes_contract.test.js \
+            test/deda_owner19_stage57_unified_readonly_callables.test.js
+          echo 'PASS: 15 backend/mobile contracts verified; no live cashout, key read or release'
