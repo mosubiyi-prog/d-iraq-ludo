@@ -38,7 +38,14 @@ jobs:
           git diff --quiet d14e573d1f7f1ab67deff04222aca13c6f928553 -- \
             functions/index.js firestore.rules firebase.json \
             lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
-            android/ server_private/catalogs/ assets/
+            android/ assets/
+          # The sole permitted change under server_private/catalogs is the
+          # owner-paired ENCRYPTED manifest. Never accept a plaintext catalog,
+          # added file, altered key or unexpected encrypted payload.
+          manifest="server_private/catalogs/DEDA_GROUP001_ADMIN100_AES256GCM_2026-10-19.enc.json"
+          changed="$(git diff --name-only d14e573d1f7f1ab67deff04222aca13c6f928553 -- server_private/catalogs/)"
+          test "$changed" = "$manifest"
+          test "$(git hash-object "$manifest")" = "d07198ced5c9019d0eb85e99ee94101db52921e3"
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           echo 'PASS: no user/production/app signing changes'
