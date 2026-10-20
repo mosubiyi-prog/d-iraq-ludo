@@ -88,11 +88,15 @@ def apply(source: str) -> str:
     if hero_begin < 0 or hero_end < 0 or not (
             hero_begin < start < match.end() < hero_end):
         raise ValueError("SAFE_STOP: matched widget outside profile hero")
-    old_slot = source[start:match.end()]
+    end = match.end()
+    if source[end:end + 1] != "\n":
+        raise ValueError("SAFE_STOP: original hero slot missing line ending")
+    end += 1
+    old_slot = source[start:end]
     mat = "import 'package:flutter/material.dart';\n"
     if source.count(mat) != 1:
         raise ValueError("SAFE_STOP: material import unexpectedly different")
-    result = source[:start] + REPLACEMENT + source[match.end():]
+    result = source[:start] + REPLACEMENT + source[end:]
     result = result.replace(mat, mat + IMPORT, 1)
     if result.replace(REPLACEMENT, old_slot, 1).replace(
             IMPORT, "", 1) != source:
