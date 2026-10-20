@@ -1,0 +1,133 @@
+name: DEDA 100360 Heartbeat Android16 STRICT offline APK smoke NO PLAY
+on:
+  push:
+    branches:
+      - deda-100359-19-issues-staged-private-no-deploy-2026-10-19
+    paths:
+      - '.github/workflows/qa-deda-100360-heartbeat-android16-strict-no-play.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deda-100360-heartbeat-android16-standalone
+  cancel-in-progress: true
+jobs:
+  offline-owner-apk-startup-and-in-place-upgrade:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact verified 100360 signed APK artifact and 100342 reference
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/deda100360/new /tmp/deda100360/old /tmp/deda100360/results
+          gh run download 39467496330 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100360-HEARTBEAT-OWNER-VISUAL-QA-SIGNED-NO-PLAY \
+            -D /tmp/deda100360/new
+          gh run download 38996450910 -R mosubiyi-prog/d-iraq-ludo \
+            -n DEDA-100342-POINT7-COMPACT-IDS-SIGNED-PRIVATE-APK-NO-PLAY \
+            -D /tmp/deda100360/old
+          test -s /tmp/deda100360/new/DEDA-100360-HEARTBEAT-OWNER-VISUAL-QA-SIGNED.apk
+          (cd /tmp/deda100360/new && sha256sum -c SHA256SUMS.txt)
+          echo '4fd93e0d0596c5d6846b3d24620d7ec9bdb77f169c47abd7cf782770c320857d  /tmp/deda100360/old/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk' | sha256sum -c -
+          echo 'PASS: two pinned ORIGINAL signed APKs fetched from GitHub artifacts'
+      - name: Prevent app data or release mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          git diff --quiet HEAD -- firestore.rules functions/index.js firebase.json android/ server_private/
+          echo 'PASS: this workflow never builds APK or deploys Firebase/Google Play'
+      - name: Prepare Android16 strict cold+upgrade script offline
+        shell: bash
+        run: |
+          cat > /tmp/deda100360/smoke.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          home=/tmp/deda100360
+          apk="$home/new/DEDA-100360-HEARTBEAT-OWNER-VISUAL-QA-SIGNED.apk"
+          old="$home/old/DEDA-100342-POINT7-COMPACT-PRIVATE-QA.apk"
+          out="$home/results"
+          pkg=com.diraq.ludo.d_iraq_ludo
+          mkdir -p "$out"
+          adb wait-for-device
+          level="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+          test "$level" = 36 || { echo "SAFE_STOP wrong Android SDK: $level"; exit 60; }
+          adb shell svc wifi disable || true
+          adb shell svc data disable || true
+          launch() {
+            label="$1"
+            adb shell am force-stop "$pkg" || true
+            adb logcat -c
+            adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 > "$out/$label-start.txt" 2>&1
+            sleep 27
+            pid="$(adb shell pidof "$pkg" | tr -d '\r' | awk '{print $1}')"
+            test -n "$pid" || { echo "SAFE_STOP $label app process not alive"; return 61; }
+            adb logcat -d -v threadtime > "$out/$label-logcat.txt"
+            awk -v pid="$pid" '$3==pid{print}' "$out/$label-logcat.txt" > "$out/$label-app-pid-logcat.txt"
+            if grep -Eai 'Unhandled Exception|PlatformException|NoSuchMethodError|ClassNotFoundException|MissingPluginException|FATAL EXCEPTION|\[ERROR:flutter|E/flutter' "$out/$label-app-pid-logcat.txt"; then
+              echo "SAFE_STOP $label Flutter exception"; return 62
+            fi
+            if grep -q "Process: $pkg," "$out/$label-logcat.txt"; then
+              echo "SAFE_STOP $label AndroidRuntime fatal"; return 63
+            fi
+            adb shell dumpsys activity activities > "$out/$label-activities.txt"
+            adb shell dumpsys window > "$out/$label-window.txt" || true
+            grep -E 'mResumedActivity|topResumedActivity|mCurrentFocus|mFocusedApp' "$out/$label-activities.txt" "$out/$label-window.txt" > "$out/$label-focus.txt" || true
+            grep -q "$pkg" "$out/$label-focus.txt" || { echo "SAFE_STOP $label app not foreground"; return 64; }
+            adb exec-out screencap -p > "$out/$label-screenshot.png" || true
+            test "$(wc -c < "$out/$label-screenshot.png")" -gt 3000 ||
+              { echo "SAFE_STOP $label missing screenshot"; return 65; }
+            echo "PASS: $label app alive/foreground and no Flutter fatal" | tee "$out/$label-summary.txt"
+          }
+          echo '== Android16 100360 fresh install =='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$apk" | tee "$out/100360-fresh-install.txt"
+          launch fresh100360
+          echo '== Android16 original signed 100342 installed before upgrade =='
+          adb uninstall "$pkg" >/dev/null 2>&1 || true
+          adb install "$old" | tee "$out/100342-signed-install.txt"
+          adb shell monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
+          sleep 8
+          adb shell am force-stop "$pkg" || true
+          echo '== Android16 signed in-place upgrade 100342 -> 100360 =='
+          adb install -r "$apk" | tee "$out/100360-in-place-upgrade.txt"
+          launch upgraded100360
+          echo 'PASS: 100360 Android16 strict offline startup and signed in-place update'
+          SCRIPT
+          chmod +x /tmp/deda100360/smoke.sh
+      - name: Allow hardware KVM only on disposable CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo 'SAFE_STOP no KVM'; exit 89; }
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Android16 strict offline private heartbeat APK smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash /tmp/deda100360/smoke.sh
+      - name: Upload STRICT Android16 logs and screenshots only, never APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100360-STRICT-ANDROID16-RESULTS-NO-APK
+          path: /tmp/deda100360/results/
+          if-no-files-found: warn
+          retention-days: 14
