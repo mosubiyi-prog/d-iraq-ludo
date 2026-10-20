@@ -32,6 +32,19 @@ class Stage49ExactQrTest(unittest.TestCase):
             changed.replace(stage.ADDITION, "", 1).replace(
                 stage.IMPORT, "", 1), old)
 
+    def test_extra_profile_copy_handler_does_not_change_qr_dialog(self):
+        source = original_source()
+        additional = (
+            "\nclass IndependentAccountCopyHandler {\n"
+            "  Future<void> _copyDedaId() async {}\n"
+            "}\n"
+        )
+        patched = stage.apply(source + additional)
+        self.assertEqual(patched.count(stage.MARKER), 1)
+        self.assertEqual(
+            patched.replace(stage.ADDITION, "", 1).replace(
+                stage.IMPORT, "", 1), source + additional)
+
     def test_unsafe_legacy_source_changes_fail_closed(self):
         source = original_source()
         for broken in (
