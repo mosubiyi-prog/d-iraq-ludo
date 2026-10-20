@@ -45,6 +45,10 @@ def find_exact_lexical(source: str, candidate: str, surface: str) -> tuple[int, 
         if i >= 2 and tokens[i - 2:i] == ['fontSize', ':'] and \
                 re.fullmatch(r'[0-9]+(?:\.[0-9]+)?', token):
             parts.append(r'1[0-6](?:\.5)?')
+        elif token == ')':
+            # dart format may add a trailing comma inside TextStyle(...)
+            # or Text(...). It does not change the widget semantics.
+            parts.append(r'(?:,\s*)?\)')
         else:
             parts.append(re.escape(token))
     expression = re.compile(r'\s*'.join(parts))
