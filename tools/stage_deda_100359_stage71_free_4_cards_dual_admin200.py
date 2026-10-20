@@ -73,6 +73,21 @@ def patch_main(src:str)->str:
     shop=once(shop,SHOP_ACTION,FREE_ACTION,'FOUR_FREE_CARD_ACTION')
     shop=once(shop,"'تصميم البطاقة: 5,000 ماسة'",
               "'تصميم البطاقة: مجاني'",'AR_CARD_PRICE')
+    # No paid Group002 branch can ever reopen from an old dart-define.
+    # The store is now FREE cards only; selection never spends diamonds.
+    shop=once(shop,'child: const bool.fromEnvironment(',
+              'child: false && const bool.fromEnvironment(',
+              'DISABLE_OLD_GROUP002_SALE_EVEN_IF_FLAG_ON')
+    for old, new in (
+      ('Card design: 5,000 diamonds','Card design: Free'),
+      ('المعاينة مجانية، وثمن التصميم منفصل عن ثمن المعرّف.',
+       'التصاميم الأربعة مجانية ومتاحة للاستخدام.'),
+      ('Preview is free; the card and identifier have separate prices.',
+       'All four card designs are free to use.'),
+      ('متجر المعرّفات','البطاقات المجانية'),
+      ('Identifier store','Free ID cards'),
+    ):
+        shop=shop.replace(old,new)
     # Formerly-for-sale Group002 moved to manager section. Never show its
     # candidates publicly even when the profile routes pass a catalog in.
     import re
