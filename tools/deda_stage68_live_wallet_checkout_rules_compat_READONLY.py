@@ -21,7 +21,8 @@ from deda_stage66_firestore_only_card_checkout_candidate_NO_DEPLOY import make a
 def section(src, marker):
     if src.count(marker) != 1: return ''
     a = src.index(marker)
-    start = src.find('{',a)
+    # For match /collection/{documentId} {, skip the path variable braces.
+    start = src.find('{', a + len(marker) - 1)
     if start < 0: return ''
     level = 0
     for i in range(start,len(src)):
