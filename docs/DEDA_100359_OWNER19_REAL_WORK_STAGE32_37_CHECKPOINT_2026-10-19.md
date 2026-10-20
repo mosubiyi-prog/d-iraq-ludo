@@ -70,3 +70,18 @@ Read this checkpoint and the master 19 checklist; verify working-branch head and
 - Mandatory real Firestore Emulator workflow `39329305426`: **SUCCESS**, all 3 jobs green (production no-change guard, isolated emulator 5k card + 10k ID sale + GM color grant race/replay/authorization suites, and checkpoint). These are emulator transactions; production server continues unchanged.
 - Production backend remains unchanged, no real balances/grants affected. Group001 server decryption key is not provisioned; neither read nor self-use nor gift can function live until owner-authorized secure provisioning. All frontend/server stage switches default OFF.
 - Exact 19-point acceptance document `docs/DEDA_100359_19_ISSUES_OWNER_ACCEPTANCE_GATE_2026-10-19.md` remains the single authority; no stage marked green simply on mock or compilation tests.
+
+
+## Stage43 — manager-private catalog session and receipt guards (20 October 2026)
+
+- GitHub point of return: `backup-deda-owner19-before-session-guard-2026-10-20`, pinned at `1a06983f2cb681d7b6bd8bfc6e9c59ef5004cfd0` (after the encrypted Group001 catalog was paired with the owner's locally stored new key; NEVER place that key in GitHub).
+- Staged private Flutter security fix: `lib/deda_exclusive_ids_admin_page.dart`.
+  - Server read response now rejects an auth UID change while awaiting Firebase Callable.
+  - Manager screen rechecks active GM role and same UID after remote reads; generation tracking discards stale overlapping requests.
+  - Firebase auth stream clears already-loaded private identifiers and grant history on account change.
+  - `DedaExclusiveAdminSnapshotVerifier.isSafe` checks the exact 100 consecutive ordered positions, no duplicates, available-versus-owned state, allowed immutable colors, matching 1-to-1 server audit, and chronological history. It does not embed the 100 secret identifier names.
+- New synthetic-only Flutter regression suite: `test/deda_owner19_stage43_snapshot_guard_test.dart`; no sensitive names or wallets.
+- New NO-DEPLOY GitHub Actions QA: `.github/workflows/qa-deda-owner19-stage43-admin-session-no-deploy.yml`.
+- **Verified PASS:** GitHub Actions run `39425004201` / job `verify-private-manager-ui`, including Flutter analyzer, original manager tile regression tests, new snapshot invariants, and production-change guard. No APK/AAB or Firebase/Play deployment.
+- This is a **source-level hardening step only**: production manager Read/Gift/Self-use Callable remains unexported and inactive, and the 19-item owner acceptance checklist remains unpassed. It does NOT prove live grants or whole-app colored profile/share identifiers.
+- Next priorities: safe Secret Manager provisioning only after owner approval, AppCheck & wallet source-of-truth verification, client-visible permanent color in profile/sharing routes, and signed private Android16 owner acceptance. Do not regenerate incomplete APKs.
