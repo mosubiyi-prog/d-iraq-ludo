@@ -1,15 +1,15 @@
-name: DEDA 100375 SPARK Premium IDs + Royal Free + Wallet OWNER PRIVATE QA
+name: DEDA 100377 SPARK Premium IDs + ALL PERSONAL Diamonds & Task Gold OWNER QA
 on:
   push:
     branches:
-      - deda-100374-ids-qa32-frames-deferred-2026-10-21
+      - deda-100377-unified-diamonds-gold-qa-no-deploy-2026-10-22
     paths:
-      - '.github/workflows/build-deda-100375-spark-verified-owner-private-apk-no-deploy.yml'
+      - '.github/workflows/build-deda-100377-spark-verified-owner-private-apk-no-deploy.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: deda-qa32-stage82-private-owner-apk-100375-no-deploy
+  group: deda-qa32-stage82-private-owner-apk-100377-no-deploy
   cancel-in-progress: false
 jobs:
   reconstruct-real-store:
@@ -127,6 +127,7 @@ jobs:
           python3 tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
+          python3 tools/stage_deda_100377_unified_currency_everywhere.py
           python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS_STAGE51_SPARK_ALIAS_FINDS_EXISTING_CANONICAL_UID_WITHOUT_REWRITING_SOCIAL_SERVICE'
           python3 tools/stage_deda_100375_all_16_lab_original_royal_frames_native.py
@@ -138,12 +139,15 @@ jobs:
           flutter test test/deda_qa32_spark_free_public_identifier_directory_test.dart
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
           flutter test test/deda_profile_visible_diamonds_test.dart
-          python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
+          flutter test test/deda_unified_currency_totals_test.dart
+          # Legacy first-pass source test is replaced by the unified
+          # task+store+profile account-scope test directly below.
+          python3 -m unittest discover -s test -p 'test_deda_100377_wallet_all_screens_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
           grep -q 'DEDA_QA32_SPARK_STAGE51_FRIEND_SEARCH_CANONICAL_NO_FUNCTIONS' lib/deda_stage51_verified_friend_alias_search.dart
           python3 -m py_compile tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
-          echo 'PASS 100375 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
+          echo 'PASS 100377 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
           python3 - <<'PY_ACCOUNT'
@@ -207,8 +211,8 @@ jobs:
           from pathlib import Path
           src=Path('lib/main.dart').read_text()
           assert src.count('DEDA_100360_COMPACT_REAL_FOILS_MERGED_PRICE_AND_ACTION') == 1
-          a=src.index('class _DedaIdentifierStorePageState extends State<DedaIdentifierStorePage> {')
-          b=src.index('class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {',a)
+          a=src.index('class _DedaIdentifierStorePageState')
+          b=src.index('class _DedaProfilePhase2PageState',a)
           shop=src[a:b]
           assert shop.count("DedaPremiumIdCard(") == 1, "four cards must share original renderer"
           assert shop.count("DedaStage71FreeCardAction(") == 1, "all four free actions are original artwork"
@@ -243,6 +247,7 @@ jobs:
           assert src[receiver_a:receiver_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert 'class DedaFriendPublicProfilePage extends StatelessWidget' in src
           assert 'DedaSocialService.findByPublicId(' in src
+          assert 'DEDA_100377_UNIFIED_REAL_TASK_COINS_AND_ALL_PERSONAL_DIAMONDS' in src
           assert src.count('DEDA_OWNER19_STAGE51_FRIEND_SEARCH_CANONICAL_ALIAS_NO_DEPLOY') == 1
           assert src.count('DedaStage51FriendSearch.acceptsInput(id)') == 1
           assert src.count('DedaStage51FriendSearch.findByUserInput(id)') == 1
@@ -330,7 +335,7 @@ jobs:
             'SAFE_STOP expected approved signed 100359 invocation')
           cmd=source.replace(
             'flutter build apk --release --build-number=100359 ',
-            'flutter build apk --release --build-number=100375 ',1)
+            'flutter build apk --release --build-number=100377 ',1)
           for required in ('USE_NEXT_GEN_SDK=true',
               'DEDA_SPARK_FIRESTORE_LIVE=true',
               'DEDA_PREMIUM_IDS_SERVER_LIVE=false',
@@ -343,15 +348,15 @@ jobs:
           cmd += ' --dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=true'
           cmd += ' --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true'
           assert '--dart-define=DEDA_PREMIUM_IDS_SERVER_LIVE=false' in cmd
-          script=Path('/tmp/deda_stage71_owner_phone_signed_100375.sh')
+          script=Path('/tmp/deda_stage71_owner_phone_signed_100377.sh')
           script.write_text('set -euo pipefail\n'+cmd+'\n')
-          print('PASS original proven signed 100359 command exactly replayed as 100375 with safe owner client flags')
+          print('PASS original proven signed 100359 command exactly replayed as 100377 with safe owner client flags')
           PY_BUILD
-      - name: Build 100375 PRIVATE signed APK - no Play/Firebase deploy
+      - name: Build 100377 PRIVATE signed APK - no Play/Firebase deploy
         shell: bash
         run: |
           set -euo pipefail
-          bash /tmp/deda_stage71_owner_phone_signed_100375.sh
+          bash /tmp/deda_stage71_owner_phone_signed_100377.sh
           test -s build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
       - name: Verify signed APK identity, zip integrity, version and publish PRIVATE artifact
@@ -364,7 +369,7 @@ jobs:
           test -x "$buildtools/aapt"
           "$buildtools/apksigner" verify --verbose --print-certs "$apk" | tee /tmp/deda_stage71_signer.txt
           grep -q 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt
-          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\.diraq\.ludo\.d_iraq_ludo' versionCode='100375'"
+          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\.diraq\.ludo\.d_iraq_ludo' versionCode='100377'"
           python3 - <<'PY_ZIP'
           import zipfile
           from pathlib import Path
@@ -374,23 +379,23 @@ jobs:
             assert z.testzip() is None
             assert 'AndroidManifest.xml' in z.namelist()
             assert 'classes.dex' in z.namelist()
-          print('PASS signed APK original package, zip integrity, 100375, local owner QA only')
+          print('PASS signed APK original package, zip integrity, 100377, local owner QA only')
           PY_ZIP
-          mkdir -p private-deda-100375
-          cp "$apk" private-deda-100375/DEDA-100375-QA32-STAGE82-PRIVATE-OWNER-ONLY.apk
-          sha256sum private-deda-100375/*.apk > private-deda-100375/SHA256SUMS.txt
-          git rev-parse HEAD > private-deda-100375/source-commit.txt
-          grep 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt > private-deda-100375/SIGNER-SHA256.txt
+          mkdir -p private-deda-100377
+          cp "$apk" private-deda-100377/DEDA-100377-QA32-STAGE82-PRIVATE-OWNER-ONLY.apk
+          sha256sum private-deda-100377/*.apk > private-deda-100377/SHA256SUMS.txt
+          git rev-parse HEAD > private-deda-100377/source-commit.txt
+          grep 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt > private-deda-100377/SIGNER-SHA256.txt
           printf '%s\n' \
             'OWNER QA ONLY. Never upload to Play without owner approval.' \
             'Spark premium-ID canonical search/share/public appearance and GM gifts, free royal frames, personal wallet display and gift badge, all private owner QA.' \
             'QA32 original 13 LAB premium WebP frames included for locked previews at 1000 diamonds, 3 royals free; real secure checkout NOT YET LIVE. One million personal wallet unverified; no guaranteed device-to-device recovery.' \
             'PRIVATE PHONE QA ONLY. Spark rules live separately; do not uninstall app, erase balances, grant real coins, change Firebase/Play to test.' \
-            > private-deda-100375/READ-ME-FIRST.txt
-      - name: Upload signed private 100375 APK without deploying
+            > private-deda-100377/READ-ME-FIRST.txt
+      - name: Upload signed private 100377 APK without deploying
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100375-QA32-STAGE82-PRIVATE-SIGNED-OWNER-QA
-          path: private-deda-100375/
+          name: DEDA-100377-QA32-STAGE82-PRIVATE-SIGNED-OWNER-QA
+          path: private-deda-100377/
           retention-days: 21
           if-no-files-found: error
