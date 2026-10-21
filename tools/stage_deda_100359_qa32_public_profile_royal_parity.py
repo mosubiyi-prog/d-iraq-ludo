@@ -80,7 +80,7 @@ def apply(source):
     # The original user public-profile avatar has changed size across prior
     # stages; locate the ONE actual DedaFramedAvatar and update its existing
     # size rather than assuming an obsolete exact 132px constant.
-    avatar_match=re.search(r"DedaFramedAvatar\\(",frag)
+    avatar_match=re.search(r"DedaFramedAvatar\(",frag)
     if avatar_match is None or frag.count("DedaFramedAvatar(")!=1:
         raise ValueError("SAFE_STOP_QA32_ROYAL_OWNER_AVATAR_NOT_UNIQUE")
     avatar_end=frag.find(")",avatar_match.end())
@@ -88,7 +88,7 @@ def apply(source):
         raise ValueError("SAFE_STOP_QA32_ROYAL_OWNER_AVATAR_BOUNDS")
     avatar=frag[avatar_match.start():avatar_end+1]
     avatar_new=one_sub(
-        avatar, r"\\bsize:\\s*[0-9]+(?:\\.[0-9]+)?\\s*,",
+        avatar, r"\bsize:\s*[0-9]+(?:\.[0-9]+)?\s*,",
         "size: 174,", "owner_avatar_size",
     )
     frag=(frag[:avatar_match.start()]+avatar_new+
@@ -96,7 +96,7 @@ def apply(source):
 
     # Only edit the owner's existing public display-name Text widget.
     # Historical patches may have changed its fontSize/spacing already.
-    names=list(re.finditer(r"Text\\(\\s*profile\\.displayName\\s*,",frag))
+    names=list(re.finditer(r"Text\(\s*profile\.displayName\s*,",frag))
     if len(names)!=1:
         raise ValueError("SAFE_STOP_QA32_ROYAL_PUBLIC_NAME_NOT_UNIQUE")
     name_start=names[0].start()
@@ -106,14 +106,14 @@ def apply(source):
     old_name=frag[name_start:name_end]
     styled=old_name
     if "textAlign:" not in styled:
-        styled=one_sub(styled,r"profile\\.displayName\\s*,",
+        styled=one_sub(styled,r"profile\.displayName\s*,",
                        "profile.displayName, textAlign: TextAlign.center,",
                        "public_name_center")
-    styled=one_sub(styled,r"maxLines:\\s*[0-9]+",
+    styled=one_sub(styled,r"maxLines:\s*[0-9]+",
                    "maxLines: 2","public_name_max_lines")
-    styled=one_sub(styled,r"color:\\s*(?:const\\s+)?Color\\(0x[0-9A-Fa-f]{8}\\)",
+    styled=one_sub(styled,r"color:\s*(?:const\s+)?Color\(0x[0-9A-Fa-f]{8}\)",
                    "color: Colors.white","public_name_white")
-    styled=one_sub(styled,r"fontSize:\\s*[0-9]+(?:\\.[0-9]+)?",
+    styled=one_sub(styled,r"fontSize:\s*[0-9]+(?:\.[0-9]+)?",
                    "fontSize: 25","public_name_size")
     frag=frag[:name_start]+styled+frag[name_end:]
 
