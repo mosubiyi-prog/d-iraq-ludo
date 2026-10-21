@@ -4,15 +4,18 @@ import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_backend.dart';
 import 'deda_qa32_premium_app_check.dart';
+import 'deda_qa32_spark_public_identifier_directory.dart';
 
 /// Owner QA only. Preserve canonical original account routing for ACTUAL
 /// diamond transaction; display the active alias ONLY after verified server
 /// lookup. Not enabled until backend/AppCheck/owner approval are in place.
 class DedaQa32AdminGiftRecipientAliasBridge {
-  static const bool enabled =
+  static const bool functionsEnabled =
       bool.fromEnvironment('DEDA_PREMIUM_IDS_SERVER_LIVE', defaultValue: false) &&
       bool.fromEnvironment('DEDA_QA32_ADMIN_GIFT_RECIPIENT_ALIAS_LIVE',
           defaultValue: false);
+  static const bool enabled =
+      DedaQa32SparkPublicIdentifierDirectory.enabled || functionsEnabled;
 
   static final RegExp _identity = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
   static final RegExp _original = RegExp(r'^@DEDA-[A-Z0-9]{6}$');
@@ -59,17 +62,25 @@ class DedaQa32AdminGiftRecipientAliasBridge {
       throw StateError('admin-authentication-required');
     }
 
-    // Callable denies non-GM, missing AppCheck, forged or inactive alias,
-    // and returns canonical original routing ID without private account data.
-    await DedaQa32PremiumAppCheck.ensureReady();
-    final response = await FirebaseFunctions.instance
-        .httpsCallable('dedaPremiumResolveAdminGiftRecipient',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 30)))
-        .call<Map<String, dynamic>>({'identifier': candidate});
+    // Spark uses a public projection whose owner-only security rules
+    // verify the real Stage71 grant and receipt. No Functions/billing.
+    String? canonical;
+    if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
+      canonical = await DedaQa32SparkPublicIdentifierDirectory
+          .resolveActiveAlias(candidate);
+    } else {
+      // Callable path remains available only if the separately authorized
+      // Functions backend has actually been deployed.
+      await DedaQa32PremiumAppCheck.ensureReady();
+      final response = await FirebaseFunctions.instance
+          .httpsCallable('dedaPremiumResolveAdminGiftRecipient',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 30)))
+          .call<Map<String, dynamic>>({'identifier': candidate});
+      canonical = verifiedOriginalFromReply(response.data, candidate);
+    }
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('admin-account-switched-during-lookup');
     }
-    final canonical = verifiedOriginalFromReply(response.data, candidate);
     if (canonical == null) return null;
     final recipient = await DedaBackend.adminDiamondGiftTarget(canonical);
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
