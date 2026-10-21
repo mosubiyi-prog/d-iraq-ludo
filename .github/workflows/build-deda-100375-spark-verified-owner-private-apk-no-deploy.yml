@@ -112,6 +112,7 @@ jobs:
           python3 tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
+          python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           flutter test test/deda_lab_verified_frame_catalog_test.dart
           flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
           flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
@@ -121,6 +122,9 @@ jobs:
           flutter test test/deda_profile_visible_diamonds_test.dart
           python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
+          grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
+          grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' lib/deda_social_service.dart
+          python3 -m py_compile tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS 100375 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
