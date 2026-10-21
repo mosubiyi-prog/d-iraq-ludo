@@ -19,6 +19,7 @@ on:
       - 'tools/stage_deda_100359_qa32_public_friend_premium_card.py'
       - 'tools/stage_deda_100359_qa32_received_location_sender_alias.py'
       - 'tools/stage_deda_100359_qa32_public_profile_royal_parity.py'
+      - 'test/deda_qa32_public_royal_hero_parity_widget_test.dart'
       - 'test/deda_qa32_public_friend_full_premium_card_test.dart'
       - 'test/deda_qa32_active_account_scope_test.dart'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
@@ -201,6 +202,7 @@ jobs:
           flutter test test/deda_stage75_gift_unread_badge_test.dart
           flutter test test/deda_qa32_active_account_scope_test.dart
           flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
+          flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_stage71_four_free_cards_dual200_widget_test.dart test/deda_makani_100337_test.dart test/deda_stage71_real_store_four_free_integration_test.dart \
             test/deda_stage19_exclusive_admin_tile_test.dart \
             test/deda_owner19_stage48_active_profile_ink_test.dart \
