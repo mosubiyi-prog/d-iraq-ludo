@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_backend.dart';
+import 'deda_qa32_premium_app_check.dart';
 
 /// Owner QA only. Preserve canonical original account routing for ACTUAL
 /// diamond transaction; display the active alias ONLY after verified server
@@ -60,6 +61,7 @@ class DedaQa32AdminGiftRecipientAliasBridge {
 
     // Callable denies non-GM, missing AppCheck, forged or inactive alias,
     // and returns canonical original routing ID without private account data.
+    await DedaQa32PremiumAppCheck.ensureReady();
     final response = await FirebaseFunctions.instance
         .httpsCallable('dedaPremiumResolveAdminGiftRecipient',
           options: HttpsCallableOptions(timeout: const Duration(seconds: 30)))
