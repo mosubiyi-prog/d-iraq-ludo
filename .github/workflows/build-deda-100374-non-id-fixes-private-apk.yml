@@ -240,6 +240,7 @@ jobs:
           assert '_rearmGiftBadges' in src
           assert 'WidgetsBinding.instance.addObserver(this);' in src
           assert 'AppLifecycleState.resumed' in src
+          assert '_startupRetry?.cancel();' in src, 'pending restart timer must be cancelled during dispose'
           assert src.count('DEDA_QA32_ACCOUNT_ACTIVE_ALIAS_READONLY_DISPLAY_NO_DEPLOY') == 1
           assert src.count('DedaQa32ActiveAccountScope(') == 2
           assert src.count('DEDA_QA32_SHARE_SENDER_VERIFIED_ACTIVE_ID_VISUAL_ONLY') == 1
