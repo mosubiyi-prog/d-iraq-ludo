@@ -4,7 +4,8 @@ on:
     branches:
       - deda-stage72-live-gm200-rules-owner-approved-2026-10-21
     paths:
-      - '.github/workflows/deda-stage72-owner-approved-free200-live-firestore-rules.yml'\n      - 'tools/deda_stage72_owner_approved_live_firestorm_rules_deploy.py'
+      - '.github/workflows/deda-stage72-owner-approved-free200-live-firestore-rules.yml'
+      - 'tools/deda_stage72_owner_approved_live_firestorm_rules_deploy.py'
       - 'tools/deda_stage71_free_admin200_live_rules_candidate_READONLY_NO_DEPLOY.py'
       - 'test/deda_stage71_free_admin_200_role_grant_emulator.test.js'
   workflow_dispatch:
