@@ -1,0 +1,87 @@
+name: DEDA OWNER APPROVED Spark Public ID Rules ONLY No Billing
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/deploy-deda-spark-public-ids-OWNER-APPROVED-rules-only-2026-10-22.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-spark-firestore-owner-approved-rules-only
+  cancel-in-progress: false
+jobs:
+  emulator-gated-live-firestore-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_SPARK_OWNER_APPROVED_RULES_ONLY: 'YES'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify owner scope and exact reviewed rules-only publication script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            tools/deda_qa32_spark_merge_LIVE_firestore_rules_QA_NO_DEPLOY.py \
+            tools/deda_qa32_spark_firestore_rules_PUBLISH_OWNER_APPROVED_2026_10_22.py
+          test -f docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          test -f test/deda_qa32_spark_LIVE_rules_emulator.test.cjs
+          grep -q 'EXPECTED_LIVE_SHA="465870297ed991f1fc5e9f48249415725d2eb019c6fef7d7971648efa767fe6e"' \
+            tools/deda_qa32_spark_firestore_rules_PUBLISH_OWNER_APPROVED_2026_10_22.py
+          test "${DEDA_SPARK_OWNER_APPROVED_RULES_ONLY:-}" = YES
+          echo 'OWNER_APPROVED_SPARK_RULES_ONLY_NO_FUNCTIONS_NO_BILLING'
+      - name: Fetch and stage copy of ACTUAL live Firestore rules; do not deploy yet
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_qa32_spark_merge_LIVE_firestore_rules_QA_NO_DEPLOY.py
+          python3 - <<'PY_CONF'
+          import json
+          from pathlib import Path
+          conf={"firestore":{"rules":"/tmp/deda_spark_emulator_rules.rules"},
+                "emulators":{"firestore":{"host":"127.0.0.1","port":8087},
+                             "ui":{"enabled":False}}}
+          Path("/tmp/deda_spark_emulator_firebase.json").write_text(json.dumps(conf))
+          print("EMULATOR_ONLY_NO_PROJECT_DATA_TOUCH")
+          PY_CONF
+      - name: Mandatory emulator security gate owner+future grant and six fail-safe tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --only firestore \
+            --project deda-spark-qa32-emulator \
+            --config /tmp/deda_spark_emulator_firebase.json \
+            --non-interactive \
+            'node --test test/deda_qa32_spark_LIVE_rules_emulator.test.cjs'
+          echo 'PASS_OWNER_SPARK_RULES_TESTS_BEFORE_DEPLOY'
+      - name: Deploy ONLY two additive public alias rules with original rules rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_qa32_spark_firestore_rules_PUBLISH_OWNER_APPROVED_2026_10_22.py
+          echo "SPARK_FIRESTORE_RULES_ONLY_DEPLOY_SCRIPT_COMPLETE"
+      - name: Preserve old release rollback metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-Spark-Original-Firestore-Ruleset-Rollback-Metadata
+          path: /tmp/deda_spark_original_live_ruleset_rollback.json
+          if-no-files-found: ignore
+          retention-days: 30
