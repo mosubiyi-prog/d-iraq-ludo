@@ -55,8 +55,15 @@ function buildResolveGiftRecipientCallable({onCall,HttpsError,db}) {
     const a=admin.exists ? admin.data()||{} : {};
     // General-manager role, active status, and permission are REQUIRED.
     // The original actual admin system must be audited at deployment.
+    // Match DEDA's existing explicit GM role names while rejecting employee,
+    // deputy, disabled and suspended accounts. Missing role is NOT enough
+    // for a new privileged callable even if legacy UI has looser defaults.
+    const role = String(a.role || a.jobTitle || "").trim().toLowerCase();
+    const allowed = new Set(["general_manager", "generalmanager",
+      "manager", "director", "admin"]);
     if (a.active !== true ||
-        (a.role !== "general_manager" && a.role !== "generalManager")) {
+        (a.status != null && a.status !== "active") ||
+        !allowed.has(role)) {
       throw new HttpsError("permission-denied","DEDA_MANAGER_ONLY");
     }
     try {
