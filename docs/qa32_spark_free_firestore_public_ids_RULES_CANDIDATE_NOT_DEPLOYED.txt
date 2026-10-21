@@ -10,71 +10,60 @@
 // No stage71 registry, user wallet, phone or private profile is opened up.
 
 // Firestore rules v2 helpers
+// Bundle each source document read just once. This avoids Firestore
+// 10-reads-per-operation/20-per-atomic-batch limits on a free Spark plan.
 function sparkOwner(originalId) {
-  return signedIn()
-    && originalId.matches('^@DEDA-[A-Z0-9]{6}$')
-    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-    && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-    && get(/databases/$(database)/documents/users/$(request.auth.uid))
-      .data.sharePersonalId == originalId
-    && get(/databases/$(database)/documents/users/$(request.auth.uid))
-      .data.accountKey ==
-      get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-      .data.accountKey
-    && exists(/databases/$(database)/documents/deda_share_ids/$(originalId))
-    && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
-      .data.kind == 'personal'
-    && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
-      .data.active == true
-    && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
-      .data.ownerUid == request.auth.uid;
+  return signedIn() && sparkOwnerAuthed(originalId);
+}
+function sparkOwnerAuthed(originalId) {
+  let account = get(/databases/$(database)/documents/users/$(request.auth.uid));
+  let session = get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid));
+  let route = get(/databases/$(database)/documents/deda_share_ids/$(originalId));
+  return originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+    && account.data.sharePersonalId == originalId
+    && account.data.accountKey is string
+    && account.data.accountKey == session.data.accountKey
+    && route.data.publicId == originalId
+    && route.data.kind == 'personal'
+    && route.data.active == true
+    && route.data.ownerUid == request.auth.uid;
 }
 
 function sparkActiveSource(originalId, activeId) {
-  return exists(
-      /databases/$(database)/documents/deda_stage71_active_identifier/$(originalId))
-    && get(
-      /databases/$(database)/documents/deda_stage71_active_identifier/$(originalId))
-      .data.originalId == originalId
-    && get(
-      /databases/$(database)/documents/deda_stage71_active_identifier/$(originalId))
-      .data.activeId == activeId;
+  let current = get(/databases/$(database)/documents/deda_stage71_active_identifier/$(originalId));
+  return current.data.originalId == originalId
+    && current.data.activeId == activeId;
+}
+
+function sparkReceivedGift(originalId, aliasId, group) {
+  let receipt = get(/databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId));
+  return receipt.data.identifier == aliasId
+    && receipt.data.originalId == originalId
+    && receipt.data.group == group
+    && receipt.data.receivedAt is timestamp;
 }
 
 function sparkValidGranted(originalId, aliasId, foil) {
+  let grant = get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId));
   return aliasId.matches('^@DEDA-[A-Z0-9]{4,12}$')
-    && foil in ['gold', 'diamond', 'royal', 'pink']
-    && exists(
-      /databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-    && get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-      .data.identifier == aliasId
-    && get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-      .data.recipientOriginalId == originalId
-    && get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-      .data.baseColor == foil
-    && get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-      .data.group in ['001','002']
+    && foil in ['gold','diamond','royal','pink']
+    && grant.data.identifier == aliasId
+    && grant.data.recipientOriginalId == originalId
+    && grant.data.baseColor == foil
+    && grant.data.group in ['001','002']
     && (
-      get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-        .data.kind == 'self_used'
-      ||
-      (
-        get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-          .data.kind == 'gifted'
-        && exists(
-          /databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId))
-        && get(/databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId))
-          .data.identifier == aliasId
-        && get(/databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId))
-          .data.originalId == originalId
-        && get(/databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId))
-          .data.group ==
-            get(/databases/$(database)/documents/deda_stage71_granted_registry/$(aliasId))
-              .data.group
-        && get(/databases/$(database)/documents/deda_stage74_id_gift_receipts/$(aliasId))
-          .data.receivedAt is timestamp
-      )
+      grant.data.kind == 'self_used'
+      || (grant.data.kind == 'gifted' &&
+          sparkReceivedGift(originalId, aliasId, grant.data.group))
     );
+}
+
+function sparkProjectedActive(originalId, aliasId, foil) {
+  let projection = getAfter(
+      /databases/$(database)/documents/deda_public_active_aliases/$(originalId));
+  return projection.data.originalId == originalId
+    && projection.data.activeId == aliasId
+    && projection.data.baseColor == foil;
 }
 
 match /deda_public_active_aliases/{originalId} {
@@ -120,14 +109,10 @@ match /deda_public_alias_routes/{aliasId} {
     && sparkActiveSource(request.resource.data.originalId, aliasId)
     && sparkValidGranted(request.resource.data.originalId,
         aliasId, request.resource.data.baseColor)
-    // Reject a false claim if active index was not updated in same logical
-    // transaction (getAfter works for existing index on later renewals).
-    && getAfter(
-      /databases/$(database)/documents/deda_public_active_aliases/$(request.resource.data.originalId))
-      .data.activeId == aliasId
-    && getAfter(
-      /databases/$(database)/documents/deda_public_active_aliases/$(request.resource.data.originalId))
-      .data.baseColor == request.resource.data.baseColor
+    // A route must match the current index (including this atomic batch).
+    && sparkProjectedActive(
+      request.resource.data.originalId, aliasId,
+      request.resource.data.baseColor)
     && (!exists(
       /databases/$(database)/documents/deda_public_alias_routes/$(aliasId))
       || resource.data.originalId == request.resource.data.originalId);
