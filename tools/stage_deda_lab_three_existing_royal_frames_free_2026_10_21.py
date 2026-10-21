@@ -33,7 +33,8 @@ def patch_source(src: str) -> str:
     for anchor in required:
         if src.count(anchor) != 1 and anchor not in (
                 'List<Widget>.generate(6, (index) {',
-                'frameStyle: _frameStyle,'):
+                'frameStyle: _frameStyle,',
+                'assets/deda_royal_frames/royal_frame_'):
             raise ValueError('SAFE_STOP_3_ROYAL_ANCHOR ' + anchor + ' count ' + str(src.count(anchor)))
         if anchor not in src:
             raise ValueError('SAFE_STOP_3_ROYAL_ANCHOR_MISSING ' + anchor)
