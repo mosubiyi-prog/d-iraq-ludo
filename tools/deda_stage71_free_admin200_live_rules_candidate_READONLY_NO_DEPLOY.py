@@ -20,12 +20,9 @@ RULE="""
     // Protected GROUP001 identities are in manager-only collection, never in
     // source code, APK or client-side static lists.
     function stage71Manager() {
-      return isAdmin()
-        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'general_manager'
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey ==
-           get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey;
+      // Match DEDA's already-deployed manager role exactly. Admin sessions
+      // use their own FirebaseAuth identity and need no personal phone PIN.
+      return isGeneralManager();
     }
     function stage71CatalogPath(id) {
       return /databases/$(database)/documents/deda_stage71_admin_catalog/$(id);
