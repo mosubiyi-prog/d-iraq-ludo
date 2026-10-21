@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_backend.dart';
+import 'deda_qa32_public_recipient_resolver.dart';
 
 class DedaSocialProfile {
   final String publicId;
@@ -186,16 +187,29 @@ class DedaSocialService {
   }
 
   static Future<DedaSocialProfile?> findByPublicId(String raw) async {
-    final publicId = normalizePublicId(raw);
-    if (!looksLikePersonalId(publicId)) return null;
-
-    final directory = await _db.collection('deda_share_ids').doc(publicId).get();
-    final directoryData = directory.data();
+    // DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT
+    // Always prefer a real original ID when 6-character IDs overlap.
+    final requestedId = normalizePublicId(raw);
+    if (!looksLikePersonalId(requestedId)) return null;
+    var publicId = requestedId;
+    var directory = await _db.collection('deda_share_ids').doc(publicId).get();
+    var directoryData = directory.data();
     if (!directory.exists ||
         directoryData == null ||
         directoryData['active'] != true ||
         directoryData['kind'] != 'personal') {
-      return null;
+      final canonical = await DedaQa32PublicRecipientResolver.resolveActiveAlias(
+        requestedId,
+      );
+      if (canonical == null ||
+          !DedaBackend.isValidPersonalShareId(canonical)) return null;
+      publicId = canonical;
+      directory = await _db.collection('deda_share_ids').doc(publicId).get();
+      directoryData = directory.data();
+      if (!directory.exists ||
+          directoryData == null ||
+          directoryData['active'] != true ||
+          directoryData['kind'] != 'personal') return null;
     }
 
     final profile =
