@@ -131,6 +131,8 @@ jobs:
           python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS_STAGE51_SPARK_ALIAS_FINDS_EXISTING_CANONICAL_UID_WITHOUT_REWRITING_SOCIAL_SERVICE'
           python3 tools/stage_deda_100375_all_16_lab_original_royal_frames_native.py
+          flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
+          echo 'PASS_100377_LEGACY_FRIEND_ORIGINAL_INPUT_PRESERVED_WITH_SPARK_OFF'
           flutter test test/deda_lab_premium_frame_artwork_test.dart
           flutter test test/deda_lab_verified_frame_catalog_test.dart
           flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
