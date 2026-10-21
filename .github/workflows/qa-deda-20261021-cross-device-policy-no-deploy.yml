@@ -1,0 +1,35 @@
+name: DEDA QA32 Cross-device Account Readonly Safety Tests NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-qa-32-batch1-no-deploy-2026-10-21
+    paths:
+      - 'functions/deda_qa32_account_continuity_policy_NOT_EXPORTED.js'
+      - 'functions/tests/deda_qa32_account_continuity_policy.test.js'
+      - '.github/workflows/qa-deda-20261021-cross-device-policy-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  account-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify stage has not changed production databases or signing
+        run: |
+          set -euo pipefail
+          git diff --quiet 2ec0c4993e1ac1f105cce33cf07c5048abddc5df -- \
+            functions/index.js firestore.rules firebase.json lib/main.dart android/
+          ! grep -q 'deda_qa32_account_continuity_policy_NOT_EXPORTED' functions/index.js
+          echo 'PASS QA32 ledger policy NOT DEPLOYED'
+      - name: Deny new-device zeroing, unverified phone/UID and stale-wallet merges
+        run: |
+          set -euo pipefail
+          node --check functions/deda_qa32_account_continuity_policy_NOT_EXPORTED.js
+          node --test functions/tests/deda_qa32_account_continuity_policy.test.js
