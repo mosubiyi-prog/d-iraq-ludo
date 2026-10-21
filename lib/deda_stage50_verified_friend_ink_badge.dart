@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'deda_verified_identifier_ink.dart';
 import 'deda_qa32_premium_app_check.dart';
+import 'deda_qa32_spark_public_identifier_directory.dart';
 
 /// Stage50 DTO. Only canonical original ID lookup is accepted by a friend
 /// profile. No client may supply a purchased card color or a target UID.
@@ -60,15 +61,27 @@ class DedaStage50PublicIdStyle {
 /// Build-time feature locks default OFF until owner approves real Functions
 /// and AppCheck on the signed APK. This is NOT a public release activation.
 class DedaStage50PublicIdStyleBridge {
-  static const bool enabled = bool.fromEnvironment(
+  static const bool functionsEnabled = bool.fromEnvironment(
         'DEDA_PREMIUM_IDS_SERVER_LIVE', defaultValue: false) &&
       bool.fromEnvironment(
         'DEDA_STAGE50_PUBLIC_IDENTIFIER_STYLE_LIVE', defaultValue: false);
+  static const bool enabled =
+      DedaQa32SparkPublicIdentifierDirectory.enabled || functionsEnabled;
 
   static Future<DedaStage50PublicIdStyle?> read(
       String requesterUid, String originalId) async {
     if (!enabled || FirebaseAuth.instance.currentUser?.uid != requesterUid) {
       throw StateError('public-id-style-server-off');
+    }
+    if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
+      final proof = await DedaQa32SparkPublicIdentifierDirectory
+          .readVerifiedStyle(originalId);
+      if (FirebaseAuth.instance.currentUser?.uid != requesterUid) {
+        throw StateError('friend-id-requester-changed');
+      }
+      return proof == null
+          ? null
+          : DedaStage50PublicIdStyle.parse(proof, originalId);
     }
     await DedaQa32PremiumAppCheck.ensureReady();
     final response = await FirebaseFunctions.instance
