@@ -1,0 +1,70 @@
+name: DEDA Spark Read Live Firestore Rules Baseline NO DEPLOY
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-spark-live-firestore-rules-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-live-rule-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check REAL Firestore rules active release WITHOUT touching production
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY_RULES_ONLY'
+          import base64,hashlib,json,os,requests
+          import google.auth
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          credential=os.environ.get("DEDA_SERVICE_ACCOUNT") or os.environ.get("DEDA_FALLBACK_ACCOUNT")
+          if not credential:
+              print("SPARK_LIVE_RULES_CREDENTIAL_MISSING")
+              raise SystemExit(0)
+          try:
+              js=json.loads(credential)
+              creds=service_account.Credentials.from_service_account_info(
+                  js,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+              creds.refresh(Request())
+          except Exception as exc:
+              print("SPARK_LIVE_RULES_CREDENTIAL_UNUSABLE",type(exc).__name__)
+              raise SystemExit(0)
+          client=requests.Session()
+          h={'Authorization':'Bearer '+creds.token}
+          base='https://firebaserules.googleapis.com/v1/projects/deda-25b88'
+          r=client.get(base+'/releases/cloud.firestore',headers=h,timeout=25)
+          print("SPARK_LIVE_RULES_RELEASE_HTTP",r.status_code)
+          if r.status_code!=200:raise SystemExit(0)
+          name=r.json().get('rulesetName')
+          if not name or not name.startswith('projects/deda-25b88/rulesets/'):
+              print("SPARK_LIVE_RULES_RELEASE_UNTRUSTED")
+              raise SystemExit(0)
+          r=client.get('https://firebaserules.googleapis.com/v1/'+name,headers=h,timeout=25)
+          print("SPARK_LIVE_RULESET_HTTP",r.status_code)
+          if r.status_code!=200:raise SystemExit(0)
+          files=r.json().get('source',{}).get('files',[])
+          rules='\n'.join(f.get('content','') for f in files)
+          sha=hashlib.sha256(rules.encode()).hexdigest()
+          print("SPARK_LIVE_RULESET_SHA256",sha)
+          print("SPARK_LIVE_RULESET_LINES",len(rules.splitlines()))
+          for item in ('deda_share_ids','deda_stage71_active_identifier',
+                       'deda_stage71_granted_registry',
+                       'deda_stage74_id_gift_receipts',
+                       'deda_public_alias_routes','deda_public_active_aliases'):
+              print("SPARK_LIVE_RULE_HAS_"+item, item in rules)
+          snapshot=open('firestore.rules',encoding='utf-8').read()
+          print("SPARK_CHECKED_IN_RULES_EXACT_MATCH",snapshot.rstrip()==rules.rstrip())
+          # Do NOT print raw rule content, service-account JSON or user data.
+          print("SPARK_LIVE_RULES_AUDIT_READ_ONLY_NO_BILLING_NO_DEPLOY")
+          PY_RULES_ONLY
