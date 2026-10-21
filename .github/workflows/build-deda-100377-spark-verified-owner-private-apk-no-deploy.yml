@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: deda-qa32-stage82-private-owner-apk-100377-no-deploy
+  group: deda-qa32-100377-repaired-private-apk-full-sign-no-deploy
   cancel-in-progress: false
 jobs:
   reconstruct-real-store:
