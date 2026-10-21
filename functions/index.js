@@ -1308,3 +1308,21 @@ exports.dedaSetPlaceEngagement = onCall(async (request) => {
         "Unable to update place reaction" : String(error.message));
   }
 });
+
+// DEDA_QA32_OWNER_APPROVED_VERIFIED_PREMIUM_ID_CALLABLES_2026_10_21
+// These new callables are read-only, authenticated and App Check protected.
+// Changes here do NOT deploy Functions: active project IAM must authorize a
+// separately reviewed targeted Cloud Functions deployment. Never relax admin
+// permissions or rewrite canonical DEDA IDs, social, gifts or wallets.
+const {
+  buildReadPublicAliasCallable,
+  buildResolveGiftRecipientCallable,
+  buildResolvePublicRecipientCallable,
+} = require("./deda_100374_qa32_verified_public_gift_callables_NOT_EXPORTED.js");
+const dedaQa32Db = {doc: (path) => getFirestore().doc(path)};
+exports.dedaPremiumReadPublicIdentifierStyle =
+    buildReadPublicAliasCallable({onCall, HttpsError, db: dedaQa32Db});
+exports.dedaPremiumResolveAdminGiftRecipient =
+    buildResolveGiftRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
+exports.dedaPremiumResolvePublicRecipient =
+    buildResolvePublicRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
