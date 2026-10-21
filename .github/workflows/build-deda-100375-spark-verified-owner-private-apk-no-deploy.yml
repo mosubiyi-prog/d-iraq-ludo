@@ -1,10 +1,5 @@
 name: DEDA 100377 SPARK Premium IDs + ALL PERSONAL Diamonds & Task Gold OWNER QA
 on:
-  push:
-    branches:
-      - deda-100374-ids-qa32-frames-deferred-2026-10-21
-    paths:
-      - '.github/workflows/build-deda-100377-spark-verified-owner-private-apk-no-deploy.yml'
   workflow_dispatch:
 permissions:
   contents: read
