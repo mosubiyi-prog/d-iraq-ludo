@@ -105,8 +105,10 @@ class DedaStage75UnreadGiftBadge {
     final viewed = prefs.getStringList(_seenPreference(uid, originalId))
             ?.toSet() ??
         <String>{};
+    // Claimed gifts are already in permanent history. On a new device a
+    // missing LOCAL seen marker must never resurrect an old claimed gift.
     final ids = gifts
-        .where((gift) => gift.originalId == originalId)
+        .where((gift) => gift.originalId == originalId && !gift.received)
         .map((gift) => gift.identifier);
     pendingNotifier.value = unreadCount(ids, viewed);
   }
