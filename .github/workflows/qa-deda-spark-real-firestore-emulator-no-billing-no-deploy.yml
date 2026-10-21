@@ -1,0 +1,57 @@
+name: DEDA Spark REAL Firestore Rules Emulator Security NO DEPLOY
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-spark-real-firestore-emulator-no-billing-no-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-firestore-rules-spark-id-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Merge Spark candidate into REAL live rules snapshot in /tmp ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_qa32_spark_merge_LIVE_firestore_rules_QA_NO_DEPLOY.py
+          python3 - <<'PY_CONFIG'
+          import json
+          from pathlib import Path
+          config={"firestore":{"rules":"/tmp/deda_spark_emulator_rules.rules"},
+                  "emulators":{"firestore":{"host":"127.0.0.1","port":8087},
+                               "ui":{"enabled":False}}}
+          Path("/tmp/deda_spark_emulator_firebase.json").write_text(
+              json.dumps(config))
+          print("SAFE_EMULATOR_ONLY_TEMP_CONFIG_READY")
+          PY_CONFIG
+      - name: Run authenticated owner/receipt/stale alias tests against Firestore emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts \
+             @firebase/rules-unit-testing@4.0.0 firebase@10.14.1
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --only firestore \
+            --project deda-spark-qa32-emulator \
+            --config /tmp/deda_spark_emulator_firebase.json \
+            --non-interactive \
+            'node --test test/deda_qa32_spark_LIVE_rules_emulator.test.cjs'
+          echo 'SPARK_REAL_CURRENT_FIRESTORE_RULES_EMULATOR_PASS_NO_PRODUCTION_WRITE'
