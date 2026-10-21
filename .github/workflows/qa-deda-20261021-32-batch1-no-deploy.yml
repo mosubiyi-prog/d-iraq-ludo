@@ -238,7 +238,7 @@ jobs:
           search_b = src.index('class DedaFriendRequestsPage', search_a)
           public_a = src.index('class DedaFriendPublicProfilePage extends StatelessWidget {')
           receiver_a = src.index('class _DedaReceivedLocationsPageState extends State<DedaReceivedLocationsPage> {')
-          receiver_b = src.index('class _DedaReceivedLocationsPageState', receiver_a + 10) if src.count('class _DedaReceivedLocationsPageState') > 1 else len(src)
+          receiver_b = src.index('\nclass ', receiver_a + len('class _DedaReceivedLocationsPageState'))
           assert src[friend_a:friend_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert src[search_a:search_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert src[public_a:].count('DedaStage50VerifiedFriendInkBadge(') == 1
