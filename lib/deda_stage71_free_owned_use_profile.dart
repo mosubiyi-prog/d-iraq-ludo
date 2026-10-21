@@ -222,6 +222,25 @@ class _DedaStage71OwnedIdsPanelState
             if(_ids==null) const Text('الملكية بانتظار التحقق من الخادم'),
             if(_ids!=null && _ids!.isEmpty)
               const Text('لا توجد معرّفات ممنوحة بعد'),
+            // QA32: original is never lost and is always available to
+            // reactivate when a gifted or self-used premium ID is active.
+            // Switching only changes the ACTIVE display alias, not the
+            // immutable original account/share routing identifier.
+            if (_ids != null)
+              ListTile(
+                key: const Key('deda_qa32_permanent_original_owned_row'),
+                dense: true,
+                title: Text(widget.originalId,
+                    textDirection: TextDirection.ltr),
+                subtitle: const Text('المعرّف الأصلي • محفوظ دائمًا'),
+                trailing: OutlinedButton(
+                  onPressed: _busy || _active == widget.originalId
+                      ? null
+                      : () => _use(widget.originalId),
+                  child: Text(_active == widget.originalId
+                      ? 'مستخدم' : 'استخدام'),
+                ),
+              ),
             for(final owned in _ids ?? <DedaStage71OwnedIdentifier>[])
               ListTile(
                 dense:true,
