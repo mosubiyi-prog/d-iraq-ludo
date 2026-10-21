@@ -12,8 +12,8 @@ void main() {
     final locked = dedaLabVerifiedFrames.where((f) => !f.free).toList();
     expect(locked.length, 13);
     expect(locked.every((f) => f.priceDiamonds == 1000), true);
-    expect(locked.every((f) => !f.bundled), true,
-        reason:'Only 3 royal images are in original app bundle so far');
+    expect(locked.every((f) => f.bundled), true,
+        reason:'13 original LAB WebP frame images are now bundled; paid use still locked');
     expect(dedaLabInternalAvatarDimension, 111);
     expect(dedaLabPurchasedFramePriceDiamonds, 1000);
   });
@@ -33,7 +33,7 @@ void main() {
   test('preview never equals verified ownership of a paid asset', () {
     final paid=dedaLabVerifiedFrames.firstWhere((x)=>x.id=='FRAME_03');
     expect(paid.free, false);
-    expect(paid.canPreviewNatively, false);
+    expect(paid.canPreviewNatively, true);
     expect(paid.needsTrustedCheckout, true);
     expect(dedaLabIsGiftedOrOwnedFrame(paid, const <String>{}), false);
     expect(dedaLabIsGiftedOrOwnedFrame(paid, const {'FRAME_03'}), true);
