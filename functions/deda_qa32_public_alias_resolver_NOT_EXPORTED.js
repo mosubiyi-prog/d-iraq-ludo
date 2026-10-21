@@ -80,4 +80,56 @@ async function readVerifiedPublicAlias(db, originalId, trustedAuthUid) {
   });
 }
 
-module.exports = {readVerifiedPublicAlias};
+/**
+ * Read-only admin recipient lookup bridge. Accepts canonical original or an
+ * ACTIVE server-verified Stage71 premium ID. Gift-transfer code must STILL
+ * confirm original recipient and available balance independently and must
+ * never trust a client-supplied recipient UID, name or account key.
+ *
+ * A historical original identifier is ALWAYS the immutable transfer key.
+ * An arbitrary gifted/owned but INACTIVE alias is not accepted in the
+ * manager lookup, preventing stale ownership confusion.
+ */
+async function resolveVerifiedGiftRecipientOriginal(db, suppliedId, trustedAuthUid) {
+  if (typeof trustedAuthUid !== "string" || !trustedAuthUid.trim()) {
+    throw new Error("SAFE_STOP_QA32_GIFT_RECIPIENT_AUTH_REQUIRED");
+  }
+  if (typeof suppliedId !== "string" || !ALIAS.test(suppliedId)) {
+    throw new Error("SAFE_STOP_QA32_GIFT_RECIPIENT_ID_INVALID");
+  }
+  if (!db || typeof db.doc !== "function") {
+    throw new Error("SAFE_STOP_QA32_GIFT_RECIPIENT_DB_REQUIRED");
+  }
+  // Original ID lookup must work even when its owner selected no premium ID.
+  if (ORIGINAL.test(suppliedId)) {
+    const route = await db.doc("deda_share_ids/" + suppliedId).get();
+    const item = route.exists ? route.data() || {} : {};
+    if (item.active === true && item.kind === "personal" &&
+        item.publicId === suppliedId &&
+        typeof item.ownerUid === "string" && item.ownerUid.trim()) {
+      return Object.freeze({requestedId: suppliedId, originalId: suppliedId,
+        serverConfirmed: true});
+    }
+  }
+
+  // A premium alias is not a new account and may NEVER determine a wallet.
+  const grantSnap = await db.doc(
+      "deda_stage71_granted_registry/" + suppliedId).get();
+  if (!grantSnap.exists) return null;
+  const grant = grantSnap.data() || {};
+  const originalId = grant.recipientOriginalId;
+  if (!ORIGINAL.test(originalId) || grant.identifier !== suppliedId) {
+    throw new Error("SAFE_STOP_QA32_GIFT_RECIPIENT_GRANT_MISMATCH");
+  }
+
+  // Reuse the full authenticated original -> active -> grant -> receipt
+  // verification already required by friends / received location cards.
+  const style = await readVerifiedPublicAlias(db, originalId, trustedAuthUid);
+  if (!style.serverConfirmed || style.displayId !== suppliedId) {
+    return null; // inactive or unverified recipient is NEVER a match
+  }
+  return Object.freeze({requestedId: suppliedId, originalId,
+    serverConfirmed: true});
+}
+
+module.exports = {readVerifiedPublicAlias, resolveVerifiedGiftRecipientOriginal};
