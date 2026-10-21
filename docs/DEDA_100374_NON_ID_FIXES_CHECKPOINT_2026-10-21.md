@@ -19,3 +19,12 @@
 - New isolated non-build diagnostics workflow [GitHub Actions 39642703133](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39642703133) determines the **actual reconstructed source** for legacy diamond badge and public contrast; do not patch the stale checked-in `lib/main.dart` as if it were the final Flutter app.
 - New Flutter regression test: `test/deda_100374_nonid_public_readability_test.dart`.
 - Status: **IN PROGRESS / NOT YET A DOWNLOADABLE NEW APK** at creation. Confirm GitHub CI, artifact, signing, package and owner phone only after all pass.
+
+
+## Implementation and real CI evidence
+- Added `tools/stage_deda_100374_nonid_diamond_gift_badge_rearm.py`: scope legacy read-only diamond stream to current Firebase UID and original ID; re-arm on auth state, after first frame/startup, and when the app resumes. No client-generated gift count, receipts or claimed-state edits. Existing red count continues combining pending diamond gifts with separately verified unviewed ID gift counts.
+- Added Flutter tests `test/deda_100374_nonid_diamond_gift_nav_test.dart` (0 → 2 → 0 pending badge updates) and `test/deda_100374_nonid_public_readability_test.dart` (white friend name + original-ID fallback); reconstructed source is mandatory for these tests.
+- First integrated build [39643994510](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39643994510) **FAILED in widget test only** with a pending 1.5-second restart Timer after disposal. Previous reconstructed app, source patch and public readability test passed; no APK/artifact was built. This was NOT a Firebase wallet/Play defect.
+- Fixed actual production widget lifecycle to retain `Timer? _startupRetry` and call `_startupRetry?.cancel()` from `dispose()`, commit `7a9e708ff2b3791ec8bb0fd846668bbd77728ff4`; added explicit CI guard for cancellation, commit `af8ba4749040f4ebc3c33c66d8945a6a1f5f6960`.
+- New integrated private APK signing attempt [39645050679](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39645050679) **IN PROGRESS** at this checkpoint. Do not call release successful until Flutter tests, APK signing/checksum, and actual artifact succeed.
+- Feature flags and premium identifier public alias pipeline remain exactly as 100373; GM premium ID lookup, gift/use flows, friend/recipient displayed aliases and server migration explicitly deferred. No new 13 LAB frames included.
