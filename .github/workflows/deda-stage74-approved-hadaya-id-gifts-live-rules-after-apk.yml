@@ -4,7 +4,8 @@ on:
     branches:
       - deda-stage74-id-gift-inbox-claim-use-tablet-2026-10-21
     paths:
-      - '.github/workflows/deda-stage74-approved-hadaya-id-gifts-live-rules-after-apk.yml'\n      - 'tools/deda_stage74_hadaya_received_id_rules_live_OWNER_APPROVED_DEPLOY.py'
+      - '.github/workflows/deda-stage74-approved-hadaya-id-gifts-live-rules-after-apk.yml'
+      - 'tools/deda_stage74_hadaya_received_id_rules_live_OWNER_APPROVED_DEPLOY.py'
       - 'tools/deda_stage74_id_gifts_live_rules_READONLY_CANDIDATE.py'
       - 'test/deda_stage74_hadaya_gift_receipt_account_security_emulator.test.js'
   workflow_dispatch:
