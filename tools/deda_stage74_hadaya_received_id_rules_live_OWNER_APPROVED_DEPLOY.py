@@ -20,7 +20,7 @@ RELEASE=f"projects/{PROJECT}/releases/cloud.firestore"
 SRC=Path("/tmp/deda-stage74-gifts-candidate.rules")
 BACKUP=Path("/tmp/deda-stage74-rules-backup")
 # Read-only Stage71 CI run #39517596785 validated this original LIVE ruleset.
-EXPECTED_LIVE_SHA16="353ebfc4b5c1e7"
+EXPECTED_LIVE_SHA16="353ebfc4b5c1e7af"
 MARKER="STAGE74_HADAYA_FREE_ID_GIFT_RECEIPT_ONLY"
 
 def fail(reason):
