@@ -21,6 +21,10 @@ class UnifiedWalletRealSource(unittest.TestCase):
         task=src[src.index("class _DedaDailyTasksPageState"):
                  src.index("class ",src.index("class _DedaDailyTasksPageState")+50)]
         self.assertIn("DedaUnifiedCurrencyStrip()",task)
+        editor=src[src.index("class _DedaEditProfilePageState"):
+                   src.find("\nclass ",src.index("class _DedaEditProfilePageState")+40)]
+        self.assertEqual(editor.count("DedaUnifiedCurrencyStrip()"),1)
+        self.assertIn("deda_edit_profile_scroll_choices",editor)
         shop=src[src.index("class _DedaStylePageState"):
                  src.find("\nclass ",src.index("class _DedaStylePageState"))]
         self.assertEqual(shop.count("DedaUnifiedCurrencyStrip()"),1)
