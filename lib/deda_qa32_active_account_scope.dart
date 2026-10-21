@@ -27,7 +27,8 @@ class DedaQa32ActiveAccountIdentity {
       originalId == currentOriginal &&
       RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId) &&
       (displayId == originalId && fixedColor == null ||
-          RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(displayId) &&
+          displayId != originalId &&
+              RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(displayId) &&
               {'gold', 'diamond', 'royal', 'pink'}.contains(fixedColor));
 }
 
