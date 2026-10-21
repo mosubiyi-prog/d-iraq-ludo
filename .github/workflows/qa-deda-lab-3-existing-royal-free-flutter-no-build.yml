@@ -1,4 +1,4 @@
-name: DEDA LAB 3 REAL ROYAL FREE FRAMES SAFE FLUTTER NO BUILD
+name: DEDA 100374 Royal FREE and Verified GM Alias QA NO BUILD
 on:
   push:
     branches:
@@ -110,8 +110,10 @@ jobs:
           python3 tools/stage_deda_100359_qa32_live_public_friend_appearance.py
           python3 tools/stage_deda_100374_nonid_diamond_gift_badge_rearm.py
           python3 tools/stage_deda_lab_three_existing_royal_frames_free_2026_10_21.py
+          python3 tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
           flutter test test/deda_lab_verified_frame_catalog_test.dart
           flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
+          flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
           flutter test test/deda_100374_nonid_diamond_gift_nav_test.dart
           grep -q 'DEDA_LAB_3_EXISTING_ROYAL_FRAMES_FREE_SAVE_RELOAD_SAFE' lib/main.dart
