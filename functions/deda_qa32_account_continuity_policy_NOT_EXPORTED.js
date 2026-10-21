@@ -13,13 +13,17 @@ function validUnsignedSafe(value) {
 
 function verifiedIdentity(proof) {
   if (!proof || typeof proof !== "object") return false;
-  const keys = [proof.userAccountKey, proof.sessionAccountKey,
-    proof.publishedOwnerAccountKey];
+  const canonical = proof.userAccountKey;
+  const ownedPlaceKey = proof.publishedOwnerAccountKey;
+  const hasPlace = proof.hasPublishedPlace === true;
   if (typeof proof.authUid !== "string" || !proof.authUid ||
       proof.userUid !== proof.authUid ||
       proof.sessionUid !== proof.authUid ||
-      typeof keys[0] !== "string" || !keys[0].trim() ||
-      keys.some(k => k !== keys[0])) {
+      typeof canonical !== "string" || !canonical.trim() ||
+      proof.sessionAccountKey !== canonical ||
+      (hasPlace && (typeof ownedPlaceKey !== "string" ||
+        ownedPlaceKey !== canonical)) ||
+      (ownedPlaceKey != null && ownedPlaceKey !== canonical)) {
     return false;
   }
   if (typeof proof.originalId !== "string" ||
