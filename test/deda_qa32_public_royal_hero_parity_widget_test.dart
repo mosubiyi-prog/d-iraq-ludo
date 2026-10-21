@@ -63,7 +63,7 @@ void main() {
     ));
     expect(find.text('نخبوي'), findsOneWidget);
     expect(find.textContaining('المستوى 7'), findsWidgets);
-    expect(find.textContaining('رقم الهاتف'), findsOneWidget);
+    expect(find.textContaining('أرقام الهاتف'), findsOneWidget);
     expect(find.textContaining('998,960'), findsNothing);
     expect(find.textContaining('975,645'), findsNothing);
     expect(tester.takeException(), isNull);
