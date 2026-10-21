@@ -1,0 +1,46 @@
+name: DEDA 100375 All 13 Original LAB Premium Frames SHA256 QA
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-100375-lab-13-original-assets-sha256-no-build.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-original-frames:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify 13 original files + 3 royal exact SHA256 and 0/1000 price tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_VERIFY'
+          import json,hashlib
+          from pathlib import Path
+          catalog=json.loads(Path('docs/DEDA_LAB_16_VERIFIED_FRAME_CATALOG_STAGED_ONLY_2026-10-21.json').read_text())
+          assert len(catalog['frames'])==16
+          free,paid=[],[]
+          for item in catalog['frames']:
+            path=Path(item['base_asset_at_100373'] or ('assets/deda_lab_frames/'+item['id']+'.webp'))
+            assert path.is_file(), 'MISSING ORIGINAL '+str(path)
+            raw=path.read_bytes()
+            assert len(raw)==item['bytes'],'WRONG ARTWORK LENGTH '+item['id']
+            assert hashlib.sha256(raw).hexdigest()==item['sha256'],'SHA256 MISMATCH '+item['id']
+            if item['initial_access']=='free':
+              assert item['initial_price_diamonds']==0
+              free.append(item['id'])
+            else:
+              assert item['initial_access']=='locked' and item['initial_price_diamonds']==1000
+              paid.append(item['id'])
+          assert free==['FRAME_01','FRAME_02','FRAME_04']
+          assert len(paid)==13 and len(set(paid))==13
+          pubspec=Path('pubspec.yaml').read_text()
+          assert '    - assets/deda_lab_frames/' in pubspec
+          app=Path('lib/deda_lab_verified_frame_catalog.dart').read_text()
+          assert app.count('bundled:true,priceDiamonds:1000')==13
+          print('PASS_13_ORIGINAL_LAB_WEBP_SHA256_MATCH_BYTE_FOR_BYTE')
+          print('PASS_3_ORIGINAL_ROYAL_FREE_AND_13_AT_1000_EACH')
+          print('PASS_NATIVE_FLUTTER_FRAME_ASSET_DIRECTORY_INCLUDED')
+          PY_VERIFY
