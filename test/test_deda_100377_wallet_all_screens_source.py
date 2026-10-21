@@ -28,7 +28,8 @@ class UnifiedWalletRealSource(unittest.TestCase):
         shop=src[src.index("class _DedaStylePageState"):
                  src.find("\nclass ",src.index("class _DedaStylePageState"))]
         self.assertEqual(shop.count("DedaUnifiedCurrencyStrip()"),1)
-        self.assertIn("_walletCard(progress, ratio, within)",shop)
+        self.assertIn("_stylePreviewCard(progress, inventory)",shop)
+        self.assertIn('Widget _stylePreviewCard(',shop)
         self.assertIn("value: progress.coins,",shop)
         self.assertIn("value: _diamonds,",shop)
         self.assertEqual(patch(src),src)
