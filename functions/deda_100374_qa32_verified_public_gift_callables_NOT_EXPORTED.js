@@ -79,7 +79,34 @@ function buildResolveGiftRecipientCallable({onCall,HttpsError,db}) {
   });
 }
 
+/**
+ * Any authenticated, App-Check verified DEDA user may use a premium ID as
+ * the add-friend or share-location recipient. The response contains ONLY a
+ * canonical public routing ID. No UID/phone/wallet/private profile data.
+ *
+ * Original IDs retain precedence if a 6-character premium alias collides
+ * with an actual canonical original ID. Client checks original first.
+ */
+function buildResolvePublicRecipientCallable({onCall,HttpsError,db}) {
+  if (typeof onCall !== "function" || typeof HttpsError !== "function" || !db) {
+    throw new Error("SAFE_STOP_QA32_CONFIG_REQUIRED");
+  }
+  return onCall({enforceAppCheck:true}, async request => {
+    const id=assertRequest(request,HttpsError);
+    try {
+      const route = await resolveVerifiedGiftRecipientOriginal(
+          db,id,request.auth.uid);
+      return route || Object.freeze({
+        requestedId:id,originalId:null,serverConfirmed:false,
+      });
+    } catch (_) {
+      throw new HttpsError("failed-precondition","DEDA_PUBLIC_RECIPIENT_UNVERIFIED");
+    }
+  });
+}
+
 module.exports = {
   buildReadPublicAliasCallable,
   buildResolveGiftRecipientCallable,
+  buildResolvePublicRecipientCallable,
 };
