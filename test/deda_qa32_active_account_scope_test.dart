@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_qa32_active_account_scope.dart';
 
@@ -51,4 +52,18 @@ void main() {
     expect(invalidId.verifiedFor(ownerUid, original), isFalse);
     expect(invalidColor.verifiedFor(ownerUid, original), isFalse);
   });
+  testWidgets('uninitialized Firebase never crashes account ID header',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: DedaQa32ActiveAccountScope(
+        originalId: original,
+        builder: (context, proof) =>
+            Text(proof == null ? 'original-safe-fallback' : 'verified-alias'),
+      )),
+    ));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('original-safe-fallback'), findsOneWidget);
+  });
+
 }
