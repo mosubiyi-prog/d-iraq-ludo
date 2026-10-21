@@ -16,12 +16,12 @@
 | # | Work item | 2026-10-21 status |
 |---|---|---|
 | 1 | Verified phone -> stable server-owned account identity across phones | OPEN; account migration requires audit |
-| 2 | Recover published owner-place for historic phone/device change, without creating another place | OPEN; Stage64 implementation exists but case not verified |
+| 2 | Recover published owner-place for historic phone/device change, without creating another place | EMULATOR RULES TEST PASS (run 39575800732); historic real account still unverified |
 | 3 | Restore levels, progress, XP across same verified account | OPEN; one user's earlier 0/100 belonged to another account; original returned 40/100 |
 | 4 | Protect diamonds, points, purchases, cards, frames, avatars, owned IDs, gifts | OPEN; safety guard required |
 | 5 | Preserve business approval, likes, followers, palettes, owner links | OPEN; audit before modification |
 | 6 | Prevent mixed UID/session when changing account, no false duplicate sign-ups | OPEN |
-| 7 | GM 200-ID direct 'use' button (without grant-to-self) | OPEN; observed broken |
+| 7 | GM 200-ID direct 'use' button (without grant-to-self) | SERVER-VERIFIED PRECHECK + VISIBLE FAIL-STOP STAGED (commit b1547108); direct Use still requires owner phone QA |
 | 8 | On Account Info top card display active premium ID; original moves into owned list as return option | OPEN; screenshot shows old 'original active' even after premium use |
 | 9 | Display active premium ID consistently across owner profile, settings, friend search, messages, location sharing, public profiles | OPEN; one hero screen working, others not |
 | 10 | Use server-owned fixed ID text/color/crown/foil, never mocked or locally claimed style | OPEN; some pieces currently work |
@@ -34,8 +34,8 @@
 | 17 | Ensure adequate contrast of friend's displayed name and ID | OPEN |
 | 18 | Sync friend's public-facing details safely and preserve privacy of phone, location, account internals | OPEN |
 | 19 | Updates to public appearance become visible to others after changes, not merely local cache | OPEN |
-| 20 | New premium-ID gift appears in the red 'Hadaya' navigation badge, preserving diamond gift counts | PATCH IN PROGRESS (Stage75, no-build CI) |
-| 21 | Viewing verified ID-gift inbox clears notification; new grant raises it again; viewing != claiming | PATCH IN PROGRESS; current Stage75 viewed marker is per device and account |
+| 20 | New premium-ID gift appears in the red 'Hadaya' navigation badge, preserving diamond gift counts | SOURCE + NO-BUILD CI PASS (run 39575469455); phone QA still OPEN |
+| 21 | Viewing verified ID-gift inbox clears notification; new grant raises it again; viewing != claiming | SOURCE + NO-BUILD CI PASS (run 39575469455); viewed marker still per device/account, cross-device server sync OPEN |
 | 22 | Claim, receipts, history and legacy 10-diamond gift remain intact | Existing receipt/diamond paths preserved in Stage75 patch; needs regression QA |
 | 23 | Isolate gift/badge state per account/session/device; cross-device seen synchronization still pending | PARTIAL Stage75 local scoped marker, server persistence OPEN |
 | 24 | Preserve four genuine free foil artworks and avoid fake paid buttons/balances | Existing Stage71 baseline, needs visual regression |
@@ -45,7 +45,7 @@
 | 28 | Test same verified account cross-device with balances, business and progress, not merely another account | NOT DONE |
 | 29 | Test GM use/grant/inbox/claim/activate/revert/account info and ledger | PARTIALLY PASS; missing GM direct use |
 | 30 | Test active ID & correct styling on all public, social and sharing surfaces | OPEN |
-| 31 | Test new gift alert then view without claim, new gift again, preserve diamond alerts | Stage75 CODE ONLY; no phone QA yet |
+| 31 | Test new gift alert then view without claim, new gift again, preserve diamond alerts | Stage75 NO-BUILD CI PASS; recipient phone QA NOT DONE |
 | 32 | Android 16 regression, original signature, owner-only APK, controlled rollback and no Play deployment before owner's approval | OPEN |
 
 ## Findings confirmed in the owner's phone test
@@ -70,3 +70,9 @@
 2. Security audit + signed private APK for owner's phone *after* code regression and specific review.
 3. Owner screenshots/QA of both original and second account and place-owner migration.
 4. Only then, with explicit new command, production Firestore or Play deployment.
+
+## 2026-10-21 verified batch status
+- Run [39575469455](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39575469455): full reconstructed-source Stage75 (gift + diamond badge) Flutter QA **SUCCESS**, no APK or deployment.
+- Run [39575800732](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39575800732): offline Firebase Emulator historic published-place recovery rules **SUCCESS**, no live server reads/writes.
+- Commit b1547108: manager self-use now verifies the original account via source=server and shows a safe-stop message rather than silently returning; awaiting same-branch Flutter QA and owner phone verification.
+- The first run failed only at missing source-reconstruction signing environment. The environment was restored without changing keys; subsequent no-build QA passed. Never cite the initial failure as an application runtime defect.
