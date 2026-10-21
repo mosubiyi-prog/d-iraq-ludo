@@ -32,7 +32,13 @@ def digest(value):
 def call(session,verb,url,**kwargs):
     r=session.request(verb,url,timeout=35,**kwargs)
     if r.status_code not in (200,201):
-        print("SAFE_STOP_FIREBASE_HTTP",verb,r.status_code)
+        # Print only server validation text (not auth headers, private IDs or keys).
+        try:
+            err=r.json().get("error",{})
+            reason=str(err.get("message",""))[:450]
+            print("SAFE_STOP_FIREBASE_HTTP",verb,r.status_code,"reason:",reason)
+        except Exception:
+            print("SAFE_STOP_FIREBASE_HTTP",verb,r.status_code)
         fail("REMOTE_PERMISSION_OR_API_VALIDATION")
     return r.json()
 
