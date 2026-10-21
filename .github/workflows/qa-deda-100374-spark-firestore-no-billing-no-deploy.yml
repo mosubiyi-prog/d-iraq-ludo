@@ -1,0 +1,43 @@
+name: DEDA QA32 Spark FREE Premium IDs No Billing No Deploy
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-100374-spark-firestore-no-billing-no-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  free-identifier-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Check only free Firestore projection; no billing or deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          grep -q 'deda_public_active_aliases' docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          grep -q 'deda_public_alias_routes' docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          grep -q "sparkValidGranted" docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          grep -q "deda_stage74_id_gift_receipts" docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt
+          ! grep -q "deda_public_active_aliases" firestore.rules
+          grep -q "DEDA_QA32_SPARK_PUBLIC_IDS_LIVE" lib/deda_qa32_spark_public_identifier_directory.dart
+          grep -q "DedaQa32SparkPublicIdentifierDirectory" lib/deda_stage50_verified_friend_ink_badge.dart
+          grep -q "DedaQa32SparkPublicIdentifierDirectory" lib/deda_stage71_free_owned_use_profile.dart
+          grep -q "DedaQa32SparkPublicIdentifierDirectory" lib/deda_qa32_admin_gift_recipient_alias_bridge.dart
+          grep -q "DedaQa32SparkPublicIdentifierDirectory" lib/deda_qa32_public_recipient_resolver.dart
+          echo 'SPARK_NO_BILLING_RULES_NOT_LIVE_AND_NO_FIREBASE_DEPLOY'
+      - name: Flutter tests for server-proof-shaped read-only public lookup
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_qa32_spark_free_public_identifier_directory_test.dart
+          flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
+          flutter test test/deda_owner19_stage50_friend_ink_widget_test.dart
+          echo 'SPARK_ID_BRIDGE_PREVIEW_PASS_WITH_DEPLOYMENT_FLAG_OFF'
