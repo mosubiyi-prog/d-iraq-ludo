@@ -25,6 +25,7 @@ const recipient={uid:"stage71_recipient",key:"account_recipient",
 const other={uid:"stage71_other_user",key:"account_other",
  original:"@DEDA-CCC333"};
 const groupOne="@DEDA-A00001",groupTwo="@DEDA-B00001";
+const emailManager={uid:"gm_email_admin_only"};
 let env;
 const catalog=(db,id)=>doc(db,"deda_stage71_admin_catalog",id);
 const owned=(db,id)=>doc(db,"deda_stage71_granted_registry",id);
@@ -42,6 +43,8 @@ async function seed(){
         publicId:p.original,ownerUid:p.uid,kind:"personal",active:true});
     }
     b.set(doc(db,"admins",manager.uid),{
+      active:true,status:"active",role:"general_manager"});
+    b.set(doc(db,"admins",emailManager.uid),{
       active:true,status:"active",role:"general_manager"});
     b.set(doc(db,"admins",other.uid),{
       active:true,status:"active",role:"employee"});
@@ -61,7 +64,7 @@ async function seed(){
     await b.commit();
   });
 }
-function grant(db,id,to,kind="gifted",color="gold"){
+function grant(db,id,to,kind="gifted",color="gold",issuer=manager.uid){
   const b=writeBatch(db);
   b.update(catalog(db,id),{
     status:kind,recipientOriginalId:to,
@@ -69,7 +72,7 @@ function grant(db,id,to,kind="gifted",color="gold"){
   });
   b.set(owned(db,id),{
     identifier:id,recipientOriginalId:to,group:id===groupOne?"001":"002",
-    baseColor:color,kind,grantedByUid:manager.uid,
+    baseColor:color,kind,grantedByUid:issuer,
     grantedAt:serverTimestamp(),
   });
   return b.commit();
@@ -177,4 +180,15 @@ test("gifted recipient can query ONLY own 200-ID registry by original ID",async(
     collection(as(recipient),"deda_stage71_granted_registry"),
     where("recipientOriginalId","==",other.original),limit(200)
   )));
+});
+
+test("REAL administration email-only GM can read and give WITHOUT personal phone session",async()=>{
+  const gm=as(emailManager);
+  const records=await assertSucceeds(getDocs(query(
+    collection(gm,"deda_stage71_admin_catalog"),limit(250))));
+  assert.equal(records.docs.length,200);
+  await assertSucceeds(grant(gm,groupOne,recipient.original,"gifted","gold",emailManager.uid));
+  assert.equal((await getDoc(owned(as(recipient),groupOne))).data().grantedByUid,
+    emailManager.uid);
+  await assertFails(grant(as(other),groupTwo,recipient.original));
 });
