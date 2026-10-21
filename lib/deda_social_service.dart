@@ -125,7 +125,7 @@ class DedaSocialService {
   }
 
   static bool looksLikePersonalId(String value) =>
-      RegExp(r'^@DEDA-[A-Z0-9]{5,12}$').hasMatch(normalizePublicId(value));
+      RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(normalizePublicId(value));
 
   static String _pairKey(String firstUid, String secondUid) {
     final values = <String>[firstUid, secondUid]..sort();
