@@ -54,7 +54,7 @@ jobs:
           test -f lib/deda_stage71_free_owned_use_profile.dart
           grep -q 'DEDA_QA32_SPARK_PUBLIC_IDS_LIVE' lib/deda_qa32_spark_public_identifier_directory.dart
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
-          grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
+          grep -q 'DEDA_QA32_STAGE51_SPARK_FRIEND_INTEGRATES_IN_EXISTING_SEARCH' tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS original signed app unmodified, owner-approved Spark-only QA'
       - uses: actions/setup-node@v4
         with:
@@ -128,6 +128,7 @@ jobs:
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
           python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
+          echo 'PASS_STAGE51_SPARK_ALIAS_FINDS_EXISTING_CANONICAL_UID_WITHOUT_REWRITING_SOCIAL_SERVICE'
           python3 tools/stage_deda_100375_all_16_lab_original_royal_frames_native.py
           flutter test test/deda_lab_premium_frame_artwork_test.dart
           flutter test test/deda_lab_verified_frame_catalog_test.dart
@@ -140,7 +141,7 @@ jobs:
           python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
-          grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' lib/deda_social_service.dart
+          grep -q 'DEDA_QA32_SPARK_STAGE51_FRIEND_SEARCH_CANONICAL_NO_FUNCTIONS' lib/deda_stage51_verified_friend_alias_search.dart
           python3 -m py_compile tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS 100375 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
           # Read-only source inspection to place the next patch ONLY on the
