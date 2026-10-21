@@ -112,3 +112,34 @@ test('original ID restores safely without fraudulently attributing foil',async()
   assert.equal(docRef.data().activeId,original);
   assert.equal(docRef.data().baseColor,null);
 });
+
+
+test('FUTURE self-used ID from group 002 works without special rule per ID',async()=>{
+  const future='@DEDA-NEW88', futureOriginal='@DEDA-AB12CD', futureUser='future-owner';
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,'users',futureUser),
+      {accountKey:'future-account',sharePersonalId:futureOriginal});
+    await setDoc(doc(db,'deda_sessions',futureUser),
+      {accountKey:'future-account'});
+    await setDoc(doc(db,'deda_share_ids',futureOriginal),
+      {publicId:futureOriginal,kind:'personal',active:true,ownerUid:futureUser});
+    await setDoc(doc(db,'deda_stage71_active_identifier',futureOriginal),
+      {originalId:futureOriginal,activeId:future});
+    await setDoc(doc(db,'deda_stage71_granted_registry',future),
+      {identifier:future,recipientOriginalId:futureOriginal,kind:'self_used',
+        group:'002',baseColor:'royal'});
+  });
+  const db=env.authenticatedContext(futureUser).firestore();
+  const tx=writeBatch(db);
+  tx.set(doc(db,'deda_public_active_aliases',futureOriginal),
+    {originalId:futureOriginal,activeId:future,baseColor:'royal',
+      updatedAt:serverTimestamp()});
+  tx.set(doc(db,'deda_public_alias_routes',future),
+    {aliasId:future,originalId:futureOriginal,baseColor:'royal',
+      updatedAt:serverTimestamp()});
+  await assertSucceeds(tx.commit());
+  const receiver=env.authenticatedContext(other).firestore();
+  assert.equal((await assertSucceeds(getDoc(
+    doc(receiver,'deda_public_alias_routes',future)))).data().originalId,futureOriginal);
+});
