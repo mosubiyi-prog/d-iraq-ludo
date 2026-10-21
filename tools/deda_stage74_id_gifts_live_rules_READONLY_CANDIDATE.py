@@ -28,7 +28,15 @@ RECEIPT_RULE="""
     }
     match /deda_stage74_id_gift_receipts/{identifier} {
       // Public identifier gift receipts are private to the verified recipient.
-      allow get, list: if signedIn()
+      // A missing receipt must also be readable in a Firestore transaction
+      // so first-time acceptance can check it does not exist. Ownership is
+      // always resolved from the immutable original gift registry.
+      allow get: if signedIn()
+        && exists(stage71RegistryPath(identifier))
+        && get(stage71RegistryPath(identifier)).data.recipientOriginalId is string
+        && stage71SelfRecipient(
+             get(stage71RegistryPath(identifier)).data.recipientOriginalId);
+      allow list: if signedIn()
         && resource.data.originalId is string
         && stage71SelfRecipient(resource.data.originalId);
       allow update, delete: if false;
