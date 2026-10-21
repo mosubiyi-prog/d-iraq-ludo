@@ -40,7 +40,9 @@ jobs:
           flutter pub get
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
           flutter test test/deda_qa32_manager_original_owner_proof_test.dart
-          flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
+          # The GM-admin target is added dynamically by the signed-source
+          # reconstruction script, not by checked-in raw lib/deda_backend.dart.
+          # It is separately tested in the fully reconstructed Flutter QA.
           grep -q "DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE" lib/deda_backend.dart
           grep -q "DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT" lib/deda_social_service.dart
           grep -q "'recipientPublicId': recipientId," lib/deda_backend.dart
