@@ -15,6 +15,7 @@ on:
       - 'lib/deda_stage75_unread_gift_badge.dart'
       - 'lib/deda_qa32_active_account_scope.dart'
       - 'tools/stage_deda_100359_qa32_account_active_header.py'
+      - 'tools/stage_deda_100359_qa32_share_verified_id_visual.py'
       - 'test/deda_qa32_active_account_scope_test.dart'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
       - 'test/deda_stage75_gift_unread_badge_test.dart'
@@ -144,6 +145,7 @@ jobs:
           python3 tools/stage_deda_100359_stage74_hadaya_id_gift_inbox.py
           python3 tools/stage_deda_100359_stage75_id_gift_unread_badge.py
           python3 tools/stage_deda_100359_qa32_account_active_header.py
+          python3 tools/stage_deda_100359_qa32_share_verified_id_visual.py
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
           python3 - <<'PY_ACCOUNT'
@@ -249,7 +251,8 @@ jobs:
           assert src.count('DedaStage74IdGiftsSection(originalId: _publicId)') == 1
           assert src.count('DEDA_STAGE75_UNREAD_ID_GIFTS_PLUS_LEGACY_DIAMOND_BADGE_NO_DEPLOY') == 1
           assert src.count('DEDA_QA32_ACCOUNT_ACTIVE_ALIAS_READONLY_DISPLAY_NO_DEPLOY') == 1
-          assert src.count('DedaQa32ActiveAccountScope(') == 1
+          assert src.count('DedaQa32ActiveAccountScope(') == 2
+          assert src.count('DEDA_QA32_SHARE_SENDER_VERIFIED_ACTIVE_ID_VISUAL_ONLY') == 1
           assert src.count('deda_point7_switch_opens_id_manager') == 1
           assert src.count('deda_point7_edit_identifier_action') == 1
           assert src.count('DedaStage75UnreadGiftBadge.start(') == 1
