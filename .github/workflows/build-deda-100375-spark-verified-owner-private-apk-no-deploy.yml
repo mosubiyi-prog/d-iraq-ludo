@@ -1,15 +1,15 @@
-name: DEDA 100375 SPARK Premium IDs + Royal Free + Wallet OWNER PRIVATE QA
+name: DEDA 100376 SPARK Premium IDs + 16 ORIGINAL LAB Assets OWNER PRIVATE QA
 on:
   push:
     branches:
-      - deda-100374-ids-qa32-frames-deferred-2026-10-21
+      - deda-100376-all-qa32-frames-owner-private-2026-10-22
     paths:
-      - '.github/workflows/build-deda-100375-spark-verified-owner-private-apk-no-deploy.yml'
+      - '.github/workflows/build-deda-100376-spark-verified-owner-private-apk-no-deploy.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: deda-qa32-stage82-private-owner-apk-100375-no-deploy
+  group: deda-qa32-stage82-private-owner-apk-100376-no-deploy
   cancel-in-progress: false
 jobs:
   reconstruct-real-store:
@@ -31,7 +31,34 @@ jobs:
         run: |
           set -euo pipefail
           git diff --quiet d14e573d1f7f1ab67deff04222aca13c6f928553 -- \
-            android/ assets/ firebase.json firestore.rules lib/main.dart
+            android/ firebase.json firestore.rules lib/main.dart
+          # The only 13 NEW assets allowed are authentic DEDA LAB originals.
+          # Nothing can change legacy royal avatars, frames or backgrounds.
+          python3 - <<'PY_FRAMES_GUARD'
+          import subprocess,hashlib
+          from pathlib import Path
+          import json
+          baseline='d14e573d1f7f1ab67deff04222aca13c6f928553'
+          changed=subprocess.check_output(
+            ['git','diff','--name-only',baseline,'--','assets/'],text=True)
+          actual=set(changed.splitlines())
+          expected={'assets/deda_lab_frames/FRAME_%02d.webp'%n
+                    for n in [3,*range(5,17)]}
+          if actual!=expected:
+            raise SystemExit('SAFE_STOP_ASSET_SET_UNEXPECTED '+repr(sorted(actual^expected)))
+          catalogue=json.loads(Path(
+            'docs/DEDA_LAB_16_VERIFIED_FRAME_CATALOG_STAGED_ONLY_2026-10-21.json'
+          ).read_text())
+          for frame in catalogue['frames']:
+            p=Path('assets/deda_lab_frames')/(frame['id']+'.webp')
+            if frame['id'] in ('FRAME_01','FRAME_02','FRAME_04'):
+              continue
+            if not p.is_file() or p.stat().st_size!=frame['bytes']:
+              raise SystemExit('SAFE_STOP_ORIGINAL_FRAME_SIZE_'+frame['id'])
+            if hashlib.sha256(p.read_bytes()).hexdigest()!=frame['sha256']:
+              raise SystemExit('SAFE_STOP_ORIGINAL_FRAME_HASH_'+frame['id'])
+          print('PASS: 13 exact original transparent LAB WebPs and no other asset changes')
+          PY_FRAMES_GUARD
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           test -f lib/deda_qa32_spark_public_identifier_directory.dart
@@ -113,10 +140,27 @@ jobs:
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
           python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
+          python3 tools/stage_deda_100376_lab_16_native_gallery_after_real_rebuild.py
+          # Reconstructed 100359 pubspec may omit newer frame directories.
+          python3 - <<'PY_LAB_ASSET'
+          from pathlib import Path
+          p=Path('pubspec.yaml')
+          s=p.read_text()
+          if '- assets/deda_lab_frames/' not in s:
+            anchor='    - assets/deda_home_bg.jpg'
+            if s.count(anchor)!=1:raise SystemExit('SAFE_STOP_LAB_ASSET_ANCHOR')
+            p.write_text(s.replace(anchor,anchor+'\n    - assets/deda_lab_frames/',1))
+          assert '- assets/deda_lab_frames/' in p.read_text()
+          print('PASS_16_LAB_ORIGINAL_WEBPS_REGISTERED_FOR_FLUTTER')
+          PY_LAB_ASSET
+          flutter pub get
           flutter test test/deda_lab_verified_frame_catalog_test.dart
+          flutter test test/deda_lab_original_frame_assets_test.dart
+          flutter test test/deda_lab_original_frames_gallery_widget_test.dart
           flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
           flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
           flutter test test/deda_qa32_manager_original_owner_proof_test.dart
+          grep -q 'DEDA_100376_REAL_16_LAB_ARTWORK_PROFILE_GALLERY' lib/main.dart
           flutter test test/deda_qa32_spark_free_public_identifier_directory_test.dart
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
           flutter test test/deda_profile_visible_diamonds_test.dart
@@ -124,8 +168,8 @@ jobs:
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
           grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' lib/deda_social_service.dart
-          python3 -m py_compile tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
-          echo 'PASS 100375 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
+          python3 -m py_compile tools/stage_deda_100376_spark_all_routing_on_rebuilt_source.py
+          echo 'PASS 100376 premium owner GM+friends+shares+Spark, gift alerts, free royal, wallet'
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
           python3 - <<'PY_ACCOUNT'
@@ -157,6 +201,7 @@ jobs:
           print('QA32_ACCOUNT_HERO_FULL',repr(src[method:after]))
           print('QA32_ACCOUNT_SOURCE_PROBE_END')
           PY_ACCOUNT
+          dart format lib/deda_lab_original_frames_gallery.dart
           dart format lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage71_free_id_cards.dart lib/deda_stage71_dual_admin_page.dart \
             lib/deda_stage71_free_manager_200_service.dart lib/deda_stage71_free_owned_use_profile.dart \
@@ -312,7 +357,7 @@ jobs:
             'SAFE_STOP expected approved signed 100359 invocation')
           cmd=source.replace(
             'flutter build apk --release --build-number=100359 ',
-            'flutter build apk --release --build-number=100375 ',1)
+            'flutter build apk --release --build-number=100376 ',1)
           for required in ('USE_NEXT_GEN_SDK=true',
               'DEDA_SPARK_FIRESTORE_LIVE=true',
               'DEDA_PREMIUM_IDS_SERVER_LIVE=false',
@@ -325,16 +370,17 @@ jobs:
           cmd += ' --dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=true'
           cmd += ' --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true'
           assert '--dart-define=DEDA_PREMIUM_IDS_SERVER_LIVE=false' in cmd
-          script=Path('/tmp/deda_stage71_owner_phone_signed_100375.sh')
+          script=Path('/tmp/deda_stage71_owner_phone_signed_100376.sh')
           script.write_text('set -euo pipefail\n'+cmd+'\n')
-          print('PASS original proven signed 100359 command exactly replayed as 100375 with safe owner client flags')
+          print('PASS original proven signed 100359 command exactly replayed as 100376 with safe owner client flags')
           PY_BUILD
-      - name: Build 100375 PRIVATE signed APK - no Play/Firebase deploy
+      - name: Build 100376 PRIVATE signed APK - no Play/Firebase deploy
         shell: bash
         run: |
           set -euo pipefail
-          bash /tmp/deda_stage71_owner_phone_signed_100375.sh
+          bash /tmp/deda_stage71_owner_phone_signed_100376.sh
           test -s build/app/outputs/flutter-apk/app-release.apk
+          test -f assets/deda_lab_frames/FRAME_16.webp
           test ! -f build/app/outputs/bundle/release/app-release.aab
       - name: Verify signed APK identity, zip integrity, version and publish PRIVATE artifact
         shell: bash
@@ -346,7 +392,7 @@ jobs:
           test -x "$buildtools/aapt"
           "$buildtools/apksigner" verify --verbose --print-certs "$apk" | tee /tmp/deda_stage71_signer.txt
           grep -q 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt
-          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\.diraq\.ludo\.d_iraq_ludo' versionCode='100375'"
+          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\.diraq\.ludo\.d_iraq_ludo' versionCode='100376'"
           python3 - <<'PY_ZIP'
           import zipfile
           from pathlib import Path
@@ -356,23 +402,23 @@ jobs:
             assert z.testzip() is None
             assert 'AndroidManifest.xml' in z.namelist()
             assert 'classes.dex' in z.namelist()
-          print('PASS signed APK original package, zip integrity, 100375, local owner QA only')
+          print('PASS signed APK original package, zip integrity, 100376, local owner QA only')
           PY_ZIP
-          mkdir -p private-deda-100375
-          cp "$apk" private-deda-100375/DEDA-100375-QA32-STAGE82-PRIVATE-OWNER-ONLY.apk
-          sha256sum private-deda-100375/*.apk > private-deda-100375/SHA256SUMS.txt
-          git rev-parse HEAD > private-deda-100375/source-commit.txt
-          grep 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt > private-deda-100375/SIGNER-SHA256.txt
+          mkdir -p private-deda-100376
+          cp "$apk" private-deda-100376/DEDA-100376-QA32-STAGE82-PRIVATE-OWNER-ONLY.apk
+          sha256sum private-deda-100376/*.apk > private-deda-100376/SHA256SUMS.txt
+          git rev-parse HEAD > private-deda-100376/source-commit.txt
+          grep 'certificate SHA-256 digest:' /tmp/deda_stage71_signer.txt > private-deda-100376/SIGNER-SHA256.txt
           printf '%s\n' \
             'OWNER QA ONLY. Never upload to Play without owner approval.' \
             'Spark premium-ID canonical search/share/public appearance and GM gifts, free royal frames, personal wallet display and gift badge, all private owner QA.' \
-            'QA32 owner QA only; 13 LAB paid frame assets and secure real wallet checkout NOT YET merged. One million personal wallet unverified; no guaranteed device-to-device recovery.' \
+            'QA32 owner QA only: all 13 ORIGINAL LAB frame assets bundled and verified; 1000-diamond secure purchase and complete in-app integration remain UNVERIFIED; never claim payment success. One million personal wallet unverified; no guaranteed device-to-device recovery.' \
             'PRIVATE PHONE QA ONLY. Spark rules live separately; do not uninstall app, erase balances, grant real coins, change Firebase/Play to test.' \
-            > private-deda-100375/READ-ME-FIRST.txt
-      - name: Upload signed private 100375 APK without deploying
+            > private-deda-100376/READ-ME-FIRST.txt
+      - name: Upload signed private 100376 APK without deploying
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100375-QA32-STAGE82-PRIVATE-SIGNED-OWNER-QA
-          path: private-deda-100375/
+          name: DEDA-100376-QA32-16-FRAMES-PRIVATE-SIGNED-OWNER-QA
+          path: private-deda-100376/
           retention-days: 21
           if-no-files-found: error
