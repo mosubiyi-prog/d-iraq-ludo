@@ -1,0 +1,28 @@
+name: DEDA 100375 Stage51 Spark 4Char Friend ALIAS Smoke NO DEPLOY
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-100375-stage51-spark-4char-friend-no-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stage51-no-purchase-spark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Dart regression original and Spark private QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_qa32_stage51_spark_alias_input_test.dart
+          flutter test --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true \
+            test/deda_qa32_stage51_spark_alias_input_test.dart
+          flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
+          echo 'PASS_SPARK_STAGE51_ORIGINAL_AND_PREMIUM_FRIEND_FOUR_CHAR_NO_DEPLOY'
