@@ -1,0 +1,31 @@
+name: DEDA 100374 Friend Receiver Alias Lifecycle Security NO BUILD
+on:
+  push:
+    branches:
+      - deda-100374-ids-qa32-frames-deferred-2026-10-21
+    paths:
+      - '.github/workflows/qa-deda-100374-other-account-active-alias-lifecycle-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  owner-verified-alias-lifecycle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Ensure no public resolver went live and test signed-off client fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_qa32_public_alias_resume_no_backend_test.dart
+          flutter test test/deda_owner19_stage50_friend_ink_widget_test.dart
+          flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
+          test "$(grep -c 'DEDA_QA32_REVERIFY_OTHER_USER_ALIAS_ON_RESUME_READ_ONLY_NO_DEPLOY' lib/deda_stage50_verified_friend_ink_badge.dart)" -eq 1
+          ! grep -q "dedaPremiumReadPublicIdentifierStyle" functions/index.js
+          echo 'PASS_QA32_OTHER_ACCOUNT_ALIAS_REFRESH_REQUIRES_TRUSTED_FUNCTIONS'
