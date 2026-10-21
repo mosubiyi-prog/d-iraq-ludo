@@ -64,3 +64,19 @@ test("restored data has no phone number, raw user UID or full account secret",()
  assert.equal("sessionAccountKey" in result,false);
  assert.equal(Object.isFrozen(result),true);
 });
+
+test("regular user without published place still keeps verified account data",()=>{
+ const regular={...proof,publishedOwnerAccountKey:null,hasPublishedPlace:false};
+ const restored=inspectContinuity(regular,server,{diamonds:0});
+ assert.equal(restored.status,"display-verified-server");
+ assert.equal(restored.diamonds,998960);
+ assert.equal(restored.allowWrite,false);
+});
+test("published place owner cannot omit or forge their verified venue account key",()=>{
+ for(const bad of [
+   {...proof,hasPublishedPlace:true,publishedOwnerAccountKey:null},
+   {...proof,hasPublishedPlace:true,publishedOwnerAccountKey:"other"},
+ ]){
+   assert.equal(inspectContinuity(bad,server,{}).status,"blocked-identity");
+ }
+});
