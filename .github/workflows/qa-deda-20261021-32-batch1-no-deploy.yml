@@ -237,11 +237,12 @@ jobs:
           search_a = src.index('class _DedaSearchResultCard extends StatelessWidget {')
           search_b = src.index('class DedaFriendRequestsPage', search_a)
           public_a = src.index('class DedaFriendPublicProfilePage extends StatelessWidget {')
+          public_b = src.index('\nclass ', public_a + len('class DedaFriendPublicProfilePage'))
           receiver_a = src.index('class _DedaReceivedLocationsPageState extends State<DedaReceivedLocationsPage> {')
           receiver_b = src.index('\nclass ', receiver_a + len('class _DedaReceivedLocationsPageState'))
           assert src[friend_a:friend_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert src[search_a:search_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
-          assert src[public_a:].count('DedaStage50VerifiedFriendInkBadge(') == 1
+          assert src[public_a:public_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert src[receiver_a:receiver_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert 'class DedaFriendPublicProfilePage extends StatelessWidget' in src
           assert 'DedaSocialService.findByPublicId(' in src
