@@ -178,7 +178,7 @@ def patch(src):
     # Keep BOTH the owner's pinned portrait hero AND the same real wallet
     # fixed while the 16 frame/portrait/background choices scroll beneath.
     editor_a=src.index('class _DedaEditProfilePageState')
-    editor_b=src.find('\\nclass ',editor_a+40)
+    editor_b=src.find('\nclass ',editor_a+40)
     if editor_b<0:raise ValueError('SAFE_STOP_100377_EDIT_EDITOR_BOUNDARY')
     editor=src[editor_a:editor_b]
     pinned='''            Expanded(
