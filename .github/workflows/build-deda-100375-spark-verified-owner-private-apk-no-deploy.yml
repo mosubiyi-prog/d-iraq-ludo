@@ -53,8 +53,8 @@ jobs:
           test -f lib/deda_qa32_public_recipient_resolver.dart
           test -f lib/deda_stage71_free_owned_use_profile.dart
           grep -q 'DEDA_QA32_SPARK_PUBLIC_IDS_LIVE' lib/deda_qa32_spark_public_identifier_directory.dart
-          grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
-          grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' lib/deda_social_service.dart
+          grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
+          grep -q 'DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT' tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS original signed app unmodified, owner-approved Spark-only QA'
       - uses: actions/setup-node@v4
         with:
