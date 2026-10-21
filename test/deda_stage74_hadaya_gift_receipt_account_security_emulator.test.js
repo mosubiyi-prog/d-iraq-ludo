@@ -212,6 +212,10 @@ test("only genuine gifted account claims ID via Hadaya; permanent receipt and re
     identifier:groupTwo,originalId:recipient.original,
     group:"002",receivedAt:serverTimestamp(),
   }));
+  // The receiver's FIRST claim needs a legal read of a missing receipt
+  // inside Firestore runTransaction. A denied missing get would break claims.
+  const before=await assertSucceeds(getDoc(path));
+  assert.equal(before.exists(),false);
   await assertSucceeds(setDoc(path,record));
   assert.equal((await getDoc(path)).data().originalId,recipient.original);
   const history=await assertSucceeds(getDocs(query(
