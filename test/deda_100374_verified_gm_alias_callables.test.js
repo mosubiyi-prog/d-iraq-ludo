@@ -1,7 +1,8 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {buildReadPublicAliasCallable,buildResolveGiftRecipientCallable}=
+const {buildReadPublicAliasCallable,buildResolveGiftRecipientCallable,
+  buildResolvePublicRecipientCallable}=
   require("../functions/deda_100374_qa32_verified_public_gift_callables_NOT_EXPORTED.js");
 
 const original="@DEDA-AQPYXJ",alias="@DEDA-IRAQI";
@@ -90,4 +91,35 @@ test("missing receipt, inactive alias and corrupted grant cannot authorize gem r
   const no=await lookup(req(alias));
   assert.equal(no.serverConfirmed,false);
   assert.equal(no.originalId,null);
+});
+
+test("read-only premium recipient resolver accepts friend/location lookup for any verified user", async()=>{
+  const {db}=setup();
+  const handler=buildResolvePublicRecipientCallable({onCall,HttpsError,db});
+  for(const role of ["normalUser","gm01"]){
+    const item=await handler(req(alias,role));
+    assert.deepEqual(item,{requestedId:alias,originalId:original,serverConfirmed:true});
+  }
+  const originalResult=await handler(req(original,"normalUser"));
+  assert.deepEqual(originalResult,{requestedId:original,originalId:original,serverConfirmed:true});
+  const unknown=await handler(req("@DEDA-NEVER","normalUser"));
+  assert.equal(unknown.serverConfirmed,false);
+  assert.equal(unknown.originalId,null);
+});
+test("read-only friend/location recipient lookup cannot be spoofed by no auth/AppCheck or client UID",async()=>{
+  const {db}=setup();
+  const handler=buildResolvePublicRecipientCallable({onCall,HttpsError,db});
+  await assert.rejects(handler({...req(alias),auth:null}),e=>e.code==="unauthenticated");
+  await assert.rejects(handler({...req(alias),app:null}),e=>e.code==="permission-denied");
+  await assert.rejects(handler({...req(alias),data:{identifier:alias,accountKey:"someone-else"}}),
+    e=>e.code==="invalid-argument");
+});
+test("read-only friend/location recipient rejects inactive, claimed but unreceived or wrong-owner premium aliases",async()=>{
+  const {db,set}=setup();
+  const handler=buildResolvePublicRecipientCallable({onCall,HttpsError,db});
+  set("deda_stage71_active_identifier/"+original,{originalId:original,activeId:original});
+  assert.equal((await handler(req(alias))).serverConfirmed,false);
+  set("deda_stage71_active_identifier/"+original,{originalId:original,activeId:alias});
+  set("deda_stage74_id_gift_receipts/"+alias,{identifier:alias,originalId:"@DEDA-ZZ2222",group:"001",receivedAt:"2026"});
+  await assert.rejects(handler(req(alias)),e=>e.code==="failed-precondition");
 });
