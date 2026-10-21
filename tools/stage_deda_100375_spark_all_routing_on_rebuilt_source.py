@@ -103,19 +103,19 @@ def patch_backend(s):
     return s
 
 def patch_social(s):
-    if MARK_FRIEND not in s:
-        if s.count(OLD_FRIEND)!=1:
-            raise ValueError(f"SAFE_STOP_SPARK_FRIEND_SOURCE_DRIFT={s.count(OLD_FRIEND)}")
-        s=s.replace(OLD_FRIEND,NEW_FRIEND,1)
-    if s.count(MARK_FRIEND)!=1:
-        raise ValueError("SAFE_STOP_SPARK_FRIEND_PATCH_DUPLICATE")
-    if OLD_REGEXP in s:
-        s=s.replace(OLD_REGEXP,NEW_REGEXP,1)
-    if NEW_REGEXP not in s:raise ValueError("SAFE_STOP_SPARK_FOUR_CHAR_FRIEND_REGEX")
-    if IMPORT not in s:
-        needle="import 'deda_backend.dart';"
-        if s.count(needle)!=1:raise ValueError("SAFE_STOP_SPARK_SOCIAL_IMPORT")
-        s=s.replace(needle,needle+"\n"+IMPORT,1)
+    # DEDA_QA32_STAGE51_SPARK_FRIEND_INTEGRATES_IN_EXISTING_SEARCH
+    # Stage51 already routes all Add Friend user input through
+    # DedaStage51FriendSearch.findByUserInput. That bridge now resolves
+    # verified Spark aliases and calls the canonical ORIGINAL lookup.
+    # Do not patch the historical DedaSocialService here; reconstruction
+    # has modified/pretty-printed this function and the second patch
+    # previously failed SAFE_STOP_SPARK_FRIEND_SOURCE_DRIFT.
+    if "static Future<DedaSocialProfile?> findByPublicId(String raw)" not in s:
+        raise ValueError("SAFE_STOP_ORIGINAL_SOCIAL_LOOKUP_MISSING")
+    if "collection('deda_share_ids')" not in s:
+        raise ValueError("SAFE_STOP_SOCIAL_ROUTE_NO_LONGER_ORIGINAL")
+    if MARK_FRIEND in s:
+        raise ValueError("SAFE_STOP_SOCIAL_ALREADY_REWRITTEN_UNEXPECTED")
     return s
 
 if __name__=="__main__":
@@ -126,4 +126,5 @@ if __name__=="__main__":
     BACKEND.write_text(after_a)
     SOCIAL.write_text(after_b)
     print("PASS_100375_SPARK_PREMIUM_ID_SEARCH_SHARE_CANONICAL_ROUTING_FOUR_CHAR")
+    print("PASS_100375_SPARK_STAGE51_VERIFIED_FRIENDS_NO_LEGACY_SOCIAL_MUTATION")
     print("PASS_100375_SPARK_ORIGINAL_ID_BACKEND_AND_FRIEND_SOURCE_GUARDS")
