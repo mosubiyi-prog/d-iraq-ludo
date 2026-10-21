@@ -1,0 +1,46 @@
+name: DEDA Spark Firestore Rules Publish Permissions READONLY
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-spark-rules-publish-permissions-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules-access-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Query Rules IAM self-permissions only, no deploy, no data reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY_RULES_IAM'
+          import json,os,requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          raw=os.getenv('DEDA_SERVICE_ACCOUNT') or os.getenv('DEDA_FALLBACK_ACCOUNT')
+          if not raw:
+            print('SPARK_PUBLISH_SA_NOT_CONFIGURED');raise SystemExit(0)
+          creds=service_account.Credentials.from_service_account_info(
+            json.loads(raw),scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          perms=['firebaserules.rulesets.create','firebaserules.releases.update',
+                 'firebaserules.rulesets.get','firebaserules.releases.get']
+          url='https://cloudresourcemanager.googleapis.com/v1/projects/deda-25b88:testIamPermissions'
+          r=requests.post(url,json={'permissions':perms},
+                          headers={'Authorization':'Bearer '+creds.token},timeout=20)
+          print('SPARK_RULES_PUBLISH_IAM_HTTP',r.status_code)
+          if r.status_code==200:
+            allowed=set(r.json().get('permissions',[]))
+            for p in perms:print('SPARK_RULES_IAM_'+p,p in allowed)
+          print('READ_ONLY_IAM_NO_FIRESTORE_RULES_DEPLOY_NO_BILLING')
+          PY_RULES_IAM
