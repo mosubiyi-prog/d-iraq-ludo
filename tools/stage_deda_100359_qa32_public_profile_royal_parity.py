@@ -89,7 +89,7 @@ def apply(source):
              r"maxLines:\s*1\s*,\s*overflow:\s*TextOverflow\.ellipsis\s*,\s*"
              r"style:\s*const\s+TextStyle\(\s*"
              r"color:\s*Color\(0xFF0B3C6F\)\s*,\s*"
-             r"fontWeight:\s*FontWeight\.w900\s*,\s*fontSize:\s*23\s*\)\s*\)")
+             r"fontWeight:\s*FontWeight\.w900\s*,\s*fontSize:\s*23\s*,?\s*\)\s*\)")
     namenew="""Text(
                   profile.displayName,
                   textAlign: TextAlign.center,
