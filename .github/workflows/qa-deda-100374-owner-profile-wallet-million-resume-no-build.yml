@@ -119,6 +119,11 @@ jobs:
           python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           flutter test test/deda_profile_visible_diamonds_test.dart
+          flutter test test/deda_qa32_manager_original_owner_proof_test.dart
+          flutter test test/deda_qa32_public_alias_resume_no_backend_test.dart
+          flutter test test/deda_owner19_stage50_friend_ink_widget_test.dart
+          flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
+          echo 'PASS_DEDA_QA32_GM_SELF_USE_PLUS_PUBLIC_ALIASES_PLUS_WALLET_NO_BUILD'
           flutter test test/deda_100374_nonid_public_readability_test.dart
           flutter test test/deda_100374_nonid_diamond_gift_nav_test.dart
           grep -q 'DEDA_LAB_3_EXISTING_ROYAL_FRAMES_FREE_SAVE_RELOAD_SAFE' lib/main.dart
