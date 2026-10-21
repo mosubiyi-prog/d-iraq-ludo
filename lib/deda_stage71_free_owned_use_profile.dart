@@ -40,6 +40,14 @@ class DedaStage71OwnedIdentifier {
   }
 }
 
+/// Notifies visible owner-identity widgets after a server-confirmed
+/// active-identifier change. This is a UI refresh only, not authority.
+class DedaStage71ActiveIdRefresh {
+  DedaStage71ActiveIdRefresh._();
+  static final ValueNotifier<int> notifier = ValueNotifier<int>(0);
+  static void changed() => notifier.value = notifier.value + 1;
+}
+
 class DedaStage71OwnedIdentifierService {
   DedaStage71OwnedIdentifierService._();
   static bool get enabled => DedaStage71Admin200.enabled;
@@ -133,6 +141,7 @@ class DedaStage71OwnedIdentifierService {
     });
     final persisted=await active(originalId);
     if(persisted!=identifier) throw StateError('active-id-readback-failed');
+    DedaStage71ActiveIdRefresh.changed();
   }
 }
 
