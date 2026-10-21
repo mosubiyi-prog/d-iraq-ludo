@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'deda_stage71_free_manager_200_service.dart';
+import 'deda_stage74_id_gift_service.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
 
 /// Stage71: permanent gifted/self-used identifiers accessible by the verified
@@ -95,9 +96,15 @@ class DedaStage71OwnedIdentifierService {
     if (current==originalId) return originalId;
     final ownedDoc=await db.collection(DedaStage71Admin200.registry)
         .doc(current).get();
-    DedaStage71OwnedIdentifier.read(
+    final owner = DedaStage71OwnedIdentifier.read(
       ownedDoc.id, ownedDoc.data() ?? {}, originalId,
     );
+    if (ownedDoc.data()?['kind'] == 'gifted' &&
+        !await DedaStage74IdGiftService.isReceived(
+          owner.recipientOriginalId, current,
+        )) {
+      throw StateError('premium-id-gift-awaits-recipient-receipt');
+    }
     return current;
   }
 
@@ -109,6 +116,12 @@ class DedaStage71OwnedIdentifierService {
           .doc(identifier).get();
       DedaStage71OwnedIdentifier.read(
         owner.id,owner.data() ?? {},originalId);
+      if (owner.data()?['kind']=='gifted' &&
+          !await DedaStage74IdGiftService.isReceived(
+            originalId, identifier,
+          )) {
+        throw StateError('premium-id-gift-not-yet-received');
+      }
     }
     if (FirebaseAuth.instance.currentUser?.uid!=uid) {
       throw StateError('account-rotated');
@@ -149,7 +162,22 @@ class _DedaStage71OwnedIdsPanelState
        _busy) return;
     final original=widget.originalId;
     try {
-      final rows=await DedaStage71OwnedIdentifierService.owned(original);
+      final all=await DedaStage71OwnedIdentifierService.owned(original);
+      final received=await DedaStage74IdGiftService.receivedNames(original);
+      // A manager's own self-use stays available as before, but free gifted
+      // premium IDs are usable here only AFTER explicit receipt in Hadaya.
+      final db=FirebaseFirestore.instance;
+      final rows=<DedaStage71OwnedIdentifier>[];
+      for (final item in all) {
+        if (received.contains(item.identifier)) {
+          rows.add(item);
+          continue;
+        }
+        final record=await db.collection(DedaStage71Admin200.registry)
+            .doc(item.identifier)
+            .get(const GetOptions(source: Source.server));
+        if (record.data()?['kind']=='self_used') rows.add(item);
+      }
       final chosen=await DedaStage71OwnedIdentifierService.active(original);
       if(!mounted||widget.originalId!=original)return;
       setState((){_ids=rows;_active=chosen;});
@@ -186,7 +214,7 @@ class _DedaStage71OwnedIdsPanelState
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
           children:[
             Row(children:[
-              const Expanded(child:Text('معرّفاتي الممنوحة',
+              const Expanded(child:Text('معرّفاتي',
                 style:TextStyle(fontWeight:FontWeight.bold))),
               IconButton(onPressed:_busy?null:_load,
                 icon:const Icon(Icons.refresh)),
