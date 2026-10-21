@@ -23,6 +23,10 @@ jobs:
           set -euo pipefail
           flutter pub get
           flutter test test/deda_qa32_manager_original_owner_proof_test.dart
+          flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
+          node --test test/deda_100374_verified_gm_alias_callables.test.js
+          grep -q "DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE" lib/deda_backend.dart
+          grep -q "DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT" lib/deda_social_service.dart
           test "$(grep -c 'DEDA_QA32_MANAGER_SELF_USE_CANONICAL_ROUTE_OWNER_PROOF' lib/deda_stage71_dual_admin_page.dart)" -eq 1
           grep -q "get(const GetOptions(source: Source.server));" lib/deda_stage71_dual_admin_page.dart
           grep -q "DedaQa32ManagerOriginalOwnerProof.authentic(" lib/deda_stage71_dual_admin_page.dart
