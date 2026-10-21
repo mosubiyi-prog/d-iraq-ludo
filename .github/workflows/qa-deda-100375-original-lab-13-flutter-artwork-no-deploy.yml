@@ -1,0 +1,27 @@
+name: DEDA 100375 Original LAB 13 Native Flutter Artwork QA
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-100375-original-lab-13-flutter-artwork-no-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-artwork-flutter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Run all 13 original premium WebPs as 111px real Flutter widgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib/deda_lab_premium_frame_artwork.dart || dart format lib/deda_lab_premium_frame_artwork.dart
+          flutter test test/deda_lab_premium_frame_artwork_test.dart
+          flutter test test/deda_lab_verified_frame_catalog_test.dart
+          echo 'PASS_DEDA_13_REAL_LAB_FRAME_ARTWORKS_SHOW_PREVIEW_WITHOUT_WALLET_DEBIT'
