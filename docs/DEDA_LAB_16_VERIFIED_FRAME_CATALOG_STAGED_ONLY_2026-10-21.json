@@ -1,0 +1,177 @@
+{
+  "source": "DEDA LAB archive FRAMES_MANIFEST.json (original immutable archive)",
+  "status": "catalog staging only: NOT a deployed purchasing ledger",
+  "total": 16,
+  "existingRoyalFree": [
+    1,
+    2,
+    4
+  ],
+  "additionalLockedCount": 13,
+  "additionalLockedUnitPriceDiamonds": 1000,
+  "internalAvatarSize": "111x111",
+  "referenceAssetCanvas": "850x850",
+  "note": "Legacy other already-owned frames remain owned. Canonical original ID for gifts/wallet not changed. Requires secure server-backed atomic purchase before enabling Buy.",
+  "frames": [
+    {
+      "id": "FRAME_01",
+      "name_ar": "الأسطورة الذهبي",
+      "source_path": "frames_webp/FRAME_01.webp",
+      "sha256": "a31029b56a4a989feaec25a119b58a8a90c378e6ba3159705d2d5e537f4f299e",
+      "bytes": 260184,
+      "initial_price_diamonds": 0,
+      "initial_access": "free",
+      "base_asset_at_100373": "assets/deda_royal_frames/royal_frame_1.webp"
+    },
+    {
+      "id": "FRAME_02",
+      "name_ar": "الأسطورة الماروني",
+      "source_path": "frames_webp/FRAME_02.webp",
+      "sha256": "dbd02ca458cf9e94e3a0005134d2b61cb0bdaaf7729893a8cbfe5f75123c249f",
+      "bytes": 247938,
+      "initial_price_diamonds": 0,
+      "initial_access": "free",
+      "base_asset_at_100373": "assets/deda_royal_frames/royal_frame_2.webp"
+    },
+    {
+      "id": "FRAME_03",
+      "name_ar": "الأسطورة الأسود الفحمي",
+      "source_path": "frames_webp/FRAME_03.webp",
+      "sha256": "85310dd70afb964f42bbfa0922322ebbceb84f86a0a5957dd16818be1ea94bec",
+      "bytes": 241238,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_04",
+      "name_ar": "الأسطورة الزمردي",
+      "source_path": "frames_webp/FRAME_04.webp",
+      "sha256": "9ae19c51cbc7394299b361cb1f8dd07e015898b43e4ecaca0fdb0f4b207a12b5",
+      "bytes": 259300,
+      "initial_price_diamonds": 0,
+      "initial_access": "free",
+      "base_asset_at_100373": "assets/deda_royal_frames/royal_frame_0.webp"
+    },
+    {
+      "id": "FRAME_05",
+      "name_ar": "الكوبرا الياقوتية الزرقاء",
+      "source_path": "frames_webp/FRAME_05.webp",
+      "sha256": "1032d2a2748d0f5308de967cf7713789a7daff3c0ce6f65ba91a2337743bba16",
+      "bytes": 133554,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_06",
+      "name_ar": "الكوبرا الياقوتية الحمراء",
+      "source_path": "frames_webp/FRAME_06.webp",
+      "sha256": "626e432cbed0ae2b1a8de38e4ad410abd07ccf8e6e10a794f9737cca573ae703",
+      "bytes": 127722,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_07",
+      "name_ar": "الكوبرا الزمردية",
+      "source_path": "frames_webp/FRAME_07.webp",
+      "sha256": "824a852e7233cd9ba929a70e08ee8d7bb117b8242604dd38020006221ad2bfbf",
+      "bytes": 125696,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_08",
+      "name_ar": "البركان المتوهج",
+      "source_path": "frames_webp/FRAME_08.webp",
+      "sha256": "f12a8acba653665d3176602547e968f5bc291048641bebcb6088aaa685ef4ce1",
+      "bytes": 644926,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_09",
+      "name_ar": "العراقي التراثي",
+      "source_path": "frames_webp/FRAME_09.webp",
+      "sha256": "de0a36956223339cb63bd66b6e108231393b44c2c0bdd1abd1af044e8c93530f",
+      "bytes": 346720,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_10",
+      "name_ar": "العراقي الجمهوري",
+      "source_path": "frames_webp/FRAME_10.webp",
+      "sha256": "e184900f5478e0eb5b29e2ef108a36626f7eedd71666c56b67a03f9d28cf3142",
+      "bytes": 319674,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_11",
+      "name_ar": "قلب الحب الملكي",
+      "source_path": "frames_webp/FRAME_11.webp",
+      "sha256": "3a3219dda5eefd23071e4bc8fc12acc5d272c2dffb4b82a0054ca00751f2b479",
+      "bytes": 366084,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_12",
+      "name_ar": "قلب الحب المجنّح",
+      "source_path": "frames_webp/FRAME_12.webp",
+      "sha256": "303bb4fce8ee6b8c2886fd7243d5fbb6f00dfe1ade58f4e58c5abbfbdd28b473",
+      "bytes": 338694,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_13",
+      "name_ar": "قلب الحب الأزرق",
+      "source_path": "frames_webp/FRAME_13.webp",
+      "sha256": "a47528acd41d0a8dce50d2e2612a304323229a2660faa217c71c3ffd1b6a8a4c",
+      "bytes": 259258,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_14",
+      "name_ar": "الجاكور الأسود الملكي",
+      "source_path": "frames_webp/FRAME_14.webp",
+      "sha256": "ad4d0b11f02ace63b1a530d3cc20b933e4b50d0f1076a6f3c496eb0e469f1741",
+      "bytes": 525152,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_15",
+      "name_ar": "BMW الفاخر · واجهة السيارة",
+      "source_path": "frames_webp/FRAME_15.webp",
+      "sha256": "dffe7bd4a78fa1b866b9885cc1ab9661cbaeaeb9f03a3ed911398c1d24f2ca4c",
+      "bytes": 419864,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    },
+    {
+      "id": "FRAME_16",
+      "name_ar": "مرسيدس الفخامة الملكية",
+      "source_path": "frames_webp/FRAME_16.webp",
+      "sha256": "a53c5f6dda02aa7a57d08dcec15f5cff525ce3873c53af2db2deb304b8029a5f",
+      "bytes": 406766,
+      "initial_price_diamonds": 1000,
+      "initial_access": "locked",
+      "base_asset_at_100373": null
+    }
+  ]
+}
