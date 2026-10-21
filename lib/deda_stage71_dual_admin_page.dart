@@ -8,7 +8,7 @@ import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage71_free_owned_use_profile.dart';
 import 'deda_qa32_manager_original_owner_proof.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor,
-    DedaPoint10CandidateGroup002;
+    DedaPoint10CandidateGroup002, DedaPreferences;
 
 /// Original DEDA luxury artwork + exactly 2 equal-width vertical catalog
 /// columns, 100 immutable original GM IDs each. No prices or color pickers.
