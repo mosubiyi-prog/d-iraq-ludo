@@ -51,6 +51,6 @@ jobs:
           export GCLOUD_PROJECT=demo-deda-stage74-hadaya-id-receipts
           export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
           functions/node_modules/.bin/firebase emulators:exec \
-            --project demo-deda-stage71-free-admin200 --only firestore \
+            --project demo-deda-stage74-hadaya-id-receipts --only firestore \
             'node --test test/deda_stage74_hadaya_gift_receipt_account_security_emulator.test.js'
           echo PASS_STAGE74_HADAYA_PERMANENT_FREE_ID_RECEIPT_11_E2E_NO_DEPLOY
