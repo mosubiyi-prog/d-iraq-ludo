@@ -1,0 +1,29 @@
+name: DEDA 100374 GM Use Verified Owner Original No Deploy
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths:
+      - '.github/workflows/qa-deda-100374-gm-self-use-canonical-owner-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gm-owner-id-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Verify read-only GM original owner proof and original route unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_qa32_manager_original_owner_proof_test.dart
+          test "$(grep -c 'DEDA_QA32_MANAGER_SELF_USE_CANONICAL_ROUTE_OWNER_PROOF' lib/deda_stage71_dual_admin_page.dart)" -eq 1
+          grep -q "get(const GetOptions(source: Source.server));" lib/deda_stage71_dual_admin_page.dart
+          grep -q "DedaQa32ManagerOriginalOwnerProof.authentic(" lib/deda_stage71_dual_admin_page.dart
+          echo "PASS_GM_SELF_USE_NO_MINT_NO_PUBLIC_ID_REASSIGNMENT"
