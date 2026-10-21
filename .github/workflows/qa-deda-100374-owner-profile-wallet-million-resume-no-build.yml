@@ -1,0 +1,125 @@
+name: DEDA Owner Million Wallet Profile and Full Shop Refresh QA
+on:
+  push:
+    branches:
+      - deda-100374-ids-qa32-frames-deferred-2026-10-21
+    paths:
+      - '.github/workflows/qa-deda-100374-owner-profile-wallet-million-resume-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner-million-resume-wallet-qa
+  cancel-in-progress: false
+jobs:
+  reconstruct-real-store:
+    runs-on: ubuntu-24.04
+    # The EXACT baseline reconstruction validates the original signing
+    # configuration even for source-only QA. No APK/AAB is produced here.
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prevent any mutation to signed 100359 phone baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet d14e573d1f7f1ab67deff04222aca13c6f928553 -- \
+            functions/index.js firestore.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            android/ assets/
+          # The sole permitted change under server_private/catalogs is the
+          # owner-paired ENCRYPTED manifest. Never accept a plaintext catalog,
+          # added file, altered key or unexpected encrypted payload.
+          manifest="server_private/catalogs/DEDA_GROUP001_ADMIN100_AES256GCM_2026-10-19.enc.json"
+          changed="$(git diff --name-only d14e573d1f7f1ab67deff04222aca13c6f928553 -- server_private/catalogs/)"
+          test "$changed" = "$manifest"
+          test "$(git hash-object "$manifest")" = "d07198ced5c9019d0eb85e99ee94101db52921e3"
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS: no user/production/app signing changes'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Reconstruct EXACT approved 100359 generated app, prohibit APK compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          python3 -m py_compile tools/qa_reconstruct_100359_then_stage35_no_apk.py
+          # Capture the EXACT already-signed 100359 build invocation before
+          # the approved no-build reconstruction replaces it with an echo.
+          python3 - <<'CAPTURE_SIGNED_SOURCE'
+          from pathlib import Path
+          p=Path('tools/qa_reconstruct_100359_then_stage35_no_apk.py')
+          s=p.read_text()
+          needle="    adjusted = original.replace(matches[0],"
+          assert s.count(needle)==1, 'SAFE_STOP original signed command capture point moved'
+          s=s.replace(needle,
+             "    Path('/tmp/deda_stage71_exact_signed_100359_command.txt').write_text(matches[0]+'\\n')\n"
+             +needle,1)
+          p.write_text(s)
+          CAPTURE_SIGNED_SOURCE
+          python3 tools/qa_reconstruct_100359_then_stage35_no_apk.py
+          test -s /tmp/deda_stage71_exact_signed_100359_command.txt
+          bash -e /tmp/deda_100340_play_aab.sh
+          grep -q "DEDA_STAGE17_STORE_CARDS_BLUE_OWNED_IDS_2026_10_19" lib/main.dart
+          grep -q "DEDA_STAGE31_OWNER_QA_LAUNCH_SANDBOX_ONLY_2026_10_19" lib/main.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS: actual approved 100359 Flutter UI recreated with NO output APK'
+      - name: Apply compact real four-foil preview to reconstructed app and check Flutter
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/stage_deda_100360_compact_four_real_foils_after_100359.py
+          python3 tools/stage_deda_100360_remove_fake_store_sandbox.py
+          python3 tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py
+          python3 tools/stage_deda_100360_verified_group002_only_store.py
+          python3 -m unittest discover -s test -p 'test_deda_stage48_real_profile_active_ink.py'
+          python3 tools/stage_deda_100360_profile_active_ink_after_100359.py
+          python3 -m unittest discover -s test -p 'test_deda_owner19_stage49_original_qr_share.py'
+          python3 tools/stage_deda_100360_share_premium_ink_after_stage48.py
+          python3 -m unittest discover -s test -p 'test_deda_stage50_friend_ink_source.py'
+          python3 tools/stage_deda_100360_friend_visible_ink_after_stage49.py
+          python3 -m unittest discover -s test -p 'test_deda_stage51_friend_alias_source.py'
+          python3 tools/stage_deda_100360_friend_alias_search_after_stage50.py
+          python3 tools/stage_deda_owner_place_cross_device_recovery_stage64.py
+          python3 tools/stage_deda_100359_stage71_free_4_cards_dual_admin200.py
+          python3 tools/stage_deda_100359_stage74_hadaya_id_gift_inbox.py
+          python3 tools/stage_deda_100359_stage75_id_gift_unread_badge.py
+          python3 tools/stage_deda_100359_qa32_account_active_header.py
+          python3 tools/stage_deda_100359_qa32_share_verified_id_visual.py
+          python3 tools/stage_deda_100359_qa32_public_friend_premium_card.py
+          python3 tools/stage_deda_100359_qa32_received_location_sender_alias.py
+          python3 tools/stage_deda_100359_qa32_public_profile_royal_parity.py
+          python3 tools/stage_deda_100359_qa32_live_public_friend_appearance.py
+          python3 tools/stage_deda_100374_nonid_diamond_gift_badge_rearm.py
+          python3 tools/stage_deda_lab_three_existing_royal_frames_free_2026_10_21.py
+          python3 tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
+          python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
+          python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
+          flutter test test/deda_lab_verified_frame_catalog_test.dart
+          flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
+          flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
+          python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
+          python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
+          flutter test test/deda_profile_visible_diamonds_test.dart
+          flutter test test/deda_100374_nonid_public_readability_test.dart
+          flutter test test/deda_100374_nonid_diamond_gift_nav_test.dart
+          grep -q 'DEDA_LAB_3_EXISTING_ROYAL_FRAMES_FREE_SAVE_RELOAD_SAFE' lib/main.dart
+          echo 'PASS: new code stages 3 real royal free frames, native persistence 3..5, no APK/deployment'
