@@ -17,7 +17,7 @@ on:
       - 'tools/stage_deda_100360_compact_four_real_foils_after_100359.py'
       - 'tools/stage_deda_100360_remove_fake_store_sandbox.py'
       - 'tools/stage_deda_100360_real_admin_foils_on_reconstructed_source.py'
-      - 'test/deda_100360_original_shop_and_manager_foils_integration_test.dart'
+      - 'test/deda_stage71_real_store_four_free_integration_test.dart'
       - 'tools/stage_deda_100360_verified_group002_only_store.py'
       - 'lib/deda_stage42_verified_sale_panel.dart'
       - 'lib/deda_stage48_verified_active_profile_ink.dart'
@@ -128,7 +128,7 @@ jobs:
             lib/deda_stage42_verified_sale_panel.dart lib/deda_stage48_verified_active_profile_ink.dart \
             lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart \
             lib/deda_stage51_verified_friend_alias_search.dart
-          flutter test test/deda_stage71_four_free_cards_dual200_widget_test.dart test/deda_makani_100337_test.dart test/deda_100360_original_shop_and_manager_foils_integration_test.dart \
+          flutter test test/deda_stage71_four_free_cards_dual200_widget_test.dart test/deda_makani_100337_test.dart test/deda_stage71_real_store_four_free_integration_test.dart \
             test/deda_stage19_exclusive_admin_tile_test.dart \
             test/deda_owner19_stage48_active_profile_ink_test.dart \
             test/deda_owner19_stage46_verified_identifier_ink_test.dart \
@@ -143,7 +143,8 @@ jobs:
           b=src.index('class _DedaProfilePhase2PageState extends State<DedaProfilePhase2Page> {',a)
           shop=src[a:b]
           assert shop.count("DedaPremiumIdCard(") == 1, "four cards must share original renderer"
-          assert shop.count("DedaStage71FreeCardAction(") == 1, "all four free actions are original artwork"\n          assert shop.count("DedaPoint17ShopCardAction(") == 0, "paid widget still shown in shop"
+          assert shop.count("DedaStage71FreeCardAction(") == 1, "all four free actions are original artwork"
+          assert shop.count("DedaPoint17ShopCardAction(") == 0, "paid widget still shown in shop"
           assert "for (final style in DedaPremiumIdCardColor.values)" in shop
           assert "height: 50" in shop, "original 50dp foil was changed"
           assert "DEDA_PREMIUM_IDS_SERVER_LIVE" in src, "server flag lost"
@@ -178,10 +179,23 @@ jobs:
           manager=Path('lib/deda_exclusive_ids_admin_page.dart').read_text()
           assert "DEDA_100360_ADMIN_USES_ORIGINAL_FOUR_FULL_FOILS" in manager
           assert "DedaPremiumIdCard(" in manager, "GM artwork still fake border"
-          assert src.count('DEDA_STAGE71_OWNER_APPROVED_FOUR_FREE_CARDS_TWO_ADMIN100_NO_PURCHASE') == 1\n          assert src.count('DedaStage71FreeProfileFoil(') == 1
+          assert src.count('DEDA_STAGE71_OWNER_APPROVED_FOUR_FREE_CARDS_TWO_ADMIN100_NO_PURCHASE') == 1
+          assert src.count('DedaStage71FreeProfileFoil(') == 1
           assert src.count('DedaStage71ActiveProfileFoil(') == 1
           assert src.count('DedaStage71OwnedIdsPanel(') == 1
-          assert "import 'deda_stage71_free_owned_use_profile.dart';" in src\n          assert 'readOnlyCatalog: const <String>[],' in src\n          assert 'تصميم البطاقة: مجاني' in shop\n          assert 'تصميم البطاقة: 5,000 ماسة' not in shop\n          admin_source=Path('lib/admin_pages.dart').read_text()\n          assert 'DedaStage71DualAdminPage(isArabic: ar)' in admin_source\n          assert 'DedaExclusiveIdsAdminPage(isArabic: ar)' not in admin_source\n          dual=Path('lib/deda_stage71_dual_admin_page.dart').read_text()\n          assert 'deda_stage71_two_equal_vertical_columns' in dual\n          assert "_column('001')" in dual and "_column('002')" in dual\n          assert 'ChoiceChip(' not in dual\n          print('PASS: TRUE 100359 signed source, four original FREE foils + profile, real 100+100 GM-only columns')
+          assert "import 'deda_stage71_free_owned_use_profile.dart';" in src
+          assert 'itemCount: 0,' in shop, 'second 100 must never show in consumer free store'
+          assert 'DedaStage71DualAdminPage(isArabic: ar)' in Path('lib/admin_pages.dart').read_text()
+          assert 'تصميم البطاقة: مجاني' in shop
+          assert 'تصميم البطاقة: 5,000 ماسة' not in shop
+          admin_source=Path('lib/admin_pages.dart').read_text()
+          assert 'DedaStage71DualAdminPage(isArabic: ar)' in admin_source
+          assert 'DedaExclusiveIdsAdminPage(isArabic: ar)' not in admin_source
+          dual=Path('lib/deda_stage71_dual_admin_page.dart').read_text()
+          assert 'deda_stage71_two_equal_vertical_columns' in dual
+          assert "_column('001')" in dual and "_column('002')" in dual
+          assert 'ChoiceChip(' not in dual
+          print('PASS: TRUE 100359 signed source, four original FREE foils + profile, real 100+100 GM-only columns')
           PY
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
