@@ -21,7 +21,7 @@
 | 4 | Protect diamonds, points, purchases, cards, frames, avatars, owned IDs, gifts | OPEN; safety guard required |
 | 5 | Preserve business approval, likes, followers, palettes, owner links | OPEN; audit before modification |
 | 6 | Prevent mixed UID/session when changing account, no false duplicate sign-ups | OPEN |
-| 7 | GM 200-ID direct 'use' button (without grant-to-self) | SERVER-VERIFIED PRECHECK + VISIBLE FAIL-STOP STAGED (commit b1547108); direct Use still requires owner phone QA |
+| 7 | GM 200-ID direct 'use' button (without grant-to-self) | GM visible precheck corrected from syntax failure at b1547108 to verified baseline at 738696515; still requires successful post-fix Flutter CI and phone test |
 | 8 | On Account Info top card display active premium ID; original moves into owned list as return option | OPEN; screenshot shows old 'original active' even after premium use |
 | 9 | Display active premium ID consistently across owner profile, settings, friend search, messages, location sharing, public profiles | OPEN; one hero screen working, others not |
 | 10 | Use server-owned fixed ID text/color/crown/foil, never mocked or locally claimed style | OPEN; some pieces currently work |
@@ -76,3 +76,9 @@
 - Run [39575800732](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39575800732): offline Firebase Emulator historic published-place recovery rules **SUCCESS**, no live server reads/writes.
 - Commit b1547108: manager self-use now verifies the original account via source=server and shows a safe-stop message rather than silently returning; awaiting same-branch Flutter QA and owner phone verification.
 - The first run failed only at missing source-reconstruction signing environment. The environment was restored without changing keys; subsequent no-build QA passed. Never cite the initial failure as an application runtime defect.
+
+## Additional verified progress on 2026-10-21
+- Manager/recipient grant, self-use, no duplicate, immutable ledger and Hadaya receipt: emulator PASS [39577337960](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39577337960), using the CURRENT released Firestore policy read only, no deploy.
+- Earlier [39576274472](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39576274472) detected a Dart syntax regression in the attempted GM visible-error patch; it was reconstructed from the immutable Stage74 source and repaired at commit `738696515`. That failed run must not be represented as a pass.
+- At commit `1256a4c18`, the Stage71 owned identifier panel now includes a permanent original ID row with explicit server-backed reactivation, without replacing routing original ID or deleting granted rows.
+- Public active alias and full style across accounts, header/card synchronization and cross-device progress migration are NOT FIXED yet; keep those items OPEN.
