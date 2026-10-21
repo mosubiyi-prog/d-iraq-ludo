@@ -41,3 +41,4 @@ flutter:
   assets:
     - assets/deda_login_bg.jpg
     - assets/deda_home_bg.jpg
+    - assets/deda_lab_frames/
