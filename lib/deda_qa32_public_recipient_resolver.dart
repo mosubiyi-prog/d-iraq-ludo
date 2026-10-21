@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import 'deda_qa32_premium_app_check.dart';
+
 /// One read-only, trusted active-identifier -> immutable original-ID lookup.
 /// Works for share-location recipients, add-friend search and other PUBLIC
 /// canonical routing. Does not grant identifiers, spend gems, or change UID.
@@ -51,6 +53,7 @@ class DedaQa32PublicRecipientResolver {
     if (!enabled || Firebase.apps.isEmpty) return null;
     final before = FirebaseAuth.instance.currentUser?.uid;
     if (before == null || before.isEmpty) return null;
+    await DedaQa32PremiumAppCheck.ensureReady();
     final response = await FirebaseFunctions.instance
         .httpsCallable('dedaPremiumResolvePublicRecipient',
             options: HttpsCallableOptions(timeout: const Duration(seconds: 30)))
