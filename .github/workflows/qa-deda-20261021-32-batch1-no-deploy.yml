@@ -20,6 +20,9 @@ on:
       - 'tools/stage_deda_100359_qa32_received_location_sender_alias.py'
       - 'tools/stage_deda_100359_qa32_public_profile_royal_parity.py'
       - 'test/deda_qa32_public_royal_hero_parity_widget_test.dart'
+      - 'lib/deda_qa32_live_friend_appearance.dart'
+      - 'tools/stage_deda_100359_qa32_live_public_friend_appearance.py'
+      - 'test/deda_qa32_live_friend_appearance_test.dart'
       - 'test/deda_qa32_public_friend_full_premium_card_test.dart'
       - 'test/deda_qa32_active_account_scope_test.dart'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
@@ -154,6 +157,7 @@ jobs:
           python3 tools/stage_deda_100359_qa32_public_friend_premium_card.py
           python3 tools/stage_deda_100359_qa32_received_location_sender_alias.py
           python3 tools/stage_deda_100359_qa32_public_profile_royal_parity.py
+          python3 tools/stage_deda_100359_qa32_live_public_friend_appearance.py
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
           python3 - <<'PY_ACCOUNT'
@@ -188,7 +192,7 @@ jobs:
           dart format lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage71_free_id_cards.dart lib/deda_stage71_dual_admin_page.dart \
             lib/deda_stage71_free_manager_200_service.dart lib/deda_stage71_free_owned_use_profile.dart \
-            lib/deda_stage74_id_gift_service.dart lib/deda_stage74_hadaya_identifier_section.dart lib/deda_stage75_unread_gift_badge.dart lib/deda_qa32_active_account_scope.dart lib/admin_pages.dart \
+            lib/deda_stage74_id_gift_service.dart lib/deda_stage74_hadaya_identifier_section.dart lib/deda_stage75_unread_gift_badge.dart lib/deda_qa32_active_account_scope.dart lib/deda_qa32_live_friend_appearance.dart lib/admin_pages.dart \
             lib/deda_stage48_verified_active_profile_ink.dart lib/deda_verified_identifier_ink.dart \
             lib/deda_stage49_verified_share_id_badge.dart lib/deda_stage50_verified_friend_ink_badge.dart \
             lib/deda_stage51_verified_friend_alias_search.dart
@@ -203,6 +207,7 @@ jobs:
           flutter test test/deda_qa32_active_account_scope_test.dart
           flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
+          flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_stage71_four_free_cards_dual200_widget_test.dart test/deda_makani_100337_test.dart test/deda_stage71_real_store_four_free_integration_test.dart \
             test/deda_stage19_exclusive_admin_tile_test.dart \
             test/deda_owner19_stage48_active_profile_ink_test.dart \
@@ -281,6 +286,7 @@ jobs:
           assert src.count('premiumCardBuilder:') == 1
           assert src.count('DEDA_QA32_RECEIVED_PERSONAL_LOCATION_VERIFIED_SENDER_ALIAS_NO_DEPLOY') == 1
           assert src.count('DEDA_QA32_FRIEND_PUBLIC_ROYAL_HERO_CONTRAST_NO_DEPLOY') == 1
+          assert src.count('DEDA_QA32_PUBLIC_FRIEND_LIVE_APPEARANCE_UID_BOUND_NO_DEPLOY') == 1
           public_scope = src[public_a:public_b]
           assert 'Color(0xFF092A63)' in public_scope and 'Color(0xFF51204E)' in public_scope
           assert 'DedaFramedAvatar(' in public_scope and 'avatarStyle: profile.avatarStyle' in public_scope
