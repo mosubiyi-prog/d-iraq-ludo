@@ -1,53 +1,80 @@
 #!/usr/bin/env python3
-"""QA32 friend PUBLIC visual parity with owner Royal Hero (NO DEPLOY).
+"""QA32: royal public-friend card high-contrast parity, safe source-only stage.
 
-Use the same elegant static royal gradient, gold trim and readable WHITE name.
-Actual photo/frame/background choice comes from the owner's verified
-DedaSocialProfile public fields (never from the viewing friend's preferences).
-Keep public ID foil from Stage77, friend routes and private values unchanged.
+Run after the single full-foil profile patch. The SOURCE OF TRUTH for avatar,
+frame and background is the *owner's verified public DedaSocialProfile*, NOT
+viewer's locally persisted preferences. No account/wallet/registry writes.
+
+This patch matches the DART-FORMATTED reconstructed 100359 source, not the
+earlier unformatted historical template. Each edited field is fail-closed and
+scoped to the one public friend-profile widget.
 """
+import re
 from pathlib import Path
+
 MAIN=Path("lib/main.dart")
 MARK="// DEDA_QA32_FRIEND_PUBLIC_ROYAL_HERO_CONTRAST_NO_DEPLOY"
 START="class DedaFriendPublicProfilePage extends StatelessWidget {"
 END="class DedaStylePage extends StatefulWidget {"
 
-def one(c,old,new,label):
-    count=c.count(old)
-    if count!=1:raise ValueError("SAFE_STOP_QA32_FRIEND_ROYAL_"+label+"_count_"+str(count))
-    return c.replace(old,new,1)
+def one_sub(source, pattern, replacement, what):
+    result,n=re.subn(pattern,lambda m:replacement,source,count=2,flags=re.DOTALL)
+    if n!=1:
+        raise ValueError("SAFE_STOP_QA32_ROYAL_"+what+"_count_"+str(n)+
+                         " public_excerpt="+repr(source[:2300]))
+    return result
 
 def apply(source):
     if MARK in source:
-        if source.count(MARK)!=1:raise ValueError("SAFE_STOP_QA32_FRIEND_ROYAL_PARTIAL")
+        if source.count(MARK)!=1:
+            raise ValueError("SAFE_STOP_QA32_PUBLIC_ROYAL_PARTIAL")
         return source
     if source.count(START)!=1 or source.count(END)!=1 or \
        source.count("DEDA_QA32_FRIEND_PUBLIC_FULL_VERIFIED_ID_FOIL_NO_DEPLOY")!=1:
-        raise ValueError("SAFE_STOP_QA32_PUBLIC_CARD_PREREQUISITES")
-    a=source.index(START)
-    e=source.index(END,a)
-    fragment=source[a:e]
-    # Restore the very same fixed multi-stop royal gradient and 2px gold trim
-    # as the owner's hero. The stored background style remains visible via the
-    # existing 'bg' selection; no profile preference is overwritten.
-    old="""              gradient: LinearGradient(colors: bg,
-                  begin: Alignment.topRight, end: Alignment.bottomLeft),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE1CB82)),"""
-    new="""              // DEDA_QA32_FRIEND_PUBLIC_ROYAL_HERO_CONTRAST_NO_DEPLOY
-              gradient: const LinearGradient(
+        raise ValueError("SAFE_STOP_QA32_PUBLIC_ROYAL_SOURCE_CHANGED")
+    begin=source.index(START)
+    end=source.index(END,begin)
+    frag=source[begin:end]
+
+    # Preserve the exact crown foil, original public ID, owner frame/avatar,
+    # social badges, level, and all user actions.
+    if frag.count("DedaStage50VerifiedFriendInkBadge(")!=1 or \
+       frag.count("DedaFramedAvatar(")!=1 or \
+       frag.count("profile.avatarStyle")<1 or \
+       frag.count("profile.frameStyle")<1 or \
+       frag.count("final bg = dedaProfileBackgroundColors(profile.backgroundStyle);")!=1:
+        raise ValueError("SAFE_STOP_QA32_PUBLIC_ROYAL_PROFILE_COMPONENTS")
+
+    # Use the same royal four stop palette and trim as owner. The last panel
+    # tone preserves an understated tint from the owner's chosen background.
+    # Reformat-safe delimiters; strictly constrain source to old expected
+    # bg gradient and border colors inside public profile.
+    bgpat=(r"gradient:\s*LinearGradient\(\s*"
+           r"colors:\s*bg,\s*"
+           r"begin:\s*Alignment\.topRight,\s*"
+           r"end:\s*Alignment\.bottomLeft,\s*\),\s*"
+           r"borderRadius:\s*BorderRadius\.circular\(24\),\s*"
+           r"border:\s*Border\.all\(\s*"
+           r"color:\s*const\s+Color\(0xFFE1CB82\)\s*,?\s*\),")
+    bgnew="""// DEDA_QA32_FRIEND_PUBLIC_ROYAL_HERO_CONTRAST_NO_DEPLOY
+              gradient: LinearGradient(
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
                 colors: <Color>[
-                  Color(0xFF092A63),
-                  Color(0xFF222056),
-                  Color(0xFF51204E),
-                  Color(0xFF111C49),
+                  const Color(0xFF092A63),
+                  const Color(0xFF222056),
+                  const Color(0xFF51204E),
+                  Color.alphaBlend(
+                    bg.last.withOpacity(0.14),
+                    const Color(0xFF111C49),
+                  ),
                 ],
-                stops: <double>[0, 0.41, 0.72, 1],
+                stops: const <double>[0, 0.41, 0.72, 1],
               ),
               borderRadius: BorderRadius.circular(29),
-              border: Border.all(color: const Color(0xFFF2CC68), width: 2),
+              border: Border.all(
+                color: const Color(0xFFF2CC68), width: 2,
+              ),
               boxShadow: const <BoxShadow>[
                 BoxShadow(
                   color: Color(0x40210E46),
@@ -55,30 +82,15 @@ def apply(source):
                   offset: Offset(0, 9),
                 ),
               ],"""
-    fragment=one(fragment,old,new,"background")
-    # Future rendering of the owner's selected background gets the SAME
-    # royal hero backdrop painter and tint. Use the already owned public
-    # background swatch as the glow source; no local preview data.
-    old="            child: Column(\n              children: <Widget>[\n                DedaFramedAvatar("
-    new="""            child: Stack(
-              alignment: Alignment.topCenter,
-              children: <Widget>[
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: _DedaRoyalProfileBackdropPainter(glow: bg.last),
-                    ),
-                  ),
-                ),
-                Column(
-              children: <Widget>[
-                DedaFramedAvatar("""
-    fragment=one(fragment,old,new,"backdrop")
-    fragment=one(fragment,"                  size: 132,","                  size: 174,","avatar_size")
-    old="""                Text(profile.displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Color(0xFF0B3C6F),
-                        fontWeight: FontWeight.w900, fontSize: 23)),"""
-    new="""                Text(
+    frag=one_sub(frag,bgpat,bgnew,"old_background")
+    frag=one_sub(frag,r"(\bsize:\s*)132(\s*,)","size: 174,","avatar_size")
+
+    namepat=(r"Text\(\s*profile\.displayName\s*,\s*"
+             r"maxLines:\s*1\s*,\s*overflow:\s*TextOverflow\.ellipsis\s*,\s*"
+             r"style:\s*const\s+TextStyle\(\s*"
+             r"color:\s*Color\(0xFF0B3C6F\)\s*,\s*"
+             r"fontWeight:\s*FontWeight\.w900\s*,\s*fontSize:\s*23\s*\)\s*\)")
+    namenew="""Text(
                   profile.displayName,
                   textAlign: TextAlign.center,
                   maxLines: 2,
@@ -91,50 +103,32 @@ def apply(source):
                       Shadow(color: Color(0x80000000), blurRadius: 8),
                     ],
                   ),
-                ),"""
-    fragment=one(fragment,old,new,"public_name_contrast")
-    # When the public verified server is OFF, fallback ID must still be
-    # readable; Stage77 full premium card replaces it if the server is ON.
-    old="""style: const TextStyle(color: Color(0xFF536779),
-                            fontWeight: FontWeight.w800, fontSize: 15)"""
-    new="""style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 15,
-                          shadows: <Shadow>[
-                            Shadow(color: Color(0x80000000), blurRadius: 6),
-                          ])"""
-    fragment=one(fragment,old,new,"original_id_contrast")
-    # Close the new Stack + nested Column around the existing level badge.
-    # Scope the close to just before the public hero's closing decoration.
-    close_old="""                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(dedaText('الشارات', 'Badges'),"""
-    close_new="""                ),
-              ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(dedaText('الشارات', 'Badges'),"""
-    fragment=one(fragment,close_old,close_new,"hero_stack_closing")
-    result=source[:a]+fragment+source[e:]
-    # No edits to personal (owner) profile methods, friend relation logic or
-    # published style settings; exact reversal must reconstruct old source.
-    if result.count(MARK)!=1 or result.count("DedaStage50VerifiedFriendInkBadge(")!=4:
-        raise ValueError("SAFE_STOP_QA32_FRIEND_ROYAL_UNEXPECTED_WRAPPER_COUNTS")
-    if "DedaFramedAvatar(\n                  avatarStyle: profile.avatarStyle,\n                  frameStyle: profile.frameStyle,\n                  size: 174," not in fragment:
-        raise ValueError("SAFE_STOP_QA32_FRIEND_ROYAL_NOT_SERVER_PROFILE")
-    return result
+                )"""
+    frag=one_sub(frag,namepat,namenew,"old_public_name")
+
+    # The canonical original-ID fallback remains legible when the public
+    # verified premium style callable is OFF; do not draw a counterfeit foil.
+    inkpat=(r"color:\s*Color\(0xFF536779\)\s*,\s*"
+            r"fontWeight:\s*FontWeight\.w800\s*,\s*fontSize:\s*15")
+    inknew="""color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      shadows: const <Shadow>[
+                        Shadow(color: Color(0x80000000), blurRadius: 6),
+                      ]"""
+    frag=one_sub(frag,inkpat,inknew,"old_original_id_ink")
+
+    if frag.count(MARK)!=1 or frag.count("DedaStage50VerifiedFriendInkBadge(")!=1:
+        raise ValueError("SAFE_STOP_QA32_PUBLIC_ROYAL_UNRELATED_EDIT")
+    updated=source[:begin]+frag+source[end:]
+    if updated[:begin]!=source[:begin] or updated[begin+len(frag):]!=source[end:]:
+        raise ValueError("SAFE_STOP_QA32_PUBLIC_ROYAL_OUTSIDE_SCOPE")
+    return updated
 
 if __name__=="__main__":
-    original=MAIN.read_text()
-    result=apply(original)
-    if result!=original:MAIN.write_text(result)
-    print("PASS_QA32_FRIEND_PUBLIC_MATCHES_OWNER_ROYAL_GRADIENT_GLOW_AND_GOLD")
-    print("PASS_QA32_FRIEND_NAME_AND_FALLBACK_ID_HIGH_CONTRAST")
-    print("PASS_QA32_PUBLIC_USES_STORED_AVATAR_FRAME_BACKGROUND_NOT_VIEWER")
+    before=MAIN.read_text()
+    after=apply(before)
+    if before!=after:MAIN.write_text(after)
+    print("PASS_QA32_PUBLIC_OWNER_ROYAL_GRADIENT_WHITE_NAME_SAFE_BG_TINT")
+    print("PASS_QA32_PUBLIC_USES_OWNER_AVATAR_FRAME_BACKGROUND_NOT_VIEWER")
+    print("PASS_QA32_PUBLIC_ORIGINAL_FALLBACK_REMAINS_NON_PREMIUM")
