@@ -229,7 +229,20 @@ jobs:
           assert src.count('DEDA_OWNER19_STAGE49_ORIGINAL_QR_PLUS_VERIFIED_PREMIUM_INK') == 1
           assert src.count('DedaStage49VerifiedShareIdBadge(') == 1
           assert src.count('DEDA_OWNER19_STAGE50_FRIEND_INK_THREE_PUBLIC_SURFACES_NO_DEPLOY') == 1
-          assert src.count('DedaStage50VerifiedFriendInkBadge(') == 3
+          # 3 original friend surfaces and 1 new received-personal-location
+          # surface; do NOT drop any original friend verification/fallback.
+          assert src.count('DedaStage50VerifiedFriendInkBadge(') == 4
+          friend_a = src.index('class _DedaFriendCompactCard extends StatelessWidget {')
+          friend_b = src.index('class DedaAddFriendPage', friend_a)
+          search_a = src.index('class _DedaSearchResultCard extends StatelessWidget {')
+          search_b = src.index('class DedaFriendRequestsPage', search_a)
+          public_a = src.index('class DedaFriendPublicProfilePage extends StatelessWidget {')
+          receiver_a = src.index('class _DedaReceivedLocationsPageState extends State<DedaReceivedLocationsPage> {')
+          receiver_b = src.index('class _DedaReceivedLocationsPageState', receiver_a + 10) if src.count('class _DedaReceivedLocationsPageState') > 1 else len(src)
+          assert src[friend_a:friend_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
+          assert src[search_a:search_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
+          assert src[public_a:].count('DedaStage50VerifiedFriendInkBadge(') == 1
+          assert src[receiver_a:receiver_b].count('DedaStage50VerifiedFriendInkBadge(') == 1
           assert 'class DedaFriendPublicProfilePage extends StatelessWidget' in src
           assert 'DedaSocialService.findByPublicId(' in src
           assert src.count('DEDA_OWNER19_STAGE51_FRIEND_SEARCH_CANONICAL_ALIAS_NO_DEPLOY') == 1
