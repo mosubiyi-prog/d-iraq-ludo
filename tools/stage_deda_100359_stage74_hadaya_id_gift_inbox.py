@@ -41,7 +41,7 @@ def patch(src):
     section = once(
         section,
         '            ),\n    );\n  }\n\n',
-        '            )),\n    );\n  }\n\n')
+        '            )),\n            ]),\n    );\n  }\n\n')
     if 'DedaStage74IdGiftsSection(originalId: _publicId)' not in section:
         raise ValueError('SAFE_STOP_STAGE74_HADAYA_INSERTION_INCOMPLETE')
     if src.count("import 'package:flutter/material.dart';\n") != 1:
