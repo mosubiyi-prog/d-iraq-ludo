@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_stage71_free_owned_use_profile.dart';
@@ -59,9 +60,29 @@ class _DedaQa32ActiveAccountScopeState
   StreamSubscription<User?>? _auth;
   int _epoch = 0;
 
+  // Widget tests and initial cold-start frames may render Account Info before
+  // Firebase.initializeApp(). A missing app MUST NOT crash the whole page.
+  bool get _firebaseReady {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String? _currentUid() {
+    if (!_firebaseReady) return null;
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    if (!_firebaseReady) return; // original header is the safe fallback
     _auth = FirebaseAuth.instance.authStateChanges().listen((_) {
       _load();
     });
@@ -80,7 +101,7 @@ class _DedaQa32ActiveAccountScopeState
 
   Future<void> _load() async {
     final epoch = ++_epoch;
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final uid = _currentUid();
     final original = widget.originalId;
     if (!mounted) return;
     if (_proof != null) setState(() => _proof = null);
@@ -103,7 +124,7 @@ class _DedaQa32ActiveAccountScopeState
         uid: uid, originalId: original, displayId: active, fixedColor: color,
       );
       if (!mounted || epoch != _epoch ||
-          FirebaseAuth.instance.currentUser?.uid != uid ||
+          _currentUid() != uid ||
           widget.originalId != original || !next.verifiedFor(uid, original)) {
         return;
       }
@@ -111,7 +132,7 @@ class _DedaQa32ActiveAccountScopeState
     } catch (_) {
       // Unknown, failed or unauthorized reads must never invent an active ID.
       if (mounted && epoch == _epoch &&
-          FirebaseAuth.instance.currentUser?.uid == uid) {
+          _currentUid() == uid) {
         setState(() => _proof = null);
       }
     }
@@ -127,7 +148,7 @@ class _DedaQa32ActiveAccountScopeState
 
   @override
   Widget build(BuildContext context) {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUid = _currentUid();
     final proof = currentUid != null &&
             _proof?.verifiedFor(currentUid, widget.originalId) == true
         ? _proof
