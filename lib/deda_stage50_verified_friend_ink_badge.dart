@@ -88,8 +88,11 @@ class DedaStage50PublicIdStyleBridge {
 class DedaStage50VerifiedFriendInkBadge extends StatefulWidget {
   final String originalId;
   final Widget fallback;
+  // Only the public profile supplies this. Compact/search rows remain tiny.
+  final Widget Function(DedaStage50PublicIdStyle verified)? premiumCardBuilder;
   const DedaStage50VerifiedFriendInkBadge({
     super.key, required this.originalId, required this.fallback,
+    this.premiumCardBuilder,
   });
 
   @override
@@ -171,10 +174,53 @@ class _DedaStage50VerifiedFriendInkBadgeState
     if (uid == null || uid != _requesterUid ||
         style == null || style.requestedId != widget.originalId ||
         style.displayId == widget.originalId) return widget.fallback;
+    if (widget.premiumCardBuilder != null) {
+      return DedaStage50PremiumPublicCard(
+        originalId: widget.originalId,
+        verified: style,
+        fallback: widget.fallback,
+        builder: widget.premiumCardBuilder!,
+      );
+    }
     return DedaStage50FriendIdInkText(
       originalId: widget.originalId, verified: style,
       fallback: widget.fallback,
     );
+  }
+}
+
+/// Use the SAME full Crown/Jewel ID artwork as the owner's profile, but only
+/// for a public server-verified granted/claimed and currently active alias.
+/// No local frame choice, raw preference or unverified ID becomes premium.
+class DedaStage50PremiumPublicCard extends StatelessWidget {
+  final String originalId;
+  final DedaStage50PublicIdStyle? verified;
+  final Widget fallback;
+  final Widget Function(DedaStage50PublicIdStyle proof) builder;
+
+  const DedaStage50PremiumPublicCard({
+    super.key, required this.originalId, required this.verified,
+    required this.fallback, required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final untrusted = verified;
+    if (untrusted == null) return fallback;
+    DedaStage50PublicIdStyle? proof;
+    try {
+      proof = DedaStage50PublicIdStyle.parse({
+        'requestedId': untrusted.requestedId,
+        'displayId': untrusted.displayId,
+        'permanentColor': untrusted.permanentColor,
+        'serverConfirmed': true,
+      }, originalId);
+    } catch (_) {
+      return fallback;
+    }
+    if (proof == null || proof.displayId == originalId ||
+        proof.permanentColor == null) return fallback;
+    return builder(proof);
   }
 }
 
