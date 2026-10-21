@@ -175,6 +175,21 @@ def patch(src):
 '''+anchor,1)
     src=src[:task_a]+task+src[task_b:]
 
+    # Keep BOTH the owner's pinned portrait hero AND the same real wallet
+    # fixed while the 16 frame/portrait/background choices scroll beneath.
+    editor_a=src.index('class _DedaEditProfilePageState')
+    editor_b=src.find('\\nclass ',editor_a+40)
+    if editor_b<0:raise ValueError('SAFE_STOP_100377_EDIT_EDITOR_BOUNDARY')
+    editor=src[editor_a:editor_b]
+    pinned='''            Expanded(
+              child: ListView(
+                key: const Key('deda_edit_profile_scroll_choices'),'''
+    if editor.count(pinned)!=1:
+        raise ValueError('SAFE_STOP_100377_PINNED_CURRENCY_ANCHOR '+str(editor.count(pinned)))
+    editor=editor.replace(pinned,'''            const DedaUnifiedCurrencyStrip(),
+'''+pinned,1)
+    src=src[:editor_a]+editor+src[editor_b:]
+
     # No new payment route; storefront still uses same ordinary + manager
     # SUM as Profile, and identical task coin notifier as the tasks strip.
     state='class _DedaStylePageState extends State<DedaStylePage> {'
