@@ -1,0 +1,48 @@
+name: DEDA 100374 Live Firebase Functions Credential PREFLIGHT Readonly
+on:
+  push:
+    branches: [deda-100374-ids-qa32-frames-deferred-2026-10-21]
+    paths: ['.github/workflows/qa-deda-100374-firebase-deploy-access-preflight-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-cloud-access:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_STAGE61_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE61_FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check current IAM self-permissions without metadata/user writes
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_owner19_stage61_alternate_firebase_iam_readonly_2026_10_20.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check existing Firebase CI token can list Functions WITHOUT deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${FIREBASE_TOKEN:-}" ]; then
+            echo 'FIREBASE_CI_TOKEN_NOT_CONFIGURED'
+            exit 0
+          fi
+          # Redirect raw CLI diagnostics (may contain private CLI metadata).
+          # Output only an explicit READ-ONLY success/failure status.
+          if timeout 120 npx --yes firebase-tools@13.35.1 functions:list \
+              --project deda-25b88 --token "$FIREBASE_TOKEN" --non-interactive \
+              > "$RUNNER_TEMP/function-list.json" \
+              2> "$RUNNER_TEMP/function-list.error"; then
+            echo 'FIREBASE_CI_TOKEN_LIST_FUNCTIONS_SUCCESS'
+          else
+            echo 'FIREBASE_CI_TOKEN_LIST_FUNCTIONS_UNAVAILABLE'
+          fi
+          echo 'READ_ONLY: no Firebase deploy, no customer data, no secrets emitted'
