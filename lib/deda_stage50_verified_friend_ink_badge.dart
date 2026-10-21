@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_verified_identifier_ink.dart';
+import 'deda_qa32_premium_app_check.dart';
 
 /// Stage50 DTO. Only canonical original ID lookup is accepted by a friend
 /// profile. No client may supply a purchased card color or a target UID.
@@ -69,6 +70,7 @@ class DedaStage50PublicIdStyleBridge {
     if (!enabled || FirebaseAuth.instance.currentUser?.uid != requesterUid) {
       throw StateError('public-id-style-server-off');
     }
+    await DedaQa32PremiumAppCheck.ensureReady();
     final response = await FirebaseFunctions.instance
         .httpsCallable('dedaPremiumReadPublicIdentifierStyle',
             options: HttpsCallableOptions(
