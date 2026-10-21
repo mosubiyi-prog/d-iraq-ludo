@@ -32,6 +32,14 @@ class DedaStage75UnreadGiftBadge {
   static int unreadCount(Iterable<String> currentIds, Set<String> viewed) =>
       currentIds.toSet().difference(viewed).length;
 
+  /// A claimed gift is historical, not a fresh alert on a new install.
+  /// Keep the original account boundary even in a pure counting test.
+  static Iterable<String> awaitingIdentifiers(
+      String originalId, Iterable<DedaStage74IdGift> gifts) =>
+      gifts.where((gift) =>
+          gift.originalId == originalId && !gift.received)
+          .map((gift) => gift.identifier);
+
   static bool _stillCurrent(int generation, String uid, String originalId) =>
       generation == _generation &&
       _activeKey == _identity(uid, originalId) &&
@@ -107,9 +115,7 @@ class DedaStage75UnreadGiftBadge {
         <String>{};
     // Claimed gifts are already in permanent history. On a new device a
     // missing LOCAL seen marker must never resurrect an old claimed gift.
-    final ids = gifts
-        .where((gift) => gift.originalId == originalId && !gift.received)
-        .map((gift) => gift.identifier);
+    final ids = awaitingIdentifiers(originalId, gifts);
     pendingNotifier.value = unreadCount(ids, viewed);
   }
 
