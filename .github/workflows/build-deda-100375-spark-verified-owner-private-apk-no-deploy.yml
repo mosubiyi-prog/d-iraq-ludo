@@ -2,7 +2,7 @@ name: DEDA 100375 SPARK Premium IDs + Royal Free + Wallet OWNER PRIVATE QA
 on:
   push:
     branches:
-      - deda-100375-ids-qa32-frames-deferred-2026-10-21
+      - deda-100374-ids-qa32-frames-deferred-2026-10-21
     paths:
       - '.github/workflows/build-deda-100375-spark-verified-owner-private-apk-no-deploy.yml'
   workflow_dispatch:
