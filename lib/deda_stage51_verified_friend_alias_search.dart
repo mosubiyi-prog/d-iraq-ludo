@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_social_service.dart';
+import 'deda_qa32_public_recipient_resolver.dart';
 
 /// Stage51 — search friend by their original ID OR a server-verified premium
 /// alias. Never store the premium alias as a friendship or location target.
@@ -44,10 +45,13 @@ class DedaStage51FriendAliasProof {
 
 class DedaStage51FriendSearch {
   /// All feature flags OFF by default. Original app search is unchanged.
-  static const bool enabled = bool.fromEnvironment(
+  static const bool functionsEnabled = bool.fromEnvironment(
         'DEDA_PREMIUM_IDS_SERVER_LIVE', defaultValue: false) &&
       bool.fromEnvironment(
         'DEDA_STAGE51_FRIEND_ALIAS_SEARCH_LIVE', defaultValue: false);
+  // DEDA_QA32_SPARK_STAGE51_FRIEND_SEARCH_CANONICAL_NO_FUNCTIONS
+  static const bool enabled =
+      DedaQa32PublicRecipientResolver.enabled || functionsEnabled;
 
   static final _premium = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
 
@@ -66,6 +70,24 @@ class DedaStage51FriendSearch {
     if (!enabled) return null;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) throw StateError('friend-alias-login-required');
+    if (DedaQa32PublicRecipientResolver.enabled) {
+      // Spark plan: read only owner-verified public alias projection.
+      // This does not create any friend or modify the original UID.
+      final original = await DedaQa32PublicRecipientResolver
+          .resolveActiveAlias(normalized);
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('friend-alias-requester-changed');
+      }
+      if (original == null) return null;
+      final target = await DedaSocialService.findByPublicId(original);
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('friend-alias-requester-changed');
+      }
+      if (target == null || target.publicId != original) {
+        throw StateError('friend-alias-canonical-profile-mismatch');
+      }
+      return target;
+    }
     final response = await FirebaseFunctions.instance
         .httpsCallable(
           'dedaPremiumResolveFriendOriginal',
