@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet google-auth requests
           python3 tools/deda_qa32_spark_merge_LIVE_firestore_rules_QA_NO_DEPLOY.py
+          grep -q 'sparkOwnerAuthed' /tmp/deda_spark_emulator_rules.rules
           python3 - <<'PY_CONFIG'
           import json
           from pathlib import Path
