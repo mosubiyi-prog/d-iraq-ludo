@@ -101,7 +101,8 @@ class DedaStage50VerifiedFriendInkBadge extends StatefulWidget {
 }
 
 class _DedaStage50VerifiedFriendInkBadgeState
-    extends State<DedaStage50VerifiedFriendInkBadge> {
+    extends State<DedaStage50VerifiedFriendInkBadge>
+    with WidgetsBindingObserver {
   DedaStage50PublicIdStyle? _style;
   StreamSubscription<User?>? _authChanges;
   String? _requesterUid;
@@ -111,6 +112,7 @@ class _DedaStage50VerifiedFriendInkBadgeState
   void initState() {
     super.initState();
     if (!DedaStage50PublicIdStyleBridge.enabled) return;
+    WidgetsBinding.instance.addObserver(this);
     _authChanges = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted || user?.uid == _requesterUid) return;
       _epoch++;
@@ -159,9 +161,23 @@ class _DedaStage50VerifiedFriendInkBadgeState
     }
   }
 
+  // DEDA_QA32_REVERIFY_OTHER_USER_ALIAS_ON_RESUME_READ_ONLY_NO_DEPLOY
+  // A friend's alias/foil may have changed while the app was backgrounded.
+  // Clear stale visible alias immediately and re-fetch SERVER-owned proof.
+  // When the callable is not approved/live, do not touch Firebase.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed ||
+        !DedaStage50PublicIdStyleBridge.enabled || !mounted) return;
+    _epoch++;
+    setState(() => _style = null);
+    _load();
+  }
+
   @override
   void dispose() {
     _epoch++;
+    WidgetsBinding.instance.removeObserver(this);
     _authChanges?.cancel();
     super.dispose();
   }
