@@ -9,7 +9,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import 'deda_pin_auth.dart';
-import 'deda_qa32_public_recipient_resolver.dart';
 
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
@@ -4491,26 +4490,13 @@ class DedaBackend {
       throw ArgumentError('invalid-share-type');
     }
 
-    // DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE
-    // Prioritize true original IDs even if a premium alias has six characters.
-    final requested = normalizeSharePublicId(recipientPublicId);
+    final recipientId = normalizeSharePublicId(recipientPublicId);
     final senderId = normalizeSharePublicId(senderPublicId);
-    if (!RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(requested)) {
+    if (!isValidPersonalShareId(recipientId)) {
       throw ArgumentError('invalid-recipient-share-id');
     }
-    var recipientId = requested;
-    var recipient = isValidPersonalShareId(recipientId)
-        ? await locationShareIdInfo(recipientId) : null;
-    if (recipient == null || (recipient['kind'] ?? '').toString() != 'personal') {
-      final verified = await DedaQa32PublicRecipientResolver.resolveActiveAlias(
-        requested,
-      );
-      if (verified == null || !isValidPersonalShareId(verified)) {
-        throw StateError('recipient-share-id-not-found');
-      }
-      recipientId = verified;
-      recipient = await locationShareIdInfo(recipientId);
-    }
+
+    final recipient = await locationShareIdInfo(recipientId);
     if (recipient == null ||
         (recipient['kind'] ?? '').toString() != 'personal') {
       throw StateError('recipient-share-id-not-found');
