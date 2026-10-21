@@ -17,6 +17,7 @@ on:
       - 'tools/stage_deda_100359_qa32_account_active_header.py'
       - 'tools/stage_deda_100359_qa32_share_verified_id_visual.py'
       - 'tools/stage_deda_100359_qa32_public_friend_premium_card.py'
+      - 'tools/stage_deda_100359_qa32_received_location_sender_alias.py'
       - 'test/deda_qa32_public_friend_full_premium_card_test.dart'
       - 'test/deda_qa32_active_account_scope_test.dart'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
@@ -149,6 +150,7 @@ jobs:
           python3 tools/stage_deda_100359_qa32_account_active_header.py
           python3 tools/stage_deda_100359_qa32_share_verified_id_visual.py
           python3 tools/stage_deda_100359_qa32_public_friend_premium_card.py
+          python3 tools/stage_deda_100359_qa32_received_location_sender_alias.py
           # Read-only source inspection to place the next patch ONLY on the
           # actual reconstructed phone UI, never the stale repository main.dart.
           python3 - <<'PY_ACCOUNT'
@@ -259,6 +261,8 @@ jobs:
           assert src.count('DEDA_QA32_SHARE_SENDER_VERIFIED_ACTIVE_ID_VISUAL_ONLY') == 1
           assert src.count('DEDA_QA32_FRIEND_PUBLIC_FULL_VERIFIED_ID_FOIL_NO_DEPLOY') == 1
           assert src.count('premiumCardBuilder:') == 1
+          assert src.count('DEDA_QA32_RECEIVED_PERSONAL_LOCATION_VERIFIED_SENDER_ALIAS_NO_DEPLOY') == 1
+          assert src.count('originalId: senderId,') == 1
           assert src.count('deda_point7_switch_opens_id_manager') == 1
           assert src.count('deda_point7_edit_identifier_action') == 1
           assert src.count('DedaStage75UnreadGiftBadge.start(') == 1
