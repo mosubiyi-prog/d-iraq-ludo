@@ -97,8 +97,13 @@ def verify_assets():
             assert item["initial_price_diamonds"]==1000
             paid.append(item["id"])
     assert free==["FRAME_01","FRAME_02","FRAME_04"] and len(paid)==13
-    if "    - assets/deda_lab_frames/" not in PUB.read_text():
-        raise ValueError("SAFE_STOP_FLUTTER_LAB_ASSET_DIRECTORY_NOT_REGISTERED")
+    pub=PUB.read_text()
+    if "    - assets/deda_lab_frames/" not in pub:
+        anchor="    - assets/deda_home_bg.jpg\n"
+        if pub.count(anchor)!=1:
+            raise ValueError("SAFE_STOP_FLUTTER_ASSET_SECTION_DRIFT")
+        PUB.write_text(pub.replace(anchor,
+            anchor+"    - assets/deda_lab_frames/\n",1))
 
 if __name__=="__main__":
     verify_assets()
