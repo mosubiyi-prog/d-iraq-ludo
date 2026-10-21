@@ -1,0 +1,35 @@
+name: DEDA QA32 Friend Public Premium Alias Read-Only Security NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-qa-32-batch1-no-deploy-2026-10-21
+    paths:
+      - 'functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js'
+      - 'functions/tests/deda_qa32_public_alias_resolver.test.js'
+      - '.github/workflows/qa-deda-20261021-public-alias-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-alias-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard original server functions and Firebase live configuration
+        run: |
+          set -euo pipefail
+          git diff --quiet 2ec0c4993e1ac1f105cce33cf07c5048abddc5df --             functions/index.js firestore.rules firebase.json             lib/main.dart lib/deda_backend.dart android/ assets/ server_private/
+          ! grep -q "deda_qa32_public_alias_resolver_NOT_EXPORTED" functions/index.js
+          echo 'PASS public resolver is NOT deployed or exported'
+      - name: Offline read-only alias entitlement tests
+        run: |
+          set -euo pipefail
+          node --check functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js
+          node --test functions/tests/deda_qa32_public_alias_resolver.test.js
+          echo 'PASS private data excluded, verified ownership and gift claim required'
