@@ -27,14 +27,19 @@ jobs:
           node --check functions/deda_100374_qa32_verified_public_gift_callables_NOT_EXPORTED.js
           node --test test/deda_100374_verified_gm_alias_callables.test.js
           node --test functions/tests/deda_qa32_public_alias_resolver.test.js
-          ! grep -q "dedaPremiumResolvePublicRecipient" functions/index.js
-          echo 'PASS_NO_PUBLIC_ALIAS_PRODUCTION_DEPLOYMENT_YET'
+          grep -q 'DEDA_QA32_OWNER_APPROVED_VERIFIED_PREMIUM_ID_CALLABLES_2026_10_21' functions/index.js
+          grep -q 'exports.dedaPremiumResolvePublicRecipient' functions/index.js
+          grep -q 'exports.dedaPremiumReadPublicIdentifierStyle' functions/index.js
+          grep -q 'exports.dedaPremiumResolveAdminGiftRecipient' functions/index.js
+          # Staged exports are on private QA branch; NO firebase deploy command.
+          echo 'PASS_QA_BRANCH_FUNCTION_EXPORTS_PREPARED_NOT_DEPLOYED'
       - name: Check real Dart client share, friends and admin recipient mappings
         shell: bash
         run: |
           set -euo pipefail
           flutter pub get
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
+          flutter test test/deda_qa32_manager_original_owner_proof_test.dart
           flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
           grep -q "DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE" lib/deda_backend.dart
           grep -q "DEDA_QA32_FIND_FRIEND_BY_VERIFIED_PREMIUM_ID_TO_CANONICAL_ACCOUNT" lib/deda_social_service.dart
