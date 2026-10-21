@@ -161,6 +161,14 @@ jobs:
               for at in positions[:2]:
                   print('QA32_SNIPPET',repr(needle),
                         repr(src[max(0,at-700):at+1200]))
+          account=src.index('class _DedaAccountInfoPageState extends State<DedaAccountInfoPage> {')
+          method=src.find('Widget _ownedIdsCompactCard(',account)
+          if method<0:
+              raise ValueError('SAFE_STOP_QA32_ACCOUNT_HERO_METHOD_MISSING')
+          after=src.find('  @override',method)
+          if after<0 or after-method>16000:
+              raise ValueError('SAFE_STOP_QA32_ACCOUNT_HERO_METHOD_AMBIGUOUS')
+          print('QA32_ACCOUNT_HERO_FULL',repr(src[method:after]))
           print('QA32_ACCOUNT_SOURCE_PROBE_END')
           PY_ACCOUNT
           dart format lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
