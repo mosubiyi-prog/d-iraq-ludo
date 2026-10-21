@@ -291,7 +291,7 @@ jobs:
           assert 'Color(0xFF092A63)' in public_scope and 'Color(0xFF51204E)' in public_scope
           assert 'DedaFramedAvatar(' in public_scope and 'avatarStyle: profile.avatarStyle' in public_scope
           assert 'frameStyle: profile.frameStyle' in public_scope
-          assert '_DedaRoyalProfileBackdropPainter(glow: bg.last)' in public_scope
+          assert 'bg.last.withOpacity(0.14)' in public_scope and 'Color.alphaBlend(' in public_scope
           assert src.count('originalId: senderId,') == 1
           assert src.count('deda_point7_switch_opens_id_manager') == 1
           assert src.count('deda_point7_edit_identifier_action') == 1
