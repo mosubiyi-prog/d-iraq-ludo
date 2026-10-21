@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_qa32_premium_app_check.dart';
+import 'deda_qa32_spark_public_identifier_directory.dart';
 
 /// One read-only, trusted active-identifier -> immutable original-ID lookup.
 /// Works for share-location recipients, add-friend search and other PUBLIC
@@ -11,11 +12,13 @@ import 'deda_qa32_premium_app_check.dart';
 class DedaQa32PublicRecipientResolver {
   DedaQa32PublicRecipientResolver._();
 
-  static const bool enabled = bool.fromEnvironment(
+  static const bool functionsEnabled = bool.fromEnvironment(
     'DEDA_PREMIUM_IDS_SERVER_LIVE', defaultValue: false,
   ) && bool.fromEnvironment(
     'DEDA_QA32_PUBLIC_RECIPIENT_LOOKUP_LIVE', defaultValue: false,
   );
+  static const bool enabled =
+      DedaQa32SparkPublicIdentifierDirectory.enabled || functionsEnabled;
 
   static final RegExp _requested = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
   static final RegExp _original = RegExp(r'^@DEDA-[A-Z0-9]{6}$');
@@ -51,6 +54,10 @@ class DedaQa32PublicRecipientResolver {
     final requested = raw.trim().toUpperCase();
     if (!_requested.hasMatch(requested)) return null;
     if (!enabled || Firebase.apps.isEmpty) return null;
+    if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
+      return DedaQa32SparkPublicIdentifierDirectory.resolveActiveAlias(
+          requested);
+    }
     final before = FirebaseAuth.instance.currentUser?.uid;
     if (before == null || before.isEmpty) return null;
     await DedaQa32PremiumAppCheck.ensureReady();
