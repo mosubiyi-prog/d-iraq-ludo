@@ -75,36 +75,47 @@ def apply(source):
               border: Border.all(
                 color: const Color(0xFFF2CC68), width: 2,
               ),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x40210E46),
-                  blurRadius: 21,
-                  offset: Offset(0, 9),
-                ),
-              ],"""
+              // Preserve the existing profile shadow; no duplicate field."""
     frag=one_sub(frag,bgpat,bgnew,"old_background")
-    frag=one_sub(frag,r"(\bsize:\s*)132(\s*,)","size: 174,","avatar_size")
+    # The original user public-profile avatar has changed size across prior
+    # stages; locate the ONE actual DedaFramedAvatar and update its existing
+    # size rather than assuming an obsolete exact 132px constant.
+    avatar_match=re.search(r"DedaFramedAvatar\\(",frag)
+    if avatar_match is None or frag.count("DedaFramedAvatar(")!=1:
+        raise ValueError("SAFE_STOP_QA32_ROYAL_OWNER_AVATAR_NOT_UNIQUE")
+    avatar_end=frag.find(")",avatar_match.end())
+    if avatar_end < 0 or avatar_end-avatar_match.end()>450:
+        raise ValueError("SAFE_STOP_QA32_ROYAL_OWNER_AVATAR_BOUNDS")
+    avatar=frag[avatar_match.start():avatar_end+1]
+    avatar_new=one_sub(
+        avatar, r"\\bsize:\\s*[0-9]+(?:\\.[0-9]+)?\\s*,",
+        "size: 174,", "owner_avatar_size",
+    )
+    frag=(frag[:avatar_match.start()]+avatar_new+
+          frag[avatar_end+1:])
 
-    namepat=(r"Text\(\s*profile\.displayName\s*,\s*"
-             r"maxLines:\s*1\s*,\s*overflow:\s*TextOverflow\.ellipsis\s*,\s*"
-             r"style:\s*const\s+TextStyle\(\s*"
-             r"color:\s*Color\(0xFF0B3C6F\)\s*,\s*"
-             r"fontWeight:\s*FontWeight\.w900\s*,\s*fontSize:\s*23\s*,?\s*\)\s*,?\s*\)")
-    namenew="""Text(
-                  profile.displayName,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 25,
-                    shadows: <Shadow>[
-                      Shadow(color: Color(0x80000000), blurRadius: 8),
-                    ],
-                  ),
-                )"""
-    frag=one_sub(frag,namepat,namenew,"old_public_name")
+    # Only edit the owner's existing public display-name Text widget.
+    # Historical patches may have changed its fontSize/spacing already.
+    names=list(re.finditer(r"Text\\(\\s*profile\\.displayName\\s*,",frag))
+    if len(names)!=1:
+        raise ValueError("SAFE_STOP_QA32_ROYAL_PUBLIC_NAME_NOT_UNIQUE")
+    name_start=names[0].start()
+    name_end=frag.find("const SizedBox(",name_start)
+    if name_end < name_start or name_end-name_start > 1100:
+        raise ValueError("SAFE_STOP_QA32_ROYAL_PUBLIC_NAME_BOUNDS")
+    old_name=frag[name_start:name_end]
+    styled=old_name
+    if "textAlign:" not in styled:
+        styled=one_sub(styled,r"profile\\.displayName\\s*,",
+                       "profile.displayName, textAlign: TextAlign.center,",
+                       "public_name_center")
+    styled=one_sub(styled,r"maxLines:\\s*[0-9]+",
+                   "maxLines: 2","public_name_max_lines")
+    styled=one_sub(styled,r"color:\\s*(?:const\\s+)?Color\\(0x[0-9A-Fa-f]{8}\\)",
+                   "color: Colors.white","public_name_white")
+    styled=one_sub(styled,r"fontSize:\\s*[0-9]+(?:\\.[0-9]+)?",
+                   "fontSize: 25","public_name_size")
+    frag=frag[:name_start]+styled+frag[name_end:]
 
     # The canonical original-ID fallback remains legible when the public
     # verified premium style callable is OFF; do not draw a counterfeit foil.
