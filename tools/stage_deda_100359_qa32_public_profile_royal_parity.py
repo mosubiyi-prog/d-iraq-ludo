@@ -52,7 +52,7 @@ def apply(source):
     bgpat=(r"gradient:\s*LinearGradient\(\s*"
            r"colors:\s*bg,\s*"
            r"begin:\s*Alignment\.topRight,\s*"
-           r"end:\s*Alignment\.bottomLeft,\s*\),\s*"
+           r"end:\s*Alignment\.bottomLeft\s*,?\s*\),\s*"
            r"borderRadius:\s*BorderRadius\.circular\(24\),\s*"
            r"border:\s*Border\.all\(\s*"
            r"color:\s*const\s+Color\(0xFFE1CB82\)\s*,?\s*\),")
