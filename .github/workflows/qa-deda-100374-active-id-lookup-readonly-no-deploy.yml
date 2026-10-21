@@ -36,4 +36,6 @@ jobs:
           node --check functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js
           node --test test/deda_100374_qa32_alias_gm_gift_lookup.test.js
           node --test test/deda_100374_16_frame_catalog_owner_price.test.js
+          node --check functions/deda_100374_qa32_verified_public_gift_callables_NOT_EXPORTED.js
+          node --test test/deda_100374_verified_gm_alias_callables.test.js
           echo 'PASS: read-only public style + manager gift recipient alias tests'
