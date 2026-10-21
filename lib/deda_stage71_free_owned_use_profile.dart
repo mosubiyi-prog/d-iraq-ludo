@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage74_id_gift_service.dart';
+import 'deda_qa32_spark_public_identifier_directory.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
 
 /// Stage71: permanent gifted/self-used identifiers accessible by the verified
@@ -141,6 +142,22 @@ class DedaStage71OwnedIdentifierService {
     });
     final persisted=await active(originalId);
     if(persisted!=identifier) throw StateError('active-id-readback-failed');
+    // Spark owner publication only after original ID, selection, grant
+    // and (if gifted) receipt have already been confirmed on the server.
+    if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
+      String? foil;
+      if (identifier != originalId) {
+        final rows = await owned(originalId);
+        final matching = rows.where((r) => r.identifier == identifier).toList();
+        if (matching.length != 1) throw StateError('spark-owner-foil-not-proven');
+        foil = matching.single.baseColor;
+      }
+      await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
+        originalId: originalId,
+        selectedAlias: identifier,
+        permanentColor: foil,
+      );
+    }
     DedaStage71ActiveIdRefresh.changed();
   }
 }
@@ -308,6 +325,27 @@ class _DedaStage71ActiveProfileFoilState
       if(row.length!=1) throw StateError('active-id-not-owned');
       if(mounted&&widget.originalId==original){
         setState((){_active=active;_color=row.single.baseColor;});
+      }
+      // First owner profile open can republish an already-active premium ID
+      // from an older version. No Firestore write if the live index matches.
+      if (DedaQa32SparkPublicIdentifierDirectory.enabled &&
+          mounted && widget.originalId == original) {
+        try {
+          final style = await DedaQa32SparkPublicIdentifierDirectory
+              .readVerifiedStyle(original);
+          if (style == null ||
+              style['displayId'] != active ||
+              style['permanentColor'] != row.single.baseColor) {
+            await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
+              originalId: original,
+              selectedAlias: active,
+              permanentColor: row.single.baseColor,
+            );
+          }
+        } catch (_) {
+          // No false success. Existing owner card is still shown; public
+          // display remains unverified until owner publishes successfully.
+        }
       }
     } catch(_) {
       if(mounted&&widget.originalId==original){
