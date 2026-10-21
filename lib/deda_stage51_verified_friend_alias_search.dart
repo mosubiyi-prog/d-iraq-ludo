@@ -56,9 +56,11 @@ class DedaStage51FriendSearch {
   static final _premium = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
   static final _canonicalOriginal = RegExp(r'^@DEDA-[A-Z0-9]{6}$');
 
-  // Real original IDs always work. Premium-only syntax is accepted only if
-  // the owner-approved authenticated Spark resolver is truly switched ON.
+  // DEDA_100377_FRIENDS_PRESERVE_ORIGINAL_ACCEPTED_INPUT_ALL_LENGTHS
+  // Never narrow the already-shipped social ID validator when Spark is OFF.
+  // Real canonical original IDs and ALL older accepted inputs remain valid.
   static bool acceptsInput(String normalized) =>
+      DedaSocialService.looksLikePersonalId(normalized) ||
       _canonicalOriginal.hasMatch(normalized) ||
       (enabled && _premium.hasMatch(normalized));
 
@@ -66,7 +68,8 @@ class DedaStage51FriendSearch {
     if (!acceptsInput(normalized)) return null;
     // Old registered ID path gets FIRST priority, and remains functional
     // even if premium server is not deployed or has a temporary outage.
-    if (_canonicalOriginal.hasMatch(normalized)) {
+    if (DedaSocialService.looksLikePersonalId(normalized) ||
+        _canonicalOriginal.hasMatch(normalized)) {
       final legacy = await DedaSocialService.findByPublicId(normalized);
       if (legacy != null) return legacy;
     }
