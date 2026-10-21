@@ -143,6 +143,7 @@ jobs:
           # Legacy first-pass source test is replaced by the unified
           # task+store+profile account-scope test directly below.
           python3 -m unittest discover -s test -p 'test_deda_100377_wallet_all_screens_source.py'
+          echo 'PASS_SIGNED_100377_WALLET_SOURCE_GUARD_MATCHES_REAL_STICKY_PROFILE_CARD'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
           grep -q 'DEDA_QA32_SPARK_STAGE51_FRIEND_SEARCH_CANONICAL_NO_FUNCTIONS' lib/deda_stage51_verified_friend_alias_search.dart
