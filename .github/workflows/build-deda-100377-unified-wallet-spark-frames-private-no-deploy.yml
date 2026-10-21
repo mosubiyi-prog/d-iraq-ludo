@@ -140,7 +140,8 @@ jobs:
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
           flutter test test/deda_profile_visible_diamonds_test.dart
           flutter test test/deda_unified_currency_totals_test.dart
-          python3 -m unittest discover -s test -p 'test_deda_100374_all_personal_wallet_display_source.py'
+          # Legacy first-pass source test is replaced by the unified
+          # task+store+profile account-scope test directly below.
           python3 -m unittest discover -s test -p 'test_deda_100377_wallet_all_screens_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100374_profile_wallet_refresh_source.py'
           grep -q 'DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE' lib/deda_backend.dart
