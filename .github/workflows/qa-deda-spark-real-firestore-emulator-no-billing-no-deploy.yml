@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save --package-lock=false --ignore-scripts \
-             @firebase/rules-unit-testing@4.0.0 firebase@10.14.1
+             @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
           npx --yes firebase-tools@13.35.1 emulators:exec \
             --only firestore \
             --project deda-spark-qa32-emulator \
