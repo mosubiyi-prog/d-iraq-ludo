@@ -201,6 +201,13 @@ def patch(src):
       ).diamonds;'''
     shop,count=pattern.subn(lambda _:replacement,shop)
     if count!=1:raise ValueError('SAFE_STOP_100377_SHOP_SUM_ANCHOR '+str(count))
+    # Displayed diamonds may include a historically unverified GM wallet:
+    # don't label the read-only sum as an amount guaranteed spendable.
+    old_label="dedaText('رصيد المشتريات', 'Purchase balance')"
+    if shop.count(old_label)!=1:
+        raise ValueError('SAFE_STOP_100377_STORE_BALANCE_LABEL_DRIFT')
+    shop=shop.replace(old_label,
+        "dedaText('إجمالي الماسات الشخصية', 'Total personal diamonds')",1)
     # Sticky header: total diamonds and task coins visible even when scrolling
     # through the frame and badge purchase list. The original wallet card
     # is preserved and must render the exact same totals.
