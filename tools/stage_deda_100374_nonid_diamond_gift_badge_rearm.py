@@ -82,6 +82,7 @@ NEW_NAV_HEAD = r"""class _DedaGiftNavBadgeState extends State<DedaGiftNavBadge>
     with WidgetsBindingObserver {
   // DEDA_100374_DIAMOND_GIFT_BADGE_AUTH_RESUME_REARM_NO_DEPLOY
   StreamSubscription<User?>? _accountAuth;
+  Timer? _startupRetry;
 
   bool get _firebaseReady {
     try {
@@ -119,13 +120,11 @@ NEW_NAV_HEAD = r"""class _DedaGiftNavBadgeState extends State<DedaGiftNavBadge>
     });
     // A one-time delayed rearm covers late asynchronous profile/phone startup.
     // Do NOT poll, auto-claim, or send notifications for historical receipts.
-    unawaited(Future<void>.delayed(
-      const Duration(milliseconds: 1500), () {
-        if (!mounted) return;
-        _watchAccountIfReady();
-        _rearmGiftBadges();
-      },
-    ));
+    _startupRetry = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      _watchAccountIfReady();
+      _rearmGiftBadges();
+    });
   }
 
   @override
@@ -139,6 +138,7 @@ NEW_NAV_HEAD = r"""class _DedaGiftNavBadgeState extends State<DedaGiftNavBadge>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _startupRetry?.cancel();
     _accountAuth?.cancel();
     super.dispose();
   }
