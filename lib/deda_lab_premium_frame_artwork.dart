@@ -36,7 +36,29 @@ class _DedaLabPremiumFrameArtworkState
     with SingleTickerProviderStateMixin {
   late final AnimationController _shine = AnimationController(
     vsync: this, duration: const Duration(milliseconds: 5400),
-  )..repeat();
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant DedaLabPremiumFrameArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    final reduced = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final shouldRun = widget.animate && widget.size >= 120 && !reduced;
+    if (shouldRun && !_shine.isAnimating) {
+      _shine.repeat();
+    } else if (!shouldRun && _shine.isAnimating) {
+      _shine.stop();
+    }
+  }
 
   @override
   void dispose() { _shine.dispose(); super.dispose(); }
