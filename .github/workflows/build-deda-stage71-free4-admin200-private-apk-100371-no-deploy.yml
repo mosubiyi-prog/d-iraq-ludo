@@ -91,7 +91,21 @@ jobs:
           set -euo pipefail
           flutter pub get
           python3 -m py_compile tools/qa_reconstruct_100359_then_stage35_no_apk.py
+          # Capture the EXACT already-signed 100359 build invocation before
+          # the approved no-build reconstruction replaces it with an echo.
+          python3 - <<'CAPTURE_SIGNED_SOURCE'
+          from pathlib import Path
+          p=Path('tools/qa_reconstruct_100359_then_stage35_no_apk.py')
+          s=p.read_text()
+          needle="    adjusted = original.replace(matches[0],"
+          assert s.count(needle)==1, 'SAFE_STOP original signed command capture point moved'
+          s=s.replace(needle,
+             "    Path('/tmp/deda_stage71_exact_signed_100359_command.txt').write_text(matches[0]+'\\n')\n"
+             +needle,1)
+          p.write_text(s)
+          CAPTURE_SIGNED_SOURCE
           python3 tools/qa_reconstruct_100359_then_stage35_no_apk.py
+          test -s /tmp/deda_stage71_exact_signed_100359_command.txt
           bash -e /tmp/deda_100340_play_aab.sh
           grep -q "DEDA_STAGE17_STORE_CARDS_BLUE_OWNED_IDS_2026_10_19" lib/main.dart
           grep -q "DEDA_STAGE31_OWNER_QA_LAUNCH_SANDBOX_ONLY_2026_10_19" lib/main.dart
@@ -211,31 +225,25 @@ jobs:
           python3 - <<'PY_BUILD'
           from pathlib import Path
           import re
-          source=Path('/tmp/deda_100340_play_aab.sh').read_text()
-          lines=[line for line in source.splitlines()
-            if re.match(r'^flutter build appbundle --release --build-number=100340(?:\s|$)',line)]
-          assert len(lines)==1, 'SAFE_STOP: approved AAB signing command is missing'
-          cmd=lines[0].replace(
-            'flutter build appbundle --release --build-number=100340',
-            'flutter build apk --release --build-number=100371',1)
-          assert 'flutter build appbundle' not in cmd
-          for required in (
-            'USE_NEXT_GEN_SDK=true',
-            'DEDA_SPARK_FIRESTORE_LIVE=true',
-          ):
-            assert required in cmd, 'SAFE_STOP old reviewed feature build setting changed: '+required
-          for key in ('DEDA_PREMIUM_IDS_SERVER_LIVE','DEDA_PREMIUM_ALIAS_ROUTING_LIVE',
-            'DEDA_OWNER_PRIVATE_SANDBOX','DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED'):
-            assert not re.search(r'--dart-define='+key+r'=',cmd),'SAFE_STOP duplicated flag '+key
-          cmd += (
-            ' --dart-define=DEDA_PREMIUM_IDS_SERVER_LIVE=false'
-            ' --dart-define=DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false'
-            ' --dart-define=DEDA_OWNER_PRIVATE_SANDBOX=false'
-            ' --dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=true'
-          )
+          source=Path('/tmp/deda_stage71_exact_signed_100359_command.txt').read_text().strip()
+          assert source.startswith('flutter build apk --release --build-number=100359 '), (
+            'SAFE_STOP expected approved signed 100359 invocation')
+          cmd=source.replace(
+            'flutter build apk --release --build-number=100359 ',
+            'flutter build apk --release --build-number=100371 ',1)
+          for required in ('USE_NEXT_GEN_SDK=true',
+              'DEDA_SPARK_FIRESTORE_LIVE=true',
+              'DEDA_PREMIUM_IDS_SERVER_LIVE=false',
+              'DEDA_PREMIUM_ALIAS_ROUTING_LIVE=false',
+              'DEDA_OWNER_PRIVATE_SANDBOX=true'):
+            assert required in cmd, 'SAFE_STOP reviewed signing/feature flag missing: '+required
+          assert '--dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=' not in cmd
+          cmd=cmd.replace('--dart-define=DEDA_OWNER_PRIVATE_SANDBOX=true',
+                          '--dart-define=DEDA_OWNER_PRIVATE_SANDBOX=false',1)
+          cmd += ' --dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=true'
           script=Path('/tmp/deda_stage71_owner_phone_signed_100371.sh')
           script.write_text('set -euo pipefail\n'+cmd+'\n')
-          print('PASS build from original signed 100340 command with only 100371 and free200 owner-client flags')
+          print('PASS original proven signed 100359 command exactly replayed as 100371 with safe owner client flags')
           PY_BUILD
       - name: Build 100371 PRIVATE signed APK - no Play/Firebase deploy
         shell: bash
