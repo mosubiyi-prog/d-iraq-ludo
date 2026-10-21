@@ -27,3 +27,18 @@ Do not conflate “إطارات الصورة الشخصية” with “بطاق�
 - No promises of all items being solved simply because the build/signature passes. Real two-account phone QA required.
 
 **This checkpoint supersedes every prior non-ID-only scope statement.**
+
+
+## Owner re-confirmed four screenshots — single premium-ID consistency acceptance gate (2026-10-21)
+These four screenshots supplied again by the owner are the *original reason for the 100373/100374 fix*, not evidence to defer premium IDs:
+
+1. **Received location:** `سالم حسن` successfully sends his location, original ID `@DEDA-AQPYXJ` appears on receiver card while sender's OWN verified share screen shows active `@DEDA-IRAQI`. Retain original identifier for account routing; receiver display must independently resolve trusted active alias. Two historically separate intentional location shares are NOT duplicates.
+2. **Friend public profile:** portrait with jeweled pink frame and gradient background appears, but old `@DEDA-AQPYXJ` replaces activated alias, the premium card foil is missing and the dark text is unreadable. Correct both genuine live verified alias+foil and readable name, without removing original owner portrait/frame/background/badge or exposing private account data.
+3. **GM `هدايا الجواهر`, canonical:** `@DEDA-AQPYXJ` resolves to `سالم حسن` level 1 and supports the already validated historic/new gem gift.
+4. **GM `هدايا الجواهر`, premium:** `@DEDA-IRAQI` results in `لم يتم العثور على حساب شخصي بهذا المعرف`. Must resolve server-verified premium ID to *exactly the same* original account, never grant gems to a different recipient, never overwrite gift history.
+
+**Cross-surface acceptance**: owner-visible account and sending location use current alias; receiver location, friend public header+authentic color/foil, GM verified recipient lookup, and owned ID Use/Gift/Claim all agree on account ownership. Test against two real accounts on owner phone/tablet, positive and negative authorization, original ID fallback/revert and switching accounts. Existing original stable routing is immutable. Do not pass because own account alone looks right.
+
+**Scope**: Fix ID system and gift notification/contrast. **Defer ONLY 13 new LAB avatar/profile FRAMES** (not the existing 6, not the four premium identifier card color designs). Keep 100373 backup; the non-ID-only 100374 workflow is outdated scope and is *not* an accepted release even if it succeeds.
+
+**Backend safety blocker**: cross-account active premium alias read uses `dedaPremiumReadPublicIdentifierStyle`, currently gated OFF and not deployed. A correct secure deployment to the live environment requires its own permission and security review; do NOT silently enable Firebase Functions/rules or substitute insecure client-field aliases. If not approved, report that relevant acceptance item remains OPEN instead of claiming it fixed.
