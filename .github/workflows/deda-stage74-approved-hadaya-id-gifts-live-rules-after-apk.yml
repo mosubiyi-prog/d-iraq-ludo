@@ -1,0 +1,115 @@
+name: DEDA Stage74 owner approved Hadaya ID gift receipt LIVE rules after signed APK
+on:
+  push:
+    branches:
+      - deda-stage74-id-gift-inbox-claim-use-tablet-2026-10-21
+    paths:
+      - '.github/workflows/deda-stage74-approved-hadaya-id-gifts-live-rules-after-apk.yml'\n      - 'tools/deda_stage74_hadaya_received_id_rules_live_OWNER_APPROVED_DEPLOY.py'
+      - 'tools/deda_stage74_id_gifts_live_rules_READONLY_CANDIDATE.py'
+      - 'test/deda_stage74_hadaya_gift_receipt_account_security_emulator.test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  manager-free200-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      DEDA_STAGE74_OWNER_EXPLICIT_APPROVAL: 2026-10-21-GIFTED-ID-HADAYA-RECEIVE-ONLY
+      DEDA_STAGE71_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE71_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Wait for signed 100372 owner-tablet APK to pass source and signature before ANY live rule change
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_WAIT_BUILD'
+          import json,os,time,urllib.request,subprocess
+          repo=os.environ['GITHUB_REPOSITORY']
+          expected_branch='deda-stage74-id-gift-inbox-claim-use-tablet-2026-10-21'
+          run=39561565035
+          url=f'https://api.github.com/repos/{repo}/actions/runs/{run}'
+          for attempt in range(105):
+              req=urllib.request.Request(url,headers={
+                'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                'Accept':'application/vnd.github+json',
+                'X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  data=json.load(response)
+              if data.get('head_branch')!=expected_branch or 'APK 100372' not in data.get('name',''):
+                  raise SystemExit('SAFE_STOP_STAGE74_NOT_ORIGINAL_SIGNED_100372_WORKFLOW')
+              status=data.get('status')
+              result=data.get('conclusion')
+              if status=='completed':
+                  if result!='success':
+                      raise SystemExit('SAFE_STOP_STAGE74_TABLET_APK_NOT_VERIFIED_'+str(result))
+                  build_sha=data.get('head_sha','')
+                  if not build_sha or len(build_sha)!=40:
+                      raise SystemExit('SAFE_STOP_STAGE74_BAD_BUILT_SHA')
+                  subprocess.run(['git','merge-base','--is-ancestor',build_sha,'HEAD'],check=True)
+                  # Only rule test and deploy tooling may change after the
+                  # successful signed APK commit. Runtime application code
+                  # must match exactly what was signed.
+                  subprocess.run(['git','diff','--quiet',build_sha,'HEAD','--',
+                    'lib/','android/','assets/',
+                    'tools/stage_deda_100359_stage74_hadaya_id_gift_inbox.py',
+                    '.github/workflows/build-deda-stage74-hadaya-received-ids-private-apk-100372-no-deploy.yml'],check=True)
+                  print('PASS_STAGE74_SIGNED_100372_BUILT_AND_IDENTICAL_APP_SOURCE',build_sha[:12])
+                  break
+              time.sleep(15)
+          else:
+              raise SystemExit('SAFE_STOP_STAGE74_100372_BUILD_TIMED_OUT')
+          PY_WAIT_BUILD
+      - name: Prove original users, Firebase rules, Play and private encrypted IDs unaffected
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 2587f0cf260e1c9ca1768baa5ccad880fbb1d15c -- \
+            firestore.rules firebase.json functions/index.js \
+            lib/main.dart lib/deda_backend.dart android/ assets/ server_private/
+          python3 -m py_compile tools/deda_stage74_id_gifts_live_rules_READONLY_CANDIDATE.py
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo PASS_NO_LIVE_FIREBASE_OR_APK_CHANGES
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Inspect current published rules READ ONLY, append temporary GM-only free200 rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_stage74_id_gifts_live_rules_READONLY_CANDIDATE.py
+      - name: Install local Firestore Emulator dependencies
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Five E2E security tests original+second 100, manager/outsider, use, gift, permanent ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GCLOUD_PROJECT=demo-deda-stage74-hadaya-id-receipts
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-stage74-hadaya-id-receipts --only firestore \
+            'node --test test/deda_stage74_hadaya_gift_receipt_account_security_emulator.test.js'
+          echo PASS_STAGE74_HADAYA_PERMANENT_FREE_ID_RECEIPT_11_E2E_NO_DEPLOY
+      - name: Deploy ONLY owner-approved immutable ID gift receipt rules; save/verify rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/deda_stage74_hadaya_received_id_rules_live_OWNER_APPROVED_DEPLOY.py
+          python3 tools/deda_stage74_hadaya_received_id_rules_live_OWNER_APPROVED_DEPLOY.py
+      - name: Save encrypted/private previous live rules rollback audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-STAGE74-HADAYA-ID-GIFTS-LIVE-RULES-ROLLBACK-PRIVATE
+          path: /tmp/deda-stage74-rules-backup/
+          if-no-files-found: warn
+          retention-days: 30
