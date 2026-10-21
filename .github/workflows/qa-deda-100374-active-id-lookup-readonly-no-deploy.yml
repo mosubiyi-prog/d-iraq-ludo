@@ -1,0 +1,36 @@
+name: DEDA 100374 Verified Premium ID Recipient QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100374-ids-qa32-frames-deferred-2026-10-21
+    paths:
+      - '.github/workflows/qa-deda-100374-active-id-lookup-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-identity-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original IDs and no unapproved production endpoint
+        run: |
+          set -euo pipefail
+          git diff --quiet d14e573d1f7f1ab67deff04222aca13c6f928553 -- \
+            functions/index.js firestore.rules firebase.json android/ \
+            lib/main.dart lib/deda_backend.dart
+          test -f functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js
+          grep -q 'resolveVerifiedGiftRecipientOriginal' \
+            functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js
+          ! grep -q 'dedaPremiumReadPublicIdentifierStyle' functions/index.js
+          echo 'PASS: no live callable was exported or deployed'
+      - name: Exercise original and active ID verified recipient lookup
+        run: |
+          set -euo pipefail
+          node --check functions/deda_qa32_public_alias_resolver_NOT_EXPORTED.js
+          node --test test/deda_100374_qa32_alias_gm_gift_lookup.test.js
+          echo 'PASS: read-only public style + manager gift recipient alias tests'
