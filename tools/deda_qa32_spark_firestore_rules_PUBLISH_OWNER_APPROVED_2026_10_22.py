@@ -86,9 +86,14 @@ def validate(original,new):
     print("PASS_EMULATOR_TESTED_ADDITIVE_RULES_SHA256",sha(new))
 
 def release_patch(headers,new_name):
+    # FirebaseRules v1 PatchReleaseRequest accepts its nested 'release'
+    # object; rulesetName is NOT a top-level PatchReleaseRequest field.
     result=request("PATCH",RELEASE+"?updateMask=rulesetName",headers,
-                   {"name":RELEASE,"rulesetName":new_name})
-    return result.get("rulesetName","")
+                   {"name":RELEASE,
+                    "release":{"name":RELEASE,"rulesetName":new_name}})
+    nested=result.get("release",{})
+    return (nested.get("rulesetName","") if isinstance(nested,dict)
+            else "") or result.get("rulesetName","")
 
 def main():
     if os.environ.get("DEDA_SPARK_OWNER_APPROVED_RULES_ONLY")!="YES":
