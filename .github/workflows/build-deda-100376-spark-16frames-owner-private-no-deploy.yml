@@ -139,12 +139,28 @@ jobs:
           python3 tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
-          python3 tools/stage_deda_100376_spark_all_routing_on_rebuilt_source.py
+          python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
+          python3 tools/stage_deda_100376_lab_16_native_gallery_after_real_rebuild.py
+          # Reconstructed 100359 pubspec may omit newer frame directories.
+          python3 - <<'PY_LAB_ASSET'
+          from pathlib import Path
+          p=Path('pubspec.yaml')
+          s=p.read_text()
+          if '- assets/deda_lab_frames/' not in s:
+            anchor='    - assets/deda_home_bg.jpg'
+            if s.count(anchor)!=1:raise SystemExit('SAFE_STOP_LAB_ASSET_ANCHOR')
+            p.write_text(s.replace(anchor,anchor+'\n    - assets/deda_lab_frames/',1))
+          assert '- assets/deda_lab_frames/' in p.read_text()
+          print('PASS_16_LAB_ORIGINAL_WEBPS_REGISTERED_FOR_FLUTTER')
+          PY_LAB_ASSET
+          flutter pub get
           flutter test test/deda_lab_verified_frame_catalog_test.dart
           flutter test test/deda_lab_original_frame_assets_test.dart
+          flutter test test/deda_lab_original_frames_gallery_widget_test.dart
           flutter test test/deda_lab_three_royal_frames_free_actual_app_test.dart
           flutter test test/deda_100374_admin_premium_alias_recipient_bridge_test.dart
           flutter test test/deda_qa32_manager_original_owner_proof_test.dart
+          grep -q 'DEDA_100376_REAL_16_LAB_ARTWORK_PROFILE_GALLERY' lib/main.dart
           flutter test test/deda_qa32_spark_free_public_identifier_directory_test.dart
           flutter test test/deda_qa32_public_recipient_live_bridge_test.dart
           flutter test test/deda_profile_visible_diamonds_test.dart
@@ -185,6 +201,7 @@ jobs:
           print('QA32_ACCOUNT_HERO_FULL',repr(src[method:after]))
           print('QA32_ACCOUNT_SOURCE_PROBE_END')
           PY_ACCOUNT
+          dart format lib/deda_lab_original_frames_gallery.dart
           dart format lib/main.dart lib/deda_backend.dart lib/deda_exclusive_ids_admin_page.dart \
             lib/deda_stage71_free_id_cards.dart lib/deda_stage71_dual_admin_page.dart \
             lib/deda_stage71_free_manager_200_service.dart lib/deda_stage71_free_owned_use_profile.dart \
@@ -363,6 +380,7 @@ jobs:
           set -euo pipefail
           bash /tmp/deda_stage71_owner_phone_signed_100376.sh
           test -s build/app/outputs/flutter-apk/app-release.apk
+          test -f assets/deda_lab_frames/FRAME_16.webp
           test ! -f build/app/outputs/bundle/release/app-release.aab
       - name: Verify signed APK identity, zip integrity, version and publish PRIVATE artifact
         shell: bash
