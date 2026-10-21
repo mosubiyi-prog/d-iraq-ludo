@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import 'deda_pin_auth.dart';
+import 'deda_qa32_public_recipient_resolver.dart';
 
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
@@ -4490,13 +4491,142 @@ class DedaBackend {
       throw ArgumentError('invalid-share-type');
     }
 
-    final recipientId = normalizeSharePublicId(recipientPublicId);
+    // DEDA_QA32_SHARE_TO_VERIFIED_ACTIVE_PREMIUM_ALIAS_CANONICAL_ROUTE
+    // Canonical original IDs remain immutable in share records. Try them
+    // first, so a rare six-character alias cannot hijack a real original ID.
+    final submittedRecipient = normalizeSharePublicId(recipientPublicId);
     final senderId = normalizeSharePublicId(senderPublicId);
-    if (!isValidPersonalShareId(recipientId)) {
-      throw ArgumentError('invalid-recipient-share-id');
+    if (!RegExp(r'^@DEDA-[A-Z0-9]{4,12}
+
+    final user = await _ensurePublicUser();
+    final firestore = FirebaseFirestore.instance;
+    final ref = firestore.collection('deda_location_shares').doc();
+    final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
+
+    await ref.set({
+      'senderUid': user.uid,
+      'senderPublicId': senderId,
+      'senderName': senderName.trim(),
+      'recipientPublicId': recipientId,
+      'shareType': shareType,
+      'placeName': placeName.trim(),
+      'placeId': placeDocumentId.trim(),
+      'latitude': latitude,
+      'longitude': longitude,
+      'durationMinutes': durationMinutes,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expiresAt),
+    });
+    return ref.id;
+  }
+
+  static Map<String, dynamic> _locationShareMap(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    String? asIso(dynamic value) {
+      if (value is Timestamp) return value.toDate().toIso8601String();
+      if (value is DateTime) return value.toIso8601String();
+      return null;
     }
 
-    final recipient = await locationShareIdInfo(recipientId);
+    return <String, dynamic>{
+      'id': document.id,
+      ...data,
+      'createdAtIso': asIso(data['createdAt']),
+      'updatedAtIso': asIso(data['updatedAt']),
+      'expiresAtIso': asIso(data['expiresAt']),
+      'acceptedAtIso': asIso(data['acceptedAt']),
+      'rejectedAtIso': asIso(data['rejectedAt']),
+    };
+  }
+
+  static Stream<List<Map<String, dynamic>>> locationSharesStream(
+    String recipientPublicId,
+  ) {
+    final id = normalizeSharePublicId(recipientPublicId);
+    if (!isReady || id.isEmpty) {
+      return Stream<List<Map<String, dynamic>>>.value(
+        const <Map<String, dynamic>>[],
+      );
+    }
+
+    return FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .where('recipientPublicId', isEqualTo: id)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      final items = snapshot.docs.map(_locationShareMap).toList();
+      items.sort((a, b) {
+        final ad = DateTime.tryParse((a['createdAtIso'] ?? '').toString());
+        final bd = DateTime.tryParse((b['createdAtIso'] ?? '').toString());
+        return (bd ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(ad ?? DateTime.fromMillisecondsSinceEpoch(0));
+      });
+      return items;
+    });
+  }
+
+  static Stream<int> pendingLocationSharesCountStream(
+    String recipientPublicId,
+  ) {
+    return locationSharesStream(recipientPublicId).map((items) {
+      final now = DateTime.now();
+      var count = 0;
+      for (final item in items) {
+        final status = (item['status'] ?? 'pending').toString();
+        final expires =
+            DateTime.tryParse((item['expiresAtIso'] ?? '').toString());
+        if (status == 'pending' &&
+            expires != null &&
+            expires.isAfter(now)) {
+          count++;
+        }
+      }
+      return count;
+    });
+  }
+
+  static Future<void> decideLocationShare({
+    required String shareId,
+    required bool accept,
+  }) async {
+    if (!isReady) throw StateError('firebase-not-ready');
+    final cleanId = shareId.trim();
+    if (cleanId.isEmpty) throw ArgumentError('share-id-required');
+    final update = <String, dynamic>{
+      'status': accept ? 'accepted' : 'rejected',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'readAt': FieldValue.serverTimestamp(),
+      if (accept) 'acceptedAt': FieldValue.serverTimestamp(),
+      if (!accept) 'rejectedAt': FieldValue.serverTimestamp(),
+    };
+    await FirebaseFirestore.instance
+        .collection('deda_location_shares')
+        .doc(cleanId)
+        .update(update);
+  }
+
+}
+).hasMatch(submittedRecipient)) {
+      throw ArgumentError('invalid-recipient-share-id');
+    }
+    var recipientId = submittedRecipient;
+    var recipient = isValidPersonalShareId(recipientId)
+        ? await locationShareIdInfo(recipientId) : null;
+    if (recipient == null || (recipient['kind'] ?? '').toString() != 'personal') {
+      final canonical = await DedaQa32PublicRecipientResolver.resolveActiveAlias(
+        submittedRecipient,
+      );
+      if (canonical == null || !isValidPersonalShareId(canonical)) {
+        throw StateError('recipient-share-id-not-found');
+      }
+      recipientId = canonical;
+      recipient = await locationShareIdInfo(recipientId);
+    }
     if (recipient == null ||
         (recipient['kind'] ?? '').toString() != 'personal') {
       throw StateError('recipient-share-id-not-found');
