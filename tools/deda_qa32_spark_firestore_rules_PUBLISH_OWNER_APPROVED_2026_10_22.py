@@ -39,6 +39,16 @@ def auth():
 def request(method,endpoint,headers,body=None):
     response=requests.request(method,API+endpoint,headers=headers,json=body,timeout=45)
     if response.status_code not in (200,201):
+        # Only the Firebase Rules API structured status/message; never tokens,
+        # headers or full response payloads which may contain private values.
+        try:
+            error=response.json().get("error",{})
+            label=str(error.get("status","unknown"))[:50]
+            why=" ".join(str(error.get("message","unknown")).split())[:850]
+        except Exception:
+            label="unknown";why="undisclosed"
+        print("SPARK_RULES_API_DIAGNOSTIC", method,
+              response.status_code,label,why,flush=True)
         raise RuntimeError(f"SAFE_STOP_RULES_API_{method}_HTTP_{response.status_code}")
     return response.json()
 
