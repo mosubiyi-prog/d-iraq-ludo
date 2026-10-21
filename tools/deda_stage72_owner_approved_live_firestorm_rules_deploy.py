@@ -113,7 +113,7 @@ def main():
     applied=False
     try:
         call(client,"PATCH",release_uri,params={"updateMask":"rulesetName"},
-          json={"name":RELEASE,"rulesetName":new_name})
+          json={"name":RELEASE,"release":{"name":RELEASE,"rulesetName":new_name}})
         applied=True
         current=call(client,"GET",release_uri)
         if current.get("rulesetName")!=new_name:
@@ -127,7 +127,7 @@ def main():
             seen=call(client,"GET",release_uri)
             if seen.get("rulesetName")==new_name:
                 call(client,"PATCH",release_uri,params={"updateMask":"rulesetName"},
-                  json={"name":RELEASE,"rulesetName":prior_ruleset})
+                  json={"name":RELEASE,"release":{"name":RELEASE,"rulesetName":prior_ruleset}})
                 print("ROLLED_BACK_STAGE72_ONLY_TO_PRIOR_RULESET")
         except Exception:
             print("CRITICAL_MANUAL_RELEASE_REVIEW_REQUIRED")
