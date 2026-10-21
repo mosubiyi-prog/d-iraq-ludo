@@ -54,6 +54,29 @@ test("gift lookup forbids employees, absent auth or AppCheck, and extra client U
   await assert.rejects(lookup({...req(alias),data:{identifier:alias,uid:"thief"}}),
     e=>e.code==="invalid-argument");
 });
+test("only active explicit legacy GM aliases are authorized; never employees or disabled managers",async()=>{
+  for(const role of ["general_manager","generalManager","manager","director","admin"]){
+    const {db,set}=setup();
+    set("admins/gm01",{active:true,status:"active",role});
+    const handler=buildResolveGiftRecipientCallable({onCall,HttpsError,db});
+    const result=await handler(req(alias));
+    assert.equal(result.originalId,original);
+    assert.equal(result.serverConfirmed,true);
+  }
+  for(const record of [
+    {active:true,status:"temporarily_stopped",role:"manager"},
+    {active:false,status:"disabled",role:"general_manager"},
+    {active:true,status:"active",role:"employee"},
+    {active:true,status:"active",role:"deputy_manager"},
+    {active:true,status:"active"},
+  ]){
+    const {db,set}=setup();
+    set("admins/gm01",record);
+    const handler=buildResolveGiftRecipientCallable({onCall,HttpsError,db});
+    await assert.rejects(handler(req(alias)),
+      e=>e.code==="permission-denied");
+  }
+});
 test("missing receipt, inactive alias and corrupted grant cannot authorize gem recipient",async()=>{
   const {db,set}=setup();
   const lookup=buildResolveGiftRecipientCallable({onCall,HttpsError,db});
