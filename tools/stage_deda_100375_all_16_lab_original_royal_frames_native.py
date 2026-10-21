@@ -55,6 +55,44 @@ def patch(s):
 """
     s=s[:a]+section.replace(anchor,early+anchor,1)+s[b:]
 
+    # The original frame-thumbnail renderer clamps to 0..5.
+    # For styles 6..18 use the new authentic WebP portrait overlay instead
+    # of accidentally showing the last (royal) frame in all paid tiles.
+    pa=s.index("class DedaProfileFramePreview extends StatelessWidget {")
+    pb=s.index("class DedaPreferences {",pa)
+    preview=s[pa:pb]
+    show="Widget build(BuildContext context) {"
+    if preview.count(show)!=1:
+        raise ValueError("SAFE_STOP_LAB_PREVIEW_RENDERER_CHANGED")
+    paid_preview="""Widget build(BuildContext context) {
+    if (style >= 6 && style <= 18) {
+      return Container(
+        width: size, height: size,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? const Color(0xFFE2AC52) : Colors.transparent,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Stack(
+          children: [
+            Center(child: DedaFramedAvatar(
+              avatarStyle: avatarStyle, frameStyle: style, size: size - 4,
+            )),
+            const PositionedDirectional(
+              top: 3, start: 3,
+              child: Icon(Icons.lock_outline_rounded,
+                color: Color(0xFF795024), size: 14),
+            ),
+          ],
+        ),
+      );
+    }
+"""
+    preview=preview.replace(show,paid_preview,1)
+    s=s[:pa]+preview+s[pb:]
+
     a=s.index("class _DedaEditProfilePageState extends State<DedaEditProfilePage> {")
     b=s.find("\nclass ",a+15)
     if b<0:raise ValueError("SAFE_STOP_EDIT_PROFILE_END_UNKNOWN")
