@@ -87,18 +87,18 @@ class _LevelBadgeTile extends StatelessWidget {
     final unlocked = progress?.isUnlocked == true;
     final hasVerifiedProgress = progress != null;
     final requiredLabel = isArabic
-        ? 'من المستوى ' + threshold.toString()
-        : 'From level ' + threshold.toString();
+        ? 'من المستوى $threshold'
+        : 'From level $threshold';
     final status = !hasVerifiedProgress
         ? (isArabic ? 'بانتظار التحقق' : 'Verification pending')
         : unlocked
             ? (isArabic ? 'مكتسبة' : 'Earned')
             : (isArabic
-                ? 'متبقي ' + progress!.levelsRemaining.toString() + ' مستوى'
-                : progress!.levelsRemaining.toString() + ' levels remaining');
+                ? 'متبقي ${progress!.levelsRemaining} مستوى'
+                : '${progress!.levelsRemaining} levels remaining');
 
     return Card(
-      key: ValueKey<String>('deda_p11_' + tier.id),
+      key: ValueKey<String>('deda_p11_${tier.id}'),
       margin: const EdgeInsets.only(bottom: 9),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -126,7 +126,7 @@ class _LevelBadgeTile extends StatelessWidget {
                   Text(requiredLabel),
                   Text(
                     status,
-                    key: ValueKey<String>('deda_p11_status_' + tier.id),
+                    key: ValueKey<String>('deda_p11_status_${tier.id}'),
                   ),
                   if (hasVerifiedProgress && !unlocked)
                     LinearProgressIndicator(
