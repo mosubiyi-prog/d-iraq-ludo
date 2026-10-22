@@ -3,6 +3,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100377_my_store_page_staged.dart';
 
 void main() {
+  testWidgets('point13 My Store never displays a premium alias without verified Firebase owner session', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: DedaMyStorePage(
+        originalId: '@DEDA-AQPYXJ',
+        items: <DedaMyStoreItem>[
+          // Local selection is not authenticated ownership.
+          DedaMyStoreItem(
+            id: '@DEDA-IRAQI',
+            label: '@DEDA-IRAQI',
+            section: DedaMyStoreSection.identifiers,
+            proof: DedaMyStoreProof.deviceSaved,
+          ),
+        ],
+      ),
+    ));
+    await tester.pump();
+    expect(find.byKey(const Key('deda_p12_canonical_original_id')), findsOneWidget);
+    expect(find.byKey(const Key('deda_p12_verified_active_display_id')), findsNothing);
+    expect(find.byKey(const Key('deda_p12_verified_alias_caption')), findsNothing);
+    expect(find.text('@DEDA-AQPYXJ'), findsOneWidget);
+    expect(find.text('شراء مثبت بالخادم'), findsNothing);
+  });
+
   testWidgets('royal frame inventory shows its genuine Flutter image asset, not a numeric placeholder', (tester) async {
     const asset = 'assets/deda_royal_frames/royal_frame_0.webp';
     await tester.pumpWidget(const MaterialApp(
