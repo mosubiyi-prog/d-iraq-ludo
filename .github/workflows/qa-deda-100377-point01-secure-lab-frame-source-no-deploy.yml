@@ -9,6 +9,7 @@ on:
       - 'lib/deda_lab_frame_purchase_action.dart'
       - 'tools/stage_deda_100377_point01_lab_frame_checkout_private.py'
       - 'test/deda_100377_point01_lab_frame_checkout_contract_test.dart'
+      - 'test/test_deda_100377_point01_purchase_action_uid_guard.py'
       - 'test/test_deda_100377_point07_received_friend_source.py'
       - 'test/deda_100377_point07_received_friend_identity_test.dart'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
@@ -224,6 +225,8 @@ jobs:
           flutter analyze lib/deda_100377_point13_unified_identity_projection_staged.dart
           flutter test test/deda_100377_point13_unified_identity_source_test.dart
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
+          # Point01/09: UI ownership/Buy/Use must never reuse another Firebase UID.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point01_purchase_action_uid_guard.py'
           flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
           echo 'PASS_100377_LEGACY_FRIEND_ORIGINAL_INPUT_PRESERVED_WITH_SPARK_OFF'
