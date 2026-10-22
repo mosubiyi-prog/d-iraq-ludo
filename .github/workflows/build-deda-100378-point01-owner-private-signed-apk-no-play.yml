@@ -1,10 +1,7 @@
 name: DEDA 100378 Point01 OWNER PRIVATE Signed LAB Frame Checkout — no Play
+# Owner 2026-10-22: ONE integrated APK only after all 13 points.
+# Historical Point01 APK workflow is deliberately frozen; do not auto-build.
 on:
-  push:
-    branches:
-      - deda-100377-13-points-sequential-qa-2026-10-22
-    paths:
-      - '.github/workflows/build-deda-100378-point01-owner-private-signed-apk-no-play.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   reconstruct-real-store:
+    if: ${{ false }} # HARD GATE: owner final 13-point integrated acceptance only
     runs-on: ubuntu-24.04
     # The EXACT baseline reconstruction validates the original signing
     # configuration even for source-only QA. No APK/AAB is produced here.
@@ -164,12 +162,13 @@ jobs:
           python3 tools/stage_deda_100374_wallet_total_diamonds_coins_display_only.py
           python3 tools/stage_deda_100374_profile_wallet_retry_read_only.py
           python3 tools/stage_deda_100377_unified_currency_everywhere.py
-          python3 tools/stage_deda_100377_point01_lab_frame_checkout_private.py
-          flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
-          flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           python3 tools/stage_deda_100375_spark_all_routing_on_rebuilt_source.py
           echo 'PASS_STAGE51_SPARK_ALIAS_FINDS_EXISTING_CANONICAL_UID_WITHOUT_REWRITING_SOCIAL_SERVICE'
           python3 tools/stage_deda_100375_all_16_lab_original_royal_frames_native.py
+          # Restore all 16 original frame tiles BEFORE installing their checkout UI.
+          python3 tools/stage_deda_100377_point01_lab_frame_checkout_private.py
+          flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
+          flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
           echo 'PASS_100377_LEGACY_FRIEND_ORIGINAL_INPUT_PRESERVED_WITH_SPARK_OFF'
           flutter test test/deda_lab_premium_frame_artwork_test.dart
@@ -370,7 +369,7 @@ jobs:
                           '--dart-define=DEDA_OWNER_PRIVATE_SANDBOX=false',1)
           cmd += ' --dart-define=DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED=true'
           cmd += ' --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true'
-           cmd += ' --dart-define=DEDA_LAB_FRAME_ATOMIC_CHECKOUT_APPROVED=true'
+          cmd += ' --dart-define=DEDA_LAB_FRAME_ATOMIC_CHECKOUT_APPROVED=true'
           assert '--dart-define=DEDA_PREMIUM_IDS_SERVER_LIVE=false' in cmd
           script=Path('/tmp/deda_stage71_owner_phone_signed_100378.sh')
           script.write_text('set -euo pipefail\n'+cmd+'\n')
