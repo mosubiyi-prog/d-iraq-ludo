@@ -29,7 +29,6 @@ def patch(src: str) -> str:
         'children: List<Widget>.generate(16, (offset)',
         'final index = offset + 3;',
         'final free = dedaProfileFrameIsFree(index);',
-        'onTap: free\n                          ? () => setState(() => _frameStyle = index)\n                          : _lockedFrameMessage,',
         'DedaProfileFramePreview(\n                            style: index,',
         'frameStyle: _frameStyle,',
         'Future<void> _save() async {',
@@ -53,11 +52,21 @@ def patch(src: str) -> str:
     if selected_at < 0 or selected_end < 0 or selected_at-grid > 800:
         raise ValueError('SAFE_STOP_POINT01_GRID_SELECTED_DRIFT')
     e = e[:selected_at] + 'final selected = (_labPreviewStyle ?? _frameStyle) == index;' + e[selected_end+1:]
-    e = e.replace(
-        'onTap: free\n                          ? () => setState(() => _frameStyle = index)\n                          : _lockedFrameMessage,',
-        '''onTap: free
+    # Old signed reconstructions legitimately vary the frame onTap syntax.
+    grid = e.index('children: List<Widget>.generate(16, (offset)')
+    ink = e.find('return InkWell(', grid)
+    tap_at = e.find('onTap:', ink)
+    border_at = e.find('borderRadius:', tap_at)
+    if (ink < 0 or tap_at < 0 or border_at < 0 or
+        tap_at-ink > 140 or border_at-tap_at > 850):
+        raise ValueError('SAFE_STOP_POINT01_FRAME_TAP_DRIFT')
+    original_tap = e[tap_at:border_at]
+    if 'free' not in original_tap or '_frameStyle' not in original_tap:
+        raise ValueError('SAFE_STOP_POINT01_UNRECOGNIZED_FRAME_TAP')
+    e = e[:tap_at] + """onTap: free
                           ? () => setState(() { _frameStyle = index; _labPreviewStyle = null; })
-                          : () => setState(() => _labPreviewStyle = index),''', 1)
+                          : () => setState(() => _labPreviewStyle = index),
+                      """ + e[border_at:]
     # Only the sticky portrait renderer, never saved preferences.
     p = e.index('child: DedaFramedAvatar(')
     q = e.index('frameStyle: _frameStyle,', p)
