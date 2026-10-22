@@ -68,8 +68,10 @@ class DedaStage71OwnedIdentifierService {
     if (user == null) throw StateError('no-firebase-account');
     final db = FirebaseFirestore.instance;
     final docs = await Future.wait([
-      db.collection('users').doc(user.uid).get(),
-      db.collection('deda_sessions').doc(user.uid).get(),
+      db.collection('users').doc(user.uid)
+          .get(const GetOptions(source: Source.server)),
+      db.collection('deda_sessions').doc(user.uid)
+          .get(const GetOptions(source: Source.server)),
     ]);
     final profile=docs[0].data() ?? {};
     final session=docs[1].data() ?? {};
@@ -86,7 +88,8 @@ class DedaStage71OwnedIdentifierService {
     final uid=await _requireOriginal(originalId);
     final db=FirebaseFirestore.instance;
     final records=await db.collection(DedaStage71Admin200.registry)
-        .where('recipientOriginalId', isEqualTo:originalId).limit(200).get();
+        .where('recipientOriginalId', isEqualTo:originalId).limit(200)
+        .get(const GetOptions(source: Source.server));
     if (FirebaseAuth.instance.currentUser?.uid!=uid) {
       throw StateError('account-rotated');
     }
@@ -110,24 +113,31 @@ class DedaStage71OwnedIdentifierService {
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('account-rotated-during-inventory');
     }
+    // DEDA_100377_MY_STORE_BATCH_GIFT_RECEIPTS_SERVER_ONLY
+    // Two bounded trusted queries replace N individual authentication +
+    // receipt reads. Every receipt is checked against its original grant,
+    // actual server timestamp and authenticated recipient by Stage74.load.
+    final verifiedGrants = <DedaStage71OwnedIdentifier>[
+      for (final record in records.docs)
+        DedaStage71OwnedIdentifier.read(
+          record.id, record.data(), originalId,
+        ),
+    ];
+    final hasGifts = verifiedGrants.any((row) => row.kind == 'gifted');
+    final receivedNames = hasGifts
+        ? await DedaStage74IdGiftService.receivedNames(originalId)
+        : <String>{};
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-after-gift-receipts');
+    }
     final accepted = <DedaStage71OwnedIdentifier>[];
-    for (final record in records.docs) {
-      final data = record.data();
-      final verified = DedaStage71OwnedIdentifier.read(
-        record.id, data, originalId,
-      );
-      if (verified.kind == 'gifted') {
-        // Receipt is checked from Source.server by the existing gift service;
-        // a pending/failed/unreceived gift stays outside My Store.
-        final received = await DedaStage74IdGiftService.isReceived(
-          originalId, verified.identifier,
-        );
-        if (!received) continue;
-      } else if (verified.kind != 'self_used') {
+    for (final verified in verifiedGrants) {
+      if (verified.kind == 'gifted' &&
+          !receivedNames.contains(verified.identifier)) {
         continue;
       }
-      if (FirebaseAuth.instance.currentUser?.uid != uid) {
-        throw StateError('account-switched-during-gift-check');
+      if (verified.kind != 'gifted' && verified.kind != 'self_used') {
+        continue;
       }
       accepted.add(verified);
     }
@@ -140,7 +150,8 @@ class DedaStage71OwnedIdentifierService {
   static Future<String> active(String originalId) async {
     final uid=await _requireOriginal(originalId);
     final db=FirebaseFirestore.instance;
-    final doc=await db.collection(activeCollection).doc(originalId).get();
+    final doc=await db.collection(activeCollection).doc(originalId)
+        .get(const GetOptions(source: Source.server));
     if (FirebaseAuth.instance.currentUser?.uid!=uid) {
       throw StateError('account-rotated');
     }
@@ -152,7 +163,7 @@ class DedaStage71OwnedIdentifierService {
     final current=data['activeId'] as String;
     if (current==originalId) return originalId;
     final ownedDoc=await db.collection(DedaStage71Admin200.registry)
-        .doc(current).get();
+        .doc(current).get(const GetOptions(source: Source.server));
     final owner = DedaStage71OwnedIdentifier.read(
       ownedDoc.id, ownedDoc.data() ?? {}, originalId,
     );
@@ -170,7 +181,7 @@ class DedaStage71OwnedIdentifierService {
     final db=FirebaseFirestore.instance;
     if (identifier!=originalId) {
       final owner=await db.collection(DedaStage71Admin200.registry)
-          .doc(identifier).get();
+          .doc(identifier).get(const GetOptions(source: Source.server));
       DedaStage71OwnedIdentifier.read(
         owner.id,owner.data() ?? {},originalId);
       if (owner.data()?['kind']=='gifted' &&
