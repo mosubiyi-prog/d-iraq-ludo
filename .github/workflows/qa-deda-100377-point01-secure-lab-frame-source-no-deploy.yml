@@ -33,6 +33,9 @@ on:
       - 'tools/stage_deda_100377_point11_achievements_real_profile_nav.py'
       - 'test/test_deda_100377_point11_real_profile_nav_source.py'
       - 'lib/deda_100377_level_achievements_page_staged.dart'
+      - 'assets/deda_owner_level_badges/**'
+      - 'pubspec.yaml'
+      - 'test/test_deda_100377_point10_owner_six_badge_art_source.py'
       - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/deda_100377_point12_my_store_widget_test.dart'
       - 'test/test_deda_100377_point12_my_store_source.py'
@@ -212,6 +215,8 @@ jobs:
           flutter test test/deda_100377_point09_badge_inventory_account_switch_widget_test.dart
           dart format lib/deda_100377_level_achievements_page_staged.dart
           flutter analyze lib/deda_100377_level_achievements_page_staged.dart lib/deda_100377_level_achievement_badges_policy.dart
+          # Point10/11 exact owner-approved artwork, verified in repo by SHA256.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point10_owner_six_badge_art_source.py'
           flutter test test/deda_100377_point11_achievements_locked_preview_widget_test.dart
           # Point13 source-only. All visible IDs use verified active alias; original ID stays canonical.
           python3 -m unittest discover -s test -p 'test_deda_100377_point13_all_surfaces_source.py'
