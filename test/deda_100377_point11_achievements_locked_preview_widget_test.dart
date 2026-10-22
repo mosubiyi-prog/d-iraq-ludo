@@ -4,6 +4,39 @@ import 'package:d_iraq_ludo/deda_100377_level_achievements_page_staged.dart';
 import 'package:d_iraq_ludo/deda_100377_level_achievement_badges_policy.dart';
 
 void main() {
+  testWidgets('six achievement rows match owner artwork presentation order, no purchase or unverified unlock', (tester) async {
+    tester.view.physicalSize = const Size(440, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const MaterialApp(
+      home: DedaLevelAchievementsPage(
+        verifiedServerLevel: null,
+        hasVerifiedAccountAndLevel: false,
+      ),
+    ));
+    await tester.pump();
+    final order = <DedaLevelBadgeTier>[
+      DedaLevelBadgeTier.gold,
+      DedaLevelBadgeTier.silver,
+      DedaLevelBadgeTier.emerald,
+      DedaLevelBadgeTier.diamond,
+      DedaLevelBadgeTier.royal,
+      DedaLevelBadgeTier.legendary,
+    ];
+    for (var i = 0; i < order.length - 1; i++) {
+      final above = find.byKey(ValueKey<String>('deda_p11_${order[i].id}'));
+      final below = find.byKey(ValueKey<String>('deda_p11_${order[i+1].id}'));
+      expect(above, findsOneWidget);
+      expect(below, findsOneWidget);
+      expect(tester.getTopLeft(above).dy,
+          lessThan(tester.getTopLeft(below).dy));
+    }
+    expect(find.text('مكتسبة'), findsNothing);
+    expect(find.byKey(const Key('deda_p11_no_unverified_unlock')),
+        findsOneWidget);
+  });
+
   testWidgets('Point11 six separate achievement rows explain preliminary ranges without granting badges',
       (tester) async {
     tester.view.physicalSize = const Size(440, 1600);
