@@ -25,6 +25,7 @@ class DedaLabFramePurchaseAction extends StatefulWidget {
 
 class _DedaLabFramePurchaseActionState
     extends State<DedaLabFramePurchaseAction> {
+  int _verificationEpoch = 0;
   bool _busy = false;
   bool _owned = false;
   String? _ownedVerifiedUid;
@@ -36,6 +37,7 @@ class _DedaLabFramePurchaseActionState
   // inherit a frame's server-confirmed Use button or pending checkout result.
   void _onAuthChanged(User? user) {
     if (!mounted) return;
+    _verificationEpoch++;
     setState(() {
       _busy = false;
       _owned = false;
@@ -120,6 +122,7 @@ class _DedaLabFramePurchaseActionState
         old.frameId != widget.frameId) {
       // Never apply old-account ownership or a pending debit result to
       // another account or another card.
+      _verificationEpoch++;
       _busy = false;
       _owned = false;
       _ownedVerifiedUid = null;
@@ -139,23 +142,24 @@ class _DedaLabFramePurchaseActionState
     final owner = widget.originalId;
     final frame = widget.frameId;
     final uid = _currentUid();
+    final epoch = _verificationEpoch;
     if (uid == null) return; // No owner proof, no paid ownership UI.
     setState(() { _busy = true; _error = null; });
     try {
       final owned = await DedaLabFrameSecureCheckout.isOwned(
         originalId: owner, frameId: frame);
-      if (_sameItem(owner, frame, uid)) {
+      if ((epoch == _verificationEpoch && _sameItem(owner, frame, uid))) {
         setState(() {
           _owned = owned;
           _ownedVerifiedUid = owned ? uid : null;
         });
       }
     } catch (_) {
-      if (_sameItem(owner, frame, uid)) {
+      if ((epoch == _verificationEpoch && _sameItem(owner, frame, uid))) {
         setState(() => _error = 'تعذّر التحقق من ملكية الإطار.');
       }
     } finally {
-      if (_sameItem(owner, frame, uid)) {
+      if ((epoch == _verificationEpoch && _sameItem(owner, frame, uid))) {
         setState(() => _busy = false);
       } else {
         _clearIfAccountChanged(owner, frame, uid);
