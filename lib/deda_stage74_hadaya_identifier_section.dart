@@ -30,7 +30,16 @@ class _DedaStage74IdGiftsSectionState
   @override
   void didUpdateWidget(covariant DedaStage74IdGiftsSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.originalId != widget.originalId) _refresh();
+    // Point08: an old account's inbox must not remain visible while a new
+    // account is being verified, even if the previous server read is pending.
+    if (oldWidget.originalId != widget.originalId) {
+      _generation++;
+      _loading = false;
+      _claimingId = null;
+      _gifts = null;
+      _error = null;
+      _refresh();
+    }
   }
 
   @override
@@ -67,6 +76,8 @@ class _DedaStage74IdGiftsSectionState
     setState(() => _claimingId = gift.identifier);
     try {
       await DedaStage74IdGiftService.receive(gift);
+      // Never refresh a DIFFERENT user's inbox after the old claim returns.
+      if (!mounted || widget.originalId != originalId) return;
       await _refresh();
       if (mounted && originalId == widget.originalId) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -82,7 +93,10 @@ class _DedaStage74IdGiftsSectionState
         ));
       }
     } finally {
-      if (mounted) setState(() => _claimingId = null);
+      if (mounted && widget.originalId == originalId &&
+          _claimingId == gift.identifier) {
+        setState(() => _claimingId = null);
+      }
     }
   }
 
