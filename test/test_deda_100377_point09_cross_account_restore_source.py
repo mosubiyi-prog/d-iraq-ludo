@@ -70,7 +70,7 @@ class Point09IdentityContinuity(unittest.TestCase):
         service = scope("class DedaStage71OwnedIdentifierService", "/// User's Edit Profile:")
         self.assertIn("deda_stage71_active_identifier", service)
         self.assertIn("DedaStage74IdGiftService.isReceived", service)
-        self.assertIn("FirebaseAuth.instance.currentUser?.uid!=uid", service)
+        self.assertRegex(service, r"FirebaseAuth\\.instance\\.currentUser\\?\\.uid\\s*!=\\s*uid")
         self.assertNotIn("DedaDiamondsWallet", service)
 
 
