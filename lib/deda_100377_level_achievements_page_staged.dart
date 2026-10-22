@@ -29,7 +29,24 @@ class DedaLevelAchievementsPage extends StatelessWidget {
       verifiedAccountAndLevel: hasVerifiedAccountAndLevel,
       ownerApprovedThresholds: ranges,
     );
-    const tiers = DedaLevelBadgeTier.values;
+    // Owner's 3x2 original artwork reference order:
+    // gold / silver / emerald / diamond / royal / legendary.
+    // This is ONLY the gallery presentation order; it does NOT change
+    // any tier thresholds, unlocks, XP or existing "مستوى ذهبي 1" label.
+    const tiers = <DedaLevelBadgeTier>[
+      DedaLevelBadgeTier.gold,
+      DedaLevelBadgeTier.silver,
+      DedaLevelBadgeTier.emerald,
+      DedaLevelBadgeTier.diamond,
+      DedaLevelBadgeTier.royal,
+      DedaLevelBadgeTier.legendary,
+    ];
+    // Calculated progress follows policy enum order (silver before gold).
+    // Bind by identity, NOT array index, when UI order differs.
+    final progressForTier = <DedaLevelBadgeTier, DedaLevelBadgeProgress>{
+      if (earned != null)
+        for (final proof in earned) proof.tier: proof,
+    };
     return Scaffold(
       appBar: AppBar(
         title: Text(_text('شاراتك وإنجازاتك', 'Your Badges & Achievements')),
@@ -60,7 +77,7 @@ class DedaLevelAchievementsPage extends StatelessWidget {
             _LevelBadgeTile(
               tier: tiers[i],
               threshold: ranges.levelFor(tiers[i]),
-              progress: earned == null ? null : earned[i],
+              progress: progressForTier[tiers[i]],
               isArabic: isArabic,
             ),
         ],
