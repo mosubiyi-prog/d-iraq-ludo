@@ -1,0 +1,130 @@
+{
+  "schema": "deda-13-point-acceptance-v1",
+  "date": "2026-10-22",
+  "repository": "mosubiyi-prog/d-iraq-ludo",
+  "developmentBranch": "deda-100377-13-points-sequential-qa-2026-10-22",
+  "protectedBackup": "backup-deda-100377-pre-13-points-2026-10-22",
+  "lastOwnerPrivateApk": 100378,
+  "notes": "النجاح البرمجي لا يعني قبول المستخدم. الصور الأصلية وملكية الحسابين والاختبار على الهاتف والتاب شرط النسخة النهائية. لا تغيير على الماسات أو قواعد Firebase أو Google Play إلا بإذن مالك التطبيق.",
+  "finalThirteenPointReleaseApproved": false,
+  "points": [
+    {
+      "number": 1,
+      "title": "شراء 13 إطارًا أصلية بـ1000 ماسة",
+      "source": "source_tested",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "زر الشراء مقفول؛ إثبات محفظة قابلة للصرف وشراء/استخدام بلا خصم مكرر",
+      "ownerAccepted": false
+    },
+    {
+      "number": 2,
+      "title": "أسماء الإطارات الأصلية",
+      "source": "source_tested",
+      "ownerPhone": "partial",
+      "ownerTablet": "untested",
+      "remaining": "مطابقة جميع الأسماء والصور على الهاتف",
+      "ownerAccepted": false
+    },
+    {
+      "number": 3,
+      "title": "ثلاثة إطارات ملكية مجانية ومعاينة ثابتة",
+      "source": "source_tested",
+      "ownerPhone": "partial",
+      "ownerTablet": "untested",
+      "remaining": "بقاء الإطار بعد فتح جديد والظهور بالملف العام",
+      "ownerAccepted": false
+    },
+    {
+      "number": 4,
+      "title": "توحيد الماسات والذهب وحماية مليون المدير",
+      "source": "source_tested",
+      "ownerPhone": "partial",
+      "ownerTablet": "untested",
+      "remaining": "مصدر الرصيد القديم والتطابق بين الأقسام والأجهزة دون إضافة رصيد",
+      "ownerAccepted": false
+    },
+    {
+      "number": 5,
+      "title": "ست صور مجانية مع استبدال الكلاسيكية بثلاث صور قمر أصلية",
+      "source": "blocked_art",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "ملفات الصور الثلاث الأصلية غير مثبتة أو مدمجة",
+      "ownerAccepted": false
+    },
+    {
+      "number": 6,
+      "title": "ظهور المعرف المميز داخل الملف العام",
+      "source": "source_tested",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "@DEDA-IRAQI اختفى في نسخة الفحص 100378",
+      "ownerAccepted": false
+    },
+    {
+      "number": 7,
+      "title": "المعرف المميز في المشاركة وملف الصديق والاستلام",
+      "source": "source_tested",
+      "ownerPhone": "untested",
+      "ownerTablet": "untested",
+      "remaining": "اختبار حساب المرسل والمستلم على الهاتف والتاب",
+      "ownerAccepted": false
+    },
+    {
+      "number": 8,
+      "title": "هدايا الإدارة والمعرفات والإشعارات",
+      "source": "source_tested",
+      "ownerPhone": "untested",
+      "ownerTablet": "untested",
+      "remaining": "إثبات صلاحيات المنح والقبول وسجلاته دون تكرار",
+      "ownerAccepted": false
+    },
+    {
+      "number": 9,
+      "title": "حفظ المقتنيات والملف وعزل الحسابات بعد الانتقال",
+      "source": "source_tested",
+      "ownerPhone": "partial",
+      "ownerTablet": "untested",
+      "remaining": "نجاح المصدر لا يثبت استعادة المقتنيات عبر الأجهزة؛ إكمال فحص التبديل",
+      "ownerAccepted": false
+    },
+    {
+      "number": 10,
+      "title": "الشارات الست الأصلية للمستويات لا تُشترى",
+      "source": "partial",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "إدخال صور المالك الأصلية والتحقق من ربط مستوى ذهبي 1 بالسياسة",
+      "ownerAccepted": false
+    },
+    {
+      "number": 11,
+      "title": "قسم شاراتك وإنجازاتك وعرض التقدم",
+      "source": "source_tested",
+      "ownerPhone": "partial",
+      "ownerTablet": "untested",
+      "remaining": "ربط الرسم الأصلي بالمستوى والتحقق من فتح الشارات",
+      "ownerAccepted": false
+    },
+    {
+      "number": 12,
+      "title": "متجري الموحد بدل بطاقتين مع المتجر الأصلي داخله",
+      "source": "source_tested",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "الفحص 100378 أظهر بطاقتين؛ الكود أصلح لاحقًا ولم يفحص على الهاتف",
+      "ownerAccepted": false
+    },
+    {
+      "number": 13,
+      "title": "200 معرف مميز موحد الإدارة والملف والمشاركة والهدايا",
+      "source": "source_tested",
+      "ownerPhone": "failed",
+      "ownerTablet": "untested",
+      "remaining": "زر استخدام المدير والمعرف المميز غير فعالين؛ ربط الخادم وتحقق الهاتف والتاب",
+      "ownerAccepted": false
+    }
+  ],
+  "postReleaseSeparatePhase": "500 daily task questions without repetition until full per-account bank exhaustion; excluded from current 13-point gate"
+}
