@@ -36,6 +36,16 @@ class SignedFrameUiOwnershipGuard(unittest.TestCase):
         self.assertIn("widget.onVerifiedOwned();", s)
         self.assertIn("تغيّر الحساب؛ أعد التحقق من ملكية الإطار.", s)
 
+    def test_purchase_owner_must_also_own_canonical_original_id_route(self):
+        s = self.checkout
+        self.assertIn('DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF', s)
+        self.assertIn("id['ownerUid'] != uid", s)
+        self.assertIn("id['publicId'] != originalId", s)
+        self.assertIn("profile['sharePersonalId'] != originalId", s)
+        self.assertIn("accountKey != (session['accountKey']", s)
+        self.assertIn("source: Source.server", s)
+        self.assertIn("original-owner-session-not-verified", s)
+
     def test_original_checkout_is_not_activated_or_changed(self):
         s = self.checkout
         self.assertIn("priceDiamonds = 1000", s)
