@@ -38,9 +38,11 @@ No evidence suggests live backend wallet funds or server grants were edited.
 
 ## Review gate
 Check final GitHub conclusion:
-https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39826871403
+https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39826871403 — SUCCESS, all exact reconstructed Flutter/Python/source tests passed.
 
-The build must be GREEN before claiming this source correction verified.
+Additional mid-await, in-flight account-switch regression (not only sequential sign-ins):
+- Commit 9fc033de65d31a9dad8e688ca20fad78bf7deebd: actual Flutter tests start an uncompleted badge acquisition/activation on A, immediately switch to B before awaiting; assert no royalty/spark badge accidentally grants to B or paints B's active icon, then return to A safely.
+- https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39828281065 — check its own final conclusion before marking the new edge cases verified.
 Even a green CI is NOT cross-phone/cloud persistence validation:
 - Existing purchases/grants need authenticated cross-device source and receipts.
 - Owner's formerly granted 1M personal diamonds remain unverified.
