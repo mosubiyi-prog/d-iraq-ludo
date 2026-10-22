@@ -99,12 +99,39 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         b=owned.index('static Future<String> active(String originalId)',a)
         m=owned[a:b]
         self.assertIn('GetOptions(source: Source.server)',m)
-        self.assertIn('DedaStage74IdGiftService.isReceived(',m)
+        self.assertIn('DedaStage74IdGiftService.receivedNames(originalId)',m)
+        self.assertIn('DEDA_100377_MY_STORE_BATCH_GIFT_RECEIPTS_SERVER_ONLY',m)
+        self.assertIn('account-switched-after-gift-receipts',m)
+        self.assertNotIn('DedaStage74IdGiftService.isReceived(',m)
+        self.assertIn('receivedNames.contains(verified.identifier)',m)
+        self.assertIn('verifiedGrants.any((row) => row.kind == \'gifted\')',m)
         self.assertIn("verified.kind == 'gifted'",m)
         self.assertIn("verified.kind != 'self_used'",m)
         self.assertIn('account-switched-before-inventory-return',m)
         for forbidden in ('FieldValue.serverTimestamp()', '.set(', '.update(', '.delete(', 'spend('):
             self.assertNotIn(forbidden,m)
+
+    def test_manager_200_reads_server_account_and_active_id_not_cached(self):
+        source=(ROOT/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
+        section=source[source.index('class DedaStage71OwnedIdentifierService'):
+                       source.index('/// User\'s Edit Profile:')]
+        self.assertIn("db.collection('users').doc(user.uid)",section)
+        self.assertIn("db.collection('deda_sessions').doc(user.uid)",section)
+        self.assertGreaterEqual(section.count('GetOptions(source: Source.server)'),5)
+        self.assertIn('account-switched-before-inventory-return',section)
+
+    def test_gift_receipt_must_include_real_server_timestamp(self):
+        source=(ROOT/'lib/deda_stage74_id_gift_service.dart').read_text()
+        a=source.index('DEDA_100377_GIFT_RECEIPT_REQUIRES_SERVER_TIMESTAMP')
+        b=source.index('rows.add(DedaStage74IdGift(',a)
+        section=source[a:b]
+        self.assertIn("receipt['identifier'] == gift.id",section)
+        self.assertIn("receipt['originalId'] == originalId",section)
+        self.assertIn("receipt['group'] == d['group']",section)
+        self.assertIn("receipt['receivedAt'] is Timestamp",section)
+        self.assertIn('if (receipt != null && !validReceipt)',section)
+        self.assertIn('GetOptions(source: Source.server)',source)
+
 
 if __name__ == '__main__':
     unittest.main()
