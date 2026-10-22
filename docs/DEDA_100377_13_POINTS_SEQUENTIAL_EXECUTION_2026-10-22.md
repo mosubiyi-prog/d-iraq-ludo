@@ -40,3 +40,11 @@ Date: 2026-10-22. Strict owner policy: **work in original numbered order; give e
 
 ## Gate
 Continue number 01 only until the above safety/functional tests pass. Then issue exact per-file/QA brief, and begin number 02. No user data touched by these commits.
+
+## Point 01 additional implementation and honest QA status (same day)
+- Created `tools/deda_100377_point01_lab_frame_rules_candidate_NO_DEPLOY.py`: 13-frame fixed 1000 wallet debit + immutable receipt + owned record; uses audited Stage69 live-rules-compatible candidate source, **offline only**, no published changes.
+- Changed `lib/deda_lab_frame_secure_checkout.dart` receipt/owned paths to account-scoped `/{originalId}/frames/{frameId}`, allowing secure ownership readback even before records exist; transaction writes `lastLabFrameId` plus immutable receipt ID.
+- Reconstructed app QA run `39753826753` failed safely on brittle generated edit-profile `selected` source anchor, not wallet or data loss. Adapted guard.
+- Subsequent run `39754557501` failed safely on different real `onTap` syntax; updated script to target the real 16-frame grid InkWell only.
+- Latest workflow update `9394830eafeb9a592941ab3451427862d0a3fbec` preserves exact generated `lib/main.dart` in a temporary PRIVATE QA artifact for source-grounded debugging and cancels superseded runs.
+- Point01 is STILL OPEN: do not say 13 frames are purchasable, do not turn on feature flag, do not use account's displayed manager/test million as spendable, do not proceed to point02 until real stage/tests and backend authorization pass.
