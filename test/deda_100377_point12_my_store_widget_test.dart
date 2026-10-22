@@ -3,6 +3,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100377_my_store_page_staged.dart';
 
 void main() {
+  testWidgets('original identifier acquisition and Edit Profile remain linked inside only one My Store', (tester) async {
+    var shopOpened = 0;
+    var editOpened = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: DedaMyStorePage(
+        originalId: '@DEDA-AQPYXJ',
+        items: const <DedaMyStoreItem>[],
+        onOpenIdentifierShop: () { shopOpened++; },
+        onOpenEditProfile: () { editOpened++; },
+      ),
+    ));
+    final edit = find.byKey(const Key('deda_p12_original_edit_profile_entry'));
+    final shop = find.byKey(const Key('deda_p12_original_identifier_shop_entry'));
+    expect(edit, findsOneWidget);
+    expect(shop, findsOneWidget);
+    await tester.tap(edit);
+    await tester.pump();
+    await tester.tap(shop);
+    await tester.pump();
+    expect(editOpened, 1);
+    expect(shopOpened, 1);
+    expect(find.byKey(const Key('deda_p12_no_fake_ownership_or_checkout')), findsOneWidget);
+  });
+
   testWidgets('point12 always shows six separate personal-inventory sections',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
