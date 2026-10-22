@@ -40,11 +40,15 @@ class DedaMyStorePage extends StatelessWidget {
     required this.originalId,
     required this.items,
     this.isArabic = true,
+    this.onOpenIdentifierShop,
   });
 
   final String originalId;
   final List<DedaMyStoreItem> items;
   final bool isArabic;
+  /// Preserves the ORIGINAL acquisition store route from the profile grid,
+  /// but keeps only one owner-facing profile tile named My Store.
+  final VoidCallback? onOpenIdentifierShop;
 
   String _t(String ar, String en) => isArabic ? ar : en;
 
@@ -127,6 +131,22 @@ class DedaMyStorePage extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
+          if (onOpenIdentifierShop != null) ...<Widget>[
+            Card(
+              child: ListTile(
+                key: const Key('deda_p12_original_identifier_shop_entry'),
+                leading: const Icon(Icons.storefront_rounded),
+                title: Text(_t('متجر المعرّفات', 'Identifier store')),
+                subtitle: Text(_t(
+                  'الانتقال إلى المتجر الأصلي للشراء؛ لا يوجد خصم في متجري.',
+                  'Open the existing identifier acquisition shop. No charge here.',
+                )),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: onOpenIdentifierShop,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           for (final section in DedaMyStoreSection.values) ...<Widget>[
             Card(
               key: ValueKey<String>('deda_p12_section_${section.name}'),
