@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_stage74_id_gift_service.dart';
 
@@ -20,6 +22,16 @@ class _DedaStage74IdGiftsSectionState
   String? _claimingId;
   String? _error;
   int _generation = 0;
+  // DEDA_100377_POINT08_GIFT_INBOX_FROZEN_FIREBASE_UID
+  // A still-mounted gift inbox may outlive the signed-in recipient account.
+  String? _verifiedUid;
+  String? _currentUid() {
+    try {
+      if (Firebase.apps.isEmpty) return null;
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) { return null; }
+  }
+
 
   @override
   void initState() {
@@ -50,36 +62,61 @@ class _DedaStage74IdGiftsSectionState
 
   Future<void> _refresh() async {
     if (!DedaStage74IdGiftService.enabled || _loading) return;
+    final uid = _currentUid();
+    if (uid == null) {
+      _generation++;
+      if (mounted) {
+        setState(() {
+          _gifts = null;
+          _verifiedUid = null;
+          _error = null;
+        });
+      }
+      return;
+    }
     final generation = ++_generation;
     final originalId = widget.originalId;
     setState(() {_loading = true; _error = null;});
     try {
       final gifts = await DedaStage74IdGiftService.load(originalId);
       if (!mounted || generation != _generation ||
-          widget.originalId != originalId) return;
+          widget.originalId != originalId || _currentUid() != uid) return;
+      _verifiedUid = uid;
       setState(() => _gifts = gifts);
     } catch (_) {
-      if (mounted && generation == _generation) {
+      if (mounted && generation == _generation &&
+          _currentUid() == uid) {
         setState(() => _error =
             'تعذّر التحقق من هدايا المعرّفات. اضغط تحديث عند توفر الإنترنت.');
       }
     } finally {
       if (mounted && generation == _generation) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          if (_currentUid() != uid) {
+            _gifts = null;
+            _verifiedUid = null;
+            _claimingId = null;
+          }
+        });
       }
     }
   }
 
   Future<void> _receive(DedaStage74IdGift gift) async {
-    if (_claimingId != null || gift.received) return;
+    final uid = _currentUid();
+    if (_claimingId != null || gift.received || uid == null ||
+        _verifiedUid != uid || gift.originalId != widget.originalId) return;
     final originalId = widget.originalId;
     setState(() => _claimingId = gift.identifier);
     try {
       await DedaStage74IdGiftService.receive(gift);
       // Never refresh a DIFFERENT user's inbox after the old claim returns.
       if (!mounted || widget.originalId != originalId) return;
+      if (_currentUid() != uid) return;
       await _refresh();
-      if (mounted && originalId == widget.originalId) {
+      if (mounted && originalId == widget.originalId &&
+          _currentUid() == uid) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('تم استلام المعرّف وحفظه ضمن معرّفاتي.'),
         ));
@@ -87,7 +124,8 @@ class _DedaStage74IdGiftsSectionState
     } catch (_) {
       // The server might have committed before a weak connection lost its
       // response. Refresh is the only safe way to verify permanent receipt.
-      if (mounted && originalId == widget.originalId) {
+      if (mounted && originalId == widget.originalId &&
+          _currentUid() == uid) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('نتيجة الاستلام غير مؤكدة. حدّث القسم قبل المحاولة ثانية.'),
         ));
@@ -140,6 +178,9 @@ class _DedaStage74IdGiftsSectionState
 
   @override
   Widget build(BuildContext context) {
+    // Old account gifts never remain visible after UID rotation.
+    final visibleGifts = _verifiedUid != null &&
+        _verifiedUid == _currentUid() ? _gifts : null;
     if (!DedaStage74IdGiftService.enabled) {
       return const SizedBox.shrink();
     }
@@ -173,18 +214,18 @@ class _DedaStage74IdGiftsSectionState
         if (_loading) const LinearProgressIndicator(),
         if (_error != null)
           Text(_error!, style: const TextStyle(color: Color(0xFFA03D3D))),
-        if (!_loading && _error == null && (_gifts?.isEmpty ?? true))
+        if (!_loading && _error == null && (visibleGifts?.isEmpty ?? true))
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Text('ما عندك هدايا معرّفات مميزة حاليًا.'),
           ),
-        if (_gifts != null && _gifts!.isNotEmpty)
+        if (visibleGifts != null && visibleGifts.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 275),
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: _gifts!.length,
-              itemBuilder: (context,i) => _giftTile(_gifts![i]),
+              itemCount: visibleGifts.length,
+              itemBuilder: (context,i) => _giftTile(visibleGifts[i]),
             ),
           ),
       ]),
