@@ -44,7 +44,7 @@ class Point08GiftInboxAccountSafety(unittest.TestCase):
         self.assertIn("final originalId = widget.originalId;", scope)
         self.assertIn("await DedaStage74IdGiftService.receive(gift);", scope)
         self.assertIn("if (!mounted || widget.originalId != originalId) return;", scope)
-        self.assertIn("if (mounted && widget.originalId == originalId &&", scope)
+        self.assertRegex(scope, r"if\s*\(mounted\s*&&\s*widget\.originalId\s*==\s*originalId\s*&&")
         self.assertIn("_claimingId == gift.identifier", scope)
         self.assertIn("await _refresh();", scope)
         self.assertLess(
