@@ -115,29 +115,67 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
     await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => DedaMyStorePage(originalId: originalId, items: items),
+        builder: (_) => DedaMyStorePage(
+          originalId: originalId,
+          items: items,
+          onOpenIdentifierShop: () {
+            if (!mounted || DedaPreferences.phone != accountPhone ||
+                _dedaId != originalId ||
+                (Firebase.apps.isNotEmpty &&
+                 FirebaseAuth.instance.currentUser?.uid != signedUidAtOpen)) {
+              return;
+            }
+            // Reuse exact original DedaIdentifierStorePage route, never mint
+            // an alternative ID store or bypass its ownership controls.
+            final activeId = _dedaId;
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => DedaIdentifierStorePage(
+                  identifier: activeId.isEmpty ? '@DEDA' : activeId,
+                  readOnlyCatalog: const <String>[],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
 """
-TILE = """        // Point12: PERSONAL OWNERSHIP, separate from the paid ID shop below.
-        _featureCard(
-          icon: Icons.inventory_2_rounded,
-          title: dedaText('متجري', 'My Store'),
-          subtitle: dedaText('مقتنياتي وممتلكاتي', 'My inventory'),
-          colors: const <Color>[Color(0xFF247C86), Color(0xFF125968)],
-          onTap: () { _openDedaMyStore(); },
-        ),
-        const SizedBox(height: 10),
-"""
+# Point12 owner correction: no extra teal card; rename the ORIGINAL purple
+# Identifier Store profile tile to My Store, while retaining its exact original
+# acquisition route as an explicit action from within My Store.
+SHOP_TITLE = "title: dedaText('متجر المعرّفات', 'Identifier store'),"
+MY_STORE_TITLE = "title: dedaText('متجري', 'My Store'),"
+SHOP_SUBTITLE = "subtitle: dedaText('معرّفات مميزة', 'Premium identifiers'),"
+MY_STORE_SUBTITLE = "subtitle: dedaText('مقتنياتي وممتلكاتي', 'My inventory'),"
+ORIGINAL_SHOP_TAP = """onTap: () {
+                  final activeId = _dedaId;
+                  Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => DedaIdentifierStorePage(
+                        identifier: activeId.isEmpty ? '@DEDA' : activeId,
+                        readOnlyCatalog: const <String>[],
+                      ),
+                    ),
+                  );
+                },"""
+REPLACEMENT_MY_STORE_TAP = """// DEDA_100377_POINT12_SINGLE_PROFILE_TILE_KEEP_ORIGINAL_SHOP_NESTED
+                onTap: () {
+                  _openDedaMyStore();
+                },"""
 
 def patch(src: str) -> str:
     if MARK in src:
-        if src.count(MARK) != 1 or src.count(IMPORT) != 1 or src.count("title: dedaText('متجري', 'My Store')") != 1:
+        if (src.count(MARK) != 1 or src.count(IMPORT) != 1 or
+                src.count(MY_STORE_TITLE) != 1 or
+                src.count('onOpenIdentifierShop: () {') != 1):
             raise ValueError('SAFE_STOP_POINT12_PARTIAL_PATCH')
         return src
-    if src.count(ANCHOR) != 1 or src.count("title: dedaText('متجر المعرّفات', 'Identifier store')") != 1:
+    if src.count(ANCHOR) != 1 or src.count(SHOP_TITLE) != 1:
         raise ValueError('SAFE_STOP_POINT12_ORIGINAL_PROFILE_SHOP_DRIFT')
     if src.count("import 'deda_lab_frame_secure_checkout.dart';") != 1:
         raise ValueError('SAFE_STOP_POINT12_MISSING_POINT01_CHECKOUT')
@@ -152,14 +190,27 @@ def patch(src: str) -> str:
     end = src.find('  Widget _featureCard(', pos)
     if end < pos: raise ValueError('SAFE_STOP_POINT12_GRID_END')
     grid = src[pos:end]
-    if grid.count(head) != 1:
-        raise ValueError('SAFE_STOP_POINT12_FEATURE_GRID_ROWS_DRIFT')
-    grid = grid.replace(head, head.replace('        Row(\n', TILE + '        Row(\n'), 1)
+    if (grid.count(head) != 1 or grid.count(SHOP_TITLE) != 1 or
+            grid.count(SHOP_SUBTITLE) != 1 or
+            grid.count(ORIGINAL_SHOP_TAP) != 1 or
+            grid.count('DEDA_INTAKADHA_POINT8_PHOTOS_TILE_BECOMES_ID_SHOP_2026_10_18') != 1):
+        raise ValueError('SAFE_STOP_POINT12_PROFILE_TILE_OR_ORIGINAL_SHOP_DRIFT')
+    # Replace the original existing profile tile, NOT add any new tile.
+    grid = grid.replace(SHOP_TITLE, MY_STORE_TITLE, 1)
+    grid = grid.replace(SHOP_SUBTITLE, MY_STORE_SUBTITLE, 1)
+    grid = grid.replace(ORIGINAL_SHOP_TAP, REPLACEMENT_MY_STORE_TAP, 1)
+    if grid.count(MY_STORE_TITLE) != 1 or grid.count(SHOP_TITLE) != 0:
+        raise ValueError('SAFE_STOP_POINT12_DUPLICATE_STORE_TILE')
     src = src[:pos] + grid + src[end:]
     import_anchor = "import 'deda_lab_frame_secure_checkout.dart';\n"
     src = src.replace(import_anchor, import_anchor + IMPORT, 1)
-    if src.count(MARK) != 1 or src.count(IMPORT) != 1 or src.count("title: dedaText('متجر المعرّفات', 'Identifier store')") != 1:
+    if src.count(MARK) != 1 or src.count(IMPORT) != 1 or src.count(MY_STORE_TITLE) != 1:
         raise ValueError('SAFE_STOP_POINT12_SHOP_OR_IMPORT_MUTATED')
+    result_grid = src[src.index(ANCHOR):src.index('  Widget _featureCard(', src.index(ANCHOR))]
+    if result_grid.count(MY_STORE_TITLE) != 1 or result_grid.count(SHOP_TITLE) != 0:
+        raise ValueError('SAFE_STOP_POINT12_MULTIPLE_PROFILE_SHOPS')
+    if src.count('onOpenIdentifierShop: () {') != 1:
+        raise ValueError('SAFE_STOP_POINT12_ORIGINAL_SHOP_ACCESS_LOST')
     return src
 
 if __name__ == '__main__':
