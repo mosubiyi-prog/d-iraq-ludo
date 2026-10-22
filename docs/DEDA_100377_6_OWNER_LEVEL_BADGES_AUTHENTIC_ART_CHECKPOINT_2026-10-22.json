@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-22",
+  "source": "owner supplied screenshot 1000099764.png, 1536x1024",
+  "source_sha256": "7465a291854fc937486886dde6b08b348f0899eef0b26c8be7e732a892289f4b",
+  "purpose": "Point10/11 visual reference, NOT implemented, NOT live, NO level rewards or cloud grants",
+  "arrangement": "3 columns by 2 rows, tile size 512x512",
+  "ranks": [
+    {
+      "id": "gold",
+      "ar": "الذهبي",
+      "sha256": "d26be540879337f04fc1102af6d5443b72354747b13f788004b08a95e32ca314",
+      "bytes": 69790,
+      "source_rect": [
+        0,
+        0,
+        512,
+        512
+      ]
+    },
+    {
+      "id": "silver",
+      "ar": "الفضي",
+      "sha256": "8926d80fce37dae83b5ea07eeac1fb9b6f281ed5997ef262e6037cfaa892ae73",
+      "bytes": 70904,
+      "source_rect": [
+        512,
+        0,
+        1024,
+        512
+      ]
+    },
+    {
+      "id": "emerald",
+      "ar": "الزمردي",
+      "sha256": "ceb2d184d8c1e0a4c7a14989c1c1b5f47e0e0ed8a15359ab81eee714afb4961e",
+      "bytes": 72574,
+      "source_rect": [
+        1024,
+        0,
+        1536,
+        512
+      ]
+    },
+    {
+      "id": "diamond",
+      "ar": "الألماسي",
+      "sha256": "79c0387e28841b41d1b57775d0aa05fb8f1f5803f97ed56112e6b4d66bf9795a",
+      "bytes": 74126,
+      "source_rect": [
+        0,
+        512,
+        512,
+        1024
+      ]
+    },
+    {
+      "id": "royal",
+      "ar": "الملكي",
+      "sha256": "71874336629f08faf0543f2dd4cd844b7c7e80a67a859a8641d468da2cf16ba9",
+      "bytes": 71268,
+      "source_rect": [
+        512,
+        512,
+        1024,
+        1024
+      ]
+    },
+    {
+      "id": "legendary",
+      "ar": "الأسطوري",
+      "sha256": "4de1d4eaa30738b8bac0d4034a8f44e7302e242e28a3ce9135b4b6868758dd46",
+      "bytes": 73900,
+      "source_rect": [
+        1024,
+        512,
+        1536,
+        1024
+      ]
+    }
+  ],
+  "reference_zip": "DEDA_6_LEVEL_BADGES_OWNER_REFERENCE_2026-10-22.zip",
+  "transfer_notes": "Derived reference images are user-approved 3x2 screenshot panel crops, resized/WEBP encoding only. Must copy authentic six images to GitHub Flutter assets and verify hashes before Point10/11 release. Not stored as app assets in this checkpoint.",
+  "account_safety": "Owner level thresholds still preliminary until reconciled with legacy Gold Level 1; never infer rank from client XP, never deduct diamonds or change user level."
+}
