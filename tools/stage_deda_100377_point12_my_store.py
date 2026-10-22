@@ -13,6 +13,8 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
   Future<void> _openDedaMyStore() async {
     final accountPhone = DedaPreferences.phone;
     final originalId = _dedaId;
+    final signedUidAtOpen = Firebase.apps.isEmpty
+        ? null : FirebaseAuth.instance.currentUser?.uid;
     if (!RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) return;
     final avatarStyle = DedaPreferences.profileAvatarStyle;
     final frameStyle = DedaPreferences.profileFrameStyle;
@@ -50,10 +52,16 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
         section: DedaMyStoreSection.frames,
         proof: DedaMyStoreProof.basicFree, active: true,
       ));
-    } else {
-      // A premium frame is NEVER called owned based on selected preferences.
-      final frame = DedaLabPremiumFrameStyles.byProfileStyle(frameStyle);
-      if (frame != null) {
+    }
+    // DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED
+    // Source.server receipt AND matching entitlement are checked for EACH of
+    // the thirteen authentic premium frames, not just the equipped one.
+    // The gated purchase feature is OFF until authorized; never infer ownership
+    // from selected style, local diamonds, or a failed/offline server read.
+    if (DedaLabFrameSecureCheckout.live) {
+      for (var style = 6; style <= 18; style++) {
+        final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
+        if (frame == null) continue;
         try {
           if (await DedaLabFrameSecureCheckout.isOwned(
               originalId: originalId, frameId: frame.id)) {
@@ -61,11 +69,11 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
               id: frame.id, label: frame.nameAr,
               section: DedaMyStoreSection.frames,
               proof: DedaMyStoreProof.serverVerified,
-              receiptKind: 'purchase', active: true,
+              receiptKind: 'purchase', active: frameStyle == style,
             ));
           }
         } catch (_) {
-          // Keep premium frame absent when server proof cannot be verified.
+          // Missing or unverifiable server receipt is NOT an owned frame.
         }
       }
     }
@@ -80,25 +88,44 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
         active: inventory.activeBadges.contains(badgeId),
       ));
     }
-    // Only the server-confirmed active ID is presented, not unreceived gifts
-    // or locally typed premium aliases. Full owned 200-list is Point13.
+    // DEDA_100377_P12_ALL_RECEIVED_OR_SELF_USED_GM_IDS
+    // Every held manager ID requires an authenticated server registry record;
+    // gifted entries ALSO require the receiver's server receipt. Display
+    // all held names, while marking only the currently active alias as active.
     if (DedaStage71OwnedIdentifierService.enabled) {
       try {
-        final verifiedActive =
-            await DedaStage71OwnedIdentifierService.active(originalId);
-        if (verifiedActive != originalId) {
+        final held = await DedaStage71OwnedIdentifierService
+            .acceptedOwnedForMyStore(originalId);
+        var currentActive = originalId;
+        try {
+          currentActive =
+              await DedaStage71OwnedIdentifierService.active(originalId);
+        } catch (_) {
+          // A failed active lookup must NOT grant or activate another ID.
+        }
+        items[0] = DedaMyStoreItem(
+          id: 'original_id', label: originalId,
+          section: DedaMyStoreSection.identifiers,
+          proof: DedaMyStoreProof.basicFree,
+          active: currentActive == originalId,
+        );
+        for (final row in held) {
           items.add(DedaMyStoreItem(
-            id: verifiedActive, label: verifiedActive,
+            id: row.identifier, label: row.identifier,
             section: DedaMyStoreSection.identifiers,
-            proof: DedaMyStoreProof.serverVerified, active: true,
+            proof: DedaMyStoreProof.serverVerified,
+            receiptKind: row.kind == 'gifted' ? 'gift' : null,
+            active: currentActive == row.identifier,
           ));
         }
       } catch (_) {
-        // No premium ownership claim without trusted current-account read.
+        // Offline or account mismatch: never show unreceived/non-owned IDs.
       }
     }
     if (!mounted || DedaPreferences.phone != accountPhone ||
-        _dedaId != originalId) return;
+        _dedaId != originalId ||
+        (Firebase.apps.isNotEmpty &&
+         FirebaseAuth.instance.currentUser?.uid != signedUidAtOpen)) return;
     await Navigator.push<void>(
       context,
       MaterialPageRoute<void>(
