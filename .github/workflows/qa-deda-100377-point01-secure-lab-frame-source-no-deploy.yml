@@ -21,6 +21,8 @@ on:
       - 'lib/deda_100377_my_store_page_staged.dart'
       - 'lib/deda_100377_profile_free_inventory.dart'
       - 'test/deda_100377_point12_full_free_inventory_test.dart'
+      - 'tools/stage_deda_100377_point11_achievements_real_profile_nav.py'
+      - 'test/test_deda_100377_point11_real_profile_nav_source.py'
       - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/deda_100377_point12_my_store_widget_test.dart'
       - 'test/test_deda_100377_point12_my_store_source.py'
@@ -176,6 +178,13 @@ jobs:
           flutter test test/deda_100377_point12_my_store_widget_test.dart
           flutter analyze lib/deda_100377_profile_free_inventory.dart
           flutter test test/deda_100377_point12_full_free_inventory_test.dart
+          # Point11: replace the REAL profile Badges placeholder with the
+          # distinct six earned LEVEL achievement preview. Release/unlock OFF.
+          python3 tools/stage_deda_100377_point11_achievements_real_profile_nav.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point11_real_profile_nav_source.py'
+          dart format lib/deda_100377_level_achievements_page_staged.dart
+          flutter analyze lib/deda_100377_level_achievements_page_staged.dart lib/deda_100377_level_achievement_badges_policy.dart
+          flutter test test/deda_100377_point11_achievements_locked_preview_widget_test.dart
           # Point13 source-only. All visible IDs use verified active alias; original ID stays canonical.
           python3 -m unittest discover -s test -p 'test_deda_100377_point13_all_surfaces_source.py'
           flutter analyze lib/deda_100377_point13_unified_identity_projection_staged.dart
