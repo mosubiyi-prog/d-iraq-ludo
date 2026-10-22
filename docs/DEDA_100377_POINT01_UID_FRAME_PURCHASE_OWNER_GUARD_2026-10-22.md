@@ -30,6 +30,26 @@ No debit or ownership should be simulated or fabricated.
    https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39839097656
    Final verdict must be read from GitHub after workflow finishes.
 
+## Additional legacy account compatibility correction (subsequent commits)
+6. `c5684c442259`: instead of separately treating `users.sharePersonalId`
+   as a mandatory field, frame checkout now REUSES the same pure owner proof
+   `DedaQa32ManagerOriginalOwnerProof.authentic` already tested for manager
+   self-use. A genuine legacy `users` profile with no `sharePersonalId` may
+   pass ONLY if Firebase auth UID matches `deda_share_ids.ownerUid`, its
+   original public ID is active/personal, and users/session accountKey match.
+   If the profile DOES carry a sharePersonalId it MUST equal the original
+   ID; a different UID, a swapped account key, forged route, or a premium
+   alias as the original lookup key are all rejected.
+7. `1f00cc2c9338`: regression verifies the checkout is wired into that
+   existing trusted policy, not merely duplicated checks in a new branch.
+8. `aea2092704be`: Dart unit contract explicitly tests a valid legacy
+   profile without sharePersonalId, an explicit verified profile, forged
+   UID, spoofed profile ID and spoofed original-ID route.
+9. Latest rebuilt-source QA for this correction:
+   https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39840481296
+   Verdict PENDING until the run completes. Earlier superseded runs are
+   CANCELLED, not SUCCESS.
+
 ## Deliberate NO-GO to actual purchases until compatible existing-wallet debit
 * Existing legacy shop: `DedaDiamondsWallet.spend(1000)` draws both device-local
   earned/rewarded diamonds and server personal gifted diamonds.
