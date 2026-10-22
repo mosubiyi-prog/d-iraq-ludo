@@ -17,6 +17,8 @@ on:
       - 'test/test_deda_100377_point08_stage75_compat_source.py'
       - 'lib/deda_stage71_free_owned_use_profile.dart'
       - 'test/test_deda_100377_point09_cross_account_restore_source.py'
+      - 'tools/stage_deda_100377_point09_account_scoped_appearance_async.py'
+      - 'test/test_deda_100377_point09_account_scoped_appearance_async.py'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
       - 'lib/deda_100377_my_store_page_staged.dart'
       - 'lib/deda_100377_profile_free_inventory.dart'
@@ -183,6 +185,11 @@ jobs:
           # distinct six earned LEVEL achievement preview. Release/unlock OFF.
           python3 tools/stage_deda_100377_point11_achievements_real_profile_nav.py
           python3 -m unittest discover -s test -p 'test_deda_100377_point11_real_profile_nav_source.py'
+          # Point09: local profile preference save is frozen to the original
+          # phone and signed Firebase UID across async SharedPreferences I/O.
+          # This does NOT claim cross-device cloud cosmetic restoration.
+          python3 tools/stage_deda_100377_point09_account_scoped_appearance_async.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point09_account_scoped_appearance_async.py'
           dart format lib/deda_100377_level_achievements_page_staged.dart
           flutter analyze lib/deda_100377_level_achievements_page_staged.dart lib/deda_100377_level_achievement_badges_policy.dart
           flutter test test/deda_100377_point11_achievements_locked_preview_widget_test.dart
