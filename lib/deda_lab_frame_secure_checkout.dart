@@ -130,9 +130,13 @@ class DedaLabFrameSecureCheckout {
           _ownership(db, originalId, frameId)
               .get(const GetOptions(source: Source.server)),
         ]);
-        if (!pair[0].exists && !pair[1].exists) return null;
+        if (!pair[0].exists && !pair[1].exists) {
+          return null;
+        }
         if (!_valid(pair[0].data(), pair[1].data(),
-                    originalId, frameId)) return null;
+                    originalId, frameId)) {
+          return null;
+        }
         return frameId;
       } catch (_) {
         // No offline/local guess and no forged or partial receipt.
