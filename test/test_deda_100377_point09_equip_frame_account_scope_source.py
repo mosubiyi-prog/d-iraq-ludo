@@ -43,7 +43,10 @@ class FrameEquipAccountGuard(unittest.TestCase):
                         b.index('await DedaPreferences.setProfileAppearance('))
 
     def test_no_money_or_backend_grants_added_to_frame_equip(self):
-        b = self.body
+        # Prior test accidentally searched the ENTIRE cosmetics page,
+        # which legitimately contains the EXISTING frame/badge purchase paths.
+        # Verify only _equipFrame, never reclassify old store payment as a bug.
+        b = self.body[self.body.index('  Future<void> _equipFrame(int index) async {'):]
         for forbidden in ('DedaDiamondsWallet.spend', 'DedaSocialProgressWallet.spendCoins',
                           'DedaLabFrameSecureCheckout.buyOnce',
                           'FirebaseFirestore.instance', 'FieldValue.increment',
