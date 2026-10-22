@@ -7,6 +7,10 @@ on:
       - '.github/workflows/qa-deda-100377-point08-hadaya-account-scope-no-deploy.yml'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
+      - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
+      - 'test/test_deda_100377_point08_stage75_compat_source.py'
+      - 'lib/deda_stage71_free_owned_use_profile.dart'
+      - 'test/test_deda_100377_point09_cross_account_restore_source.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +28,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py' -v
+          python3 -m unittest discover -s test -p 'test_deda_100377_point08_stage75_compat_source.py' -v
+          python3 -m unittest discover -s test -p 'test_deda_100377_point09_cross_account_restore_source.py' -v
           grep -Fq 'if (!mounted || widget.originalId != originalId) return;' lib/deda_stage74_hadaya_identifier_section.dart
           grep -Fq "_gifts = null;" lib/deda_stage74_hadaya_identifier_section.dart
           grep -Fq "targetPublicId: target['publicId'].toString()" tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
