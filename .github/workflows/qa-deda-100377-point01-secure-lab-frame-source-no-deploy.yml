@@ -33,6 +33,7 @@ on:
       - 'tools/stage_deda_100377_point11_achievements_real_profile_nav.py'
       - 'test/test_deda_100377_point11_real_profile_nav_source.py'
       - 'lib/deda_100377_level_achievements_page_staged.dart'
+      - 'test/deda_100377_point11_achievements_locked_preview_widget_test.dart'
       - 'assets/deda_owner_level_badges/**'
       - 'pubspec.yaml'
       - 'test/test_deda_100377_point10_owner_six_badge_art_source.py'
