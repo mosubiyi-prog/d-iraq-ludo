@@ -139,6 +139,8 @@ jobs:
           # Owner 13-point staged sequence: source-only Point02 name fix AFTER secure Point01.
           python3 tools/stage_deda_100377_point02_exact_frame_names.py
           python3 -m unittest discover -s test -p 'test_deda_100377_point02_exact_frame_names_source.py'
+          # Point03 checks existing three royal FREE save/use, sticky preview, public owner frame.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point03_free_royal_sticky_source.py'
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
           flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
