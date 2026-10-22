@@ -38,6 +38,27 @@ but less complete owner predicate; this change removes the mismatch.
 This does NOT establish that the current live Firebase catalog, 200 imports,
 manager role/session or user gift receipt is provisioned/available.
 
+## Point08 extension: legacy ID gift inbox and acceptance, no forged receipt
+- `307d3d13d8eb` updates `lib/deda_stage74_id_gift_service.dart`:
+  `_verifiedOwner(originalId)` now applies the *same* canonical owner
+  proof and checks `users/{uid}`, `deda_sessions/{uid}`, and
+  `deda_share_ids/{originalId}` from Source.server. Legacy recipient
+  accounts without users.sharePersonalId are accepted only if their
+  account/session keys and route owner UID are authentic.
+- `97e798cea980` adds Point08 source contract requiring the extra
+  ownerUid proof for `load`, `receive`, `receivedNames` and
+  `isReceived`; the receipt still requires immutable grant + server
+  timestamp. No receipt is synthesized.
+- `3b85a8e4a6cb` runs the Point08 contract along with Point13 in the
+  exact reconstructed Flutter source. Last triggered run:
+  https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39842850092
+  This run is not assumed passed before real GitHub conclusion.
+- The separately tested original hadaya notification screen, manager
+  grants, regular diamond gifts and user ledgers remain unchanged.
+- Cross-account real device gift inbox, confirmation and old/new owner ID
+  must still be tested on phone/tablet after enabling verified live rules.
+  Do not mark Point08 accepted yet.
+
 ## Strict open release blockers — must not be silently closed
 1. Stage71 200 private manager catalog `DEDA_STAGE71_ADMIN200_RULES_AND_PRIVATE_CATALOG_DEPLOYED` remains OFF by default. Do NOT enable with private catalog absent.
 2. Spark public alias route `DEDA_QA32_SPARK_PUBLIC_IDS_LIVE` remains OFF by default; active @DEDA-IRAQI still failed on 100378 and requires real owner + friend two-device acceptance.
