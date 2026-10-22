@@ -147,6 +147,9 @@ jobs:
           # Point05 PREFLIGHT ONLY: preserve 3 royal + 3 free classic slots,
           # pending retrieval of exact approved moonlit art. No substitution.
           python3 -m unittest discover -s test -p 'test_deda_100377_point05_avatar_preservation_preflight.py'
+          # Point05 guard-only transformer tests; do NOT integrate absent or unapproved art.
+          python3 -m py_compile tools/stage_deda_100377_point05_verified_moonlit_avatars.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point05_verified_moonlit_gate.py'
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
           flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
