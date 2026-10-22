@@ -19,6 +19,8 @@ on:
       - 'test/test_deda_100377_point09_cross_account_restore_source.py'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
       - 'lib/deda_100377_my_store_page_staged.dart'
+      - 'lib/deda_100377_profile_free_inventory.dart'
+      - 'test/deda_100377_point12_full_free_inventory_test.dart'
       - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/deda_100377_point12_my_store_widget_test.dart'
       - 'test/test_deda_100377_point12_my_store_source.py'
@@ -172,6 +174,8 @@ jobs:
           dart format lib/deda_100377_my_store_page_staged.dart
           flutter analyze lib/deda_100377_my_store_page_staged.dart
           flutter test test/deda_100377_point12_my_store_widget_test.dart
+          flutter analyze lib/deda_100377_profile_free_inventory.dart
+          flutter test test/deda_100377_point12_full_free_inventory_test.dart
           # Point13 source-only. All visible IDs use verified active alias; original ID stays canonical.
           python3 -m unittest discover -s test -p 'test_deda_100377_point13_all_surfaces_source.py'
           flutter analyze lib/deda_100377_point13_unified_identity_projection_staged.dart
