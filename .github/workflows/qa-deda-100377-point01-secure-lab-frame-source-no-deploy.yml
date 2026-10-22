@@ -23,6 +23,7 @@ on:
       - 'test/deda_100377_point12_full_free_inventory_test.dart'
       - 'tools/stage_deda_100377_point11_achievements_real_profile_nav.py'
       - 'test/test_deda_100377_point11_real_profile_nav_source.py'
+      - 'lib/deda_100377_level_achievements_page_staged.dart'
       - 'tools/stage_deda_100377_point12_my_store.py'
       - 'test/deda_100377_point12_my_store_widget_test.dart'
       - 'test/test_deda_100377_point12_my_store_source.py'
