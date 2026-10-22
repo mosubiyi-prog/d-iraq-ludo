@@ -60,6 +60,11 @@ class DedaLabFrameSecureCheckout {
     if (accountKey.isEmpty ||
         accountKey != (session['accountKey'] ?? '').toString().trim() ||
         profile['sharePersonalId'] != originalId ||
+        // DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF
+        // Identity-route ownership must match the current Firebase UID, not
+        // merely an ID string copied into a profile/session document.
+        id['ownerUid'] != uid ||
+        id['publicId'] != originalId ||
         id['kind'] != 'personal' || id['active'] != true) {
       throw StateError('original-owner-session-not-verified');
     }
