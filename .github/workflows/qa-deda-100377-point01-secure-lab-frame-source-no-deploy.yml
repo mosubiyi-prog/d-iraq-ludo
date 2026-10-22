@@ -21,6 +21,8 @@ on:
       - 'test/test_deda_100377_point09_account_scoped_appearance_async.py'
       - 'tools/stage_deda_100377_point09_badge_inventory_account_scope.py'
       - 'test/test_deda_100377_point09_badge_inventory_source.py'
+      - 'tools/stage_deda_100377_point09_style_page_async_read_scope.py'
+      - 'test/test_deda_100377_point09_style_page_async_read_source.py'
       - 'test/deda_100377_point09_badge_inventory_account_switch_widget_test.dart'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
       - 'lib/deda_100377_my_store_page_staged.dart'
@@ -197,6 +199,10 @@ jobs:
           # before async reads, writes and badge notifier updates.
           python3 tools/stage_deda_100377_point09_badge_inventory_account_scope.py
           python3 -m unittest discover -s test -p 'test_deda_100377_point09_badge_inventory_source.py'
+          # Account identity must remain unchanged while the old cosmetics
+          # shop loads currency and inventory; stale results never repaint.
+          python3 tools/stage_deda_100377_point09_style_page_async_read_scope.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point09_style_page_async_read_source.py'
           flutter test test/deda_100377_point09_badge_inventory_account_switch_widget_test.dart
           dart format lib/deda_100377_level_achievements_page_staged.dart
           flutter analyze lib/deda_100377_level_achievements_page_staged.dart lib/deda_100377_level_achievement_badges_policy.dart
