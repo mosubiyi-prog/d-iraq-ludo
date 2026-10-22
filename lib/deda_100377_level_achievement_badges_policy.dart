@@ -43,6 +43,21 @@ class DedaLevelBadgeThresholds {
     return DedaLevelBadgeThresholds._(Map.unmodifiable(safe));
   }
 
+  /// Owner-reviewed preliminary distribution from 2026-10-22:
+  /// 1–9 silver, 10–19 gold, 20–29 emerald, 30–39 diamond,
+  /// 40–49 royal, 50+ legendary. This DOES NOT activate any award.
+  /// It must be reconciled with legacy "مستوى ذهبي • 1" display before release.
+  static final DedaLevelBadgeThresholds preliminaryOwnerRanges = validate(
+    <DedaLevelBadgeTier, int>{
+      DedaLevelBadgeTier.silver: 1,
+      DedaLevelBadgeTier.gold: 10,
+      DedaLevelBadgeTier.emerald: 20,
+      DedaLevelBadgeTier.diamond: 30,
+      DedaLevelBadgeTier.royal: 40,
+      DedaLevelBadgeTier.legendary: 50,
+    },
+  )!;
+
   int levelFor(DedaLevelBadgeTier tier) => _levels[tier]!;
 }
 
