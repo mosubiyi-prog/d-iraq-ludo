@@ -114,6 +114,37 @@ class DedaLabFrameSecureCheckout {
     return true;
   }
 
+  /// DEDA_100377_MY_STORE_ALL_13_OWNED_FRAMES_SERVER_ONLY
+  /// An inventory scan is READ ONLY. Verify signed original account once,
+  /// then check both server receipt and account-owned record for every
+  /// authentic paid LAB frame. Selected style and offline cache never count.
+  static Future<Set<String>> verifiedOwnedFrameIds(String originalId) async {
+    final uid = await _verifyOwner(originalId);
+    final db = FirebaseFirestore.instance;
+    final ids = paidFrameIds.toList()..sort();
+    final checks = await Future.wait<String?>(ids.map((frameId) async {
+      try {
+        final pair = await Future.wait([
+          _receipt(db, originalId, frameId)
+              .get(const GetOptions(source: Source.server)),
+          _ownership(db, originalId, frameId)
+              .get(const GetOptions(source: Source.server)),
+        ]);
+        if (!pair[0].exists && !pair[1].exists) return null;
+        if (!_valid(pair[0].data(), pair[1].data(),
+                    originalId, frameId)) return null;
+        return frameId;
+      } catch (_) {
+        // No offline/local guess and no forged or partial receipt.
+        return null;
+      }
+    }));
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-during-frame-inventory');
+    }
+    return Set<String>.unmodifiable(checks.whereType<String>());
+  }
+
   /// Transaction is idempotent per original account + frame.
   /// If the response is lost, caller must first retry isOwned, not show
   /// success or debit locally. ONLY server-authenticated wallet is eligible.
