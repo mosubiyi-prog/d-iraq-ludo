@@ -203,6 +203,9 @@ jobs:
           flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
           # Point06 source-only contract: canonical original ID, server-verified active public foil.
           flutter test test/deda_100377_point06_verified_public_identity_test.dart
+          # Point07 receiver+friends: two intentional shares stay distinct; original routing retained.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point07_received_friend_source.py'
+          flutter test test/deda_100377_point07_received_friend_identity_test.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
