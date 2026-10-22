@@ -34,7 +34,14 @@ class Point09LocalAppearanceAccountSafety(unittest.TestCase):
         fragment = s[a:b]
         self.assertIn("final savePhone = phone;", fragment)
         self.assertIn("final saveUid = _appearanceCurrentUid();", fragment)
-        self.assertIn("if (!isLoggedIn || savePhone.trim().isEmpty) return;", fragment)
+        self.assertIn("final firebaseReadyAtStart = Firebase.apps.isNotEmpty;", fragment)
+        self.assertIn("if (savePhone.trim().isEmpty ||", fragment)
+        self.assertIn("(firebaseReadyAtStart && saveUid == null)) return;", fragment)
+        self.assertEqual(fragment.count("Firebase.apps.isNotEmpty != firebaseReadyAtStart"), 2)
+        self.assertNotIn("!isLoggedIn", fragment)
+        # Legacy test fixture sets DedaPreferences.phone without local isLoggedIn.
+        # Three free royal frames 3/4/5 MUST still persist in this scenario.
+        self.assertIn("final requestedFrame = frameStyle.clamp(0, 18).toInt();", fragment)
         self.assertEqual(fragment.count("phone != savePhone"), 2)
         self.assertEqual(fragment.count("_appearanceCurrentUid() != saveUid"), 2)
         self.assertIn("SharedPreferences.getInstance()", fragment)
