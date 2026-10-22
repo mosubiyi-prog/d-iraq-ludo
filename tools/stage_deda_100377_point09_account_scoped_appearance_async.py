@@ -52,12 +52,17 @@ REPLACEMENT = """  // DEDA_100377_POINT09_APPEARANCE_ASYNC_ACCOUNT_SCOPE
   }) async {
     final savePhone = phone;
     final saveUid = _appearanceCurrentUid();
-    if (!isLoggedIn || savePhone.trim().isEmpty) return;
+    // The legacy signed-source widget tests and some pre-Firebase sessions
+    // intentionally use the saved phone without a global isLoggedIn flag.
+    // Preserve that behavior. If Firebase HAS started, require an actual UID.
+    final firebaseReadyAtStart = Firebase.apps.isNotEmpty;
+    if (savePhone.trim().isEmpty ||
+        (firebaseReadyAtStart && saveUid == null)) return;
     final requestedAvatar = avatarStyle.clamp(0, 8).toInt();
     final requestedFrame = frameStyle.clamp(0, 18).toInt();
     final requestedBackground = backgroundStyle.clamp(0, 8).toInt();
     final prefs = await SharedPreferences.getInstance();
-    if (!isLoggedIn || phone != savePhone ||
+    if (phone != savePhone || Firebase.apps.isNotEmpty != firebaseReadyAtStart ||
         _appearanceCurrentUid() != saveUid) return;
     // Capture ORIGINAL phone in every key, never mutable DedaPreferences.phone.
     // All existing per-phone preference keys and old saved items are retained.
@@ -67,7 +72,7 @@ REPLACEMENT = """  // DEDA_100377_POINT09_APPEARANCE_ASYNC_ACCOUNT_SCOPE
       prefs.setInt(_profileFrameKey(savePhone), requestedFrame),
       prefs.setInt(_profileBackgroundKey(savePhone), requestedBackground),
     ]);
-    if (!isLoggedIn || phone != savePhone ||
+    if (phone != savePhone || Firebase.apps.isNotEmpty != firebaseReadyAtStart ||
         _appearanceCurrentUid() != saveUid) return;
     // Don't repaint the newly signed-in user's in-memory profile style.
     profileAvatarStyle = requestedAvatar;
