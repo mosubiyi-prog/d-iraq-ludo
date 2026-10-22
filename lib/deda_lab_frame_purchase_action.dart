@@ -161,6 +161,9 @@ class _DedaLabFramePurchaseActionState
     } finally {
       if ((epoch == _verificationEpoch && _sameItem(owner, frame, uid))) {
         setState(() => _busy = false);
+      } else if (mounted && epoch != _verificationEpoch) {
+        // A newer auth/card verification owns the busy state. An older
+        // asynchronous completion must never clear or overwrite it.
       } else {
         _clearIfAccountChanged(owner, frame, uid);
       }
