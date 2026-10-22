@@ -4,8 +4,47 @@ import 'package:d_iraq_ludo/deda_lab_frame_purchase_action.dart';
 import 'package:d_iraq_ludo/deda_lab_verified_frame_catalog.dart';
 import 'package:d_iraq_ludo/deda_lab_premium_frame_artwork.dart';
 import 'package:d_iraq_ludo/deda_lab_frame_secure_checkout.dart';
+import 'package:d_iraq_ludo/deda_qa32_manager_original_owner_proof.dart';
 
 void main() {
+  test('point01 original owner proof retains legitimate legacy account, blocks UID spoof', () {
+    const id = '@DEDA-AQPYXJ';
+    const uid = 'confirmed-legacy-account-uid';
+    const account = <String, dynamic>{'accountKey': 'owner-account-001'};
+    const session = <String, dynamic>{'accountKey': 'owner-account-001'};
+    const route = <String, dynamic>{
+      'publicId': id,
+      'ownerUid': uid,
+      'kind': 'personal',
+      'active': true,
+    };
+    bool valid({String currentUid = uid,
+      Map<String, dynamic> profile = account,
+      Map<String, dynamic> originalRoute = route}) =>
+      DedaQa32ManagerOriginalOwnerProof.authentic(
+        expectedOriginal: id,
+        authUid: currentUid,
+        account: profile,
+        session: session,
+        route: originalRoute,
+      );
+    expect(valid(), isTrue);
+    expect(valid(profile: <String, dynamic>{
+      'accountKey': 'owner-account-001', 'sharePersonalId': id,
+    }), isTrue);
+    expect(valid(currentUid: 'other-uid'), isFalse);
+    expect(valid(profile: <String, dynamic>{
+      'accountKey': 'owner-account-001',
+      'sharePersonalId': '@DEDA-OTHER',
+    }), isFalse);
+    expect(valid(originalRoute: <String, dynamic>{
+      ...route, 'ownerUid': 'other-uid',
+    }), isFalse);
+    expect(valid(originalRoute: <String, dynamic>{
+      ...route, 'publicId': '@DEDA-OTHER',
+    }), isFalse);
+  });
+
   test('16 exact-frame catalog: 3 permanently free and 13 buy-once at 1000', () {
     expect(dedaLabVerifiedFrames.length, 16);
     expect(dedaLabVerifiedFrames.where((f) => f.free).length, 3);
