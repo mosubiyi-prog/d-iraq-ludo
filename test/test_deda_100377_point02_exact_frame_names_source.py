@@ -8,8 +8,8 @@ class Point02FrameNameSourceTest(unittest.TestCase):
     def test_13_paid_names_are_unique_real_catalog_titles(self):
         text = Path('lib/deda_lab_verified_frame_catalog.dart').read_text(encoding='utf-8')
         rows = re.findall(
-            r"DedaLabFrameSpec\\(id:'(FRAME_\\d+)',nameAr:'([^']+)'"
-            r".*?priceDiamonds:(\\d+),", text, re.S)
+            r"DedaLabFrameSpec\(id:'(FRAME_\d+)',nameAr:'([^']+)'"
+            r".*?priceDiamonds:(\d+),", text, re.S)
         self.assertEqual(16, len(rows))
         paid = [(id_, name) for id_, name, price in rows if price == '1000']
         free = [(id_, name) for id_, name, price in rows if price == '0']
