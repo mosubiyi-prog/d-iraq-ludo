@@ -95,6 +95,13 @@ void main() {
     expect(DedaLabFrameSecureCheckout.purchaseId(
       '@DEDA-AQPYXJ', 'FRAME_03'), '@DEDA-AQPYXJ_FRAME_03');
   });
+  test('point01 verified funds preflight remains nonspending and gated', () {
+    expect(DedaLabFrameSecureCheckout.priceDiamonds, 1000);
+    expect(DedaLabFrameSecureCheckout.live, isFalse);
+    expect(DedaLabFrameSecureCheckout.purchaseId(
+      '@DEDA-AQPYXJ', 'FRAME_03'), '@DEDA-AQPYXJ_FRAME_03');
+  });
+
   test('point01 real checkout defaults OFF until audited production rules', () {
     expect(DedaLabFrameSecureCheckout.live, isFalse);
   });

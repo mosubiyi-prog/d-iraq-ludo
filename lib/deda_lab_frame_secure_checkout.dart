@@ -81,6 +81,29 @@ class DedaLabFrameSecureCheckout {
     FirebaseFirestore db, String originalId,
   ) => db.collection('deda_diamond_gift_balances').doc(originalId);
 
+  // DEDA_100377_POINT01_VERIFIED_PURCHASE_FUNDS_PREFLIGHT_NO_DEBIT
+  // Read ONLY the existing authenticated received-gift/verified-Telegram
+  // Firestore wallet. This is not the personal display total, which may
+  // contain unverified local AdMob earnings or historical manager diamonds.
+  // This preview never authorizes a purchase: buyOnce still performs the
+  // definitive balance check inside its atomic, receipt-backed transaction.
+  static Future<int> verifiedPurchaseBalance(String originalId) async {
+    final uid = await _verifyOwner(originalId);
+    final doc = await _wallet(FirebaseFirestore.instance, originalId)
+        .get(const GetOptions(source: Source.server));
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-during-wallet-preflight');
+    }
+    if (!doc.exists) return 0;
+    final data = doc.data();
+    final amount = data?['balance'];
+    if (data?['publicId'] != originalId ||
+        amount is! int || amount < 0) {
+      throw StateError('unverified-purchase-wallet-balance');
+    }
+    return amount;
+  }
+
   static DocumentReference<Map<String, dynamic>> _receipt(
     FirebaseFirestore db, String originalId, String frameId,
   ) => db.collection('deda_lab_frame_receipts')

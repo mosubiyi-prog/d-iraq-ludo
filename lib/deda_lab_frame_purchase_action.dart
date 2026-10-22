@@ -182,6 +182,8 @@ class _DedaLabFramePurchaseActionState
         title: const Text('شراء الإطار'),
         content: const Text(
           'سعر الإطار 1,000 ماسة. الخصم مرة واحدة فقط بعد التأكيد. '
+          'حالياً يُحتسب للشراء رصيد الماسات الموثق بالخادم من الهدايا '
+          'المستلمة والمكافآت الموثقة، وليس كل مجموع الماسات الظاهر. '
           'المعاينة مجانية ولا تخصم شيئاً.'),
         actions: [
           TextButton(
@@ -202,6 +204,18 @@ class _DedaLabFramePurchaseActionState
     if (yes != true || _busy || _owned) return;
     setState(() { _busy = true; _error = null; });
     try {
+      // DEDA_100377_POINT01_NO_FALSE_DISPLAY_BALANCE_CHECKOUT
+      // The visible total includes sources that are not yet server-verified
+      // for spending. Never claim that total is eligible or charge it locally.
+      final spendable = await DedaLabFrameSecureCheckout
+          .verifiedPurchaseBalance(owner);
+      if (!_sameItem(owner, frame, uid)) {
+        _clearIfAccountChanged(owner, frame, uid);
+        return;
+      }
+      if (spendable < DedaLabFrameSecureCheckout.priceDiamonds) {
+        throw StateError('insufficient-verified-gift-diamonds');
+      }
       await DedaLabFrameSecureCheckout.buyOnce(
         originalId: owner, frameId: frame);
       if (_sameItem(owner, frame, uid)) {
@@ -225,7 +239,7 @@ class _DedaLabFramePurchaseActionState
           final insufficient = error.toString()
               .contains('insufficient-verified-gift-diamonds');
           setState(() => _error = insufficient
-              ? 'رصيد الماسات الموثق للشراء غير كافٍ.'
+              ? 'الماسات الموثقة للشراء غير كافية؛ إجمالي الملف قد يشمل أرصدة غير مؤهلة للخصم.'
               : 'لم يتأكد الشراء؛ لم نفعّل الإطار.');
         }
       } catch (_) {

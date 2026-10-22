@@ -66,6 +66,33 @@ class SignedFrameUiOwnershipGuard(unittest.TestCase):
         self.assertIn("source: Source.server", s)
         self.assertIn("original-owner-session-not-verified", s)
 
+    def test_point01_spend_preflight_uses_server_wallet_not_display_total(self):
+        s = self.checkout
+        u = self.ui
+        self.assertIn(
+            'DEDA_100377_POINT01_VERIFIED_PURCHASE_FUNDS_PREFLIGHT_NO_DEBIT', s)
+        a = s.index('static Future<int> verifiedPurchaseBalance(')
+        b = s.index('static DocumentReference<Map<String, dynamic>> _receipt(', a)
+        body = s[a:b]
+        self.assertIn('final uid = await _verifyOwner(originalId);', body)
+        self.assertIn('_wallet(FirebaseFirestore.instance, originalId)', body)
+        self.assertIn('GetOptions(source: Source.server)', body)
+        self.assertIn('FirebaseAuth.instance.currentUser?.uid != uid', body)
+        self.assertIn("if (!doc.exists) return 0;", body)
+        self.assertIn("data?['publicId'] != originalId", body)
+        self.assertIn("amount is! int || amount < 0", body)
+        self.assertNotIn('runTransaction', body)
+        self.assertNotIn('.spend(', body)
+        self.assertNotIn('tx.update(', body)
+        self.assertIn('DEDA_100377_POINT01_NO_FALSE_DISPLAY_BALANCE_CHECKOUT', u)
+        self.assertIn('.verifiedPurchaseBalance(owner)', u)
+        self.assertIn('spendable < DedaLabFrameSecureCheckout.priceDiamonds', u)
+        self.assertIn('await DedaLabFrameSecureCheckout.buyOnce(', u)
+        self.assertLess(u.index('.verifiedPurchaseBalance(owner)'),
+                        u.index('await DedaLabFrameSecureCheckout.buyOnce('))
+        self.assertNotIn('DedaDiamondsWallet.spend', u)
+        self.assertIn('إجمالي الملف قد يشمل أرصدة غير مؤهلة للخصم', u)
+
     def test_original_checkout_is_not_activated_or_changed(self):
         s = self.checkout
         self.assertIn("priceDiamonds = 1000", s)
