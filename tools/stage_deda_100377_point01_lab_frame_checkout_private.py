@@ -29,7 +29,6 @@ def patch(src: str) -> str:
         'children: List<Widget>.generate(16, (offset)',
         'final index = offset + 3;',
         'final free = dedaProfileFrameIsFree(index);',
-        'final selected = free && _frameStyle == index;',
         'onTap: free\n                          ? () => setState(() => _frameStyle = index)\n                          : _lockedFrameMessage,',
         'DedaProfileFramePreview(\n                            style: index,',
         'frameStyle: _frameStyle,',
@@ -46,9 +45,14 @@ def patch(src: str) -> str:
         '  int? _labPreviewStyle;\n'
         '  final Set<int> _serverVerifiedPaidStyles = <int>{};\n',
         1)
-    e = e.replace(
-        'final selected = free && _frameStyle == index;',
-        'final selected = (_labPreviewStyle ?? _frameStyle) == index;', 1)
+    # Earlier profile stages legitimately change the exact selected check.
+    # Touch ONLY the first selected declaration after the 16-frame grid.
+    grid = e.index('children: List<Widget>.generate(16, (offset)')
+    selected_at = e.find('final selected =', grid)
+    selected_end = e.find(';', selected_at)
+    if selected_at < 0 or selected_end < 0 or selected_at-grid > 800:
+        raise ValueError('SAFE_STOP_POINT01_GRID_SELECTED_DRIFT')
+    e = e[:selected_at] + 'final selected = (_labPreviewStyle ?? _frameStyle) == index;' + e[selected_end+1:]
     e = e.replace(
         'onTap: free\n                          ? () => setState(() => _frameStyle = index)\n                          : _lockedFrameMessage,',
         '''onTap: free
