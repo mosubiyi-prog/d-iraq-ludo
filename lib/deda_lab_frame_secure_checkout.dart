@@ -72,12 +72,14 @@ class DedaLabFrameSecureCheckout {
   ) => db.collection('deda_diamond_gift_balances').doc(originalId);
 
   static DocumentReference<Map<String, dynamic>> _receipt(
-    FirebaseFirestore db, String id,
-  ) => db.collection('deda_lab_frame_receipts').doc(id);
+    FirebaseFirestore db, String originalId, String frameId,
+  ) => db.collection('deda_lab_frame_receipts')
+      .doc(originalId).collection('frames').doc(frameId);
 
   static DocumentReference<Map<String, dynamic>> _ownership(
-    FirebaseFirestore db, String id,
-  ) => db.collection('deda_lab_owned_frames').doc(id);
+    FirebaseFirestore db, String originalId, String frameId,
+  ) => db.collection('deda_lab_owned_frames')
+      .doc(originalId).collection('frames').doc(frameId);
 
   static bool _valid(
     Map<String, dynamic>? receipt, Map<String, dynamic>? owned,
@@ -100,7 +102,7 @@ class DedaLabFrameSecureCheckout {
     final id = purchaseId(originalId, frameId);
     final db = FirebaseFirestore.instance;
     final data = await Future.wait([
-      _receipt(db, id).get(), _ownership(db, id).get(),
+      _receipt(db, originalId, frameId).get(), _ownership(db, originalId, frameId).get(),
     ]);
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('account-switched');
@@ -122,8 +124,8 @@ class DedaLabFrameSecureCheckout {
     final id = purchaseId(originalId, frameId);
     final db = FirebaseFirestore.instance;
     final wallet = _wallet(db, originalId);
-    final receipt = _receipt(db, id);
-    final owned = _ownership(db, id);
+    final receipt = _receipt(db, originalId, frameId);
+    final owned = _ownership(db, originalId, frameId);
     await db.runTransaction<void>((tx) async {
       // Firestore requires all reads before any write.
       final funds = await tx.get(wallet);
@@ -147,6 +149,7 @@ class DedaLabFrameSecureCheckout {
       }
       tx.update(wallet, <String, dynamic>{
         'balance': amount - priceDiamonds,
+        'lastLabFrameId': frameId,
         'lastLabFrameReceiptId': id,
         'updatedAt': FieldValue.serverTimestamp(),
       });
