@@ -17,9 +17,13 @@ class DedaStage71OwnedIdentifier {
   final String baseColor;
   final String recipientOriginalId;
   final String group;
+  /// Proof source: gifted requires a received gift receipt; self_used is
+  /// the original owner's already-assigned administrator record.
+  final String kind;
   const DedaStage71OwnedIdentifier({
     required this.identifier, required this.baseColor,
     required this.recipientOriginalId, required this.group,
+    this.kind = 'self_used',
   });
 
   static DedaStage71OwnedIdentifier read(
@@ -37,6 +41,7 @@ class DedaStage71OwnedIdentifier {
     }
     return DedaStage71OwnedIdentifier(
       identifier:id, baseColor:color,recipientOriginalId:owner,group:group,
+      kind: data['kind'] as String,
     );
   }
 }
@@ -87,6 +92,49 @@ class DedaStage71OwnedIdentifierService {
     }
     return records.docs.map((d)=>
       DedaStage71OwnedIdentifier.read(d.id,d.data(),originalId)).toList();
+  }
+
+  /// DEDA_100377_READONLY_ACCEPTED_OWNED_IDS_P12_P13
+  /// Fetch from the server under the authenticated original owner. An
+  /// allocated-but-unreceived gift is NEVER counted as the owner's inventory.
+  /// This never changes grants, the active alias, the original routing ID,
+  /// administrative stock or balances.
+  static Future<List<DedaStage71OwnedIdentifier>> acceptedOwnedForMyStore(
+      String originalId) async {
+    final uid = await _requireOriginal(originalId);
+    final records = await FirebaseFirestore.instance
+        .collection(DedaStage71Admin200.registry)
+        .where('recipientOriginalId', isEqualTo: originalId)
+        .limit(200)
+        .get(const GetOptions(source: Source.server));
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-rotated-during-inventory');
+    }
+    final accepted = <DedaStage71OwnedIdentifier>[];
+    for (final record in records.docs) {
+      final data = record.data();
+      final verified = DedaStage71OwnedIdentifier.read(
+        record.id, data, originalId,
+      );
+      if (verified.kind == 'gifted') {
+        // Receipt is checked from Source.server by the existing gift service;
+        // a pending/failed/unreceived gift stays outside My Store.
+        final received = await DedaStage74IdGiftService.isReceived(
+          originalId, verified.identifier,
+        );
+        if (!received) continue;
+      } else if (verified.kind != 'self_used') {
+        continue;
+      }
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('account-switched-during-gift-check');
+      }
+      accepted.add(verified);
+    }
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-before-inventory-return');
+    }
+    return List<DedaStage71OwnedIdentifier>.unmodifiable(accepted);
   }
 
   static Future<String> active(String originalId) async {
