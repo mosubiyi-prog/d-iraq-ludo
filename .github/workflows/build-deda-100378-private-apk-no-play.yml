@@ -453,7 +453,7 @@ jobs:
           assert line.count('--build-number=100359')==1, 'SAFE_STOP unexpected version'
           line=line.replace('--build-number=100359','--build-number=100378',1)
           assert 'firebase deploy' not in line and 'gh workflow run' not in line
-          p.write_text(line+'\\n')
+          p.write_text(line+'\n')
           PY_BUILD
           bash -e /tmp/deda_stage71_exact_signed_100359_command.txt
           test -s build/app/outputs/flutter-apk/app-release.apk
