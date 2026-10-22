@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'deda_lab_frame_secure_checkout.dart';
 
-/// Paid frame UI: the 1000-diamond price is fixed. Preview is ALWAYS free.
-/// The buy button remains disabled until owner-approved live rules are tested.
+/// The original DEDA store visual flow: preview is free; paid Buy becomes Use
+/// only after a verified receipt. Never trigger a client-only wallet debit.
 class DedaLabFramePurchaseAction extends StatefulWidget {
   final String originalId;
   final String frameId;
@@ -25,6 +25,9 @@ class _DedaLabFramePurchaseActionState
   bool _owned = false;
   String? _error;
 
+  bool _sameItem(String owner, String frame) =>
+      mounted && widget.originalId == owner && widget.frameId == frame;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +41,9 @@ class _DedaLabFramePurchaseActionState
     super.didUpdateWidget(old);
     if (old.originalId != widget.originalId ||
         old.frameId != widget.frameId) {
+      // Never apply old-account ownership or a pending debit result to
+      // another account or another card.
+      _busy = false;
       _owned = false;
       _error = null;
       if (DedaLabFrameSecureCheckout.live) {
@@ -48,68 +54,80 @@ class _DedaLabFramePurchaseActionState
 
   Future<void> _refresh() async {
     if (!mounted || _busy || !DedaLabFrameSecureCheckout.live) return;
+    final owner = widget.originalId;
+    final frame = widget.frameId;
     setState(() { _busy = true; _error = null; });
     try {
       final owned = await DedaLabFrameSecureCheckout.isOwned(
-        originalId: widget.originalId, frameId: widget.frameId);
-      if (mounted) {
-        setState(() => _owned = owned);
-      }
+        originalId: owner, frameId: frame);
+      if (_sameItem(owner, frame)) setState(() => _owned = owned);
     } catch (_) {
-      if (mounted) setState(() => _error = 'تعذّر التحقق من ملكية الإطار');
+      if (_sameItem(owner, frame)) {
+        setState(() => _error = 'تعذّر التحقق من ملكية الإطار.');
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_sameItem(owner, frame)) setState(() => _busy = false);
     }
   }
 
   Future<void> _buy() async {
     if (_busy || _owned || !DedaLabFrameSecureCheckout.live) return;
+    final owner = widget.originalId;
+    final frame = widget.frameId;
     final yes = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         title: const Text('شراء الإطار'),
         content: const Text(
-          'السعر 1,000 ماسة. سيتم الخصم من الرصيد الموثق القابل للصرف فقط. '
+          'سعر الإطار 1,000 ماسة. الخصم مرة واحدة فقط بعد التأكيد. '
           'المعاينة مجانية ولا تخصم شيئاً.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('تأكيد الشراء')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('تأكيد الشراء'),
+          ),
         ],
       ),
     );
-    if (!mounted || yes != true) return;
+    if (!_sameItem(owner, frame) || yes != true || _busy || _owned) return;
     setState(() { _busy = true; _error = null; });
     try {
       await DedaLabFrameSecureCheckout.buyOnce(
-        originalId: widget.originalId, frameId: widget.frameId);
-      if (mounted) {
-        setState(() => _owned = true);
-      }
-    } catch (_) {
-      // The request may have committed before network failure. Read first.
+        originalId: owner, frameId: frame);
+      if (_sameItem(owner, frame)) setState(() => _owned = true);
+    } catch (error) {
+      // Network timeouts can happen AFTER a real commit. Read receipt first,
+      // never issue a second automatic payment.
       try {
         final owned = await DedaLabFrameSecureCheckout.isOwned(
-          originalId: widget.originalId, frameId: widget.frameId);
-        if (mounted && owned) {
+          originalId: owner, frameId: frame);
+        if (_sameItem(owner, frame) && owned) {
           setState(() => _owned = true);
-          widget.onVerifiedOwned();
-        } else if (mounted) {
-          setState(() => _error = 'لم يتأكد الشراء؛ لم نفعّل الإطار.');
+        } else if (_sameItem(owner, frame)) {
+          final insufficient = error.toString()
+              .contains('insufficient-verified-gift-diamonds');
+          setState(() => _error = insufficient
+              ? 'رصيد الماسات الموثق للشراء غير كافٍ.'
+              : 'لم يتأكد الشراء؛ لم نفعّل الإطار.');
         }
       } catch (_) {
-        if (mounted) {
-          setState(() => _error = 'الحالة غير مؤكدة، أعد التحقق قبل الشراء.');
+        if (_sameItem(owner, frame)) {
+          setState(() =>
+              _error = 'الحالة غير مؤكدة؛ أعد التحقق قبل أي محاولة شراء.');
         }
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (_sameItem(owner, frame)) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Unlike a fake interactive Buy control, this is explicit until rollout.
     if (!DedaLabFrameSecureCheckout.live) {
       return const Column(mainAxisSize: MainAxisSize.min, children: [
         Text('1000 💎', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -117,14 +135,31 @@ class _DedaLabFramePurchaseActionState
       ]);
     }
     return Column(mainAxisSize: MainAxisSize.min, children: [
-      TextButton(
-        onPressed: _busy ? null : _owned ? widget.onVerifiedOwned : _buy,
-        child: Text(_busy ? 'جار التحقق…' :
-          _owned ? 'استخدام' : 'شراء — 1000 💎'),
+      SizedBox(
+        height: 38,
+        width: double.infinity,
+        child: _owned
+            ? OutlinedButton(
+                onPressed: _busy ? null : widget.onVerifiedOwned,
+                child: Text(_busy ? 'جار التحقق…' : 'استخدام'),
+              )
+            : FilledButton(
+                onPressed: _busy ? null : _buy,
+                child: Text(_busy ? 'جار التحقق…' : 'شراء — 1000 💎'),
+              ),
       ),
-      if (_error != null)
-        TextButton(onPressed: _busy ? null : _refresh,
-          child: const Text('إعادة التحقق')),
+      if (_error != null) ...[
+        const SizedBox(height: 4),
+        Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Color(0xFF9C2929), fontSize: 11),
+        ),
+        TextButton(
+          onPressed: _busy ? null : _refresh,
+          child: const Text('إعادة التحقق'),
+        ),
+      ],
     ]);
   }
 }
