@@ -48,3 +48,12 @@ Continue number 01 only until the above safety/functional tests pass. Then issue
 - Subsequent run `39754557501` failed safely on different real `onTap` syntax; updated script to target the real 16-frame grid InkWell only.
 - Latest workflow update `9394830eafeb9a592941ab3451427862d0a3fbec` preserves exact generated `lib/main.dart` in a temporary PRIVATE QA artifact for source-grounded debugging and cancels superseded runs.
 - Point01 is STILL OPEN: do not say 13 frames are purchasable, do not turn on feature flag, do not use account's displayed manager/test million as spendable, do not proceed to point02 until real stage/tests and backend authorization pass.
+
+
+## Point01 continuation — actual security test evidence
+- Corrected actual reconstructed 100377 frame edit profile integration to reuse existing preview field rather than duplicating selected/tap source anchors. Commit afee08c10d307109c05b1ff778eab5a58dfb6474.
+- Flutter contract tests 3/3 PASSED: exactly 13 premium frames at fixed 1000, rejects unknown identifiers/product, default live checkout OFF. Analyzer caught redundant braces and unused temporary; fixed in 962879986517fe7c8825afa5d7768e7ee3e9ff03.
+- Added real Firestore Emulator rules test via live policy READ-ONLY; run 39758153113 SUCCESS: **6 PASS, 0 FAIL** (atomic debit + receipt/entitlement, replay, wallet-only debit, tampered price/product, insufficient, stranger, unauthenticated).
+- https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39758153113
+- Flutter real source run 39757765693 still awaiting final result at this checkpoint.
+- **NO Firebase deploy, NO live wallet writes, NO Play publish, NO APK yet. Point01 remains OPEN until trusted spendable balances, owner permission and phone/tablet acceptance.**
