@@ -20,7 +20,8 @@ class Point11RealProfileNavTest(unittest.TestCase):
         self.assertEqual(s.count("title: dedaText('الشارات', 'Badges')"), 1)
         self.assertEqual(s.count("title: dedaText('متجري', 'My Store')"), 1)
         self.assertEqual(s.count(
-            "title: dedaText('متجر المعرّفات', 'Identifier store')"), 1)
+            "title: dedaText('متجر المعرّفات', 'Identifier store')"), 0)
+        self.assertIn("onOpenIdentifierShop: () {",s)
         self.assertNotIn(OLD_ACTION, s)
         self.assertEqual(patch(s), s)
 
