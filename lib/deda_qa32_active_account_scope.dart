@@ -55,10 +55,15 @@ class DedaQa32ActiveAccountScope extends StatefulWidget {
 }
 
 class _DedaQa32ActiveAccountScopeState
-    extends State<DedaQa32ActiveAccountScope> {
+    extends State<DedaQa32ActiveAccountScope> with WidgetsBindingObserver {
   DedaQa32ActiveAccountIdentity? _proof;
   StreamSubscription<User?>? _auth;
   int _epoch = 0;
+  bool _authAttachQueued = false;
+  // DEDA_100377_POINT13_LATE_FIREBASE_INIT_ACCOUNT_SCOPE_REARM
+  // A page can mount before Firebase.initializeApp completes. The canonical
+  // fallback stays until an actual session and Stage71 grant are verified.
+  // Re-arm on app resume/parent rebuild without leaking prior UID proof.
 
   // Widget tests and initial cold-start frames may render Account Info before
   // Firebase.initializeApp(). A missing app MUST NOT crash the whole page.
@@ -79,20 +84,62 @@ class _DedaQa32ActiveAccountScopeState
     }
   }
 
+  void _attachAuthWhenReady() {
+    if (!mounted || _auth != null || !_firebaseReady) return;
+    try {
+      _auth = FirebaseAuth.instance.authStateChanges().listen((_) {
+        _load();
+      });
+      // After late initialization the fresh session will trigger _load.
+      _load();
+    } catch (_) {
+      // Firebase isn't ready: keep the canonical original fallback.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    if (!_firebaseReady) return; // original header is the safe fallback
-    _auth = FirebaseAuth.instance.authStateChanges().listen((_) {
-      _load();
-    });
+    WidgetsBinding.instance.addObserver(this);
+    // Always listen, even if Firebase initialization is pending.
     DedaStage71ActiveIdRefresh.notifier.addListener(_load);
-    _load();
+    // Attach after first frame as mounted is false during initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _attachAuthWhenReady();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Firebase may have become ready while this screen was already mounted.
+    if (_auth == null && _firebaseReady && !_authAttachQueued) {
+      _authAttachQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _authAttachQueued = false;
+        if (mounted) _attachAuthWhenReady();
+      });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _attachAuthWhenReady();
+      _load(); // server-verified refresh, never a local alias guess
+    }
   }
 
   @override
   void didUpdateWidget(covariant DedaQa32ActiveAccountScope oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Reattach if this owner header survived Firebase initialization.
+    if (_auth == null && _firebaseReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _attachAuthWhenReady();
+      });
+    }
     if (oldWidget.originalId != widget.originalId) {
       setState(() => _proof = null);
       _load();
@@ -142,6 +189,7 @@ class _DedaQa32ActiveAccountScopeState
   void dispose() {
     ++_epoch;
     DedaStage71ActiveIdRefresh.notifier.removeListener(_load);
+    WidgetsBinding.instance.removeObserver(this);
     _auth?.cancel();
     super.dispose();
   }
