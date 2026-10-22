@@ -78,6 +78,12 @@ class DedaMyStoreSnapshot {
 }
 
 class DedaMyStorePage extends StatelessWidget {
+  // This page is staged and disconnected from main.dart. A trusted production
+  // item-source adapter and signed owner QA are mandatory before enabling.
+  static const bool releaseEnabled = bool.fromEnvironment(
+    'DEDA_100377_MY_STORE_VERIFIED_LIVE', defaultValue: false,
+  );
+
   const DedaMyStorePage({
     super.key,
     required this.originalId,
@@ -103,7 +109,7 @@ class DedaMyStorePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = _trustedUid();
-    final inventory = uid != null &&
+    final inventory = releaseEnabled && uid != null &&
             verifiedSnapshot?.verifiedFor(uid, originalId) == true
         ? verifiedSnapshot
         : null;
