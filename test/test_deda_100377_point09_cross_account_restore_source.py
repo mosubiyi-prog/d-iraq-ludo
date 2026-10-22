@@ -83,6 +83,20 @@ class Point09IdentityContinuity(unittest.TestCase):
         self.assertIn("DedaStage71OwnedIdentifierService.active(original)", part)
         self.assertIn("DedaStage71OwnedIdentifierService.owned(original)", part)
 
+    def test_active_premium_foil_invalidates_same_original_on_firebase_uid_change(self):
+        foil = SOURCE[SOURCE.index("class _DedaStage71ActiveProfileFoilState"):]
+        self.assertIn("DEDA_100377_P09_ACTIVE_FOIL_FIREBASE_UID_ROTATION_SAFE",foil)
+        self.assertIn("StreamSubscription<User?>? _auth;",foil)
+        self.assertIn("FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged)",foil)
+        self.assertIn("_auth?.cancel();",foil)
+        self.assertIn("void _onAuthChanged(User? user)",foil)
+        self.assertIn("_verifiedUid = null;",foil)
+        self.assertIn("_verifiedUid = uid;",foil)
+        self.assertIn("_currentUid() != _verifiedUid",foil)
+        self.assertGreaterEqual(foil.count("_currentUid() != uid"),3)
+        self.assertIn("widget.fallback",foil)
+        self.assertIn("widget.originalId == original && _currentUid() == uid",foil)
+
     def test_cross_device_money_and_xp_never_restored_from_unverified_local_max(self):
         self.assertIn("function inspectContinuity(proof, server, device)", SERVER)
         self.assertIn('status: "needs-verified-recovery"', SERVER)
