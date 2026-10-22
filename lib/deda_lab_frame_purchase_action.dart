@@ -169,7 +169,9 @@ class _DedaLabFramePurchaseActionState
 
   Future<void> _buy() async {
     if (_busy || !DedaLabFrameSecureCheckout.live ||
-        (_owned && _ownedVerifiedUid == _currentUid())) return;
+        (_owned && _ownedVerifiedUid == _currentUid())) {
+      return;
+    }
     final owner = widget.originalId;
     final frame = widget.frameId;
     final uid = _currentUid();
