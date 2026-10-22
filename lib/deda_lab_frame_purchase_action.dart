@@ -27,6 +27,7 @@ class _DedaLabFramePurchaseActionState
     extends State<DedaLabFramePurchaseAction> {
   int _verificationEpoch = 0;
   bool _busy = false;
+  String? _lastAuthUid;
   bool _owned = false;
   String? _ownedVerifiedUid;
   String? _error;
@@ -37,6 +38,10 @@ class _DedaLabFramePurchaseActionState
   // inherit a frame's server-confirmed Use button or pending checkout result.
   void _onAuthChanged(User? user) {
     if (!mounted) return;
+    // Firebase auth streams may repeat the same UID. Do not reset an
+    // in-flight purchase or its verified ownership for duplicate events.
+    if (_lastAuthUid == user?.uid) return;
+    _lastAuthUid = user?.uid;
     _verificationEpoch++;
     setState(() {
       _busy = false;
