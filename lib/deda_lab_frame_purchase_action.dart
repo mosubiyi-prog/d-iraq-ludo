@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'deda_lab_frame_secure_checkout.dart';
 
 /// The original DEDA store visual flow: preview is free; paid Buy becomes Use
@@ -23,10 +25,55 @@ class _DedaLabFramePurchaseActionState
     extends State<DedaLabFramePurchaseAction> {
   bool _busy = false;
   bool _owned = false;
+  String? _ownedVerifiedUid;
   String? _error;
 
-  bool _sameItem(String owner, String frame) =>
-      mounted && widget.originalId == owner && widget.frameId == frame;
+  // DEDA_100377_POINT01_FRAME_PURCHASE_ACTION_ACCOUNT_UID_GUARD
+  // Even if the visible card stays mounted, a signed-in account can change
+  // while an async receipt or purchase is pending. Never show or activate
+  // another user's paid frame after that change.
+  String? _currentUid() {
+    try {
+      if (Firebase.apps.isEmpty) return null;
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _sameItem(String owner, String frame, String? uid) =>
+      mounted &&
+      widget.originalId == owner &&
+      widget.frameId == frame &&
+      uid != null &&
+      _currentUid() == uid;
+
+  void _clearIfAccountChanged(String owner, String frame, String? uid) {
+    if (!mounted || widget.originalId != owner || widget.frameId != frame ||
+        _currentUid() == uid) return;
+    setState(() {
+      _busy = false;
+      _owned = false;
+      _ownedVerifiedUid = null;
+      _error = 'تغيّر الحساب؛ أعد التحقق من ملكية الإطار.';
+    });
+  }
+
+  void _useVerifiedFrame() {
+    if (!_busy && _owned && _ownedVerifiedUid != null &&
+        _ownedVerifiedUid == _currentUid()) {
+      widget.onVerifiedOwned();
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _owned = false;
+        _ownedVerifiedUid = null;
+        _busy = false;
+        _error = 'يلزم التحقق من ملكية الإطار لهذا الحساب.';
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -45,6 +92,7 @@ class _DedaLabFramePurchaseActionState
       // another account or another card.
       _busy = false;
       _owned = false;
+      _ownedVerifiedUid = null;
       _error = null;
       if (DedaLabFrameSecureCheckout.live) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
@@ -56,17 +104,28 @@ class _DedaLabFramePurchaseActionState
     if (!mounted || _busy || !DedaLabFrameSecureCheckout.live) return;
     final owner = widget.originalId;
     final frame = widget.frameId;
+    final uid = _currentUid();
+    if (uid == null) return; // No owner proof, no paid ownership UI.
     setState(() { _busy = true; _error = null; });
     try {
       final owned = await DedaLabFrameSecureCheckout.isOwned(
         originalId: owner, frameId: frame);
-      if (_sameItem(owner, frame)) setState(() => _owned = owned);
+      if (_sameItem(owner, frame, uid)) {
+        setState(() {
+          _owned = owned;
+          _ownedVerifiedUid = owned ? uid : null;
+        });
+      }
     } catch (_) {
-      if (_sameItem(owner, frame)) {
+      if (_sameItem(owner, frame, uid)) {
         setState(() => _error = 'تعذّر التحقق من ملكية الإطار.');
       }
     } finally {
-      if (_sameItem(owner, frame)) setState(() => _busy = false);
+      if (_sameItem(owner, frame, uid)) {
+        setState(() => _busy = false);
+      } else {
+        _clearIfAccountChanged(owner, frame, uid);
+      }
     }
   }
 
@@ -74,6 +133,8 @@ class _DedaLabFramePurchaseActionState
     if (_busy || _owned || !DedaLabFrameSecureCheckout.live) return;
     final owner = widget.originalId;
     final frame = widget.frameId;
+    final uid = _currentUid();
+    if (uid == null) return;
     final yes = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -93,21 +154,33 @@ class _DedaLabFramePurchaseActionState
         ],
       ),
     );
-    if (!_sameItem(owner, frame) || yes != true || _busy || _owned) return;
+    if (!_sameItem(owner, frame, uid)) {
+      _clearIfAccountChanged(owner, frame, uid);
+      return;
+    }
+    if (yes != true || _busy || _owned) return;
     setState(() { _busy = true; _error = null; });
     try {
       await DedaLabFrameSecureCheckout.buyOnce(
         originalId: owner, frameId: frame);
-      if (_sameItem(owner, frame)) setState(() => _owned = true);
+      if (_sameItem(owner, frame, uid)) {
+        setState(() {
+          _owned = true;
+          _ownedVerifiedUid = uid;
+        });
+      }
     } catch (error) {
       // Network timeouts can happen AFTER a real commit. Read receipt first,
       // never issue a second automatic payment.
       try {
         final owned = await DedaLabFrameSecureCheckout.isOwned(
           originalId: owner, frameId: frame);
-        if (_sameItem(owner, frame) && owned) {
-          setState(() => _owned = true);
-        } else if (_sameItem(owner, frame)) {
+        if (_sameItem(owner, frame, uid) && owned) {
+          setState(() {
+            _owned = true;
+            _ownedVerifiedUid = uid;
+          });
+        } else if (_sameItem(owner, frame, uid)) {
           final insufficient = error.toString()
               .contains('insufficient-verified-gift-diamonds');
           setState(() => _error = insufficient
@@ -115,13 +188,17 @@ class _DedaLabFramePurchaseActionState
               : 'لم يتأكد الشراء؛ لم نفعّل الإطار.');
         }
       } catch (_) {
-        if (_sameItem(owner, frame)) {
+        if (_sameItem(owner, frame, uid)) {
           setState(() =>
               _error = 'الحالة غير مؤكدة؛ أعد التحقق قبل أي محاولة شراء.');
         }
       }
     } finally {
-      if (_sameItem(owner, frame)) setState(() => _busy = false);
+      if (_sameItem(owner, frame, uid)) {
+        setState(() => _busy = false);
+      } else {
+        _clearIfAccountChanged(owner, frame, uid);
+      }
     }
   }
 
@@ -140,7 +217,7 @@ class _DedaLabFramePurchaseActionState
         width: double.infinity,
         child: _owned
             ? OutlinedButton(
-                onPressed: _busy ? null : widget.onVerifiedOwned,
+                onPressed: _busy ? null : _useVerifiedFrame,
                 child: Text(_busy ? 'جار التحقق…' : 'استخدام'),
               )
             : FilledButton(
