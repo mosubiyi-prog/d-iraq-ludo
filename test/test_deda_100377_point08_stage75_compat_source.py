@@ -18,31 +18,42 @@ def stage75():
 
 
 def baseline_section():
-    """Accept either raw repo state or Actions' already-staged Stage75 input."""
-    source = SECTION.read_text(encoding="utf-8")
-    if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" not in source:
-        return source
-    removals = [
-        ("import 'dart:async';\n\n", ""),
-        ("import 'deda_stage75_unread_gift_badge.dart';\n", ""),
-        ("    unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n", ""),
-        ("      unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n", ""),
-        ("      // DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW\n"
-         "      // This is a read marker ONLY, never an ownership/claim mutation.\n"
-         "      unawaited(DedaStage75UnreadGiftBadge.markViewed(originalId, gifts));\n", ""),
-    ]
-    for old, new in removals:
-        if source.count(old) != 1:
-            raise ValueError("SAFE_STOP_STAGE75_TEST_RESTORE_INPUT_DRIFT:" + repr(old))
-        source = source.replace(old, new, 1)
-    if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" in source:
-        raise ValueError("SAFE_STOP_STAGE75_TEST_MARKER_REMAINS")
-    return source
+    """Use immutable Git HEAD source, never subtract Dart-formatted patches.
+
+    Actions reconstructs lib/*.dart in its working tree. Its formatting of
+    Stage75 start()/markViewed() is not guaranteed to preserve source-space
+    indentation. Git HEAD is the tracked, unmodified version of the same
+    branch's Point08 protected inbox, so patch tests remain deterministic.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "show", "HEAD:lib/deda_stage74_hadaya_identifier_section.dart"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+    original = result.stdout
+    if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" in original:
+        raise ValueError("SAFE_STOP_HEAD_STAGE75_ALREADY_PATCHED")
+    for marker in ("_generation++;", "_claimingId = null;",
+                   "_gifts = null;", "_error = null;",
+                   "if (oldWidget.originalId != widget.originalId) {"):
+        if marker not in original:
+            raise ValueError("SAFE_STOP_TRACKED_POINT08_GUARD_MISSING:" + marker)
+    return original
 
 
 class GiftNotificationCompatibility(unittest.TestCase):
     def test_current_account_safe_inbox_keeps_protection_and_unread_badge(self):
         original = baseline_section()
+        # If the full reconstructed app already applied Stage75, verify
+        # idempotence and current-account safety before testing raw HEAD.
+        working = SECTION.read_text(encoding="utf-8")
+        if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" in working:
+            self.assertEqual(stage75().patch_section(working), working)
+            for marker in ("_generation++;", "_gifts = null;",
+                           "_claimingId = null;", "widget.originalId != originalId"):
+                self.assertIn(marker, working)
+            self.assertIn("DedaStage75UnreadGiftBadge.start", working)
         patched = stage75().patch_section(original)
         self.assertIn("DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW", patched)
         self.assertEqual(
