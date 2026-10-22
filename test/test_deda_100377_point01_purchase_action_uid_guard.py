@@ -39,10 +39,18 @@ class SignedFrameUiOwnershipGuard(unittest.TestCase):
     def test_purchase_owner_must_also_own_canonical_original_id_route(self):
         s = self.checkout
         self.assertIn('DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF', s)
-        self.assertIn("id['ownerUid'] != uid", s)
-        self.assertIn("id['publicId'] != originalId", s)
-        self.assertIn("profile['sharePersonalId'] != originalId", s)
-        self.assertIn("accountKey != (session['accountKey']", s)
+        self.assertIn("DedaQa32ManagerOriginalOwnerProof.authentic(", s)
+        self.assertIn("expectedOriginal: originalId,", s)
+        self.assertIn("authUid: uid,", s)
+        self.assertIn("account: profile,", s)
+        self.assertIn("session: session,", s)
+        self.assertIn("route: id,", s)
+        self.assertIn("Legacy accounts may lack users.sharePersonalId entirely", s)
+        auth = (ROOT / "lib/deda_qa32_manager_original_owner_proof.dart").read_text()
+        self.assertIn("route['ownerUid'] != authUid", auth)
+        self.assertIn("route['publicId'] != expectedOriginal", auth)
+        self.assertIn("accountKey != session['accountKey']", auth)
+        self.assertIn("claimedOriginal != expectedOriginal", auth)
         self.assertIn("source: Source.server", s)
         self.assertIn("original-owner-session-not-verified", s)
 
