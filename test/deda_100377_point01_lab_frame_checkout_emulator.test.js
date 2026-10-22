@@ -72,6 +72,45 @@ test('atomic 1000 checkout creates immutable receipt and ownership',async()=>{
   await assertFails(checkout(db,'FRAME_03',1000,500));
   assert.equal((await getDoc(wallet(db))).data().balance,1500);
 });
+test('genuine existing admin gift claim survives 1000-frame checkout rules',async()=>{
+  await reset(2500);
+  const giftId='point01_real_gift_preservation_100';
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await setDoc(doc(ctx.firestore(),'deda_diamond_gifts',giftId),{
+      giftId,targetPublicId:user.id,amount:100,status:'pending',
+      sourceType:'admin',adminUid:'synthetic_manager',
+      createdAt:new Date(2026,9,1)});
+  });
+  const db=client();
+  const gift=writeBatch(db);
+  gift.update(doc(db,'deda_diamond_gifts',giftId),{
+    status:'received',claimedAt:serverTimestamp()});
+  gift.update(wallet(db),{
+    balance:2600,lastClaimGiftId:giftId,updatedAt:serverTimestamp()});
+  await assertSucceeds(gift.commit());
+  assert.equal((await getDoc(wallet(db))).data().balance,2600);
+  const replay=writeBatch(db);
+  replay.update(doc(db,'deda_diamond_gifts',giftId),{
+    status:'received',claimedAt:serverTimestamp()});
+  replay.update(wallet(db),{
+    balance:2700,lastClaimGiftId:giftId,updatedAt:serverTimestamp()});
+  await assertFails(replay.commit());
+  assert.equal((await getDoc(wallet(db))).data().balance,2600);
+});
+
+test('two concurrent taps cannot both own or debit the same frame',async()=>{
+  await reset(2500);
+  const db=client();
+  const outcomes=await Promise.allSettled([
+    checkout(db,'FRAME_03',1000,1500),
+    checkout(db,'FRAME_03',1000,1500),
+  ]);
+  assert.equal(outcomes.filter(x=>x.status==='fulfilled').length,1);
+  assert.equal(outcomes.filter(x=>x.status==='rejected').length,1);
+  assert.equal((await getDoc(wallet(db))).data().balance,1500);
+  assert.equal((await getDoc(receipt(db))).data().cost,1000);
+});
+
 test('wallet-only debit and standalone owned frame are denied',async()=>{
   await reset();
   const db=client();
