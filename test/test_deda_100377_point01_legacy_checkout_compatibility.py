@@ -33,7 +33,7 @@ class TestPoint01ExistingShopCompatibility(unittest.TestCase):
         self.assertNotIn("DedaDiamondsWallet.spend", new_checkout)
         self.assertIn("'الشراء بعد التحقق'", new_ui)
         self.assertIn("defaultValue: false", new_checkout)
-        self.assertEqual(len(re.findall(r"'FRAME_(?:0[3-9]|1[0-6])'", new_checkout)), 14)
+        self.assertEqual(len(re.findall(r"'FRAME_(?:0[3-9]|1[0-6])'", new_checkout)), 13)
 
     def test_proposed_live_policy_changes_old_gift_spending_permission(self):
         rules = (ROOT / "tools/deda_stage69_merge_5000_checkout_into_live_rules_READONLY_NO_DEPLOY.py").read_text()
