@@ -41,7 +41,9 @@ class Point13TrueAccountProjectionSourceTest(unittest.TestCase):
         self.assertIn("'recipientOriginalId'",self.stage71)
         self.assertIn('account-rotated',self.stage71)
         self.assertIn('accountKey',self.stage71)
-        self.assertIn('receivedNames(original)',self.stage71)
+        self.assertIn('acceptedOwnedForMyStore(original)',self.stage71)
+        self.assertIn('receivedNames(originalId)',self.stage71)
+        self.assertIn('DEDA_100377_UNIFIED_ACCEPTED_OWNERSHIP_PROFILE_AND_MY_STORE',self.stage71)
 
     def test_source_of_truth_is_original_and_active_alias_is_server_proof(self):
         spark=self.spark
