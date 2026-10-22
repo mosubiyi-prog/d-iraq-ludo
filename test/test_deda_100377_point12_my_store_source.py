@@ -134,9 +134,17 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         source=(ROOT/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
         section=source[source.index('class DedaStage71OwnedIdentifierService'):
                        source.index('/// User\'s Edit Profile:')]
-        self.assertIn("db.collection('users').doc(user.uid)",section)
-        self.assertIn("db.collection('deda_sessions').doc(user.uid)",section)
-        self.assertGreaterEqual(section.count('GetOptions(source: Source.server)'),5)
+        # Point13 now freezes signed UID before async reads; asserting the
+        # old Dart variable spelling would reject the *stronger* owner guard.
+        self.assertIn("final uid = user.uid;",section)
+        self.assertIn("db.collection('users').doc(uid)",section)
+        self.assertIn("db.collection('deda_sessions').doc(uid)",section)
+        self.assertIn("db.collection('deda_share_ids').doc(id)",section)
+        self.assertIn("DedaQa32ManagerOriginalOwnerProof.authentic(",section)
+        self.assertIn("authUid: uid",section)
+        self.assertIn("route: route",section)
+        self.assertIn("FirebaseAuth.instance.currentUser?.uid != uid",section)
+        self.assertGreaterEqual(section.count('GetOptions(source: Source.server)'),6)
         self.assertIn('account-switched-before-inventory-return',section)
 
     def test_gift_receipt_must_include_real_server_timestamp(self):
