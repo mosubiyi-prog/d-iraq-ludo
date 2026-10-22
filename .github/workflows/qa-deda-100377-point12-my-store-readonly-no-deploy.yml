@@ -1,0 +1,39 @@
+name: DEDA 100377 Point12 My Store Ownership QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100377-13-points-sequential-qa-2026-10-22
+    paths:
+      - '.github/workflows/qa-deda-100377-point12-my-store-readonly-no-deploy.yml'
+      - 'lib/deda_100377_my_store_owned_profile_staged.dart'
+      - 'test/deda_100377_point12_my_store_owned_readonly_widget_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100377-point12-my-store-source-only
+  cancel-in-progress: true
+jobs:
+  proof-only-owned-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Validate proof-only five-category My Store
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_100377_point12_my_store_owned_readonly_widget_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_100377_my_store_owned_profile_staged.dart
+          grep -Fq 'ownerUid != uid' lib/deda_100377_my_store_owned_profile_staged.dart
+          grep -Fq 'FirebaseAuth.instance.currentUser?.uid' lib/deda_100377_my_store_owned_profile_staged.dart
+          grep -Fq 'متجري' lib/deda_100377_my_store_owned_profile_staged.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          git diff --quiet -- android/ firebase.json firestore.rules functions/index.js lib/main.dart
+          echo 'PASS Point12 My Store source read-only, no premium fake ownership, no APK or deploy'
