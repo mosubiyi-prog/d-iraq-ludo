@@ -2234,6 +2234,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && validLabFrameDebit(publicId)
         && existsAfter(labFrameOwnedPath(publicId, frameId))
+        && getAfter(labFrameOwnedPath(publicId, frameId)).data.publicId == publicId
+        && getAfter(labFrameOwnedPath(publicId, frameId)).data.frameId == frameId
         && getAfter(labFrameOwnedPath(publicId, frameId)).data.receiptId ==
           publicId + '_' + frameId;
     }
@@ -2252,6 +2254,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && validLabFrameDebit(publicId)
         && existsAfter(labFrameReceiptPath(publicId, frameId))
+        && getAfter(labFrameReceiptPath(publicId, frameId)).data.publicId == publicId
+        && getAfter(labFrameReceiptPath(publicId, frameId)).data.frameId == frameId
         && getAfter(labFrameReceiptPath(publicId, frameId)).data.kind == 'lab_frame'
         && getAfter(labFrameReceiptPath(publicId, frameId)).data.cost == 1000;
     }
