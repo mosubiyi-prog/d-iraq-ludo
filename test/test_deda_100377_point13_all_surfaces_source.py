@@ -45,6 +45,22 @@ class Point13TrueAccountProjectionSourceTest(unittest.TestCase):
         self.assertIn('receivedNames(originalId)',self.stage71)
         self.assertIn('DEDA_100377_UNIFIED_ACCEPTED_OWNERSHIP_PROFILE_AND_MY_STORE',self.stage71)
 
+    def test_late_firebase_start_and_resume_rearm_only_verified_owner_alias(self):
+        owner=self.owner
+        self.assertIn('DEDA_100377_POINT13_LATE_FIREBASE_INIT_ACCOUNT_SCOPE_REARM',owner)
+        self.assertIn('with WidgetsBindingObserver',owner)
+        self.assertIn('WidgetsBinding.instance.addObserver(this);',owner)
+        self.assertIn('WidgetsBinding.instance.removeObserver(this);',owner)
+        self.assertIn('void _attachAuthWhenReady()',owner)
+        self.assertIn('FirebaseAuth.instance.authStateChanges().listen',owner)
+        self.assertIn('DedaStage71ActiveIdRefresh.notifier.addListener(_load);',owner)
+        self.assertIn('state == AppLifecycleState.resumed',owner)
+        self.assertIn('_attachAuthWhenReady();',owner)
+        self.assertIn('_load(); // server-verified refresh, never a local alias guess',owner)
+        self.assertIn('DedaStage71OwnedIdentifierService.active(original)',owner)
+        self.assertIn('!DedaStage71OwnedIdentifierService.enabled',owner)
+        self.assertIn('verifiedFor(currentUid, widget.originalId)',owner)
+
     def test_source_of_truth_is_original_and_active_alias_is_server_proof(self):
         spark=self.spark
         owner=self.owner
