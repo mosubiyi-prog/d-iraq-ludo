@@ -48,7 +48,8 @@ def patch(src: str) -> str:
     if (grid.count(OLD_ACTION) != 1 or
             grid.count("title: dedaText('الشارات', 'Badges')") != 1 or
             grid.count("title: dedaText('متجري', 'My Store')") != 1 or
-            grid.count("title: dedaText('متجر المعرّفات', 'Identifier store')") != 1):
+            grid.count("title: dedaText('متجر المعرّفات', 'Identifier store')") != 0 or
+            grid.count('DEDA_100377_POINT12_SINGLE_PROFILE_TILE_KEEP_ORIGINAL_SHOP_NESTED') != 1):
         raise ValueError("SAFE_STOP_POINT11_BADGE_TILE_OR_SHOPS_MISMATCH")
     grid = grid.replace(OLD_ACTION, NEW_ACTION, 1)
     src = src[:begin] + grid + src[end:]
