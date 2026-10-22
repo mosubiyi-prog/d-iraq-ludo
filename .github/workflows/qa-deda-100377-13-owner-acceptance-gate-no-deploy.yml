@@ -1,0 +1,39 @@
+name: DEDA 100377 13 Owner Acceptance Gates QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100377-13-points-sequential-qa-2026-10-22
+    paths:
+      - 'docs/DEDA_100377_13_POINT_OWNER_ACCEPTANCE_GATES_2026-10-22.json'
+      - 'tools/deda_100377_13_point_acceptance_gate.py'
+      - '.github/workflows/qa-deda-100377-13-owner-acceptance-gate-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit-owner-13:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify all 13 original point labels and documented blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100377_13_point_acceptance_gate.py
+          python3 - <<'PY_GATE'
+          import subprocess
+          import sys
+          p = subprocess.run(
+              [sys.executable, 'tools/deda_100377_13_point_acceptance_gate.py', '--release'],
+              text=True, capture_output=True,
+          )
+          if p.returncode == 0 or 'SAFE_STOP_INCOMPLETE_OWNER_ACCEPTANCE_NO_FINAL_APK' not in p.stderr:
+              print(p.stdout, p.stderr)
+              raise SystemExit('SAFE_STOP_FINAL_APK_GATE_MUST_BLOCK_OPEN_POINTS')
+          print('PASS_FINAL_13_OF_13_APK_RELEASE_IS_BLOCKED_WHILE_OWNER_ACCEPTANCE_PENDING')
+          PY_GATE
+      - name: Confirm zero APK, zero AAB and no deployment
+        run: |
+          test ! -e build/app/outputs/flutter-apk/app-release.apk
+          test ! -e build/app/outputs/bundle/release/app-release.aab
+          echo 'NO_PLAY_NO_FIREBASE_NO_WALLET_NO_PUBLISH'
