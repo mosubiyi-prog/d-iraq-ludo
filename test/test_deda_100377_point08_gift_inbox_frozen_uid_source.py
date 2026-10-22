@@ -44,9 +44,22 @@ class HadayaFrozenAccountUid(unittest.TestCase):
         self.assertIn('if (!mounted || widget.originalId != originalId) return;', s)
         self.assertIn('      setState(() => _gifts = gifts);', s)
         self.assertIn('if (oldWidget.originalId != widget.originalId) {', s)
-        self.assertIn('      _generation++;\n      _loading = false;\n'
-                      '      _claimingId = null;\n      _gifts = null;\n'
-                      '      _error = null;\n      _refresh();\n    }', s)
+        # Stage75 legitimately adds a read-only unread-count notification
+        # between the reset and _refresh; never fail on that safe insertion.
+        start = s.index('if (oldWidget.originalId != widget.originalId) {')
+        stop = s.index('void dispose()', start)
+        switched = s[start:stop]
+        required = ('_generation++;', '_loading = false;',
+                    '_claimingId = null;', '_gifts = null;',
+                    '_error = null;', '_refresh();')
+        locations = [switched.index(item) for item in required]
+        self.assertEqual(locations, sorted(locations))
+        if 'DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW' in s:
+            self.assertIn(
+                'DedaStage75UnreadGiftBadge.start(widget.originalId)',
+                switched)
+        self.assertLess(switched.index('_gifts = null;'),
+                        switched.index('_refresh();'))
         self.assertNotIn('transaction.set(', s)
 
 
