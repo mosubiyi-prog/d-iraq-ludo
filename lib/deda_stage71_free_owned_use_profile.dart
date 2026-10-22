@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'deda_stage71_free_manager_200_service.dart';
 import 'deda_stage74_id_gift_service.dart';
 import 'deda_qa32_spark_public_identifier_directory.dart';
+import 'deda_qa32_manager_original_owner_proof.dart';
 import 'main.dart' show DedaPremiumIdCard, DedaPremiumIdCardColor;
 
 /// Stage71: permanent gifted/self-used identifiers accessible by the verified
@@ -69,21 +70,34 @@ class DedaStage71OwnedIdentifierService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('no-firebase-account');
     final db = FirebaseFirestore.instance;
+    // DEDA_100377_POINT13_LEGACY_ORIGINAL_ID_UID_OWNER_PROOF
+    // An older account can legitimately lack users.sharePersonalId.
+    // The original-ID route must always point to this exact authenticated
+    // UID, with a matching users/session accountKey and no conflicting ID.
+    // No local preference, display alias, or manager role is authority.
+    final uid = user.uid;
     final docs = await Future.wait([
-      db.collection('users').doc(user.uid)
+      db.collection('users').doc(uid)
           .get(const GetOptions(source: Source.server)),
-      db.collection('deda_sessions').doc(user.uid)
+      db.collection('deda_sessions').doc(uid)
+          .get(const GetOptions(source: Source.server)),
+      db.collection('deda_share_ids').doc(id)
           .get(const GetOptions(source: Source.server)),
     ]);
-    final profile=docs[0].data() ?? {};
-    final session=docs[1].data() ?? {};
-    if (FirebaseAuth.instance.currentUser?.uid!=user.uid ||
-        profile['sharePersonalId'] != id ||
-        profile['accountKey']==null ||
-        profile['accountKey'] != session['accountKey']) {
+    final profile = docs[0].data() ?? <String, dynamic>{};
+    final session = docs[1].data() ?? <String, dynamic>{};
+    final route = docs[2].data() ?? <String, dynamic>{};
+    if (FirebaseAuth.instance.currentUser?.uid != uid ||
+        !DedaQa32ManagerOriginalOwnerProof.authentic(
+          expectedOriginal: id,
+          authUid: uid,
+          account: profile,
+          session: session,
+          route: route,
+        )) {
       throw StateError('different-original-account');
     }
-    return user.uid;
+    return uid;
   }
 
   static Future<List<DedaStage71OwnedIdentifier>> owned(String originalId) async {
