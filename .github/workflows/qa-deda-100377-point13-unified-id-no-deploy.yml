@@ -1,4 +1,4 @@
-name: DEDA 100377 Point13 Unified ID Source QA NO DEPLOY
+name: DEDA 100377 Point13 Canonical ID Static Preflight NO DEPLOY
 on:
   push:
     branches:
@@ -19,21 +19,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: false
-      - name: Verify original-ID routing and one active-display projection
+      - name: Preflight canonical routing contract, full Dart tests run in reconstructed-app QA
         shell: bash
         run: |
           set -euo pipefail
-          flutter pub get
-          flutter test test/deda_100377_point13_unified_identity_source_test.dart
-          flutter analyze --no-fatal-warnings --no-fatal-infos lib/deda_100377_point13_unified_identity_projection_staged.dart
-          grep -Fq 'DEDA_100377_UNIFIED_ACTIVE_ID_LIVE' lib/deda_100377_point13_unified_identity_projection_staged.dart
-          grep -Fq 'defaultValue: false' lib/deda_100377_point13_unified_identity_projection_staged.dart
-          grep -Fq 'String get routeId => canonicalOriginal;' lib/deda_100377_point13_unified_identity_projection_staged.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('lib/deda_100377_point13_unified_identity_projection_staged.dart').read_text()
+          tests=Path('test/deda_100377_point13_unified_identity_source_test.dart').read_text()
+          assert src.count('DEDA_100377_UNIFIED_ACTIVE_ID_LIVE') == 1
+          assert 'defaultValue: false' in src
+          assert 'String get routeId => canonicalOriginal;' in src
+          assert 'releaseEnabled && isServerVerified ? stagedDisplayId : canonicalOriginal' in src
+          assert 'proof.verifiedFor(currentUid, originalId)' in src
+          assert 'proof.requestedId != originalId' in src
+          assert 'publicProof' in tests and 'wrong account UID' in tests
+          assert 'DedaDiamondsWallet' not in src
+          assert 'FirebaseFirestore' not in src
+          print('PASS_POINT13_STATIC_ONLY: canonical ID and release guard; no compile claim')
+          PY
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           test ! -f build/app/outputs/bundle/release/app-release.aab
           git diff --quiet -- android/ firebase.json firestore.rules functions/index.js lib/main.dart
-          echo 'PASS Point13 canonical/share ID immutable, public alias rollout OFF, no writes or build'
+          echo 'PASS Point13 STATIC only, full Flutter tests delegated to exact reconstruction workflow'
