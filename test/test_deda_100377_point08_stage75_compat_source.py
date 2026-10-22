@@ -17,9 +17,32 @@ def stage75():
     return module
 
 
+def baseline_section():
+    """Accept either raw repo state or Actions' already-staged Stage75 input."""
+    source = SECTION.read_text(encoding="utf-8")
+    if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" not in source:
+        return source
+    removals = [
+        ("import 'dart:async';\n\n", ""),
+        ("import 'deda_stage75_unread_gift_badge.dart';\n", ""),
+        ("    unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n", ""),
+        ("      unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n", ""),
+        ("      // DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW\n"
+         "      // This is a read marker ONLY, never an ownership/claim mutation.\n"
+         "      unawaited(DedaStage75UnreadGiftBadge.markViewed(originalId, gifts));\n", ""),
+    ]
+    for old, new in removals:
+        if source.count(old) != 1:
+            raise ValueError("SAFE_STOP_STAGE75_TEST_RESTORE_INPUT_DRIFT:" + repr(old))
+        source = source.replace(old, new, 1)
+    if "DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW" in source:
+        raise ValueError("SAFE_STOP_STAGE75_TEST_MARKER_REMAINS")
+    return source
+
+
 class GiftNotificationCompatibility(unittest.TestCase):
     def test_current_account_safe_inbox_keeps_protection_and_unread_badge(self):
-        original = SECTION.read_text(encoding="utf-8")
+        original = baseline_section()
         patched = stage75().patch_section(original)
         self.assertIn("DEDA_STAGE75_GIFT_SEEN_ON_INBOX_VIEW", patched)
         self.assertEqual(
@@ -37,7 +60,7 @@ class GiftNotificationCompatibility(unittest.TestCase):
         self.assertNotIn("transaction.set(", patched)
 
     def test_legacy_exact_anchor_remains_supported_without_unsafe_fake_data(self):
-        current = SECTION.read_text(encoding="utf-8")
+        current = baseline_section()
         begin = current.index("    if (oldWidget.originalId != widget.originalId) {")
         end = current.index("\n  }\n\n  @override\n  void dispose()", begin)
         historical = (current[:begin] +
@@ -50,7 +73,7 @@ class GiftNotificationCompatibility(unittest.TestCase):
         self.assertIn("if (oldWidget.originalId != widget.originalId) {", patched)
 
     def test_unknown_account_switch_structure_fails_closed(self):
-        current = SECTION.read_text(encoding="utf-8")
+        current = baseline_section()
         changed = current.replace("      _gifts = null;", "      _gifts = <DedaStage74IdGift>[];", 1)
         with self.assertRaises(ValueError):
             stage75().patch_section(changed)
