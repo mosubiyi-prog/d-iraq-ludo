@@ -275,21 +275,12 @@ class _DedaStage71OwnedIdsPanelState
     final generation = ++_generation;
     final original = widget.originalId;
     try {
-      final all = await DedaStage71OwnedIdentifierService.owned(original);
-      final received = await DedaStage74IdGiftService.receivedNames(original);
-      // Only a valid grant or a received gift may be presented as owned.
-      final db = FirebaseFirestore.instance;
-      final rows = <DedaStage71OwnedIdentifier>[];
-      for (final item in all) {
-        if (received.contains(item.identifier)) {
-          rows.add(item);
-          continue;
-        }
-        final record = await db.collection(DedaStage71Admin200.registry)
-            .doc(item.identifier)
-            .get(const GetOptions(source: Source.server));
-        if (record.data()?['kind'] == 'self_used') rows.add(item);
-      }
+      // DEDA_100377_UNIFIED_ACCEPTED_OWNERSHIP_PROFILE_AND_MY_STORE
+      // The Edit Profile Use panel and My Store share one server-verified
+      // owned/received filter. No extra per-item round trip, and no pending
+      // gift can become usable through this local list.
+      final rows = await DedaStage71OwnedIdentifierService
+          .acceptedOwnedForMyStore(original);
       final chosen = await DedaStage71OwnedIdentifierService.active(original);
       if (!mounted || generation != _generation ||
           widget.originalId != original) return;
