@@ -216,6 +216,7 @@ jobs:
           python3 -m unittest discover -s test -p 'test_deda_100377_point07_received_friend_source.py'
           flutter test test/deda_100377_point07_received_friend_identity_test.dart
           # Point08 account switch: new user cannot inherit previous Hadaya inbox state.
+          # Point08 formatter-agnostic account-switch callback assertions.
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py'
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_stage75_compat_source.py'
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage74_hadaya_identifier_section.dart
