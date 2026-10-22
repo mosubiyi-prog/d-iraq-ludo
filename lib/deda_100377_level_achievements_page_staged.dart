@@ -168,9 +168,15 @@ class _LevelBadgeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final unlocked = progress?.isUnlocked == true;
     final hasVerifiedProgress = progress != null;
-    final requiredLabel = isArabic
-        ? 'من المستوى $threshold'
-        : 'From level $threshold';
+    // Point10: NEVER present the owner-unapproved preliminary rank
+    // thresholds as facts. Gold Level 1 already exists in legacy UI.
+    final requiredLabel = !hasVerifiedProgress
+        ? (isArabic
+            ? 'مستوى الفتح قيد التحقق'
+            : 'Unlock level pending verification')
+        : (isArabic
+            ? 'من المستوى $threshold'
+            : 'From level $threshold');
     final status = !hasVerifiedProgress
         ? (isArabic ? 'بانتظار التحقق' : 'Verification pending')
         : unlocked
