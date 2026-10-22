@@ -50,7 +50,9 @@ class _DedaLabFramePurchaseActionState
 
   void _clearIfAccountChanged(String owner, String frame, String? uid) {
     if (!mounted || widget.originalId != owner || widget.frameId != frame ||
-        _currentUid() == uid) return;
+        _currentUid() == uid) {
+      return;
+    }
     setState(() {
       _busy = false;
       _owned = false;
