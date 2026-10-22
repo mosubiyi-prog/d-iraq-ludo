@@ -69,17 +69,29 @@ class DedaLevelBadgePolicy {
     defaultValue: false,
   );
 
-  /// MUST be invoked only after server-confirmed current owner/level proof.
-  /// Null means NO authority to unlock or display progress, never level 1.
-  /// Passing a higher phone-local level or task points is not proof.
+  /// Release feature gate has NO caller-overridable bypass. Remains off
+  /// until verified cloud identity/level plus owner thresholds are connected.
   static List<DedaLevelBadgeProgress>? evaluate({
     required int? serverVerifiedLevel,
     required bool verifiedAccountAndLevel,
     required DedaLevelBadgeThresholds? ownerApprovedThresholds,
-    bool allowUnreleasedPurePolicyTest = false,
   }) {
-    if ((!releaseEnabled && !allowUnreleasedPurePolicyTest) ||
-        !verifiedAccountAndLevel ||
+    if (!releaseEnabled) return null;
+    return inspectVerifiedLevelForPolicyQa(
+      serverVerifiedLevel: serverVerifiedLevel,
+      verifiedAccountAndLevel: verifiedAccountAndLevel,
+      ownerApprovedThresholds: ownerApprovedThresholds,
+    );
+  }
+
+  /// Pure deterministic calculation for source-policy testing only.
+  /// Produces NO ownership, Firebase entitlement, user state, or award.
+  static List<DedaLevelBadgeProgress>? inspectVerifiedLevelForPolicyQa({
+    required int? serverVerifiedLevel,
+    required bool verifiedAccountAndLevel,
+    required DedaLevelBadgeThresholds? ownerApprovedThresholds,
+  }) {
+    if (!verifiedAccountAndLevel ||
         serverVerifiedLevel == null ||
         serverVerifiedLevel < 1 ||
         serverVerifiedLevel > 99999999 ||
