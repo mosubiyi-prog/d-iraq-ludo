@@ -183,11 +183,21 @@ class DedaStage71OwnedIdentifierService {
     final owner = DedaStage71OwnedIdentifier.read(
       ownedDoc.id, ownedDoc.data() ?? {}, originalId,
     );
+    // DEDA_100377_POINT13_ACTIVE_ALIAS_LATE_UID_GUARD
+    // Never return an old owner's premium alias after a slow grant read.
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-during-active-grant');
+    }
     if (ownedDoc.data()?['kind'] == 'gifted' &&
         !await DedaStage74IdGiftService.isReceived(
           owner.recipientOriginalId, current,
         )) {
       throw StateError('premium-id-gift-awaits-recipient-receipt');
+    }
+    // A gift receipt check may take another network round trip; confirm
+    // the SAME Firebase user before returning any paid/received display ID.
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-after-active-gift-receipt');
     }
     return current;
   }

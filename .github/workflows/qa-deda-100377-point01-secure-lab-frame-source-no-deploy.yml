@@ -46,6 +46,7 @@ on:
       - 'test/test_deda_100377_point12_my_store_source.py'
       - 'test/test_deda_100377_point13_all_surfaces_source.py'
       - 'test/test_deda_100377_point13_legacy_owned_id_uid_route_source.py'
+      - 'test/test_deda_100377_point13_active_late_uid_guard_source.py'
       - 'lib/deda_100377_point13_unified_identity_projection_staged.dart'
       - 'test/deda_100377_point13_unified_identity_source_test.dart'
   workflow_dispatch:
@@ -229,6 +230,9 @@ jobs:
           # Existing UID+canonical original account owner security applies to
           # all manager-held / gifted 200 IDs; support verified legacy users.
           python3 -m unittest discover -s test -p 'test_deda_100377_point13_legacy_owned_id_uid_route_source.py'
+          # Point13 active alias proof remains tied to current Firebase UID
+          # after both grant and received-gift network awaits.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point13_active_late_uid_guard_source.py'
           flutter analyze lib/deda_100377_point13_unified_identity_projection_staged.dart
           flutter test test/deda_100377_point13_unified_identity_source_test.dart
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
