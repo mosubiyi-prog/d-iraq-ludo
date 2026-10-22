@@ -26,7 +26,7 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         b = s.index('  Widget _featureGrid() {', a)
         m = s[a:b]
         self.assertIn('DedaStyleInventory.load()', m)
-        self.assertIn('DedaLabFrameSecureCheckout.isOwned(', m)
+        self.assertIn('DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(', m)
         self.assertIn('DedaStage71OwnedIdentifierService.active(originalId)', m)
         self.assertIn('DedaPreferences.phone != accountPhone', m)
         self.assertIn('_dedaId != originalId', m)
@@ -44,17 +44,30 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         self.assertIn('proof: DedaMyStoreProof.deviceSaved', m)
         self.assertNotIn("receiptKind: 'purchase'", m)
 
-    def test_all_paid_lab_frames_are_queried_from_server_one_by_one(self):
+    def test_all_paid_lab_frames_are_queried_from_server_batch(self):
         s=self.src
         a=s.index('DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED')
         b=s.index('for (var i = 0; i < dedaStyleBadgeIds.length; i++)',a)
         m=s[a:b]
         self.assertIn('if (DedaLabFrameSecureCheckout.live)',m)
         self.assertIn('style = 6; style <= 18; style++',m)
-        self.assertIn('DedaLabFrameSecureCheckout.isOwned(',m)
+        self.assertIn('DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(',m)
         self.assertIn("receiptKind: 'purchase'",m)
         self.assertIn('active: frameStyle == style',m)
         self.assertNotIn('buyOnce(',m)
+        checkout=(ROOT/'lib/deda_lab_frame_secure_checkout.dart').read_text()
+        a=checkout.index('DEDA_100377_MY_STORE_ALL_13_OWNED_FRAMES_SERVER_ONLY')
+        b=checkout.index('/// Transaction is idempotent per original account + frame.',a)
+        reader=checkout[a:b]
+        self.assertIn('await _verifyOwner(originalId)',reader)
+        self.assertIn('paidFrameIds.toList()..sort()',reader)
+        self.assertIn('Future.wait<String?>',reader)
+        self.assertIn('Source.server',reader)
+        self.assertIn('_valid(',reader)
+        self.assertIn('account-switched-during-frame-inventory',reader)
+        self.assertNotIn('.set(',reader)
+        self.assertNotIn('.update(',reader)
+        self.assertNotIn('buyOnce(',reader)
 
     def test_all_accepted_manager_ids_not_only_active(self):
         s=self.src
