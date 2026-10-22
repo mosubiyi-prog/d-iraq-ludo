@@ -201,6 +201,8 @@ jobs:
           flutter test test/deda_stage75_gift_unread_badge_test.dart
           flutter test test/deda_qa32_active_account_scope_test.dart
           flutter test test/deda_qa32_public_friend_full_premium_card_test.dart
+          # Point06 source-only contract: canonical original ID, server-verified active public foil.
+          flutter test test/deda_100377_point06_verified_public_identity_test.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
