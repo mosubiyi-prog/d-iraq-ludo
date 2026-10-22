@@ -217,8 +217,8 @@ class DedaLabFrameSecureCheckout {
       }
       tx.update(wallet, <String, dynamic>{
         'balance': amount - priceDiamonds,
-        'lastLabFrameId': frameId,
-        'lastLabFrameReceiptId': id,
+        // Keep wallet update compatible with existing Firestore rules.
+        // Frame identity is recorded in the separate receipt and ownership.
         'updatedAt': FieldValue.serverTimestamp(),
       });
       tx.set(receipt, <String, dynamic>{
