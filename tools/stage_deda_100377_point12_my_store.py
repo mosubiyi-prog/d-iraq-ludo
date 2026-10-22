@@ -138,6 +138,15 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
               ),
             );
           },
+          onOpenEditProfile: () {
+            if (!mounted || DedaPreferences.phone != accountPhone ||
+                _dedaId != originalId ||
+                (Firebase.apps.isNotEmpty &&
+                 FirebaseAuth.instance.currentUser?.uid != signedUidAtOpen)) {
+              return;
+            }
+            _openEditProfile();
+          },
         ),
       ),
     );
@@ -172,7 +181,8 @@ def patch(src: str) -> str:
     if MARK in src:
         if (src.count(MARK) != 1 or src.count(IMPORT) != 1 or
                 src.count(MY_STORE_TITLE) != 1 or
-                src.count('onOpenIdentifierShop: () {') != 1):
+                src.count('onOpenIdentifierShop: () {') != 1 or
+                src.count('onOpenEditProfile: () {') != 1):
             raise ValueError('SAFE_STOP_POINT12_PARTIAL_PATCH')
         return src
     if src.count(ANCHOR) != 1 or src.count(SHOP_TITLE) != 1:
@@ -209,6 +219,8 @@ def patch(src: str) -> str:
     result_grid = src[src.index(ANCHOR):src.index('  Widget _featureCard(', src.index(ANCHOR))]
     if result_grid.count(MY_STORE_TITLE) != 1 or result_grid.count(SHOP_TITLE) != 0:
         raise ValueError('SAFE_STOP_POINT12_MULTIPLE_PROFILE_SHOPS')
+    if src.count('onOpenEditProfile: () {') != 1:
+        raise ValueError('SAFE_STOP_POINT12_ORIGINAL_EDIT_PROFILE_ACCESS_LOST')
     if src.count('onOpenIdentifierShop: () {') != 1:
         raise ValueError('SAFE_STOP_POINT12_ORIGINAL_SHOP_ACCESS_LOST')
     return src
