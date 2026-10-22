@@ -35,8 +35,8 @@ class DedaLabFrameSecureCheckout {
   }
 
   static Future<String> _verifyOwner(String originalId) async {
-    if (!live || Firebase.apps.isEmpty) {
-      throw StateError('secure-lab-frame-checkout-not-approved');
+    if (Firebase.apps.isEmpty) {
+      throw StateError('firebase-not-initialized');
     }
     if (!originalIdPattern.hasMatch(originalId)) {
       throw ArgumentError('original-account-id-required');
@@ -188,6 +188,10 @@ class DedaLabFrameSecureCheckout {
   static Future<void> buyOnce({
     required String originalId, required String frameId,
   }) async {
+    // Read-only ownership remains available while new purchases are gated.
+    if (!live) {
+      throw StateError('secure-lab-frame-checkout-not-approved');
+    }
     final uid = await _verifyOwner(originalId);
     final id = purchaseId(originalId, frameId);
     final db = FirebaseFirestore.instance;
