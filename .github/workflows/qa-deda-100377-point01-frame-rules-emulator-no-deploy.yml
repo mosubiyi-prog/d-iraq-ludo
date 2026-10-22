@@ -7,6 +7,7 @@ on:
       - 'tools/deda_100377_point01_lab_frame_rules_candidate_NO_DEPLOY.py'
       - 'tools/deda_100377_point01_extend_stage69_rules_emulator_NO_DEPLOY.py'
       - 'test/deda_100377_point01_lab_frame_checkout_emulator.test.js'
+      - 'test/test_deda_100377_point01_legacy_checkout_compatibility.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,6 +41,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify existing DEDA store compatibility before ANY live rollout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_deda_100377_point01_legacy_checkout_compatibility.py'
+          echo 'PASS SOURCE AUDIT / LIVE ROLLOUT STILL BLOCKED UNTIL WALLET SOURCES RECONCILED'
       - name: Read active Firestore rules READ ONLY and build emulator candidate
         shell: bash
         run: |
