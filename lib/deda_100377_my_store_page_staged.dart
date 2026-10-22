@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'deda_qa32_active_account_scope.dart';
+
 /// DEDA 100377 / Point12 — read-only personal inventory, never an acquisition shop.
 /// Only callers with an actual verified server receipt may use [serverVerified].
 /// SharedPreferences selections are [deviceSaved], never proven purchases.
@@ -121,11 +123,41 @@ class DedaMyStorePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-          Text(
-            originalId,
-            key: const Key('deda_p12_canonical_original_id'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+          // DEDA_100377_POINT13_MY_STORE_OWNER_VERIFIED_ACTIVE_ALIAS
+          // The canonical ID always stays visible for routing/account recovery.
+          // A premium alias only appears after Stage71 authenticated server
+          // verification of this exact account; no SharedPreferences guess.
+          DedaQa32ActiveAccountScope(
+            originalId: originalId,
+            builder: (context, proof) {
+              final verifiedPremium = proof?.isPremium == true;
+              return Column(
+                children: <Widget>[
+                  if (verifiedPremium)
+                    Text(
+                      proof!.displayId,
+                      key: const Key('deda_p12_verified_active_display_id'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  if (verifiedPremium)
+                    Text(
+                      _t('المعرّف المميز المفعّل والمثبت', 'Verified active premium ID'),
+                      key: const Key('deda_p12_verified_alias_caption'),
+                    ),
+                  Text(
+                    originalId,
+                    key: const Key('deda_p12_canonical_original_id'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: verifiedPremium ? const Color(0xFF62666A) : null,
+                      fontSize: verifiedPremium ? 13 : null,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 7),
           Text(
