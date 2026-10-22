@@ -72,11 +72,31 @@ def patch_section(source):
     source = once(source, "    _refresh();\n  }\n\n  @override\n  void didUpdateWidget",
         "    unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n"
         "    _refresh();\n  }\n\n  @override\n  void didUpdateWidget")
-    source = once(source,
-        "    if (oldWidget.originalId != widget.originalId) _refresh();",
-        "    if (oldWidget.originalId != widget.originalId) {\n"
-        "      unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n"
-        "      _refresh();\n    }")
+    # Point08 already clears stale rows when account IDs change; never
+    # revert this protection merely to add Stage75 unread-badge handling.
+    legacy = "    if (oldWidget.originalId != widget.originalId) _refresh();"
+    if source.count(legacy) == 1:
+        source = once(source, legacy,
+            "    if (oldWidget.originalId != widget.originalId) {\n"
+            "      unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n"
+            "      _refresh();\n    }")
+    else:
+        hardened = (
+            "      _generation++;\n"
+            "      _loading = false;\n"
+            "      _claimingId = null;\n"
+            "      _gifts = null;\n"
+            "      _error = null;\n"
+            "      _refresh();\n    }"
+        )
+        if source.count("    if (oldWidget.originalId != widget.originalId) {") != 1:
+            raise ValueError("SAFE_STOP_STAGE75_NO_UNIQUE_ACCOUNT_SWITCH")
+        if source.count(hardened) != 1:
+            raise ValueError("SAFE_STOP_STAGE75_POINT08_PROTECTION_CHANGED")
+        source = once(source, hardened, hardened.replace(
+            "      _refresh();\n",
+            "      unawaited(DedaStage75UnreadGiftBadge.start(widget.originalId));\n"
+            "      _refresh();\n", 1))
     source = once(source,
         "      setState(() => _gifts = gifts);\n",
         "      setState(() => _gifts = gifts);\n"
