@@ -105,10 +105,12 @@ class DedaMyStorePage extends StatelessWidget {
         title: Text(_t('متجري', 'My Store')),
         centerTitle: true,
       ),
-      body: ListView(
+      body: SingleChildScrollView(
         key: const Key('deda_p12_my_store_read_only'),
         padding: const EdgeInsets.all(14),
-        children: <Widget>[
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
           Text(
             originalId,
             key: const Key('deda_p12_canonical_original_id'),
@@ -165,7 +167,8 @@ class DedaMyStorePage extends StatelessWidget {
             ),
             const SizedBox(height: 6),
           ],
-        ],
+          ],
+        ),
       ),
     );
   }
