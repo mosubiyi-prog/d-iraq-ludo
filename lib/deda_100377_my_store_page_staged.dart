@@ -22,6 +22,7 @@ class DedaMyStoreItem {
     required this.proof,
     this.active = false,
     this.receiptKind,
+    this.previewAsset,
   });
 
   final String id;
@@ -32,6 +33,8 @@ class DedaMyStoreItem {
 
   /// Only 'purchase' or 'gift' with serverVerified may enter the final section.
   final String? receiptKind;
+  /// An existing original Flutter asset for authentic visual thumbnails.
+  final String? previewAsset;
 }
 
 class DedaMyStorePage extends StatelessWidget {
@@ -41,6 +44,7 @@ class DedaMyStorePage extends StatelessWidget {
     required this.items,
     this.isArabic = true,
     this.onOpenIdentifierShop,
+    this.onOpenEditProfile,
   });
 
   final String originalId;
@@ -49,6 +53,8 @@ class DedaMyStorePage extends StatelessWidget {
   /// Preserves the ORIGINAL acquisition store route from the profile grid,
   /// but keeps only one owner-facing profile tile named My Store.
   final VoidCallback? onOpenIdentifierShop;
+  /// Reuse the actual existing Edit Profile picker; avoid a second fake Use.
+  final VoidCallback? onOpenEditProfile;
 
   String _t(String ar, String en) => isArabic ? ar : en;
 
@@ -131,6 +137,22 @@ class DedaMyStorePage extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
+          if (onOpenEditProfile != null) ...<Widget>[
+            Card(
+              child: ListTile(
+                key: const Key('deda_p12_original_edit_profile_entry'),
+                leading: const Icon(Icons.brush_outlined),
+                title: Text(_t('اختيار الصورة والإطار والخلفية', 'Choose avatar, frame and background')),
+                subtitle: Text(_t(
+                  'استخدم العناصر المجانية أو المملوكة من شاشة تعديل الملف الأصلية.',
+                  'Use free or verified-owned cosmetics in the original Edit Profile.',
+                )),
+                trailing: const Icon(Icons.chevron_left_rounded),
+                onTap: onOpenEditProfile,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (onOpenIdentifierShop != null) ...<Widget>[
             Card(
               child: ListTile(
@@ -175,6 +197,18 @@ class DedaMyStorePage extends StatelessWidget {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         key: ValueKey<String>('deda_p12_item_${item.section.name}_${item.id}'),
+                        leading: item.previewAsset == null
+                            ? null
+                            : SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: Image.asset(
+                                  item.previewAsset!,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(Icons.image_not_supported_outlined),
+                                ),
+                              ),
                         title: Text(item.label),
                         subtitle: Text(_proofLabel(item)),
                         trailing: item.active
