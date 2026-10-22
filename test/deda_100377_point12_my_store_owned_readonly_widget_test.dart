@@ -6,6 +6,10 @@ void main() {
   const original = '@DEDA-AQPYXJ';
   const uid = 'verified-phone-owner-A';
 
+  test('Point12 release is OFF before verified inventory rollout', () {
+    expect(DedaMyStorePage.releaseEnabled, isFalse);
+  });
+
   test('Point12 only authenticated original account may view owned items', () {
     const proof = DedaMyStoreSnapshot(
       ownerUid: uid,
