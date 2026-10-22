@@ -9,7 +9,7 @@ import re
 
 MAIN = Path('lib/main.dart')
 MARK = '// DEDA_100377_POINT01_LAB_FRAME_CHECKOUT_GUARDED'
-IMPORT = "import 'deda_lab_frame_purchase_action.dart';\n"
+IMPORT = "import 'deda_lab_frame_purchase_action.dart';\nimport 'deda_lab_frame_secure_checkout.dart';\n"
 EDITOR_START = 'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {'
 GRID = 'children: List<Widget>.generate(16, (offset) {'
 
@@ -38,10 +38,33 @@ def patch(src: str) -> str:
     editor = editor.replace(state, state + '\n  ' + MARK + '\n  final Set<int> _serverVerifiedPaidStyles = <int>{};', 1)
     save = 'Future<void> _save() async {'
     editor = editor.replace(save, save + '''
-    // Never persist a locally previewed or unverified paid LAB frame.
-    if (_frameStyle >= 6 && !_serverVerifiedPaidStyles.contains(_frameStyle)) {
-      setState(() => _error = 'تحقق من ملكية الإطار بالخادم ثم اضغط استخدام.');
-      return;
+    // Restore previously purchased premium frames safely on app reopen:
+    // verify the server-owned receipt again, not just an ephemeral UI Set.
+    if (_frameStyle >= 6) {
+      final selectedStyle = _frameStyle;
+      final frame = DedaLabPremiumFrameStyles.byProfileStyle(selectedStyle);
+      if (frame == null) {
+        setState(() => _error = 'هذا الإطار غير معتمد.');
+        return;
+      }
+      try {
+        final verified = await DedaLabFrameSecureCheckout.isOwned(
+          originalId: DedaBackend.personalShareIdForPhone(
+            DedaPreferences.phone,
+          ).trim(),
+          frameId: frame.id,
+        );
+        if (!mounted) return;
+        if (!verified || _frameStyle != selectedStyle) {
+          setState(() => _error = 'تحقق من ملكية الإطار ثم أعد المحاولة.');
+          return;
+        }
+        _serverVerifiedPaidStyles.add(selectedStyle);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _error = 'تعذّر التحقق من ملكية الإطار بالخادم.');
+        return;
+      }
     }
 ''', 1)
     grid = editor.index(GRID)
