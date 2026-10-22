@@ -457,12 +457,43 @@ class _DedaStage71ActiveProfileFoilState
   String? _active;
   String? _color;
   String? _verifiedOriginal;
+  String? _verifiedUid;
+  StreamSubscription<User?>? _auth;
   int _generation = 0;
+
+  // DEDA_100377_P09_ACTIVE_FOIL_FIREBASE_UID_ROTATION_SAFE
+  String? _currentUid() {
+    try {
+      if (Firebase.apps.isEmpty) return null;
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _onAuthChanged(User? user) {
+    ++_generation;
+    if (!mounted) return;
+    setState(() {
+      _active = null;
+      _color = null;
+      _verifiedOriginal = null;
+      _verifiedUid = null;
+    });
+    if (user?.uid != null) _load();
+  }
 
   @override
   void initState() {
     super.initState();
     DedaStage71ActiveIdRefresh.notifier.addListener(_load);
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        _auth = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
+      }
+    } catch (_) {
+      // Keep canonical original card if Firebase is not initialized.
+    }
     _load();
   }
 
@@ -475,6 +506,7 @@ class _DedaStage71ActiveProfileFoilState
       _active = null;
       _color = null;
       _verifiedOriginal = null;
+      _verifiedUid = null;
       _load();
     }
   }
@@ -483,24 +515,28 @@ class _DedaStage71ActiveProfileFoilState
   void dispose() {
     ++_generation;
     DedaStage71ActiveIdRefresh.notifier.removeListener(_load);
+    _auth?.cancel();
     super.dispose();
   }
 
   Future<void> _load() async {
     final generation = ++_generation;
     final original = widget.originalId;
-    if (_active != null || _color != null || _verifiedOriginal != null) {
+    final uid = _currentUid();
+    if (_active != null || _color != null ||
+        _verifiedOriginal != null || _verifiedUid != null) {
       if (mounted) setState(() {
         _active = null;
         _color = null;
         _verifiedOriginal = null;
+        _verifiedUid = null;
       });
     }
-    if (!DedaStage71OwnedIdentifierService.enabled) return;
+    if (!DedaStage71OwnedIdentifierService.enabled || uid == null) return;
     try {
       final active = await DedaStage71OwnedIdentifierService.active(original);
       if (!mounted || generation != _generation ||
-          widget.originalId != original) return;
+          widget.originalId != original || _currentUid() != uid) return;
       if (active == original) {
         // The original-ID fallback remains the only permitted visual state.
         return;
@@ -509,22 +545,23 @@ class _DedaStage71ActiveProfileFoilState
       final matching = rows.where((r) => r.identifier == active).toList();
       if (matching.length != 1) throw StateError('active-id-not-owned');
       if (!mounted || generation != _generation ||
-          widget.originalId != original) return;
+          widget.originalId != original || _currentUid() != uid) return;
       setState(() {
         _active = active;
         _color = matching.single.baseColor;
         _verifiedOriginal = original;
+        _verifiedUid = uid;
       });
       // Preserve the existing optional Spark projection refresh. Do not
       // invent remote ownership, change original identity or touch wallets.
       if (DedaQa32SparkPublicIdentifierDirectory.enabled &&
           mounted && generation == _generation &&
-          widget.originalId == original) {
+          widget.originalId == original && _currentUid() == uid) {
         try {
           final style = await DedaQa32SparkPublicIdentifierDirectory
               .readVerifiedStyle(original);
           if (!mounted || generation != _generation ||
-              widget.originalId != original) return;
+              widget.originalId != original || _currentUid() != uid) return;
           if (style == null ||
               style['displayId'] != active ||
               style['permanentColor'] != matching.single.baseColor) {
@@ -540,11 +577,12 @@ class _DedaStage71ActiveProfileFoilState
       }
     } catch (_) {
       if (mounted && generation == _generation &&
-          widget.originalId == original) {
+          widget.originalId == original && _currentUid() == uid) {
         setState(() {
           _active = null;
           _color = null;
           _verifiedOriginal = null;
+          _verifiedUid = null;
         });
       }
     }
@@ -553,6 +591,7 @@ class _DedaStage71ActiveProfileFoilState
   @override
   Widget build(BuildContext context) {
     if (_verifiedOriginal != widget.originalId ||
+        _verifiedUid == null || _currentUid() != _verifiedUid ||
         _active == null || _color == null) return widget.fallback;
     final color=DedaPremiumIdCardColor.values.firstWhere(
       (c)=>c.name==_color!,
