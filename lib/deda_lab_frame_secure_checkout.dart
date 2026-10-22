@@ -29,7 +29,7 @@ class DedaLabFrameSecureCheckout {
         !paidFrameIds.contains(frameId)) {
       throw ArgumentError('unapproved-frame-or-original-identifier');
     }
-    return '${originalId}_${frameId}';
+    return '$originalId_${frameId}';
   }
 
   static Future<String> _verifyOwner(String originalId) async {
@@ -99,7 +99,7 @@ class DedaLabFrameSecureCheckout {
     required String originalId, required String frameId,
   }) async {
     final uid = await _verifyOwner(originalId);
-    final id = purchaseId(originalId, frameId);
+    purchaseId(originalId, frameId);
     final db = FirebaseFirestore.instance;
     final data = await Future.wait([
       _receipt(db, originalId, frameId).get(), _ownership(db, originalId, frameId).get(),
