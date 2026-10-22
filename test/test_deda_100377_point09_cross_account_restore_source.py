@@ -37,6 +37,29 @@ class Point09IdentityContinuity(unittest.TestCase):
         self.assertIn("widget.originalId != original", part)
         self.assertIn("DedaStage71ActiveIdRefresh.notifier.removeListener(_onActiveChanged)", part)
 
+    def test_firebase_auth_rotation_clears_same_original_id_owned_rows(self):
+        part = scope("class _DedaStage71OwnedIdsPanelState", "/// On the user's personal hero")
+        self.assertIn("DEDA_100377_P09_AUTH_UID_ROTATION_INVALIDATES_OWNED_PANEL", part)
+        self.assertIn("FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged)", part)
+        self.assertIn("StreamSubscription<User?>? _auth;", part)
+        self.assertIn("_auth?.cancel();", part)
+        auth = part[part.index("void _onAuthChanged(User? user)"):part.index("@override\n  void initState()",part.index("void _onAuthChanged(User? user)"))]
+        for required in ("++_generation;", "_ids = null;", "_active = null;",
+                         "_verifiedUid = null;", "_busy = false;"):
+            self.assertIn(required, auth)
+        self.assertIn("if (user?.uid != null) _load();", auth)
+
+    def test_same_original_id_different_uid_never_shows_or_uses_previous_items(self):
+        part = scope("class _DedaStage71OwnedIdsPanelState", "/// On the user's personal hero")
+        self.assertIn("final uid = _currentUid();",part)
+        self.assertIn("_currentUid() != uid",part)
+        self.assertIn("_verifiedUid = uid;",part)
+        self.assertIn("if (uid == null || uid != _verifiedUid) return;",part)
+        self.assertIn("_currentUid() == _verifiedUid ? _ids : null;",part)
+        self.assertIn("final currentActive = currentRows == null ? null : _active;",part)
+        self.assertIn("for(final owned in currentRows ?? <DedaStage71OwnedIdentifier>[])",part)
+        self.assertIn("if (currentRows != null)",part)
+
     def test_old_account_use_reply_cannot_mark_new_account_active(self):
         part = scope("class _DedaStage71OwnedIdsPanelState", "/// On the user's personal hero")
         start = part.index("Future<void> _use(String id) async")
