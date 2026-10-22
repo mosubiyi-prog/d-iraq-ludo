@@ -35,6 +35,21 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         for forbidden in ('buyOnce(', '.spend(', 'addOwned(', 'claimDiamondGift(', 'grant('):
             self.assertNotIn(forbidden, m)
 
+    def test_free_choices_are_native_six_by_six_not_fake_new_moonlit(self):
+        s=self.src
+        self.assertIn("import 'deda_100377_profile_free_inventory.dart';",s)
+        self.assertIn("DedaProfileFreeInventory.forDevice(",s)
+        self.assertIn('DEDA_100377_POINT12_FULL_NATIVE_FREE_APPEARANCE_NO_FAKE_MOONLIT',s)
+        from pathlib import Path
+        source=(ROOT/'lib/deda_100377_profile_free_inventory.dart').read_text()
+        self.assertIn('avatarChoices = <int>[0, 1, 2, 3, 4, 5]',source)
+        self.assertIn('frameChoices = <int>[0, 1, 2, 3, 4, 5]',source)
+        self.assertIn('backgroundChoices = <int>[0, 1, 2, 6, 7, 8]',source)
+        self.assertIn('avatarStyle >= 6 && avatarStyle <= 8',source)
+        self.assertIn('backgroundStyle >= 3 && backgroundStyle <= 5',source)
+        self.assertNotIn('receiptKind:',source)
+        self.assertNotIn('DedaLabFrameSecureCheckout.buyOnce',source)
+
     def test_local_badge_does_not_become_verified_purchase(self):
         s = self.src
         a = s.index('for (var i = 0; i < dedaStyleBadgeIds.length; i++)')
