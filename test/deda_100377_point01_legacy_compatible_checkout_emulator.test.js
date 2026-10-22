@@ -110,6 +110,27 @@ test('simultaneous duplicate requests produce exactly one purchase',async()=>{
   assert.equal(results.filter(r=>r.status==='rejected').length,1);
   assert.equal((await getDoc(wallet(db))).data().balance,1500);
 });
+test('two different paid frames each charge 1000 once without overwriting ownership',async()=>{
+  await reset(2500);
+  const db=client();
+  await assertSucceeds(newFramePurchase(db,'FRAME_03',1000,1500));
+  await assertSucceeds(newFramePurchase(db,'FRAME_05',1000,500));
+  assert.equal((await getDoc(wallet(db))).data().balance,500);
+  assert.equal((await getDoc(owned(db,'FRAME_03'))).data().frameId,'FRAME_03');
+  assert.equal((await getDoc(owned(db,'FRAME_05'))).data().frameId,'FRAME_05');
+  await assertFails(newFramePurchase(db,'FRAME_03',1000,-500));
+  assert.equal((await getDoc(wallet(db))).data().balance,500);
+});
+test('fake LAB wallet markers without a receipt cannot bypass original store permission',async()=>{
+  await reset(2500);
+  const db=client();
+  const b=writeBatch(db);
+  b.update(wallet(db),{
+    balance:1500,lastLabFrameId:'FRAME_03',
+    lastLabFrameReceiptId:A.id+'_FRAME_03',updatedAt:serverTimestamp()});
+  await assertFails(b.commit());
+  assert.equal((await getDoc(wallet(db))).data().balance,2500);
+});
 test('price 900, free royalty frame and unknown frame cannot be purchased',async()=>{
   await reset();
   const db=client();
