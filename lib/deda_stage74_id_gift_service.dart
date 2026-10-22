@@ -87,10 +87,13 @@ class DedaStage74IdGiftService {
         continue;
       }
       final receipt = byId[gift.id];
+      // DEDA_100377_GIFT_RECEIPT_REQUIRES_SERVER_TIMESTAMP
+      // An incomplete receipt is NOT a completed user acceptance.
       final validReceipt = receipt != null &&
           receipt['identifier'] == gift.id &&
           receipt['originalId'] == originalId &&
-          receipt['group'] == d['group'];
+          receipt['group'] == d['group'] &&
+          receipt['receivedAt'] is Timestamp;
       if (receipt != null && !validReceipt) {
         throw StateError('id-gift-receipt-mismatch');
       }
