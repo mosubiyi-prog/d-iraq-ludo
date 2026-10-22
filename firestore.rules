@@ -2192,6 +2192,70 @@ service cloud.firestore {
         && getAfter(adminGiftPath(giftId)).data.claimedAt == request.time;
     }
 
+    // DEDA 100377 point 01: immutable paid-frame proof. No deployment here.
+    // Every frame receipt and ownership pair must be created in the same
+    // atomic operation as the exact 1000-diamond wallet debit.
+    function approvedPaidLabFrame(frameId) {
+      return frameId in [
+        'FRAME_03', 'FRAME_05', 'FRAME_06', 'FRAME_07',
+        'FRAME_08', 'FRAME_09', 'FRAME_10', 'FRAME_11',
+        'FRAME_12', 'FRAME_13', 'FRAME_14', 'FRAME_15', 'FRAME_16'
+      ];
+    }
+
+    function labFrameReceiptPath(publicId, frameId) {
+      return /databases/$(database)/documents/deda_lab_frame_receipts/$(publicId)/frames/$(frameId);
+    }
+
+    function labFrameOwnedPath(publicId, frameId) {
+      return /databases/$(database)/documents/deda_lab_owned_frames/$(publicId)/frames/$(frameId);
+    }
+
+    function validLabFrameDebit(publicId) {
+      return exists(userGiftBalancePath(publicId))
+        && existsAfter(userGiftBalancePath(publicId))
+        && get(userGiftBalancePath(publicId)).data.balance is int
+        && getAfter(userGiftBalancePath(publicId)).data.balance ==
+          get(userGiftBalancePath(publicId)).data.balance - 1000;
+    }
+
+    match /deda_lab_frame_receipts/{publicId}/frames/{frameId} {
+      allow get: if verifiedDiamondsPersonalOwner(publicId);
+      allow list, update, delete: if false;
+      allow create: if verifiedDiamondsPersonalOwner(publicId)
+        && approvedPaidLabFrame(frameId)
+        && request.resource.data.keys().hasOnly([
+          'publicId', 'frameId', 'kind', 'cost', 'createdAt'
+        ])
+        && request.resource.data.publicId == publicId
+        && request.resource.data.frameId == frameId
+        && request.resource.data.kind == 'lab_frame'
+        && request.resource.data.cost == 1000
+        && request.resource.data.createdAt == request.time
+        && validLabFrameDebit(publicId)
+        && existsAfter(labFrameOwnedPath(publicId, frameId))
+        && getAfter(labFrameOwnedPath(publicId, frameId)).data.receiptId ==
+          publicId + '_' + frameId;
+    }
+
+    match /deda_lab_owned_frames/{publicId}/frames/{frameId} {
+      allow get: if verifiedDiamondsPersonalOwner(publicId);
+      allow list, update, delete: if false;
+      allow create: if verifiedDiamondsPersonalOwner(publicId)
+        && approvedPaidLabFrame(frameId)
+        && request.resource.data.keys().hasOnly([
+          'publicId', 'frameId', 'receiptId', 'createdAt'
+        ])
+        && request.resource.data.publicId == publicId
+        && request.resource.data.frameId == frameId
+        && request.resource.data.receiptId == publicId + '_' + frameId
+        && request.resource.data.createdAt == request.time
+        && validLabFrameDebit(publicId)
+        && existsAfter(labFrameReceiptPath(publicId, frameId))
+        && getAfter(labFrameReceiptPath(publicId, frameId)).data.kind == 'lab_frame'
+        && getAfter(labFrameReceiptPath(publicId, frameId)).data.cost == 1000;
+    }
+
     match /deda_diamond_gift_balances/{publicId} {
       allow get: if verifiedGiftGeneralManager()
         || verifiedDiamondsPersonalOwner(publicId);
