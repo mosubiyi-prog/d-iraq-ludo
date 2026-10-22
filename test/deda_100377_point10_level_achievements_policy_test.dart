@@ -89,4 +89,28 @@ void main() {
         [true, true, true, true, false, false]);
     expect(eight.map((v) => v.levelsRemaining).toList(), [0, 0, 0, 0, 2, 4]);
   });
+
+  test('owner preliminary 1/10/20/30/40/50 tier boundaries, without any live grants', () {
+    final reviewed = DedaLevelBadgeThresholds.preliminaryOwnerRanges;
+    expect(badges.map(reviewed.levelFor).toList(), [1, 10, 20, 30, 40, 50]);
+    final cases = <int, int>{
+      1: 1, 9: 1, 10: 2, 19: 2, 20: 3, 29: 3,
+      30: 4, 39: 4, 40: 5, 49: 5, 50: 6, 99: 6,
+    };
+    for (final entry in cases.entries) {
+      final onlyPreview = DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
+        serverVerifiedLevel: entry.key,
+        verifiedAccountAndLevel: true,
+        ownerApprovedThresholds: reviewed,
+      )!;
+      expect(onlyPreview.where((t) => t.isUnlocked).length, entry.value);
+      expect(onlyPreview.last.levelsRemaining,
+          entry.key >= 50 ? 0 : 50 - entry.key);
+      expect(DedaLevelBadgePolicy.evaluate(
+        serverVerifiedLevel: entry.key,
+        verifiedAccountAndLevel: true,
+        ownerApprovedThresholds: reviewed,
+      ), isNull, reason: 'release gate stays off at every level');
+    }
+  });
 }
