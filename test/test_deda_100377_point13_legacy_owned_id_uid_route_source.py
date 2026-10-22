@@ -52,7 +52,10 @@ class Stage71OwnedIdentifierAuth(unittest.TestCase):
         self.assertIn("DedaStage74IdGiftService.isReceived(", src)
         self.assertIn("GetOptions(source: Source.server)", src)
         self.assertIn("DedaStage71OwnedIdentifier.read(", src)
-        self.assertIn("if (persisted!=identifier)", src)
+        # Dart formatter may insert spaces in a security comparison.
+        # Verify the readback guard and its failure branch semantically.
+        self.assertRegex(src, r"if\s*\(\s*persisted\s*!=\s*identifier\s*\)")
+        self.assertIn("active-id-readback-failed", src)
         self.assertIn("if (DedaQa32SparkPublicIdentifierDirectory.enabled)", src)
         self.assertIn("defaultValue: false", (ROOT /
             "lib/deda_stage71_free_manager_200_service.dart").read_text())
