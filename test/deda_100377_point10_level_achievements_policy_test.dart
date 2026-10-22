@@ -50,42 +50,41 @@ void main() {
   test('no progress or entitlement from phone-local XP, fake login or unknown level', () {
     final thresholds = DedaLevelBadgeThresholds.validate(approvedTestFixture());
     for (final level in <int?>[null, -1, 0]) {
-      expect(DedaLevelBadgePolicy.evaluate(
+      expect(DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
         serverVerifiedLevel: level,
         verifiedAccountAndLevel: true,
         ownerApprovedThresholds: thresholds,
-        allowUnreleasedPurePolicyTest: true,
       ), isNull);
     }
-    expect(DedaLevelBadgePolicy.evaluate(
+    expect(DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
         serverVerifiedLevel: 1000,
         verifiedAccountAndLevel: false,
         ownerApprovedThresholds: thresholds,
-        allowUnreleasedPurePolicyTest: true), isNull);
-    expect(DedaLevelBadgePolicy.evaluate(
+), isNull);
+    expect(DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
         serverVerifiedLevel: 1000,
         verifiedAccountAndLevel: true,
         ownerApprovedThresholds: null,
-        allowUnreleasedPurePolicyTest: true), isNull);
+), isNull);
   });
 
   test('test-only illustrative thresholds enforce six boundaries independently', () {
     // Fixture levels 2,4,6,8,10,12 are NOT approved product thresholds.
     final thresholds = DedaLevelBadgeThresholds.validate(approvedTestFixture());
-    final one = DedaLevelBadgePolicy.evaluate(
+    final one = DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
         serverVerifiedLevel: 1,
         verifiedAccountAndLevel: true,
         ownerApprovedThresholds: thresholds,
-        allowUnreleasedPurePolicyTest: true)!;
+)!;
     expect(one.length, 6);
     expect(one.every((v) => !v.isUnlocked), isTrue);
     expect(one.first.levelsRemaining, 1);
 
-    final eight = DedaLevelBadgePolicy.evaluate(
+    final eight = DedaLevelBadgePolicy.inspectVerifiedLevelForPolicyQa(
         serverVerifiedLevel: 8,
         verifiedAccountAndLevel: true,
         ownerApprovedThresholds: thresholds,
-        allowUnreleasedPurePolicyTest: true)!;
+)!;
     expect(eight.map((v) => v.isUnlocked).toList(),
         [true, true, true, true, false, false]);
     expect(eight.map((v) => v.levelsRemaining).toList(), [0, 0, 0, 0, 2, 4]);
