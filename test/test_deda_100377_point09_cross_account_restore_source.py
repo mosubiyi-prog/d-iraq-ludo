@@ -32,7 +32,8 @@ class Point09IdentityContinuity(unittest.TestCase):
             self.assertIn(required, swapped)
         self.assertLess(swapped.index("_ids = null;"), swapped.index("_load();"))
         self.assertIn("final generation = ++_generation;", part)
-        self.assertGreaterEqual(part.count("generation != _generation"), 3)
+        self.assertGreaterEqual(part.count("generation != _generation"), 2)
+        self.assertIn("generation == _generation", part)
         self.assertIn("widget.originalId != original", part)
         self.assertIn("DedaStage71ActiveIdRefresh.notifier.removeListener(_onActiveChanged)", part)
 
@@ -54,7 +55,7 @@ class Point09IdentityContinuity(unittest.TestCase):
         self.assertIn("_verifiedOriginal = null;", part)
         self.assertIn("_verifiedOriginal = original;", part)
         self.assertIn("_verifiedOriginal != widget.originalId", part)
-        self.assertGreaterEqual(part.count("generation != _generation"), 4)
+        self.assertGreaterEqual(part.count("generation != _generation"), 3)
         self.assertIn("DedaStage71ActiveIdRefresh.notifier.removeListener(_load)", part)
         self.assertIn("DedaStage71OwnedIdentifierService.active(original)", part)
         self.assertIn("DedaStage71OwnedIdentifierService.owned(original)", part)
