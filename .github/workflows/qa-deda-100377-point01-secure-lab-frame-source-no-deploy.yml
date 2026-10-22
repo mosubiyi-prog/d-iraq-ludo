@@ -18,6 +18,8 @@ on:
       - 'lib/deda_stage71_free_owned_use_profile.dart'
       - 'test/test_deda_100377_point09_cross_account_restore_source.py'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
+      - 'lib/deda_100377_point13_unified_identity_projection_staged.dart'
+      - 'test/deda_100377_point13_unified_identity_source_test.dart'
   workflow_dispatch:
 permissions:
   contents: read
@@ -224,6 +226,9 @@ jobs:
           python3 -m unittest discover -s test -p 'test_deda_100377_point09_cross_account_restore_source.py'
           flutter test test/deda_100377_point09_account_switch_fallback_widget_test.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage71_free_owned_use_profile.dart
+          # Point13: actual reconstructed app includes stage71 owner + stage50 friend ID dependencies.
+          flutter test test/deda_100377_point13_unified_identity_source_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_100377_point13_unified_identity_projection_staged.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
