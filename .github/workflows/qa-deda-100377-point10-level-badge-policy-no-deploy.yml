@@ -1,0 +1,39 @@
+name: DEDA 100377 Point10 Level Badge Policy QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100377-13-points-sequential-qa-2026-10-22
+    paths:
+      - '.github/workflows/qa-deda-100377-point10-level-badge-policy-no-deploy.yml'
+      - 'lib/deda_100377_level_achievement_badges_policy.dart'
+      - 'test/deda_100377_point10_level_achievements_policy_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100377-point10-level-policy
+  cancel-in-progress: true
+jobs:
+  six-achievement-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Check six safe badges in real Dart/Flutter environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_100377_point10_level_achievements_policy_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_100377_level_achievement_badges_policy.dart
+          grep -Fq 'DEDA_100377_LEVEL_ACHIEVEMENTS_APPROVED' lib/deda_100377_level_achievement_badges_policy.dart
+          grep -Fq 'defaultValue: false' lib/deda_100377_level_achievement_badges_policy.dart
+          grep -Fq 'allowUnreleasedPurePolicyTest' test/deda_100377_point10_level_achievements_policy_test.dart
+          git diff --quiet -- android/ firebase.json firestore.rules functions/index.js lib/main.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS Point10 six distinct LEVEL badges policy gated; no wallet or XP or cosmetic inventory changes'
