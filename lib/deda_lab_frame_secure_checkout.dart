@@ -46,9 +46,9 @@ class DedaLabFrameSecureCheckout {
     final uid = user.uid;
     final db = FirebaseFirestore.instance;
     final docs = await Future.wait([
-      db.collection('users').doc(uid).get(),
-      db.collection('deda_sessions').doc(uid).get(),
-      db.collection('deda_share_ids').doc(originalId).get(),
+      db.collection('users').doc(uid).get(const GetOptions(source: Source.server)),
+      db.collection('deda_sessions').doc(uid).get(const GetOptions(source: Source.server)),
+      db.collection('deda_share_ids').doc(originalId).get(const GetOptions(source: Source.server)),
     ]);
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('account-changed-during-checkout');
@@ -102,7 +102,7 @@ class DedaLabFrameSecureCheckout {
     purchaseId(originalId, frameId);
     final db = FirebaseFirestore.instance;
     final data = await Future.wait([
-      _receipt(db, originalId, frameId).get(), _ownership(db, originalId, frameId).get(),
+      _receipt(db, originalId, frameId).get(const GetOptions(source: Source.server)), _ownership(db, originalId, frameId).get(const GetOptions(source: Source.server)),
     ]);
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('account-switched');
