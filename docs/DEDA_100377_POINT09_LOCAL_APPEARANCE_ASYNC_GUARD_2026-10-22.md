@@ -21,7 +21,7 @@ replaces that exact method on the rebuilt source with a same-device local-only
 update that:
 - Captures original phone and signed Firebase UID at call start.
 - Clamps avatar/frame/background styles to the existing approved legacy bounds.
-- Rejects unsigned or blank-phone attempts and checks phone+UID before any I/O.
+- Rejects unsigned or blank-phone attempts, then checks phone+UID after obtaining local preferences and before any preference WRITE.
 - After acquiring SharedPreferences, aborts if a new user signed in.
 - ALWAYS writes into original phone's existing keys, preserving all old saved
   items, three Royal Avatar migration keys and per-phone frame/background prefs.
