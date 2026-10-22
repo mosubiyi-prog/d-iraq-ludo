@@ -8,6 +8,9 @@ on:
       - 'lib/deda_100377_level_achievements_page_staged.dart'
       - 'lib/deda_100377_level_achievement_badges_policy.dart'
       - 'test/deda_100377_point11_achievements_locked_preview_widget_test.dart'
+      - 'pubspec.yaml'
+      - 'assets/deda_owner_level_badges/**'
+      - 'test/test_deda_100377_point10_owner_six_badge_art_source.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -29,6 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+          python3 -m unittest discover -s test -p 'test_deda_100377_point10_owner_six_badge_art_source.py'
           flutter test test/deda_100377_point11_achievements_locked_preview_widget_test.dart
           flutter analyze --no-fatal-warnings --no-fatal-infos lib/deda_100377_level_achievements_page_staged.dart
           grep -Fq 'DEDA_100377_LEVEL_ACHIEVEMENTS_APPROVED' lib/deda_100377_level_achievement_badges_policy.dart
