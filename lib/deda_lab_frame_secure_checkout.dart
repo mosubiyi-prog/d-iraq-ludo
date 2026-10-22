@@ -29,7 +29,7 @@ class DedaLabFrameSecureCheckout {
         !paidFrameIds.contains(frameId)) {
       throw ArgumentError('unapproved-frame-or-original-identifier');
     }
-    return '$originalId_${frameId}';
+    return '${originalId}_$frameId';
   }
 
   static Future<String> _verifyOwner(String originalId) async {
