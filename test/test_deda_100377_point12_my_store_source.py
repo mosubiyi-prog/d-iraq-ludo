@@ -1,0 +1,48 @@
+import unittest
+from pathlib import Path
+
+from tools.stage_deda_100377_point12_my_store import patch, MARK
+
+ROOT = Path(__file__).resolve().parents[1]
+MAIN = ROOT / 'lib/main.dart'
+
+class Point12MyStoreSourceTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.src = MAIN.read_text(encoding='utf-8')
+
+    def test_integrated_single_tile_and_separate_shop(self):
+        s = self.src
+        self.assertEqual(s.count(MARK), 1)
+        self.assertEqual(s.count("title: dedaText('متجري', 'My Store')"), 1)
+        self.assertEqual(s.count("title: dedaText('متجر المعرّفات', 'Identifier store')"), 1)
+        self.assertEqual(s.count("import 'deda_100377_my_store_page_staged.dart';"), 1)
+        self.assertIn("builder: (_) => DedaMyStorePage(", s)
+        self.assertEqual(patch(s), s)
+
+    def test_read_only_provenance_and_account_guard(self):
+        s = self.src
+        a = s.index('Future<void> _openDedaMyStore() async {')
+        b = s.index('  Widget _featureGrid() {', a)
+        m = s[a:b]
+        self.assertIn('DedaStyleInventory.load()', m)
+        self.assertIn('DedaLabFrameSecureCheckout.isOwned(', m)
+        self.assertIn('DedaStage71OwnedIdentifierService.active(originalId)', m)
+        self.assertIn('DedaPreferences.phone != accountPhone', m)
+        self.assertIn('_dedaId != originalId', m)
+        self.assertIn('proof: DedaMyStoreProof.deviceSaved', m)
+        self.assertIn('proof: DedaMyStoreProof.serverVerified', m)
+        for forbidden in ('buyOnce(', '.spend(', 'addOwned(', 'claimDiamondGift(', 'grant('):
+            self.assertNotIn(forbidden, m)
+
+    def test_local_badge_does_not_become_verified_purchase(self):
+        s = self.src
+        a = s.index('for (var i = 0; i < dedaStyleBadgeIds.length; i++)')
+        b = s.index('if (DedaStage71OwnedIdentifierService.enabled)', a)
+        m = s[a:b]
+        self.assertIn('inventory.owned.contains(badgeId)', m)
+        self.assertIn('proof: DedaMyStoreProof.deviceSaved', m)
+        self.assertNotIn("receiptKind: 'purchase'", m)
+
+if __name__ == '__main__':
+    unittest.main()
