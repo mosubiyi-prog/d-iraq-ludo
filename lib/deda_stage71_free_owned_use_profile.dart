@@ -175,57 +175,102 @@ class _DedaStage71OwnedIdsPanelState
     extends State<DedaStage71OwnedIdsPanel> {
   List<DedaStage71OwnedIdentifier>? _ids;
   String? _active;
-  bool _busy=false;
+  bool _busy = false;
+  int _generation = 0;
+
   @override
-  void initState(){super.initState();_load();}
-  @override
-  void didUpdateWidget(covariant DedaStage71OwnedIdsPanel oldWidget){
-    super.didUpdateWidget(oldWidget);
-    if(oldWidget.originalId!=widget.originalId) _load();
+  void initState() {
+    super.initState();
+    DedaStage71ActiveIdRefresh.notifier.addListener(_onActiveChanged);
+    _load();
   }
+
+  void _onActiveChanged() {
+    if (!_busy) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant DedaStage71OwnedIdsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.originalId != widget.originalId) {
+      // DEDA_100377_POINT09_OWNED_IDS_ACCOUNT_SWITCH_NO_STALE_ROWS
+      // Clear the previous user's entitlement and active alias immediately.
+      // Invalidate all previous loads or Use replies before reading new UID.
+      ++_generation;
+      _ids = null;
+      _active = null;
+      _busy = false;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_generation;
+    DedaStage71ActiveIdRefresh.notifier.removeListener(_onActiveChanged);
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    if(!DedaStage71OwnedIdentifierService.enabled ||
-       _busy) return;
-    final original=widget.originalId;
+    if (!DedaStage71OwnedIdentifierService.enabled || _busy) return;
+    final generation = ++_generation;
+    final original = widget.originalId;
     try {
-      final all=await DedaStage71OwnedIdentifierService.owned(original);
-      final received=await DedaStage74IdGiftService.receivedNames(original);
-      // A manager's own self-use stays available as before, but free gifted
-      // premium IDs are usable here only AFTER explicit receipt in Hadaya.
-      final db=FirebaseFirestore.instance;
-      final rows=<DedaStage71OwnedIdentifier>[];
+      final all = await DedaStage71OwnedIdentifierService.owned(original);
+      final received = await DedaStage74IdGiftService.receivedNames(original);
+      // Only a valid grant or a received gift may be presented as owned.
+      final db = FirebaseFirestore.instance;
+      final rows = <DedaStage71OwnedIdentifier>[];
       for (final item in all) {
         if (received.contains(item.identifier)) {
           rows.add(item);
           continue;
         }
-        final record=await db.collection(DedaStage71Admin200.registry)
+        final record = await db.collection(DedaStage71Admin200.registry)
             .doc(item.identifier)
             .get(const GetOptions(source: Source.server));
-        if (record.data()?['kind']=='self_used') rows.add(item);
+        if (record.data()?['kind'] == 'self_used') rows.add(item);
       }
-      final chosen=await DedaStage71OwnedIdentifierService.active(original);
-      if(!mounted||widget.originalId!=original)return;
-      setState((){_ids=rows;_active=chosen;});
-    } catch(_){
-      if(mounted&&widget.originalId==original){
-        setState((){_ids=null;_active=null;});
+      final chosen = await DedaStage71OwnedIdentifierService.active(original);
+      if (!mounted || generation != _generation ||
+          widget.originalId != original) return;
+      setState(() {
+        _ids = rows;
+        _active = chosen;
+      });
+    } catch (_) {
+      if (mounted && generation == _generation &&
+          widget.originalId == original) {
+        setState(() {
+          _ids = null;
+          _active = null;
+        });
       }
     }
   }
 
   Future<void> _use(String id) async {
-    if(_busy) return;
-    setState(()=>_busy=true);
-    try{
-      await DedaStage71OwnedIdentifierService.use(widget.originalId,id);
-      if(mounted) setState(()=>_active=id);
-    } catch(_){
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:Text('تعذّر تأكيد استخدام المعرف. حدث القائمة وحاول ثانية.'),
-      ));
+    if (_busy) return;
+    final original = widget.originalId;
+    final generation = ++_generation;
+    setState(() => _busy = true);
+    try {
+      await DedaStage71OwnedIdentifierService.use(original, id);
+      if (!mounted || generation != _generation ||
+          widget.originalId != original) return;
+      setState(() => _active = id);
+    } catch (_) {
+      if (mounted && generation == _generation &&
+          widget.originalId == original) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تعذّر تأكيد استخدام المعرف. حدث القائمة وحاول ثانية.'),
+        ));
+      }
     } finally {
-      if(mounted) setState(()=>_busy=false);
+      if (mounted && generation == _generation &&
+          widget.originalId == original) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -301,61 +346,107 @@ class DedaStage71ActiveProfileFoil extends StatefulWidget {
       _DedaStage71ActiveProfileFoilState();
 }
 class _DedaStage71ActiveProfileFoilState
-    extends State<DedaStage71ActiveProfileFoil>{
+    extends State<DedaStage71ActiveProfileFoil> {
   String? _active;
   String? _color;
+  String? _verifiedOriginal;
+  int _generation = 0;
+
   @override
-  void initState(){super.initState();_load();}
-  @override
-  void didUpdateWidget(covariant DedaStage71ActiveProfileFoil oldWidget){
-    super.didUpdateWidget(oldWidget);
-    if(oldWidget.originalId!=widget.originalId) _load();
+  void initState() {
+    super.initState();
+    DedaStage71ActiveIdRefresh.notifier.addListener(_load);
+    _load();
   }
+
+  @override
+  void didUpdateWidget(covariant DedaStage71ActiveProfileFoil oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.originalId != widget.originalId) {
+      // DEDA_100377_POINT09_ACTIVE_FOIL_ACCOUNT_SWITCH_SAFE_FALLBACK
+      ++_generation;
+      _active = null;
+      _color = null;
+      _verifiedOriginal = null;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_generation;
+    DedaStage71ActiveIdRefresh.notifier.removeListener(_load);
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    if(!DedaStage71OwnedIdentifierService.enabled) return;
-    final original=widget.originalId;
-    try{
-      final active=await DedaStage71OwnedIdentifierService.active(original);
-      if(!mounted||widget.originalId!=original)return;
-      if(active==original){
-        setState((){_active=null;_color=null;});return;
+    final generation = ++_generation;
+    final original = widget.originalId;
+    if (_active != null || _color != null || _verifiedOriginal != null) {
+      if (mounted) setState(() {
+        _active = null;
+        _color = null;
+        _verifiedOriginal = null;
+      });
+    }
+    if (!DedaStage71OwnedIdentifierService.enabled) return;
+    try {
+      final active = await DedaStage71OwnedIdentifierService.active(original);
+      if (!mounted || generation != _generation ||
+          widget.originalId != original) return;
+      if (active == original) {
+        // The original-ID fallback remains the only permitted visual state.
+        return;
       }
-      final rows=await DedaStage71OwnedIdentifierService.owned(original);
-      final row=rows.where((r)=>r.identifier==active).toList();
-      if(row.length!=1) throw StateError('active-id-not-owned');
-      if(mounted&&widget.originalId==original){
-        setState((){_active=active;_color=row.single.baseColor;});
-      }
-      // First owner profile open can republish an already-active premium ID
-      // from an older version. No Firestore write if the live index matches.
+      final rows = await DedaStage71OwnedIdentifierService.owned(original);
+      final matching = rows.where((r) => r.identifier == active).toList();
+      if (matching.length != 1) throw StateError('active-id-not-owned');
+      if (!mounted || generation != _generation ||
+          widget.originalId != original) return;
+      setState(() {
+        _active = active;
+        _color = matching.single.baseColor;
+        _verifiedOriginal = original;
+      });
+      // Preserve the existing optional Spark projection refresh. Do not
+      // invent remote ownership, change original identity or touch wallets.
       if (DedaQa32SparkPublicIdentifierDirectory.enabled &&
-          mounted && widget.originalId == original) {
+          mounted && generation == _generation &&
+          widget.originalId == original) {
         try {
           final style = await DedaQa32SparkPublicIdentifierDirectory
               .readVerifiedStyle(original);
+          if (!mounted || generation != _generation ||
+              widget.originalId != original) return;
           if (style == null ||
               style['displayId'] != active ||
-              style['permanentColor'] != row.single.baseColor) {
+              style['permanentColor'] != matching.single.baseColor) {
             await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
               originalId: original,
               selectedAlias: active,
-              permanentColor: row.single.baseColor,
+              permanentColor: matching.single.baseColor,
             );
           }
         } catch (_) {
-          // No false success. Existing owner card is still shown; public
-          // display remains unverified until owner publishes successfully.
+          // Owner-only fallback remains safe if public projection is not live.
         }
       }
-    } catch(_) {
-      if(mounted&&widget.originalId==original){
-        setState((){_active=null;_color=null;});
+    } catch (_) {
+      if (mounted && generation == _generation &&
+          widget.originalId == original) {
+        setState(() {
+          _active = null;
+          _color = null;
+          _verifiedOriginal = null;
+        });
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
-    if(_active==null||_color==null) return widget.fallback;
+    if (_verifiedOriginal != widget.originalId ||
+        _active == null || _color == null) return widget.fallback;
     final color=DedaPremiumIdCardColor.values.firstWhere(
       (c)=>c.name==_color!,
     );
