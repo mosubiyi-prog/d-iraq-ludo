@@ -54,7 +54,6 @@ class _DedaLabFramePurchaseActionState
         originalId: widget.originalId, frameId: widget.frameId);
       if (mounted) {
         setState(() => _owned = owned);
-        if (owned) widget.onVerifiedOwned();
       }
     } catch (_) {
       if (mounted) setState(() => _error = 'تعذّر التحقق من ملكية الإطار');
@@ -87,7 +86,6 @@ class _DedaLabFramePurchaseActionState
         originalId: widget.originalId, frameId: widget.frameId);
       if (mounted) {
         setState(() => _owned = true);
-        widget.onVerifiedOwned();
       }
     } catch (_) {
       // The request may have committed before network failure. Read first.
