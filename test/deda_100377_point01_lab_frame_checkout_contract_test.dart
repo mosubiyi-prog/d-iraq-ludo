@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:deda_guide/deda_lab_frame_secure_checkout.dart';
+import 'package:d_iraq_ludo/deda_lab_frame_secure_checkout.dart';
 
 void main() {
   test('point01 exactly 13 approved paid frames at 1000 diamonds', () {
