@@ -28,6 +28,11 @@ class DedaProfileFreeInventory {
       'الصورة الكلاسيكية 2',
       'الصورة الكلاسيكية 3',
     ];
+    const avatarArt = <String>[
+      'assets/deda_royal_avatars/deda_avatar_male_royal.jpg',
+      'assets/deda_royal_avatars/deda_avatar_female_royal.jpg',
+      'assets/deda_royal_avatars/deda_avatar_couple_royal.jpg',
+    ];
     for (final style in avatarChoices) {
       results.add(DedaMyStoreItem(
         id: 'avatar_$style',
@@ -35,6 +40,7 @@ class DedaProfileFreeInventory {
         section: DedaMyStoreSection.avatars,
         proof: DedaMyStoreProof.basicFree,
         active: avatarStyle == style,
+        previewAsset: style < avatarArt.length ? avatarArt[style] : null,
       ));
     }
     // Old owner choices 6..8 are preserved by the avatar migration, not
@@ -49,23 +55,47 @@ class DedaProfileFreeInventory {
       ));
     }
 
+    const frameNames = <String>[
+      'إطار DEDA الأساسي الأول',
+      'إطار DEDA الأساسي الثاني',
+      'إطار DEDA الأساسي الثالث',
+      'وردي ملكي',
+      'ذهبي ملكي',
+      'زمردي ملكي',
+    ];
     for (final style in frameChoices) {
       results.add(DedaMyStoreItem(
         id: 'frame_$style',
-        label: 'الإطار المجاني $style',
+        label: frameNames[style],
         section: DedaMyStoreSection.frames,
         proof: DedaMyStoreProof.basicFree,
         active: frameStyle == style,
+        previewAsset: style >= 3
+            ? 'assets/deda_royal_frames/royal_frame_${style - 3}.webp'
+            : null,
       ));
     }
 
+    const backgroundNames = <int, String>{
+      0: 'الخلفية الخضراء الفاتحة',
+      1: 'الخلفية الزرقاء الفاتحة',
+      2: 'الخلفية الرملية الفاتحة',
+      6: 'الخلفية الملكية المرصّعة بالنجوم',
+      7: 'الخلفية الزمردية الذهبية',
+      8: 'الخلفية المارونية الذهبية',
+    };
     for (final style in backgroundChoices) {
       results.add(DedaMyStoreItem(
         id: 'background_$style',
-        label: 'الخلفية المجانية $style',
+        label: backgroundNames[style]!,
         section: DedaMyStoreSection.backgrounds,
         proof: DedaMyStoreProof.basicFree,
         active: backgroundStyle == style,
+        previewAsset: switch (style) {
+          7 => 'assets/deda_royal_backgrounds/deda_royal_bg_emerald.webp',
+          8 => 'assets/deda_royal_backgrounds/deda_royal_bg_burgundy.webp',
+          _ => null,
+        },
       ));
     }
     // The saved legacy 3..5 backgrounds can still decorate an account even
