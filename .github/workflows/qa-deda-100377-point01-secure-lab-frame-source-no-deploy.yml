@@ -23,6 +23,8 @@ on:
       - 'test/test_deda_100377_point09_badge_inventory_source.py'
       - 'tools/stage_deda_100377_point09_style_page_async_read_scope.py'
       - 'test/test_deda_100377_point09_style_page_async_read_source.py'
+      - 'tools/stage_deda_100377_point09_equip_frame_account_guard.py'
+      - 'test/test_deda_100377_point09_equip_frame_account_scope_source.py'
       - 'test/deda_100377_point09_badge_inventory_account_switch_widget_test.dart'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
       - 'lib/deda_100377_my_store_page_staged.dart'
@@ -203,6 +205,10 @@ jobs:
           # shop loads currency and inventory; stale results never repaint.
           python3 tools/stage_deda_100377_point09_style_page_async_read_scope.py
           python3 -m unittest discover -s test -p 'test_deda_100377_point09_style_page_async_read_source.py'
+          # Re-verify an equipped frame belongs to the CURRENT account and
+          # never repaint the global avatar/frame notifier after switching.
+          python3 tools/stage_deda_100377_point09_equip_frame_account_guard.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point09_equip_frame_account_scope_source.py'
           flutter test test/deda_100377_point09_badge_inventory_account_switch_widget_test.dart
           dart format lib/deda_100377_level_achievements_page_staged.dart
           flutter analyze lib/deda_100377_level_achievements_page_staged.dart lib/deda_100377_level_achievement_badges_policy.dart
