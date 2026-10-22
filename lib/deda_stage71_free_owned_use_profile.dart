@@ -226,6 +226,11 @@ class DedaStage71OwnedIdentifierService {
       'updatedAt':FieldValue.serverTimestamp(),
     });
     final persisted=await active(originalId);
+    // DEDA_100377_POINT13_USE_ALIAS_LATE_UID_GUARD
+    // A server readback may complete after logout/account switching.
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-after-use-readback');
+    }
     if(persisted!=identifier) throw StateError('active-id-readback-failed');
     // Spark owner publication only after original ID, selection, grant
     // and (if gifted) receipt have already been confirmed on the server.
@@ -235,13 +240,22 @@ class DedaStage71OwnedIdentifierService {
         final rows = await owned(originalId);
         final matching = rows.where((r) => r.identifier == identifier).toList();
         if (matching.length != 1) throw StateError('spark-owner-foil-not-proven');
+        if (FirebaseAuth.instance.currentUser?.uid != uid) {
+          throw StateError('account-switched-before-spark-publish');
+        }
         foil = matching.single.baseColor;
+      }
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('account-switched-before-spark-publish');
       }
       await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
         originalId: originalId,
         selectedAlias: identifier,
         permanentColor: foil,
       );
+    }
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-before-use-notifier');
     }
     DedaStage71ActiveIdRefresh.changed();
   }

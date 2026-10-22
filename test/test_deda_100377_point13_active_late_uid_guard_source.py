@@ -17,6 +17,7 @@ class ActivePremiumAliasUidIsolation(unittest.TestCase):
         b=src.index("  static Future<void> use(String originalId,String identifier) async {", a)
         cls.src=src
         cls.active=src[a:b]
+        cls.use=src[b:]
 
     def test_verified_grant_cannot_return_alias_after_switch(self):
         s=self.active
@@ -30,6 +31,21 @@ class ActivePremiumAliasUidIsolation(unittest.TestCase):
                         s.index("DedaStage74IdGiftService.isReceived("))
         self.assertLess(s.index("account-switched-after-active-gift-receipt"),
                         s.index("return current;",s.index("DedaStage74IdGiftService.isReceived(")))
+
+    def test_use_rechecks_uid_after_readback_inventory_and_publication(self):
+        s=self.use
+        self.assertIn('DEDA_100377_POINT13_USE_ALIAS_LATE_UID_GUARD',s)
+        self.assertIn('account-switched-after-use-readback',s)
+        self.assertIn('account-switched-before-spark-publish',s)
+        self.assertIn('account-switched-before-use-notifier',s)
+        self.assertGreaterEqual(s.count('FirebaseAuth.instance.currentUser?.uid != uid'),4)
+        self.assertLess(s.index('account-switched-after-use-readback'),
+                        s.index('active-id-readback-failed'))
+        self.assertLess(s.index('account-switched-before-spark-publish'),
+                        s.index('publishOwnerVerified('))
+        self.assertLess(s.index('account-switched-before-use-notifier'),
+                        s.index('DedaStage71ActiveIdRefresh.changed();'))
+        self.assertNotIn('DedaDiamondsWallet.spend',s)
 
     def test_grant_receipt_and_original_route_remain_verified(self):
         s=self.active

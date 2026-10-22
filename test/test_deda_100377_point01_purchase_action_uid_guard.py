@@ -36,6 +36,18 @@ class SignedFrameUiOwnershipGuard(unittest.TestCase):
         self.assertIn("widget.onVerifiedOwned();", s)
         self.assertIn("تغيّر الحساب؛ أعد التحقق من ملكية الإطار.", s)
 
+    def test_old_frame_use_never_renders_after_uid_rotation(self):
+        s = self.ui
+        self.assertIn('DEDA_100377_POINT01_FRAME_OWNERSHIP_AUTH_ROTATION_INVALIDATION',s)
+        self.assertIn('StreamSubscription<User?>? _authSubscription;',s)
+        self.assertIn('FirebaseAuth.instance.authStateChanges()',s)
+        self.assertIn('void _onAuthChanged(User? user)',s)
+        self.assertIn('_authSubscription?.cancel();',s)
+        self.assertIn('final ownedByCurrentUid = _owned && _ownedVerifiedUid != null &&',s)
+        self.assertIn('child: ownedByCurrentUid',s)
+        self.assertNotIn('child: _owned\n            ? OutlinedButton(',s)
+        self.assertIn('(_owned && _ownedVerifiedUid == _currentUid())',s)
+
     def test_purchase_owner_must_also_own_canonical_original_id_route(self):
         s = self.checkout
         self.assertIn('DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF', s)

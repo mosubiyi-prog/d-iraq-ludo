@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -27,6 +29,26 @@ class _DedaLabFramePurchaseActionState
   bool _owned = false;
   String? _ownedVerifiedUid;
   String? _error;
+  StreamSubscription<User?>? _authSubscription;
+
+  // DEDA_100377_POINT01_FRAME_OWNERSHIP_AUTH_ROTATION_INVALIDATION
+  // Cache is presentation-only; a different authenticated UID can never
+  // inherit a frame's server-confirmed Use button or pending checkout result.
+  void _onAuthChanged(User? user) {
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _owned = false;
+      _ownedVerifiedUid = null;
+      _error = null;
+    });
+    if (user?.uid != null && DedaLabFrameSecureCheckout.live) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refresh();
+      });
+    }
+  }
+
 
   // DEDA_100377_POINT01_FRAME_PURCHASE_ACTION_ACCOUNT_UID_GUARD
   // Even if the visible card stays mounted, a signed-in account can change
@@ -80,6 +102,14 @@ class _DedaLabFramePurchaseActionState
   @override
   void initState() {
     super.initState();
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        _authSubscription = FirebaseAuth.instance.authStateChanges()
+            .listen(_onAuthChanged);
+      }
+    } catch (_) {
+      // Firebase not initialized: never show a cached premium ownership.
+    }
     if (DedaLabFrameSecureCheckout.live) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     }
@@ -100,6 +130,12 @@ class _DedaLabFramePurchaseActionState
         WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -132,7 +168,8 @@ class _DedaLabFramePurchaseActionState
   }
 
   Future<void> _buy() async {
-    if (_busy || _owned || !DedaLabFrameSecureCheckout.live) return;
+    if (_busy || !DedaLabFrameSecureCheckout.live ||
+        (_owned && _ownedVerifiedUid == _currentUid())) return;
     final owner = widget.originalId;
     final frame = widget.frameId;
     final uid = _currentUid();
@@ -206,6 +243,10 @@ class _DedaLabFramePurchaseActionState
 
   @override
   Widget build(BuildContext context) {
+    // Even before the async auth listener is delivered, old-owner receipt
+    // state must never render an actionable Use button for the next account.
+    final ownedByCurrentUid = _owned && _ownedVerifiedUid != null &&
+        _ownedVerifiedUid == _currentUid();
     // Unlike a fake interactive Buy control, this is explicit until rollout.
     if (!DedaLabFrameSecureCheckout.live) {
       return const Column(mainAxisSize: MainAxisSize.min, children: [
@@ -217,7 +258,7 @@ class _DedaLabFramePurchaseActionState
       SizedBox(
         height: 38,
         width: double.infinity,
-        child: _owned
+        child: ownedByCurrentUid
             ? OutlinedButton(
                 onPressed: _busy ? null : _useVerifiedFrame,
                 child: Text(_busy ? 'جار التحقق…' : 'استخدام'),
