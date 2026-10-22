@@ -18,6 +18,10 @@ on:
       - 'lib/deda_stage71_free_owned_use_profile.dart'
       - 'test/test_deda_100377_point09_cross_account_restore_source.py'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
+      - 'lib/deda_100377_my_store_page_staged.dart'
+      - 'tools/stage_deda_100377_point12_my_store.py'
+      - 'test/deda_100377_point12_my_store_widget_test.dart'
+      - 'test/test_deda_100377_point12_my_store_source.py'
       - 'lib/deda_100377_point13_unified_identity_projection_staged.dart'
       - 'test/deda_100377_point13_unified_identity_source_test.dart'
   workflow_dispatch:
@@ -161,6 +165,12 @@ jobs:
           # Point05 guard-only transformer tests; do NOT integrate absent or unapproved art.
           python3 -m py_compile tools/stage_deda_100377_point05_verified_moonlit_avatars.py
           python3 -m unittest discover -s test -p 'test_deda_100377_point05_verified_moonlit_gate.py'
+          # Point12 is a read-only personal inventory; existing purchase stores stay put.
+          python3 tools/stage_deda_100377_point12_my_store.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point12_my_store_source.py'
+          dart format lib/deda_100377_my_store_page_staged.dart
+          flutter analyze lib/deda_100377_my_store_page_staged.dart
+          flutter test test/deda_100377_point12_my_store_widget_test.dart
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
           flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
