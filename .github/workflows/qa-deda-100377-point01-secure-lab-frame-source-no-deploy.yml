@@ -14,6 +14,8 @@ on:
       - 'test/deda_100377_point07_received_friend_identity_test.dart'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
+      - 'lib/deda_stage74_id_gift_service.dart'
+      - 'test/test_deda_100377_point08_gift_recipient_legacy_uid_source.py'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
       - 'test/test_deda_100377_point08_stage75_compat_source.py'
       - 'lib/deda_stage71_free_owned_use_profile.dart'
@@ -289,6 +291,9 @@ jobs:
           # Point08 account switch: new user cannot inherit previous Hadaya inbox state.
           # Point08 formatter-agnostic account-switch callback assertions.
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py'
+          # Original recipient route owned by current UID; legacy profiles
+          # cannot be denied solely for missing sharePersonalId.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_recipient_legacy_uid_source.py'
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_stage75_compat_source.py'
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage74_hadaya_identifier_section.dart
           # Point09: authenticated alias fallback after account swap; wallet/XP remains untouched.
