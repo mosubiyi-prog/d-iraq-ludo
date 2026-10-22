@@ -14,6 +14,7 @@ on:
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
       - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
+      - 'test/test_deda_100377_point08_stage75_compat_source.py'
       - 'lib/deda_stage71_free_owned_use_profile.dart'
       - 'test/test_deda_100377_point09_cross_account_restore_source.py'
       - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
