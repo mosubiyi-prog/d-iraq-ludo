@@ -3,6 +3,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100377_my_store_page_staged.dart';
 
 void main() {
+  testWidgets('royal frame inventory shows its genuine Flutter image asset, not a numeric placeholder', (tester) async {
+    const asset = 'assets/deda_royal_frames/royal_frame_0.webp';
+    await tester.pumpWidget(const MaterialApp(
+      home: DedaMyStorePage(
+        originalId: '@DEDA-AQPYXJ',
+        items: <DedaMyStoreItem>[
+          DedaMyStoreItem(
+            id: 'free_frame_3',
+            label: 'وردي ملكي',
+            section: DedaMyStoreSection.frames,
+            proof: DedaMyStoreProof.basicFree,
+            previewAsset: asset,
+            active: true,
+          ),
+        ],
+      ),
+    ));
+    expect(find.text('وردي ملكي'), findsOneWidget);
+    expect(find.text('الإطار المجاني 3'), findsNothing);
+    final image = tester.widget<Image>(find.byType(Image).first);
+    expect(image.image, isA<AssetImage>());
+    expect((image.image as AssetImage).assetName, asset);
+    expect(find.text('مستخدمة'), findsOneWidget);
+    expect(find.text('شراء مثبت بالخادم'), findsNothing);
+  });
+
   testWidgets('original identifier acquisition and Edit Profile remain linked inside only one My Store', (tester) async {
     var shopOpened = 0;
     var editOpened = 0;
