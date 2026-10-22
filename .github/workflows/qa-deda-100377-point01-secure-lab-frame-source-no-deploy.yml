@@ -14,7 +14,7 @@ permissions:
   contents: read
 concurrency:
   group: deda-qa32-point01-lab-frame-source-no-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   reconstruct-real-store:
     runs-on: ubuntu-24.04
@@ -311,6 +311,14 @@ jobs:
           test ! -f build/app/outputs/bundle/release/app-release.aab
           echo 'PASS: Stage71 accepted new no-purchase 200-admin catalog and four no-charge original cosmetics applied to reconstructed 100359. No APK/Play/Firebase deploy'
 
+      - name: Preserve exact reconstructed source for private QA (no APK)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100377-POINT01-RECONSTRUCTED-MAIN-DIAGNOSTIC-NO-APK
+          path: lib/main.dart
+          if-no-files-found: warn
+          retention-days: 2
       - name: Confirm no APK AAB or Firestore deploy happened
         run: |
           set -euo pipefail
