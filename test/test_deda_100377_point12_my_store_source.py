@@ -15,7 +15,15 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         s = self.src
         self.assertEqual(s.count(MARK), 1)
         self.assertEqual(s.count("title: dedaText('متجري', 'My Store')"), 1)
-        self.assertEqual(s.count("title: dedaText('متجر المعرّفات', 'Identifier store')"), 1)
+        self.assertEqual(s.count("title: dedaText('متجر المعرّفات', 'Identifier store')"), 0)
+        self.assertIn('DEDA_100377_POINT12_SINGLE_PROFILE_TILE_KEEP_ORIGINAL_SHOP_NESTED',s)
+        self.assertEqual(s.count('onOpenIdentifierShop: () {'),1)
+        self.assertIn('DedaIdentifierStorePage(',s)
+        grid=s[s.index('  Widget _featureGrid() {'):s.index('  Widget _featureCard(',s.index('  Widget _featureGrid() {'))]
+        self.assertEqual(grid.count("title: dedaText('متجري', 'My Store')"),1)
+        self.assertNotIn("title: dedaText('متجر المعرّفات', 'Identifier store')",grid)
+        self.assertIn("title: dedaText('تعديل الملف', 'Edit profile')",grid)
+        self.assertIn("title: dedaText('الشارات', 'Badges')",grid)
         self.assertEqual(s.count("import 'deda_100377_my_store_page_staged.dart';"), 1)
         self.assertIn("builder: (_) => DedaMyStorePage(", s)
         self.assertEqual(patch(s), s)
