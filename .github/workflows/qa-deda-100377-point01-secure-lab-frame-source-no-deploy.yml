@@ -13,6 +13,10 @@ on:
       - 'test/deda_100377_point07_received_friend_identity_test.dart'
       - 'lib/deda_stage74_hadaya_identifier_section.dart'
       - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
+      - 'tools/stage_deda_100359_stage75_id_gift_unread_badge.py'
+      - 'lib/deda_stage71_free_owned_use_profile.dart'
+      - 'test/test_deda_100377_point09_cross_account_restore_source.py'
+      - 'test/deda_100377_point09_account_switch_fallback_widget_test.dart'
   workflow_dispatch:
 permissions:
   contents: read
@@ -212,7 +216,12 @@ jobs:
           flutter test test/deda_100377_point07_received_friend_identity_test.dart
           # Point08 account switch: new user cannot inherit previous Hadaya inbox state.
           python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py'
+          python3 -m unittest discover -s test -p 'test_deda_100377_point08_stage75_compat_source.py'
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage74_hadaya_identifier_section.dart
+          # Point09: authenticated alias fallback after account swap; wallet/XP remains untouched.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point09_cross_account_restore_source.py'
+          flutter test test/deda_100377_point09_account_switch_fallback_widget_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage71_free_owned_use_profile.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
