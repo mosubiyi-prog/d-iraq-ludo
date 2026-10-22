@@ -1,0 +1,32 @@
+name: DEDA 100377 Point08 Hadaya Account Scope Source QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100377-13-points-sequential-qa-2026-10-22
+    paths:
+      - '.github/workflows/qa-deda-100377-point08-hadaya-account-scope-no-deploy.yml'
+      - 'lib/deda_stage74_hadaya_identifier_section.dart'
+      - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100377-point08-hadaya-source-only
+  cancel-in-progress: true
+jobs:
+  gift-inbox-account-scope-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm account-switch and immutable recipient source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py' -v
+          grep -Fq 'if (!mounted || widget.originalId != originalId) return;' lib/deda_stage74_hadaya_identifier_section.dart
+          grep -Fq "_gifts = null;" lib/deda_stage74_hadaya_identifier_section.dart
+          grep -Fq "targetPublicId: target['publicId'].toString()" tools/stage_deda_100374_admin_gift_original_and_premium_alias_ui.py
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS_POINT08_SOURCE_ONLY_CANONICAL_GIFTS_NO_FIREBASE_OR_APK'
