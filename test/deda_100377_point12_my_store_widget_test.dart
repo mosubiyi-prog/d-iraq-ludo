@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:deda_guide/deda_100377_my_store_page_staged.dart';
+import 'package:d_iraq_ludo/deda_100377_my_store_page_staged.dart';
 
 void main() {
   testWidgets('point12 always shows six separate personal-inventory sections',
