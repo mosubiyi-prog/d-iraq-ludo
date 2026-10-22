@@ -51,3 +51,37 @@ Even a green CI is NOT cross-phone/cloud persistence validation:
 - Six owner badge illustrations extracted as a separate local ZIP but not
   integrated into app assets, level policy still OFF until verified source.
 - No Play publication, no user balance modifications, no AAB/APK was made.
+
+
+## 2026-10-22 additional real frame-equip race fix, acceptance gating
+- The original reconstructed `_DedaStylePageState._equipFrame(index)` could update
+  `DedaProfileAppearanceState.frameNotifier` AFTER the guarded
+  `DedaPreferences.setProfileAppearance` returned, even if the owner account
+  switched mid-await. It also trusted a potentially stale cached screen inventory.
+- Source commit `4067e502`: `tools/stage_deda_100377_point09_equip_frame_account_guard.py`
+  reloads current-owner frame inventory, freezes the account phone, key, Firebase
+  availability/UID, then verifies the selected style actually persisted before
+  updating the global preview notifier. NO new purchase or wallet writes.
+- Source regression `73f12ac9`, CI commit `923c4850`. First combined
+  [39832594258](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39832594258)
+  failed **only in the new over-broad source test**: it searched pre-existing
+  purchase functions in the whole cosmetics page for wallet calls, instead of
+  looking exclusively inside `_equipFrame`. The existing DEDA buying system
+  must NOT be erased to satisfy that test. Commit `83c8fe70` narrowed the
+  assertion to the actual equip method; combined rerun
+  [39833420748](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39833420748)
+  was in progress at checkpoint. Inspect final conclusion before PASS.
+- Independent 13-point owner-acceptance audit
+  [39833202469](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39833202469)
+  **SUCCESS**: validates all 13 point identifiers/remaining blockers and proves
+  the final release command FAILS while any owner phone/tablet test is incomplete.
+  Manifest `docs/DEDA_100377_13_POINT_OWNER_ACCEPTANCE_GATES_2026-10-22.json`
+  has **0/13 owner accepted** as of this checkpoint. Source QA GREEN does not
+  override real 100378 owner findings, and a private partial APK cannot be
+  represented as a complete release.
+- *Still OPEN*: the separate original `_buyFrame/_buyBadge` flows and
+  `DedaDiamondsWallet.spend` involve legacy multi-await purchase/storage.
+  Any atomic receipt and account-bound idempotent spending must be reviewed as
+  part of Point01/04/09 before real 1000-diamond purchase activation. Do not
+  silently refactor payments as part of a cosmetics notifier repair; no wallet
+  debit or user balances were changed here.
