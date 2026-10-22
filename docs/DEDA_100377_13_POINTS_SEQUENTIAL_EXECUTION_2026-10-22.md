@@ -74,3 +74,20 @@ Continue number 01 only until the above safety/functional tests pass. Then issue
 - Point01 reopen fix commit `dbc75cabda753b002ee1702e7875fe820ad19a2f`: `tools/stage_deda_100377_point01_lab_frame_checkout_private.py` revalidates server ownership when saving a previously owned paid frame after relaunch, rather than depending only on an ephemeral session Set.
 - Latest real source CI link: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39760580439 (verify actual conclusion before reporting PASS).
 - **Still explicitly NOT COMPLETED**: real 1000-diamond purchasing remains disabled until safe spendable wallet sources are reconciled, user explicitly approves any necessary production Firestore policy rollout, and signed phone/tablet acceptance proves no double debit or phantom ownership. No changes to Firebase production, Play, or live balances. Do NOT start point02 until Point01 actually passes.
+
+## Point01 safe-rollout compatibility finding — 2026-10-22
+Owner consent to carefully reviewed Frame01 rules rollout has been received. This is **not** permission to alter user balances or disrupt the existing successful badge checkout.
+
+### Exact discovered incompatibility (block live deploy)
+- The working **existing** badge/frame purchase UI in `tools/style_badges_frames_100273_2026_10_05.py` calls `DedaDiamondsWallet.spend(price)`.
+- Existing wallet patch `tools/social_ui_wallet_fixes_100270_2026_10_04.py` uses local earned diamonds FIRST; when insufficient, it debits the remote received-gift remainder via `DedaBackend.spendPersonalGiftedDiamonds` (an unreceipted client balance decrease allowed by the earlier Firestore rules).
+- New 13-LAB-frame checkout in `lib/deda_lab_frame_secure_checkout.dart` would debit **only** `deda_diamond_gift_balances/{originalId}`, ignoring the local earned, ad/task and historical manager wallet. Displayed personal totals do not guarantee this particular balance.
+- The proposed production policy from Stage69 + Point01 deliberately removes the old unreceipted wallet-decrease allowance to prevent forged debits. This also potentially **breaks existing badge/frame purchases funded in part or entirely from the remote gift balance**. Publishing now without replacing the old checkout's client debit path is **NOT acceptable**.
+- Do not restore insecure arbitrary balance decrements as a shortcut; do not mint local diamonds into a server wallet without verified origin.
+
+### Concrete safe progress
+- The existing real reconstructed Flutter source QA run `39760580439` completed SUCCESS after the Point01 account switch, server-only readback and reopen verification corrections.
+- Expanded Firestore emulator regression: approved synthetic purchase, replay/price/owner/insufficient guards, real pending gift claim-once, and simultaneous two-tap purchase. `39762158911` SUCCESS, 8 tests PASS, zero FAIL. Emulator used a published-rules-derived **temporary** candidate, never live database.
+- Added `test/test_deda_100377_point01_legacy_checkout_compatibility.py` as a source audit showing that the legacy original store and new LAB checkout currently use different spendable sources. Wired into the read-only emulator CI workflow.
+- The safe next engineering prerequisite is to reconcile legitimate, securely attested diamond sources with the legacy store purchases, and provide an atomic receipt-backed replacement for any client-only gift-wallet spend before production rules activation. Preserve gift claiming and existing owned items, then rerun the entire compatibility and concurrency suite.
+- Point01 **NOT COMPLETED** / Firebase live policy **NOT DEPLOYED** / no owner wallet write / no Play publish. Point02 remains untouched. Owner phone+tablet end-to-end acceptance remains mandatory.
