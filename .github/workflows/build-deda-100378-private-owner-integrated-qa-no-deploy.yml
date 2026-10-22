@@ -414,7 +414,7 @@ jobs:
               if '--dart-define='+key+'=' not in cmd:
                   cmd += ' --dart-define='+key+'=false'
           script=Path('/tmp/deda_owner_signed_integrated_100378.sh')
-          script.write_text('set -euo pipefail\\n'+cmd+'\\n')
+          script.write_text('set -euo pipefail\n'+cmd+'\n')
           print('PASS owner-original APK signing command staged; code 100378; unapproved purchase, ID & earned badges OFF')
           PY_BUILD
       - name: Build original-signed PRIVATE 100378 APK from fully tested point09/11/12/13 source
@@ -434,7 +434,7 @@ jobs:
           test -x "$buildtools/aapt"
           "$buildtools/apksigner" verify --verbose --print-certs "$apk" | tee /tmp/deda_owner_signer_100378.txt
           grep -q 'certificate SHA-256 digest:' /tmp/deda_owner_signer_100378.txt
-          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\\.diraq\\.ludo\\.d_iraq_ludo' versionCode='100378'"
+          "$buildtools/aapt" dump badging "$apk" | grep -E "^package: name='com\.diraq\.ludo\.d_iraq_ludo' versionCode='100378'"
           python3 - <<'PY_ZIP'
           import zipfile
           from pathlib import Path
@@ -451,14 +451,14 @@ jobs:
           sha256sum private-deda-100378/*.apk > private-deda-100378/SHA256SUMS.txt
           git rev-parse HEAD > private-deda-100378/source-commit.txt
           grep 'certificate SHA-256 digest:' /tmp/deda_owner_signer_100378.txt > private-deda-100378/SIGNER-SHA256.txt
-          printf '%s\\n' \\
-            'PRIVATE OWNER QA ONLY — THIS BUILD IS NOT 13/13 COMPLETE.' \\
-            'No Google Play publication, no Firebase deployment, no user wallet/account changes.' \\
-            'Point05 original moonlit trio is MISSING; do not count replaced art complete.' \\
-            'Paid 13-frame checkout and 200 manager IDs stay OFF pending live permissions, balances and acceptance.' \\
-            'Six level-earned badges remain verification-pending; no automatic award.' \\
-            'Point09 phone-local profile preference guard is included; cloud phone/tablet recovery is NOT verified.' \\
-            'Install on the owner phone only after backing up. Do not uninstall, erase app data or publish.' \\
+          printf '%s\n' \
+            'PRIVATE OWNER QA ONLY — THIS BUILD IS NOT 13/13 COMPLETE.' \
+            'No Google Play publication, no Firebase deployment, no user wallet/account changes.' \
+            'Point05 original moonlit trio is MISSING; do not count replaced art complete.' \
+            'Paid 13-frame checkout and 200 manager IDs stay OFF pending live permissions, balances and acceptance.' \
+            'Six level-earned badges remain verification-pending; no automatic award.' \
+            'Point09 phone-local profile preference guard is included; cloud phone/tablet recovery is NOT verified.' \
+            'Install on the owner phone only after backing up. Do not uninstall, erase app data or publish.' \
             > private-deda-100378/READ-ME-FIRST.txt
       - name: Upload PRIVATE 100378 owner test APK (no release)
         uses: actions/upload-artifact@v4
