@@ -1,0 +1,75 @@
+name: DEDA 100377 POINT01 1000-DIAMOND FRAME FIRESTORE EMULATOR NO DEPLOY
+on:
+  push:
+    branches: [deda-100377-13-points-sequential-qa-2026-10-22]
+    paths:
+      - '.github/workflows/qa-deda-100377-point01-frame-rules-emulator-no-deploy.yml'
+      - 'tools/deda_100377_point01_lab_frame_rules_candidate_NO_DEPLOY.py'
+      - 'tools/deda_100377_point01_extend_stage69_rules_emulator_NO_DEPLOY.py'
+      - 'test/deda_100377_point01_lab_frame_checkout_emulator.test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-live-policy-and-test-only-local-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      DEDA_STAGE69_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE69_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Guard production app wallet Firebase and signing files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet f4da0bfd52affaea8a4d45e2ac15498bc0cea280 -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            lib/main.dart android/ server_private/ assets/
+          python3 -m py_compile \
+            tools/deda_100377_point01_lab_frame_rules_candidate_NO_DEPLOY.py \
+            tools/deda_100377_point01_extend_stage69_rules_emulator_NO_DEPLOY.py
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'PASS NO production changes or APK'
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Read active Firestore rules READ ONLY and build emulator candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_stage69_merge_5000_checkout_into_live_rules_READONLY_NO_DEPLOY.py
+          python3 tools/deda_100377_point01_extend_stage69_rules_emulator_NO_DEPLOY.py
+          test -s /tmp/deda-point01-frame-candidate.rules
+          grep -q 'DEDA_100377_POINT01_LAB_FRAME_1000_RULES_OFFLINE_NO_DEPLOY' \
+            /tmp/deda-point01-frame-candidate.rules
+      - name: Install isolated local Firebase rules emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-save --no-audit --no-fund \
+            firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Verify atomic 1000 frame purchase on synthetic accounts only
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GCLOUD_PROJECT=demo-deda-100377-frames
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100377-frames --only firestore \
+            'node --test test/deda_100377_point01_lab_frame_checkout_emulator.test.js'
+          echo 'PASS owner-authenticated atomic frame 1000, receipt, replay/tamper/insufficient/account guards — LOCAL EMULATOR ONLY'
+      - name: Confirm never deploy rules, APK or Play
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo 'PASS NO-DEPLOY ONLY (no Firebase publish, no wallet write)'
