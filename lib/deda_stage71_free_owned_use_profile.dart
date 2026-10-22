@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -236,11 +238,44 @@ class _DedaStage71OwnedIdsPanelState
   String? _active;
   bool _busy = false;
   int _generation = 0;
+  // DEDA_100377_P09_AUTH_UID_ROTATION_INVALIDATES_OWNED_PANEL
+  // A changed account can retain the same widget originalId briefly during
+  // login transition. Its old premium rows MUST NOT remain usable or visible.
+  StreamSubscription<User?>? _auth;
+  String? _verifiedUid;
+
+  String? _currentUid() {
+    try {
+      if (Firebase.apps.isEmpty) return null;
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _onAuthChanged(User? user) {
+    ++_generation; // invalidates pending ownership and Use responses
+    if (!mounted) return;
+    setState(() {
+      _ids = null;
+      _active = null;
+      _verifiedUid = null;
+      _busy = false;
+    });
+    if (user?.uid != null) _load();
+  }
 
   @override
   void initState() {
     super.initState();
     DedaStage71ActiveIdRefresh.notifier.addListener(_onActiveChanged);
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        _auth = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
+      }
+    } catch (_) {
+      // No initialized Firebase means no verified premium ownership display.
+    }
     _load();
   }
 
@@ -258,6 +293,7 @@ class _DedaStage71OwnedIdsPanelState
       ++_generation;
       _ids = null;
       _active = null;
+      _verifiedUid = null;
       _busy = false;
       _load();
     }
@@ -267,6 +303,7 @@ class _DedaStage71OwnedIdsPanelState
   void dispose() {
     ++_generation;
     DedaStage71ActiveIdRefresh.notifier.removeListener(_onActiveChanged);
+    _auth?.cancel();
     super.dispose();
   }
 
@@ -274,6 +311,17 @@ class _DedaStage71OwnedIdsPanelState
     if (!DedaStage71OwnedIdentifierService.enabled || _busy) return;
     final generation = ++_generation;
     final original = widget.originalId;
+    final uid = _currentUid();
+    if (uid == null) {
+      if (mounted) {
+        setState(() {
+          _ids = null;
+          _active = null;
+          _verifiedUid = null;
+        });
+      }
+      return;
+    }
     try {
       // DEDA_100377_UNIFIED_ACCEPTED_OWNERSHIP_PROFILE_AND_MY_STORE
       // The Edit Profile Use panel and My Store share one server-verified
@@ -283,17 +331,19 @@ class _DedaStage71OwnedIdsPanelState
           .acceptedOwnedForMyStore(original);
       final chosen = await DedaStage71OwnedIdentifierService.active(original);
       if (!mounted || generation != _generation ||
-          widget.originalId != original) return;
+          widget.originalId != original || _currentUid() != uid) return;
       setState(() {
         _ids = rows;
         _active = chosen;
+        _verifiedUid = uid;
       });
     } catch (_) {
       if (mounted && generation == _generation &&
-          widget.originalId == original) {
+          widget.originalId == original && _currentUid() == uid) {
         setState(() {
           _ids = null;
           _active = null;
+          _verifiedUid = null;
         });
       }
     }
@@ -302,23 +352,25 @@ class _DedaStage71OwnedIdsPanelState
   Future<void> _use(String id) async {
     if (_busy) return;
     final original = widget.originalId;
+    final uid = _currentUid();
+    if (uid == null || uid != _verifiedUid) return;
     final generation = ++_generation;
     setState(() => _busy = true);
     try {
       await DedaStage71OwnedIdentifierService.use(original, id);
       if (!mounted || generation != _generation ||
-          widget.originalId != original) return;
+          widget.originalId != original || _currentUid() != uid) return;
       setState(() => _active = id);
     } catch (_) {
       if (mounted && generation == _generation &&
-          widget.originalId == original) {
+          widget.originalId == original && _currentUid() == uid) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('تعذّر تأكيد استخدام المعرف. حدث القائمة وحاول ثانية.'),
         ));
       }
     } finally {
       if (mounted && generation == _generation &&
-          widget.originalId == original) {
+          widget.originalId == original && _currentUid() == uid) {
         setState(() => _busy = false);
       }
     }
@@ -329,6 +381,11 @@ class _DedaStage71OwnedIdsPanelState
     if(!DedaStage71OwnedIdentifierService.enabled){
       return const SizedBox.shrink();
     }
+    // Enforce current account on EVERY frame; auth change events can arrive
+    // after widget rebuild. Old rows are never rendered in the interim.
+    final currentRows = _verifiedUid != null &&
+            _currentUid() == _verifiedUid ? _ids : null;
+    final currentActive = currentRows == null ? null : _active;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -340,14 +397,14 @@ class _DedaStage71OwnedIdsPanelState
               IconButton(onPressed:_busy?null:_load,
                 icon:const Icon(Icons.refresh)),
             ]),
-            if(_ids==null) const Text('الملكية بانتظار التحقق من الخادم'),
-            if(_ids!=null && _ids!.isEmpty)
+            if(currentRows==null) const Text('الملكية بانتظار التحقق من الخادم'),
+            if(currentRows!=null && currentRows.isEmpty)
               const Text('لا توجد معرّفات ممنوحة بعد'),
             // QA32: original is never lost and is always available to
             // reactivate when a gifted or self-used premium ID is active.
             // Switching only changes the ACTIVE display alias, not the
             // immutable original account/share routing identifier.
-            if (_ids != null)
+            if (currentRows != null)
               ListTile(
                 key: const Key('deda_qa32_permanent_original_owned_row'),
                 dense: true,
@@ -355,22 +412,22 @@ class _DedaStage71OwnedIdsPanelState
                     textDirection: TextDirection.ltr),
                 subtitle: const Text('المعرّف الأصلي • محفوظ دائمًا'),
                 trailing: OutlinedButton(
-                  onPressed: _busy || _active == widget.originalId
+                  onPressed: _busy || currentActive == widget.originalId
                       ? null
                       : () => _use(widget.originalId),
-                  child: Text(_active == widget.originalId
+                  child: Text(currentActive == widget.originalId
                       ? 'مستخدم' : 'استخدام'),
                 ),
               ),
-            for(final owned in _ids ?? <DedaStage71OwnedIdentifier>[])
+            for(final owned in currentRows ?? <DedaStage71OwnedIdentifier>[])
               ListTile(
                 dense:true,
                 title:Text(owned.identifier,textDirection:TextDirection.ltr),
                 subtitle:Text('لون أصلي ثابت • مجموعة ${owned.group}'),
                 trailing:OutlinedButton(
-                  onPressed:_busy||_active==owned.identifier
+                  onPressed:_busy||currentActive==owned.identifier
                     ?null:()=>_use(owned.identifier),
-                  child:Text(_active==owned.identifier
+                  child:Text(currentActive==owned.identifier
                     ?'مستخدم':'استخدام'),
                 ),
               ),
