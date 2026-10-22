@@ -55,9 +55,9 @@ class Point09IdentityContinuity(unittest.TestCase):
         self.assertIn("_currentUid() != uid",part)
         self.assertIn("_verifiedUid = uid;",part)
         self.assertIn("if (uid == null || uid != _verifiedUid) return;",part)
-        self.assertIn("_currentUid() == _verifiedUid ? _ids : null;",part)
+        self.assertRegex(part, r"_currentUid\(\)\s*==\s*_verifiedUid\s*\?\s*_ids\s*:\s*null;")
         self.assertIn("final currentActive = currentRows == null ? null : _active;",part)
-        self.assertIn("for(final owned in currentRows ?? <DedaStage71OwnedIdentifier>[])",part)
+        self.assertRegex(part, r"for\s*\(\s*final\s+owned\s+in\s+currentRows\s*\?\?\s*<DedaStage71OwnedIdentifier>\[\]\s*\)")
         self.assertIn("if (currentRows != null)",part)
 
     def test_old_account_use_reply_cannot_mark_new_account_active(self):
@@ -95,7 +95,7 @@ class Point09IdentityContinuity(unittest.TestCase):
         self.assertIn("_currentUid() != _verifiedUid",foil)
         self.assertGreaterEqual(foil.count("_currentUid() != uid"),3)
         self.assertIn("widget.fallback",foil)
-        self.assertIn("widget.originalId == original && _currentUid() == uid",foil)
+        self.assertRegex(foil, r"widget\.originalId\s*==\s*original\s*&&\s*_currentUid\(\)\s*==\s*uid")
 
     def test_cross_device_money_and_xp_never_restored_from_unverified_local_max(self):
         self.assertIn("function inspectContinuity(proof, server, device)", SERVER)
