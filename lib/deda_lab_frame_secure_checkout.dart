@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import 'deda_qa32_manager_original_owner_proof.dart';
+
 /// DEDA point 01 — trusted 13-LAB-frame checkout candidate.
 ///
 /// SAFETY GATE: NEVER enable before published Firestore rules and all verified
@@ -56,16 +58,19 @@ class DedaLabFrameSecureCheckout {
     final profile = docs[0].data() ?? <String, dynamic>{};
     final session = docs[1].data() ?? <String, dynamic>{};
     final id = docs[2].data() ?? <String, dynamic>{};
-    final accountKey = (profile['accountKey'] ?? '').toString().trim();
-    if (accountKey.isEmpty ||
-        accountKey != (session['accountKey'] ?? '').toString().trim() ||
-        profile['sharePersonalId'] != originalId ||
-        // DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF
-        // Identity-route ownership must match the current Firebase UID, not
-        // merely an ID string copied into a profile/session document.
-        id['ownerUid'] != uid ||
-        id['publicId'] != originalId ||
-        id['kind'] != 'personal' || id['active'] != true) {
+    // DEDA_100377_POINT01_OWNER_UID_ROUTE_PROOF
+    // Use the SAME original-ID owner proof already tested for manager self-use.
+    // Legacy accounts may lack users.sharePersonalId entirely; accepting them
+    // requires matching authenticated UID, account/session key, active
+    // deda_share_ids routing record and no conflicting recorded sharePersonalId.
+    // Never accept an alias string in place of a canonical original ID.
+    if (!DedaQa32ManagerOriginalOwnerProof.authentic(
+      expectedOriginal: originalId,
+      authUid: uid,
+      account: profile,
+      session: session,
+      route: id,
+    )) {
       throw StateError('original-owner-session-not-verified');
     }
     // Published rules must independently authorize this UID/original account.
