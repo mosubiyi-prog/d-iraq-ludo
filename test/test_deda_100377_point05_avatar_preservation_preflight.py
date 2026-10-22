@@ -25,7 +25,7 @@ class Point05MoonlitAvatarPreflight(unittest.TestCase):
         editor_end = s.find('\nclass ', editor_start + 20)
         editor = s[editor_start:editor_end]
         self.assertIn('children: List<Widget>.generate(6, (index)', editor)
-        self.assertIn('_avatarStyle = index;', editor)
+        self.assertIn('onTap: () => setState(() => _avatarStyle = index)', editor)
         self.assertIn('DedaAvatarPortrait(', editor)
 
     def test_legacy_owners_keep_their_original_avatar_choice(self):
