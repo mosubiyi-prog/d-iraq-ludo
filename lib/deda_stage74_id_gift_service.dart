@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_stage71_free_manager_200_service.dart';
+import 'deda_qa32_manager_original_owner_proof.dart';
 
 /// Permanent, user-confirmed reception of an ALREADY gifted free identifier.
 /// Never creates premium ownership, never changes original IDs, and never
@@ -39,23 +40,37 @@ class DedaStage74IdGiftService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('gift-recipient-not-signed-in');
     final db = FirebaseFirestore.instance;
-    final pair = await Future.wait([
-      db.collection('users').doc(user.uid).get(
+    // DEDA_100377_POINT08_LEGACY_GIFT_RECIPIENT_UID_ORIGINAL_ROUTE_PROOF
+    // The recipient's ORIGINAL account identity is bound by three
+    // authoritative server records; a missing legacy sharePersonalId is
+    // permitted only when account/session keys and the owned ID route match.
+    // This never treats a typed premium alias as the canonical recipient.
+    final uid = user.uid;
+    final proof = await Future.wait([
+      db.collection('users').doc(uid).get(
         const GetOptions(source: Source.server),
       ),
-      db.collection('deda_sessions').doc(user.uid).get(
+      db.collection('deda_sessions').doc(uid).get(
+        const GetOptions(source: Source.server),
+      ),
+      db.collection('deda_share_ids').doc(originalId).get(
         const GetOptions(source: Source.server),
       ),
     ]);
-    final account = pair[0].data() ?? {};
-    final session = pair[1].data() ?? {};
-    if (FirebaseAuth.instance.currentUser?.uid != user.uid ||
-        account['sharePersonalId'] != originalId ||
-        account['accountKey'] is! String ||
-        account['accountKey'] != session['accountKey']) {
+    final account = proof[0].data() ?? <String, dynamic>{};
+    final session = proof[1].data() ?? <String, dynamic>{};
+    final route = proof[2].data() ?? <String, dynamic>{};
+    if (FirebaseAuth.instance.currentUser?.uid != uid ||
+        !DedaQa32ManagerOriginalOwnerProof.authentic(
+          expectedOriginal: originalId,
+          authUid: uid,
+          account: account,
+          session: session,
+          route: route,
+        )) {
       throw StateError('gift-recipient-original-account-mismatch');
     }
-    return user.uid;
+    return uid;
   }
 
   static Future<List<DedaStage74IdGift>> load(String originalId) async {
