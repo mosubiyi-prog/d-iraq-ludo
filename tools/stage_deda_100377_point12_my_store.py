@@ -7,7 +7,7 @@ from pathlib import Path
 
 MAIN = Path('lib/main.dart')
 MARK = '// DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE'
-IMPORT = "import 'deda_100377_my_store_page_staged.dart';\n"
+IMPORT = "import 'deda_100377_my_store_page_staged.dart';\nimport 'deda_100377_profile_free_inventory.dart';\n"
 ANCHOR = '  Widget _featureGrid() {'
 METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
   Future<void> _openDedaMyStore() async {
@@ -29,30 +29,15 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
         proof: DedaMyStoreProof.basicFree,
         active: true,
       ),
-      DedaMyStoreItem(
-        id: 'avatar_$avatarStyle',
-        label: dedaText('الصورة المختارة ($avatarStyle)',
-                        'Selected avatar ($avatarStyle)'),
-        section: DedaMyStoreSection.avatars,
-        proof: DedaMyStoreProof.deviceSaved, active: true,
-      ),
-      DedaMyStoreItem(
-        id: 'background_$backgroundStyle',
-        label: dedaText('الخلفية المختارة ($backgroundStyle)',
-                        'Selected background ($backgroundStyle)'),
-        section: DedaMyStoreSection.backgrounds,
-        proof: DedaMyStoreProof.deviceSaved, active: true,
-      ),
     ];
-    if (frameStyle <= 5) {
-      items.add(DedaMyStoreItem(
-        id: 'frame_$frameStyle',
-        label: dedaText('الإطار المجاني المختار ($frameStyle)',
-                        'Selected free frame ($frameStyle)'),
-        section: DedaMyStoreSection.frames,
-        proof: DedaMyStoreProof.basicFree, active: true,
-      ));
-    }
+    // DEDA_100377_POINT12_FULL_NATIVE_FREE_APPEARANCE_NO_FAKE_MOONLIT
+    // The original 6/6/6 picker options are FREE and READ-ONLY here;
+    // missing owner-approved moonlit images are not substituted.
+    items.addAll(DedaProfileFreeInventory.forDevice(
+      avatarStyle: avatarStyle,
+      frameStyle: frameStyle,
+      backgroundStyle: backgroundStyle,
+    ));
     // DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED
     // Source.server receipt AND matching entitlement are checked for EACH of
     // the thirteen authentic premium frames, not just the equipped one.
