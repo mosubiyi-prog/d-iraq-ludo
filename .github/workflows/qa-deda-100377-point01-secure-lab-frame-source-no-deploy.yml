@@ -9,6 +9,10 @@ on:
       - 'lib/deda_lab_frame_purchase_action.dart'
       - 'tools/stage_deda_100377_point01_lab_frame_checkout_private.py'
       - 'test/deda_100377_point01_lab_frame_checkout_contract_test.dart'
+      - 'test/test_deda_100377_point07_received_friend_source.py'
+      - 'test/deda_100377_point07_received_friend_identity_test.dart'
+      - 'lib/deda_stage74_hadaya_identifier_section.dart'
+      - 'test/test_deda_100377_point08_gift_inbox_account_scope.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -206,6 +210,9 @@ jobs:
           # Point07 receiver+friends: two intentional shares stay distinct; original routing retained.
           python3 -m unittest discover -s test -p 'test_deda_100377_point07_received_friend_source.py'
           flutter test test/deda_100377_point07_received_friend_identity_test.dart
+          # Point08 account switch: new user cannot inherit previous Hadaya inbox state.
+          python3 -m unittest discover -s test -p 'test_deda_100377_point08_gift_inbox_account_scope.py'
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_stage74_hadaya_identifier_section.dart
           flutter test test/deda_qa32_public_royal_hero_parity_widget_test.dart
           flutter test test/deda_qa32_live_friend_appearance_test.dart
           flutter test test/deda_100374_nonid_public_readability_test.dart
