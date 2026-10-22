@@ -21,7 +21,7 @@ class HadayaFrozenAccountUid(unittest.TestCase):
         self.assertIn('FirebaseAuth.instance.currentUser?.uid', s)
         self.assertIn('String? _verifiedUid;', s)
         self.assertIn('final uid = _currentUid();', s)
-        self.assertIn('widget.originalId != originalId || _currentUid() != uid', s)
+        self.assertRegex(s, r'widget\.originalId\s*!=\s*originalId\s*\|\|\s*_currentUid\(\)\s*!=\s*uid')
         self.assertIn('_verifiedUid = uid;', s)
         self.assertIn('setState(() => _gifts = gifts);', s)
         self.assertIn('if (_currentUid() != uid) {', s)
@@ -29,11 +29,11 @@ class HadayaFrozenAccountUid(unittest.TestCase):
 
     def test_visible_rows_and_receive_are_user_scoped(self):
         s = self.source
-        self.assertIn('_verifiedUid == _currentUid() ? _gifts : null', s)
+        self.assertRegex(s, r'_verifiedUid\s*==\s*_currentUid\(\)\s*\?\s*_gifts\s*:\s*null')
         self.assertIn('if (visibleGifts != null && visibleGifts.isNotEmpty)', s)
         self.assertIn('itemCount: visibleGifts.length', s)
-        self.assertIn('itemBuilder: (context,i) => _giftTile(visibleGifts[i])', s)
-        self.assertIn('_verifiedUid != uid || gift.originalId != widget.originalId', s)
+        self.assertRegex(s, r'itemBuilder:\s*\(context,\s*i\)\s*=>\s*_giftTile\(visibleGifts\[i\]\)')
+        self.assertRegex(s, r'_verifiedUid\s*!=\s*uid\s*\|\|\s*gift\.originalId\s*!=\s*widget\.originalId')
         self.assertIn('if (_currentUid() != uid) return;', s)
         self.assertIn('await DedaStage74IdGiftService.receive(gift);', s)
         self.assertNotIn('DedaDiamondsWallet.spend', s)
