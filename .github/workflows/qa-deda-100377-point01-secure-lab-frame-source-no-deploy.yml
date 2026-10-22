@@ -136,6 +136,9 @@ jobs:
           echo 'PASS_STAGE51_SPARK_ALIAS_FINDS_EXISTING_CANONICAL_UID_WITHOUT_REWRITING_SOCIAL_SERVICE'
           python3 tools/stage_deda_100375_all_16_lab_original_royal_frames_native.py
           python3 tools/stage_deda_100377_point01_lab_frame_checkout_private.py
+          # Owner 13-point staged sequence: source-only Point02 name fix AFTER secure Point01.
+          python3 tools/stage_deda_100377_point02_exact_frame_names.py
+          python3 -m unittest discover -s test -p 'test_deda_100377_point02_exact_frame_names_source.py'
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart
           flutter analyze lib/deda_lab_frame_secure_checkout.dart lib/deda_lab_frame_purchase_action.dart
           flutter test test/deda_owner19_stage51_friend_alias_widget_test.dart
