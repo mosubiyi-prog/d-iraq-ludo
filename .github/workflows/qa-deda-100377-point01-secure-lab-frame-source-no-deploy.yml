@@ -4,7 +4,11 @@ on:
     branches:
       - deda-100377-13-points-sequential-qa-2026-10-22
     paths:
-      - '.github/workflows/qa-deda-100377-point01-secure-lab-frame-source-no-deploy.yml'\n      - 'lib/deda_lab_frame_secure_checkout.dart'\n      - 'lib/deda_lab_frame_purchase_action.dart'\n      - 'tools/stage_deda_100377_point01_lab_frame_checkout_private.py'\n      - 'test/deda_100377_point01_lab_frame_checkout_contract_test.dart'
+      - '.github/workflows/qa-deda-100377-point01-secure-lab-frame-source-no-deploy.yml'
+      - 'lib/deda_lab_frame_secure_checkout.dart'
+      - 'lib/deda_lab_frame_purchase_action.dart'
+      - 'tools/stage_deda_100377_point01_lab_frame_checkout_private.py'
+      - 'test/deda_100377_point01_lab_frame_checkout_contract_test.dart'
   workflow_dispatch:
 permissions:
   contents: read
