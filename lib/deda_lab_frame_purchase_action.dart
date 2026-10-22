@@ -42,7 +42,7 @@ class _DedaLabFramePurchaseActionState
       _ownedVerifiedUid = null;
       _error = null;
     });
-    if (user?.uid != null && DedaLabFrameSecureCheckout.live) {
+    if (user?.uid != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _refresh();
       });
@@ -110,9 +110,7 @@ class _DedaLabFramePurchaseActionState
     } catch (_) {
       // Firebase not initialized: never show a cached premium ownership.
     }
-    if (DedaLabFrameSecureCheckout.live) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
@@ -126,9 +124,7 @@ class _DedaLabFramePurchaseActionState
       _owned = false;
       _ownedVerifiedUid = null;
       _error = null;
-      if (DedaLabFrameSecureCheckout.live) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
     }
   }
 
@@ -139,7 +135,7 @@ class _DedaLabFramePurchaseActionState
   }
 
   Future<void> _refresh() async {
-    if (!mounted || _busy || !DedaLabFrameSecureCheckout.live) return;
+    if (!mounted || _busy) return;
     final owner = widget.originalId;
     final frame = widget.frameId;
     final uid = _currentUid();
@@ -265,9 +261,21 @@ class _DedaLabFramePurchaseActionState
         _ownedVerifiedUid == _currentUid();
     // Unlike a fake interactive Buy control, this is explicit until rollout.
     if (!DedaLabFrameSecureCheckout.live) {
-      return const Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('1000 💎', style: TextStyle(fontWeight: FontWeight.bold)),
-        Text('الشراء بعد التحقق', style: TextStyle(fontSize: 11)),
+      return Column(mainAxisSize: MainAxisSize.min, children: [
+        if (ownedByCurrentUid)
+          OutlinedButton(
+            onPressed: _busy ? null : _useVerifiedFrame,
+            child: Text(_busy ? 'جار التحقق…' : 'استخدام'),
+          )
+        else ...[
+          const Text('1000 💎', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('الشراء بعد التحقق', style: TextStyle(fontSize: 11)),
+        ],
+        if (_error != null)
+          TextButton(
+            onPressed: _busy ? null : _refresh,
+            child: const Text('إعادة التحقق'),
+          ),
       ]);
     }
     return Column(mainAxisSize: MainAxisSize.min, children: [
