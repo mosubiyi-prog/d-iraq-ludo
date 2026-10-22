@@ -86,6 +86,71 @@ class DedaLevelAchievementsPage extends StatelessWidget {
   }
 }
 
+/// An exact crop from the owner's supplied 3x2 badge art sheet,
+/// preserved as ONE authenticated repository image asset; never substitute
+/// the separate paid cosmetic badge pictures or fabricate earned status.
+/// Gold/Silver/Emerald on row 1, Diamond/Royal/Legendary on row 2.
+class DedaOriginalSixLevelBadgeArt extends StatelessWidget {
+  const DedaOriginalSixLevelBadgeArt({
+    super.key,
+    required this.tier,
+    this.size = 68,
+  });
+
+  static const asset =
+      'assets/deda_owner_level_badges/owner_approved_six_rank_badges_768x512.webp';
+
+  final DedaLevelBadgeTier tier;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final column = switch (tier) {
+      DedaLevelBadgeTier.gold => 0,
+      DedaLevelBadgeTier.silver => 1,
+      DedaLevelBadgeTier.emerald => 2,
+      DedaLevelBadgeTier.diamond => 0,
+      DedaLevelBadgeTier.royal => 1,
+      DedaLevelBadgeTier.legendary => 2,
+    };
+    final row = switch (tier) {
+      DedaLevelBadgeTier.gold ||
+      DedaLevelBadgeTier.silver ||
+      DedaLevelBadgeTier.emerald => 0,
+      _ => 1,
+    };
+    // OverflowBox must allow the full 3x2 image to exceed the cell. Only
+    // the exact owner's artwork cell is visible after ClipRect.
+    return SizedBox(
+      key: ValueKey<String>('deda_owner_level_art_${tier.id}'),
+      width: size,
+      height: size,
+      child: ClipRect(
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: size * 3,
+          maxWidth: size * 3,
+          minHeight: size * 2,
+          maxHeight: size * 2,
+          child: Transform.translate(
+            offset: Offset(-column * size, -row * size),
+            child: Image.asset(
+              asset,
+              key: ValueKey<String>('deda_owner_level_asset_${tier.id}'),
+              width: size * 3,
+              height: size * 2,
+              fit: BoxFit.fill,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (context, error, stackTrace) =>
+                  const Icon(Icons.image_not_supported_outlined),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LevelBadgeTile extends StatelessWidget {
   const _LevelBadgeTile({
     required this.tier,
@@ -121,12 +186,22 @@ class _LevelBadgeTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: <Widget>[
-            Icon(
-              unlocked ? Icons.workspace_premium : Icons.lock_outline,
-              color: unlocked
-                  ? const Color(0xFF906F35)
-                  : const Color(0xFF7B8290),
-              size: 30,
+            // The original artwork is shown even when pending/locked.
+            // Its appearance never grants a badge or changes any level.
+            Stack(
+              children: <Widget>[
+                DedaOriginalSixLevelBadgeArt(tier: tier),
+                if (!unlocked)
+                  const Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Icon(
+                      Icons.lock_outline,
+                      size: 17,
+                      color: Color(0xFF7B8290),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(
