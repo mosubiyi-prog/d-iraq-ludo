@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Point01: attach trusted LAB frame ownership to real reconstructed 100377.
+"""Owner point01: guarded secure checkout on reconstructed actual 100377 Flutter.
 
-Runs AFTER stage_deda_100375_all_16_lab_original_royal_frames_native.py.
-13 premium frames can be previewed without touching saved appearance.
-The buy control stays fail-CLOSED until real server rules are approved.
-No local deductions, no automatic grant, no Firebase/Play deployment.
+Preserve existing _previewFrameStyle mechanics and owner choice. No purchase
+is enabled without explicit secure backend switch and audited server rules.
 """
 from pathlib import Path
 import re
@@ -12,128 +10,96 @@ import re
 MAIN = Path('lib/main.dart')
 MARK = '// DEDA_100377_POINT01_LAB_FRAME_CHECKOUT_GUARDED'
 IMPORT = "import 'deda_lab_frame_purchase_action.dart';\n"
-A = 'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {'
-PREF = 'class DedaPreferences {'
+EDITOR_START = 'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {'
+GRID = 'children: List<Widget>.generate(16, (offset) {'
 
 def patch(src: str) -> str:
     if MARK in src:
-        if src.count(MARK) != 1 or IMPORT not in src:
-            raise ValueError('SAFE_STOP_PARTIAL_POINT01')
+        if src.count(MARK) != 1 or src.count(IMPORT) != 1:
+            raise ValueError('SAFE_STOP_PARTIAL_POINT01_PATCH')
         return src
-    a = src.index(A)
-    b = src.find('\nclass ', a+len(A))
+    if src.count(EDITOR_START) != 1:
+        raise ValueError('SAFE_STOP_POINT01_EDIT_PROFILE_NOT_EXACTLY_ONCE')
+    a = src.index(EDITOR_START)
+    b = src.find('\nclass ', a + len(EDITOR_START))
     if b < 0:
-        raise ValueError('SAFE_STOP_EDIT_SECTION_BOUNDARY')
-    e = src[a:b]
-    anchors = (
-        'children: List<Widget>.generate(16, (offset)',
-        'final index = offset + 3;',
-        'final free = dedaProfileFrameIsFree(index);',
-        'DedaProfileFramePreview(\n                            style: index,',
-        'frameStyle: _frameStyle,',
-        'Future<void> _save() async {',
-    )
-    for x in anchors:
-        if x not in e:
-            raise ValueError('SAFE_STOP_POINT01_RENDER_DRIFT ' + x[:70])
-    # Parent state only, no changes to other application areas.
-    e = e.replace(
-        'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {',
-        'class _DedaEditProfilePageState extends State<DedaEditProfilePage> {\n'
-        '  '+MARK+'\n'
-        '  int? _labPreviewStyle;\n'
-        '  final Set<int> _serverVerifiedPaidStyles = <int>{};\n',
-        1)
-    # Earlier profile stages legitimately change the exact selected check.
-    # Touch ONLY the first selected declaration after the 16-frame grid.
-    grid = e.index('children: List<Widget>.generate(16, (offset)')
-    selected_at = e.find('final selected =', grid)
-    selected_end = e.find(';', selected_at)
-    if selected_at < 0 or selected_end < 0 or selected_at-grid > 800:
-        raise ValueError('SAFE_STOP_POINT01_GRID_SELECTED_DRIFT')
-    e = e[:selected_at] + 'final selected = (_labPreviewStyle ?? _frameStyle) == index;' + e[selected_end+1:]
-    # Old signed reconstructions legitimately vary the frame onTap syntax.
-    grid = e.index('children: List<Widget>.generate(16, (offset)')
-    ink = e.find('return InkWell(', grid)
-    tap_at = e.find('onTap:', ink)
-    border_at = e.find('borderRadius:', tap_at)
-    if (ink < 0 or tap_at < 0 or border_at < 0 or
-        tap_at-ink > 140 or border_at-tap_at > 850):
-        raise ValueError('SAFE_STOP_POINT01_FRAME_TAP_DRIFT')
-    original_tap = e[tap_at:border_at]
-    if 'free' not in original_tap or '_frameStyle' not in original_tap:
-        raise ValueError('SAFE_STOP_POINT01_UNRECOGNIZED_FRAME_TAP')
-    e = e[:tap_at] + """onTap: free
-                          ? () => setState(() { _frameStyle = index; _labPreviewStyle = null; })
-                          : () => setState(() => _labPreviewStyle = index),
-                      """ + e[border_at:]
-    # Only the sticky portrait renderer, never saved preferences.
-    p = e.index('child: DedaFramedAvatar(')
-    q = e.index('frameStyle: _frameStyle,', p)
-    e = e[:q] + 'frameStyle: _labPreviewStyle ?? _frameStyle,' + e[q+len('frameStyle: _frameStyle,'):]
-    # Price + authenticated ownership action live BELOW each locked frame.
-    thumb = '''DedaProfileFramePreview(
-                            style: index,
-                            avatarStyle: _avatarStyle,
-                            size: cell,
-                            selected: selected,
-                          ),'''
-    if e.count(thumb) != 1:
-        raise ValueError('SAFE_STOP_POINT01_THUMB_DRIFT')
-    e = e.replace(thumb, thumb+'''
-                          if (index >= 6)
-                            DedaLabFramePurchaseAction(
-                              key: ValueKey<String>('deda_frame_checkout_$index'),
-                              originalId: DedaBackend.personalShareIdForPhone(
-                                DedaPreferences.phone,
-                              ).trim(),
-                              frameId: DedaLabPremiumFrameStyles.byProfileStyle(index)!.id,
-                              onVerifiedOwned: () => setState(() {
-                                _serverVerifiedPaidStyles.add(index);
-                                _frameStyle = index;
-                                _labPreviewStyle = null;
-                              }),
-                            ),''', 1)
-    # Never accidentally persist a paid preview when saving a name/background.
-    saveAnchor = 'Future<void> _save() async {'
-    e = e.replace(saveAnchor, saveAnchor+'''
+        raise ValueError('SAFE_STOP_POINT01_EDITOR_END')
+    editor = src[a:b]
+    requirements = [GRID, 'int? _previewFrameStyle;', 'frameStyle: _previewFrameStyle ?? _frameStyle,',
+                    'final index = offset + 3;', 'final free = dedaProfileFrameIsFree(index);',
+                    'onTap: free', 'DedaProfileFramePreview(',
+                    'class _DedaEditProfilePageState', 'Future<void> _save() async {']
+    for item in requirements:
+        if item not in editor:
+            raise ValueError('SAFE_STOP_POINT01_MISSING_REAL_EDITOR_ANCHOR:' + item)
+    state = '  int? _previewFrameStyle;'
+    if editor.count(state) != 1:
+        raise ValueError('SAFE_STOP_POINT01_PREVIEW_STATE_DRIFT')
+    editor = editor.replace(state, state + '\n  ' + MARK + '\n  final Set<int> _serverVerifiedPaidStyles = <int>{};', 1)
+    save = 'Future<void> _save() async {'
+    editor = editor.replace(save, save + '''
+    // Never persist a locally previewed or unverified paid LAB frame.
     if (_frameStyle >= 6 && !_serverVerifiedPaidStyles.contains(_frameStyle)) {
-      setState(() => _error = 'الملكية المدفوعة غير مؤكدة من الخادم؛ لم نحفظ الإطار.');
+      setState(() => _error = 'تحقق من ملكية الإطار بالخادم ثم اضغط استخدام.');
       return;
     }
 ''', 1)
-    src = src[:a] + e + src[b:]
+    grid = editor.index(GRID)
+    thumb = '''DedaProfileFramePreview(
+                                  style: index,
+                                  avatarStyle: _avatarStyle,
+                                  size: cell,
+                                  selected: selected,
+                                ),'''
+    if editor.count(thumb) != 1 or editor.find(thumb,grid) < 0:
+        raise ValueError('SAFE_STOP_POINT01_PAID_THUMB_DRIFT')
+    editor = editor.replace(thumb, thumb+'''
+                                if (index >= 6)
+                                  DedaLabFramePurchaseAction(
+                                    key: ValueKey<String>('deda_lab_checkout_$index'),
+                                    originalId: DedaBackend.personalShareIdForPhone(
+                                      DedaPreferences.phone,
+                                    ).trim(),
+                                    frameId: DedaLabPremiumFrameStyles.byProfileStyle(index)!.id,
+                                    onVerifiedOwned: () => setState(() {
+                                      _serverVerifiedPaidStyles.add(index);
+                                      _frameStyle = index;
+                                      _previewFrameStyle = null;
+                                    }),
+                                  ),''',1)
+    src=src[:a]+editor+src[b:]
     if IMPORT in src or src.count("import 'package:flutter/material.dart';\n") != 1:
         raise ValueError('SAFE_STOP_POINT01_IMPORT_DRIFT')
-    src = src.replace("import 'package:flutter/material.dart';\n",
-                      "import 'package:flutter/material.dart';\n"+IMPORT,1)
-    # Preserve historical cached ownership; only widen frame slot integer.
-    pa = src.index(PREF)
-    pb = src.index('\nenum DedaTaskEvent', pa)
-    prefs = src[pa:pb]
-    n = 0
-    def widen(m):
-        nonlocal n
-        val = m.group(0)
-        if '.clamp(0, 5)' in val:
-            n += 1
-            return val.replace('.clamp(0, 5)', '.clamp(0, 18)')
-        return val
-    prefs = re.sub(r'profileFrameStyle\s*=\s*[^;]{0,230};', widen, prefs, flags=re.S)
-    if n < 3:
-        raise ValueError('SAFE_STOP_POINT01_LOCAL_FRAME_STORAGE_DRIFT ' + str(n))
-    src = src[:pa] + prefs + src[pb:]
-    if src.count(MARK) != 1 or src.count(IMPORT) != 1:
-        raise ValueError('SAFE_STOP_POINT01_FINAL')
+    src=src.replace("import 'package:flutter/material.dart';\n", "import 'package:flutter/material.dart';\n"+IMPORT,1)
+    # UI saving valid verified styles cannot be truncated to a legacy 0..5.
+    pa=src.index('class DedaPreferences {')
+    pb=src.find('\nenum DedaTaskEvent',pa)
+    if pb < pa:
+        raise ValueError('SAFE_STOP_POINT01_PREFERENCES_END')
+    prefs=src[pa:pb]
+    edited=0
+    def widen(match):
+        nonlocal edited
+        v=match.group(0)
+        if '.clamp(0, 5)' in v:
+            edited+=1
+            return v.replace('.clamp(0, 5)', '.clamp(0, 18)')
+        return v
+    prefs = re.sub(r'profileFrameStyle\s*=\s*[^;]{0,290};', widen, prefs, flags=re.S)
+    if edited < 3:
+        raise ValueError('SAFE_STOP_POINT01_EXPECTED_FRAME_PREFS_3: '+str(edited))
+    src=src[:pa]+prefs+src[pb:]
+    if src.count(MARK)!=1 or src.count(IMPORT)!=1 or src.count('DedaLabFramePurchaseAction(')!=1:
+        raise ValueError('SAFE_STOP_POINT01_UNIQUE_MARKERS')
     return src
 
-if __name__ == '__main__':
-    source = MAIN.read_text()
-    result = patch(source)
-    if source == result:
-        raise ValueError('SAFE_STOP_POINT01_ALREADY_PRESENT')
-    MAIN.write_text(result)
-    print('PASS_POINT01_13_PRICED_AT_1000_SECURE_PURCHASE_UI_STAGED')
-    print('PASS_POINT01_PREVIEW_NEVER_SAVED_OR_DEBITED')
-    print('PASS_POINT01_PAID_EQUIP_REQUIRES_SERVER_RECEIPT')
-    print('NO_LIVE_CHECKOUT_NO_FIRESTORE_DEPLOY_NO_PLAY_PUBLISH')
+if __name__=='__main__':
+    before=MAIN.read_text()
+    after=patch(before)
+    if before==after:
+        raise ValueError('SAFE_STOP_POINT01_DUPLICATE')
+    MAIN.write_text(after)
+    print('PASS_POINT01_REAL_GENERATED_EDITOR_PREVIEW_REUSED_NO_DEBIT')
+    print('PASS_POINT01_13_PAID_FRAMES_ONLY_SERVER_RECEIPT_ENABLE_USE')
+    print('PASS_POINT01_WALLET_AND_OWNED_RECORDS_UNCHANGED')
+    print('NO_REAL_SALES_NO_FIREBASE_DEPLOY_NO_PLAY_PUBLISH')
