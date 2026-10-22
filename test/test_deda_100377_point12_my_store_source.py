@@ -44,5 +44,39 @@ class Point12MyStoreSourceTest(unittest.TestCase):
         self.assertIn('proof: DedaMyStoreProof.deviceSaved', m)
         self.assertNotIn("receiptKind: 'purchase'", m)
 
+    def test_all_paid_lab_frames_are_queried_from_server_one_by_one(self):
+        s=self.src
+        a=s.index('DEDA_100377_P12_ALL_PAID_FRAMES_VERIFIED_NOT_ONLY_SELECTED')
+        b=s.index('for (var i = 0; i < dedaStyleBadgeIds.length; i++)',a)
+        m=s[a:b]
+        self.assertIn('if (DedaLabFrameSecureCheckout.live)',m)
+        self.assertIn('style = 6; style <= 18; style++',m)
+        self.assertIn('DedaLabFrameSecureCheckout.isOwned(',m)
+        self.assertIn("receiptKind: 'purchase'",m)
+        self.assertIn('active: frameStyle == style',m)
+        self.assertNotIn('buyOnce(',m)
+
+    def test_all_accepted_manager_ids_not_only_active(self):
+        s=self.src
+        a=s.index('DEDA_100377_P12_ALL_RECEIVED_OR_SELF_USED_GM_IDS')
+        b=s.index('await Navigator.push<void>(',a)
+        m=s[a:b]
+        self.assertIn('acceptedOwnedForMyStore(originalId)',m)
+        self.assertIn('for (final row in held)',m)
+        self.assertIn("row.kind == 'gifted' ? 'gift' : null",m)
+        self.assertIn('active: currentActive == row.identifier',m)
+        self.assertIn('FirebaseAuth.instance.currentUser?.uid != signedUidAtOpen',m)
+        owned=(ROOT/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
+        a=owned.index('DEDA_100377_READONLY_ACCEPTED_OWNED_IDS_P12_P13')
+        b=owned.index('static Future<String> active(String originalId)',a)
+        m=owned[a:b]
+        self.assertIn('GetOptions(source: Source.server)',m)
+        self.assertIn('DedaStage74IdGiftService.isReceived(',m)
+        self.assertIn("verified.kind == 'gifted'",m)
+        self.assertIn("verified.kind != 'self_used'",m)
+        self.assertIn('account-switched-before-inventory-return',m)
+        for forbidden in ('FieldValue.serverTimestamp()', '.set(', '.update(', '.delete(', 'spend('):
+            self.assertNotIn(forbidden,m)
+
 if __name__ == '__main__':
     unittest.main()
