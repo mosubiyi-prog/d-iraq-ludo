@@ -1,9 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100377_level_achievements_page_staged.dart';
 import 'package:d_iraq_ludo/deda_100377_level_achievement_badges_policy.dart';
 
 void main() {
+  testWidgets('owner original six WebP badges are bundled, correct sprite cells, without awarding levels', (tester) async {
+    // The 3x2 asset was copied from the actual owner screenshot, not drawn
+    // from scratch or substituted by one of the paid cosmetic badges.
+    final bytes = await rootBundle.load(DedaOriginalSixLevelBadgeArt.asset);
+    expect(bytes.lengthInBytes, 98380);
+    expect(bytes.getUint8(0), 0x52); // RIFF/WebP
+    expect(bytes.getUint8(1), 0x49);
+    expect(bytes.getUint8(8), 0x57);
+    expect(bytes.getUint8(9), 0x45);
+    tester.view.physicalSize = const Size(440, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const MaterialApp(
+      home: DedaLevelAchievementsPage(
+        verifiedServerLevel: null,
+        hasVerifiedAccountAndLevel: false,
+      ),
+    ));
+    await tester.pump();
+    for (final tier in DedaLevelBadgeTier.values) {
+      expect(find.byKey(ValueKey<String>('deda_owner_level_art_${tier.id}')), findsOneWidget);
+      final asset = tester.widget<Image>(
+        find.byKey(ValueKey<String>('deda_owner_level_asset_${tier.id}')),
+      );
+      expect(asset.image, isA<AssetImage>());
+      expect((asset.image as AssetImage).assetName,
+          DedaOriginalSixLevelBadgeArt.asset);
+    }
+    expect(find.text('مكتسبة'), findsNothing);
+    expect(DedaLevelBadgePolicy.releaseEnabled, isFalse);
+  });
+
   testWidgets('six achievement rows match owner artwork presentation order, no purchase or unverified unlock', (tester) async {
     tester.view.physicalSize = const Size(440, 1600);
     tester.view.devicePixelRatio = 1;
