@@ -1,0 +1,39 @@
+name: DEDA 100377 Point11 Achievements UI Staged QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100377-13-points-sequential-qa-2026-10-22
+    paths:
+      - '.github/workflows/qa-deda-100377-point11-achievements-preview-no-deploy.yml'
+      - 'lib/deda_100377_level_achievements_page_staged.dart'
+      - 'lib/deda_100377_level_achievement_badges_policy.dart'
+      - 'test/deda_100377_point11_achievements_locked_preview_widget_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100377-point11-unreleased-ui
+  cancel-in-progress: true
+jobs:
+  read-only-achievement-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Prove Point11 preview cannot award offline achievements
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_100377_point11_achievements_locked_preview_widget_test.dart
+          flutter analyze --no-fatal-warnings --no-fatal-infos lib/deda_100377_level_achievements_page_staged.dart
+          grep -Fq 'DEDA_100377_LEVEL_ACHIEVEMENTS_APPROVED' lib/deda_100377_level_achievement_badges_policy.dart
+          grep -Fq 'defaultValue: false' lib/deda_100377_level_achievement_badges_policy.dart
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          git diff --quiet -- android/ firebase.json firestore.rules functions/index.js lib/main.dart
+          echo 'PASS Point11 6 badges view staged and DISABLED: no XP/currency/ownership writes'
