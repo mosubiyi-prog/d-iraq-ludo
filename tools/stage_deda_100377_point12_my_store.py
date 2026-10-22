@@ -59,22 +59,23 @@ METHOD = """  // DEDA_100377_POINT12_READ_ONLY_PERSONAL_MY_STORE
     // The gated purchase feature is OFF until authorized; never infer ownership
     // from selected style, local diamonds, or a failed/offline server read.
     if (DedaLabFrameSecureCheckout.live) {
-      for (var style = 6; style <= 18; style++) {
-        final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
-        if (frame == null) continue;
-        try {
-          if (await DedaLabFrameSecureCheckout.isOwned(
-              originalId: originalId, frameId: frame.id)) {
-            items.add(DedaMyStoreItem(
-              id: frame.id, label: frame.nameAr,
-              section: DedaMyStoreSection.frames,
-              proof: DedaMyStoreProof.serverVerified,
-              receiptKind: 'purchase', active: frameStyle == style,
-            ));
-          }
-        } catch (_) {
-          // Missing or unverifiable server receipt is NOT an owned frame.
+      try {
+        // One authenticated server proof, then paired receipt/entitlement
+        // reads for all 13: do not block on thirteen sequential auth checks.
+        final ownedFrames =
+            await DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(originalId);
+        for (var style = 6; style <= 18; style++) {
+          final frame = DedaLabPremiumFrameStyles.byProfileStyle(style);
+          if (frame == null || !ownedFrames.contains(frame.id)) continue;
+          items.add(DedaMyStoreItem(
+            id: frame.id, label: frame.nameAr,
+            section: DedaMyStoreSection.frames,
+            proof: DedaMyStoreProof.serverVerified,
+            receiptKind: 'purchase', active: frameStyle == style,
+          ));
         }
+      } catch (_) {
+        // Offline or wrong account: do not show an unverified purchase.
       }
     }
     for (var i = 0; i < dedaStyleBadgeIds.length; i++) {
