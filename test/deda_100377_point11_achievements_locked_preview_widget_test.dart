@@ -114,11 +114,11 @@ void main() {
     expect(DedaLevelBadgePolicy.releaseEnabled, isFalse);
     expect(find.text('مكتسبة'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.text('من المستوى 1'), findsOneWidget);
-    expect(find.text('من المستوى 10'), findsOneWidget);
-    expect(find.text('من المستوى 20'), findsOneWidget);
-    expect(find.text('من المستوى 30'), findsOneWidget);
-    expect(find.text('من المستوى 40'), findsOneWidget);
-    expect(find.text('من المستوى 50'), findsOneWidget);
+    // The temporary 1/10/20/... tier policy is NOT owner-accepted and
+    // cannot contradict the installed account's 'مستوى ذهبي 1' label.
+    expect(find.text('مستوى الفتح قيد التحقق'), findsNWidgets(6));
+    for (final level in <int>[1, 10, 20, 30, 40, 50]) {
+      expect(find.text('من المستوى $level'), findsNothing);
+    }
   });
 }
