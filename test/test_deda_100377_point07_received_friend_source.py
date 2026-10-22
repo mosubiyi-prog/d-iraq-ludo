@@ -79,7 +79,7 @@ class Point07SourceRegressions(unittest.TestCase):
         self.assertIn("class _DedaFriendCompactCard", friend)
         self.assertIn("class _DedaSearchResultCard", friend)
         self.assertIn("class DedaFriendPublicProfilePage", friend)
-        self.assertIn("DedaQa32SparkPublicIdentifierDirectory\n          .readVerifiedStyle(originalId)", bridge)
+        self.assertRegex(bridge, r"DedaQa32SparkPublicIdentifierDirectory\s*\.\s*readVerifiedStyle\s*\(\s*originalId\s*\)")
         self.assertIn("FirebaseAuth.instance.currentUser?.uid != requester", bridge)
         self.assertIn("style.requestedId != widget.originalId", bridge)
         self.assertIn("return widget.fallback", bridge)
