@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_stability_read_scope.dart';
 
+// This coordinator has no widgets. Use the real event loop so awaiting an
+// already completed error matcher cannot deadlock Flutter's fake widget clock.
 void main() {
   test('two concurrent reads join one execution; completed values are not cached', () async {
     final scope = DedaStabilityReadScope<int>();
@@ -44,41 +46,41 @@ void main() {
     scope.dispose();
   });
 
-  testWidgets('one completed transient failure retries once and succeeds', (tester) async {
+  test('one completed transient failure retries once and succeeds', () async {
     final scope = DedaStabilityReadScope<int>(retryDelay: const Duration(milliseconds: 20));
     var calls = 0;
     final result = scope.run(key: 'a', isCurrent: () => true,
       read: () async { if (++calls == 1) throw const FormatException(); return 9; },
       retryWhen: (e) => e is FormatException);
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     expect(calls, 1);
-    await tester.pump(const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
     expect(await result, 9);
     expect(calls, 2);
     scope.dispose();
   });
 
-  testWidgets('persistent transient failure stops after two attempts', (tester) async {
+  test('persistent transient failure stops after two attempts', () async {
     final scope = DedaStabilityReadScope<int>(retryDelay: Duration.zero);
     var calls = 0;
     final outcome = expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () async { calls++; throw const FormatException(); },
       retryWhen: (_) => true), throwsFormatException);
-    await tester.pump();
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
     await outcome;
     expect(calls, 2);
     scope.dispose();
   });
 
-  testWidgets('timeout retains real SDK request; late success cannot publish', (tester) async {
+  test('timeout retains real SDK request; late success cannot publish', () async {
     final scope = DedaStabilityReadScope<int>(timeout: const Duration(seconds: 1));
     final source = Completer<int>();
     var calls = 0;
     Future<int> read() { calls++; return source.future; }
     final first = scope.run(key: 'a', isCurrent: () => true, read: read);
     final outcome = expectLater(first, throwsA(isA<TimeoutException>()));
-    await tester.pump(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(seconds: 1));
     await outcome;
     expect(scope.diagnostics['outstanding'], 1);
     final repeated = scope.run(key: 'a', isCurrent: () => true, read: read);
@@ -86,7 +88,7 @@ void main() {
     await expectLater(repeated, throwsA(isA<TimeoutException>()));
     expect(calls, 1);
     source.complete(99);
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     expect(scope.diagnostics['succeeded'], 0);
     expect(scope.diagnostics['outstanding'], 0);
     expect(await scope.run(key: 'a', isCurrent: () => true,
@@ -94,24 +96,23 @@ void main() {
     scope.dispose();
   });
 
-  testWidgets('late error after timeout is observed without another retry', (tester) async {
+  test('late error after timeout is observed without another retry', () async {
     final scope = DedaStabilityReadScope<int>(timeout: const Duration(seconds: 1));
     final source = Completer<int>();
     var calls = 0;
     final outcome = expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () { calls++; return source.future; }, retryWhen: (_) => true),
       throwsA(isA<TimeoutException>()));
-    await tester.pump(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(seconds: 1));
     await outcome;
     source.completeError(StateError('late SDK failure'));
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     expect(calls, 1);
-    expect(tester.takeException(), isNull);
     expect(scope.diagnostics['outstanding'], 0);
     scope.dispose();
   });
 
-  testWidgets('A to B to A never resurrects first A proof', (tester) async {
+  test('A to B to A never resurrects first A proof', () async {
     final scope = DedaStabilityReadScope<String>();
     final old = Completer<String>();
     final oldResult = expectLater(scope.run(key: 'A', isCurrent: () => true,
@@ -121,13 +122,13 @@ void main() {
     expect(await scope.run(key: 'A', isCurrent: () => true,
       read: () async => 'fresh-A'), 'fresh-A');
     old.complete('old-A');
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     await oldResult;
     expect(scope.diagnostics['succeeded'], 1);
     scope.dispose();
   });
 
-  testWidgets('live identity guard rejects changed owner without explicit invalidation', (tester) async {
+  test('live identity guard rejects changed owner without explicit invalidation', () async {
     final scope = DedaStabilityReadScope<int>();
     var same = true;
     final source = Completer<int>();
@@ -135,55 +136,55 @@ void main() {
       read: () => source.future), throwsA(isA<DedaStaleRead>()));
     same = false;
     source.complete(1);
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     await outcome;
     expect(scope.diagnostics['succeeded'], 0);
     scope.dispose();
   });
 
-  testWidgets('account invalidation during backoff prevents retry', (tester) async {
+  test('account invalidation during backoff prevents retry', () async {
     final scope = DedaStabilityReadScope<int>(retryDelay: const Duration(seconds: 1));
     var calls = 0;
     final outcome = expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () async { calls++; throw const FormatException(); },
       retryWhen: (_) => true), throwsA(isA<DedaStaleRead>()));
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     scope.invalidate();
-    await tester.pump(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(seconds: 1));
     await outcome;
     expect(calls, 1);
     scope.dispose();
   });
 
-  testWidgets('wait deadline covers retry delay and prevents an extra SDK request', (tester) async {
+  test('wait deadline covers retry delay and prevents an extra SDK request', () async {
     final scope = DedaStabilityReadScope<int>(timeout: const Duration(seconds: 1),
         retryDelay: const Duration(seconds: 2));
     var calls = 0;
     final outcome = expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () async { calls++; throw const FormatException(); }, retryWhen: (_) => true),
       throwsA(isA<TimeoutException>()));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(const Duration(seconds: 2));
     await outcome;
     expect(calls, 1);
     scope.dispose();
   });
 
-  testWidgets('disposed screen completes caller stale; late result cannot publish', (tester) async {
+  test('disposed screen completes caller stale; late result cannot publish', () async {
     final scope = DedaStabilityReadScope<int>();
     final source = Completer<int>();
     final outcome = expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () => source.future), throwsA(isA<DedaStaleRead>()));
     scope.dispose();
     source.complete(1);
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     await outcome;
     await expectLater(scope.run(key: 'a', isCurrent: () => true,
       read: () async => 2), throwsA(isA<DedaStaleRead>()));
     expect(scope.diagnostics['succeeded'], 0);
   });
 
-  testWidgets('outstanding requests remain bounded across account generations', (tester) async {
+  test('outstanding requests remain bounded across account generations', () async {
     final scope = DedaStabilityReadScope<int>(maxOutstanding: 1);
     final source = Completer<int>();
     final old = expectLater(scope.run(key: 'a', isCurrent: () => true,
@@ -192,7 +193,7 @@ void main() {
     await expectLater(scope.run(key: 'b', isCurrent: () => true,
       read: () async => 2), throwsA(isA<DedaReadCapacityExceeded>()));
     source.complete(1);
-    await tester.pump();
+    await Future<void>.delayed(Duration.zero);
     await old;
     expect(await scope.run(key: 'b', isCurrent: () => true,
       read: () async => 2), 2);
