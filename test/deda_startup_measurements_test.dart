@@ -76,8 +76,8 @@ void main() {
     final boot = _Boot();
     await boot.run();
     expect(boot.events, [
-      'bindings', 'mapCache', 'firebase', 'preferences', 'tasks', 'launch',
-      'observeFirstFrame',
+      'bindings', 'mapCache', 'firebase', 'preferences', 'tasks',
+      'observeFirstFrame', 'launch',
     ]);
     for (final entry in _Boot.costs.entries) {
       expect(boot.stage(entry.key.name)['elapsedMicros'], entry.value);
@@ -90,7 +90,7 @@ void main() {
     boot.now += 17;
     boot.firstFrame!();
     expect(boot.measurements.snapshot['firstFrameFromBootMicros'], 58);
-    expect(boot.stage('firstFrame')['elapsedMicros'], 17);
+    expect(boot.stage('firstFrame')['elapsedMicros'], 30);
     expect(boot.stage('firstFrame')['outcome'], 'succeeded');
   });
 
@@ -103,7 +103,7 @@ void main() {
     expect(boot.stages.containsKey('preferences'), isFalse);
     boot.firebaseGate!.complete();
     await running;
-    expect(boot.events.last, 'observeFirstFrame');
+    expect(boot.events.last, 'launch');
   });
 
   test('Firebase failure retains original non-fatal policy and does not leak error text', () async {
@@ -129,7 +129,12 @@ void main() {
       expect(boot.measurements.snapshot['bootState'], 'failed');
       expect(boot.stage(failureStage.name)['outcome'], 'failed');
       expect(boot.events.last, failureStage.name);
-      expect(boot.stages.containsKey('firstFrame'), isFalse);
+      if (failureStage == DedaStartupStage.launch) {
+        expect(boot.stage('firstFrame')['outcome'], 'failed');
+        expect(boot.measurements.snapshot['firstFrameFromBootMicros'], isNull);
+      } else {
+        expect(boot.stages.containsKey('firstFrame'), isFalse);
+      }
       expect(boot.measurements.snapshot.toString(), isNot(contains('private-error')));
     });
   }
@@ -147,7 +152,7 @@ void main() {
     expect(boot.measurements.snapshot['firstFrameFromBootMicros'], first);
   });
 
-  test('diagnostic observer failure never breaks an already launched application', () async {
+  test('diagnostic observer failure never prevents the normal launch', () async {
     final boot = _Boot()..observerAction = (_) => throw StateError('observer');
     await boot.run();
     expect(boot.events, contains('launch'));

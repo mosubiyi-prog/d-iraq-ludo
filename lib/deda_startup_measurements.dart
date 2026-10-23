@@ -125,17 +125,20 @@ Future<void> runDedaMeasuredStartup({
     }
     await measurements._async(DedaStartupStage.preferences, loadPreferences);
     await measurements._async(DedaStartupStage.tasks, initializeTasks);
-    measurements._sync(DedaStartupStage.launch, launch);
+    // Arm before launch: a binding may draw its warm-up frame during runApp.
+    // The original initialization calls keep their serial order.
     measurements._start(DedaStartupStage.firstFrame);
     try {
       observeFirstFrame(() => measurements._finish(
           DedaStartupStage.firstFrame, DedaStartupOutcome.succeeded));
     } catch (_) {
-      // A diagnostic observer must never turn a launched app into a boot error.
+      // Diagnostic registration must never prevent the normal launch.
       measurements._finish(DedaStartupStage.firstFrame, DedaStartupOutcome.failed);
     }
+    measurements._sync(DedaStartupStage.launch, launch);
   } catch (_) {
     measurements._failed = true;
+    measurements._finish(DedaStartupStage.firstFrame, DedaStartupOutcome.failed);
     rethrow;
   } finally {
     measurements._returned = measurements._clock();
