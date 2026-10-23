@@ -123,7 +123,7 @@ class DedaSessionFlowPrototype {
       await _signOut(permit, current);
     }
     _ready(permit);
-    final user = await port.signInAnonymous(DedaSessionTransitionPermit permit);
+    final user = await port.signInAnonymous(permit);
     _check(permit, user);
     if (user.kind != DedaSessionAuthKind.anonymous) throw const DedaSessionProofRejected();
     return user;
