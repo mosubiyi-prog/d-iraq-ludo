@@ -26,13 +26,15 @@ jobs:
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
       DART_SUPPRESS_ANALYTICS: 'true'
       FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
-      DEDA_NATIVE_APP: ${{ runner.temp }}/deda-native-transport-qa
-      DEDA_NATIVE_BASELINE: ${{ runner.temp }}/deda-native-baseline
-      DEDA_NATIVE_RESULTS: ${{ runner.temp }}/deda-native-results
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Define disposable runner directories
+        run: |
+          printf 'DEDA_NATIVE_APP=%s/deda-native-transport-qa\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_NATIVE_BASELINE=%s/deda-native-baseline\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_NATIVE_RESULTS=%s/deda-native-results\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
