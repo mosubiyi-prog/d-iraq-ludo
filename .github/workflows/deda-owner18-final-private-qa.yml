@@ -1,4 +1,5 @@
 name: DEDA 100379 owner18 signed private QA NO PLAY
+# Revision 2: reject conflicting original IDs even if an anonymous UID is reused.
 on:
   push:
     branches: [deda-100378-owner18-fixes-2026-10-23]

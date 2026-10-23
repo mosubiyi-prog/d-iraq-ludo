@@ -92,6 +92,17 @@ test('public profile accepts the same avatar/frame/background range without affe
   }));
   assert.equal((await getDoc(doc(db,'deda_social_profiles',A.id))).data().level,1);
 });
+test('reused anonymous UID cannot access an older different account route',async()=>{
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await updateDoc(doc(db,'deda_share_ids',B.id),{ownerUid:A.uid});
+    await setDoc(account(db,B.id),{originalId:B.id,avatar:4,updatedAt:new Date()});
+  });
+  const reused=env.authenticatedContext(A.uid).firestore();
+  await assertFails(getDoc(account(reused,B.id)));
+  await assertFails(setDoc(account(reused,B.id),{
+    originalId:B.id,avatar:0,updatedAt:serverTimestamp()}));
+});
 test('two devices cannot begin charging the same native frame twice',async()=>{
   const db=env.authenticatedContext(A.uid).firestore();
   await setDoc(account(db),data());

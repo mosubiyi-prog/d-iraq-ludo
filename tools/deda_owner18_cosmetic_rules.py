@@ -22,6 +22,7 @@ RULE = '''
         && exists(/databases/$(database)/documents/deda_share_ids/$(publicId))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey
           == get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('sharePersonalId', publicId) == publicId
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid == request.auth.uid
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.kind == 'personal'
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.active == true;

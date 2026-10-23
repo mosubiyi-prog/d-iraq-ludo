@@ -229,10 +229,10 @@ def native_wallet(s):
       dayKey: current.dayKey,
     );"""
     spend = one(spend, old, """    if (!sameOwner()) return false;
-    await prefs.setString(ownerKey, jsonEncode(<String, dynamic>{
+    final saved = await prefs.setString(ownerKey, jsonEncode(<String, dynamic>{
       'balance': nextLocal, 'viewsToday': current.viewsToday, 'day': current.dayKey,
     }));
-    if (!sameOwner()) return false;""")
+    if (!saved || !sameOwner()) return false;""")
     return s[:a] + spend + s[b:]
 
 def main():
