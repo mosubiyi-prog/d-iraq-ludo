@@ -1,0 +1,19 @@
+name: DEDA remove temporary baseline source export
+on:
+  push:
+    branches: [deda-100378-owner18-fixes-2026-10-23]
+    paths: ['.github/workflows/deda-owner18-remove-source-export.yml']
+permissions:
+  actions: write
+jobs:
+  remove-temporary-export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.deleteArtifact({
+              owner: context.repo.owner, repo: context.repo.repo,
+              artifact_id: 12471093600
+            });
+            console.log('Removed temporary source export; safe Dart-only export replaces it.');
