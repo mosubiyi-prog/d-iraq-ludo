@@ -26,3 +26,5 @@ jobs:
           name: DEDA-owner18-related-readonly-diagnostics
           path: owner18-diagnostics/
           retention-days: 7
+
+# Revision 2: only discussed owner wallet and ID proof, no credential or phone output.
