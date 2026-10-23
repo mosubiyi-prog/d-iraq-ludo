@@ -44,9 +44,10 @@ class DedaSixReceivedIdentity extends StatelessWidget {
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           key: ValueKey('$uid:$originalId'),
           stream: FirebaseFirestore.instance.collection('deda_public_active_aliases')
-            .doc(originalId).snapshots(),
+            .doc(originalId).snapshots(includeMetadataChanges: true),
           builder: (context, snapshot) {
-            if (snapshot.hasError || uid != FirebaseAuth.instance.currentUser?.uid)
+            if (snapshot.hasError || snapshot.data?.metadata.isFromCache != false ||
+                uid != FirebaseAuth.instance.currentUser?.uid)
               return fallback;
             final verified = DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
                 originalId, snapshot.data?.data());

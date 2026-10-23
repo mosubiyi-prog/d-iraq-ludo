@@ -113,13 +113,13 @@ class DedaSixAdminUsers {
             .snapshots().listen((s) {
           masters = records(s); mastersDone = true; mastersError = null; publish();
         }, onError: (Object e) {
-          mastersDone = true; mastersError = e; publish();
+          masters = []; mastersDone = true; mastersError = e; publish();
         }));
         subscriptions.add(FirebaseFirestore.instance.collection('users')
             .snapshots().listen((s) {
           sessions = records(s); sessionsDone = true; sessionsError = null; publish();
         }, onError: (Object e) {
-          sessionsDone = true; sessionsError = e; publish();
+          sessions = []; sessionsDone = true; sessionsError = e; publish();
         }));
         subscriptions.add(FirebaseAuth.instance.authStateChanges().listen((user) {
           if (!stopped && user?.uid != uid) {

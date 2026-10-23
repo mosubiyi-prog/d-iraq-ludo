@@ -15,6 +15,7 @@ void main() {
         key:key, child:DedaSixBadgeCutout(tier:tier,size:256)))));
       await tester.pump();
       final boundary=key.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      await tester.runAsync(() async {
       final image=await boundary.toImage(pixelRatio:1);
       final rgba=await image.toByteData(format:ui.ImageByteFormat.rawRgba);
       expect(rgba!.getUint8(3),0,reason:'${tier.id} top-left backdrop');
@@ -24,6 +25,7 @@ void main() {
       Directory('six-note-visual-qa').createSync(recursive:true);
       File('six-note-visual-qa/${tier.id}.png').writeAsBytesSync(png!.buffer.asUint8List());
       image.dispose();
+      });
       expect(tester.takeException(),isNull);
     }
   });
