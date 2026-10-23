@@ -1,0 +1,53 @@
+name: DEDA owner18 cosmetic account isolation QA NO DEPLOY
+on:
+  push:
+    branches: [deda-100378-owner18-fixes-2026-10-23]
+    paths:
+      - '.github/workflows/deda-owner18-cosmetic-rules-qa.yml'
+      - 'tools/deda_owner18_cosmetic_rules.py'
+      - 'test/deda_owner18_cosmetics_emulator.test.cjs'
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner18-cosmetic-rules
+  cancel-in-progress: true
+jobs:
+  isolated-cosmetics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEDA_STAGE69_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_STAGE69_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: pip install google-auth requests
+      - name: Prepare only cosmetic backup policy against current live source
+        run: |
+          python3 tools/deda_owner18_readonly_diagnostics.py
+          python3 tools/deda_owner18_cosmetic_rules.py
+      - run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Test account isolation and no ownership loss on synthetic data only
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '{"firestore":{"rules":"/tmp/deda-owner18-cosmetics.rules"},"emulators":{"firestore":{"host":"127.0.0.1","port":8080}}}' > /tmp/deda-owner18-firebase.json
+          export GCLOUD_PROJECT=demo-deda-owner18-cosmetics
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec --config /tmp/deda-owner18-firebase.json --project demo-deda-owner18-cosmetics --only firestore 'node --test test/deda_owner18_cosmetics_emulator.test.cjs'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-owner18-tested-cosmetic-candidate-NO-DEPLOY
+          path: |
+            /tmp/deda-owner18-cosmetics.rules
+            /tmp/deda-owner18-cosmetics-tests-passed
+          retention-days: 7
