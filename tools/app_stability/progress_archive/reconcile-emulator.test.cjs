@@ -6,6 +6,7 @@ const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const core=require('./reconcile-core.cjs');
+const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
 const account='07700000000',otherAccount='07700000001';
 const zero=()=>({points:0,coins:0,xp:0,earnedDiamonds:0});
 const baselineId='baseline_receipt_00000001',awardId='award_receipt_0000000001',debitId='debit_receipt_0000000001';
@@ -129,3 +130,72 @@ test('event history belongs to the account on new device, never another account'
   assert.equal((await assertSucceeds(getDocs(collection(c,`${statePath}/events`)))).size,1);
   await assertFails(getDocs(collection(client('other-device'),`${statePath}/events`)));
 });
+
+// Migration approvals below are ADMIN TEST FIXTURES, not real legacy audits,
+// provider proofs or actual fencing of writers in older APKs.
+const migrationRoot=`deda_progress_migrations/${account}`;
+async function migrationFixture(disposition='included-in-baseline'){
+  await initialize();await seed(awardId,award());
+  const migration={format:1,accountKey:account,migrationId:'migration_fixture_000001',phase:'cutover-complete',
+    evidenceDigest:'a'.repeat(64),baselineEventKey:core.eventKey(baseline()),settlementId:'settlement_fixture_000001'};
+  await db.doc(migrationRoot).set(migration);
+  await db.doc(`${migrationRoot}/settlements/${migration.settlementId}`).set({format:1,accountKey:account,
+    migrationId:migration.migrationId,evidenceDigest:migration.evidenceDigest,baselineEventKey:migration.baselineEventKey,
+    legacyFenceId:'legacy_fence_fixture_0001',pendingPurchases:0,pendingReservations:0});
+  await db.doc(`${migrationRoot}/classifications/${core.eventKey(award())}`).set({format:1,accountKey:account,
+    migrationId:migration.migrationId,evidenceDigest:migration.evidenceDigest,disposition,receipt:award()});
+}
+const applyMigrated=id=>reconcileMigratedReceipt({store,accountKey:account,receiptId:id});
+test('migration included award is not credited twice through concurrent wrappers',async()=>{
+  await migrationFixture();const second='migration_wrapper_0000001';await seed(second,award());
+  const result=await Promise.all([applyMigrated(awardId),applyMigrated(second)]);
+  assert.ok(result.every(r=>r.includedInBaseline));assert.deepEqual((await state()).balances,baseline().delta);
+  assert.equal((await state()).version,1);assert.equal((await events()).length,1);
+});
+test('migration post-cutover award remains exactly once in real Admin transactions',async()=>{
+  await migrationFixture('after-cutover');const second='migration_wrapper_0000001';await seed(second,award());
+  const result=await Promise.all([applyMigrated(awardId),applyMigrated(second)]);
+  assert.equal(result.filter(r=>r.replayed).length,1);assert.equal((await state()).balances.coins,40);
+  assert.equal((await state()).version,2);assert.equal((await events()).length,2);
+});
+test('migration unknown classification leaves balances and history unchanged',async()=>{
+  await migrationFixture();await db.doc(`${migrationRoot}/classifications/${core.eventKey(award())}`).delete();
+  await assert.rejects(applyMigrated(awardId),e=>e.code==='migration-classification-required');
+  assert.deepEqual((await state()).balances,baseline().delta);assert.equal((await events()).length,1);
+});
+test('migration pending cutover cannot credit even a verified fixture receipt',async()=>{
+  await migrationFixture();await db.doc(migrationRoot).update({phase:'baseline-approved'});
+  await assert.rejects(applyMigrated(awardId),e=>e.code==='migration-pending');assert.equal((await state()).version,1);
+});
+test('migration unsettled purchase blocks credit without any partial marker',async()=>{
+  await migrationFixture();await db.doc(`${migrationRoot}/settlements/settlement_fixture_000001`).update({pendingPurchases:1});
+  await assert.rejects(applyMigrated(awardId),e=>e.code==='migration-not-settled');assert.equal((await events()).length,1);
+});
+test('migration same event with different amount cannot reuse old review',async()=>{
+  await migrationFixture('after-cutover');await seed(awardId,{...award(),delta:{...award().delta,coins:9999}});
+  await assert.rejects(applyMigrated(awardId),e=>e.code==='migration-classification-conflict');assert.equal((await state()).version,1);
+});
+test('migration included historical debit is not deducted a second time',async()=>{
+  await migrationFixture();await seed(debitId,debit('already-settled-purchase'));
+  await db.doc(`${migrationRoot}/classifications/${core.eventKey(debit('already-settled-purchase'))}`).set({
+    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:'a'.repeat(64),
+    disposition:'included-in-baseline',receipt:debit('already-settled-purchase')});
+  assert.equal((await applyMigrated(debitId)).includedInBaseline,true);
+  assert.equal((await state()).balances.coins,30);assert.equal((await state()).version,1);
+});
+test('new device reads the current balance after migrated award and spending',async()=>{
+  await migrationFixture('after-cutover');await applyMigrated(awardId);await seed(debitId,debit());
+  await db.doc(`${migrationRoot}/classifications/${core.eventKey(debit())}`).set({
+    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:'a'.repeat(64),
+    disposition:'after-cutover',receipt:debit()});
+  await applyMigrated(debitId);await applyMigrated(awardId);
+  const snapshot=await assertSucceeds(getDocFromServer(doc(client('new-device'),statePath)));
+  assert.equal(snapshot.data().balances.coins,20);assert.equal(snapshot.data().version,3);
+});
+for(const path of [migrationRoot,`${migrationRoot}/classifications/${core.eventKey(award())}`,`${migrationRoot}/settlements/settlement_fixture_000001`]){
+  test(`client cannot read or manufacture protected migration document ${path.split('/').at(-1)}`,async()=>{
+    await migrationFixture();const ref=doc(client('new-device'),path);
+    await assertFails(getDocFromServer(ref));await assertFails(setDoc(ref,{verified:true,phase:'cutover-complete'}));
+    await assertFails(deleteDoc(ref));
+  });
+}

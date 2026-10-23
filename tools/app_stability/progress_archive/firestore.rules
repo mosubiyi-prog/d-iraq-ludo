@@ -43,6 +43,11 @@ service cloud.firestore {
     match /deda_progress_receipts/{accountKey}/events/{eventId} {
       allow read, write: if false;
     }
+    // Migration reviews, classifications and settlement evidence are private
+    // trusted-worker inputs, never approval flags supplied by the phone.
+    match /deda_progress_migrations/{accountKey}/{document=**} {
+      allow read, write: if false;
+    }
     match /deda_verified_progress/{accountKey} {
       allow get: if ownsProgressAccount(accountKey);
       allow list, write: if false;
