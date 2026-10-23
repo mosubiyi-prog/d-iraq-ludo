@@ -8,6 +8,7 @@ on:
       - 'lib/deda_stability_read_scope.dart'
       - 'lib/deda_qa32_active_account_scope.dart'
       - 'test/deda_stability_read_scope_test.dart'
+      - 'test/deda_stability_identity_lifecycle_test.dart'
       - '.github/workflows/deda-app-stability-source-qa.yml'
   workflow_dispatch:
 permissions:
@@ -69,8 +70,8 @@ jobs:
         if: matrix.mode == 'pilot'
         working-directory: ${{ runner.temp }}/deda-stability
         run: |
-          flutter analyze --no-pub --fatal-infos lib/deda_stability_read_scope.dart test/deda_stability_read_scope_test.dart
-          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_IDENTITY_PILOT=true --reporter expanded test/deda_stability_read_scope_test.dart
+          flutter analyze --no-pub --fatal-infos lib/deda_stability_read_scope.dart lib/deda_qa32_active_account_scope.dart test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_IDENTITY_PILOT=true --reporter expanded test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
       - name: Verify no installable application was produced
         if: always()
         run: |

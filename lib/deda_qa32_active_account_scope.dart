@@ -37,18 +37,88 @@ class DedaQa32ActiveAccountIdentity {
 typedef DedaQa32ActiveAccountBuilder = Widget Function(
     BuildContext context, DedaQa32ActiveAccountIdentity? proof);
 
+/// Read-only boundary used by the owner header. It cannot sign in, restore a
+/// session, grant an alias or change a balance. The production implementation
+/// keeps all existing server-side ownership and gift-receipt checks.
+abstract class DedaQa32IdentitySource {
+  bool get ready;
+  bool get enabled;
+  String? get currentUid;
+  Stream<String?> authChanges();
+  Future<DedaQa32ActiveAccountIdentity> readVerified(String uid, String original);
+}
+
+class _FirebaseIdentitySource implements DedaQa32IdentitySource {
+  const _FirebaseIdentitySource();
+
+  @override
+  bool get ready {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  bool get enabled => DedaStage71OwnedIdentifierService.enabled;
+
+  @override
+  String? get currentUid {
+    if (!ready) return null;
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Stream<String?> authChanges() => FirebaseAuth.instance.authStateChanges()
+      .map((user) => user?.uid);
+
+  @override
+  Future<DedaQa32ActiveAccountIdentity> readVerified(
+      String uid, String original) async {
+    final active = await DedaStage71OwnedIdentifierService.active(original);
+    String? color;
+    if (active != original) {
+      final owned = await DedaStage71OwnedIdentifierService.owned(original);
+      final matching = owned.where((row) => row.identifier == active).toList();
+      if (matching.length != 1) throw StateError('alias-not-owned');
+      color = matching.single.baseColor;
+    }
+    return DedaQa32ActiveAccountIdentity(
+      uid: uid, originalId: original, displayId: active, fixedColor: color,
+    );
+  }
+}
+
 /// UI wrapper for use on Account Info and the sender's own location share
 /// page. A successful server read is mandatory before showing an alias.
 /// No cross-account alias may leak through the old local widget state.
 class DedaQa32ActiveAccountScope extends StatefulWidget {
   final String originalId;
   final DedaQa32ActiveAccountBuilder builder;
+  final DedaQa32IdentitySource _source;
+  final Duration _readTimeout;
 
   const DedaQa32ActiveAccountScope({
     super.key,
     required this.originalId,
     required this.builder,
-  });
+  }) : _source = const _FirebaseIdentitySource(),
+       _readTimeout = const Duration(seconds: 12);
+
+  /// A fake observation/read source for lifecycle tests; never used by main.
+  @visibleForTesting
+  const DedaQa32ActiveAccountScope.forTesting({
+    super.key,
+    required this.originalId,
+    required this.builder,
+    required DedaQa32IdentitySource source,
+    Duration readTimeout = const Duration(seconds: 12),
+  }) : _source = source, _readTimeout = readTimeout;
 
   @override
   State<DedaQa32ActiveAccountScope> createState() =>
@@ -58,46 +128,52 @@ class DedaQa32ActiveAccountScope extends StatefulWidget {
 class _DedaQa32ActiveAccountScopeState
     extends State<DedaQa32ActiveAccountScope> with WidgetsBindingObserver {
   DedaQa32ActiveAccountIdentity? _proof;
-  StreamSubscription<User?>? _auth;
+  StreamSubscription<String?>? _auth;
+  String? _observedUid;
+  bool _paused = false;
   int _epoch = 0;
-  final _reads = DedaStabilityReadScope<DedaQa32ActiveAccountIdentity>();
+  late final _reads = DedaStabilityReadScope<DedaQa32ActiveAccountIdentity>(
+    timeout: widget._readTimeout,
+  );
   bool _authAttachQueued = false;
   // DEDA_100377_POINT13_LATE_FIREBASE_INIT_ACCOUNT_SCOPE_REARM
   // A page can mount before Firebase.initializeApp completes. The canonical
   // fallback stays until an actual session and Stage71 grant are verified.
   // Re-arm on app resume/parent rebuild without leaking prior UID proof.
 
-  // Widget tests and initial cold-start frames may render Account Info before
-  // Firebase.initializeApp(). A missing app MUST NOT crash the whole page.
-  bool get _firebaseReady {
+  bool get _firebaseReady => widget._source.ready;
+  String? _currentUid() => widget._source.currentUid;
+
+  bool _attachAuthWhenReady() {
+    if (!mounted || _auth != null || !_firebaseReady) return false;
     try {
-      return Firebase.apps.isNotEmpty;
+      _observedUid = _currentUid();
+      _auth = widget._source.authChanges().listen((uid) {
+        if (!dedaStabilityIdentityPilot || uid != _observedUid) {
+          _reads.invalidate();
+        }
+        // Use the event sequence as well as the live UID: queued A/B/A events
+        // must invalidate first-A even if the current UID already returned A.
+        _observedUid = uid;
+        _load();
+      }, onError: (Object _) {
+        _invalidateProof();
+      }, onDone: () {
+        _auth = null;
+        _invalidateProof();
+      });
+      _load();
+      return true;
     } catch (_) {
+      _invalidateProof();
       return false;
     }
   }
 
-  String? _currentUid() {
-    if (!_firebaseReady) return null;
-    try {
-      return FirebaseAuth.instance.currentUser?.uid;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _attachAuthWhenReady() {
-    if (!mounted || _auth != null || !_firebaseReady) return;
-    try {
-      _auth = FirebaseAuth.instance.authStateChanges().listen((_) {
-        _reads.invalidate();
-        _load();
-      });
-      // After late initialization the fresh session will trigger _load.
-      _load();
-    } catch (_) {
-      // Firebase isn't ready: keep the canonical original fallback.
-    }
+  void _invalidateProof() {
+    _reads.invalidate();
+    ++_epoch;
+    if (mounted && _proof != null) setState(() => _proof = null);
   }
 
   @override
@@ -128,15 +204,30 @@ class _DedaQa32ActiveAccountScopeState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (dedaStabilityIdentityPilot) {
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.hidden ||
+          state == AppLifecycleState.detached) {
+        _paused = true;
+        _invalidateProof();
+      } else if (state == AppLifecycleState.resumed) {
+        _paused = false;
+        if (!_attachAuthWhenReady()) _load();
+      }
+    } else if (state == AppLifecycleState.resumed) {
       _attachAuthWhenReady();
-      _refresh(); // server-verified refresh, never a local alias guess
+      _refresh(); // unchanged non-pilot server-verified refresh
     }
   }
 
   @override
   void didUpdateWidget(covariant DedaQa32ActiveAccountScope oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget._source, widget._source)) {
+      _auth?.cancel();
+      _auth = null;
+      _invalidateProof();
+    }
     // Reattach if this owner header survived Firebase initialization.
     if (_auth == null && _firebaseReady) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -161,26 +252,14 @@ class _DedaQa32ActiveAccountScopeState
     final original = widget.originalId;
     if (!mounted) return;
     if (_proof != null) setState(() => _proof = null);
-    if (uid == null || !DedaStage71OwnedIdentifierService.enabled ||
+    if (dedaStabilityIdentityPilot && _paused) return;
+    if (uid == null || !widget._source.enabled ||
         !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original)) {
       return;
     }
     try {
-      Future<DedaQa32ActiveAccountIdentity> readVerified() async {
-        // The service separately checks users/{uid}, deda_sessions/{uid},
-        // original ownership and, for gifted aliases, immutable receipt.
-        final active = await DedaStage71OwnedIdentifierService.active(original);
-        String? color;
-        if (active != original) {
-          final owned = await DedaStage71OwnedIdentifierService.owned(original);
-          final matching = owned.where((row) => row.identifier == active).toList();
-          if (matching.length != 1) throw StateError('alias-not-owned');
-          color = matching.single.baseColor;
-        }
-        return DedaQa32ActiveAccountIdentity(
-          uid: uid, originalId: original, displayId: active, fixedColor: color,
-        );
-      }
+      Future<DedaQa32ActiveAccountIdentity> readVerified() =>
+          widget._source.readVerified(uid, original);
       final next = dedaStabilityIdentityPilot
           ? await _reads.run(
               key: (uid, original),
