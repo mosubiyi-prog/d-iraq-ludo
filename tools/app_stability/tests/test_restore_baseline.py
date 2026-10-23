@@ -134,6 +134,21 @@ class RestoreBaselineTest(unittest.TestCase):
             self.assertEqual((owner / name).read_bytes(), (baseline / name).read_bytes())
         self.assertFalse((owner / 'android').exists())
 
+    def test_admin_adapter_preserves_entry_visibility_and_real_auth_sources(self):
+        baseline, admin = self.root / 'baseline', self.root / 'admin'
+        restore_module.restore(baseline)
+        restore_module.restore(admin, admin_firebase_adapter=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(admin) for p in (admin / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (admin / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE,
+            restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES,
+            restore_module.ADMIN_ADAPTER_MODULE})
+        for name in ['lib/main.dart','lib/deda_backend.dart','lib/deda_pin_auth.dart']:
+            self.assertEqual((admin / name).read_bytes(), (baseline / name).read_bytes())
+        self.assertFalse((admin / 'android').exists())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()

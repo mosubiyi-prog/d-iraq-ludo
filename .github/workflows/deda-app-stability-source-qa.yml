@@ -10,6 +10,8 @@ on:
       - 'lib/deda_session_transition_gate.dart'
       - 'lib/deda_session_flow_prototype.dart'
       - 'lib/deda_owner_session_firebase_port.dart'
+      - 'lib/deda_admin_session_firebase_adapter.dart'
+      - 'test/deda_admin_session_firebase_adapter_test.dart'
       - 'lib/deda_session_principal_tracker.dart'
       - 'test/deda_owner_session_firebase_port_test.dart'
       - 'test/deda_session_flow_prototype_test.dart'
@@ -46,7 +48,7 @@ jobs:
       - name: Restore hash-verified source without Android or signing files
         run: |
           if [ '${{ matrix.mode }}' = measured-pilot ]; then
-            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter
           elif [ '${{ matrix.mode }}' = pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot
           else
@@ -111,6 +113,13 @@ jobs:
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_session_principal_tracker.dart lib/deda_owner_session_firebase_port.dart test/deda_owner_session_firebase_port_test.dart
           flutter test --no-pub --timeout 20s --reporter expanded test/deda_owner_session_firebase_port_test.dart
+      - name: Verify unwired admin login and authorization boundaries with fake IO only
+        timeout-minutes: 3
+        if: matrix.mode == 'measured-pilot'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_admin_session_firebase_adapter.dart test/deda_admin_session_firebase_adapter_test.dart
+          flutter test --no-pub --timeout 20s --reporter expanded test/deda_admin_session_firebase_adapter_test.dart
       - name: Verify no installable application was produced
         if: always()
         run: |
