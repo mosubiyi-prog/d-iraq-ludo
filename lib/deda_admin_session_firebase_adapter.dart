@@ -11,6 +11,7 @@ abstract class DedaAdminSessionIo {
   DedaFlowSdkUser? get currentUser;
   String? get currentEmail;
   void clearAdminProfileCache();
+  void cacheAdminProfile(DedaFlowSdkUser user, Map<String,dynamic> profile);
   Future<DedaFlowSdkUser?> signIn(String email, String password);
   Future<void> signOut();
   Future<DedaOwnerServerDocument> readAdmin(String uid);
@@ -26,12 +27,14 @@ abstract class DedaAdminSessionIo {
 /// legacy cache-clear hook. No async legacy helper is delegated unguarded.
 class DedaFirebaseAdminSessionIo implements DedaAdminSessionIo {
   DedaFirebaseAdminSessionIo({required this.session, required this.firestore,
-    required this.messaging, required void Function() clearAdminProfileCache})
-      : _clearCache = clearAdminProfileCache;
+    required this.messaging, required void Function() clearAdminProfileCache,
+    required void Function(DedaFlowSdkUser,Map<String,dynamic>) cacheAdminProfile})
+      : _clearCache = clearAdminProfileCache, _cacheProfile = cacheAdminProfile;
   final DedaFirebaseOwnerSessionIo session;
   final FirebaseFirestore firestore;
   final FirebaseMessaging messaging;
   final void Function() _clearCache;
+  final void Function(DedaFlowSdkUser,Map<String,dynamic>) _cacheProfile;
   @override
   bool get ready => session.ready;
   @override
@@ -40,6 +43,8 @@ class DedaFirebaseAdminSessionIo implements DedaAdminSessionIo {
   String? get currentEmail => session.auth.currentUser?.email;
   @override
   void clearAdminProfileCache() => _clearCache();
+  @override
+  void cacheAdminProfile(DedaFlowSdkUser user,Map<String,dynamic> profile) => _cacheProfile(user,profile);
   @override
   Future<DedaFlowSdkUser?> signIn(String email, String password) async {
     final credential = await session.auth.signInWithEmailAndPassword(email:email,password:password);
@@ -135,6 +140,15 @@ class DedaAdminSessionFirebaseAdapter {
       if (_active(data)) {
         final name = (data!['displayName'] ?? data['name'] ?? io.currentEmail ?? 'DEDA Admin').toString();
         final role = DedaBackend.normalizeAdminRole(data['role'] ?? data['jobTitle']);
+        final profile = <String,dynamic>{
+          ...data,'uid':user.uid,'email':io.currentEmail ?? data['email'] ?? '',
+          'displayName':name,'role':role,'status':DedaBackend.normalizeAdminStatus(data),
+          'roleNormalized':role,
+        };
+        _check(permit,user);
+        // Legacy currentAdminProfile warms its 45s cache before audit.add.
+        // Hook must synchronously update that SAME cache, never a second cache.
+        io.cacheAdminProfile(user,profile);
         _check(permit,user);
         await io.addAudit({
           'action':'admin_signed_in','adminUid':user.uid,'adminName':name,

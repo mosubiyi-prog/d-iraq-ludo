@@ -23,6 +23,7 @@ class _Io implements DedaAdminSessionIo {
   final after = <String,void Function()>{};
   final updates = <Map<String,dynamic>>[];
   final audits = <Map<String,dynamic>>[];
+  Map<String,dynamic>? cachedProfile;
   Map<String,dynamic>? admin = {'active':true,'status':'active','role':'employee','displayName':'Fixture Admin'};
   bool proofCache = false, proofPending = false, auditCache = false, auditPending = false;
   bool nullCredential = false;
@@ -38,7 +39,13 @@ class _Io implements DedaAdminSessionIo {
     if (failures[label] != null) throw failures[label]!;
   }
   @override
-  void clearAdminProfileCache() { events.add('cache.clear'); }
+  void clearAdminProfileCache() { events.add('cache.clear'); cachedProfile = null; }
+  @override
+  void cacheAdminProfile(DedaFlowSdkUser user,Map<String,dynamic> profile) {
+    expect(user.uid,currentUser!.uid);
+    expect(user.revision,currentUser!.revision);
+    events.add('cache.warm'); cachedProfile = Map.of(profile);
+  }
   @override
   Future<DedaFlowSdkUser?> signIn(String email,String password) async {
     receivedEmail = email;
@@ -104,7 +111,7 @@ void main() {
     final h = _Harness();
     expect(await h.login(),isTrue);
     expect(h.io.events,['cache.clear','sdk.signIn','read.proof','admin.update',
-      'notification.permission','notification.token','notification.write','read.audit','audit.write']);
+      'notification.permission','notification.token','notification.write','read.audit','cache.warm','audit.write']);
     expect(h.io.receivedEmail,'fixture@example.invalid');
     expect(h.io.receivedPassword,'fixture-password');
     expect(h.io.updates[0].keys.toSet(),{'lastSeenAt','lastLoginAt'});
@@ -129,6 +136,9 @@ void main() {
     expect(h.io.updates[0].keys.toSet(),{'lastSeenAt','lastLoginAt','displayName','updatedAt'});
     expect(h.io.updates[0]['displayName'],'New Fixture');
     expect(h.io.audits.single['adminName'],'New Fixture');
+    expect(h.io.cachedProfile!['displayName'],'New Fixture');
+    expect(h.io.cachedProfile!['uid'],'fixture-admin');
+    expect(h.io.cachedProfile!['roleNormalized'],'employee');
     h.gate.dispose();
   });
   test('missing admin document returns false after ending only its current SDK session', () async {
