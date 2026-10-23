@@ -68,6 +68,14 @@ Future<void> _show(WidgetTester tester, _IdentitySource source, {
   ),
 )));
 
+// A fake SDK future first completes the coordinator, then the widget's await
+// schedules setState. Flush microtasks and render that explicitly next frame.
+// Do not pumpAndSettle: a deliberately pending read has a live deadline timer.
+Future<void> _flush(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
+
 void main() {
   test('lifecycle tests require the isolated pilot to be enabled', () {
     expect(dedaStabilityIdentityPilot, isTrue);
@@ -80,11 +88,11 @@ void main() {
     expect(find.text('safe-fallback'), findsOneWidget);
     source.ready = true;
     await _show(tester, source);
-    await tester.pump();
+    await _flush(tester);
     expect(source.subscriptions, 1);
     expect(source.reads, hasLength(1));
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-GOLD'), findsOneWidget);
   });
 
@@ -93,10 +101,10 @@ void main() {
     await _show(tester, source);
     source.events.add('A');
     source.events.add('A');
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(1));
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-GOLD'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -105,7 +113,7 @@ void main() {
     final source = _IdentitySource();
     await _show(tester, source);
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     await _show(tester, source);
     expect(source.subscriptions, 1);
     expect(source.reads, hasLength(1));
@@ -117,15 +125,15 @@ void main() {
     await _show(tester, source);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     source.reads.first.succeed('@DEDA-OLD1');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('safe-fallback'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     source.events.add('A');
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(2));
     source.reads.last.succeed('@DEDA-NEW1');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-NEW1'), findsOneWidget);
     expect(find.text('@DEDA-OLD1'), findsNothing);
   });
@@ -136,11 +144,11 @@ void main() {
     source.ready = true;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     source.events.add('A');
-    await tester.pump();
+    await _flush(tester);
     expect(source.subscriptions, 1);
     expect(source.reads, hasLength(1));
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-GOLD'), findsOneWidget);
   });
 
@@ -148,13 +156,13 @@ void main() {
     final source = _IdentitySource();
     await _show(tester, source);
     source.reads.first.succeed('@DEDA-OLD1');
-    await tester.pump();
+    await _flush(tester);
     source.change('B');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-OLD1'), findsNothing);
     expect(find.text('safe-fallback'), findsOneWidget);
     source.reads.last.succeed('@DEDA-NEW1');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-NEW1'), findsOneWidget);
   });
 
@@ -165,13 +173,13 @@ void main() {
     // Current state has already returned to A before queued events arrive.
     source.events.add('B');
     source.events.add('A');
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(3));
     source.reads.last.succeed('@DEDA-NEW1');
-    await tester.pump();
+    await _flush(tester);
     firstA.succeed('@DEDA-OLD1');
     source.reads[1].succeed('@DEDA-OLD2');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-NEW1'), findsOneWidget);
     expect(find.text('@DEDA-OLD1'), findsNothing);
     expect(find.text('@DEDA-OLD2'), findsNothing);
@@ -185,7 +193,7 @@ void main() {
     expect(source.reads, hasLength(2));
     source.reads.last.succeed('@DEDA-NEW1');
     old.succeed('@DEDA-OLD1');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-NEW1'), findsOneWidget);
     expect(find.text('@DEDA-OLD1'), findsNothing);
   });
@@ -196,16 +204,16 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('safe-fallback'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(1));
     source.reads.first.succeed('@DEDA-LATE');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-LATE'), findsNothing);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(2));
     source.reads.last.succeed('@DEDA-NEW1');
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-NEW1'), findsOneWidget);
   });
 
@@ -215,7 +223,7 @@ void main() {
     source.reads.first.result.completeError(
       FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
     );
-    await tester.pump();
+    await _flush(tester);
     await tester.pump(const Duration(seconds: 1));
     expect(source.reads, hasLength(1));
     expect(find.text('safe-fallback'), findsOneWidget);
@@ -228,12 +236,12 @@ void main() {
     source.reads.first.result.completeError(
       FirebaseException(plugin: 'cloud_firestore', code: 'unavailable'),
     );
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(1));
     await tester.pump(const Duration(milliseconds: 200));
     expect(source.reads, hasLength(2));
     source.reads.last.succeed();
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('@DEDA-GOLD'), findsOneWidget);
   });
 
@@ -241,9 +249,9 @@ void main() {
     final source = _IdentitySource();
     await _show(tester, source);
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     source.events.addError(StateError('fake-auth-observation-error'));
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('safe-fallback'), findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(source.reads, hasLength(1));
@@ -257,7 +265,7 @@ void main() {
     source.events.add('B');
     DedaStage71ActiveIdRefresh.changed();
     source.reads.single.succeed();
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, hasLength(1));
     expect(tester.takeException(), isNull);
   });
@@ -269,7 +277,7 @@ void main() {
       uid: 'different-user', originalId: _original,
       displayId: '@DEDA-FAKE', fixedColor: 'gold',
     ));
-    await tester.pump();
+    await _flush(tester);
     expect(find.text('safe-fallback'), findsOneWidget);
     expect(find.text('@DEDA-FAKE'), findsNothing);
   });
@@ -280,7 +288,7 @@ void main() {
     expect(source.reads, isEmpty);
     source.enabled = true;
     source.change(null);
-    await tester.pump();
+    await _flush(tester);
     expect(source.reads, isEmpty);
     expect(find.text('safe-fallback'), findsOneWidget);
   });
