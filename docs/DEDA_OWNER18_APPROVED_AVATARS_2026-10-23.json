@@ -1,0 +1,43 @@
+{
+  "owner_approved_exact_artwork": true,
+  "original_source_size": [
+    1536,
+    1536
+  ],
+  "inner_display": [
+    111,
+    111
+  ],
+  "avatars": [
+    {
+      "role": "male",
+      "slot": 3,
+      "asset": "assets/deda_owner_avatars_20261023/deda_male_royal_v2.jpg",
+      "sha256": "0a90845251c8a93f487dc4de6856a9ed06f9cf3f93763c32cf4a52b065187116",
+      "dimensions": [
+        1536,
+        1536
+      ]
+    },
+    {
+      "role": "female",
+      "slot": 4,
+      "asset": "assets/deda_owner_avatars_20261023/deda_female_royal_v2.jpg",
+      "sha256": "2e3b8ea0256ffd3e584649596e3a8e33697d7636fbc78a8835f1a8f6a3ff42c7",
+      "dimensions": [
+        1536,
+        1536
+      ]
+    },
+    {
+      "role": "couple",
+      "slot": 5,
+      "asset": "assets/deda_owner_avatars_20261023/deda_couple_royal_v2.jpg",
+      "sha256": "faceb117c6d757dc62c35f1e57f5e4439fff6a1899160049dc5ed6a524f9e748",
+      "dimensions": [
+        1536,
+        1536
+      ]
+    }
+  ]
+}
