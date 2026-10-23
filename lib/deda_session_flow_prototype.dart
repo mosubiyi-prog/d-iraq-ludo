@@ -51,7 +51,8 @@ class DedaAdminFlowResult {
 }
 
 /// All asynchronous helpers inherit the same permit. An adapter checks it
-/// after local preparation awaits and BEFORE dispatching each next write.
+/// after local preparation awaits and BEFORE dispatching each next write,
+/// including matching the supplied user UID, kind and principal revision.
 /// Already dispatched SDK/Firestore effects cannot be cancelled by this token.
 abstract class DedaSessionFlowPort {
   bool get firebaseReady;
@@ -64,7 +65,7 @@ abstract class DedaSessionFlowPort {
   Future<DedaOwnerFlowProfile> readOwnerProfile(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, String accountKey);
   Future<void> trustOwnerDevice(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, String accountKey);
   Future<void> writeOwnerProjection(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, DedaOwnerFlowProfile profile);
-  Future<void> rememberKnownOwner(DedaSessionTransitionPermit permit, String accountKey);
+  Future<void> rememberKnownOwner(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, String accountKey);
   Future<DedaFlowSdkUser> signInAdmin(DedaSessionTransitionPermit permit, String email, String password);
   Future<DedaAdminSessionProof> readAdminProof(DedaSessionTransitionPermit permit, DedaFlowSdkUser user);
   Future<void> refreshAdminProfile(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, DedaAdminSessionProof proof);
@@ -170,7 +171,7 @@ class DedaSessionFlowPrototype {
         }
         await _step(permit, user, () => port.trustOwnerDevice(permit, user, account));
         await _step(permit, user, () => port.writeOwnerProjection(permit, user, profile));
-        await _step(permit, user, () => port.rememberKnownOwner(permit, account));
+        await _step(permit, user, () => port.rememberKnownOwner(permit, user, account));
         _check(permit, user);
         return DedaOwnerFlowResult(user, proof, profile);
       });

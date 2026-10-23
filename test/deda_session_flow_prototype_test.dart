@@ -42,6 +42,14 @@ class _Port implements DedaSessionFlowPort {
     if (!dispatchedSdk) permit.checkCurrent();
   }
 
+  void checkUser(DedaSessionTransitionPermit permit, DedaFlowSdkUser user) {
+    permit.checkCurrent();
+    if (currentUser?.uid != user.uid || currentUser?.kind != user.kind ||
+        currentUser?.revision != user.revision) {
+      throw const DedaStaleSessionTransition();
+    }
+  }
+
   @override
   Future<bool> signOutIfCurrent(DedaSessionTransitionPermit permit, DedaFlowSdkUser expected) async {
     if (currentUser?.uid != expected.uid || currentUser?.revision != expected.revision) return false;
@@ -89,16 +97,16 @@ class _Port implements DedaSessionFlowPort {
   Future<void> trustOwnerDevice(DedaSessionTransitionPermit permit,
       DedaFlowSdkUser user, String accountKey) async {
     await visit('trust.prepare', permit); // e.g. waiting for local installId.
-    permit.checkCurrent();
+    checkUser(permit, user);
     await visit('trust.write', permit);
   }
   @override
   Future<void> writeOwnerProjection(DedaSessionTransitionPermit permit,
       DedaFlowSdkUser user, DedaOwnerFlowProfile profile) => visit('owner.projection', permit);
   @override
-  Future<void> rememberKnownOwner(DedaSessionTransitionPermit permit, String accountKey) async {
+  Future<void> rememberKnownOwner(DedaSessionTransitionPermit permit, DedaFlowSdkUser user, String accountKey) async {
     await visit('remember.prepare', permit);
-    permit.checkCurrent();
+    checkUser(permit, user);
     events.add('remember.write');
   }
   @override
@@ -296,6 +304,22 @@ void main() {
     expect(h.port.events, isNot(contains('owner.projection')));
     h.gate.dispose();
   });
+
+  for (final preparation in ['trust.prepare', 'remember.prepare']) {
+    test('principal change during $preparation prevents the next nested write', () async {
+      final h = _Harness();
+      final hold = h.hold(preparation);
+      final result = h.login();
+      final outcome = expectLater(result, throwsA(isA<DedaStaleSessionTransition>()));
+      await _reached(h, preparation);
+      h.port.setUser('newer-during-local-preparation', DedaSessionAuthKind.authenticated);
+      hold.complete();
+      await outcome;
+      final forbidden = preparation == 'trust.prepare' ? 'trust.write' : 'remember.write';
+      expect(h.port.events, isNot(contains(forbidden)));
+      h.gate.dispose();
+    });
+  }
 
   test('already dispatched projection is not retried and cannot trigger late local remember', () async {
     final h = _Harness(shortWait: true);
