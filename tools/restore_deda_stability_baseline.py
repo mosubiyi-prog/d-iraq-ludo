@@ -1,7 +1,8 @@
 """Restore an immutable 100380 source-only workspace; never touches Android/signing.
 
-Output MUST be absent or empty. --pilot overlays exactly the two reviewed
-read-coordination files. Existing build/reconstruction workflows are unchanged.
+Output MUST be absent or empty. --pilot overlays the two identity files.
+--startup-metrics adds an opt-in module and exact-hash main instrumentation.
+Existing APK/build workflows and the immutable archive remain unchanged.
 """
 import argparse
 import hashlib
@@ -9,6 +10,7 @@ import json
 import re
 import shutil
 import tarfile
+import textwrap
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -16,7 +18,46 @@ PILOT_FILES = ('lib/deda_stability_read_scope.dart',
                'lib/deda_qa32_active_account_scope.dart')
 
 
-def restore(output, pilot=False):
+STARTUP_MODULE = 'lib/deda_startup_measurements.dart'
+
+
+def instrument_startup(source):
+    """Add opt-in probes to the exact immutable main; refuse source drift."""
+    manifest = json.loads((REPO / 'tools/app_stability/100380-baseline-manifest.json').read_text())
+    expected = manifest['files']['lib/main.dart']
+    if hashlib.sha256(source.encode()).hexdigest() != expected:
+        raise ValueError('Startup instrumentation requires exact baseline main')
+    header = 'Future<void> main() async {\n'
+    start = source.index(header)
+    close = source.index('\n}\n\nclass _DedaCleanPageTransitionsBuilder', start)
+    body = source[start + len(header):close]
+    measured = """Future<void> main() async {
+  if (!dedaStabilityStartupMetricsEnabled) {
+BASELINE_BODY
+    return;
+  }
+  await runDedaMeasuredStartup(
+    measurements: dedaStartupMeasurements,
+    initializeBindings: () { WidgetsFlutterBinding.ensureInitialized(); },
+    initializeMapCache: () {
+      BuiltInMapCachingProvider.getOrCreateInstance(
+        maxCacheSize: 128 * 1024 * 1024,
+      );
+    },
+    initializeFirebase: () async { await Firebase.initializeApp(); },
+    loadPreferences: DedaPreferences.load,
+    initializeTasks: DedaTaskEngine.initializeForCurrentAccount,
+    launch: () { runApp(const DedaApp()); },
+    observeFirstFrame: (callback) => WidgetsBinding.instance
+        .addPostFrameCallback((_) => callback()),
+  );
+}""".replace('BASELINE_BODY', textwrap.indent(body, '  '))
+    source = source[:start] + measured + source[close + 2:]
+    first_import = source.index('import ')
+    return source[:first_import] + "import 'deda_startup_measurements.dart';\n" + source[first_import:]
+
+
+def restore(output, pilot=False, startup_metrics=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -56,7 +97,12 @@ def restore(output, pilot=False):
     if pilot:
         for name in PILOT_FILES:
             shutil.copy2(REPO/name, output/name)
+    if startup_metrics:
+        shutil.copy2(REPO / STARTUP_MODULE, output / STARTUP_MODULE)
+        main_path = output / 'lib/main.dart'
+        main_path.write_text(instrument_startup(main_path.read_text()))
     return {'verifiedFiles':len(verified), 'pilot':pilot,
+            'startupMetrics':startup_metrics,
             'flutterVersion':manifest['flutterVersion']}
 
 
@@ -64,5 +110,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output',type=Path)
     parser.add_argument('--pilot',action='store_true')
+    parser.add_argument('--startup-metrics',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics)))

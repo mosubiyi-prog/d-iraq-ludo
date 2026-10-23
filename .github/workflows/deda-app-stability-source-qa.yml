@@ -6,6 +6,8 @@ on:
       - 'tools/app_stability/**'
       - 'tools/restore_deda_stability_baseline.py'
       - 'lib/deda_stability_read_scope.dart'
+      - 'lib/deda_startup_measurements.dart'
+      - 'test/deda_startup_measurements_test.dart'
       - 'lib/deda_qa32_active_account_scope.dart'
       - 'test/deda_stability_read_scope_test.dart'
       - 'test/deda_stability_identity_lifecycle_test.dart'
@@ -23,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [baseline, pilot]
+        mode: [baseline, pilot, measured-pilot]
     env:
       CI: 'true'
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
@@ -36,7 +38,9 @@ jobs:
         run: python3 -m unittest discover -s tools/app_stability/tests -v
       - name: Restore hash-verified source without Android or signing files
         run: |
-          if [ '${{ matrix.mode }}' = pilot ]; then
+          if [ '${{ matrix.mode }}' = measured-pilot ]; then
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics
+          elif [ '${{ matrix.mode }}' = pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot
           else
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability"
@@ -56,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_qa32_active_account_scope.dart lib/deda_six_active_identity.dart
-          flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true --dart-define=DEDA_STABILITY_IDENTITY_PILOT=${{ matrix.mode == 'pilot' }} --reporter expanded \
+          flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true --dart-define=DEDA_STABILITY_IDENTITY_PILOT=${{ matrix.mode != 'baseline' }} --reporter expanded \
             test/deda_qa32_active_account_scope_test.dart \
             test/deda_six_notes_test.dart \
             test/deda_six_badge_visual_test.dart \
@@ -67,11 +71,18 @@ jobs:
             test/deda_royal_avatar_choice_100341_test.dart
       - name: Exercise read coordination with delayed and failed fake requests only
         timeout-minutes: 3
-        if: matrix.mode == 'pilot'
+        if: matrix.mode != 'baseline'
         working-directory: ${{ runner.temp }}/deda-stability
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_stability_read_scope.dart lib/deda_qa32_active_account_scope.dart test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
           flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_IDENTITY_PILOT=true --reporter expanded test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
+      - name: Verify startup measurement order, failure policy and first-frame observer
+        timeout-minutes: 3
+        if: matrix.mode == 'measured-pilot'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_startup_measurements.dart test/deda_startup_measurements_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_STARTUP_METRICS=true --reporter expanded test/deda_startup_measurements_test.dart
       - name: Verify no installable application was produced
         if: always()
         run: |

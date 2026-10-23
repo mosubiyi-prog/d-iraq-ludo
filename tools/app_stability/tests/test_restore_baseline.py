@@ -45,6 +45,45 @@ class RestoreBaselineTest(unittest.TestCase):
         for name in restore_module.PILOT_FILES:
             self.assertEqual((pilot / name).read_bytes(), (REPO / name).read_bytes())
 
+    def test_measured_restore_changes_only_entry_and_adds_measurement_module(self):
+        baseline, measured = self.root / 'baseline', self.root / 'measured'
+        restore_module.restore(baseline)
+        restore_module.restore(measured, startup_metrics=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(measured) for p in (measured / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (measured / p).read_bytes()}
+        self.assertEqual(changed, {'lib/main.dart', restore_module.STARTUP_MODULE})
+        original = (baseline / 'lib/main.dart').read_text()
+        generated = (measured / 'lib/main.dart').read_text()
+        header = 'Future<void> main() async {\n'
+        start = original.index(header) + len(header)
+        end = original.index('\n}\n\nclass _DedaCleanPageTransitionsBuilder', start)
+        # Disabled measurement path retains the exact original body, with only
+        # the extra branch indentation. It cannot reorder initialization.
+        import textwrap
+        self.assertIn(textwrap.indent(original[start:end], '  ') + '\n    return;', generated)
+        self.assertIn('if (!dedaStabilityStartupMetricsEnabled)', generated)
+        self.assertEqual(generated.count('await runDedaMeasuredStartup('), 1)
+
+    def test_combined_restore_retains_identity_and_startup_overlays(self):
+        output = self.root / 'combined'
+        restore_module.restore(output, pilot=True, startup_metrics=True)
+        for name in (*restore_module.PILOT_FILES, restore_module.STARTUP_MODULE):
+            self.assertEqual((output / name).read_bytes(), (REPO / name).read_bytes())
+        self.assertIn('runDedaMeasuredStartup', (output / 'lib/main.dart').read_text())
+        self.assertFalse((output / 'android').exists())
+
+    def test_instrumentation_rejects_source_drift(self):
+        with self.assertRaisesRegex(ValueError, 'exact baseline main'):
+            restore_module.instrument_startup('Future<void> main() async {}')
+
+    def test_instrumentation_rejects_a_second_application(self):
+        output = self.root / 'measured'
+        restore_module.restore(output, startup_metrics=True)
+        with self.assertRaisesRegex(ValueError, 'exact baseline main'):
+            restore_module.instrument_startup((output / 'lib/main.dart').read_text())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
