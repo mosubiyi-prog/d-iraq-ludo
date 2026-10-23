@@ -30,7 +30,7 @@ RULE = '''
       let d = request.resource.data;
       return d.originalId == publicId
         && d.updatedAt == request.time
-        && d.keys().hasOnly(['originalId','ownedStyles','ownedFrames',
+        && d.keys().hasOnly(['originalId','ownedStyles','ownedFrames','pendingFrames',
           'activeBadges','avatar','frame','background','updatedAt'])
         && d.get('ownedStyles', []) is list
         && d.get('ownedStyles', []).size() <= 12
@@ -43,6 +43,11 @@ RULE = '''
         && d.get('ownedFrames', []) is list
         && d.get('ownedFrames', []).size() <= 13
         && d.get('ownedFrames', []).hasOnly(['FRAME_03','FRAME_05','FRAME_06',
+          'FRAME_07','FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12',
+          'FRAME_13','FRAME_14','FRAME_15','FRAME_16'])
+        && d.get('pendingFrames', []) is list
+        && d.get('pendingFrames', []).size() <= 13
+        && d.get('pendingFrames', []).hasOnly(['FRAME_03','FRAME_05','FRAME_06',
           'FRAME_07','FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12',
           'FRAME_13','FRAME_14','FRAME_15','FRAME_16'])
         && d.get('avatar',0) is int && d.get('avatar',0) >= 0 && d.get('avatar',0) <= 8

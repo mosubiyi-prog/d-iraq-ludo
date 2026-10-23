@@ -277,6 +277,17 @@ def main():
     src = section(src, 'class DedaStyleInventory {', '\nconst List<String> dedaStyleBadgeIds', inventory)
     src = section(src, 'class DedaDiamondsWallet {', '\nclass DedaAccountHubPage', native_wallet)
     src = section(src, '  Widget _profileHeroCard() {', '\n  Widget _avatar(', hero)
+    def profile_refresh(s):
+        return one(s, '    unawaited(dedaEnsurePersonalSocialSession());', """    final appearanceOwnerPhone = DedaPreferences.phone;
+    unawaited(() async {
+      try {
+        await dedaEnsurePersonalSocialSession();
+        if (mounted && DedaPreferences.phone == appearanceOwnerPhone) {
+          setState(() {});
+        }
+      } catch (_) {}
+    }());""")
+    src = section(src, 'class _DedaProfilePhase2PageState', '\nclass DedaSocialProgressSnapshot', profile_refresh)
     src = section(src, '  Future<void> _openDedaMyStore() async {', '\n  Widget _featureGrid()', store)
     old = """const DedaLevelAchievementsPage(
                         verifiedServerLevel: null,

@@ -6,7 +6,7 @@ const {createRequire} = require('node:module');
 const {resolve} = require('node:path');
 const req = createRequire(resolve(__dirname, '../functions/package.json'));
 const {initializeTestEnvironment, assertFails, assertSucceeds} = req('@firebase/rules-unit-testing');
-const {doc, setDoc, getDoc, updateDoc, serverTimestamp, arrayUnion} = req('firebase/firestore');
+const {doc, setDoc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove, runTransaction} = req('firebase/firestore');
 const project = 'demo-deda-owner18-cosmetics';
 assert.equal(process.env.GCLOUD_PROJECT, project);
 assert.match(process.env.FIRESTORE_EMULATOR_HOST || '', /^(localhost|127\.0\.0\.1):\d+$/);
@@ -91,6 +91,33 @@ test('public profile accepts the same avatar/frame/background range without affe
     createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
   }));
   assert.equal((await getDoc(doc(db,'deda_social_profiles',A.id))).data().level,1);
+});
+test('two devices cannot begin charging the same native frame twice',async()=>{
+  const db=env.authenticatedContext(A.uid).firestore();
+  await setDoc(account(db),data());
+  const begin=()=>runTransaction(db,async tx=>{
+    const snap=await tx.get(account(db));
+    if((snap.data().pendingFrames || []).includes('FRAME_03')) throw Error('pending');
+    tx.update(account(db),{pendingFrames:arrayUnion('FRAME_03'),updatedAt:serverTimestamp()});
+  });
+  const results=await Promise.allSettled([begin(),begin()]);
+  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
+  await assertSucceeds(updateDoc(account(db),{ownedFrames:arrayUnion('FRAME_03'),
+    pendingFrames:arrayRemove('FRAME_03'),updatedAt:serverTimestamp()}));
+  assert.deepEqual((await getDoc(account(db))).data().ownedFrames,['FRAME_03']);
+});
+test('new signed-in UID for the same canonical account restores the backup',async()=>{
+  const old=env.authenticatedContext(A.uid).firestore();
+  await setDoc(account(old),data({ownedStyles:['badge_member','badge_spark'],avatar:5}));
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,'users','owner18_reinstalled'),{accountKey:A.key,sharePersonalId:A.id});
+    await setDoc(doc(db,'deda_sessions','owner18_reinstalled'),{accountKey:A.key});
+    await updateDoc(doc(db,'deda_share_ids',A.id),{ownerUid:'owner18_reinstalled'});
+  });
+  const restored=env.authenticatedContext('owner18_reinstalled').firestore();
+  assert.equal((await assertSucceeds(getDoc(account(restored)))).data().avatar,5);
+  await assertFails(getDoc(account(old)));
 });
 // Receipt marks only a fully successful test run, never generated on failure.
 process.on('exit', code => {

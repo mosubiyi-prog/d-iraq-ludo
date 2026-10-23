@@ -38,6 +38,16 @@ class DedaOwner18FrameCheckout {
     final data = await DedaOwner18Cosmetics.read(originalId);
     if (data['ownedFrames'] is List &&
         (data['ownedFrames'] as List).contains(frameId)) return true;
+    final phone = _phone(originalId);
+    final uid = await DedaOwner18Cosmetics.requireOwner(originalId);
+    final prefs = await SharedPreferences.getInstance();
+    _same(uid, phone);
+    if (prefs.getString(_key(originalId, frameId)) == 'paid') {
+      await DedaOwner18Cosmetics.confirmNativeFrame(originalId, frameId);
+      _same(uid, phone);
+      await prefs.remove(_key(originalId, frameId));
+      return true;
+    }
     // Preserve any receipt-backed purchases from earlier builds.
     return DedaLabFrameSecureCheckout.isOwned(
         originalId: originalId, frameId: frameId);
@@ -71,6 +81,11 @@ class DedaOwner18FrameCheckout {
       {required String originalId, required String frameId}) {
     _item(frameId);
     final key = '$originalId/$frameId';
+    if (!_purchases.containsKey(key) &&
+        _purchases.keys.any((k) => k.startsWith('$originalId/'))) {
+      return Future<void>.error(
+          StateError('another-frame-purchase-in-progress'));
+    }
     return _purchases.putIfAbsent(key, () async {
       try {
         await _buy(originalId, frameId);
@@ -109,7 +124,9 @@ class DedaOwner18FrameCheckout {
     // Verify account backup is writable before using the original wallet.
     await DedaOwner18Cosmetics.prepare(original);
     _same(uid, phone);
+    if (!await DedaOwner18Cosmetics.beginNativeFrame(original, frame)) return;
     if (!await prefs.setString(pending, 'charging')) {
+      await DedaOwner18Cosmetics.cancelUnchargedFrame(original, frame);
       throw StateError('purchase-journal-unavailable');
     }
     _same(uid, phone);

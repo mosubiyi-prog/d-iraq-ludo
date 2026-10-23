@@ -103,6 +103,7 @@ class DedaOwner18Cosmetics {
     await ref(original).set({
       'originalId': original,
       'ownedFrames': FieldValue.arrayUnion([frame]),
+      'pendingFrames': FieldValue.arrayRemove([frame]),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
     sameOwner(uid);
@@ -112,5 +113,39 @@ class DedaOwner18Cosmetics {
         (proof['ownedFrames'] as List).contains(frame))) {
       throw StateError('frame-account-save-unconfirmed');
     }
+  }
+
+  static Future<bool> beginNativeFrame(String original, String frame) async {
+    final uid = await requireOwner(original);
+    return FirebaseFirestore.instance.runTransaction<bool>((tx) async {
+      final snap = await tx.get(ref(original));
+      sameOwner(uid);
+      final data = snap.data() ?? <String, dynamic>{};
+      if (data['ownedFrames'] is List &&
+          (data['ownedFrames'] as List).contains(frame)) return false;
+      if (data['pendingFrames'] is List &&
+          (data['pendingFrames'] as List).contains(frame)) {
+        throw StateError('native-frame-purchase-already-pending');
+      }
+      tx.set(
+          ref(original),
+          {
+            'originalId': original,
+            'pendingFrames': FieldValue.arrayUnion([frame]),
+            'updatedAt': FieldValue.serverTimestamp()
+          },
+          SetOptions(merge: true));
+      return true;
+    });
+  }
+
+  static Future<void> cancelUnchargedFrame(
+      String original, String frame) async {
+    final uid = await requireOwner(original);
+    await ref(original).update({
+      'pendingFrames': FieldValue.arrayRemove([frame]),
+      'updatedAt': FieldValue.serverTimestamp()
+    });
+    sameOwner(uid);
   }
 }
