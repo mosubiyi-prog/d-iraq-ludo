@@ -6,6 +6,7 @@ Output MUST be absent or empty. --pilot overlays the two identity files.
 --session-flow adds its UNWIRED full-flow prototype and coordinator dependency.
 --owner-firebase-port adds an UNWIRED owner adapter and principal observer.
 --admin-firebase-adapter adds the UNWIRED admin flow and owner observer dependencies.
+--legacy-progress-capture adds a read-only UNWIRED local evidence module.
 Existing APK/build workflows and the immutable archive remain unchanged.
 """
 import argparse
@@ -25,6 +26,7 @@ PILOT_FILES = ('lib/deda_stability_read_scope.dart',
 STARTUP_MODULE = 'lib/deda_startup_measurements.dart'
 SESSION_MODULE = 'lib/deda_session_transition_gate.dart'
 SESSION_FLOW_MODULE = 'lib/deda_session_flow_prototype.dart'
+LEGACY_PROGRESS_MODULE = 'lib/deda_legacy_progress_capture.dart'
 ADMIN_ADAPTER_MODULE = 'lib/deda_admin_session_firebase_adapter.dart'
 OWNER_PORT_MODULES = ('lib/deda_owner_session_firebase_port.dart',
                       'lib/deda_session_principal_tracker.dart')
@@ -66,7 +68,7 @@ BASELINE_BODY
     return source[:first_import] + "import 'deda_startup_measurements.dart';\n" + source[first_import:]
 
 
-def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False):
+def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False, legacy_progress_capture=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -119,11 +121,14 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
             shutil.copy2(REPO / name, output / name)
     if admin_firebase_adapter:
         shutil.copy2(REPO / ADMIN_ADAPTER_MODULE, output / ADMIN_ADAPTER_MODULE)
+    if legacy_progress_capture:
+        shutil.copy2(REPO / LEGACY_PROGRESS_MODULE, output / LEGACY_PROGRESS_MODULE)
     return {'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate or session_flow or owner_firebase_port or admin_firebase_adapter,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter,
             'ownerFirebasePort':owner_firebase_port or admin_firebase_adapter,
             'adminFirebaseAdapter':admin_firebase_adapter,
+            'legacyProgressCapture':legacy_progress_capture,
             'flutterVersion':manifest['flutterVersion']}
 
 
@@ -136,5 +141,6 @@ if __name__ == '__main__':
     parser.add_argument('--session-flow',action='store_true')
     parser.add_argument('--owner-firebase-port',action='store_true')
     parser.add_argument('--admin-firebase-adapter',action='store_true')
+    parser.add_argument('--legacy-progress-capture',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter,args.legacy_progress_capture)))

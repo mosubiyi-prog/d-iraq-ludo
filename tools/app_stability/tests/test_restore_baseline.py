@@ -149,6 +149,17 @@ class RestoreBaselineTest(unittest.TestCase):
             self.assertEqual((admin / name).read_bytes(), (baseline / name).read_bytes())
         self.assertFalse((admin / 'android').exists())
 
+    def test_legacy_progress_capture_adds_one_module_without_touching_any_original_source(self):
+        baseline, progress = self.root / 'baseline', self.root / 'progress'
+        restore_module.restore(baseline)
+        restore_module.restore(progress, legacy_progress_capture=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(progress) for p in (progress / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (progress / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.LEGACY_PROGRESS_MODULE})
+        self.assertFalse((progress / 'android').exists())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
