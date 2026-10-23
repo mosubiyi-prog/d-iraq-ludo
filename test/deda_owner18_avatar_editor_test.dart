@@ -52,6 +52,12 @@ void main() {
         const Offset(0, -520));
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.getTopLeft(preview).dy, closeTo(y, 0.5));
+    // Dispose the editor, then let the original wallet's bounded 220ms
+    // readiness retry finish. Do not change production wallet timing for QA.
+    await tester.pumpWidget(const SizedBox.shrink());
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
     expect(tester.takeException(), isNull);
   });
 }
