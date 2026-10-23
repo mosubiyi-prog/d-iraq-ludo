@@ -1,3 +1,4 @@
+import 'deda_stage50_verified_friend_ink_badge.dart';
 import 'main.dart' show DedaPreferences;
 import 'deda_stage71_free_owned_use_profile.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -54,10 +55,9 @@ class DedaSixReceivedIdentity extends StatelessWidget {
             final verified = DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
                 originalId, snapshot.data?.data());
             if (verified == null) return fallback;
-            return Text(verified['displayId'] as String,
-              textDirection: TextDirection.ltr,
-              style: const TextStyle(color: Color(0xFF5C635D),
-                  fontWeight: FontWeight.w700));
+            return DedaStage50FriendIdInkText(originalId: originalId,
+              verified: DedaStage50PublicIdStyle.parse(verified, originalId),
+              fallback: fallback);
           });
       });
   }
