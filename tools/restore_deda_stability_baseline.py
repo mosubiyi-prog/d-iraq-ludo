@@ -4,6 +4,7 @@ Output MUST be absent or empty. --pilot overlays the two identity files.
 --startup-metrics adds an opt-in module and exact-hash main instrumentation.
 --session-gate copies an UNWIRED session coordinator for isolated tests only.
 --session-flow adds its UNWIRED full-flow prototype and coordinator dependency.
+--owner-firebase-port adds an UNWIRED owner adapter and principal observer.
 Existing APK/build workflows and the immutable archive remain unchanged.
 """
 import argparse
@@ -23,6 +24,8 @@ PILOT_FILES = ('lib/deda_stability_read_scope.dart',
 STARTUP_MODULE = 'lib/deda_startup_measurements.dart'
 SESSION_MODULE = 'lib/deda_session_transition_gate.dart'
 SESSION_FLOW_MODULE = 'lib/deda_session_flow_prototype.dart'
+OWNER_PORT_MODULES = ('lib/deda_owner_session_firebase_port.dart',
+                      'lib/deda_session_principal_tracker.dart')
 
 
 def instrument_startup(source):
@@ -61,7 +64,7 @@ BASELINE_BODY
     return source[:first_import] + "import 'deda_startup_measurements.dart';\n" + source[first_import:]
 
 
-def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False):
+def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -105,13 +108,17 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         shutil.copy2(REPO / STARTUP_MODULE, output / STARTUP_MODULE)
         main_path = output / 'lib/main.dart'
         main_path.write_text(instrument_startup(main_path.read_text()))
-    if session_gate or session_flow:
+    if session_gate or session_flow or owner_firebase_port:
         shutil.copy2(REPO / SESSION_MODULE, output / SESSION_MODULE)
-    if session_flow:
+    if session_flow or owner_firebase_port:
         shutil.copy2(REPO / SESSION_FLOW_MODULE, output / SESSION_FLOW_MODULE)
+    if owner_firebase_port:
+        for name in OWNER_PORT_MODULES:
+            shutil.copy2(REPO / name, output / name)
     return {'verifiedFiles':len(verified), 'pilot':pilot,
-            'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate or session_flow,
-            'sessionFlowPrototype':session_flow,
+            'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate or session_flow or owner_firebase_port,
+            'sessionFlowPrototype':session_flow or owner_firebase_port,
+            'ownerFirebasePort':owner_firebase_port,
             'flutterVersion':manifest['flutterVersion']}
 
 
@@ -122,5 +129,6 @@ if __name__ == '__main__':
     parser.add_argument('--startup-metrics',action='store_true')
     parser.add_argument('--session-gate',action='store_true')
     parser.add_argument('--session-flow',action='store_true')
+    parser.add_argument('--owner-firebase-port',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port)))

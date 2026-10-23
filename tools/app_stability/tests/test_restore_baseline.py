@@ -120,6 +120,20 @@ class RestoreBaselineTest(unittest.TestCase):
             self.assertEqual((flow / module).read_bytes(), (REPO / module).read_bytes())
         self.assertFalse((flow / 'android').exists())
 
+    def test_owner_adapter_is_unwired_and_keeps_existing_auth_bytes(self):
+        baseline, owner = self.root / 'baseline', self.root / 'owner'
+        restore_module.restore(baseline)
+        restore_module.restore(owner, owner_firebase_port=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(owner) for p in (owner / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (owner / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE,
+            restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES})
+        for name in ['lib/main.dart','lib/deda_backend.dart','lib/deda_pin_auth.dart']:
+            self.assertEqual((owner / name).read_bytes(), (baseline / name).read_bytes())
+        self.assertFalse((owner / 'android').exists())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
