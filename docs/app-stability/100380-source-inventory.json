@@ -1,0 +1,2569 @@
+{
+  "schemaVersion": 1,
+  "referenceCommit": "08535d34a0028a916f978dc77a9a0f1a942a7c1b",
+  "runtimeReference": "100379 Dart-only manifest + stage_deda_six_notes.py at reference commit",
+  "limitation": "Lexical inventory only. Import reachability does not prove a user can reach a page. Counts can include comments; no latency/device/network tests.",
+  "files": [
+    {
+      "path": "lib/admin_pages.dart",
+      "sha256": "bd500d0e1792bf357ba8b6e2efe00f31bc40bb2fe0d01b7e0af9688b144e17e8",
+      "lines": 5288,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/admin_place_map.dart",
+        "lib/admin_recovery_pages.dart",
+        "lib/admin_team_pages.dart",
+        "lib/deda_admin_automation_toggle.dart",
+        "lib/deda_admin_compact_card.dart",
+        "lib/deda_admin_task_management_page.dart",
+        "lib/deda_backend.dart",
+        "lib/deda_exclusive_ids_admin_page.dart",
+        "lib/deda_gift_recipient_preview.dart",
+        "lib/deda_qa32_admin_gift_recipient_alias_bridge.dart",
+        "lib/deda_recovery_admin.dart",
+        "lib/deda_stage71_dual_admin_page.dart",
+        "lib/prize_winner_pages.dart"
+      ],
+      "pages": [
+        "DedaAdminLoginPage",
+        "DedaAdminInviteActivationPage",
+        "DedaAdminDashboardPage",
+        "_AdminRequestsPage",
+        "DedaAdminInboxPage",
+        "DedaPlaceRequestTrashPage",
+        "DedaSupportTrashPage",
+        "DedaPublishedPlacesAdminPage",
+        "DedaAdminDiamondGiftPage"
+      ],
+      "classes": [
+        "DedaAdminLoginPage",
+        "_DedaAdminLoginPageState",
+        "DedaAdminInviteActivationPage",
+        "_DedaAdminInviteActivationPageState",
+        "DedaAdminDashboardPage",
+        "_DedaAdminDashboardPageState",
+        "_AdminRequestsPage",
+        "DedaAdminInboxPage",
+        "_DedaAdminInboxPageState",
+        "_DedaSupportImage",
+        "_DedaSupportImageViewer",
+        "_DedaSupportImageViewerState",
+        "_RequestList",
+        "_RequestListState",
+        "DedaPlaceRequestTrashPage",
+        "DedaSupportTrashPage",
+        "DedaPublishedPlacesAdminPage",
+        "_DedaPublishedPlacesList",
+        "_DedaPublishedPlacesListState",
+        "DedaAdminDiamondGiftPage",
+        "_DedaAdminDiamondGiftPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/admin_place_map.dart",
+      "sha256": "e95626a8e781bbf21b72a5427ab77fa1b9704d43a1015fc205c45ecd940c3f99",
+      "lines": 94,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [
+        "DedaAdminPlaceMapPage"
+      ],
+      "classes": [
+        "DedaAdminPlaceMapPage"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/admin_recovery_pages.dart",
+      "sha256": "b2f6a90fbde2665d6be7a0c92cafe8d74961f3355f090c24698388ece18020e5",
+      "lines": 780,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [
+        "DedaAdminRecoveryRequestPage",
+        "DedaAdminRecoveryInboxPage"
+      ],
+      "classes": [
+        "DedaAdminRecoveryRequestPage",
+        "_DedaAdminRecoveryRequestPageState",
+        "DedaAdminRecoveryInboxPage"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/admin_team_pages.dart",
+      "sha256": "76e71192fd42a3bb957f80cb548deda1d14314dc7d13d5aef771762167a83e51",
+      "lines": 4040,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_six_admin_users.dart"
+      ],
+      "pages": [
+        "DedaAdminTeamPage",
+        "DedaAdminInvitationsPage",
+        "DedaAdminMemberEditorPage",
+        "DedaAdminAuditPage",
+        "DedaAdminUsersPage",
+        "DedaPlaceDeletionRequestsPage",
+        "DedaAccountDeletionRequestsPage",
+        "DedaAdminRoadReportsPage",
+        "DedaGovernoratesPage",
+        "DedaAdminReportsPage",
+        "DedaAdminSettingsPage",
+        "DedaAdminEntryPhonesPage"
+      ],
+      "classes": [
+        "DedaAdminTeamPage",
+        "_DedaAdminTeamPageState",
+        "DedaAdminInvitationsPage",
+        "DedaAdminMemberEditorPage",
+        "_DedaAdminMemberEditorPageState",
+        "DedaAdminAuditPage",
+        "DedaAdminUsersPage",
+        "_DedaAdminUsersPageState",
+        "DedaPlaceDeletionRequestsPage",
+        "_DedaPlaceDeletionRequestsPageState",
+        "DedaAccountDeletionRequestsPage",
+        "_DedaAccountDeletionRequestsPageState",
+        "DedaAdminRoadReportsPage",
+        "_DedaAdminRoadReportsPageState",
+        "DedaGovernoratesPage",
+        "DedaAdminReportsPage",
+        "_DedaAdminReportsPageState",
+        "DedaAdminSettingsPage",
+        "_DedaAdminSettingsPageState",
+        "DedaAdminEntryPhonesPage",
+        "_DedaAdminEntryPhonesPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_level_achievement_badges_policy.dart",
+      "sha256": "e5a0ee145f645665efe585d4997ba4caccd8cfb021b19c7241411ee77069dd40",
+      "lines": 129,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaLevelBadgeThresholds",
+        "DedaLevelBadgeProgress",
+        "DedaLevelBadgePolicy"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_level_achievements_page_staged.dart",
+      "sha256": "803d4a6f76ed310a95beace4103b30ccc736d2d3a67d9132bed32beabb169e4d",
+      "lines": 243,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_100377_level_achievement_badges_policy.dart"
+      ],
+      "pages": [
+        "DedaLevelAchievementsPage"
+      ],
+      "classes": [
+        "DedaLevelAchievementsPage",
+        "DedaOriginalSixLevelBadgeArt",
+        "_LevelBadgeTile"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_my_store_owned_profile_staged.dart",
+      "sha256": "3521d19e87bce210f2fbb290348523a237f132744ed938da999db6a24b68a06d",
+      "lines": 214,
+      "reachableViaLocalImports": false,
+      "imports": [],
+      "pages": [
+        "DedaMyStorePage"
+      ],
+      "classes": [
+        "DedaMyStoreEntry",
+        "DedaMyStoreSnapshot",
+        "DedaMyStorePage",
+        "_MyStoreCategory"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_my_store_page_staged.dart",
+      "sha256": "2f2ad6493fe1fed421196f343823ed112590cc7b0016215c2c3d4b100aa26e07",
+      "lines": 272,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_active_account_scope.dart"
+      ],
+      "pages": [
+        "DedaMyStorePage"
+      ],
+      "classes": [
+        "DedaMyStoreItem",
+        "DedaMyStorePage"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_point13_unified_identity_projection_staged.dart",
+      "sha256": "dd6eb3cea56d3bdaf7239eedc26e2e0565fb99e241d3a45436d730df46d50233",
+      "lines": 85,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_qa32_active_account_scope.dart",
+        "lib/deda_stage50_verified_friend_ink_badge.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPoint13UnifiedIdentity"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_100377_profile_free_inventory.dart",
+      "sha256": "8c62ca3ab8809dd3f4a511a73de242ad0b507581793d1fccc587d47b84ce75a4",
+      "lines": 117,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_100377_my_store_page_staged.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaProfileFreeInventory"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_automation_toggle.dart",
+      "sha256": "4e3b6767ad932ec6376eb91786a0eb0bcba20daecaecb9b825f1ed00d5a5d502",
+      "lines": 310,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_launch_feature_gates.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaAdminAutomationToggle",
+        "_DedaAdminAutomationToggleState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 1,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_compact_card.dart",
+      "sha256": "6180a7a609a69472806f44fcd5ff6e29753aeecce62be2a67be39741dde6d60d",
+      "lines": 174,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaAdminCompactCard"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_social_task_preview_page.dart",
+      "sha256": "e7d858809fb6bba5cd88d2fb9bd4bc301a8e7835466fa756c82072ed6ad51cc0",
+      "lines": 480,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_launch_feature_gates.dart",
+        "lib/deda_social_task_live_service.dart",
+        "lib/deda_social_task_preview.dart"
+      ],
+      "pages": [
+        "DedaAdminSocialTaskPreviewPage"
+      ],
+      "classes": [
+        "DedaAdminSocialTaskPreviewPage",
+        "_DedaAdminSocialTaskPreviewPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_survey_drafts.dart",
+      "sha256": "e72f6b78e21c871ce102cb35aa55aa3828ff3e0ecefe0e5c303778efd6a792d8",
+      "lines": 251,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaSurveyQuestion",
+        "DedaAdminSurveyDraft",
+        "DedaAdminSurveyDraftService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 1,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_surveys_page.dart",
+      "sha256": "ad53626b48966019c8399f9b481986439f34a69a993b45d7b033b65118257931",
+      "lines": 502,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_admin_survey_drafts.dart",
+        "lib/deda_backend.dart"
+      ],
+      "pages": [
+        "DedaAdminSurveysPage"
+      ],
+      "classes": [
+        "DedaAdminSurveysPage",
+        "_DedaAdminSurveysPageState",
+        "_SurveyQuestionFields",
+        "_SurveyDraftEditor",
+        "_SurveyDraftEditorState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_task_drafts.dart",
+      "sha256": "6cdb852a3412c0c845dc60cee6bb1f41294b680036c015b8943af9a5614ce5ad",
+      "lines": 242,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaAdminTaskDraft",
+        "DedaAdminTaskDraftService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 1,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_admin_task_management_page.dart",
+      "sha256": "445ad57e210da288ef859434a7b3ad5970fcb8d8fd4b4e3bbadc6a020c79e84f",
+      "lines": 597,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_admin_social_task_preview_page.dart",
+        "lib/deda_admin_task_drafts.dart",
+        "lib/deda_backend.dart",
+        "lib/deda_daily_login_offer_preview_page.dart",
+        "lib/deda_daily_schedule_preview_service.dart",
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [
+        "DedaAdminTaskManagementPage"
+      ],
+      "classes": [
+        "DedaAdminTaskManagementPage",
+        "_DedaAdminTaskManagementPageState",
+        "_DedaTaskDraftDialog",
+        "_DedaTaskDraftDialogState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_backend.dart",
+      "sha256": "7a1c35c1a6558d3286dd45f01831c17f9b37d48991c14dbb1346954240bb31d2",
+      "lines": 5059,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_pin_auth.dart",
+        "lib/deda_qa32_public_recipient_resolver.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaBackend"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 27,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 8,
+        "anonymousSignIn": 1
+      }
+    },
+    {
+      "path": "lib/deda_daily_login_offer_preview_page.dart",
+      "sha256": "f4f8fc1bfa5b4357cfe1262b093fdea796f6c42c0ba7ff06ced564d85bb60b87",
+      "lines": 386,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_daily_login_offer_preview_policy.dart"
+      ],
+      "pages": [
+        "DedaDailyLoginOfferPreviewPage"
+      ],
+      "classes": [
+        "DedaDailyLoginOfferPreviewPage",
+        "_DedaDailyLoginOfferPreviewPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_login_offer_preview_policy.dart",
+      "sha256": "16227040f449fe17ac7357fd8aad180ae053fb0d5444493e9a3ff5e01ed3cf82",
+      "lines": 136,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaLoginPreviewReward",
+        "DedaLoginPreviewOffer",
+        "DedaLoginPreviewPlan"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_published_tasks.dart",
+      "sha256": "8438cc4d601ae5b079b962d9cb4c02c8818e7ae188a85e8345aef60337f895dc",
+      "lines": 222,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPublishedDailyTask",
+        "DedaDailyTaskPresentation",
+        "DedaDailyPublishedCatalog",
+        "DedaDailyPublishedTaskReader"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_schedule_policy.dart",
+      "sha256": "ddf07e8ef76a8b4640a5a4c0dea17cf2b9780ecf8a3df56944502062dd376193",
+      "lines": 46,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaDailySchedulePolicy"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_schedule_preview_service.dart",
+      "sha256": "1ecc3dba00989b40fd7049c08cd1820b08c112caaadfab61158069d00b42b100",
+      "lines": 180,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_admin_task_drafts.dart",
+        "lib/deda_backend.dart",
+        "lib/deda_daily_schedule_policy.dart",
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaDailySchedulePreview",
+        "DedaDailySchedulePreviewService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 2,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_task_slots.dart",
+      "sha256": "3d1ab3ce3f2e510c781066093a19ef18ea6aec173c0a16b646ff590ebd444300",
+      "lines": 99,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaDailyTaskSlot",
+        "DedaIraqDay"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_daily_user_task_display.dart",
+      "sha256": "5a06e08abd4d6424a071d0039eaee8bce3f33c3a886443f1d7f2bfa48359b66f",
+      "lines": 70,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_daily_published_tasks.dart",
+        "lib/deda_daily_task_slots.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaDailyUserTaskDisplay"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_exclusive_ids_admin_page.dart",
+      "sha256": "902b9ba1ff2c2632a7d546080b7f4b51251389e3be07ed948f6e81e223319b17",
+      "lines": 840,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_verified_identifier_ink.dart",
+        "lib/main.dart"
+      ],
+      "pages": [
+        "DedaExclusiveIdsAdminPage"
+      ],
+      "classes": [
+        "DedaExclusiveAdminId",
+        "DedaExclusiveAdminGrant",
+        "DedaExclusiveAdminSnapshot",
+        "DedaExclusiveAdminSnapshotVerifier",
+        "DedaExclusiveAdminBridge",
+        "DedaExclusiveIdsAdminPage",
+        "_DedaExclusiveIdsAdminPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_geo_firestore_reader.dart",
+      "sha256": "ce71d04c6c65f8f1145697dc066cb9f423dbd7d0d902dfad54d8ea253b78bea6",
+      "lines": 104,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_geo_window.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaGeoFirestoreReader"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_geo_window.dart",
+      "sha256": "3fe52fd3256beecbcbf5ae811d3a0d625f899f12397b0b33f9c5d93fdd772841",
+      "lines": 139,
+      "reachableViaLocalImports": false,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaGeoWindow",
+        "DedaLongitudeRange",
+        "DedaGeoQueryBudget",
+        "DedaGeoScan"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_gift_recipient_preview.dart",
+      "sha256": "c20f52d8dc97d6f313d8e59ef4468d79ad25c2f1270a2777f5b745c55ef4e22e",
+      "lines": 137,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaGiftRecipientPreview"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_lab_frame_purchase_action.dart",
+      "sha256": "7b7358f6334fa267b3fb93d57a10fcc414023228582429980127ae94e79034b4",
+      "lines": 321,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_lab_frame_secure_checkout.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaLabFramePurchaseAction",
+        "_DedaLabFramePurchaseActionState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_lab_frame_secure_checkout.dart",
+      "sha256": "3d5b4cde3a87f87056a034327ad4c59ef3a2eca10bd7e94d81c47659ec7ded57",
+      "lines": 207,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_original_account_proof.dart",
+        "lib/deda_qa32_manager_original_owner_proof.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaLabFrameSecureCheckout"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_lab_premium_frame_artwork.dart",
+      "sha256": "e96b4bac878653fa6fe42001caa0baa5ee2fa5ad92691d032f875691bf1c037f",
+      "lines": 131,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_lab_verified_frame_catalog.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaLabPremiumFrameStyles",
+        "DedaLabPremiumFrameArtwork",
+        "_DedaLabPremiumFrameArtworkState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_lab_verified_frame_catalog.dart",
+      "sha256": "c6929799eaa5cadcfb9508615372783a3c43af136e065912e0075945a17acab5",
+      "lines": 110,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaLabFrameSpec"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_launch_feature_gates.dart",
+      "sha256": "8df3da0e91ece06ea831b396a77dc67eeed1c4bacf6a121299ac19453483d49c",
+      "lines": 14,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaLaunchFeatureGates"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_official_gift_logo.dart",
+      "sha256": "b02615ff109ef6916d454e4eb00f3226618c2b0f41041c99545faff2bfeb2770",
+      "lines": 46,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaOfficialGiftLogo"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_cosmetics.dart",
+      "sha256": "08f7a05f2137e30a3861587ae10e078bb15acb30d40f764280f3dce80f97e842",
+      "lines": 120,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_original_account_proof.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaOwner18Cosmetics"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_frame_checkout.dart",
+      "sha256": "8866a43a43194d7c5e1a61ef8d65edc11206326985338422dfccbc3462e46999",
+      "lines": 145,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_lab_frame_secure_checkout.dart",
+        "lib/deda_owner18_cosmetics.dart",
+        "lib/main.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaOwner18FrameCheckout"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_frame_purchase_action.dart",
+      "sha256": "2693a7f6513bce316268a0e4f618523c4e810bcc11a072b7e6a12be03940b573",
+      "lines": 323,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_frame_checkout.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaOwner18FramePurchaseAction",
+        "_DedaOwner18FramePurchaseActionState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_level_badges.dart",
+      "sha256": "ff142f9927dd42d25c61b1152d7f3752fbd5daa3488805ce3e3c06c489df73e5",
+      "lines": 102,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_100377_level_achievement_badges_policy.dart",
+        "lib/deda_100377_level_achievements_page_staged.dart"
+      ],
+      "pages": [
+        "DedaOwner18AchievementsPage"
+      ],
+      "classes": [
+        "DedaOwner18Rank",
+        "DedaOwner18LevelBadge",
+        "DedaOwner18AchievementsPage"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_original_account_proof.dart",
+      "sha256": "f2462480e45efba8332b1a7de900593113134377baf7de6641351967e773b87c",
+      "lines": 91,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_manager_original_owner_proof.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaOwner18OriginalAccountProof"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner18_public_alias_repair.dart",
+      "sha256": "863c957304917bc92c13f2b4bf1f3c1f5ddc42ba2598379e93ec178ed90f9fea",
+      "lines": 54,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_spark_public_identifier_directory.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaOwner18PublicAliasRepair"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner_diamond_provenance_preview_stage25.dart",
+      "sha256": "33365cd19c020af49eb3eb9515ba753095af06936931d6b94a562ca2c881173c",
+      "lines": 102,
+      "reachableViaLocalImports": false,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaDiamondProvenancePreview",
+        "DedaOwnerDiamondSafetyPreview"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_owner_review_sandbox_stage31.dart",
+      "sha256": "ab04ab5223f4bb9a8b91284ff4e3ef05737abda07a4945e53ae79ad4a2255d9e",
+      "lines": 225,
+      "reachableViaLocalImports": false,
+      "imports": [],
+      "pages": [
+        "DedaOwnerQaSandboxPage"
+      ],
+      "classes": [
+        "DedaQaLedger",
+        "DedaOwnerQaSandboxPage",
+        "_DedaOwnerQaSandboxPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_pin_auth.dart",
+      "sha256": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+      "lines": 457,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPinAuth"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 2,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 1,
+        "anonymousSignIn": 1
+      }
+    },
+    {
+      "path": "lib/deda_place_activity_symbol.dart",
+      "sha256": "82b0af1550a94f187b786ece06dafb2965f9eeb4aa4042c913abc685f726a8f5",
+      "lines": 47,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_place_suggestions.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPlaceActivitySymbol"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_branding_service.dart",
+      "sha256": "84f883fd6fa914ef0acae5fa96bdc1c979ac880eb4a4b5aa5e0db569f97ddccf",
+      "lines": 61,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_place_palette.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPlaceBrandingService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_engagement_bar.dart",
+      "sha256": "7497fd3cd0016dc43e9b155afcb21c551f9d31fb5a3b8d43ecbdfaef8b428fe6",
+      "lines": 125,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPlaceEngagementBar"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_engagement_service.dart",
+      "sha256": "8f3eb0c3206da758fd353fbff2052230a4b6386b34272a4d8a331d7452f6910d",
+      "lines": 198,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPlaceEngagementService",
+        "DedaPlaceEngagement"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_logo.dart",
+      "sha256": "0b1fdc3a0b0eeac7d52136670b217f6474d052f4f4436e0f58fbe4faab3480db",
+      "lines": 113,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_place_activity_symbol.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPlaceLogoService",
+        "DedaOwnerPlaceLogo"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_palette.dart",
+      "sha256": "6defa41547237549cb00b91c4dcabf3d3c088ec0b42a262577a3d425c0b231a4",
+      "lines": 94,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPlacePalette",
+        "DedaPlaceColorChooser"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_place_suggestions.dart",
+      "sha256": "4d1779b4b557776774f20ebf8ac99f99d0c0f573b24aafaa903d94759b91efe5",
+      "lines": 429,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPlaceSuggestion",
+        "DedaPlaceSuggestions"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_profile_visible_diamonds.dart",
+      "sha256": "341c77c0429f97fc99c90fb2fcb7dc12bbc782024a89deda17f38cbe734ad375",
+      "lines": 22,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_public_provider_health.dart",
+      "sha256": "aa3d27901337a9548d8e9a18bce83f91145778e2168b8e93da3f1cbd4b449882",
+      "lines": 140,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaPublicProviderHealth",
+        "DedaPublicProviderCoolingDown",
+        "_ProviderState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_active_account_scope.dart",
+      "sha256": "c4c222e1e108028f6c7c06680c478f48d97cb9daac6ca667fa251bf756c0ff94",
+      "lines": 212,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_stage71_free_owned_use_profile.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaQa32ActiveAccountIdentity",
+        "DedaQa32ActiveAccountScope",
+        "_DedaQa32ActiveAccountScopeState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 1,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_admin_gift_recipient_alias_bridge.dart",
+      "sha256": "3a20650a6a0f0f6f659e9621c5a463663fcf2d970acdda58f6b39fce9b797057",
+      "lines": 100,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_qa32_premium_app_check.dart",
+        "lib/deda_qa32_spark_public_identifier_directory.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaQa32AdminGiftRecipientAliasBridge"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_live_friend_appearance.dart",
+      "sha256": "18373fd8be78c89ce30792d844e8b51fbfdff8f828a69526256f31d9843998a1",
+      "lines": 82,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_social_service.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaQa32LiveFriendAppearance"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_manager_original_owner_proof.dart",
+      "sha256": "66ef35d29ca617e5b6bdb6e62c66f97b53eac0caa789bc6ca6e91e5923c4274f",
+      "lines": 42,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaQa32ManagerOriginalOwnerProof"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_premium_app_check.dart",
+      "sha256": "af0d5d5ce1ad8395a595462e7a76d1de76f6dd16cf37893c89d47d44a1fbb7d5",
+      "lines": 44,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaQa32PremiumAppCheck"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_public_recipient_resolver.dart",
+      "sha256": "98c3e42927842223141240a641fb45e617ef106b833d9afc59ed00584cd014a8",
+      "lines": 73,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_premium_app_check.dart",
+        "lib/deda_qa32_spark_public_identifier_directory.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaQa32PublicRecipientResolver"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_qa32_spark_public_identifier_directory.dart",
+      "sha256": "ebf014c967ec16a9bcc11f83d0170174f9493601dc133edd341af20a22dbb6ff",
+      "lines": 134,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaQa32SparkPublicIdentifierDirectory"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_recovery_admin.dart",
+      "sha256": "319956ba3dd52af440de1f7fddf3a3a6292d11c288f8816af6ec63a57817f58e",
+      "lines": 456,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaRecoveryAdminList"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_request_coalescer.dart",
+      "sha256": "b13ed9d7384c352cf1122b85490bb689d3e138798313c2cd17f1303c4c57a89a",
+      "lines": 69,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaRequestCoalescer",
+        "_Cached"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_road_class_lookup.dart",
+      "sha256": "3abb93056c18363175d9ce26445f1d369c3deb51adf5ff445aabd3aae5aa9536",
+      "lines": 147,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaRoadClassLookup"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 3,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_route_hazard_corridor.dart",
+      "sha256": "d8a46ad26b9dff07ccd69d8fd469cee31e72da768ced959e1ec58d60a0c68c54",
+      "lines": 203,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_geo_window.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaRouteCoordinate",
+        "DedaHazardCorridorPlan",
+        "DedaRouteHazardCorridor"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_active_identity.dart",
+      "sha256": "56566416c8e9e2d122826b8fa4849feab01cad212a6c3accaa3f3f7ad1c692ce",
+      "lines": 81,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_active_account_scope.dart",
+        "lib/deda_qa32_spark_public_identifier_directory.dart",
+        "lib/deda_stage50_verified_friend_ink_badge.dart",
+        "lib/deda_stage71_free_owned_use_profile.dart",
+        "lib/main.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaSixActiveIdentity",
+        "DedaSixReceivedIdentity",
+        "DedaSixIdentityCopy"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 1,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_admin_users.dart",
+      "sha256": "863fb89d27d63cb33be1ae21b63973344835b2c2532ab235f0d3fd92a80df8bd",
+      "lines": 138,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaSixUserRecord",
+        "DedaSixAdminUserRow",
+        "DedaSixAdminUsers"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 3,
+        "snapshots": 2,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_badge_cutout.dart",
+      "sha256": "1736da1061d864b591b03cfe6b4fa4f0041a5df335396a56bae687808f483392",
+      "lines": 93,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_100377_level_achievement_badges_policy.dart",
+        "lib/deda_100377_level_achievements_page_staged.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaSixBadgeCutout",
+        "_BadgeAssets",
+        "_BadgePainter"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_frame_equip.dart",
+      "sha256": "000a802c65d4d0256631d60676b536e32d1667523e787b0d5b6269b87a4d0477",
+      "lines": 83,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_lab_premium_frame_artwork.dart",
+        "lib/deda_owner18_cosmetics.dart",
+        "lib/deda_owner18_frame_checkout.dart",
+        "lib/main.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaSixFrameCommit",
+        "DedaSixFrameEquip",
+        "DedaSixFrameOrder"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_frame_purchase_action.dart",
+      "sha256": "6d0a268bd8437e493d035217dcc2b568026329e7d812ccf57decf97d0ea8fb73",
+      "lines": 345,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_frame_checkout.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaSixFramePurchaseAction",
+        "_DedaSixFramePurchaseActionState",
+        "DedaSixFrameButtonLabel"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_six_level_badges.dart",
+      "sha256": "f90fa2eaf579f7d56348e0ae70d515f31ce84eb446a0b44e6097238e86245487",
+      "lines": 75,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_level_badges.dart",
+        "lib/deda_six_badge_cutout.dart"
+      ],
+      "pages": [
+        "DedaSixAchievementsPage"
+      ],
+      "classes": [
+        "DedaSixLevelBadge",
+        "DedaSixAchievementsPage"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_social_service.dart",
+      "sha256": "5144b6b52036bff0c4ce7469ac87f5d4f6e5e655220eb95e6197a1e156fa7037",
+      "lines": 440,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaPoint16SocialAliasCompat",
+        "DedaSocialProfile",
+        "DedaFriendshipRecord",
+        "DedaSocialSession",
+        "DedaSocialService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 2,
+        "snapshots": 2,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_social_task_live_service.dart",
+      "sha256": "7285547fb0b246bc53a80b92686cbb08998fb888c0e5fdde3b6b3cb710e1bde5",
+      "lines": 224,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaLiveSocialTaskService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 3,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_social_task_preview.dart",
+      "sha256": "1ec231a82fd58b4b52b6d9e449ee4c60a1517557528c5faf39b5d5a2bd48eec3",
+      "lines": 427,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_launch_feature_gates.dart",
+        "lib/deda_social_task_live_service.dart",
+        "lib/deda_telegram_verified_reward_service.dart"
+      ],
+      "pages": [
+        "DedaSocialTaskUserPreviewPage"
+      ],
+      "classes": [
+        "DedaSocialTaskPreview",
+        "DedaSocialTaskCatalog",
+        "DedaSocialTaskCompactCard",
+        "DedaSocialTaskUserPreviewPage",
+        "_DedaSocialTaskUserPreviewPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage42_verified_sale_panel.dart",
+      "sha256": "668c8b3bbe2ee7c5bdd3212ed926e91cea3550d721bca02a4e5a8e59f9e600ab",
+      "lines": 179,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaStage42VerifiedSalePanel",
+        "_DedaStage42VerifiedSalePanelState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage48_verified_active_profile_ink.dart",
+      "sha256": "ee8298c416b90ef518664c9c7aacaff243f533c13469b9e1501434bf2d42d584",
+      "lines": 254,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_verified_identifier_ink.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage48ActiveInkProof",
+        "DedaStage48ActiveInkBridge",
+        "DedaStage48ActiveInkProfileSlot",
+        "_DedaStage48ActiveInkProfileSlotState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage49_verified_share_id_badge.dart",
+      "sha256": "cf55d2fb2e29bf0bcf73f7b2bad4b8d933f7830a272d3e79f71e0442ee8616cd",
+      "lines": 182,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_stage48_verified_active_profile_ink.dart",
+        "lib/deda_verified_identifier_ink.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage49VerifiedShareIdBadge",
+        "_DedaStage49VerifiedShareIdBadgeState",
+        "DedaStage49VerifiedShareIdPreview"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage50_verified_friend_ink_badge.dart",
+      "sha256": "f5170a854bb0d6dda60a00108292ee9e20400b16c2847ef0efe4feebfdb526d0",
+      "lines": 304,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_premium_app_check.dart",
+        "lib/deda_qa32_spark_public_identifier_directory.dart",
+        "lib/deda_verified_identifier_ink.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage50PublicIdStyle",
+        "DedaStage50PublicIdStyleBridge",
+        "DedaStage50VerifiedFriendInkBadge",
+        "_DedaStage50VerifiedFriendInkBadgeState",
+        "DedaStage50PremiumPublicCard",
+        "DedaStage50FriendIdInkText"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 1,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 1,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage51_verified_friend_alias_search.dart",
+      "sha256": "d9f912048c80e50bcf8fbe75e9b3a3255672ded41cabfe29aa27bef7a5424911",
+      "lines": 122,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_qa32_public_recipient_resolver.dart",
+        "lib/deda_social_service.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage51FriendAliasProof",
+        "DedaStage51FriendSearch"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage67_spark_card_action.dart",
+      "sha256": "f0d1393cc449dbe077547e1f17123b969581550b383432861f3725558a9b07b9",
+      "lines": 131,
+      "reachableViaLocalImports": false,
+      "imports": [
+        "lib/deda_stage67_spark_secure_card_checkout.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage67SparkCardAction",
+        "_DedaStage67SparkCardActionState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage67_spark_secure_card_checkout.dart",
+      "sha256": "e62a63a6defd881c7a251513f57ad8300046c513dda4aaf5971b71aadfab7b6f",
+      "lines": 201,
+      "reachableViaLocalImports": false,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaStage67SparkCardCheckout"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage71_dual_admin_page.dart",
+      "sha256": "3b3275f5bbe04d4b3a16154f69df5e22996a4a1cbcd708073f9249b83f4bca32",
+      "lines": 554,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart",
+        "lib/deda_owner18_original_account_proof.dart",
+        "lib/deda_qa32_manager_original_owner_proof.dart",
+        "lib/deda_stage71_free_manager_200_service.dart",
+        "lib/deda_stage71_free_owned_use_profile.dart",
+        "lib/main.dart"
+      ],
+      "pages": [
+        "DedaStage71DualAdminPage"
+      ],
+      "classes": [
+        "DedaStage71DualAdminPage",
+        "_DedaStage71DualAdminPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage71_free_id_cards.dart",
+      "sha256": "013bc3a6c950801027b6c83b212b88382e53d77c64e5a096b8ca6fc69d5a008f",
+      "lines": 207,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/main.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage71FreeCards",
+        "DedaStage71FreeCardAction",
+        "_DedaStage71FreeCardActionState",
+        "DedaStage71FreeProfileFoil",
+        "_DedaStage71FreeProfileFoilState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage71_free_manager_200_service.dart",
+      "sha256": "95f7a449f22c2e361e92f82e8dde24fc09205caa9dd940405cb62ba402b48333",
+      "lines": 296,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage71AdminId",
+        "DedaStage71Admin200"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage71_free_owned_use_profile.dart",
+      "sha256": "db845ea21264025938e1d7af968cd0b10637d19b4281a3cd6f2dabdebae76ef4",
+      "lines": 685,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_original_account_proof.dart",
+        "lib/deda_owner18_public_alias_repair.dart",
+        "lib/deda_qa32_manager_original_owner_proof.dart",
+        "lib/deda_qa32_spark_public_identifier_directory.dart",
+        "lib/deda_stage71_free_manager_200_service.dart",
+        "lib/deda_stage74_id_gift_service.dart",
+        "lib/main.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage71OwnedIdentifier",
+        "DedaStage71ActiveIdRefresh",
+        "DedaStage71OwnedIdentifierService",
+        "DedaStage71OwnedIdsPanel",
+        "_DedaStage71OwnedIdsPanelState",
+        "DedaStage71ActiveProfileFoil",
+        "_DedaStage71ActiveProfileFoilState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 2,
+        "snapshots": 0,
+        "authStateChanges": 2,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage74_hadaya_identifier_section.dart",
+      "sha256": "7c15d600fd1e2bfe9ae270675343dcd7818092c5c279232b1af8b95f7ad09f1a",
+      "lines": 251,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_stage74_id_gift_service.dart",
+        "lib/deda_stage75_unread_gift_badge.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage74IdGiftsSection",
+        "_DedaStage74IdGiftsSectionState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage74_id_gift_service.dart",
+      "sha256": "3b97b3fc2ad2e14552af04b4ec7dc42e15e713d9d44a39e7ef328be1db58dc31",
+      "lines": 177,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_owner18_original_account_proof.dart",
+        "lib/deda_qa32_manager_original_owner_proof.dart",
+        "lib/deda_stage71_free_manager_200_service.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage74IdGift",
+        "DedaStage74IdGiftService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_stage75_unread_gift_badge.dart",
+      "sha256": "5794ccbc43c30ea541965e8496d4e92c2dfa789c726b473da1b193099c316f8c",
+      "lines": 152,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_stage71_free_manager_200_service.dart",
+        "lib/deda_stage74_id_gift_service.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaStage75UnreadGiftBadge"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 2,
+        "snapshots": 1,
+        "authStateChanges": 1,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_team_page.dart",
+      "sha256": "e21ebc3e80d71bef3b53aa1f7850a454bfd8a69207f1863cd1dbd30bc125c952",
+      "lines": 426,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [
+        "DedaTeamPage"
+      ],
+      "classes": [
+        "DedaTeamPage",
+        "_TeamRowCard",
+        "_AvatarBadge",
+        "_DedaTeamMember"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_telegram_verified_reward_service.dart",
+      "sha256": "a373dccce2e0d0f38c61e128494712ec5ccecd4edd8c53f881db12f4055d7048",
+      "lines": 33,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaTelegramVerifiedRewardService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_unified_currency_totals.dart",
+      "sha256": "5deec2ab867e70518225cd49962927782666ab0e4e89c1ee6b13d52873bdc8a2",
+      "lines": 35,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_profile_visible_diamonds.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "DedaUnifiedCurrencyTotals"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/deda_verified_identifier_ink.dart",
+      "sha256": "0445db1f7ba25ad182ac7622d669a1ca0290286e1c2287a2f2d664a6077d4f67",
+      "lines": 84,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [],
+      "classes": [
+        "DedaVerifiedIdentifierInk",
+        "DedaVerifiedIdentifierText"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "28c64356ded24ac5c156f7e439655f1c90ac0af94d4a746a96b9282ddc6d48d8",
+      "lines": 34493,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/admin_pages.dart",
+        "lib/deda_100377_level_achievements_page_staged.dart",
+        "lib/deda_100377_my_store_page_staged.dart",
+        "lib/deda_100377_profile_free_inventory.dart",
+        "lib/deda_backend.dart",
+        "lib/deda_lab_frame_secure_checkout.dart",
+        "lib/deda_lab_premium_frame_artwork.dart",
+        "lib/deda_official_gift_logo.dart",
+        "lib/deda_owner18_cosmetics.dart",
+        "lib/deda_owner18_frame_checkout.dart",
+        "lib/deda_owner18_frame_purchase_action.dart",
+        "lib/deda_owner18_level_badges.dart",
+        "lib/deda_pin_auth.dart",
+        "lib/deda_place_activity_symbol.dart",
+        "lib/deda_place_branding_service.dart",
+        "lib/deda_place_engagement_bar.dart",
+        "lib/deda_place_engagement_service.dart",
+        "lib/deda_place_logo.dart",
+        "lib/deda_place_palette.dart",
+        "lib/deda_place_suggestions.dart",
+        "lib/deda_profile_visible_diamonds.dart",
+        "lib/deda_qa32_active_account_scope.dart",
+        "lib/deda_qa32_live_friend_appearance.dart",
+        "lib/deda_road_class_lookup.dart",
+        "lib/deda_six_active_identity.dart",
+        "lib/deda_six_frame_equip.dart",
+        "lib/deda_six_frame_purchase_action.dart",
+        "lib/deda_six_level_badges.dart",
+        "lib/deda_social_service.dart",
+        "lib/deda_social_task_preview.dart",
+        "lib/deda_stage42_verified_sale_panel.dart",
+        "lib/deda_stage48_verified_active_profile_ink.dart",
+        "lib/deda_stage49_verified_share_id_badge.dart",
+        "lib/deda_stage50_verified_friend_ink_badge.dart",
+        "lib/deda_stage51_verified_friend_alias_search.dart",
+        "lib/deda_stage71_free_id_cards.dart",
+        "lib/deda_stage71_free_owned_use_profile.dart",
+        "lib/deda_stage74_hadaya_identifier_section.dart",
+        "lib/deda_stage75_unread_gift_badge.dart",
+        "lib/deda_team_page.dart",
+        "lib/deda_unified_currency_totals.dart",
+        "lib/places_service.dart",
+        "lib/prize_winner_pages.dart",
+        "lib/traffic_quiz_page.dart"
+      ],
+      "pages": [
+        "LoginPage",
+        "DedaPinCreatePage",
+        "DedaPinSignInPage",
+        "DedaPinRecoveryPage",
+        "DedaContactPage",
+        "AccountTypePage",
+        "DedaSettingsPage",
+        "OwnerPlacePage",
+        "PersonalPlaceEditorPage",
+        "PersonalPlacesPage",
+        "HomePage",
+        "DedaMakaniPage",
+        "DedaEditProfilePage",
+        "DedaAccountInfoPage",
+        "DedaAccountHubPage",
+        "DedaMyRequestsPage",
+        "DedaShareLocationPage",
+        "DedaReceivedLocationsPage",
+        "DedaDailyTasksPage",
+        "NearbyPlacesPage",
+        "DedaFullScreenMapPage",
+        "DedaPlaceSearchPage",
+        "PlaceDetailsPage",
+        "SavedPlacesPage",
+        "DedaRoutePage",
+        "MapReadyPage",
+        "DedaProfilePhase2Page",
+        "DedaIdentifierStorePage",
+        "DedaPublicProfilePreviewPage",
+        "DedaSocialHubPage",
+        "_DedaSocialPlaceholderPage",
+        "DedaFriendsPage",
+        "DedaAddFriendPage",
+        "DedaFriendRequestsPage",
+        "DedaFriendPublicProfilePage",
+        "DedaStylePage",
+        "DedaMyGiftsPage"
+      ],
+      "classes": [
+        "DedaLanguageState",
+        "DedaAvatarPortrait",
+        "_DedaAvatarPainter",
+        "DedaFramedAvatar",
+        "_DedaRoyalFrameMotion",
+        "_DedaRoyalFrameMotionState",
+        "_DedaLuxuryFramePainter",
+        "DedaProfileFramePreview",
+        "DedaPreferences",
+        "DedaTaskIds",
+        "DedaTaskEventResult",
+        "DedaTaskEngine",
+        "_DedaCleanPageTransitionsBuilder",
+        "DedaApp",
+        "LoginPage",
+        "_LoginPageState",
+        "DedaPinCreatePage",
+        "_DedaPinCreatePageState",
+        "DedaPinSignInPage",
+        "_DedaPinSignInPageState",
+        "DedaPinRecoveryPage",
+        "_DedaPinRecoveryPageState",
+        "_DedaCategoryPreviewStrip",
+        "_DedaRinadSignature",
+        "DedaContactPage",
+        "_DedaContactPageState",
+        "AccountTypePage",
+        "_AccountTypePageState",
+        "DedaSettingsPage",
+        "_DedaSettingsPageState",
+        "OwnerPlacePage",
+        "_OwnerPlacePageState",
+        "DedaPersonalPlace",
+        "PersonalPlaceEditorPage",
+        "_PersonalPlaceEditorPageState",
+        "PersonalPlacesPage",
+        "_PersonalPlacesPageState",
+        "HomePage",
+        "_HomePageState",
+        "DedaMakaniPage",
+        "_DedaMakaniPageState",
+        "DedaEditProfilePage",
+        "_DedaEditProfilePageState",
+        "DedaAccountInfoPage",
+        "DedaIdCardPurchaseReceipt",
+        "DedaPremiumIdCardsManagementPanel",
+        "_DedaPremiumIdCardsManagementPanelState",
+        "DedaPoint15OwnedIdsSnapshot",
+        "DedaPoint15OwnedIdsBridge",
+        "DedaPoint15OwnedIdsState",
+        "DedaPoint15OwnedIdentifierPanel",
+        "_DedaPoint15OwnedIdentifierPanelState",
+        "DedaPoint15AdminReservedGrantPanel",
+        "_DedaPoint15AdminReservedGrantPanelState",
+        "DedaPoint16PremiumCallableBridge",
+        "DedaPoint17ShopCardAction",
+        "_DedaPoint17ShopCardActionState",
+        "_DedaAccountInfoPageState",
+        "DedaDiamondsState",
+        "DedaDiamondsClaimResult",
+        "DedaDiamondsWallet",
+        "DedaAccountHubPage",
+        "_DedaAccountHubPageState",
+        "DedaMyRequestsPage",
+        "DedaShareLocationPage",
+        "_DedaShareLocationPageState",
+        "DedaReceivedLocationsPage",
+        "_DedaReceivedLocationsPageState",
+        "DedaLongTripProgress",
+        "DedaUnifiedCurrencyStrip",
+        "_DedaUnifiedCurrencyStripState",
+        "DedaDailyTasksPage",
+        "_DedaDailyTasksPageState",
+        "_DedaTasksHeroCard",
+        "_DedaMapHeroCard",
+        "DedaCategoryData",
+        "DedaCategory",
+        "NearbyPlacesPage",
+        "_NearbyPlacesPageState",
+        "DedaFullScreenMapPage",
+        "_DedaFullScreenMapPageState",
+        "DedaPlacesStore",
+        "DedaRegisteredPlacesStore",
+        "DedaMapPlaceMarker",
+        "DedaPlaceSearchPage",
+        "_DedaPlaceSearchPageState",
+        "PlaceDetailsPage",
+        "_PlaceDetailsPageState",
+        "SavedPlacesPage",
+        "_SavedPlacesPageState",
+        "DedaLaneGuide",
+        "DedaRouteStep",
+        "DedaRouteResult",
+        "DedaRouteService",
+        "DedaRoadHazard",
+        "DedaRoutePage",
+        "_DedaRoutePageState",
+        "_DedaIraqDestinationFlag",
+        "_DedaRouteStat",
+        "_DedaLegendRow",
+        "MapReadyPage",
+        "_MapReadyPageState",
+        "DedaProfilePhase2Page",
+        "_DedaRoyalProfileBackdropPainter",
+        "DedaRoyalBackgroundArtwork",
+        "_DedaIdFoil",
+        "DedaPremiumIdCard",
+        "_DedaIdFoilPainter",
+        "DedaProfileVerifiedIdCardSlot",
+        "DedaPoint10CandidateGroup002",
+        "DedaIdentifierStorePage",
+        "_DedaIdentifierStorePageState",
+        "DedaPoint14VerifiedSnapshot",
+        "DedaPoint14VerifiedBridge",
+        "DedaPoint14VerifiedProfileSlot",
+        "_DedaPoint14VerifiedProfileSlotState",
+        "DedaPoint14VerifiedAccountPanel",
+        "_DedaPoint14VerifiedAccountPanelState",
+        "_DedaProfilePhase2PageState",
+        "DedaPublicProfilePreviewPage",
+        "DedaSocialHubPage",
+        "_DedaSocialHubPageState",
+        "_DedaSocialTabSpec",
+        "_DedaSocialPlaceholderPage",
+        "DedaSocialProgressSnapshot",
+        "DedaSocialProgressWallet",
+        "DedaStyleInventorySnapshot",
+        "DedaStyleInventory",
+        "DedaBadgeAsset",
+        "DedaSocialFriendCount",
+        "DedaProfileAppearanceState",
+        "DedaIncomingRequestNotifications",
+        "DedaFriendsPage",
+        "_DedaFriendsPageState",
+        "_DedaFriendCompactCard",
+        "DedaAddFriendPage",
+        "_DedaAddFriendPageState",
+        "_DedaSearchResultCard",
+        "DedaFriendRequestsPage",
+        "_DedaFriendRequestsPageState",
+        "DedaFriendPublicProfilePage",
+        "DedaStylePage",
+        "_DedaStylePageState",
+        "DedaGiftInbox",
+        "DedaGiftNavBadge",
+        "_DedaGiftNavBadgeState",
+        "DedaMyGiftsPage",
+        "_DedaMyGiftsPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 7,
+        "listen": 5,
+        "snapshots": 0,
+        "authStateChanges": 1,
+        "lifecycleHandler": 3,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/places_service.dart",
+      "sha256": "c54a4ecbaeafad4aaf6575a75b129a7e0c8be54f25b78cc1a963ed849a1941e5",
+      "lines": 499,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_public_provider_health.dart",
+        "lib/deda_request_coalescer.dart"
+      ],
+      "pages": [],
+      "classes": [
+        "PlaceInfo",
+        "PlacesService"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 2,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/prize_winner_pages.dart",
+      "sha256": "133e1ed0d83344be0063529b2a1a37e31128a113daf8d4fd42205b8458a2a0cf",
+      "lines": 1156,
+      "reachableViaLocalImports": true,
+      "imports": [
+        "lib/deda_backend.dart"
+      ],
+      "pages": [
+        "DedaPrizeWinnerRequestPage",
+        "DedaAdminPrizeWinnersPage",
+        "DedaAdminPrizeWinnerDetailPage"
+      ],
+      "classes": [
+        "DedaPrizeWinnerRequestPage",
+        "_DedaPrizeWinnerRequestPageState",
+        "DedaAdminPrizeWinnersPage",
+        "_DedaAdminPrizeWinnersPageState",
+        "DedaAdminPrizeWinnerDetailPage",
+        "_DedaAdminPrizeWinnerDetailPageState"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    },
+    {
+      "path": "lib/traffic_quiz_page.dart",
+      "sha256": "85718b93189e76982e4c271bf61f87bc11782e2e7f3e616eb2fa5db6d0ff6972",
+      "lines": 2078,
+      "reachableViaLocalImports": true,
+      "imports": [],
+      "pages": [
+        "DedaTrafficQuizPage"
+      ],
+      "classes": [
+        "DedaTrafficQuizPage",
+        "_DedaTrafficQuizPageState",
+        "_ResultStat",
+        "_TrafficSignCard",
+        "_MiniSign",
+        "_TrafficSign",
+        "_CircleSign",
+        "_TriangleSign",
+        "_TrianglePainter",
+        "_YieldSign",
+        "_StopSign",
+        "_OctagonClipper",
+        "_NoEntrySign",
+        "_TrafficLightSign",
+        "_LightDot",
+        "_TrafficQuestion"
+      ],
+      "syntacticOccurrences": {
+        "timeout": 0,
+        "listen": 0,
+        "snapshots": 0,
+        "authStateChanges": 0,
+        "lifecycleHandler": 0,
+        "transaction": 0,
+        "anonymousSignIn": 0
+      }
+    }
+  ],
+  "summary": {
+    "dartFiles": 95,
+    "importReachableFiles": 81,
+    "pageClasses": 79,
+    "sourceLines": 70880
+  }
+}
