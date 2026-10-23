@@ -63,6 +63,9 @@ def original_account_and_public_alias():
     } catch (_) {
       // Keep the proven owner ID; retry public sync on the next owner refresh.
     }
+    if (FirebaseAuth.instance.currentUser?.uid != uid) {
+      throw StateError('account-switched-during-public-alias-sync');
+    }
     return current;""")
     s=method(s,'  static Future<String> active(',repair)
     s="import 'deda_owner18_public_alias_repair.dart';\n"+s

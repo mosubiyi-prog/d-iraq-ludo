@@ -1,5 +1,5 @@
 name: DEDA 100379 owner18 signed private QA NO PLAY
-# Revision 3: preserve canonical ownership on a new device and rebuild missing public alias projections.
+# Revision 4: final UID guard after public synchronization; preserve canonical ownership on a new device and rebuild missing public alias projections.
 on:
   push:
     branches: [deda-100378-owner18-fixes-2026-10-23]
