@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_stage71_free_owned_use_profile.dart';
+import 'deda_stability_read_scope.dart';
 
 /// Verified *owner-only* account display. Never changes the immutable
 /// sharePersonalId used for location routing and friend lookup.
@@ -59,6 +60,7 @@ class _DedaQa32ActiveAccountScopeState
   DedaQa32ActiveAccountIdentity? _proof;
   StreamSubscription<User?>? _auth;
   int _epoch = 0;
+  final _reads = DedaStabilityReadScope<DedaQa32ActiveAccountIdentity>();
   bool _authAttachQueued = false;
   // DEDA_100377_POINT13_LATE_FIREBASE_INIT_ACCOUNT_SCOPE_REARM
   // A page can mount before Firebase.initializeApp completes. The canonical
@@ -88,6 +90,7 @@ class _DedaQa32ActiveAccountScopeState
     if (!mounted || _auth != null || !_firebaseReady) return;
     try {
       _auth = FirebaseAuth.instance.authStateChanges().listen((_) {
+        _reads.invalidate();
         _load();
       });
       // After late initialization the fresh session will trigger _load.
@@ -102,7 +105,7 @@ class _DedaQa32ActiveAccountScopeState
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // Always listen, even if Firebase initialization is pending.
-    DedaStage71ActiveIdRefresh.notifier.addListener(_load);
+    DedaStage71ActiveIdRefresh.notifier.addListener(_refresh);
     // Attach after first frame as mounted is false during initState.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -127,7 +130,7 @@ class _DedaQa32ActiveAccountScopeState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _attachAuthWhenReady();
-      _load(); // server-verified refresh, never a local alias guess
+      _refresh(); // server-verified refresh, never a local alias guess
     }
   }
 
@@ -141,9 +144,15 @@ class _DedaQa32ActiveAccountScopeState
       });
     }
     if (oldWidget.originalId != widget.originalId) {
+      _reads.invalidate();
       setState(() => _proof = null);
       _load();
     }
+  }
+
+  void _refresh() {
+    _reads.invalidate();
+    _load();
   }
 
   Future<void> _load() async {
@@ -157,19 +166,31 @@ class _DedaQa32ActiveAccountScopeState
       return;
     }
     try {
-      // The service separately checks users/{uid}, deda_sessions/{uid},
-      // original ownership and, for gifted aliases, immutable receipt.
-      final active = await DedaStage71OwnedIdentifierService.active(original);
-      String? color;
-      if (active != original) {
-        final owned = await DedaStage71OwnedIdentifierService.owned(original);
-        final matching = owned.where((row) => row.identifier == active).toList();
-        if (matching.length != 1) throw StateError('alias-not-owned');
-        color = matching.single.baseColor;
+      Future<DedaQa32ActiveAccountIdentity> readVerified() async {
+        // The service separately checks users/{uid}, deda_sessions/{uid},
+        // original ownership and, for gifted aliases, immutable receipt.
+        final active = await DedaStage71OwnedIdentifierService.active(original);
+        String? color;
+        if (active != original) {
+          final owned = await DedaStage71OwnedIdentifierService.owned(original);
+          final matching = owned.where((row) => row.identifier == active).toList();
+          if (matching.length != 1) throw StateError('alias-not-owned');
+          color = matching.single.baseColor;
+        }
+        return DedaQa32ActiveAccountIdentity(
+          uid: uid, originalId: original, displayId: active, fixedColor: color,
+        );
       }
-      final next = DedaQa32ActiveAccountIdentity(
-        uid: uid, originalId: original, displayId: active, fixedColor: color,
-      );
+      final next = dedaStabilityIdentityPilot
+          ? await _reads.run(
+              key: (uid, original),
+              isCurrent: () => mounted && _currentUid() == uid &&
+                  widget.originalId == original,
+              read: readVerified,
+              retryWhen: (error) => error is FirebaseException &&
+                  {'unavailable', 'deadline-exceeded'}.contains(error.code),
+            )
+          : await readVerified();
       if (!mounted || epoch != _epoch ||
           _currentUid() != uid ||
           widget.originalId != original || !next.verifiedFor(uid, original)) {
@@ -188,7 +209,8 @@ class _DedaQa32ActiveAccountScopeState
   @override
   void dispose() {
     ++_epoch;
-    DedaStage71ActiveIdRefresh.notifier.removeListener(_load);
+    _reads.dispose();
+    DedaStage71ActiveIdRefresh.notifier.removeListener(_refresh);
     WidgetsBinding.instance.removeObserver(this);
     _auth?.cancel();
     super.dispose();
