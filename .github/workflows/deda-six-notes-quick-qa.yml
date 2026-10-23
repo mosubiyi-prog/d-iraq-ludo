@@ -1,0 +1,49 @@
+name: DEDA six notes isolated Flutter QA NO APK
+on:
+  push:
+    branches: [deda-100380-six-notes-fixes-2026-10-23]
+    paths: ['lib/deda_six*.dart', 'tools/stage_deda_six_notes.py', 'test/deda_six*.dart', '.github/workflows/deda-six-notes-quick-qa.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deda-six-quick
+  cancel-in-progress: true
+jobs:
+  test-six-notes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEDA-100379-DART-ONLY-SIX-NOTES-BASELINE
+          run-id: 39959766789
+          github-token: ${{ github.token }}
+          path: approved-dart
+      - name: Verify immutable source manifest and overlay baseline
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,shutil
+          base=Path('approved-dart')
+          manifest=json.loads((base/'dart-source-sha256.json').read_text())
+          for name,sha in manifest.items():
+            assert (name.startswith('lib/') and name.endswith('.dart')) or name in ('pubspec.yaml','pubspec.lock')
+            p=base/name
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==sha
+            Path(name).parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(p,name)
+          PY
+          python3 tools/stage_deda_six_notes.py
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+      - name: Analyze and test delta
+        run: |
+          flutter pub get
+          dart format lib/deda_six*.dart lib/main.dart lib/admin_team_pages.dart test/deda_six_notes_test.dart
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_six*.dart lib/main.dart lib/admin_team_pages.dart
+          flutter test --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_six_notes_test.dart test/deda_owner18_original_account_proof_test.dart test/deda_owner18_level_badges_test.dart test/deda_owner18_avatar_editor_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_avatar_choice_100341_test.dart
