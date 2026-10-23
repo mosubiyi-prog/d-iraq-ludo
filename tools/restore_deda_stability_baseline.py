@@ -2,6 +2,7 @@
 
 Output MUST be absent or empty. --pilot overlays the two identity files.
 --startup-metrics adds an opt-in module and exact-hash main instrumentation.
+--session-gate copies an UNWIRED session coordinator for isolated tests only.
 Existing APK/build workflows and the immutable archive remain unchanged.
 """
 import argparse
@@ -19,6 +20,7 @@ PILOT_FILES = ('lib/deda_stability_read_scope.dart',
 
 
 STARTUP_MODULE = 'lib/deda_startup_measurements.dart'
+SESSION_MODULE = 'lib/deda_session_transition_gate.dart'
 
 
 def instrument_startup(source):
@@ -57,7 +59,7 @@ BASELINE_BODY
     return source[:first_import] + "import 'deda_startup_measurements.dart';\n" + source[first_import:]
 
 
-def restore(output, pilot=False, startup_metrics=False):
+def restore(output, pilot=False, startup_metrics=False, session_gate=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -101,8 +103,10 @@ def restore(output, pilot=False, startup_metrics=False):
         shutil.copy2(REPO / STARTUP_MODULE, output / STARTUP_MODULE)
         main_path = output / 'lib/main.dart'
         main_path.write_text(instrument_startup(main_path.read_text()))
+    if session_gate:
+        shutil.copy2(REPO / SESSION_MODULE, output / SESSION_MODULE)
     return {'verifiedFiles':len(verified), 'pilot':pilot,
-            'startupMetrics':startup_metrics,
+            'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate,
             'flutterVersion':manifest['flutterVersion']}
 
 
@@ -111,5 +115,6 @@ if __name__ == '__main__':
     parser.add_argument('output',type=Path)
     parser.add_argument('--pilot',action='store_true')
     parser.add_argument('--startup-metrics',action='store_true')
+    parser.add_argument('--session-gate',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate)))

@@ -84,6 +84,27 @@ class RestoreBaselineTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'exact baseline main'):
             restore_module.instrument_startup((output / 'lib/main.dart').read_text())
 
+    def test_session_foundation_adds_only_its_module_without_auth_callsite_changes(self):
+        baseline, session = self.root / 'baseline', self.root / 'session'
+        restore_module.restore(baseline)
+        restore_module.restore(session, session_gate=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(session) for p in (session / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (session / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE})
+        for name in ['lib/main.dart','lib/deda_backend.dart','lib/deda_pin_auth.dart']:
+            self.assertNotIn('deda_session_transition_gate', (session / name).read_text())
+
+    def test_all_overlays_preserve_real_auth_implementations(self):
+        output = self.root / 'all'
+        restore_module.restore(output, pilot=True, startup_metrics=True, session_gate=True)
+        manifest = json.loads((REPO / 'tools/app_stability/100380-baseline-manifest.json').read_text())
+        for name in ['lib/deda_backend.dart','lib/deda_pin_auth.dart']:
+            self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), manifest['files'][name])
+        self.assertEqual((output / restore_module.SESSION_MODULE).read_bytes(),
+                         (REPO / restore_module.SESSION_MODULE).read_bytes())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
