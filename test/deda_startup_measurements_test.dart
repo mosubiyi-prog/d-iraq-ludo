@@ -169,12 +169,14 @@ void main() {
   });
 
   testWidgets('real Flutter post-frame callback marks a frame after launch', (tester) async {
-    final boot = _Boot()
-      ..launchAction = () => runApp(const Directionality(
+    final boot = _Boot();
+    boot.launchAction = () {
+      runApp(const Directionality(
         textDirection: TextDirection.ltr, child: Text('startup-frame'),
-      ))
-      ..observerAction = (callback) => WidgetsBinding.instance
-          .addPostFrameCallback((_) => callback());
+      ));
+    };
+    boot.observerAction = (callback) => WidgetsBinding.instance
+        .addPostFrameCallback((_) => callback());
     var returned = false;
     final running = boot.run().then((_) { returned = true; });
     await tester.pump();
