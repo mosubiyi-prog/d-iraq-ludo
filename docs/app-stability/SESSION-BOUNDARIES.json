@@ -1,0 +1,86 @@
+{
+  "referenceCommit": "08535d34a0028a916f978dc77a9a0f1a942a7c1b",
+  "source": "immutable 100380 baseline manifest",
+  "limitation": "Reviewed direct SDK mutation sites in these two files only; lexical locations are not complete call-graph coverage or proof of integration. Higher-level PIN, session, profile, invite and cleanup writes require their own guarded boundaries.",
+  "realAuthPathsWiredToGate": false,
+  "files": [
+    {
+      "path": "lib/deda_backend.dart",
+      "sha256": "7a1c35c1a6558d3286dd45f01831c17f9b37d48991c14dbb1346954240bb31d2",
+      "reviewedSites": [
+        {
+          "line": 71,
+          "method": "_ensurePublicUser",
+          "sdkOperation": "signInAnonymously"
+        },
+        {
+          "line": 1528,
+          "method": "signInAdmin",
+          "sdkOperation": "signInWithEmailAndPassword"
+        },
+        {
+          "line": 1540,
+          "method": "signInAdmin",
+          "sdkOperation": "signOut"
+        },
+        {
+          "line": 1571,
+          "method": "signInAdmin",
+          "sdkOperation": "signOut"
+        },
+        {
+          "line": 4004,
+          "method": "activateAdminInvitation",
+          "sdkOperation": "createUserWithEmailAndPassword"
+        },
+        {
+          "line": 4014,
+          "method": "activateAdminInvitation",
+          "sdkOperation": "signOut"
+        },
+        {
+          "line": 4130,
+          "method": "activateAdminInvitation",
+          "sdkOperation": "delete"
+        },
+        {
+          "line": 4133,
+          "method": "activateAdminInvitation",
+          "sdkOperation": "signOut"
+        },
+        {
+          "line": 4408,
+          "method": "changeCurrentAdminPassword",
+          "sdkOperation": "updatePassword"
+        },
+        {
+          "line": 4697,
+          "method": "signOutAdmin",
+          "sdkOperation": "signOut"
+        }
+      ]
+    },
+    {
+      "path": "lib/deda_pin_auth.dart",
+      "sha256": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+      "reviewedSites": [
+        {
+          "line": 40,
+          "method": "_ensureAnonymousSession",
+          "sdkOperation": "signOut"
+        },
+        {
+          "line": 46,
+          "method": "_ensureAnonymousSession",
+          "sdkOperation": "signInAnonymously"
+        },
+        {
+          "line": 445,
+          "method": "signOutFirebase",
+          "sdkOperation": "signOut"
+        }
+      ]
+    }
+  ],
+  "reviewedDirectSdkMutationSites": 13
+}
