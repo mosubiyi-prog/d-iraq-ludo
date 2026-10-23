@@ -19,6 +19,7 @@ class DedaSixBadgeCutout extends StatelessWidget {
     try { return (await codec.getNextFrame()).image; }
     finally { codec.dispose(); }
   }
+  static _BadgeAssets? _ready;
   static Future<_BadgeAssets> _load() async {
     final art=await _decode(DedaOriginalSixLevelBadgeArt.asset);
     final mask=await _decode(maskAsset);
@@ -44,7 +45,7 @@ class DedaSixBadgeCutout extends StatelessWidget {
         }
         paths.add(path);
       }
-      return _BadgeAssets(art,paths);
+      return _ready = _BadgeAssets(art,paths);
     } finally {mask.dispose();}
   }
   static final Future<_BadgeAssets> _assets=_load();
@@ -52,7 +53,8 @@ class DedaSixBadgeCutout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     key:ValueKey('deda_owner_level_art_${tier.id}'), width:size,height:size,
-    child:FutureBuilder<_BadgeAssets>(future:_assets,builder:(context,snapshot) {
+    child: _ready != null ? CustomPaint(painter:_BadgePainter(_ready!,tier))
+      : FutureBuilder<_BadgeAssets>(future:_assets,builder:(context,snapshot) {
       if(snapshot.hasError) return const Icon(Icons.image_not_supported_outlined);
       final assets=snapshot.data;
       if(assets==null) return const SizedBox.shrink();

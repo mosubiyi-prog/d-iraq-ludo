@@ -42,8 +42,20 @@ class DedaSixFrameEquip {
       sameAccount: same,
       verifyOwnership: () => DedaOwner18FrameCheckout.isOwned(
           originalId: original, frameId: frame.id),
-      save: () => DedaPreferences.setProfileAppearance(avatarStyle: avatar,
-          frameStyle: style, backgroundStyle: background),
+      save: () async {
+        // Confirm the server selection before changing any local preference.
+        // A failed network save must not become a false Used state on reopen.
+        await DedaOwner18Cosmetics.saveAppearance(original,
+          avatar: avatar, frame: style, background: background);
+        if (!same()) throw StateError('frame-account-changed');
+        final saved = await DedaOwner18Cosmetics.read(original);
+        if (!same() || saved['frame'] != style || saved['avatar'] != avatar ||
+            saved['background'] != background) {
+          throw StateError('frame-cloud-selection-not-confirmed');
+        }
+        await DedaPreferences.setProfileAppearance(avatarStyle: avatar,
+          frameStyle: style, backgroundStyle: background);
+      },
       confirm: () async {
         final saved = await DedaOwner18Cosmetics.read(original);
         return same() && saved['frame'] == style && saved['avatar'] == avatar &&

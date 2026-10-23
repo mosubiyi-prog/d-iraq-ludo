@@ -29,6 +29,7 @@ s=s[:a]+e+s[b:]
 a=s.index('class _DedaEditProfilePageState');b=s.index('\nclass ',a+7); e=s[a:b]
 e=replace(e,'    _backgroundStyle = DedaPreferences.profileBackgroundStyle;','    _backgroundStyle = DedaPreferences.profileBackgroundStyle;\n    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOwnedFrames());')
 anchor='  Future<void> _save() async {'
+e=replace(e,'  int? _previewFrameStyle;', '  int? _previewFrameStyle;\n  int? _confirmedActiveFrame;')
 e=replace(e,anchor,'''  Future<void> _loadOwnedFrames() async {
     if (Firebase.apps.isEmpty || DedaPreferences.phone.trim().isEmpty) return;
     final phone = DedaPreferences.phone;
@@ -36,6 +37,8 @@ e=replace(e,anchor,'''  Future<void> _loadOwnedFrames() async {
     if (uid == null) return;
     try {
       final owned = await DedaOwner18FrameCheckout.verifiedOwnedFrameIds(
+        DedaBackend.personalShareIdForPhone(phone).trim());
+      final appearance = await DedaOwner18Cosmetics.read(
         DedaBackend.personalShareIdForPhone(phone).trim());
       if (!mounted || DedaPreferences.phone != phone ||
           FirebaseAuth.instance.currentUser?.uid != uid) return;
@@ -45,6 +48,8 @@ e=replace(e,anchor,'''  Future<void> _loadOwnedFrames() async {
             _serverVerifiedPaidStyles.add(i);
           }
         }
+        _confirmedActiveFrame = appearance['frame'] == _frameStyle &&
+            _serverVerifiedPaidStyles.contains(_frameStyle) ? _frameStyle : null;
       });
     } catch (_) { /* Keep unpaid frames locked until server proof succeeds. */ }
   }
@@ -60,6 +65,7 @@ e=replace(e,anchor,'''  Future<void> _loadOwnedFrames() async {
       setState(() {
         _serverVerifiedPaidStyles.add(index);
         _frameStyle = index; _previewFrameStyle = null;
+        _confirmedActiveFrame = index;
       });
       return true;
     } catch (_) {
@@ -82,7 +88,7 @@ e=replace(e,'''                                    onVerifiedOwned: () => setSta
                                       _serverVerifiedPaidStyles.add(index);
                                       _frameStyle = index;
                                       _previewFrameStyle = null;
-                                    }),''','''                                    isActive: _frameStyle == index &&
+                                    }),''','''                                    isActive: _confirmedActiveFrame == index && _frameStyle == index &&
                                         DedaPreferences.profileFrameStyle == index &&
                                         _previewFrameStyle == null,
                                     onVerifiedOwned: () => _equipOwnedFrame(index),

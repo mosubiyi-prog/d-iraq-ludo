@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'deda_100377_level_achievement_badges_policy.dart';
 import 'deda_six_badge_cutout.dart';
 
 import 'deda_owner18_level_badges.dart' show DedaOwner18Rank;
