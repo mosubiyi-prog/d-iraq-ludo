@@ -42,6 +42,7 @@ class _Io implements DedaProgressEvidenceIo {
   void user(String uid,{String account=_account,DedaSessionAuthKind kind=DedaSessionAuthKind.anonymous}) {
     currentUser=tracker.observe(uid,kind);
     docs['deda_sessions/$uid']={'uid':uid,'accountKey':account,'installId':install};
+    docs['users/$uid']={'accountKey':account};
   }
   Future<void> visit(String event) async {
     events.add(event);
@@ -54,7 +55,7 @@ class _Io implements DedaProgressEvidenceIo {
   }
   @override
   Future<DedaOwnerServerDocument> readServer(String path) async {
-    await visit(path.startsWith('deda_sessions/') ? 'session.read' : 'evidence.read');
+    await visit(path.startsWith('deda_sessions/') ? 'session.read' : path.startsWith('users/') ? 'user.read' : 'evidence.read');
     return overrides[path] ?? DedaOwnerServerDocument(docs[path]);
   }
   @override
@@ -102,7 +103,7 @@ void main() {
     expect(h.io.writeCount,1);
     expect(h.io.docs[_path]!.keys.toSet(),{'format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'});
     expect(h.io.docs[_path]!['kind'],'legacy-local-evidence');
-    expect(h.io.events,['install.prepare','session.read','transaction.read','transaction.dispatch','evidence.read']);
+    expect(h.io.events,['install.prepare','session.read','user.read','transaction.read','transaction.dispatch','evidence.read']);
   });
   test('same save intent is idempotent and never changes the first server timestamp',() async {
     final h=_Harness();final capture=await _capture();await h.save(capture);
@@ -185,7 +186,7 @@ void main() {
       expect(h.io.events,isEmpty);
     });
   }
-  for(final step in ['install.prepare','session.read','transaction.read','evidence.read','evidence.list']) {
+  for(final step in ['install.prepare','session.read','user.read','transaction.read','evidence.read','evidence.list']) {
     test('principal A B A during $step prevents late evidence publication or new dispatch',() async {
       final h=_Harness();final capture=await _capture();
       if(step=='evidence.list')await h.save(capture);
@@ -219,4 +220,15 @@ void main() {
     await expectLater(h.save(await _capture()),throwsA(isA<DedaStaleSessionTransition>()));
     expect(h.io.events,isEmpty);
   });
+  for(final fault in ['missing','account','cache','pending']) {
+    test('user proof $fault rejects before an evidence write',() async {
+      final h=_Harness();
+      if(fault=='missing')h.io.docs.remove('users/old-device');
+      if(fault=='account')h.io.docs['users/old-device']={'accountKey':'07700000001'};
+      if(fault=='cache' || fault=='pending') h.io.overrides['users/old-device']=
+        DedaOwnerServerDocument(h.io.docs['users/old-device'],fromCache:fault=='cache',pendingWrites:fault=='pending');
+      await expectLater(h.save(await _capture()),throwsA(isA<DedaSessionProofRejected>()));
+      expect(h.io.writeCount,0);expect(h.io.events,isNot(contains('transaction.read')));
+    });
+  }
 }

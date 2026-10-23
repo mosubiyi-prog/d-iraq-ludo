@@ -14,6 +14,14 @@ class DedaProgressEvidenceMissing implements Exception {
   const DedaProgressEvidenceMissing();
 }
 
+/// Observation for composing capture and save. This object is not authority:
+/// every archive operation still verifies its owner against the server.
+class DedaProgressEvidenceOwner {
+  const DedaProgressEvidenceOwner(this.user,this.installId);
+  final DedaFlowSdkUser user;
+  final String installId;
+}
+
 bool _sameEvidence(Map<String,dynamic> a,Map<String,dynamic> b) =>
   a['format'] == b['format'] && a['kind'] == b['kind'] && a['accountKey'] == b['accountKey'] &&
   a['sourceUid'] == b['sourceUid'] && a['installId'] == b['installId'] && a['captureId'] == b['captureId'] &&
@@ -112,8 +120,8 @@ class DedaProgressEvidenceStore {
     }
   }
   Map<String,dynamic> _server(DedaOwnerServerDocument document) {
-    if(document.data == null) throw const DedaProgressEvidenceMissing();
     if(document.fromCache || document.pendingWrites) throw const DedaSessionProofRejected();
+    if(document.data == null) throw const DedaProgressEvidenceMissing();
     return document.data!;
   }
   Future<(DedaFlowSdkUser,String)> _owner(String account,bool Function() isCurrent) async {
@@ -125,12 +133,26 @@ class DedaProgressEvidenceStore {
     final install = await io.installId(()=>_check(user,isCurrent));
     _check(user,isCurrent);
     if(install.isEmpty || install.length > 128) throw const DedaSessionProofRejected();
-    final session = _server(await io.readServer('deda_sessions/${user.uid}'));
+    final sessionDocument = await io.readServer('deda_sessions/${user.uid}');
+    _check(user,isCurrent);
+    if(sessionDocument.data == null) throw const DedaSessionProofRejected();
+    final session = _server(sessionDocument);
     _check(user,isCurrent);
     if(session['uid'] != user.uid || session['accountKey'] != account || session['installId'] != install) {
       throw const DedaSessionProofRejected();
     }
+    final profileDocument = await io.readServer('users/${user.uid}');
+    _check(user,isCurrent);
+    if(profileDocument.data == null) throw const DedaSessionProofRejected();
+    final profile = _server(profileDocument);
+    _check(user,isCurrent);
+    if(profile['accountKey'] != account) throw const DedaSessionProofRejected();
     return (user,install);
+  }
+  Future<DedaProgressEvidenceOwner> verifyCurrentOwner({required String accountKey,
+    required bool Function() isCurrent}) async {
+    final (user,install) = await _owner(accountKey,isCurrent);
+    return DedaProgressEvidenceOwner(user,install);
   }
   String _path(String account,String id) => 'deda_progress_evidence/$account/captures/$id';
   void _records(DedaLegacyProgressCapture capture) {

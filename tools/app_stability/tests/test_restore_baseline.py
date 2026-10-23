@@ -183,6 +183,25 @@ class RestoreBaselineTest(unittest.TestCase):
         self.assertEqual((output / 'keep.txt').read_text(), 'existing work')
         self.assertEqual(list(output.iterdir()), [output / 'keep.txt'])
 
+    def test_backup_composition_retains_all_original_sources_and_rules(self):
+        baseline, backup = self.root / 'baseline', self.root / 'backup'
+        restore_module.restore(baseline)
+        result = restore_module.restore(backup, progress_backup_coordinator=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(backup) for p in (backup / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (backup / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE,
+            restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES,
+            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE,
+            restore_module.PROGRESS_BACKUP_MODULE})
+        self.assertTrue(result['progressEvidenceStore'])
+        self.assertTrue(result['progressBackupCoordinator'])
+        for name in ['lib/main.dart', 'lib/deda_backend.dart', 'lib/deda_pin_auth.dart']:
+            self.assertEqual((backup / name).read_bytes(), (baseline / name).read_bytes())
+        for name in ['android', 'firebase.json', 'firestore.rules']:
+            self.assertFalse((backup / name).exists())
+
     def test_refuses_output_inside_repository(self):
         with self.assertRaisesRegex(ValueError, 'outside the repository'):
             restore_module.restore(REPO / 'do-not-create-this')

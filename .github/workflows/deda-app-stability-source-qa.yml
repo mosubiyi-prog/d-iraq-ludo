@@ -13,6 +13,8 @@ on:
       - 'lib/deda_admin_session_firebase_adapter.dart'
       - 'lib/deda_legacy_progress_capture.dart'
       - 'lib/deda_progress_evidence_store.dart'
+      - 'lib/deda_progress_backup_coordinator.dart'
+      - 'test/deda_progress_backup_coordinator_test.dart'
       - 'test/deda_progress_evidence_store_test.dart'
       - 'test/deda_legacy_progress_capture_test.dart'
       - 'test/deda_admin_session_firebase_adapter_test.dart'
@@ -52,7 +54,7 @@ jobs:
       - name: Restore hash-verified source without Android or signing files
         run: |
           if [ '${{ matrix.mode }}' = measured-pilot ]; then
-            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store --progress-backup-coordinator
           elif [ '${{ matrix.mode }}' = pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot
           else
@@ -138,6 +140,13 @@ jobs:
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_progress_evidence_store.dart test/deda_progress_evidence_store_test.dart
           flutter test --no-pub --timeout 20s --reporter expanded test/deda_progress_evidence_store_test.dart
+      - name: Verify pending capture journal and uncertain-write recovery with simulated server IO
+        timeout-minutes: 3
+        if: matrix.mode == 'measured-pilot'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_progress_backup_coordinator.dart test/deda_progress_backup_coordinator_test.dart
+          flutter test --no-pub --timeout 20s --reporter expanded test/deda_progress_backup_coordinator_test.dart
       - name: Verify no installable application was produced
         if: always()
         run: |
