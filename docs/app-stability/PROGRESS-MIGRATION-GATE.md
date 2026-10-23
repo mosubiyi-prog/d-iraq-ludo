@@ -16,7 +16,7 @@ The isolated rules explicitly deny client reads and writes to migration document
 
 ## Validation
 
-Local Node: 36 migration tests + 42 existing reconciliation tests = 78/78 passed. Existing restoration tests are run separately. Eleven added Firestore Emulator cases cover inclusion, concurrent wrappers, missing classification, incomplete cutover, pending purchase, amount conflict, client denial for three protected paths, included historical debit and current-state read by a second seeded UID after award/spend. Emulator/CI result must be recorded after the run; seeded sessions are fixtures, not real PIN sign-in or actual two-phone validation.
+Local Node: 36 migration tests + 42 existing reconciliation tests = 78/78 passed. Existing restoration tests are run separately. Eleven added Firestore Emulator cases cover inclusion, concurrent wrappers, missing classification, incomplete cutover, pending purchase, amount conflict, client denial for three protected paths, included historical debit and current-state read by a second seeded UID after award/spend. CI run [40036848933](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40036848933), source 66e91869e507ef16cf9b6772bf646dd2294257a4, passed all four jobs: baseline, pilot, measured-pilot and isolated Firestore rules/reconciliation. The emulator suite adds 11 cases to 61 prior cases (72 total). Local restoration tests passed 16/16. Seeded sessions are fixtures, not real PIN sign-in or actual two-phone validation.
 
 ## Next
 

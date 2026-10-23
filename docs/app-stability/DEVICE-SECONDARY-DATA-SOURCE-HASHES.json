@@ -1,0 +1,46 @@
+{
+  "kind": "read-only-source-audit-not-device-test",
+  "reference": "100380 restored baseline",
+  "files": [
+    {
+      "file": "lib/main.dart",
+      "sha256": "28c64356ded24ac5c156f7e439655f1c90ac0af94d4a746a96b9282ddc6d48d8"
+    },
+    {
+      "file": "lib/deda_backend.dart",
+      "sha256": "7a1c35c1a6558d3286dd45f01831c17f9b37d48991c14dbb1346954240bb31d2"
+    },
+    {
+      "file": "lib/deda_social_service.dart",
+      "sha256": "5144b6b52036bff0c4ce7469ac87f5d4f6e5e655220eb95e6197a1e156fa7037"
+    },
+    {
+      "file": "lib/traffic_quiz_page.dart",
+      "sha256": "85718b93189e76982e4c271bf61f87bc11782e2e7f3e616eb2fa5db6d0ff6972"
+    },
+    {
+      "file": "lib/deda_stage71_free_id_cards.dart",
+      "sha256": "013bc3a6c950801027b6c83b212b88382e53d77c64e5a096b8ca6fc69d5a008f"
+    },
+    {
+      "file": "lib/deda_stage75_unread_gift_badge.dart",
+      "sha256": "5794ccbc43c30ea541965e8496d4e92c2dfa789c726b473da1b193099c316f8c"
+    },
+    {
+      "file": "lib/deda_stage74_id_gift_service.dart",
+      "sha256": "3b97b3fc2ad2e14552af04b4ec7dc42e15e713d9d44a39e7ef328be1db58dc31"
+    },
+    {
+      "file": "lib/deda_owner18_cosmetics.dart",
+      "sha256": "08f7a05f2137e30a3861587ae10e078bb15acb30d40f764280f3dce80f97e842"
+    },
+    {
+      "file": "lib/deda_stage67_spark_secure_card_checkout.dart",
+      "sha256": "e62a63a6defd881c7a251513f57ad8300046c513dda4aaf5971b71aadfab7b6f"
+    },
+    {
+      "file": "lib/deda_lab_frame_secure_checkout.dart",
+      "sha256": "3d5b4cde3a87f87056a034327ad4c59ef3a2eca10bd7e94d81c47659ec7ded57"
+    }
+  ]
+}
