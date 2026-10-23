@@ -38,6 +38,19 @@ service cloud.firestore {
       allow create: if ownsProgressAccount(accountKey) && validEvidence(accountKey,captureId);
       allow update, delete: if false;
     }
+    // Verified receipts and projections can only be written by a separate
+    // trusted server authority. Raw legacy archives never grant that authority.
+    match /deda_progress_receipts/{accountKey}/events/{eventId} {
+      allow read, write: if false;
+    }
+    match /deda_verified_progress/{accountKey} {
+      allow get: if ownsProgressAccount(accountKey);
+      allow list, write: if false;
+      match /events/{eventId} {
+        allow get, list: if ownsProgressAccount(accountKey);
+        allow write: if false;
+      }
+    }
     match /deda_sessions/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
       allow list, write: if false;

@@ -164,9 +164,11 @@ jobs:
       - name: Install isolated pinned emulator test tools only
         run: |
           mkdir -p "$RUNNER_TEMP/progress-rules-qa"
-          npm install --prefix "$RUNNER_TEMP/progress-rules-qa" --no-save --no-audit --no-fund firebase@11.10.0 @firebase/rules-unit-testing@4.0.0 firebase-tools@13.35.1
-      - name: Verify candidate archive rules with localhost demo project only NO DEPLOY
+          npm install --prefix "$RUNNER_TEMP/progress-rules-qa" --no-save --no-audit --no-fund firebase@11.10.0 @firebase/rules-unit-testing@4.0.0 firebase-tools@13.35.1 firebase-admin@13.0.0
+      - name: Verify trusted reconciliation core without SDK or credentials
+        run: node --test tools/app_stability/progress_archive/reconcile-core.test.cjs
+      - name: Verify candidate archive and reconciliation with localhost demo project only NO DEPLOY
         timeout-minutes: 8
         run: |
           export NODE_PATH="$RUNNER_TEMP/progress-rules-qa/node_modules"
-          "$RUNNER_TEMP/progress-rules-qa/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-deda-progress-archive --config tools/app_stability/progress_archive/firebase.json 'node --test --test-concurrency=1 tools/app_stability/progress_archive/rules.test.cjs'
+          "$RUNNER_TEMP/progress-rules-qa/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-deda-progress-archive --config tools/app_stability/progress_archive/firebase.json 'node --test --test-concurrency=1 tools/app_stability/progress_archive/rules.test.cjs tools/app_stability/progress_archive/reconcile-emulator.test.cjs'
