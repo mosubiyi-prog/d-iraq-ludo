@@ -13,13 +13,18 @@ s=replace(s,'  static Future<void> setProfileAppearance({','  static int _appear
 s=replace(s,'    final requestedAvatar = avatarStyle.clamp(0, 8).toInt();','    ++_appearanceRevision;\n    final requestedAvatar = avatarStyle.clamp(0, 8).toInt();')
 a=s.index('  static Future<void> setProfileAppearance('); b=s.index('  static Future<void> setVoiceEnabled',a)
 part=s[a:b]
-part=replace(part,'    await Future.wait([','    final writes = await Future.wait<bool>([',n=1 if part.count('    await Future.wait([')==1 else 2) if False else part
 # Check the local save result only; the restore retains its existing fallback.
 part=part.replace('    await Future.wait([','    final writes = await Future.wait<bool>([',1)
 part=replace(part,'      prefs.setInt(_profileBackgroundKey(savePhone), requestedBackground),\n    ]);','      prefs.setInt(_profileBackgroundKey(savePhone), requestedBackground),\n    ]);\n    if (writes.any((ok) => !ok)) throw StateError("appearance-local-save-failed");')
 part=replace(part,'    final ownerPhone = phone;','    final revision = _appearanceRevision;\n    final ownerPhone = phone;')
 part=replace(part,'bool same() => phone == ownerPhone && _appearanceCurrentUid() == uid;', 'bool same() => revision == _appearanceRevision && phone == ownerPhone && _appearanceCurrentUid() == uid;')
 s=s[:a]+part+s[b:]
+a=s.index('class DedaProfileFramePreview'); b=s.index('\nclass ',a+7)
+e=s[a:b]
+e=replace(e,'  final bool selected;', '  final bool selected;\n  final bool owned;')
+e=replace(e,'    this.selected = false,', '    this.selected = false,\n    this.owned = false,')
+e=e.replace('            const PositionedDirectional(', '            if (!owned) const PositionedDirectional(',1)
+s=s[:a]+e+s[b:]
 # Scope all editor replacements to this single class.
 a=s.index('class _DedaEditProfilePageState');b=s.index('\nclass ',a+7); e=s[a:b]
 e=replace(e,'    _backgroundStyle = DedaPreferences.profileBackgroundStyle;','    _backgroundStyle = DedaPreferences.profileBackgroundStyle;\n    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOwnedFrames());')
@@ -71,6 +76,7 @@ e=replace(e,anchor,'''  Future<void> _loadOwnedFrames() async {
 e=replace(e,'final index = offset + 3;', 'final index = DedaSixFrameOrder.styles(_serverVerifiedPaidStyles)[offset];')
 e=replace(e,'                                  free &&\n                                  _frameStyle == index);','                                  (free || _serverVerifiedPaidStyles.contains(index)) &&\n                                  _frameStyle == index);')
 e=replace(e,'                            onTap: free','                            onTap: _saving ? null : free')
+e=replace(e,'                                DedaProfileFramePreview(\n                                  style: index,', '                                DedaProfileFramePreview(\n                                  owned: _serverVerifiedPaidStyles.contains(index),\n                                  style: index,')
 e=e.replace('DedaOwner18FramePurchaseAction(', 'DedaSixFramePurchaseAction(')
 e=replace(e,'''                                    onVerifiedOwned: () => setState(() {
                                       _serverVerifiedPaidStyles.add(index);
@@ -93,6 +99,10 @@ e=e.replace('المعرّفات المميزة المملوكة: تفعيلها 
 s=s[:a]+e+s[b:]
 a=s.index('class DedaPublicProfilePreviewPage'); b=s.index('\nclass ',a+7); e=s[a:b]
 e=replace(e,'child: Text(\n                    id,','child: DedaSixActiveIdentity(\n                    originalId: id,')
+s=s[:a]+e+s[b:]
+a=s.index('  Widget _shareCard(Map<String, dynamic> item)');b=s.index('  @override',a)
+e=s[a:b]
+e=replace(e,'DedaStage50VerifiedFriendInkBadge(', 'DedaSixReceivedIdentity(')
 s=s[:a]+e+s[b:];p.write_text(s)
 # Read-only admin listing: group accounts, registration order, no documents deleted.
 p=Path('lib/admin_team_pages.dart');s=p.read_text();s="import 'deda_six_admin_users.dart';\n"+s

@@ -22,6 +22,27 @@ jobs:
           run-id: 39959766789
           github-token: ${{ github.token }}
           path: approved-dart
+      - uses: actions/download-artifact@v4
+        with:
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          run-id: 39948539871
+          github-token: ${{ github.token }}
+          path: approved-apk
+      - name: Restore exact legacy artwork from signed previous APK only
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          apk=next(Path('approved-apk').glob('*.apk'))
+          with zipfile.ZipFile(apk) as z:
+            for name in z.namelist():
+              prefix='assets/flutter_assets/assets/deda_style/'
+              if name.startswith(prefix) and name.endswith('.png'):
+                dst=Path('assets/deda_style')/Path(name).name
+                dst.parent.mkdir(parents=True,exist_ok=True)
+                dst.write_bytes(z.read(name))
+          assert Path('assets/deda_style/frame_0.png').is_file()
+          PY
       - name: Verify immutable source manifest and overlay baseline
         run: |
           python3 - <<'PY'
@@ -46,4 +67,10 @@ jobs:
           flutter pub get
           dart format lib/deda_six*.dart lib/main.dart lib/admin_team_pages.dart test/deda_six_notes_test.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_six*.dart lib/main.dart lib/admin_team_pages.dart
-          flutter test --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_six_notes_test.dart test/deda_owner18_original_account_proof_test.dart test/deda_owner18_level_badges_test.dart test/deda_owner18_avatar_editor_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_avatar_choice_100341_test.dart
+          flutter test --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_six_notes_test.dart test/deda_six_badge_visual_test.dart test/deda_owner18_original_account_proof_test.dart test/deda_owner18_level_badges_test.dart test/deda_owner18_avatar_editor_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_avatar_choice_100341_test.dart
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: DEDA-six-note-badge-visual-QA
+          path: six-note-visual-qa/
+          retention-days: 7
