@@ -1,0 +1,26 @@
+{
+  "main.dart": {
+    "changedClasses": [
+      "DedaProfileFramePreview",
+      "DedaPreferences",
+      "_DedaEditProfilePageState",
+      "_DedaAccountHubPageState",
+      "_DedaReceivedLocationsPageState",
+      "_DedaProfilePhase2PageState",
+      "DedaPublicProfilePreviewPage",
+      "_DedaAddFriendPageState"
+    ],
+    "unchangedClassCount": 140
+  },
+  "admin_team_pages.dart": {
+    "changedClasses": [
+      "_DedaAdminUsersPageState"
+    ],
+    "unchangedClassCount": 20
+  },
+  "otherCompiledDartFilesByteIdentical": 87,
+  "protectedFilesSHA256": {
+    "deda_backend.dart": "7a1c35c1a6558d3286dd45f01831c17f9b37d48991c14dbb1346954240bb31d2",
+    "deda_social_service.dart": "5144b6b52036bff0c4ce7469ac87f5d4f6e5e655220eb95e6197a1e156fa7037"
+  }
+}

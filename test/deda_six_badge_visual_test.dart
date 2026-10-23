@@ -13,7 +13,7 @@ void main() {
       final key=GlobalKey();
       await tester.pumpWidget(MaterialApp(home: Center(child:RepaintBoundary(
         key:key, child:DedaSixBadgeCutout(tier:tier,size:256)))));
-      await tester.pump();
+      await tester.pumpAndSettle();
       final boundary=key.currentContext!.findRenderObject() as RenderRepaintBoundary;
       await tester.runAsync(() async {
       final image=await boundary.toImage(pixelRatio:1);

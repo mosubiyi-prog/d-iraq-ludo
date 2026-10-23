@@ -1,3 +1,5 @@
+import 'main.dart' show DedaPreferences;
+import 'deda_stage71_free_owned_use_profile.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -58,5 +60,22 @@ class DedaSixReceivedIdentity extends StatelessWidget {
                   fontWeight: FontWeight.w700));
           });
       });
+  }
+}
+
+/// User-facing Copy/Share follows the same verified current identity as the
+/// label. Reward, friendship and location storage continue to use canonical IDs.
+class DedaSixIdentityCopy {
+  static Future<String?> resolve(String original) async {
+    final phone=DedaPreferences.phone;
+    if(Firebase.apps.isEmpty) return original;
+    final uid=FirebaseAuth.instance.currentUser?.uid;
+    if(uid==null) return null;
+    bool same()=>DedaPreferences.phone==phone &&
+        FirebaseAuth.instance.currentUser?.uid==uid;
+    try {
+      final active=await DedaStage71OwnedIdentifierService.active(original);
+      return same()?active:null;
+    } catch(_) {return same()?original:null;}
   }
 }

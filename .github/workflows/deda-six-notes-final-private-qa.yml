@@ -1,4 +1,5 @@
 name: DEDA 100380 six notes signed private QA NO PLAY
+# Revision 2: alpha silhouette clipping preserves opaque interiors; all own copy/display surfaces verified.
 # Six-note delta after verified 100379 reconstruction; no Firebase deployment or Play upload.
 on:
   push:

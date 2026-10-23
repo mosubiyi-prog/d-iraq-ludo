@@ -104,6 +104,30 @@ a=s.index('  Widget _shareCard(Map<String, dynamic> item)');b=s.index('  @overri
 e=s[a:b]
 e=replace(e,'DedaStage50VerifiedFriendInkBadge(', 'DedaSixReceivedIdentity(')
 s=s[:a]+e+s[b:];p.write_text(s)
+# Visible own identity and copy/share use the verified alias across legacy
+# account UI and Add Friend as well. No internal IDs or transaction routes change.
+s=p.read_text()
+for name,following in [('_DedaAccountHubPageState', None),
+        ('_DedaProfilePhase2PageState', None),('_DedaAddFriendPageState', None)]:
+    a=s.index('class '+name);b=s.index('\nclass ',a+7);e=s[a:b]
+    if name=='_DedaAccountHubPageState':
+        e=replace(e,'    final id = _personalDedaId;\n    if (id.isEmpty) return;',
+          '    final id = await DedaSixIdentityCopy.resolve(_personalDedaId);\n    if (!mounted || id == null || id.isEmpty) return;',n=2)
+        e=replace(e,'child: Text(\n                        _personalDedaId,',
+          'child: DedaSixActiveIdentity(\n                        originalId: _personalDedaId,')
+        e=replace(e,'                        maxLines: 1,\n                        overflow: TextOverflow.ellipsis,\n                        textAlign: TextAlign.center,',
+          '                        textAlign: TextAlign.center,')
+    elif name=='_DedaProfilePhase2PageState':
+        e=replace(e,'    final id = _dedaId;\n    if (id.isEmpty) return;',
+          '    final id = await DedaSixIdentityCopy.resolve(_dedaId);\n    if (!mounted || id == null || id.isEmpty) return;')
+    else:
+        e=replace(e,"    final id = _session?.publicId ??\n        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);\n    if (id.trim().isEmpty) return;",
+          "    final original = _session?.publicId ??\n        DedaBackend.personalShareIdForPhone(DedaPreferences.phone);\n    final id = await DedaSixIdentityCopy.resolve(original);\n    if (!mounted || id == null || id.trim().isEmpty) return;")
+        e=replace(e,"child: Text(myId.isEmpty ? '@DEDA' : myId,\n                                maxLines: 1,",
+          "child: DedaSixActiveIdentity(originalId: myId.isEmpty ? '@DEDA' : myId,")
+    s=s[:a]+e+s[b:]
+p.write_text(s)
+
 # Read-only admin listing: group accounts, registration order, no documents deleted.
 p=Path('lib/admin_team_pages.dart');s=p.read_text();s="import 'deda_six_admin_users.dart';\n"+s
 a=s.index('class _DedaAdminUsersPageState');b=s.index('\nclass ',a+7);e=s[a:b]
