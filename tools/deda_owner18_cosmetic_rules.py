@@ -15,7 +15,7 @@ RULE = '''
     // This backs up that same per-account inventory; it is not a payment
     // attestation and never grants a currency balance or premium identifier.
     function nativeCosmeticOwner(publicId) {
-      return signedIn()
+      return verifiedDiamondsPersonalOwner(publicId) || (signedIn()
         && publicId.matches('^@DEDA-[A-Z0-9]{6}$')
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
@@ -25,7 +25,7 @@ RULE = '''
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('sharePersonalId', publicId) == publicId
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.ownerUid == request.auth.uid
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.kind == 'personal'
-        && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.active == true;
+        && get(/databases/$(database)/documents/deda_share_ids/$(publicId)).data.active == true);
     }
     function nativeCosmeticsValid(publicId) {
       let d = request.resource.data;
@@ -78,6 +78,10 @@ def candidate(active):
         assert social.count(old) == 2, 'unexpected public appearance validator'
         social = social.replace(old, f'request.resource.data.{field} <= {maximum}')
     updated = updated[:a] + social + updated[b:]
+    old_owner = '&& route.data.ownerUid == request.auth.uid;'
+    assert updated.count(old_owner) == 1, 'unexpected public alias owner validator'
+    updated = updated.replace(old_owner,
+        '&& verifiedDiamondsPersonalOwner(originalId);', 1)
     end = updated.rfind('\n  }')
     assert end > 0 and updated[end:].lstrip().startswith('}\n}')
     return updated[:end] + '\n' + RULE + updated[end:]

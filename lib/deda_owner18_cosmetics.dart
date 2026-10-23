@@ -1,44 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'deda_qa32_manager_original_owner_proof.dart';
+import 'deda_owner18_original_account_proof.dart';
 
 /// Account backup of the EXISTING native cosmetic shop and selections.
 /// No funds, XP, identifier ownership or account fields are written here.
 class DedaOwner18Cosmetics {
   static const collection = 'deda_native_account_cosmetics';
-  static Future<String> requireOwner(String original) async {
-    if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original)) {
-      throw StateError('original-owner-required');
-    }
-    final db = FirebaseFirestore.instance;
-    final docs = await Future.wait([
-      db
-          .collection('users')
-          .doc(uid)
-          .get(const GetOptions(source: Source.server)),
-      db
-          .collection('deda_sessions')
-          .doc(uid)
-          .get(const GetOptions(source: Source.server)),
-      db
-          .collection('deda_share_ids')
-          .doc(original)
-          .get(const GetOptions(source: Source.server)),
-    ]);
-    if (FirebaseAuth.instance.currentUser?.uid != uid ||
-        !DedaQa32ManagerOriginalOwnerProof.authentic(
-            expectedOriginal: original,
-            authUid: uid,
-            account: docs[0].data() ?? {},
-            session: docs[1].data() ?? {},
-            route: docs[2].data() ?? {})) {
-      throw StateError('account-changed-or-owner-unverified');
-    }
-    return uid;
-  }
+  static Future<String> requireOwner(String original) =>
+      DedaOwner18OriginalAccountProof.verify(original);
 
   static void sameOwner(String uid) {
     if (FirebaseAuth.instance.currentUser?.uid != uid) {

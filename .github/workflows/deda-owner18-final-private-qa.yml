@@ -1,5 +1,5 @@
 name: DEDA 100379 owner18 signed private QA NO PLAY
-# Revision 2: reject conflicting original IDs even if an anonymous UID is reused.
+# Revision 3: preserve canonical ownership on a new device and rebuild missing public alias projections.
 on:
   push:
     branches: [deda-100378-owner18-fixes-2026-10-23]
@@ -441,7 +441,7 @@ jobs:
           flutter pub get
           dart format lib/main.dart lib/deda_social_service.dart lib/deda_owner18_cosmetics.dart lib/deda_owner18_frame_checkout.dart lib/deda_owner18_frame_purchase_action.dart lib/deda_owner18_level_badges.dart lib/deda_100377_my_store_page_staged.dart lib/deda_100377_profile_free_inventory.dart
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_social_service.dart lib/deda_owner18_cosmetics.dart lib/deda_owner18_frame_checkout.dart lib/deda_owner18_frame_purchase_action.dart lib/deda_owner18_level_badges.dart lib/deda_100377_my_store_page_staged.dart lib/deda_100377_profile_free_inventory.dart
-          flutter test test/deda_owner18_level_badges_test.dart test/deda_owner18_avatar_editor_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_avatar_choice_100341_test.dart
+          flutter test test/deda_owner18_original_account_proof_test.dart test/deda_owner18_level_badges_test.dart test/deda_owner18_avatar_editor_test.dart test/deda_sticky_edit_preview_100343_test.dart test/deda_royal_avatar_choice_100341_test.dart
       - name: Download previous 100378 only to compare app signing certificate
         uses: actions/download-artifact@v4
         with:

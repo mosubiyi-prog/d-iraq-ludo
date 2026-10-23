@@ -19,6 +19,65 @@ def section(s, start, end, fn):
     b = s.index(end, a + len(start))
     return s[:a] + fn(s[a:b]) + s[b:]
 
+def method(s, signature, edit):
+    a = s.index(signature)
+    brace = s.index('{', a)
+    depth = 1
+    end = brace + 1
+    while depth and end < len(s):
+        depth += (s[end] == '{') - (s[end] == '}')
+        end += 1
+    assert depth == 0
+    return s[:a] + edit(s[a:end]) + s[end:]
+
+def original_account_and_public_alias():
+    imp = "import 'deda_owner18_original_account_proof.dart';\n"
+    configs = [
+        ('lib/deda_stage71_free_owned_use_profile.dart',
+         '  static Future<String> _requireOriginal(',
+         "  static Future<String> _requireOriginal(String id) async {\n"
+         "    if (!enabled) throw StateError('free-identifier-rules-not-live');\n"
+         "    return DedaOwner18OriginalAccountProof.verify(id);\n  }"),
+        ('lib/deda_stage74_id_gift_service.dart',
+         '  static Future<String> _verifiedOwner(',
+         "  static Future<String> _verifiedOwner(String originalId) async {\n"
+         "    if (!enabled) throw StateError('gift-inbox-not-authorized');\n"
+         "    return DedaOwner18OriginalAccountProof.verify(originalId);\n  }"),
+        ('lib/deda_lab_frame_secure_checkout.dart',
+         '  static Future<String> _verifyOwner(',
+         "  static Future<String> _verifyOwner(String originalId) =>\n"
+         "    DedaOwner18OriginalAccountProof.verify(originalId);")
+    ]
+    for file, signature, replacement in configs:
+        p=Path(file);s=p.read_text()
+        s=method(s,signature,lambda _:replacement)
+        s=imp+s
+        p.write_text(s)
+    p=Path('lib/deda_stage71_free_owned_use_profile.dart');s=p.read_text()
+    def repair(active):
+        return one(active,'    return current;',"""    // Restore a missing public projection from this VERIFIED existing grant.
+    // This never changes ownership or the selected identifier.
+    try {
+      await DedaOwner18PublicAliasRepair.ensure(original: originalId,
+        alias: current, color: owner.baseColor, uid: uid);
+    } catch (_) {
+      // Keep the proven owner ID; retry public sync on the next owner refresh.
+    }
+    return current;""")
+    s=method(s,'  static Future<String> active(',repair)
+    s="import 'deda_owner18_public_alias_repair.dart';\n"+s
+    p.write_text(s)
+    p=Path('lib/deda_stage71_dual_admin_page.dart');s=p.read_text()
+    anchor='        final routeSnap ='
+    s=one(s,anchor,"        final verifiedOwnerUid = await DedaOwner18OriginalAccountProof.verify(originalId);\n"+anchor)
+    start=s.index('!DedaQa32ManagerOriginalOwnerProof.authentic(')
+    paren=s.index('(',start);depth=1;end=paren+1
+    while depth:
+        depth+=(s[end]=='(')-(s[end]==')');end+=1
+    s=s[:start]+'verifiedOwnerUid != current.uid'+s[end:]
+    p.write_text(imp+s)
+    print('PASS same canonical account on new UID; no account/session/ownership rewrites')
+
 def inventory(s):
     # Preserve the original native inventory implementation and local keys.
     anchor = "    // Earlier DEDA builds gave frame 1/2 as free defaults."
@@ -344,6 +403,7 @@ def main():
         s = re.sub(r'('+field+r'[^;]{0,160}?)\.clamp\(0, 5\)',
             lambda m: m[1]+f'.clamp(0, {maximum})', s, flags=re.S)
     p.write_text(s)
+    original_account_and_public_alias()
     print('OWNER18 targeted generated classes changed:', ', '.join(changed))
     print('PASS unrelated generated classes byte-identical; native storage and funds preserved')
 

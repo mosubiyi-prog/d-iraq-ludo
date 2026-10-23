@@ -6,7 +6,7 @@ const {createRequire} = require('node:module');
 const {resolve} = require('node:path');
 const req = createRequire(resolve(__dirname, '../functions/package.json'));
 const {initializeTestEnvironment, assertFails, assertSucceeds} = req('@firebase/rules-unit-testing');
-const {doc, setDoc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove, runTransaction} = req('firebase/firestore');
+const {doc, setDoc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove, runTransaction, writeBatch} = req('firebase/firestore');
 const project = 'demo-deda-owner18-cosmetics';
 assert.equal(process.env.GCLOUD_PROJECT, project);
 assert.match(process.env.FIRESTORE_EMULATOR_HOST || '', /^(localhost|127\.0\.0\.1):\d+$/);
@@ -124,11 +124,59 @@ test('new signed-in UID for the same canonical account restores the backup',asyn
     const db=ctx.firestore();
     await setDoc(doc(db,'users','owner18_reinstalled'),{accountKey:A.key,sharePersonalId:A.id});
     await setDoc(doc(db,'deda_sessions','owner18_reinstalled'),{accountKey:A.key});
-    await updateDoc(doc(db,'deda_share_ids',A.id),{ownerUid:'owner18_reinstalled'});
   });
   const restored=env.authenticatedContext('owner18_reinstalled').firestore();
   assert.equal((await assertSucceeds(getDoc(account(restored)))).data().avatar,5);
+  // Both signed-in devices remain the SAME canonical account. A stale or
+  // subsequently switched session loses access without changing the route.
+  await assertSucceeds(getDoc(account(old)));
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),'deda_sessions',A.uid),{accountKey:B.key});
+  });
   await assertFails(getDoc(account(old)));
+  await assertSucceeds(getDoc(account(restored)));
+});
+test('existing protected owner probe permits a missing receipt on a new legitimate UID only',async()=>{
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,'users','owner18_new_device'),{accountKey:A.key,sharePersonalId:A.id});
+    await setDoc(doc(db,'deda_sessions','owner18_new_device'),{accountKey:A.key});
+  });
+  const db=env.authenticatedContext('owner18_new_device').firestore();
+  const probe=doc(db,'deda_lab_frame_receipts',A.id,'frames','FRAME_03');
+  assert.equal((await assertSucceeds(getDoc(probe))).exists(),false);
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),'users',B.uid),{sharePersonalId:A.id});
+  });
+  const wrong=env.authenticatedContext(B.uid).firestore();
+  await assertFails(getDoc(doc(wrong,'deda_lab_frame_receipts',A.id,'frames','FRAME_03')));
+});
+test('missing public alias projections can be rebuilt on a new UID from the immutable received grant',async()=>{
+  const alias='@DEDA-TESTID';
+  await env.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,'users','owner18_new_device'),{accountKey:A.key,sharePersonalId:A.id});
+    await setDoc(doc(db,'deda_sessions','owner18_new_device'),{accountKey:A.key});
+    await setDoc(doc(db,'deda_stage71_granted_registry',alias),{
+      identifier:alias,recipientOriginalId:A.id,group:'001',baseColor:'gold',kind:'gifted',
+      grantedByUid:'synthetic_gm',grantedAt:new Date()});
+    await setDoc(doc(db,'deda_stage74_id_gift_receipts',alias),{
+      identifier:alias,originalId:A.id,group:'001',receivedAt:new Date()});
+    await setDoc(doc(db,'deda_stage71_active_identifier',A.id),{
+      originalId:A.id,activeId:alias,updatedAt:new Date()});
+  });
+  const db=env.authenticatedContext('owner18_new_device').firestore();
+  const batch=writeBatch(db);
+  batch.set(doc(db,'deda_public_active_aliases',A.id),{originalId:A.id,
+    activeId:alias,baseColor:'gold',updatedAt:serverTimestamp()});
+  batch.set(doc(db,'deda_public_alias_routes',alias),{aliasId:alias,
+    originalId:A.id,baseColor:'gold',updatedAt:serverTimestamp()});
+  await assertSucceeds(batch.commit());
+  const viewer=env.authenticatedContext(B.uid).firestore();
+  assert.equal((await getDoc(doc(viewer,'deda_public_active_aliases',A.id))).data().activeId,alias);
+  await assertFails(getDoc(doc(viewer,'deda_stage74_id_gift_receipts',alias)));
+  await assertFails(setDoc(doc(viewer,'deda_public_active_aliases',A.id),{
+    originalId:A.id,activeId:alias,baseColor:'gold',updatedAt:serverTimestamp()}));
 });
 // Receipt marks only a fully successful test run, never generated on failure.
 process.on('exit', code => {
