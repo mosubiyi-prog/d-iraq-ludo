@@ -31,6 +31,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify immutable restoration and refusal to overwrite work
+        run: python3 -m unittest discover -s tools/app_stability/tests -v
       - name: Restore hash-verified source without Android or signing files
         run: |
           if [ '${{ matrix.mode }}' = pilot ]; then
