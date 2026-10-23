@@ -24,7 +24,7 @@ Only three scoped financial source texts are captured. They remain UNTRUSTED evi
 
 ## Validation status
 
-Local Python restoration tests: 17/17, including exact original main/Backend/PinAuth preservation and refusal to add platform/rules configuration. Dart coordinator, journal and expanded owner-proof checks are submitted to isolated CI; do not claim them passed until its result is recorded. Existing build/signing workflows, main/Backend/PinAuth, runtime source snapshot, Firebase rules and account data are unchanged. `--progress-backup-coordinator` adds the module and its six archive/owner dependencies to a disposable QA source tree only. All previous checks remain in the workflow.
+Local Python restoration tests: 17/17, including exact original main/Backend/PinAuth preservation and refusal to add platform/rules configuration. CI run [40038151995](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40038151995), source dcee8c023aa2d81f9675c7194d38a2858cdc5d91, passed all four jobs. Decoded logs confirm 29/29 coordinator/journal cases and 40/40 evidence-store cases, strict analysis without issues, and 17 restoration tests. All previous groups remained green (including 78 Node and 72 emulator cases). The inherited 181 main source issues remain. Full numeric summary: BACKUP-COORDINATOR-QA-2026-10-24.json. Existing build/signing workflows, main/Backend/PinAuth, runtime source snapshot, Firebase rules and account data are unchanged. `--progress-backup-coordinator` adds the module and its six archive/owner dependencies to a disposable QA source tree only. All previous checks remain in the workflow.
 
 ## Next activation prerequisites
 

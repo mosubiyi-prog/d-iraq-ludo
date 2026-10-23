@@ -1,0 +1,34 @@
+{
+  "sourceCommit": "dcee8c023aa2d81f9675c7194d38a2858cdc5d91",
+  "sourceTree": "8c5dbd92ba6f6ae96717011a01c14db4b8ffc118",
+  "runId": 40038151995,
+  "url": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40038151995",
+  "jobs": {
+    "baseline": "success",
+    "pilot": "success",
+    "measured-pilot": "success",
+    "progress-archive-rules": "success"
+  },
+  "measuredPilotPassedGroups": {
+    "accountOwnershipUi": 38,
+    "readScopeAndLifecycle": 30,
+    "startupMetrics": 13,
+    "sessionGate": 21,
+    "sessionFlow": 36,
+    "ownerAdapter": 35,
+    "adminAdapter": 43,
+    "localCapture": 27,
+    "evidenceStore": 40,
+    "pendingBackupCoordinator": 29
+  },
+  "restorationPassed": 17,
+  "nodeCorePassed": 78,
+  "firestoreEmulatorPassed": 72,
+  "newModuleStrictAnalysis": "no issues",
+  "inheritedMainIssues": 181,
+  "runtimeCallsitesEnabled": false,
+  "actualTwoPhoneAcceptance": false,
+  "productionRulesDeployed": false,
+  "apkOrAabProduced": false,
+  "basis": "Completed GitHub job logs; mocks/isolated candidate rules as described in PROGRESS-BACKUP-COORDINATOR.md"
+}
