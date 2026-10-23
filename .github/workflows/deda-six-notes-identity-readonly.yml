@@ -1,0 +1,30 @@
+name: DEDA six notes public identity READ ONLY
+on:
+  push:
+    branches: [deda-100380-six-notes-fixes-2026-10-23]
+    paths: ['.github/workflows/deda-six-notes-identity-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  related-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install google-auth requests
+      - name: Read only discussed public identity and rule source
+        env:
+          DEDA_STAGE69_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_STAGE69_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python3 tools/deda_six_public_identity_readonly.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-six-notes-public-identity-readonly
+          path: six-identity-readonly/
+          retention-days: 7
+
+# Revision 2: only discussed owner wallet and ID proof, no credential or phone output.
