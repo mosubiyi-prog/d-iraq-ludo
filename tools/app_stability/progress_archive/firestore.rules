@@ -1,0 +1,48 @@
+// ISOLATED EMULATOR CANDIDATE ONLY. Not a replacement for app/live rules.
+// Immutable private legacy evidence; NEVER an authoritative wallet/award.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ownsProgressAccount(accountKey) {
+      return request.auth != null
+        && accountKey.matches('^[0-9]+$')
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
+    }
+    function validLegacyText(value) {
+      return value == null || (value is string && value.size() <= 200000);
+    }
+    function validEvidence(accountKey, captureId) {
+      let d = request.resource.data;
+      return captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && d.keys().hasAll(['format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'])
+        && d.keys().hasOnly(['format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'])
+        && d.format == 1 && d.kind == 'legacy-local-evidence'
+        && d.accountKey == accountKey && d.captureId == captureId
+        && d.sourceUid == request.auth.uid
+        && d.installId is string && d.installId.size() > 0 && d.installId.size() <= 128
+        && d.installId == get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.installId
+        && d.createdAt == request.time
+        && d.records is map
+        && d.records.keys().hasAll(['taskPoints','socialCoinsAndXp','earnedDiamonds'])
+        && d.records.keys().hasOnly(['taskPoints','socialCoinsAndXp','earnedDiamonds'])
+        && validLegacyText(d.records.taskPoints)
+        && validLegacyText(d.records.socialCoinsAndXp)
+        && validLegacyText(d.records.earnedDiamonds);
+    }
+    match /deda_progress_evidence/{accountKey}/captures/{captureId} {
+      allow get, list: if ownsProgressAccount(accountKey);
+      allow create: if ownsProgressAccount(accountKey) && validEvidence(accountKey,captureId);
+      allow update, delete: if false;
+    }
+    match /deda_sessions/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+    // No UI/role/wallet/progress application or permission added here.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

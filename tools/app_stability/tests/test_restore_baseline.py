@@ -160,6 +160,20 @@ class RestoreBaselineTest(unittest.TestCase):
         self.assertEqual(changed, {restore_module.LEGACY_PROGRESS_MODULE})
         self.assertFalse((progress / 'android').exists())
 
+    def test_progress_evidence_store_is_unwired_and_has_no_live_rules_or_platform_config(self):
+        baseline, archive = self.root / 'baseline', self.root / 'archive'
+        restore_module.restore(baseline)
+        restore_module.restore(archive, progress_evidence_store=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(archive) for p in (archive / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (archive / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE,
+            restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES,
+            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE})
+        for name in ['android','firebase.json','firestore.rules']:
+            self.assertFalse((archive / name).exists())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
