@@ -28,3 +28,17 @@ No Play publication authorized. Final deliverable: privately signed APK, existin
 ## Reporting
 For each point: observed cause, actual change, verification, remaining device checks. Code/design visibility or a green build is not proof of functional success.
 On a blocker, report actual state. No claim of completion without evidence.
+
+## Verified implementation checkpoint (revision 4, not yet delivered)
+- Working implementation: e4be3d3a90fd162848176b7133d6e23abf0bf6ed.
+- Current private build/QA run: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/39888600527
+- Independent synthetic account/rule QA passed 11 tests in run 39888493867: account isolation, monotonic inventory, missing-receipt authorization, legitimate new-device UID with unchanged canonical owner route, immutable received-grant public projection repair, concurrent frame lock, and denial of foreign account writes.
+- Exact 100378 generated baseline staging passed offline; only the explicitly allowed profile/shop/wallet classes changed. No currency amount, XP, grant, account session or private ID document was rewritten.
+- Read-only server diagnosis: original 200 catalog intact; @DEDA-IRAQI is already granted and received by @DEDA-AQPYXJ and selected active. Both public projections were absent. App repairs only those projections after verifying the immutable ownership/receipt/current-account proof.
+- Server GM wallet observed 998850 diamonds and gift wallet 60. These are observations, not instructions to overwrite or force screenshot totals. Local earned balances were not read or replaced.
+- Three complete approved 1536x1536 portraits restored and SHA256 matched. An earlier CI check correctly rejected truncated uploaded copies before APK generation.
+- Remaining gates: final Flutter analysis/widgets, signed APK build, signer comparison to 100378, isolated Android16 upgrade and cold launch, tested scoped cosmetic/public projection policy activation, private artifact delivery. No Play publication.
+- Real-account purchases, grant changes and live wallet deductions have NOT been performed as QA. Device/account end-to-end outcomes must not be claimed from unit tests alone.
+
+## Signing material incident (already disclosed to owner)
+A temporary public CI source export accidentally included the encrypted existing signing keystore without its passwords. Artifact 12471093600 was deleted and the artifact list verified empty; the exporter now includes only Dart source and pubspec. A prior download cannot be excluded. The existing signing identity is preserved for app update compatibility. Review the upload-key exposure before any future store release; no key rotation or Play publication has been performed.
