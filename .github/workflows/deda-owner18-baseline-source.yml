@@ -390,7 +390,7 @@ jobs:
           echo 'PASS: Stage71 accepted new no-purchase 200-admin catalog and four no-charge original cosmetics applied to reconstructed 100359. No APK/Play/Firebase deploy'
 
       - name: Export exact reconstructed baseline source only
-        run: tar -czf owner18-baseline-source.tar.gz lib pubspec.yaml pubspec.lock android
+        run: tar -czf owner18-baseline-source.tar.gz lib pubspec.yaml pubspec.lock
       - uses: actions/upload-artifact@v4
         with:
           name: DEDA-owner18-baseline-source-NO-APK
