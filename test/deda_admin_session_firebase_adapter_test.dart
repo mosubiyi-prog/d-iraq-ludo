@@ -340,6 +340,29 @@ void main() {
     expect(await h.login(),isTrue);
     h.gate.dispose();
   });
+  test('parent entry flow inherits one permit and retains the lane after backend login', () async {
+    final h = _Harness();
+    final entryCheck = Completer<void>();
+    final reachedEntry = Completer<void>();
+    final parent = h.gate.run<bool>(key:Object(),kind:DedaSessionTransitionKind.adminLogin,
+      origin:_explicit,currentAuthKind:()=>DedaSessionAuthKind.none,isCurrent:()=>true,
+      action:(permit) async {
+        final allowed = await h.adapter.signInWithPermit(permit:permit,
+          email:'fixture@example.invalid',password:'fixture-password');
+        permit.checkCurrent();
+        reachedEntry.complete();
+        await entryCheck.future;
+        permit.checkCurrent();
+        return allowed;
+      });
+    await reachedEntry.future;
+    await expectLater(h.login(),throwsA(isA<DedaSessionTransitionBusy>()));
+    expect(h.gate.diagnostics['started'],1);
+    entryCheck.complete();
+    expect(await parent,isTrue);
+    expect(h.io.events.where((e)=>e == 'sdk.signIn'),hasLength(1));
+    h.gate.dispose();
+  });
   test('background and missing Firebase never clear cache or call SDK', () async {
     final h = _Harness();
     await expectLater(h.login(origin:DedaSessionTransitionOrigin.background),throwsA(isA<DedaSessionTransitionDenied>()));

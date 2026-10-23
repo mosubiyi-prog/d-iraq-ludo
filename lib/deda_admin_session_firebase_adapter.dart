@@ -169,38 +169,46 @@ class DedaAdminSessionFirebaseAdapter {
     if (!io.ready) return Future<bool>.error(StateError('firebase-not-ready'));
     return gate.run<bool>(key:Object(),kind:DedaSessionTransitionKind.adminLogin,
       origin:origin,currentAuthKind:()=>io.currentUser?.kind ?? DedaSessionAuthKind.none,
-      isCurrent:isCurrent,action:(permit) async {
-        _ready(permit);
-        io.clearAdminProfileCache();
-        _ready(permit);
-        final user = await io.signIn(email.trim(),password);
-        _ready(permit);
-        if (user == null) return false;
-        _check(permit,user);
-        final data = _server(await io.readAdmin(user.uid));
-        _check(permit,user);
-        if (data == null) {
-          await _signOutRejected(permit,user);
-          return false;
-        }
-        if (!_active(data)) {
-          final status = DedaBackend.normalizeAdminStatus(data);
-          await _signOutRejected(permit,user);
-          throw StateError(status == 'temporarily_stopped' ? 'admin-temporarily-stopped' : 'admin-disabled');
-        }
-        final cleanName = displayName.trim();
-        final update = <String,dynamic>{
-          'lastSeenAt':io.serverTimestamp(),'lastLoginAt':io.serverTimestamp(),
-          if (cleanName.isNotEmpty) 'displayName':cleanName,
-          if (cleanName.isNotEmpty) 'updatedAt':io.serverTimestamp(),
-        };
-        _check(permit,user);
-        await io.mergeAdmin(user.uid,update);
-        _check(permit,user);
-        await _notifications(permit,user);
-        await _audit(permit,user);
-        _check(permit,user);
-        return true;
-      });
+      isCurrent:isCurrent,action:(permit) => signInWithPermit(
+        permit:permit,email:email,password:password,displayName:displayName));
+  }
+
+  /// Composition entry for the FUTURE UI flow: inherit its permit instead of
+  /// nesting gate.run. The caller keeps entry matching/local persistence and
+  /// guarded rejection cleanup within its own admitted transition. No UI is
+  /// authorized merely because this backend-compatible subflow returns true.
+  Future<bool> signInWithPermit({required DedaSessionTransitionPermit permit,
+    required String email,required String password,String displayName = ''}) async {
+    _ready(permit);
+    io.clearAdminProfileCache();
+    _ready(permit);
+    final user = await io.signIn(email.trim(),password);
+    _ready(permit);
+    if (user == null) return false;
+    _check(permit,user);
+    final data = _server(await io.readAdmin(user.uid));
+    _check(permit,user);
+    if (data == null) {
+      await _signOutRejected(permit,user);
+      return false;
+    }
+    if (!_active(data)) {
+      final status = DedaBackend.normalizeAdminStatus(data);
+      await _signOutRejected(permit,user);
+      throw StateError(status == 'temporarily_stopped' ? 'admin-temporarily-stopped' : 'admin-disabled');
+    }
+    final cleanName = displayName.trim();
+    final update = <String,dynamic>{
+      'lastSeenAt':io.serverTimestamp(),'lastLoginAt':io.serverTimestamp(),
+      if (cleanName.isNotEmpty) 'displayName':cleanName,
+      if (cleanName.isNotEmpty) 'updatedAt':io.serverTimestamp(),
+    };
+    _check(permit,user);
+    await io.mergeAdmin(user.uid,update);
+    _check(permit,user);
+    await _notifications(permit,user);
+    await _audit(permit,user);
+    _check(permit,user);
+    return true;
   }
 }
