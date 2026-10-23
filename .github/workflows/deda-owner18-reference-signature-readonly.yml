@@ -1,0 +1,26 @@
+name: DEDA owner18 reference APK public certificate READ ONLY
+on:
+  push:
+    branches: [deda-100378-owner18-fixes-2026-10-23]
+    paths: ['.github/workflows/deda-owner18-reference-signature-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reference-certificate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39869442313
+          name: DEDA-100378-PRIVATE-APK-UNVERIFIED-13-POINTS
+          path: /tmp/deda-reference-100378
+      - name: Read ONLY public APK signing certificate
+        run: |
+          set -euo pipefail
+          tools_dir="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          "$tools_dir/apksigner" verify --verbose --print-certs /tmp/deda-reference-100378/app-release.apk
