@@ -32,17 +32,41 @@ abstract class DedaOwnerSessionIo {
   Future<void> rememberKnownPhone(String phone, void Function() checkCurrent);
 }
 
+/// Firestore composition boundary: never subtype sealed plugin references.
+abstract class DedaOwnerFirestoreAccess {
+  Future<DedaOwnerServerDocument> read(String path, GetOptions options);
+  Future<void> write(String path, Map<String, dynamic> fields, SetOptions options);
+}
+
+class DedaFirebaseOwnerFirestoreAccess implements DedaOwnerFirestoreAccess {
+  DedaFirebaseOwnerFirestoreAccess(this.firestore);
+  final FirebaseFirestore firestore;
+  @override
+  Future<DedaOwnerServerDocument> read(String path, GetOptions options) async {
+    final snapshot = await firestore.doc(path).get(options);
+    return DedaOwnerServerDocument(snapshot.exists ? snapshot.data() : null,
+      fromCache: snapshot.metadata.isFromCache, pendingWrites: snapshot.metadata.hasPendingWrites);
+  }
+  @override
+  Future<void> write(String path, Map<String, dynamic> fields, SetOptions options) =>
+    firestore.doc(path).set(fields, options);
+}
+
 /// Real SDK transport, deliberately not instantiated by any app callsite yet.
 /// Share this instance across bound owner ports so SDK epochs cannot reset.
 class DedaFirebaseOwnerSessionIo implements DedaOwnerSessionIo {
-  DedaFirebaseOwnerSessionIo({required this.auth, required this.firestore}) {
+  DedaFirebaseOwnerSessionIo({required FirebaseAuth auth, required FirebaseFirestore firestore})
+      : this._(auth: auth, documents: DedaFirebaseOwnerFirestoreAccess(firestore));
+  DedaFirebaseOwnerSessionIo.forTesting({required FirebaseAuth auth, required DedaOwnerFirestoreAccess documents})
+      : this._(auth: auth, documents: documents);
+  DedaFirebaseOwnerSessionIo._({required this.auth, required this.documents}) {
     _observe(auth.currentUser);
     _subscription = auth.authStateChanges().listen(_observe,
       onError: (Object error, StackTrace stack) { _observing = false; },
       onDone: () { _observing = false; });
   }
   final FirebaseAuth auth;
-  final FirebaseFirestore firestore;
+  final DedaOwnerFirestoreAccess documents;
   final _tracker = DedaSessionPrincipalTracker();
   late final StreamSubscription<User?> _subscription;
   bool _observing = true;
@@ -70,14 +94,11 @@ class DedaFirebaseOwnerSessionIo implements DedaOwnerSessionIo {
   @override
   Future<void> signOut() => auth.signOut();
   @override
-  Future<DedaOwnerServerDocument> readServer(String path) async {
-    final snapshot = await firestore.doc(path).get(const GetOptions(source: Source.server));
-    return DedaOwnerServerDocument(snapshot.exists ? snapshot.data() : null,
-      fromCache: snapshot.metadata.isFromCache, pendingWrites: snapshot.metadata.hasPendingWrites);
-  }
+  Future<DedaOwnerServerDocument> readServer(String path) =>
+    documents.read(path, const GetOptions(source: Source.server));
   @override
   Future<void> setDocument(String path, Map<String, dynamic> fields, {bool merge = false}) =>
-    firestore.doc(path).set(fields, SetOptions(merge: merge));
+    documents.write(path, fields, SetOptions(merge: merge));
   @override
   Object serverTimestamp() => FieldValue.serverTimestamp();
   @override

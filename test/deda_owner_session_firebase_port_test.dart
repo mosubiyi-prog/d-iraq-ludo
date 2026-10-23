@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -131,84 +130,56 @@ class _Auth implements FirebaseAuth {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
-class _Metadata implements SnapshotMetadata {
-  @override
-  bool get hasPendingWrites => false;
-  @override
-  bool get isFromCache => false;
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-class _Document implements DocumentSnapshot<Map<String,dynamic>> {
-  @override
-  bool get exists => true;
-  @override
-  SnapshotMetadata get metadata => _Metadata();
-  @override
-  Map<String,dynamic> data() => {'fixture':'server'};
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-class _Reference implements DocumentReference<Map<String,dynamic>> {
+class _Firestore implements DedaOwnerFirestoreAccess {
+  String? requestedPath;
   GetOptions? readOptions;
   SetOptions? writeOptions;
   Map<String,dynamic>? written;
   @override
-  Future<DocumentSnapshot<Map<String,dynamic>>> get([GetOptions? options]) async {
+  Future<DedaOwnerServerDocument> read(String path, GetOptions options) async {
+    requestedPath = path;
     readOptions = options;
-    return _Document();
+    return const DedaOwnerServerDocument({'fixture':'server'});
   }
   @override
-  Future<void> set(Map<String,dynamic> data,[SetOptions? options]) async {
+  Future<void> write(String path, Map<String,dynamic> data, SetOptions options) async {
+    requestedPath = path;
     written = data;
     writeOptions = options;
   }
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-class _Firestore implements FirebaseFirestore {
-  final reference = _Reference();
-  String? requestedPath;
-  @override
-  DocumentReference<Map<String,dynamic>> doc(String path) {
-    requestedPath = path;
-    return reference;
-  }
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('real Firestore transport requests server-only source and exposes metadata', () async {
+  test('SDK transport policy requests server-only source and exposes metadata', () async {
     final auth = _Auth();
     final firestore = _Firestore();
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:firestore);
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:firestore);
     final result = await io.readServer('deda_sessions/fixture');
     expect(firestore.requestedPath,'deda_sessions/fixture');
-    expect(firestore.reference.readOptions!.source,Source.server);
+    expect(firestore.readOptions!.source,Source.server);
     expect(result.data,{'fixture':'server'});
     expect(result.fromCache,isFalse);
     expect(result.pendingWrites,isFalse);
     await io.dispose();
     await auth.changes.close();
   });
-  test('real Firestore transport preserves overwrite and merge options', () async {
+  test('SDK transport policy preserves overwrite and merge options', () async {
     final auth = _Auth();
     final firestore = _Firestore();
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:firestore);
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:firestore);
     await io.setDocument('deda_sessions/fixture',{'accountKey':_account});
-    expect(firestore.reference.writeOptions!.merge,isFalse);
+    expect(firestore.writeOptions!.merge,isFalse);
     await io.setDocument('users/fixture',{'name':'Fixture'},merge:true);
-    expect(firestore.reference.writeOptions!.merge,isTrue);
-    expect(firestore.reference.written,{'name':'Fixture'});
+    expect(firestore.writeOptions!.merge,isTrue);
+    expect(firestore.written,{'name':'Fixture'});
     await io.dispose();
     await auth.changes.close();
   });
   test('real transport preserves and reuses the existing installation preference', () async {
     SharedPreferences.setMockInitialValues({'deda_install_id_v1':' existing-install '});
     final auth = _Auth();
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:_Firestore());
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:_Firestore());
     expect(await io.installId(() {}), 'existing-install');
     expect((await SharedPreferences.getInstance()).getString('deda_install_id_v1'),' existing-install ');
     await io.dispose();
@@ -217,7 +188,7 @@ void main() {
   test('real transport creates one random installation id and remembers normalized phone', () async {
     SharedPreferences.setMockInitialValues({});
     final auth = _Auth();
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:_Firestore());
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:_Firestore());
     final install = await io.installId(() {});
     expect(RegExp(r'^[0-9a-f]{48}$').hasMatch(install),isTrue);
     expect(await io.installId(() {}),install);
@@ -229,7 +200,7 @@ void main() {
   test('real preference helpers honor expired guard before dispatching local writes', () async {
     SharedPreferences.setMockInitialValues({});
     final auth = _Auth();
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:_Firestore());
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:_Firestore());
     void expired() => throw const DedaStaleSessionTransition();
     await expectLater(io.installId(expired),throwsA(isA<DedaStaleSessionTransition>()));
     await expectLater(io.rememberKnownPhone(_phone,expired),throwsA(isA<DedaStaleSessionTransition>()));
@@ -239,7 +210,7 @@ void main() {
   });
   test('real auth observer records intermediate A B A events and ignores repeated current UID', () async {
     final auth = _Auth()..currentUser = _SdkUser('A',true);
-    final io = DedaFirebaseOwnerSessionIo(auth:auth,firestore:_Firestore());
+    final io = DedaFirebaseOwnerSessionIo.forTesting(auth:auth,documents:_Firestore());
     final first = io.currentUser!;
     auth.changes.add(auth.currentUser);
     expect(io.currentUser!.revision,first.revision);
