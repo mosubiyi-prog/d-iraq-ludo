@@ -6,7 +6,11 @@ pkg=dev.deda.qa.deda_transport_qa
 mkdir -p "$DEDA_NATIVE_RESULTS"
 node "$repo/tools/app_stability/native_transport/fixture-server.cjs" > "$DEDA_NATIVE_RESULTS/fixture.log" 2>&1 &
 fixture_pid=$!
-trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+cleanup() {
+  adb logcat -d -v threadtime > "$DEDA_NATIVE_RESULTS/native-logcat.log" 2>/dev/null || true
+  kill "$fixture_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
 python3 "$repo/tools/app_stability/native_transport/wait-result.py" waiting --timeout 30
 adb wait-for-device
 test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 36
