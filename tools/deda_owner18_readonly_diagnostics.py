@@ -47,6 +47,46 @@ for path in [
     allowed = {'identifier', 'recipientOriginalId', 'kind', 'group',
                'baseColor', 'originalId', 'activeId', 'balance', 'publicId'}
     report[path] = {k: v for k, v in fields.items() if k in allowed}
+def related_fields(path):
+    result = http.get(f'{base}/{path}', timeout=30)
+    if result.status_code == 404:
+        return None
+    if result.status_code != 200:
+        raise RuntimeError('Related identity diagnostic HTTP ' + str(result.status_code))
+    return result.json().get('fields', {})
+
+def value(fields, key, kind='stringValue'):
+    return (fields or {}).get(key, {}).get(kind)
+
+route = related_fields('deda_share_ids/@DEDA-AQPYXJ')
+owner_uid = value(route, 'ownerUid')
+if owner_uid:
+    profile = related_fields('users/' + owner_uid)
+    session = related_fields('deda_sessions/' + owner_uid)
+    key = value(profile, 'accountKey')
+    report['discussed_owner_identity_checks'] = {
+        'profile_exists': profile is not None,
+        'session_matches_account': bool(key and key == value(session, 'accountKey')),
+        'profile_original_id_matches': value(profile, 'sharePersonalId') == '@DEDA-AQPYXJ',
+        'route_active': value(route, 'active', 'booleanValue') is True,
+    }
+    if key:
+        gm = related_fields('deda_gm_personal_diamond_wallets/' + key)
+        report['existing_manager_personal_wallet'] = {
+            'exists': gm is not None, 'balance': value(gm, 'balance', 'integerValue')}
+for collection, identifier in [
+    ('deda_stage74_id_gift_receipts','@DEDA-IRAQI'),
+    ('deda_public_active_aliases','@DEDA-AQPYXJ'),
+    ('deda_public_alias_routes','@DEDA-IRAQI'),
+]:
+    fields = related_fields(collection + '/' + identifier)
+    report[collection + '_discussed_identifier'] = {
+        'exists': fields is not None,
+        'originalId': value(fields, 'originalId'),
+        'activeId': value(fields, 'activeId'),
+        'received': bool(value(fields, 'receivedAt', 'timestampValue')),
+    }
+
 rulesbase = 'https://firebaserules.googleapis.com/v1'
 r = http.get(f'{rulesbase}/projects/{PROJECT}/releases/cloud.firestore', timeout=30)
 r.raise_for_status()
