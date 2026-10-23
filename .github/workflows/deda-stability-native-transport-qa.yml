@@ -1,0 +1,103 @@
+name: DEDA isolated native Firebase and preferences Android16 QA NO DEPLOY
+on:
+  push:
+    branches: [deda-app-stability-isolated-2026-10-23]
+    paths:
+      - 'tools/app_stability/native_transport/**'
+      - 'tools/app_stability/progress_archive/firestore.rules'
+      - 'lib/deda_progress_backup_coordinator.dart'
+      - 'lib/deda_progress_evidence_store.dart'
+      - 'lib/deda_legacy_progress_capture.dart'
+      - 'lib/deda_owner_session_firebase_port.dart'
+      - 'lib/deda_session_principal_tracker.dart'
+      - '.github/workflows/deda-stability-native-transport-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stability-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-android16-transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      DEDA_NATIVE_APP: ${{ runner.temp }}/deda-native-transport-qa
+      DEDA_NATIVE_BASELINE: ${{ runner.temp }}/deda-native-baseline
+      DEDA_NATIVE_RESULTS: ${{ runner.temp }}/deda-native-results
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Verify original sources and prepare separate minimal Android harness
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEDA_NATIVE_RESULTS"
+          python3 -m unittest discover -s tools/app_stability/tests -v
+          python3 tools/restore_deda_stability_baseline.py "$DEDA_NATIVE_BASELINE"
+          flutter create --platforms android --project-name deda_transport_qa --org dev.deda.qa --no-pub "$DEDA_NATIVE_APP"
+          python3 tools/app_stability/native_transport/prepare-harness.py "$DEDA_NATIVE_APP" "$DEDA_NATIVE_BASELINE"
+          cp "$DEDA_NATIVE_APP/native-source-manifest.json" "$DEDA_NATIVE_RESULTS/"
+          test ! -e "$DEDA_NATIVE_APP/android/app/google-services.json"
+      - name: Resolve and verify exact baseline Firebase and preferences plugin versions
+        working-directory: ${{ env.DEDA_NATIVE_APP }}
+        run: |
+          set -euo pipefail
+          flutter pub get
+          python3 "$GITHUB_WORKSPACE/tools/app_stability/native_transport/prepare-harness.py" "$DEDA_NATIVE_APP" "$DEDA_NATIVE_BASELINE" --verify | tee "$DEDA_NATIVE_RESULTS/pinned-versions.json"
+          flutter analyze --no-pub lib | tee "$DEDA_NATIVE_RESULTS/native-analysis.log"
+      - name: Build disposable QA package with debug key only, no DEDA signing material
+        working-directory: ${{ env.DEDA_NATIVE_APP }}
+        run: |
+          set -euo pipefail
+          flutter build apk --debug 2>&1 | tee "$DEDA_NATIVE_RESULTS/native-build.log"
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk > "$DEDA_NATIVE_RESULTS/test-binary.sha256"
+      - name: Install pinned local demo emulators and privileged test fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-native-node"
+          npm install --prefix "$RUNNER_TEMP/deda-native-node" --no-save --no-audit --no-fund firebase-tools@13.35.1 firebase-admin@13.0.0
+          node --check tools/app_stability/native_transport/fixture-server.cjs
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Actual native plugins, local rules and process restart on Android16
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NODE_PATH: ${{ runner.temp }}/deda-native-node/node_modules
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: '"$RUNNER_TEMP/deda-native-node/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-progress-archive --config "$GITHUB_WORKSPACE/tools/app_stability/native_transport/firebase.json" ''bash "$GITHUB_WORKSPACE/tools/app_stability/native_transport/run-native.sh"'''
+      - name: Preserve logs on either outcome; never upload an APK or signing files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-STABILITY-NATIVE-ANDROID16-TRANSPORT-RESULTS-NO-APK
+          path: ${{ env.DEDA_NATIVE_RESULTS }}/
+          if-no-files-found: warn
+          retention-days: 14

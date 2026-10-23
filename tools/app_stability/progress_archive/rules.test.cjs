@@ -39,6 +39,18 @@ test('verified original owner can create and read immutable raw evidence',async(
   assert.deepEqual(saved.data().records,records());
   assert(saved.data().createdAt instanceof Timestamp);
 });
+test('native owner proof can read only its own users projection',async()=>{
+  const own=await assertSucceeds(getDocFromServer(doc(dbFor(oldUid),'users',oldUid)));
+  assert.equal(own.data().accountKey,account);
+  await assertFails(getDocFromServer(doc(dbFor(oldUid),'users',newUid)));
+  await assertFails(getDocs(collection(dbFor(oldUid),'users')));
+});
+test('own users projection remains read-only and unavailable without authentication',async()=>{
+  const ref=doc(dbFor(oldUid),'users',oldUid);
+  await assertFails(setDoc(ref,{accountKey:otherAccount}));
+  await assertFails(deleteDoc(ref));
+  await assertFails(getDocFromServer(doc(env.unauthenticatedContext().firestore(),'users',oldUid)));
+});
 test('new UID and new install for SAME proven account can read old-device evidence',async()=>{
   const saved=await assertSucceeds(getDocFromServer(doc(dbFor(newUid),evidencePath(account,oldId))));
   assert.equal(saved.data().sourceUid,oldUid);

@@ -60,6 +60,12 @@ service cloud.firestore {
       allow get: if request.auth != null && request.auth.uid == uid;
       allow list, write: if false;
     }
+    // The native archive transport reads its own user projection as a second
+    // proof input. No enumeration, cross-UID read or client write is allowed.
+    match /users/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
     // No UI/role/wallet/progress application or permission added here.
     match /{document=**} { allow read, write: if false; }
   }
