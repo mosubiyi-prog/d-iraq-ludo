@@ -1,0 +1,28 @@
+name: DEDA owner18 related state READ ONLY
+on:
+  push:
+    branches: [deda-100378-owner18-fixes-2026-10-23]
+    paths: ['.github/workflows/deda-owner18-readonly-diagnostics.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  related-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install google-auth requests
+      - name: Read only catalog and discussed owner ID state
+        env:
+          DEDA_STAGE69_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_STAGE69_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python3 tools/deda_owner18_readonly_diagnostics.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-owner18-related-readonly-diagnostics
+          path: owner18-diagnostics/
+          retention-days: 7
