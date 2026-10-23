@@ -46,7 +46,7 @@ jobs:
         with:
           flutter-version: '3.47.7'
           channel: stable
-          cache: false
+          cache: true
       - name: Verify original sources and prepare separate minimal Android harness
         run: |
           set -euo pipefail
@@ -75,6 +75,10 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deda-native-node"
           npm install --prefix "$RUNNER_TEMP/deda-native-node" --no-save --no-audit --no-fund firebase-tools@13.35.1 firebase-admin@13.0.0
+          mkdir -p "$RUNNER_TEMP/deda-native-demo"
+          cp tools/app_stability/native_transport/firebase.json "$RUNNER_TEMP/deda-native-demo/firebase.json"
+          cp tools/app_stability/progress_archive/firestore.rules "$RUNNER_TEMP/deda-native-demo/firestore.rules"
+          sha256sum "$RUNNER_TEMP/deda-native-demo/firestore.rules" > "$DEDA_NATIVE_RESULTS/test-rules.sha256"
           node --check tools/app_stability/native_transport/fixture-server.cjs
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
@@ -94,7 +98,7 @@ jobs:
           disable-linux-hw-accel: false
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: '"$RUNNER_TEMP/deda-native-node/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-progress-archive --config "$GITHUB_WORKSPACE/tools/app_stability/native_transport/firebase.json" ''bash "$GITHUB_WORKSPACE/tools/app_stability/native_transport/run-native.sh"'''
+          script: '"$RUNNER_TEMP/deda-native-node/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-progress-archive --config "$RUNNER_TEMP/deda-native-demo/firebase.json" ''bash "$GITHUB_WORKSPACE/tools/app_stability/native_transport/run-native.sh"'''
       - name: Preserve logs on either outcome; never upload an APK or signing files
         if: always()
         uses: actions/upload-artifact@v4

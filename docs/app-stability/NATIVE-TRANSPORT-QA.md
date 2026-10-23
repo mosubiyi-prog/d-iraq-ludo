@@ -29,8 +29,15 @@ The host requires exactly ten first-phase cases, two DISTINCT native process IDs
 
 Demo project ID and explicit emulator endpoints are hardcoded; no real Firebase config, service-account key, app production signature, billing or deployment command is used. The host fixture refuses non-local emulator environment variables or GOOGLE_APPLICATION_CREDENTIALS. Only its privileged test fixture seeds users/session state. The app exercises real SDK methods for evidence and journal operations. Existing source/rules tests remain separate and active.
 
-Six offline boundary checks cover required harness identity, refusal to target the repository, absent flutter-create marker, production app/config rejection, refusal to overwrite prepared work, and pinned-version drift. Together with previous restoration tests there are 23 local checks. Native case results are pending until a completed workflow and logs are recorded; creating the workflow or debug APK is not success.
+Seven offline boundary checks cover required harness identity, refusal to target the repository, absent flutter-create marker, production app/config rejection, refusal to overwrite prepared work, pinned-version drift, and the Firebase config rules staying inside the demo project root. Together with previous restoration tests there are 24 local checks. Native case results are pending until a completed workflow and logs are recorded; creating the workflow or debug APK is not success.
 
 Next after native success: candidate/live-rules compatibility review, application lifecycle and owner proof integration, a defined old-origin pending recovery policy, coherent producer snapshots, verified baseline/event cutover, nonfinancial migration, and actual DEDA acceptance across phones. No balances are interpreted or restored by these tests.
 
 Reference APIs: https://firebase.google.com/docs/emulator-suite/connect_auth and https://docs.flutter.dev/testing/integration-tests . The controlled cold-restart harness uses explicit host lifecycle control instead of a mocked plugin binding.
+
+
+## First native run — infrastructure failure before application cases
+
+Run 40041219643, source 95016c6bacdb05fedac3afd1c78324e772cdb1fb, built the isolated debug APK and booted Android API 36 successfully, but Firebase CLI rejected `../progress_archive/firestore.rules` as outside its config project directory before running the application cases. No native case passed or failed in that run. The correction copies the exact candidate rules and a local-path config into a disposable demo directory, with the rules SHA256 recorded. The harness Dart/modules/plugin versions are unchanged. SDK download caching is enabled for the pinned Flutter distribution only; no test APK is cached or uploaded.
+
+The source/rules regression run 40041219729 passed all four jobs: 78 Node and 74 emulator cases, and the earlier Dart groups. Artifact 12539463536 from the failed native run contains build/analysis/version/source evidence only; digest ad9f9aef2fb9a7d2e75163fec5357b9781435e1ad36931162b4ca46408caebb7. It is not proof of actual native transport. Native verification is still pending the corrected run.

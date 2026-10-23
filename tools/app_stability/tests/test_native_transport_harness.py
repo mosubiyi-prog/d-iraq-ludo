@@ -77,3 +77,9 @@ class NativeHarnessBoundaryTest(unittest.TestCase):
         (self.harness / 'pubspec.lock').write_text(altered)
         with self.assertRaisesRegex(ValueError, 'drifted'):
             native.verify(self.harness, self.baseline)
+
+    def test_demo_config_keeps_rules_inside_its_project_root(self):
+        config = json.loads((ROOT / 'tools/app_stability/native_transport/firebase.json').read_text())
+        self.assertEqual(config['firestore']['rules'], 'firestore.rules')
+        for service in ['auth', 'firestore']:
+            self.assertEqual(config['emulators'][service]['host'], '127.0.0.1')
