@@ -105,6 +105,21 @@ class RestoreBaselineTest(unittest.TestCase):
         self.assertEqual((output / restore_module.SESSION_MODULE).read_bytes(),
                          (REPO / restore_module.SESSION_MODULE).read_bytes())
 
+    def test_session_flow_adds_two_unwired_modules_without_changing_real_auth(self):
+        baseline, flow = self.root / 'baseline', self.root / 'flow'
+        restore_module.restore(baseline)
+        restore_module.restore(flow, session_flow=True)
+        paths = {p.relative_to(baseline) for p in (baseline / 'lib').rglob('*.dart')}
+        paths |= {p.relative_to(flow) for p in (flow / 'lib').rglob('*.dart')}
+        changed = {p.as_posix() for p in paths if not (baseline / p).exists()
+                   or (baseline / p).read_bytes() != (flow / p).read_bytes()}
+        self.assertEqual(changed, {restore_module.SESSION_MODULE, restore_module.SESSION_FLOW_MODULE})
+        for name in ['lib/main.dart','lib/deda_backend.dart','lib/deda_pin_auth.dart']:
+            self.assertEqual((flow / name).read_bytes(), (baseline / name).read_bytes())
+        for module in [restore_module.SESSION_MODULE, restore_module.SESSION_FLOW_MODULE]:
+            self.assertEqual((flow / module).read_bytes(), (REPO / module).read_bytes())
+        self.assertFalse((flow / 'android').exists())
+
     def test_refuses_existing_work_without_touching_it(self):
         output = self.root / 'work'
         output.mkdir()
