@@ -1,0 +1,73 @@
+{
+  "verificationSourceCommit": "e8e13b11409f7bd1dd27eac38d2a2871bed8b312",
+  "sourceTree": "d2691ce2b581becfd62339b867e1c1513cb1a53e",
+  "workflowRun": 40089971797,
+  "status": "verified",
+  "offlinePython": 51,
+  "newRuntimeAndDriverCases": 32,
+  "productionFeatureEnabled": false,
+  "compileTimeDefine": "DEDA_STABILITY_PROGRESS_BACKUP_PILOT",
+  "defineDefault": false,
+  "assemblyOption": "--progress-backup-runtime",
+  "generatedSourceSHA256": {
+    "lib/main.dart": "9ccd7fc8af29fb7fb21796616844ec39d13b781bd7b464b86d29099c3d1cdb76",
+    "lib/deda_backend.dart": "7a1c35c1a6558d3286dd45f01831c17f9b37d48991c14dbb1346954240bb31d2",
+    "lib/deda_pin_auth.dart": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+    "lib/deda_progress_backup_runtime.dart": "22198544813b4266560de8fc02553bb7dba34cd256fcdcf9a2abb628a7fe5d72"
+  },
+  "baselineArchiveSHA256": "760293947cafd4b7be12e7d6107a66e78ba851eb91b7a0062b645c7866a8374d",
+  "originalAuthSourcesPreserved": true,
+  "officialBuildOrSigningWorkflowChanged": false,
+  "apkOrAabProduced": false,
+  "firebaseDeploy": false,
+  "productionAccountChanges": false,
+  "testData": "controller/fake server and mock preferences; generated real preference hooks; not native application acceptance",
+  "triggerPolicy": "first frame, completed selection, resume; busy triggers dropped; no automatic queue or retry",
+  "scope": "untrusted three-record evidence only; no balance restore, mint, purchase, or device-global data adoption",
+  "remaining": [
+    "native integration of the new driver/root",
+    "full coordinated auth bindings",
+    "trusted financial migration and old-writer fencing",
+    "nonfinancial account data backup",
+    "two-phone acceptance and official signed test APK"
+  ],
+  "jobs": [
+    {
+      "id": 120860480966,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 120860481090,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120860481144,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120860481147,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    }
+  ],
+  "measuredPilotGroups": [
+    38,
+    30,
+    32,
+    13,
+    21,
+    36,
+    35,
+    43,
+    27,
+    40,
+    29
+  ],
+  "nodeReconciliation": 78,
+  "standaloneEmulator": 74,
+  "inheritedMainIssues": 181,
+  "selectedStrictAnalysesWithoutIssues": 10
+}
