@@ -14,7 +14,15 @@
 - لا خلط مع ملاحظات 100377 أو الإصلاحات الست أو التصميم. القائمة مستقلة.
 - المصادقة عبر git CLI غير متاحة؛ استُخدم اتصال GitHub المصرح مع مطابقة tree SHA المحلية والخادمية وexpected_sha. لا force ولا حذف عمل؛ فروع checkpoint المحلية تحفظ الرؤوس عند مزامنة نفس الشجرة.
 
-## أحدث نتيجة معتمدة — ربط حفظ التقدم وسجل الدفع واجتياز إعادة التشغيل
+## الدفعة الحالية — حفظ حقوق مراحل النقاط بعد مراجعة الرصيد (CI قيد الانتظار)
+
+أضيف point-tier-carryover.cjs كعامل داخلي غير منشور، يشتق5سجلات حقوق خاصة وملخصاً واحداً في معاملة من approval المحمي والأرشيف المطابق. يجب بقاء المرحلة baseline-approved دون حالة مالية مفعّلة، والسياسة مفعلة بنفس الإصدار، والمراجع مديراً عاماً نشطاً بالبريد نفسه. لا token أو مبلغ أو threshold أو verified من الهاتف؛ العامل يستهلك قرار المراجعة السابق ولا يمثل API أو فحص revocation جديداً للمراجع.
+
+حجز أول أربع مراحل يصبح reserved-awaiting-cutover مع عائد مستقبلي معلوم من الجدول الأصلي، والاستلام الموجود في الخام claimed-in-baseline بلا عائد ثانٍ، وخصم25000 terminal-prize-spent بلا رد أو bonus. الحالة غير المرصودة not-observed وليست رصيد صفر أو فتح مرحلة. كل السجلات canClaimNow=false/canRefundNow=false، والملخص canReleaseBalance=false/canAutoSettle=false؛ لا رصيد/receipt/مقتنى أو settlement/cutover يُكتب.
+
+نقص/تعارض/legacy temporary history يبقى للمراجعة دون إصلاح صامت. replay لا يغير timestamps أو يعيد كتابة الحقوق، وpartial/tampered carryover يرفض overwrite. أضيف32فحصNode (المجموع273 محلياً) و14حالةEmulator؛ CI قيد الانتظار. لا تغييرDart/قواعد/Native أو نشر؛ نتائج native24+PIN24 السابقة أدناه ما زالت دليل الربط ضمن حدودها. الرجوع checkpoint-stability-before-point-tier-carryover-2026-10-25 عند1b9487e.
+
+## النتيجة السابقة المعتمدة — ربط حفظ التقدم وسجل الدفع واجتياز إعادة التشغيل
 
 المصدر73fcd1fe89aa2071dd5c70e8281336944e9fd427 وحارس QA:c08f03c95cc547de8e90febbcdb2d7bf7d139c02. أضيف قارئ يحفظ14مفتاحاً أصلياً فقط (journals الإطارات13 وstyle inventory للحساب) بلا تغيير أنواعها/نصوصها أو تشغيل شراء/خصم. purchase sidecar مستقل immutable مربوط بـparent capture وUID/install وcanonical original، وتقرأه مراجعة المعلقات داخل معاملتها دون grant/refund/settlement. أصل التقدم v1 لم يتغير.
 

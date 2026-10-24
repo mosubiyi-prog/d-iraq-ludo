@@ -73,4 +73,4 @@ async function approveLegacyBaseline(options){
   return Object.freeze({replayed:false,phase:next.phase,baselineEventKey,canReleaseBalance:false});
  });
 }
-module.exports={approveLegacyBaseline,policyPath};
+module.exports={approveLegacyBaseline,policyPath,parsePolicy};

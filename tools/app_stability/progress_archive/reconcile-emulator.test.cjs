@@ -4,6 +4,7 @@ const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/
 const {doc,setDoc,getDocFromServer,deleteDoc,collection,getDocs,serverTimestamp}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
+const {savePointTierCarryover}=require('./point-tier-carryover.cjs');
 const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
 const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
@@ -563,4 +564,100 @@ for(const field of ['sourceUid','installId','progressCaptureId'])test(`worker pu
 test('missing requested local payment evidence never becomes no pending purchases',async()=>{
  await operationsFixture();await assert.rejects(reviewOperations({purchaseCaptureId:localPurchaseCaptureId}),e=>e.code==='purchase-evidence-missing');
  assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
+});
+
+const carryoverSummary=`${assessmentRoot}/pointTierCarryovers/${assessmentMigrationId}`;
+const carriedStage=t=>`${assessmentRoot}/pointTierEntitlements/${t}`;
+async function approvedCarryoverFixture(awards){
+ await reviewFixture();
+ if(awards!==undefined){
+  await db.doc(assessmentSource).update({'records.taskPoints':JSON.stringify({version:1,
+   awards:{income:{points:100000},...awards},completions:{},ledger:[]})});
+  await db.doc(assessmentRoot).delete();await db.doc(assessmentPath).delete();await assessArchive();
+ }
+ await approveArchive();
+}
+const carryover=(extra={})=>savePointTierCarryover({store,accountKey:account,migrationId:assessmentMigrationId,...extra});
+test('real approved carryover preserves original reservations, wallets and baseline proposal without releasing funds',async()=>{
+ await approvedCarryoverFixture();await db.doc('deda_gm_personal_diamond_wallets/keep').set({balance:1000000});
+ const before=(await db.doc(assessmentSource).get()).data(),rootBefore=(await db.doc(assessmentRoot).get()).data();
+ const r=await carryover();assert.equal(r.summary.canReleaseBalance,false);assert.equal(r.summary.observedUnclaimedReturns,1);
+ const stage=(await db.doc(carriedStage(5000)).get()).data();assert.equal(stage.status,'reserved-awaiting-cutover');
+ assert.equal(stage.futureReturnPoints,5050);assert.equal(stage.canClaimNow,false);assert.equal(stage.recordedReservePoints,-5000);
+ assert.equal((await db.collection(`${assessmentRoot}/pointTierEntitlements`).get()).size,5);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+ assert.deepEqual((await db.doc(assessmentSource).get()).data(),before);assert.deepEqual((await db.doc(assessmentRoot).get()).data(),rootBefore);
+ assert.deepEqual((await db.doc('deda_gm_personal_diamond_wallets/keep').get()).data(),{balance:1000000});
+ assert.equal((await db.collection(`deda_progress_receipts/${account}/events`).get()).size,0);
+});
+test('concurrent carryover workers create one summary/five stages and retain initial timestamp on replay',async()=>{
+ await approvedCarryoverFixture();const result=await Promise.all([carryover(),carryover()]);assert.equal(result.filter(v=>v.replayed).length,1);
+ const before=(await db.doc(carryoverSummary).get()).data();const first=(await db.doc(carriedStage(5000)).get()).data();
+ assert.equal((await carryover()).replayed,true);assert.deepEqual((await db.doc(carryoverSummary).get()).data(),before);
+ assert.deepEqual((await db.doc(carriedStage(5000)).get()).data(),first);
+ assert.equal((await db.collection(`${assessmentRoot}/pointTierCarryovers`).get()).size,1);
+});
+test('actual claimed raw pair is carried as already included with no second return amount',async()=>{
+ await approvedCarryoverFixture({'point_tier_reserve|5000':{points:-5000},'point_tier_claim|5000':{points:5050}});
+ await carryover();const stage=(await db.doc(carriedStage(5000)).get()).data();
+ assert.equal(stage.status,'claimed-in-baseline');assert.equal(stage.futureReturnPoints,null);assert.equal(stage.recordedClaimPoints,5050);
+});
+test('terminal 25000 native stage stays spent in private carryover and cannot be refunded',async()=>{
+ const awards={};for(const t of [5000,10000,15000,20000,25000]){
+  awards[`point_tier_reserve|${t}`]={points:-t};if(t!==25000)awards[`point_tier_claim|${t}`]={points:t+t/100};
+ }
+ await approvedCarryoverFixture(awards);await carryover();const last=(await db.doc(carriedStage(25000)).get()).data();
+ assert.equal(last.status,'terminal-prize-spent');assert.equal(last.futureReturnPoints,null);assert.equal(last.canRefundNow,false);
+ assert.equal((await db.doc(carryoverSummary).get()).data().terminalPrizeReserved,true);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('inconsistent later reserve without previous claim is retained without importing any rights',async()=>{
+ await approvedCarryoverFixture({'point_tier_reserve|10000':{points:-10000}});
+ const before=(await db.doc(assessmentSource).get()).data();
+ await assert.rejects(carryover(),e=>e.code==='point-carryover-history-needs-review');
+ assert.equal((await db.doc(carryoverSummary).get()).exists,false);assert.deepEqual((await db.doc(assessmentSource).get()).data(),before);
+});
+for(const change of ['policy-off','reviewer-demoted'])test(`carryover rechecks ${change} after actual SDK review approval`,async()=>{
+ await approvedCarryoverFixture();
+ if(change==='policy-off')await db.doc(policyPath).update({enabled:false});
+ else await db.doc(`admins/${reviewManager.uid}`).update({role:'admin'});
+ await assert.rejects(carryover(),e=>e.code===(change==='policy-off'?'baseline-review-policy-disabled':'point-carryover-reviewer-inactive'));
+ assert.equal((await db.doc(carryoverSummary).get()).exists,false);
+});
+test('changed raw evidence cannot rebase approved carryover inside a real transaction',async()=>{
+ await approvedCarryoverFixture();const raw=(await db.doc(assessmentSource).get()).data();
+ await db.doc(assessmentSource).update({'records.taskPoints':raw.records.taskPoints+' '});
+ await assert.rejects(carryover(),e=>e.code==='migration-reviewed-evidence-conflict');
+ assert.equal((await db.doc(carryoverSummary).get()).exists,false);
+});
+test('existing financial state is preserved instead of importing a replacement entitlement basis',async()=>{
+ await approvedCarryoverFixture();const existing={balances:{points:1000000},tag:'preserve'};await db.doc(statePath).set(existing);
+ await assert.rejects(carryover(),e=>e.code==='point-carryover-already-activated');assert.deepEqual((await db.doc(statePath).get()).data(),existing);
+});
+test('clients including original/new/other UID and manager cannot read, forge or delete carried rights',async()=>{
+ await approvedCarryoverFixture();await carryover();
+ for(const uid of ['old-device','new-device','other-device',reviewManager.uid])for(const path of [carryoverSummary,carriedStage(5000)]){
+  const ref=doc(client(uid),path);await assertFails(getDocFromServer(ref));
+  await assertFails(setDoc(ref,{canClaimNow:true},{merge:true}));await assertFails(deleteDoc(ref));
+ }
+});
+test('atomic write validation failure leaves neither a carryover summary nor partial stages',async()=>{
+ await approvedCarryoverFixture();const badStore=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>undefined});
+ await assert.rejects(carryover({store:badStore}));assert.equal((await db.doc(carryoverSummary).get()).exists,false);
+ assert.equal((await db.collection(`${assessmentRoot}/pointTierEntitlements`).get()).size,0);
+});
+test('tampered carried amount cannot be corrected silently by replaying original import',async()=>{
+ await approvedCarryoverFixture();await carryover();await db.doc(carriedStage(5000)).update({futureReturnPoints:999999});
+ await assert.rejects(carryover(),e=>e.code==='point-carryover-conflict');assert.equal((await db.doc(carriedStage(5000)).get()).data().futureReturnPoints,999999);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('partial stage records are held rather than overwritten without their atomic summary',async()=>{
+ await approvedCarryoverFixture();await db.doc(carriedStage(5000)).set({tag:'preserve'});
+ await assert.rejects(carryover(),e=>e.code==='point-carryover-conflict');
+ assert.deepEqual((await db.doc(carriedStage(5000)).get()).data(),{tag:'preserve'});
+});
+test('closed migration cannot reimport legacy rights or reset a later claim history',async()=>{
+ await approvedCarryoverFixture();await db.doc(assessmentRoot).update({phase:'cutover-complete',settlementId:'settlement_review_0000001'});
+ await assert.rejects(carryover(),e=>e.code==='point-carryover-reviewed-baseline-required');
+ assert.equal((await db.doc(carryoverSummary).get()).exists,false);
 });
