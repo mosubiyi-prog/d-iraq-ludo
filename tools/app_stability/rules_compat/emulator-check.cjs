@@ -4,7 +4,7 @@
 const fs=require('node:fs');const path=require('node:path');const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
-const {doc,setDoc,getDocFromServer,deleteDoc,collection,getDocs,updateDoc,serverTimestamp,Timestamp}=require('firebase/firestore');
+const {doc,setDoc,getDocFromServer,deleteDoc,collection,getDocs,updateDoc,serverTimestamp,Timestamp,runTransaction,arrayUnion}=require('firebase/firestore');
 const project='demo-deda-live-progress-compat';
 if(!/^(127\.0\.0\.1|localhost):[0-9]+$/.test(process.env.FIRESTORE_EMULATOR_HOST||'') ||
    process.env.GCLOUD_PROJECT!==project || process.env.GOOGLE_APPLICATION_CREDENTIALS ||
@@ -162,24 +162,125 @@ async function afterArchiveChecks(){
   });
 }
 
+
+// Match immutable 100380 DedaPinAuth's Firestore payloads/order. Only credential
+// and profile creation use normal client rules; no privileged session/user seeds
+// for this account. Auth token issuance is still a rules-unit fixture, not PIN UI.
+const pinAccount='07700000002',syntheticPin='381649';
+const pinUids={first:'compat-pin-register',second:'compat-pin-new-device',
+  trusted:'compat-pin-trusted-uid',wrong:'compat-pin-wrong',untrusted:'compat-pin-untrusted'};
+const pinDb=uid=>env.authenticatedContext(uid,{firebase:{sign_in_provider:'anonymous'}}).firestore();
+const prove=(db,uid,pin=syntheticPin,key=pinAccount)=>setDoc(doc(db,'deda_auth_attempts',uid),
+  {uid,accountKey:key,pin,createdAt:serverTimestamp()});
+const open=(db,uid,installId,key=pinAccount)=>setDoc(doc(db,'deda_sessions',uid),
+  {uid,accountKey:key,installId,signedInAt:serverTimestamp(),lastSeenAt:serverTimestamp()});
+const userPayload=install=>({name:'Synthetic PIN Owner',phone:pinAccount,accountKey:pinAccount,
+  accountType:'user',authMethod:'deda_pin_firestore_v1',trustedInstallIds:arrayUnion(install),
+  updatedAt:serverTimestamp(),lastSeenAt:serverTimestamp()});
+async function pinOwnershipChecks(mode){
+  const first=pinDb(pinUids.first),second=pinDb(pinUids.second),trusted=pinDb(pinUids.trusted);
+  await check(`${mode}/pin/client-registration-and-first-session`,async()=>{
+    const directory=doc(first,'deda_account_directory',pinAccount);
+    await runTransaction(first,async transaction=>{
+      assert.equal((await transaction.get(directory)).exists(),false);
+      transaction.set(doc(first,'deda_credentials',pinAccount),{accountKey:pinAccount,pin:syntheticPin,
+        active:true,createdUid:pinUids.first,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+      transaction.set(directory,{accountKey:pinAccount,active:true,createdUid:pinUids.first,
+        createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+    });
+    await prove(first,pinUids.first);await open(first,pinUids.first,'compat-pin-install-first');
+    await setDoc(doc(first,'deda_account_profiles',pinAccount),{accountKey:pinAccount,
+      name:'Synthetic PIN Owner',phone:pinAccount,accountType:'user',
+      trustedInstallIds:['compat-pin-install-first'],createdAt:serverTimestamp(),
+      updatedAt:serverTimestamp(),lastSeenAt:serverTimestamp()});
+    await setDoc(doc(first,'users',pinUids.first),{...userPayload('compat-pin-install-first'),createdAt:serverTimestamp()},{merge:true});
+    assert.equal((await getDocFromServer(doc(first,'users',pinUids.first))).data().accountKey,pinAccount);
+  });
+  await check(`${mode}/pin/credential-and-attempt-remain-unreadable`,async()=>{
+    for(const route of [['deda_credentials',pinAccount],['deda_auth_attempts',pinUids.first]]){
+      assert.equal(await permitted(()=>getDocFromServer(doc(first,...route))),false);
+    }
+  });
+  await check(`${mode}/pin/wrong-pin-cannot-open-session-or-profile`,async()=>{
+    const uid=pinUids.wrong,db=pinDb(uid);
+    assert.equal(await permitted(()=>prove(db,uid,'000000')),false);
+    assert.equal(await permitted(()=>open(db,uid,'compat-wrong-install')),false);
+    assert.equal(await permitted(()=>getDocFromServer(doc(db,'deda_account_profiles',pinAccount))),false);
+    assert.equal(await permitted(()=>setDoc(doc(db,'users',uid),userPayload('compat-wrong-install'))),false);
+  });
+  await check(`${mode}/pin/new-device-correct-pin-session-readback`,async()=>{
+    await prove(second,pinUids.second);await open(second,pinUids.second,'compat-pin-install-second');
+    const session=await getDocFromServer(doc(second,'deda_sessions',pinUids.second));
+    assert.equal(session.data().accountKey,pinAccount);assert.equal(session.data().installId,'compat-pin-install-second');
+    assert.equal(session.metadata.fromCache,false);assert.equal(session.metadata.hasPendingWrites,false);
+    assert.equal((await getDocFromServer(doc(second,'deda_account_profiles',pinAccount))).data().name,'Synthetic PIN Owner');
+  });
+  await check(`${mode}/pin/new-device-profile-trust-and-users-binding`,async()=>{
+    await setDoc(doc(second,'deda_account_profiles',pinAccount),{
+      trustedInstallIds:arrayUnion('compat-pin-install-second'),lastSeenAt:serverTimestamp(),updatedAt:serverTimestamp()},{merge:true});
+    await setDoc(doc(second,'users',pinUids.second),userPayload('compat-pin-install-second'),{merge:true});
+    assert.equal((await getDocFromServer(doc(second,'users',pinUids.second))).data().accountKey,pinAccount);
+  });
+  await check(`${mode}/pin/trusted-install-new-uid-without-pin`,async()=>{
+    await open(trusted,pinUids.trusted,'compat-pin-install-second');
+    assert.equal((await getDocFromServer(doc(trusted,'deda_account_profiles',pinAccount))).data().accountKey,pinAccount);
+    await setDoc(doc(trusted,'users',pinUids.trusted),userPayload('compat-pin-install-second'),{merge:true});
+    assert.equal((await getDocFromServer(doc(trusted,'deda_sessions',pinUids.trusted))).data().uid,pinUids.trusted);
+  });
+  await check(`${mode}/pin/untrusted-install-without-pin-denied`,async()=>{
+    const uid=pinUids.untrusted,db=pinDb(uid);
+    assert.equal(await permitted(()=>open(db,uid,'compat-pin-install-unknown')),false);
+    assert.equal(await permitted(()=>getDocFromServer(doc(db,'deda_account_profiles',pinAccount))),false);
+  });
+  await check(`${mode}/pin/valid-proof-cannot-switch-to-other-account`,async()=>{
+    assert.equal(await permitted(()=>open(second,pinUids.second,'compat-pin-install-second',A)),false);
+    assert.equal((await getDocFromServer(doc(second,'deda_sessions',pinUids.second))).data().accountKey,pinAccount);
+  });
+  await check(`${mode}/pin/cannot-write-another-uid-proof-session-or-user`,async()=>{
+    assert.equal(await permitted(()=>prove(second,pinUids.first)),false);
+    assert.equal(await permitted(()=>open(second,pinUids.first,'compat-pin-install-second')),false);
+    assert.equal(await permitted(()=>setDoc(doc(second,'users',pinUids.first),userPayload('compat-pin-install-second'),{merge:true})),false);
+  });
+  await check(`${mode}/pin/original-profile-and-both-trust-entries-preserved`,async()=>{
+    const profile=(await getDocFromServer(doc(first,'deda_account_profiles',pinAccount))).data();
+    assert.equal(profile.name,'Synthetic PIN Owner');assert.equal(profile.accountKey,pinAccount);
+    assert.deepEqual(profile.trustedInstallIds,['compat-pin-install-first','compat-pin-install-second']);
+    assert.equal((await getDocFromServer(doc(first,'users',pinUids.first))).data().name,'Synthetic PIN Owner');
+  });
+  if(mode==='after')await check('after/pin/client-proven-new-uid-reads-original-evidence',async()=>{
+    const id='compat_pin_owned_capture_00001';
+    const route=`deda_progress_evidence/${pinAccount}/captures/${id}`;
+    await setDoc(doc(first,route),{...payload(id,pinUids.first,'compat-pin-install-first'),accountKey:pinAccount});
+    for(const db of [second,trusted]){
+      const evidence=(await getDocFromServer(doc(db,route))).data();
+      assert.equal(evidence.sourceUid,pinUids.first);assert.equal(evidence.installId,'compat-pin-install-first');
+      assert.deepEqual(evidence.records,records);
+    }
+    for(const uid of [pinUids.wrong,pinUids.untrusted]){
+      assert.equal(await permitted(()=>getDocFromServer(doc(pinDb(uid),route))),false);
+    }
+  });
+}
+
 (async()=>{
   let success=false;
   try{
     for(const mode of ['before','after']){
       env=await initializeTestEnvironment({projectId:project,firestore:{rules:sources[mode]}});
-      await seed();await legacyChecks(mode);
+      await seed();await legacyChecks(mode);await pinOwnershipChecks(mode);
       if(mode==='before')await beforeNamespaceChecks();else await afterArchiveChecks();
       await env.cleanup();env=null;
     }
     // 18 old-policy observations per mode +16 baseline namespace probes +20
-    // added-policy cases. Both old policy and merged policy were loaded.
-    assert.equal(cases.length,72);assert(cases.every(value=>value.passed));success=true;
+    // added-policy cases, plus 10 PIN cases per policy and one archive bridge.
+    // Both old policy and merged policy were loaded.
+    assert.equal(cases.length,93);assert(cases.every(value=>value.passed));success=true;
   }catch(error){
     if(!cases.some(value=>!value.passed))cases.push({name:'emulator-setup-or-completion',passed:false,code:'setup-or-count-failed'});
   }finally{
     if(env){try{await env.cleanup();}catch(_){success=false;}}
     report.status=success?'emulator-passed-awaiting-release-verify':'emulator-failed';
-    report.emulator={project,expectedCases:72,completedCases:cases.length,passed:cases.filter(c=>c.passed).length,
+    report.emulator={project,expectedCases:93,completedCases:cases.length,passed:cases.filter(c=>c.passed).length,
       failed:cases.filter(c=>!c.passed).length,cases,legacyObservations:observations,
       data:'synthetic only, no production documents read or written'};
     fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');

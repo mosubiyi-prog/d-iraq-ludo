@@ -31,3 +31,10 @@ The downloaded artifact contained only the sanitized report; ZIP SHA256 `f31afb2
 A follow-up preserves UTF-8 bytes explicitly through private-file storage and verification, including CRLF policy text. Local Python checks are now 48/48; rerun CI for that follow-up before treating it as validated remotely. No Dart/native transport module, runtime callsite, app signature, wallet or production rule is modified here.
 
 Official API scope references: https://firebase.google.com/docs/reference/rules/rest/v1/projects.rulesets/get and https://firebase.google.com/docs/reference/rules/rest/v1/projects.releases/get . Both document firebase.readonly for these GET operations; create/update release operations are not implemented by this tool.
+
+
+## PIN-to-archive compatibility follow-up
+
+The emulator suite now additionally attempts 10 client-rule cases on each original/merged policy, plus one bridge from client-proven sessions to the new evidence path (93 total cases planned). The separate synthetic account has NO privileged-seeded session/users/profile/credentials. Normal client requests create its directory/credential transaction, submit PIN proof, open a session, create its profile/users binding, sign in from a replacement UID/install, and restore the trusted install on another UID without a new PIN proof. Denial cases cover wrong PIN, untrusted install, cross-account session switch, foreign-UID writes and unreadable credential/proof documents. The merged bridge must preserve original capture provenance while the two newly client-proven UIDs read it.
+
+Payloads and order were compared with immutable 100380 `deda_pin_auth.dart`, SHA256 `884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786`. Token identities are still rules-unit-testing fixtures. This checks Firestore contract compatibility; it does not execute Dart PinAuth, actual anonymous token issuance, UI local lockout, physical phones or app restoration. This follow-up remains pending until its own CI result is recorded.
