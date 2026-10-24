@@ -1,0 +1,100 @@
+{
+  "format": 1,
+  "dateBaghdad": "2026-10-25",
+  "status": "passed",
+  "sourceCommit": "1343e514b3ff6f9aa36d8d23a0058fa7bfca7740",
+  "runId": 40139845610,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40139845610",
+  "jobs": [
+    {
+      "id": 121009080026,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121009080206,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121009080218,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121009080225,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121009080255,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    }
+  ],
+  "tests": {
+    "node": {
+      "passed": 351,
+      "failed": 0,
+      "new": 49
+    },
+    "authFirestoreEmulator": {
+      "passed": 189,
+      "failed": 0,
+      "new": 18
+    },
+    "python": 66,
+    "preservedUi": 38,
+    "authPlace": 94,
+    "purchaseReaderStore": 28,
+    "combinedCoordinator": 43
+  },
+  "behavior": {
+    "source": "point-tier-return-v1",
+    "returnTable": {
+      "5000": 5050,
+      "10000": 10100,
+      "15000": 15150,
+      "20000": 20200
+    },
+    "terminal25000Excluded": true,
+    "alreadyClaimedAndUnobservedExcluded": true,
+    "atomicWrites": [
+      "protectedReceipt",
+      "afterCutoverClassification",
+      "appliedEvent",
+      "currentProjection",
+      "privateClaimMarker"
+    ],
+    "concurrentOnceOnly": true,
+    "replayReturnsCurrentState": true,
+    "archivedRightsImmutable": true,
+    "clientAmountOrIdentityOverrideAccepted": false
+  },
+  "productionMutations": false,
+  "rulesChanged": false,
+  "dartChanged": false,
+  "nativeRerun": false,
+  "publicApi": false,
+  "activation": false,
+  "remaining": [
+    "actual old-writer fencing",
+    "payment settlement and trusted cutover producer",
+    "account-authenticated server entry",
+    "future reservation and other trusted award producers",
+    "application balance/secondary-data restore bindings",
+    "two-device acceptance and review APK"
+  ],
+  "limits": [
+    "Internal trusted worker is not a public account-authorized endpoint.",
+    "Cutover/settlement/fence in tests remain privileged synthetic fixtures.",
+    "legacyFenceId still validates only a reference, not a live writer fence.",
+    "Only previously carried, unclaimed stage returns are covered.",
+    "New-UID reads use emulator rule contexts, not physical phones."
+  ],
+  "checkpointBefore": {
+    "branch": "checkpoint-stability-before-point-tier-claim-2026-10-25",
+    "sha": "73c32c130fa11316a3798616eeb9adf02372dd56"
+  }
+}

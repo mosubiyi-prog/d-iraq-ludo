@@ -1,6 +1,6 @@
 # Atomic migrated point-tier return — 25 October 2026 Baghdad
 
-Status: Node351 passed locally; CI pending. Internal, undeployed, no client API.
+Status: PASS. Source `1343e514b3ff6f9aa36d8d23a0058fa7bfca7740`; all five CI jobs passed on the first attempt. Internal, undeployed, no client API.
 
 ## Result
 
@@ -12,7 +12,7 @@ Five writes commit together: protected receipt, after-cutover classification, ap
 
 ## Validation
 
-Node351/351 locally:302 previous plus49 new cases for exact amounts/all four returnable stages, replay/lost response, generic receipt replay, current balances, excluded stages, early/unsettled/missing proof, rollback/retry, orphan/tampered records and strict receipt units/identity. New Auth/Firestore cases use actual SDK approval and the real carryover producer before exercising concurrent claims, response loss, new-UID reads, fixed stages, rejection conditions, five-write rollback and private client denial. Final CI counts pending.
+Node351/351 locally:302 previous plus49 new cases for exact amounts/all four returnable stages, replay/lost response, generic receipt replay, current balances, excluded stages, early/unsettled/missing proof, rollback/retry, orphan/tampered records and strict receipt units/identity. New Auth/Firestore cases use actual SDK approval and the real carryover producer before exercising concurrent claims, response loss, new-UID reads, fixed stages, rejection conditions, five-write rollback and private client denial. CI https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40139845610 passed Node351/351 and Auth/Firestore189/189 (18 new Emulator cases above171), both with zero failures. All five jobs passed. Python66, preserved UI38, auth/place94, reader/store28 and combined coordinator43 remain successful in their applicable jobs. No Dart/rules/native sources changed, so no repeated Android run was needed. New-UID read assertions use emulator rule contexts; they are not physical-phone acceptance.
 
 ## Boundaries
 
