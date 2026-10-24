@@ -1,0 +1,91 @@
+name: DEDA current Firebase policy GET ONLY and private archive compatibility NO DEPLOY
+on:
+  push:
+    branches: [deda-app-stability-isolated-2026-10-23]
+    paths:
+      - 'tools/app_stability/rules_compat/**'
+      - 'tools/app_stability/tests/test_rules_live_compat.py'
+      - 'tools/app_stability/progress_archive/firestore.rules'
+      - '.github/workflows/deda-stability-live-policy-compat-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stability-live-policy-readonly-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  readonly-snapshot-private-emulator-compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GCLOUD_PROJECT: demo-deda-live-progress-compat
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Define separate private source and public sanitized result directories
+        run: |
+          printf 'DEDA_RULES_PRIVATE=%s/deda-live-policy-private\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_RULES_PUBLIC=%s/deda-live-policy-results\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/deda-live-policy-results"
+      - name: Verify reversible merge and read-only endpoint guards offline
+        run: |
+          python3 -m unittest discover -s tools/app_stability/tests -v
+          node --check tools/app_stability/rules_compat/emulator-check.cjs
+      - name: Install isolated read-only client and demo emulator dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/deda-rules-read-client"
+          "$RUNNER_TEMP/deda-rules-read-client/bin/pip" install --disable-pip-version-check --quiet google-auth==2.40.3 requests==2.32.4
+          npm install --prefix "$RUNNER_TEMP/deda-rules-node" --no-save --no-audit --no-fund firebase@11.10.0 @firebase/rules-unit-testing@4.0.0 firebase-tools@13.35.1
+      - name: GET current release and immutable ruleset using firebase.readonly scope only
+        env:
+          DEDA_RULES_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_RULES_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          "$RUNNER_TEMP/deda-rules-read-client/bin/python" tools/app_stability/rules_compat/read_current.py --private-dir "$DEDA_RULES_PRIVATE" --public-dir "$DEDA_RULES_PUBLIC"
+      - name: Compare original and additive policy with synthetic demo documents only
+        env:
+          NODE_PATH: ${{ runner.temp }}/deda-rules-node/node_modules
+        run: |
+          set -euo pipefail
+          # Full rules and emulator diagnostics stay private. Only controlled
+          # status codes, hashes and synthetic observation results are shared.
+          "$RUNNER_TEMP/deda-rules-node/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-deda-live-progress-compat --config "$DEDA_RULES_PRIVATE/firebase.json" 'node "$GITHUB_WORKSPACE/tools/app_stability/rules_compat/emulator-check.cjs"' > "$DEDA_RULES_PRIVATE/emulator-private.log" 2>&1
+      - name: GET release again and reject concurrent live policy drift
+        env:
+          DEDA_RULES_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_RULES_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          "$RUNNER_TEMP/deda-rules-read-client/bin/python" tools/app_stability/rules_compat/read_current.py --private-dir "$DEDA_RULES_PRIVATE" --public-dir "$DEDA_RULES_PUBLIC" --verify-after
+      - name: Ensure sanitized failure status exists without disclosing private source
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['DEDA_RULES_PUBLIC'])/'rules-compat-report.json'
+          if not p.exists():
+              p.write_text(json.dumps({'status':'read-or-test-stopped','privateSourceUploaded':False})+'\n')
+          report=json.loads(p.read_text())
+          print(json.dumps({'status':report['status'],'emulator':{
+              k:report.get('emulator',{}).get(k) for k in ['expectedCases','completedCases','passed','failed']}}))
+          PY
+      - name: Preserve sanitized result ONLY, never private source or credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-STABILITY-CURRENT-POLICY-COMPAT-SANITIZED-NO-SOURCE-NO-DEPLOY
+          path: ${{ env.DEDA_RULES_PUBLIC }}/rules-compat-report.json
+          if-no-files-found: error
+          retention-days: 14
