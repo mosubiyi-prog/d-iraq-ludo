@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "date": "2026-10-24",
+  "timezone": "Asia/Baghdad",
+  "codeCommit": "11b26d6b78d5f6bc021262a177f71c7c191e1d2d",
+  "runId": 40131232489,
+  "status": "all-five-ci-jobs-passed",
+  "tests": {
+    "node": {
+      "passed": 171,
+      "new": 32
+    },
+    "authFirestoreEmulator": {
+      "passed": 110,
+      "new": 16
+    },
+    "authAndPlace": {
+      "passed": 94
+    },
+    "preservedAccountOwnershipUi": {
+      "passed": 38
+    },
+    "python": {
+      "passed": 66
+    }
+  },
+  "productionPolicyCreated": false,
+  "liveAccountWrites": false,
+  "deployed": false,
+  "reviewTokenVerification": "AdminSDK.verifyIdToken(checkRevoked=true) every transaction attempt",
+  "approvalWrites": [
+    "private-approval",
+    "migration-phase-baseline-approved"
+  ],
+  "financialWrites": false,
+  "approvalReleasesBalance": false,
+  "adminPinIntegrationComplete": false,
+  "actualTwoPhoneAcceptance": false,
+  "remaining": [
+    "owner-policy-activation-decision",
+    "existing-admin-PIN-entry-integration",
+    "pending-purchase-and-reservation-settlement",
+    "actual-legacy-writer-fencing",
+    "baseline-and-reward-source-production",
+    "app-restore-integration",
+    "two-phone-acceptance"
+  ]
+}
