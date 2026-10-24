@@ -5,7 +5,7 @@ import time
 import urllib.request
 
 parser = argparse.ArgumentParser()
-parser.add_argument('expected', choices=['waiting', 'restart-ready', 'passed'])
+parser.add_argument('expected', choices=['waiting', 'background-ready', 'backgrounded', 'restart-ready', 'passed'])
 parser.add_argument('--timeout', type=int, default=180)
 args = parser.parse_args()
 deadline = time.monotonic() + args.timeout
@@ -16,9 +16,9 @@ while time.monotonic() < deadline:
         if value['status'] == 'failed':
             raise SystemExit(json.dumps(value))
         if value['status'] == args.expected:
-            if args.expected == 'restart-ready' and len(value['passed']) != 10:
+            if args.expected == 'restart-ready' and len(value['passed']) != 18:
                 raise SystemExit('incomplete first-phase result')
-            if args.expected == 'passed' and (len(value['passed']) != 12 or value.get('phase') != 2):
+            if args.expected == 'passed' and (len(value['passed']) != 22 or value.get('phase') != 2):
                 raise SystemExit('incomplete cold-restart result')
             print(json.dumps({'status': value['status'], 'passed': len(value['passed'])}))
             break

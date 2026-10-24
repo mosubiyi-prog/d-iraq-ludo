@@ -59,3 +59,12 @@ The correction initializes a DEFAULT demo app and explicitly points its Auth/Fir
 نجحت فحوص الاستعادة/حدود harness **24/24**، وNode **78/78**، ومحاكي القواعد **74/74**، وبقيت مجموعات Dart السابقة ناجحة (38/30/13/21/36/35/43/27/40/29 بحسب مواضعها). التحليل الصارم للـmodules وحزمة الاختبار بلا ملاحظات؛ بقيت 181 ملاحظة/تحذيراً قديمة في main المرجعي. تم إنشاء debug APK مؤقت بحزمة dev.deda.qa.deda_transport_qa وتوقيع اختبار runner فقط؛ لم يُرفع أو يُنشر ولم يتغير Android أو توقيع التطبيق الأصلي أو main/Backend/PinAuth أو قواعد الإنتاج.
 
 هذه نتيجة نقل وتخزين فعلية للمكونات المعزولة. لا يعلن اكتمال حفظ تقدم مستخدمي ديدا أو جاهزية تحديث رسمي؛ ربط حساب ديدا الحقيقي، ومطابقة القواعد المنشورة، واعتماد التقدم القديم والأحداث، وحفظ غير المالي، والإدارة والأقسام وفحص هاتفين والنسخة الموقعة باقية. CURRENT أعيد تنظيمه ليعرض الحالة الأحدث أولاً؛ التاريخ والحدود السابقة محفوظة هنا وفي NATIVE-TRANSPORT-QA.md وسجل git.
+
+
+## Follow-up: passive runtime/root on the same native plugins — pending
+
+The harness now plans 22 cases (the original 12 plus 10 runtime/root cases). It copies the unchanged real runtime module as the eighth transport module and opts in ONLY in the disposable debug build. New cases cover root selection/default driver, unchanged suppression after owner proof, changed raw text, A→B→A after a completed native server read, real Android Home/resume while that read result is held, offline pending recovery, the production host constructor/default Firebase factory and default Auth/pending account-B recovery across force-stop. The held-read seam pauses AFTER a real server read; it does not interrupt a network packet.
+
+The host presses Home, waits for the actual Flutter lifecycle pause callback reported by the app, and relaunches the same process. It requires equal PIDs across this background cycle. It then force-stops/relaunches the same installed APK/data and requires different PIDs. Account-B has a separate journal from the retained original account-A restart cases. Fixture install markers are changed explicitly for these tests; this is one emulator, not two physical phones. Sessions/users remain local privileged fixtures; no real DEDA PIN/native sign-in UI is claimed.
+
+Offline boundaries now pass 52 Python checks. New shell/Node syntax checks pass. The 22-case native result remains pending until its workflow and downloaded artifact are verified. No production runtime, Firebase rule, account, official signing or APK-delivery workflow changes here.

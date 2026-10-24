@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'deda_legacy_progress_capture.dart';
 import 'deda_owner_session_firebase_port.dart';
 import 'deda_progress_backup_coordinator.dart';
+import 'deda_progress_backup_runtime.dart';
 import 'deda_progress_evidence_store.dart';
 import 'deda_session_flow_prototype.dart';
 
@@ -27,6 +28,8 @@ const account='07700000000',otherAccount='07700000001';
 const install='native-primary-install-v1';
 const firstId='native_transport_first_capture_0001';
 const restartId='native_transport_restart_capture_001';
+const runtimeRestartId='native_runtime_restart_capture_0001';
+const runtimeInstall='native-runtime-install-b-v1';
 const rawPoints=' {"awards":{"spent":{"points":-5000}},"label":"تقدم محفوظ"} ';
 const rawSocial='{"coins":17,"xp":3020,"taskClaims":["day|task"]}';
 const rawDiamonds='{"balance":9,"day":"fixture","viewsToday":1}';
@@ -80,6 +83,19 @@ class NativeClient {
   DedaProgressBackupCoordinator coordinator(DedaProgressEvidenceStore store)=>
     DedaProgressBackupCoordinator(reader:DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
       archive:store,journal:DedaSharedPreferencesBackupJournal(),timeout:const Duration(seconds:5));
+  static Future<NativeClient> fromDefault({bool allowCreate=true}) async {
+    final app=Firebase.app();
+    final auth=FirebaseAuth.instance;
+    await auth.authStateChanges().first.timeout(const Duration(seconds:15));
+    if(auth.currentUser==null) {
+      check(allowCreate,'default Auth did not survive restart');
+      await auth.signInAnonymously();
+    }
+    check(auth.currentUser?.isAnonymous==true,'default principal is not anonymous');
+    final store=FirebaseFirestore.instance;
+    final session=DedaFirebaseOwnerSessionIo(auth:auth,firestore:store);
+    return NativeClient(app,auth,store,session,DedaFirebaseProgressEvidenceIo(session:session,firestore:store));
+  }
   static Future<NativeClient> connect(String name,{bool allowCreate=true}) async {
     check(project.startsWith('demo-'),'demo project is mandatory');
     final app=await Firebase.initializeApp(name:name,options:demoOptions);
@@ -124,6 +140,224 @@ class LostAckIo implements DedaProgressEvidenceIo {
     dispatches++;await real.writeOnce(path,fields,check);
     if(armed){armed=false;throw StateError('native-injected-lost-ack');}
   }
+}
+
+
+// Native transport is real. This one-shot pause is injected AFTER a completed
+// server read, to make account/lifecycle invalidation deterministic; it does
+// not claim to interrupt an in-flight network packet.
+class HeldReadIo extends LostAckIo {
+  HeldReadIo(super.real) {armed=false;}
+  bool holding=false;
+  Completer<void> reached=Completer<void>(),release=Completer<void>();
+  void holdNext() {holding=true;reached=Completer<void>();release=Completer<void>();}
+  @override
+  Future<DedaOwnerServerDocument> readServer(String path) async {
+    final result=await real.readServer(path);
+    if(holding) {holding=false;reached.complete();await release.future;}
+    return result;
+  }
+}
+class NativeObservedRuntime extends DedaProgressBackupRuntime {
+  NativeObservedRuntime({required super.account,required super.currentAccount,
+    required super.driverFactory}):super(enabled:true);
+  int pendingCalls=0;
+  @override
+  Future<void> request() async {
+    pendingCalls++;
+    try {await super.request();} finally {pendingCalls--;}
+  }
+  bool expectBackground=false;
+  final resumed=Completer<void>();
+  @override
+  void pause() {
+    super.pause();
+    if(expectBackground)unawaited(post('/lifecycle',{'state':'paused'}));
+  }
+  @override
+  Future<void> resume() {
+    final result=super.resume();
+    if(expectBackground && !resumed.isCompleted)resumed.complete();
+    return result;
+  }
+}
+Future<void> until(bool Function() condition,{int seconds=25}) async {
+  final deadline=DateTime.now().add(Duration(seconds:seconds));
+  while(!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds:30));
+  }
+  check(condition(),'bounded native runtime wait expired in $activeCase');
+}
+String? runtimeSelection;
+void selectRuntime(String? key) {
+  runtimeSelection=key;
+  dedaProgressBackupAccount.complete(dedaProgressBackupAccount.begin(),key);
+}
+Widget label()=>const MaterialApp(home:Scaffold(body:Center(child:Text('DEDA native runtime QA'))));
+Future<void> detachRoot() async {
+  runApp(label());await WidgetsBinding.instance.endOfFrame;
+}
+Future<List<QueryDocumentSnapshot<Map<String,dynamic>>>> captures(NativeClient client,String key) async =>
+  (await client.firestore.collection('deda_progress_evidence/$key/captures')
+    .get(const GetOptions(source:Source.server))).docs;
+
+Future<void> nativeRuntimeFirstPhase(SharedPreferences prefs) async {
+  check(dedaProgressBackupPilot,'native harness must opt in explicitly');
+  final client=await NativeClient.fromDefault();
+  final uid=client.uid;
+  await seed(uid);selectRuntime(null);
+  var factories=0;
+  DedaFirebaseProgressBackupDriver? driver;
+  var runtime=NativeObservedRuntime(account:dedaProgressBackupAccount,
+    currentAccount:()=>runtimeSelection,driverFactory:(){factories++;return driver=DedaFirebaseProgressBackupDriver.create();});
+  runApp(DedaProgressBackupHost.forTesting(currentAccount:()=>runtimeSelection,
+    runtime:runtime,child:label()));
+  await WidgetsBinding.instance.endOfFrame;
+  await record('native-runtime-root-selection-archives-with-real-driver',() async {
+    selectRuntime(account);
+    await until(()=>runtime.status==DedaProgressBackupStatus.saved);
+    final rows=await captures(client,account);
+    final owned=rows.where((row)=>row.data()['sourceUid']==uid).toList();
+    check(owned.length==1,'root did not produce exactly one owned capture');
+    check(RegExp(r'^[a-f0-9]{48}$').hasMatch(owned.single.id),'runtime capture ID is not secure 24-byte hex');
+    check((owned.single.data()['records'] as Map)['taskPoints']==rawPoints,'root altered source text');
+    check(factories==1 && await DedaSharedPreferencesBackupJournal().read(account)==null,'root did not settle its one shared driver');
+  });
+  await record('native-runtime-unchanged-skips-upload-after-owner-proof',() async {
+    final before=(await captures(client,account)).length;
+    await runtime.request();
+    check(runtime.status==DedaProgressBackupStatus.unchanged,'unchanged capture not suppressed');
+    check((await captures(client,account)).length==before,'unchanged capture uploaded again');
+    check(factories==1 && client.uid==uid,'root recreated driver or mutated Auth');
+  });
+  await record('native-runtime-changed-source-archives-without-overwrite',() async {
+    const changed=' {"awards":{"new":5,"spent":-2},"nativeRuntime":true} ';
+    final before=(await captures(client,account)).length;
+    await prefs.setString(sourcePoints,changed);
+    await runtime.request();
+    check(runtime.status==DedaProgressBackupStatus.saved,'changed capture not saved');
+    final rows=await captures(client,account);
+    check(rows.length==before+1,'changed source was not one new immutable capture');
+    check(rows.any((row)=>row.data()['sourceUid']==uid && (row.data()['records'] as Map)['taskPoints']==changed),'changed raw text missing');
+    check(prefs.getString(sourcePoints)==changed,'runtime overwrote source');
+    await prefs.setString(sourcePoints,rawPoints);
+  });
+  await detachRoot();await runtime.dispose();selectRuntime(null);
+  final held=HeldReadIo(client.transport);
+  driver=DedaFirebaseProgressBackupDriver.forTesting(session:client.session,
+    coordinator:client.coordinator(DedaProgressEvidenceStore(held)),dispose:() async {});
+  runtime=NativeObservedRuntime(account:dedaProgressBackupAccount,
+    currentAccount:()=>runtimeSelection,driverFactory:()=>driver);
+  runApp(DedaProgressBackupHost.forTesting(key:const ValueKey('native-held-root'),
+    currentAccount:()=>runtimeSelection,runtime:runtime,child:label()));
+  await WidgetsBinding.instance.endOfFrame;
+  await record('native-runtime-A-B-A-revokes-completed-server-read',() async {
+    final before=(await captures(client,account)).length;
+    held.holdNext();selectRuntime(account);
+    await held.reached.future.timeout(const Duration(seconds:15));
+    selectRuntime(otherAccount);selectRuntime(account);
+    held.release.complete();
+    await until(()=>!driver!.busy && runtime.pendingCalls==0);
+    check((await captures(client,account)).length==before,'stale account read dispatched an upload');
+    check(await DedaSharedPreferencesBackupJournal().read(account)==null,'stale account read wrote pending journal');
+  });
+  await record('native-runtime-Android-home-resume-revokes-held-read',() async {
+    final before=(await captures(client,account)).length;
+    held.holdNext();final request=runtime.request();
+    await held.reached.future.timeout(const Duration(seconds:15));
+    runtime.expectBackground=true;
+    await post('/background-ready',{'passed':passed,'failures':failures,'phase':1});
+    // Host presses Android Home, waits for the REAL lifecycle pause signal,
+    // then launches this SAME native process. No simulated lifecycle here.
+    await runtime.resumed.future.timeout(const Duration(seconds:45));
+    runtime.expectBackground=false;held.release.complete();await request;
+    check(runtime.status!=DedaProgressBackupStatus.saved,'resume revived old lifecycle intent');
+    check((await captures(client,account)).length==before,'resume queued an automatic duplicate');
+    check(await DedaSharedPreferencesBackupJournal().read(account)==null,'paused read wrote a journal');
+  });
+  await record('native-runtime-offline-retains-pending-and-explicit-resume-recovers',() async {
+    await driver!.coordinator.prepare(accountKey:account,
+      captureId:'native_runtime_offline_pending_0001',isCurrent:()=>true);
+    final pending=await DedaSharedPreferencesBackupJournal().read(account);
+    await client.firestore.disableNetwork();
+    try {
+      await runtime.request();
+      check(runtime.status==DedaProgressBackupStatus.blocked,'offline request not blocked');
+      check(await DedaSharedPreferencesBackupJournal().read(account)==pending,'offline runtime dropped pending');
+    } finally {await client.firestore.enableNetwork();}
+    await until(()=>!driver!.busy);
+    await runtime.resume();
+    check(runtime.status==DedaProgressBackupStatus.saved,'explicit resume did not settle pending');
+    check(await DedaSharedPreferencesBackupJournal().read(account)==null,'runtime pending not retired');
+    check(prefs.getString(sourcePoints)==rawPoints,'offline runtime changed source');
+  });
+  await detachRoot();await runtime.dispose();
+  await record('native-runtime-production-host-constructor-default-factory',() async {
+    final before=(await captures(client,account)).length;
+    runApp(DedaProgressBackupHost(key:const ValueKey('native-production-host'),
+      currentAccount:()=>runtimeSelection,child:label()));
+    final deadline=DateTime.now().add(const Duration(seconds:25));
+    var complete=false;
+    while(DateTime.now().isBefore(deadline)) {
+      final count=(await captures(client,account)).length;
+      if(count==before+1 && await DedaSharedPreferencesBackupJournal().read(account)==null) {complete=true;break;}
+      await Future<void>.delayed(const Duration(milliseconds:150));
+    }
+    check(complete,'real production host/default factory did not archive');
+    check(client.uid==uid && client.auth.currentUser!.isAnonymous,'host mutated SDK identity');
+    await detachRoot();
+  });
+  await record('native-runtime-B-pending-prepared-for-cold-restart',() async {
+    selectRuntime(null);
+    await prefs.setString('deda_install_id_v1',runtimeInstall);
+    await seed(uid,key:otherAccount,installation:runtimeInstall);
+    for(final key in [
+      'deda_task_points_state_v1_$otherAccount',
+      'deda_social_progress_v1_$otherAccount',
+      'deda_diamonds_wallet_v1_$otherAccount']) {
+      check(await prefs.setString(key,' {"runtimePending":"original B"} '),'B source not persisted');
+    }
+    final pendingDriver=DedaFirebaseProgressBackupDriver.create();
+    try {
+      final intent=await pendingDriver.coordinator.prepare(accountKey:otherAccount,
+        captureId:runtimeRestartId,isCurrent:()=>true);
+      check(await prefs.setString('qa_runtime_intent',intent.encode()),'B intent fixture not saved');
+      check(await prefs.setString('qa_runtime_uid',uid),'B native UID fixture not saved');
+    } finally {await pendingDriver.dispose();await prefs.setString('deda_install_id_v1',install);}
+  });
+  await client.session.dispose();
+}
+
+Future<void> nativeRuntimeSecondPhase(SharedPreferences prefs) async {
+  final client=await NativeClient.fromDefault(allowCreate:false);
+  await record('native-runtime-default-auth-and-B-journal-survive-process',() async {
+    check(client.uid==prefs.getString('qa_runtime_uid'),'default native Auth UID changed across processes');
+    final encoded=prefs.getString('qa_runtime_intent');
+    check(encoded!=null && await DedaSharedPreferencesBackupJournal().read(otherAccount)==encoded,'B pending journal changed across processes');
+    check(DedaProgressBackupIntent.decode(encoded!,otherAccount).captureId==runtimeRestartId,'B capture ID lost');
+    check(prefs.getString('deda_task_points_state_v1_$otherAccount')==' {"runtimePending":"original B"} ','B source lost');
+  });
+  await record('native-runtime-root-recovers-original-B-pending-after-process-restart',() async {
+    await prefs.setString('deda_install_id_v1',runtimeInstall);
+    selectRuntime(otherAccount);
+    final runtime=NativeObservedRuntime(account:dedaProgressBackupAccount,
+      currentAccount:()=>runtimeSelection,driverFactory:DedaFirebaseProgressBackupDriver.create);
+    runApp(DedaProgressBackupHost.forTesting(currentAccount:()=>runtimeSelection,
+      runtime:runtime,child:label()));
+    await until(()=>runtime.status==DedaProgressBackupStatus.saved);
+    final evidence=await client.archive.read(accountKey:otherAccount,
+      captureId:runtimeRestartId,isCurrent:()=>true);
+    check(evidence.sourceUid==client.uid && evidence.installId==runtimeInstall,'B original provenance changed');
+    check(evidence.capture.raw[DedaLegacyProgressPart.taskPoints]==' {"runtimePending":"original B"} ','B raw evidence changed');
+    check(await DedaSharedPreferencesBackupJournal().read(otherAccount)==null,'B pending not retired');
+    await runtime.request();
+    check(runtime.status==DedaProgressBackupStatus.unchanged,'recovered intent immediately uploaded again');
+    check((await captures(client,otherAccount)).length==1,'B recovery produced duplicate captures');
+    check(prefs.getString(sourcePoints)==rawPoints,'B recovery changed A source');
+    await detachRoot();await runtime.dispose();
+    await prefs.setString('deda_install_id_v1',install);
+  });
+  await client.session.dispose();
 }
 
 Future<void> firstPhase(SharedPreferences prefs) async {
@@ -230,13 +464,14 @@ Future<void> firstPhase(SharedPreferences prefs) async {
     } finally {await prefs.setString('deda_install_id_v1',install);}
     await client.backup.uploadPending(accountKey:account,isCurrent:()=>true);
   });
+  await nativeRuntimeFirstPhase(prefs);
   await record('native-pending-journal-prepared-for-cold-restart',() async {
     final intent=await client.backup.prepare(accountKey:account,captureId:restartId,isCurrent:()=>true);
     check(await prefs.setString('qa_restart_intent',intent.encode()),'restart intent not saved');
     check(await prefs.setString('qa_owner_uid',client.uid),'restart UID not saved');
     check(intent.capture.raw[DedaLegacyProgressPart.taskPoints]==rawPoints,'restart source changed');
   });
-  check(passed.length==10 && failures.isEmpty,'first phase incomplete');
+  check(passed.length==18 && failures.isEmpty,'first phase incomplete');
   check(await prefs.setString('qa_passed',jsonEncode(passed)),'pass history not persisted');
   check(await prefs.setString('qa_phase','restart-ready'),'restart marker not persisted');
   await prefs.reload();
@@ -248,7 +483,7 @@ Future<void> firstPhase(SharedPreferences prefs) async {
 Future<void> secondPhase(SharedPreferences prefs) async {
   phase=2;
   final previous=jsonDecode(prefs.getString('qa_passed') ?? 'null');
-  check(previous is List && previous.length==10,'first process pass history did not survive');
+  check(previous is List && previous.length==18,'first process pass history did not survive');
   passed.addAll((previous as List).cast<String>());
   await record('native-preferences-and-pending-survive-process-restart',() async {
     final encoded=prefs.getString('qa_restart_intent');
@@ -268,10 +503,13 @@ Future<void> secondPhase(SharedPreferences prefs) async {
     check(result.evidence.capture.raw[DedaLegacyProgressPart.taskPoints]==rawPoints,'recovered raw source changed');
     check(prefs.getString(sourcePoints)==rawPoints,'recovery overwrote source preferences');
   });
-  check(passed.length==12 && failures.isEmpty,'second phase incomplete');
+  await nativeRuntimeSecondPhase(prefs);
+  check(passed.length==22 && failures.isEmpty,'second phase incomplete');
   await prefs.setString('qa_phase','completed');
   await post('/finish',{'passed':passed,'failures':failures,'phase':2,
-    'coldRestart':true,'nativeAuthUidPersisted':true,'scope':'demo native transport harness'});
+    'coldRestart':true,'nativeAuthUidPersisted':true,'runtimeHostTested':true,
+    'actualAndroidBackgroundResume':true,'runtimeDefaultFactoryTested':true,
+    'scope':'demo native transport and passive runtime harness; seeded sessions, not DEDA PIN'});
 }
 
 Future<void> main() async {

@@ -13,6 +13,10 @@
 - لا خلط مع ملاحظات 100377 أو الإصلاحات الست أو التصميم. القائمة مستقلة.
 - المصادقة عبر git CLI غير متاحة؛ استُخدم اتصال GitHub المصرح مع مطابقة tree SHA المحلية والخادمية وexpected_sha. لا force ولا حذف عمل؛ فروع checkpoint المحلية تحفظ الرؤوس عند مزامنة نفس الشجرة.
 
+## متابعة native للربط — قيد التشغيل
+
+جهزت 22 حالة native مخططة: الـ12 السابقة +10 للـruntime/root الحقيقيين. أضيف Home/رجوع فعلي من أندرويد مع نفس PID، ثم force-stop/فتح مع PID مختلف ونفس بيانات الحزمة. الجديد يستعمل الموديول الثامن الأصلي وdefault Firebase factory، والجلسات/البيانات تبقى fixtures محلية؛ لا DEDA PIN حقيقي أو هاتفين. فحوص Python52 وبنية shell/Node ناجحة؛ لا تعتمد native22 قبل نتيجة CI والتحقق من الأثر. راجع NATIVE-TRANSPORT-QA.md.
+
 ## أحدث نتيجة — أول ربط لحفظ الدليل داخل مصدر ديدا
 
 أضيف --progress-backup-runtime لربط root/preferences الفعليين من مصدر 100380. يلتقط load/saveLogin/logout جيل الحساب قبل أول await، ويستدعي منسق الحفظ عند أول إطار/اكتمال الاختيار/الرجوع، دون تعديل المصادقة. العلم DEDA_STABILITY_PROGRESS_BACKUP_PILOT افتراضي false؛ لم يفعل أو ينشر. بوابة المالك الخادمية وUID/install/users تبقى لازمة. راجع PROGRESS-BACKUP-RUNTIME.md؛ فحوص Python الجديدة 51/51، ومجموعة الربط والمحوّل الجديدة **32/32**. نجح https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40089971797 على مصدر e8e13b1 بأربع مهامه؛ Python51 وNode78 وEmulator74، وكل مجموعات Dart السابقة. التحليل الصارم المحدد نجح عشر مرات وبقيت ملاحظات main الموروثة 181. ملف النتائج PROGRESS-BACKUP-RUNTIME-RESULTS-2026-10-24.json.

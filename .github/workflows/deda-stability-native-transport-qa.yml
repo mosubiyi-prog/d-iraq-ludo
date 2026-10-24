@@ -6,6 +6,7 @@ on:
       - 'tools/app_stability/native_transport/**'
       - 'tools/app_stability/progress_archive/firestore.rules'
       - 'lib/deda_progress_backup_coordinator.dart'
+      - 'lib/deda_progress_backup_runtime.dart'
       - 'lib/deda_progress_evidence_store.dart'
       - 'lib/deda_legacy_progress_capture.dart'
       - 'lib/deda_owner_session_firebase_port.dart'
@@ -68,7 +69,7 @@ jobs:
         working-directory: ${{ env.DEDA_NATIVE_APP }}
         run: |
           set -euo pipefail
-          flutter build apk --debug 2>&1 | tee "$DEDA_NATIVE_RESULTS/native-build.log"
+          flutter build apk --debug --dart-define=DEDA_STABILITY_PROGRESS_BACKUP_PILOT=true 2>&1 | tee "$DEDA_NATIVE_RESULTS/native-build.log"
           sha256sum build/app/outputs/flutter-apk/app-debug.apk > "$DEDA_NATIVE_RESULTS/test-binary.sha256"
       - name: Install pinned local demo emulators and privileged test fixtures
         run: |

@@ -78,6 +78,17 @@ class NativeHarnessBoundaryTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'drifted'):
             native.verify(self.harness, self.baseline)
 
+    def test_runtime_is_exact_module_and_pilot_enabled_only_for_disposable_debug_build(self):
+        self.assertIn('deda_progress_backup_runtime.dart', native.MODULES)
+        workflow=(ROOT / '.github/workflows/deda-stability-native-transport-qa.yml').read_text()
+        self.assertIn('flutter build apk --debug --dart-define=DEDA_STABILITY_PROGRESS_BACKUP_PILOT=true', workflow)
+        script=(ROOT / 'tools/app_stability/native_transport/run-native.sh').read_text()
+        self.assertIn('KEYCODE_HOME', script)
+        self.assertIn('background-ready --timeout', script)
+        self.assertIn('backgrounded --timeout', script)
+        self.assertIn('test "$background_pid" = "$first_pid"', script)
+        self.assertIn('adb shell am force-stop "$pkg"', script)
+
     def test_demo_config_keeps_rules_inside_its_project_root(self):
         config = json.loads((ROOT / 'tools/app_stability/native_transport/firebase.json').read_text())
         self.assertEqual(config['firestore']['rules'], 'firestore.rules')

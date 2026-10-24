@@ -11,7 +11,7 @@ MODULES = (
     'deda_session_transition_gate.dart', 'deda_session_flow_prototype.dart',
     'deda_session_principal_tracker.dart', 'deda_owner_session_firebase_port.dart',
     'deda_legacy_progress_capture.dart', 'deda_progress_evidence_store.dart',
-    'deda_progress_backup_coordinator.dart',
+    'deda_progress_backup_coordinator.dart', 'deda_progress_backup_runtime.dart',
 )
 FAMILIES = ('firebase_core', 'firebase_auth', 'cloud_firestore', 'shared_preferences')
 
