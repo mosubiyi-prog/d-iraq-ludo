@@ -4,6 +4,7 @@ const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/
 const {doc,setDoc,getDocFromServer,deleteDoc,collection,getDocs,serverTimestamp}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getAuth}=require('firebase-admin/auth');
+const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
 const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
@@ -455,4 +456,79 @@ test('assessment retry after approval does not erase reviewer decision or advanc
  assert.equal((await assessArchive()).phase,'baseline-approved');
  assert.deepEqual((await db.doc(approvalPath).get()).data(),before);
  assert.equal((await db.doc(statePath).get()).exists,false);
+});
+
+const operationsOriginal='@DEDA-ABC123';
+const nativeCosmeticPath=`deda_native_account_cosmetics/${operationsOriginal}`;
+const oldReceiptPath=`deda_lab_frame_receipts/${operationsOriginal}/frames/FRAME_03`;
+const oldOwnershipPath=`deda_lab_owned_frames/${operationsOriginal}/frames/FRAME_03`;
+async function operationsFixture(){
+ await archiveAssessment();await assessArchive();
+ await db.doc('users/old-device').update({sharePersonalId:operationsOriginal});
+ await db.doc(`deda_share_ids/${operationsOriginal}`).set({publicId:operationsOriginal,kind:'personal',active:true,ownerUid:'old-device'});
+ await db.doc(nativeCosmeticPath).set({originalId:operationsOriginal,pendingFrames:['FRAME_03'],ownedFrames:['FRAME_05'],
+  ownedStyles:['badge_gold'],avatar:2,customField:'preserve',updatedAt:FieldValue.serverTimestamp()});
+}
+const reviewOperations=(extra={})=>saveLegacyOperationReview({store,accountKey:account,migrationId:assessmentMigrationId,originalId:operationsOriginal,...extra});
+async function receiptPair(){
+ await db.doc(oldReceiptPath).set({kind:'lab_frame',publicId:operationsOriginal,frameId:'FRAME_03',cost:1000,createdAt:FieldValue.serverTimestamp()});
+ await db.doc(oldOwnershipPath).set({publicId:operationsOriginal,frameId:'FRAME_03',receiptId:`${operationsOriginal}_FRAME_03`,createdAt:FieldValue.serverTimestamp()});
+}
+test('operation review preserves actual Firestore pending markers, all cosmetics, GM wallet and raw evidence',async()=>{
+ await operationsFixture();const wallet=db.doc('deda_gm_personal_diamond_wallets/keep');await wallet.set({balance:1000000});
+ const native=(await db.doc(nativeCosmeticPath).get()).data(),source=(await db.doc(assessmentSource).get()).data(),root=(await db.doc(assessmentRoot).get()).data();
+ const result=await reviewOperations();assert.equal(result.report.pendingPurchases,'unknown');assert.equal(result.report.canAutoSettle,false);
+ assert.equal(result.report.pointTiers.observedUnclaimedReturns,1);
+ assert.deepEqual((await db.doc(nativeCosmeticPath).get()).data(),native);
+ assert.deepEqual((await db.doc(assessmentSource).get()).data(),source);assert.deepEqual((await db.doc(assessmentRoot).get()).data(),root);
+ assert.deepEqual((await wallet.get()).data(),{balance:1000000});assert.equal((await db.doc(statePath).get()).exists,false);
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,1);
+});
+test('concurrent operation reviews create one immutable report with a stable timestamp',async()=>{
+ await operationsFixture();const results=await Promise.all([reviewOperations(),reviewOperations()]);
+ assert.equal(results.filter(r=>r.replayed).length,1);const before=(await db.doc(results[0].path).get()).data();
+ assert.equal((await reviewOperations()).replayed,true);assert.deepEqual((await db.doc(results[0].path).get()).data(),before);
+});
+test('receipt pair confirms item only and never clears ambiguous native pending charge or refunds funds',async()=>{
+ await operationsFixture();await receiptPair();const before=(await db.doc(nativeCosmeticPath).get()).data();
+ const r=await reviewOperations();assert.equal(r.report.frames[0].receiptConfirmed,true);assert.equal(r.report.frames[0].nativePending,true);
+ assert.equal(r.report.frames[0].canAutoRefund,false);assert.equal(r.report.pendingPurchases,'unknown');
+ assert.deepEqual((await db.doc(nativeCosmeticPath).get()).data(),before);assert.equal((await db.doc(statePath).get()).exists,false);
+});
+for(const field of ['receipt-only','wrong-cost','wrong-receipt-id'])test(`operation review ${field} cannot confirm ownership`,async()=>{
+ await operationsFixture();await receiptPair();
+ if(field==='receipt-only')await db.doc(oldOwnershipPath).delete();
+ if(field==='wrong-cost')await db.doc(oldReceiptPath).update({cost:1});
+ if(field==='wrong-receipt-id')await db.doc(oldOwnershipPath).update({receiptId:'forged'});
+ const r=await reviewOperations();assert.equal(r.report.frames[0].receiptConfirmed,false);assert.ok(r.report.issues.some(v=>v.includes('partial-or-invalid')));
+});
+test('changing a native pending list produces a new review and keeps original unresolved evidence',async()=>{
+ await operationsFixture();const first=await reviewOperations();
+ await db.doc(nativeCosmeticPath).update({pendingFrames:['FRAME_03','FRAME_06']});const second=await reviewOperations();
+ assert.notEqual(first.path,second.path);assert.deepEqual((await db.doc(first.path).get()).data().nativePendingFrames,['FRAME_03']);
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,2);
+});
+for(const field of ['foreign-route-owner','changed-archive'])test(`operation ${field} cannot attach an inconsistent review`,async()=>{
+ await operationsFixture();
+ if(field==='foreign-route-owner')await db.doc(`deda_share_ids/${operationsOriginal}`).update({ownerUid:'other-device'});
+ else await db.doc(assessmentSource).update({'records.socialCoinsAndXp':'{"coins":999,"xp":20,"taskClaims":[]}'});
+ await assert.rejects(reviewOperations(),e=>e.code===(field==='foreign-route-owner'?'operation-review-owner-not-proven':'migration-reviewed-evidence-conflict'));
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
+});
+test('missing server cosmetic record stays unknown instead of becoming no pending purchases',async()=>{
+ await operationsFixture();await db.doc(nativeCosmeticPath).delete();const r=await reviewOperations();
+ assert.equal(r.report.nativePendingFrames,null);assert.equal(r.report.pendingPurchases,'unknown');assert.equal(r.report.canReleaseBalance,false);
+});
+test('owners/new-device/manager client cannot read, forge or delete operation review snapshots',async()=>{
+ await operationsFixture();const r=await reviewOperations();
+ for(const uid of ['old-device','new-device','other-device',reviewManager.uid]){
+  const ref=doc(client(uid),r.path);await assertFails(getDocFromServer(ref));
+  await assertFails(setDoc(ref,{canAutoSettle:true},{merge:true}));await assertFails(deleteDoc(ref));
+ }
+});
+test('operation review failed atomic write leaves original pending purchase available for later recovery',async()=>{
+ await operationsFixture();const before=(await db.doc(nativeCosmeticPath).get()).data();
+ const badStore=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>undefined});await assert.rejects(reviewOperations({store:badStore}));
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
+ assert.deepEqual((await db.doc(nativeCosmeticPath).get()).data(),before);
 });

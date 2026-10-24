@@ -199,7 +199,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/progress-rules-qa"
           npm install --prefix "$RUNNER_TEMP/progress-rules-qa" --no-save --no-audit --no-fund firebase@11.10.0 @firebase/rules-unit-testing@4.0.0 firebase-tools@13.35.1 firebase-admin@13.0.0
       - name: Verify trusted reconciliation core without SDK or credentials
-        run: node --test tools/app_stability/progress_archive/reconcile-core.test.cjs tools/app_stability/progress_archive/migration-gate.test.cjs tools/app_stability/progress_archive/migration-assessment.test.cjs tools/app_stability/progress_archive/baseline-review.test.cjs
+        run: node --test tools/app_stability/progress_archive/reconcile-core.test.cjs tools/app_stability/progress_archive/migration-gate.test.cjs tools/app_stability/progress_archive/migration-assessment.test.cjs tools/app_stability/progress_archive/baseline-review.test.cjs tools/app_stability/progress_archive/legacy-operation-review.test.cjs
       - name: Verify candidate archive and reconciliation with localhost demo project only NO DEPLOY
         timeout-minutes: 8
         run: |
