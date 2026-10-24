@@ -1,0 +1,158 @@
+name: DEDA original native PIN and current policy GET ONLY Android16 NO DEPLOY
+on:
+  push:
+    branches: [deda-app-stability-isolated-2026-10-23]
+    paths:
+      - 'tools/app_stability/native_pin/**'
+      - 'tools/app_stability/tests/test_native_pin_harness.py'
+      - '.github/workflows/deda-stability-native-pin-current-policy-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stability-native-pin-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  original-pin-private-policy-native-android16:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-deda-live-progress-compat
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Define separate private diagnostics and sanitized public outputs
+        run: |
+          printf 'DEDA_PIN_APP=%s/deda-native-pin-app\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_PIN_BASELINE=%s/deda-native-pin-baseline\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_PIN_PRIVATE=%s/deda-native-pin-private\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_RULES_PRIVATE=%s/deda-native-pin-policy-private\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DEDA_RULES_PUBLIC=%s/deda-native-pin-public\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          mkdir -m 700 "$RUNNER_TEMP/deda-native-pin-private"
+          mkdir -p "$RUNNER_TEMP/deda-native-pin-public"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Verify source boundaries and prepare original PinAuth in separate Android app
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/app_stability/tests -v
+          python3 tools/restore_deda_stability_baseline.py "$DEDA_PIN_BASELINE"
+          flutter create --platforms android --project-name deda_pin_qa --org dev.deda.qa --no-pub "$DEDA_PIN_APP"
+          python3 tools/app_stability/native_pin/prepare-harness.py "$DEDA_PIN_APP" "$DEDA_PIN_BASELINE"
+          node --check tools/app_stability/native_pin/policy-server.cjs
+          bash -n tools/app_stability/native_pin/run-native.sh
+      - name: Resolve pinned transports and analyze original native sources
+        working-directory: ${{ env.DEDA_PIN_APP }}
+        run: |
+          set -euo pipefail
+          flutter pub get > "$DEDA_PIN_PRIVATE/pub.log" 2>&1
+          python3 "$GITHUB_WORKSPACE/tools/app_stability/native_pin/prepare-harness.py" "$DEDA_PIN_APP" "$DEDA_PIN_BASELINE" --verify > "$DEDA_PIN_PRIVATE/pinned-versions.json"
+          flutter analyze --no-pub lib 2>&1 | tee "$DEDA_PIN_PRIVATE/analysis.log"
+      - name: Build isolated debug binary with no DEDA signing or Firebase configuration
+        working-directory: ${{ env.DEDA_PIN_APP }}
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --dart-define=DEDA_STABILITY_PROGRESS_BACKUP_PILOT=true 2>&1 | tee "$DEDA_PIN_PRIVATE/build.log"
+          test ! -e android/app/google-services.json
+      - name: Install pinned read-only client and localhost emulators
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/deda-pin-read-client"
+          "$RUNNER_TEMP/deda-pin-read-client/bin/pip" install --disable-pip-version-check --quiet google-auth==2.40.3 requests==2.32.4
+          npm install --prefix "$RUNNER_TEMP/deda-pin-node" --no-save --no-audit --no-fund firebase@11.10.0 @firebase/rules-unit-testing@4.0.0 firebase-tools@13.35.1
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: GET current release and immutable policy using firebase.readonly only
+        env:
+          DEDA_RULES_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_RULES_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          "$RUNNER_TEMP/deda-pin-read-client/bin/python" tools/app_stability/rules_compat/read_current.py --private-dir "$DEDA_RULES_PRIVATE" --public-dir "$DEDA_RULES_PUBLIC"
+      - name: Prepare private local Auth config and safe source/version manifests
+        run: |
+          python3 - <<'PY'
+          import json,os,shutil
+          from pathlib import Path
+          private,public=Path(os.environ['DEDA_RULES_PRIVATE']),Path(os.environ['DEDA_RULES_PUBLIC'])
+          config=json.loads((private/'firebase.json').read_text())
+          config['emulators']['auth']={'host':'127.0.0.1','port':9099}
+          (private/'firebase.json').write_text(json.dumps(config))
+          shutil.copy2(Path(os.environ['DEDA_PIN_APP'])/'native-pin-source-manifest.json',public/'native-pin-source-manifest.json')
+          shutil.copy2(Path(os.environ['DEDA_PIN_PRIVATE'])/'pinned-versions.json',public/'pinned-versions.json')
+          PY
+      - name: Original and additive rules plus original native PIN and process restart
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NODE_PATH: ${{ runner.temp }}/deda-pin-node/node_modules
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          disk-size: 6G
+          emulator-boot-timeout: 900
+          disable-linux-hw-accel: false
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: '"$RUNNER_TEMP/deda-pin-node/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-live-progress-compat --config "$DEDA_RULES_PRIVATE/firebase.json" ''bash "$GITHUB_WORKSPACE/tools/app_stability/native_pin/run-native.sh"'' > "$DEDA_PIN_PRIVATE/emulator.log" 2>&1'
+      - name: Verify sanitized native result before final read-only freshness check
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          r=json.loads((Path(os.environ['DEDA_RULES_PUBLIC'])/'native-pin-result.json').read_text())
+          assert r['status']=='passed' and len(r['passed'])==24 and not r['failures'] and r['coldRestart']
+          assert r['originalDedaPinAuth'] and not r['privilegedDocumentSeeds']
+          PY
+      - name: GET release again and reject policy changes during native testing
+        env:
+          DEDA_RULES_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_RULES_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          "$RUNNER_TEMP/deda-pin-read-client/bin/python" tools/app_stability/rules_compat/read_current.py --private-dir "$DEDA_RULES_PRIVATE" --public-dir "$DEDA_RULES_PUBLIC" --verify-after
+      - name: Summarize sanitized status only
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ['DEDA_RULES_PUBLIC'])
+          allowed={'rules-compat-report.json','native-pin-result.json','native-pin-source-manifest.json','pinned-versions.json'}
+          assert all(p.name in allowed and p.is_file() for p in root.iterdir())
+          p=root/'native-pin-result.json'
+          if not p.exists(): p.write_text(json.dumps({'status':'stopped-before-native-result','privateSourceUploaded':False})+'\n')
+          r=json.loads(p.read_text())
+          print(json.dumps({'status':r['status'],'passed':len(r.get('passed',[])),'failed':len(r.get('failures',[]))}))
+          PY
+      - name: Upload sanitized JSON only, never private policy, logs, PINs, APK or keys
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-NATIVE-ORIGINAL-PIN-CURRENT-POLICY-SANITIZED-NO-APK-NO-SOURCE
+          path: |
+            ${{ env.DEDA_RULES_PUBLIC }}/rules-compat-report.json
+            ${{ env.DEDA_RULES_PUBLIC }}/native-pin-result.json
+            ${{ env.DEDA_RULES_PUBLIC }}/native-pin-source-manifest.json
+            ${{ env.DEDA_RULES_PUBLIC }}/pinned-versions.json
+          if-no-files-found: warn
+          retention-days: 14

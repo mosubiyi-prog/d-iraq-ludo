@@ -13,6 +13,10 @@
 - لا خلط مع ملاحظات 100377 أو الإصلاحات الست أو التصميم. القائمة مستقلة.
 - المصادقة عبر git CLI غير متاحة؛ استُخدم اتصال GitHub المصرح مع مطابقة tree SHA المحلية والخادمية وexpected_sha. لا force ولا حذف عمل؛ فروع checkpoint المحلية تحفظ الرؤوس عند مزامنة نفس الشجرة.
 
+## متابعة PIN الأصلي — قيد فحص CI
+
+جهزت native24 مخططة على Android16: DedaPinAuth الأصلي ببصمته 884ffcc7، وقواعد الإنتاج الحالية قراءة فقط ثم نسختها الإضافية داخل محاكٍ محلي. حسابا A/B ينشآن credential/session/profile/users من العميل؛ لا fixture seeds لهذين الحسابين. تتضمن رفض PIN خاطئ وتثبيت غير موثوق، واستعادة تثبيت موثوق لا تكفي وحدها لـusers proof، ثم إكمال الربط عبر محول المالك الأصلي، والحفظ/إعادة فتح العملية. نجحت Python59 وNode/shell/YAML؛ لا تعتبر native24 ناجحة قبل نتيجة CI والأثر. لا نشر أو تشغيل إنتاج. راجع NATIVE-PIN-CURRENT-POLICY-QA.md.
+
 ## أحدث نتيجة — native للربط: 22/22
 
 نجح https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40091083991 على مصدر 6191447: الـ12 السابقة +10 للـruntime/root الأصليين. Home/رجوع فعلي أبقى PID **3234→3234**؛ force-stop/فتح غيّره **3234→4114** مع نفس الحزمة والبيانات. بقيت جلسة DEFAULT والـjournal للحساب B، واستكمل root جديد نفس captureId/provenance ثم منع إعادة رفع النص غير المتغير. نجح أيضاً constructor الإنتاجي/default Firebase factory داخل harness المعزول.

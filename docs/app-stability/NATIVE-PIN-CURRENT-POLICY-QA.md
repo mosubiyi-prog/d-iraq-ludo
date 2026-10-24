@@ -1,0 +1,21 @@
+# Original DedaPinAuth on native Android, private current policy — pending
+
+24 October 2026 Baghdad. This stage tests the immutable original `deda_pin_auth.dart` (SHA256 `884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786`) with the real Android Auth/Firestore/SharedPreferences plugins. It is a disposable debug app `dev.deda.qa.deda_pin_qa`, never the DEDA application package or signature. The existing passive runtime module is copied unchanged; the application auth implementation/production rules are not changed or enabled.
+
+## Evidence and isolation
+
+The established GET-only client obtains the current immutable Firebase Rules definition using firebase.readonly scope and verifies the release again after testing. No production Firestore document API is called. Original and additive policy text stays in private runner directories, outside public result paths. SDK/emulator diagnostics and logcat also stay private for this test; only four explicit sanitized JSON files are uploaded. Credentials exist only in the two GET steps, not the emulator/app steps. No APK, PIN value, UID, actual rule source or service-account key is uploaded.
+
+First the existing 93-case Node original/additive comparison must pass. A local rules-only loader then loads ORIGINAL for native account A, followed by MERGED for native account B. It exposes no seed/document API and uses no Admin document SDK. New native accounts' credentials, directory, sessions, profiles and users records are created by the original Dart client and existing owner adapter under client rules. The earlier Node comparison uses separate fixture account keys; native account keys are fresh and registration fails if they already exist.
+
+## Planned cases: 21 before process stop, 3 after
+
+For each original/merged policy, eight cases cover original account creation/server binding, unreadable credential/proof docs, native local lockout state, wrong PIN on fresh UID, unknown-install trusted-restore denial, correct PIN with preserved profile on a new UID, trusted-install restore on another UID, and completing that user's projection with the existing real owner adapter under its gate. A bare trusted restore intentionally creates a session only; new-UID users proof remains absent and backup must reject it until the complete explicit PIN owner flow binds the user. This boundary is not bypassed by seeding or manual fixture document writes.
+
+The original policy must still deny the added archive scope. Merged policy adds four cases: native archive roundtrip, cross-account profile/evidence rejection, original capture provenance read by a fresh correctly PIN-authenticated UID, and a pending journal prepared for force-stop. After host force-stop/relaunch of the SAME installed binary/data: native Auth/install/journal/source text must persist; a fresh root/real driver resolves the original pending capture; an unchanged request is skipped and credential/proof reads remain denied. The host requires distinct process PIDs and exactly 24 cases with no failures.
+
+Install-ID replacement is explicit simulation on one emulator. Local lockout primitives are exercised, not the full PIN UI or a server rate-limit guarantee. Archive records remain untrusted text, not spendable balance or a verified migration. No real user, admin-role transition, actual physical phone pair, full DEDA UI or financial restore is claimed. The original sign-out's best-effort remote cleanup and all auth races still require broader coordinated integration.
+
+## Current validation
+
+59 offline Python checks pass, including five no-network Node VM protocol cases, exact original-source preservation, target/configuration rejection, transport lock drift, no overwrite, secret-step scope and explicit JSON artifact boundaries. New shell/Node syntax and workflow YAML parse pass. Native 24 and the fresh policy comparison remain pending until CI and the downloaded sanitized artifact are verified. Underlying native22 and controller32 proofs remain as recorded in CURRENT.
