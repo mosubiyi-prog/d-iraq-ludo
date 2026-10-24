@@ -102,6 +102,7 @@ Future<void> first(SharedPreferences prefs) async {
    {'isAvailableNow':true,'updatedAt':FieldValue.serverTimestamp()}),permission);
   await reject(()=>db.doc('admins/${auth.currentUser!.uid}').set(
    {'active':true,'status':'active','role':'general_manager'}),permission);
+  await DedaPinAuth.signOutFirebase();await barrier();
   await DedaPinAuth.signIn(phone:account,pin:pin);await barrier();await boundOwner();
  });
  await record('native-bound-section-preserves-admin',() async {
