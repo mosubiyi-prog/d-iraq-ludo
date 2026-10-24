@@ -1,35 +1,54 @@
 {
-  "result": {
-    "passed": [
-      "native-owner-proof-and-raw-roundtrip",
-      "native-immutable-replay-preserves-server-time",
-      "native-conflicting-capture-preserves-source",
-      "native-private-read-and-write-rules",
-      "native-missing-user-proof-blocks-backup",
-      "native-offline-pending-recovery",
-      "native-lost-ack-read-before-resend",
-      "native-new-uid-reads-original-provenance",
-      "native-new-uid-missing-origin-remains-pending",
-      "native-pending-journal-prepared-for-cold-restart",
-      "native-preferences-and-pending-survive-process-restart",
-      "native-auth-owner-and-pending-upload-after-restart"
-    ],
-    "failures": [],
-    "phase": 2,
-    "coldRestart": true,
-    "nativeAuthUidPersisted": true,
-    "scope": "demo native transport harness",
-    "status": "passed",
-    "projectId": "demo-deda-progress-archive",
-    "realNativePlugins": true,
-    "actualDedaPinTested": false,
-    "physicalTwoPhonesTested": false
-  },
-  "processIds": [
-    "3078",
-    "3766"
+  "passed": [
+    "native-owner-proof-and-raw-roundtrip",
+    "native-immutable-replay-preserves-server-time",
+    "native-conflicting-capture-preserves-source",
+    "native-private-read-and-write-rules",
+    "native-missing-user-proof-blocks-backup",
+    "native-offline-pending-recovery",
+    "native-lost-ack-read-before-resend",
+    "native-new-uid-reads-original-provenance",
+    "native-new-uid-missing-origin-remains-pending",
+    "native-runtime-root-selection-archives-with-real-driver",
+    "native-runtime-unchanged-skips-upload-after-owner-proof",
+    "native-runtime-changed-source-archives-without-overwrite",
+    "native-runtime-A-B-A-revokes-completed-server-read",
+    "native-runtime-Android-home-resume-revokes-held-read",
+    "native-runtime-offline-retains-pending-and-explicit-resume-recovers",
+    "native-runtime-production-host-constructor-default-factory",
+    "native-runtime-B-pending-prepared-for-cold-restart",
+    "native-pending-journal-prepared-for-cold-restart",
+    "native-preferences-and-pending-survive-process-restart",
+    "native-auth-owner-and-pending-upload-after-restart",
+    "native-runtime-default-auth-and-B-journal-survive-process",
+    "native-runtime-root-recovers-original-B-pending-after-process-restart"
   ],
-  "manifest": {
+  "failures": [],
+  "phase": 2,
+  "coldRestart": true,
+  "nativeAuthUidPersisted": true,
+  "runtimeHostTested": true,
+  "actualAndroidBackgroundResume": true,
+  "runtimeDefaultFactoryTested": true,
+  "scope": "demo native transport and passive runtime harness; seeded sessions, not DEDA PIN",
+  "status": "passed",
+  "projectId": "demo-deda-progress-archive",
+  "realNativePlugins": true,
+  "actualDedaPinTested": false,
+  "physicalTwoPhonesTested": false,
+  "verificationSourceCommit": "6191447d38af7e0ff8051536620533bfa94511b1",
+  "workflowRun": 40091083991,
+  "jobId": 120863721226,
+  "artifactId": 12558714509,
+  "artifactZipSHA256": "ba3b29840ac657f2803499ecd84798e653d89cd62098ebc22d376f927ce67418",
+  "firstProcessPid": "3234",
+  "secondProcessPid": "4114",
+  "backgroundProcessPids": [
+    "3234",
+    "3234"
+  ],
+  "moduleCount": 8,
+  "sourceManifest": {
     "scope": "disposable native plugin harness, not DEDA APK",
     "projectId": "demo-deda-progress-archive",
     "files": {
@@ -40,7 +59,8 @@
       "lib/deda_legacy_progress_capture.dart": "7a1d7668a3b4458a76bd9e1b379dbc22943e272cb876c183bde4d34a9c33f3e5",
       "lib/deda_progress_evidence_store.dart": "4c7c7a4d1128113f1b82628cbf9a0212c9a5ba3fd107d9bd5b1c1c6a6a84ac91",
       "lib/deda_progress_backup_coordinator.dart": "a1ceb6b46ee87e6aec6e9f4212d5244842f4de6f7674a7560d24f9ba9db073a8",
-      "lib/main.dart": "1e1cccf96f0c7a01bd53364ccbb24cbed26cb6479a7890cead0644a9da9fb724"
+      "lib/deda_progress_backup_runtime.dart": "22198544813b4266560de8fc02553bb7dba34cd256fcdcf9a2abb628a7fe5d72",
+      "lib/main.dart": "9cd75e198e13782b3b9f1f5680ee78ea82565da615a3d99b9996e5f939b327ed"
     },
     "pinnedTransportVersions": {
       "cloud_firestore": "5.6.12",
@@ -61,20 +81,46 @@
       "shared_preferences_windows": "2.4.1"
     }
   },
-  "rulesSHA256": "0b671d8cd995dc60f6c73022b565cd49e12d071dc2ec6a2eb33a1fe253cecd08",
-  "artifactDigest": "62aeb50ade4fe4cf5a2dd08ff526e35bd1cb33c2528987c98219e345b548a51a",
-  "artifactId": 12540587647,
-  "runId": 40043426916,
-  "sourceCommit": "59720a61a55042d31cc93ce22812a28ee07f20b5",
-  "sourceRegressionRunId": 40043426967,
-  "sourceRegression": {
-    "status": "success",
-    "restorationAndHarnessBoundary": 24,
+  "testRulesSHA256": "0b671d8cd995dc60f6c73022b565cd49e12d071dc2ec6a2eb33a1fe253cecd08",
+  "pinnedVersions": {
+    "pinnedTransportPackages": 16,
+    "verified": true
+  },
+  "sourceRegressionRun": 40091083983,
+  "sourceRegressionAttempt": 2,
+  "sourceRegressionStatus": "success",
+  "fullDedaApplicationTested": false,
+  "artifactBinaryFilesAbsent": true,
+  "sourceRegressionJobs": [
+    {
+      "id": 120864560571,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 120864562067,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120864563049,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120864583752,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    }
+  ],
+  "sourceRegressionCounts": {
+    "offlinePython": 52,
     "nodeReconciliation": 78,
-    "firestoreEmulator": 74,
-    "measuredPilotGroups": [
+    "standaloneEmulator": 74,
+    "measuredGroups": [
       38,
       30,
+      32,
       13,
       21,
       36,
@@ -84,13 +130,17 @@
       40,
       29
     ],
-    "inheritedMainIssues": 181
+    "inheritedMainIssues": 181,
+    "strictAnalysesWithoutIssues": 10
   },
-  "limitations": [
-    "Standalone debug harness, not the signed DEDA application",
-    "Sessions/users seeded by privileged localhost fixture; real DEDA PIN not tested",
-    "New UID/install simulated on one emulator; physical two-phone acceptance not tested",
-    "No authoritative legacy balance migration or live app activation",
-    "Candidate rules only; deployed Firebase rules were not read or changed in this run"
-  ]
+  "firstSourceAttemptFailure": {
+    "jobId": 120863721096,
+    "case": "concurrent receipt wrappers for SAME source event award once",
+    "error": "3 INVALID_ARGUMENT: Transaction is invalid or closed.",
+    "sameCodeRerun": "all four jobs passed; no test or retry policy changed",
+    "cause": "not proven; emulator transaction rejection observed once"
+  },
+  "backgroundHeldReadBoundary": "native server read completed before injected hold; Android Home/return invokes real root lifecycle; 5-second fixture UI timeout can also expire, so this case does not isolate lifecycle from timeout",
+  "productionPilotEnabled": false,
+  "productionRulesDeployed": false
 }
