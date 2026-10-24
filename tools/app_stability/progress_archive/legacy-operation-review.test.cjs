@@ -128,3 +128,31 @@ test('duplicate raw JSON keys cannot hide a claimed reservation from review',()=
  const raw=evidence();raw.records.taskPoints='{"version":1,"awards":{},"awards":{"point_tier_reserve|5000":{"points":-5000}},"completions":{},"ledger":[]}';
  assert.equal(pointTierObservations(raw,assessLegacyEvidence(raw,A,captureId)).observedUnclaimedReturns,null);
 });
+function sidecar(f){
+ const id='purchase_capture_origin_00001';
+ const journals=Object.fromEntries(frames.map(frame=>[frame,null]));journals.FRAME_03='paid';journals.FRAME_05='charging';
+ const raw={format:1,kind:'legacy-purchase-evidence',accountKey:A,captureId:id,sourceUid:'old-device',installId:'old-install',
+ createdAt:{seconds:3,nanoseconds:0},records:{originalId,progressCaptureId:captureId,localSnapshot:JSON.stringify({format:1,accountKey:A,originalId,
+ inventory:' {"owned":["frame_3"]} ',frameJournals:journals})}};
+ f.request.purchaseCaptureId=id;f.store.docs.set(`deda_purchase_evidence/${A}/captures/${id}`,raw);return raw;
+}
+test('linked original phone paid journal is preserved in review but never authorizes charge/refund/ownership',async()=>{
+ const f=await fixture();sidecar(f);pair(f.store);const r=await save(f);
+ assert.equal(r.report.frames[0].localJournal.state,'paid-recorded');assert.equal(r.report.frames[1].localJournal.state,'charging-recorded');
+ assert.equal(r.report.purchaseJournalEvidence.canProvePayment,false);assert.equal(r.report.pendingPurchases,'unknown');
+ assert.equal(r.report.canAutoSettle,false);assert.deepEqual(f.store.docs.get(nativePath).pendingFrames,['FRAME_03']);
+ assert.equal(f.store.writes.length,1);
+});
+for(const field of ['sourceUid','installId'])test(`journal with changed ${field} cannot be attributed to parent progress source`,async()=>{
+ const f=await fixture(),raw=sidecar(f);raw[field]='new-device';await rejected(f,'purchase-evidence-origin-conflict');
+});
+test('different progress capture cannot silently supply a more convenient payment journal',async()=>{
+ const f=await fixture(),raw=sidecar(f);raw.records.progressCaptureId='different_capture_000001';await rejected(f,'purchase-evidence-parent-conflict');
+});
+test('requested missing payment journal blocks review without creating an empty/settled report',async()=>{
+ const f=await fixture();f.request.purchaseCaptureId='purchase_capture_origin_00001';await rejected(f,'purchase-evidence-missing');
+});
+test('changed journal bytes cause a new immutable review and keep the earlier paid observation',async()=>{
+ const f=await fixture(),raw=sidecar(f);const first=await save(f);raw.records.localSnapshot+=' ';
+ const second=await save(f);assert.notEqual(first.path,second.path);assert.equal(f.store.docs.get(first.path).frames[0].localJournal.state,'paid-recorded');
+});

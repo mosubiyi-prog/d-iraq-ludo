@@ -160,3 +160,76 @@ test('claiming manager/custom-account tokens does not grant access to another ac
 test('cross-account parent collection listing is denied',async()=>{
   await assertFails(getDocs(collection(dbFor(oldUid),'deda_progress_evidence')));
 });
+const purchaseId='purchase_capture_origin_00001',purchaseOriginal='@DEDA-ABC123';
+const purchasePath=(id=purchaseId)=>`deda_purchase_evidence/${account}/captures/${id}`;
+const purchaseFrames=['FRAME_03','FRAME_05','FRAME_06','FRAME_07','FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12','FRAME_13','FRAME_14','FRAME_15','FRAME_16'];
+function purchasePayload(){return {format:1,kind:'legacy-purchase-evidence',accountKey:account,sourceUid:oldUid,
+ installId:'fixture-old-install',captureId:purchaseId,createdAt:serverTimestamp(),records:{originalId:purchaseOriginal,
+ progressCaptureId:oldId,localSnapshot:JSON.stringify({format:1,accountKey:account,originalId:purchaseOriginal,
+ inventory:' {"owned":["frame_3"]} ',frameJournals:Object.fromEntries(purchaseFrames.map(id=>[id,id==='FRAME_03'?'paid':null]))})}};}
+async function purchaseProof(){await env.withSecurityRulesDisabled(async ctx=>{
+ const db=ctx.firestore();await setDoc(doc(db,'users',oldUid),{accountKey:account,sharePersonalId:purchaseOriginal});
+ await setDoc(doc(db,'users',newUid),{accountKey:account,sharePersonalId:purchaseOriginal});
+ await setDoc(doc(db,'deda_share_ids',purchaseOriginal),{publicId:purchaseOriginal,kind:'personal',active:true,ownerUid:oldUid});
+});}
+test('original device can create linked immutable purchase evidence without altering raw progress parent',async()=>{
+ await purchaseProof();const db=dbFor(oldUid),before=(await getDocFromServer(doc(db,evidencePath(account,oldId)))).data();
+ await assertSucceeds(setDoc(doc(db,purchasePath()),purchasePayload()));
+ const saved=(await assertSucceeds(getDocFromServer(doc(db,purchasePath())))).data();
+ assert.equal(saved.records.progressCaptureId,oldId);assert.equal(JSON.parse(saved.records.localSnapshot).frameJournals.FRAME_03,'paid');
+ assert.deepEqual((await getDocFromServer(doc(db,evidencePath(account,oldId)))).data(),before);
+});
+test('new UID/install for same account reads and lists original payment journal with old provenance',async()=>{
+ await purchaseProof();await assertSucceeds(setDoc(doc(dbFor(oldUid),purchasePath()),purchasePayload()));
+ const saved=(await assertSucceeds(getDocFromServer(doc(dbFor(newUid),purchasePath())))).data();
+ assert.equal(saved.sourceUid,oldUid);assert.equal(saved.installId,'fixture-old-install');
+ assert.equal((await assertSucceeds(getDocs(collection(dbFor(newUid),`deda_purchase_evidence/${account}/captures`)))).size,1);
+});
+test('new UID can capture its own journal only alongside a parent captured under that new UID/install',async()=>{
+ await purchaseProof();const db=dbFor(newUid);
+ await assertSucceeds(setDoc(doc(db,evidencePath(account,newId)),{...payload(newId),sourceUid:newUid,installId:'fixture-new-install'}));
+ const data=purchasePayload();data.sourceUid=newUid;data.installId='fixture-new-install';data.records.progressCaptureId=newId;
+ await assertSucceeds(setDoc(doc(db,purchasePath()),data));
+});
+test('new UID cannot relabel original phone journal as its own by linking the older parent',async()=>{
+ await purchaseProof();const data=purchasePayload();data.sourceUid=newUid;data.installId='fixture-new-install';
+ await assertFails(setDoc(doc(dbFor(newUid),purchasePath()),data));
+});
+for(const who of ['unauthenticated','other-account'])test(`${who} cannot read, list or forge purchase sidecars`,async()=>{
+ await purchaseProof();await assertSucceeds(setDoc(doc(dbFor(oldUid),purchasePath()),purchasePayload()));
+ const db=who==='unauthenticated'?env.unauthenticatedContext().firestore():dbFor(otherUid);
+ await assertFails(getDocFromServer(doc(db,purchasePath())));
+ await assertFails(getDocs(collection(db,`deda_purchase_evidence/${account}/captures`)));
+ const data=purchasePayload();data.captureId='other_purchase_capture_0001';
+ await assertFails(setDoc(doc(db,purchasePath(data.captureId)),data));
+});
+for(const defect of ['foreign-source','wrong-install','missing-parent','inactive-route','wrong-user-original','foreign-route-owner','alias-route'])test(`purchase sidecar ${defect} blocked by server proof`,async()=>{
+ await purchaseProof();const data=purchasePayload();
+ if(defect==='foreign-source')data.sourceUid=newUid;
+ if(defect==='wrong-install')data.installId='new-install';
+ if(defect==='missing-parent')data.records.progressCaptureId='missing_parent_capture_001';
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  if(defect==='inactive-route')await setDoc(doc(db,'deda_share_ids',purchaseOriginal),{active:false},{merge:true});
+  if(defect==='wrong-user-original')await setDoc(doc(db,'users',oldUid),{sharePersonalId:'@DEDA-OTHER1'},{merge:true});
+  if(defect==='foreign-route-owner')await setDoc(doc(db,'deda_share_ids',purchaseOriginal),{ownerUid:otherUid},{merge:true});
+  if(defect==='alias-route')await setDoc(doc(db,'deda_share_ids',purchaseOriginal),{kind:'premium'},{merge:true});
+ });
+ await assertFails(setDoc(doc(dbFor(oldUid),purchasePath()),data));
+});
+for(const field of ['extra-field','client-time','wrong-kind','oversized-snapshot','missing-snapshot'])test(`invalid purchase ${field} rejected`,async()=>{
+ await purchaseProof();const data=purchasePayload();
+ if(field==='extra-field')data.verified=true;if(field==='client-time')data.createdAt=Timestamp.fromMillis(1);
+ if(field==='wrong-kind')data.kind='verified-receipt';if(field==='oversized-snapshot')data.records.localSnapshot='x'.repeat(200001);
+ if(field==='missing-snapshot')delete data.records.localSnapshot;
+ await assertFails(setDoc(doc(dbFor(oldUid),purchasePath()),data));
+});
+test('purchase sidecars cannot be overwritten/deleted and add no routing collection read or write grant',async()=>{
+ await purchaseProof();await assertSucceeds(setDoc(doc(dbFor(oldUid),purchasePath()),purchasePayload()));
+ for(const uid of [oldUid,newUid]){
+  await assertFails(setDoc(doc(dbFor(uid),purchasePath()),{records:{localSnapshot:'paid'}},{merge:true}));
+  await assertFails(deleteDoc(doc(dbFor(uid),purchasePath())));
+  await assertFails(getDocFromServer(doc(dbFor(uid),'deda_share_ids',purchaseOriginal)));
+  await assertFails(setDoc(doc(dbFor(uid),'deda_share_ids',purchaseOriginal),{active:true},{merge:true}));
+ }
+});

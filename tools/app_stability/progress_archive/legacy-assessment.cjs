@@ -113,4 +113,4 @@ function assessLegacyEvidence(raw,expectedAccount,captureId){
     settlement:Object.freeze({purchases:'unknown',pointReservations:'unknown'}),
     excludedComponents:Object.freeze(['general-manager-points-bonus','gifted-diamonds','general-manager-personal-wallet','admin-grant-wallet'])});
 }
-module.exports={assessLegacyEvidence};
+module.exports={assessLegacyEvidence,hasDuplicateJsonKeys:duplicateKeys};

@@ -33,6 +33,39 @@ service cloud.firestore {
         && validLegacyText(d.records.socialCoinsAndXp)
         && validLegacyText(d.records.earnedDiamonds);
     }
+    function ownsPurchaseOriginal(accountKey, originalId) {
+      let route = get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data;
+      return originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId == originalId
+        && route.publicId == originalId && route.kind == 'personal' && route.active == true
+        && route.ownerUid is string
+        && get(/databases/$(database)/documents/users/$(route.ownerUid)).data.accountKey == accountKey;
+    }
+    function validPurchaseEvidence(accountKey, captureId) {
+      let d = request.resource.data;
+      let p = get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(d.records.progressCaptureId)).data;
+      return captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && d.keys().hasAll(['format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'])
+        && d.keys().hasOnly(['format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'])
+        && d.format == 1 && d.kind == 'legacy-purchase-evidence' && d.accountKey == accountKey
+        && d.sourceUid == request.auth.uid && d.captureId == captureId
+        && d.installId is string && d.installId.size() > 0 && d.installId.size() <= 128
+        && d.installId == get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.installId
+        && d.createdAt == request.time && d.records is map
+        && d.records.keys().hasAll(['originalId','progressCaptureId','localSnapshot'])
+        && d.records.keys().hasOnly(['originalId','progressCaptureId','localSnapshot'])
+        && d.records.originalId is string && d.records.progressCaptureId is string
+        && d.records.progressCaptureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && d.records.localSnapshot is string && d.records.localSnapshot.size() <= 200000
+        && p.format == 1 && p.kind == 'legacy-local-evidence' && p.accountKey == accountKey
+        && p.captureId == d.records.progressCaptureId && p.sourceUid == d.sourceUid && p.installId == d.installId
+        && ownsPurchaseOriginal(accountKey, d.records.originalId);
+    }
+    match /deda_purchase_evidence/{accountKey}/captures/{captureId} {
+      allow get, list: if ownsProgressAccount(accountKey);
+      allow create: if ownsProgressAccount(accountKey) && validPurchaseEvidence(accountKey,captureId);
+      allow update, delete: if false;
+    }
     match /deda_progress_evidence/{accountKey}/captures/{captureId} {
       allow get, list: if ownsProgressAccount(accountKey);
       allow create: if ownsProgressAccount(accountKey) && validEvidence(accountKey,captureId);

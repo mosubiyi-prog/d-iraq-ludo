@@ -170,7 +170,7 @@ class RestoreBaselineTest(unittest.TestCase):
                    or (baseline / p).read_bytes() != (archive / p).read_bytes()}
         self.assertEqual(changed, {restore_module.SESSION_MODULE,
             restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES,
-            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE})
+            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PURCHASE_EVIDENCE_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE})
         for name in ['android','firebase.json','firestore.rules']:
             self.assertFalse((archive / name).exists())
 
@@ -193,7 +193,7 @@ class RestoreBaselineTest(unittest.TestCase):
                    or (baseline / p).read_bytes() != (backup / p).read_bytes()}
         self.assertEqual(changed, {restore_module.SESSION_MODULE,
             restore_module.SESSION_FLOW_MODULE, *restore_module.OWNER_PORT_MODULES,
-            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE,
+            restore_module.LEGACY_PROGRESS_MODULE, restore_module.PURCHASE_EVIDENCE_MODULE, restore_module.PROGRESS_EVIDENCE_MODULE,
             restore_module.PROGRESS_BACKUP_MODULE})
         self.assertTrue(result['progressEvidenceStore'])
         self.assertTrue(result['progressBackupCoordinator'])

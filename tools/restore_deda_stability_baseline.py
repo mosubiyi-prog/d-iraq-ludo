@@ -33,6 +33,7 @@ PROGRESS_EVIDENCE_MODULE = 'lib/deda_progress_evidence_store.dart'
 PROGRESS_BACKUP_MODULE = 'lib/deda_progress_backup_coordinator.dart'
 PROGRESS_RUNTIME_MODULE = 'lib/deda_progress_backup_runtime.dart'
 LEGACY_PROGRESS_MODULE = 'lib/deda_legacy_progress_capture.dart'
+PURCHASE_EVIDENCE_MODULE = 'lib/deda_legacy_purchase_evidence.dart'
 ADMIN_ADAPTER_MODULE = 'lib/deda_admin_session_firebase_adapter.dart'
 OWNER_PORT_MODULES = ('lib/deda_owner_session_firebase_port.dart',
                       'lib/deda_session_principal_tracker.dart')
@@ -175,6 +176,7 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         shutil.copy2(REPO / LEGACY_PROGRESS_MODULE, output / LEGACY_PROGRESS_MODULE)
     if progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / PROGRESS_EVIDENCE_MODULE, output / PROGRESS_EVIDENCE_MODULE)
+        shutil.copy2(REPO / PURCHASE_EVIDENCE_MODULE, output / PURCHASE_EVIDENCE_MODULE)
     if progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / PROGRESS_BACKUP_MODULE, output / PROGRESS_BACKUP_MODULE)
     if progress_backup_runtime:

@@ -6,12 +6,13 @@ const {isDeepStrictEqual}=require('node:util');
 const {account}=require('./reconcile-core.cjs');
 const {parseMigration}=require('./migration-gate.cjs');
 const {loadReviewedEvidence}=require('./baseline-evidence.cjs');
-const frames=Object.freeze(['FRAME_03','FRAME_05','FRAME_06','FRAME_07','FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12','FRAME_13','FRAME_14','FRAME_15','FRAME_16']);
+const {frames}=require('./purchase-frames.cjs');
+const {assessPurchaseEvidence}=require('./purchase-evidence.cjs');
 const thresholds=Object.freeze([5000,10000,15000,20000,25000]);
 function fail(code){throw Object.assign(new Error(code),{code});}
 function stable(value){
  if(value===null||typeof value!=='object')return value;
- if(Number.isSafeInteger(value.seconds)&&Number.isSafeInteger(value.nanoseconds))return {seconds:value.seconds,nanoseconds:value.nanoseconds};
+ if(typeof value.toDate==='function'&&Number.isSafeInteger(value.seconds)&&Number.isSafeInteger(value.nanoseconds))return {firestoreTimestamp:[value.seconds,value.nanoseconds]};
  if(Array.isArray(value))return value.map(stable);
  return Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])]));
 }
@@ -53,8 +54,10 @@ function pointTierObservations(raw,assessment){
 }
 async function saveLegacyOperationReview(options){
  const keys=['store','accountKey','migrationId','originalId'];
- if(!options||Object.keys(options).length!==keys.length||!keys.every(k=>Object.hasOwn(options,k)))fail('invalid-operation-review-request');
- const {store,accountKey,migrationId,originalId}=options;
+ if(!options||![keys.length,keys.length+1].includes(Object.keys(options).length)||!keys.every(k=>Object.hasOwn(options,k))||
+ Object.keys(options).some(k=>!keys.includes(k)&&k!=='purchaseCaptureId'))fail('invalid-operation-review-request');
+ const {store,accountKey,migrationId,originalId,purchaseCaptureId}=options;
+ if(Object.hasOwn(options,'purchaseCaptureId')&&(typeof purchaseCaptureId!=='string'||!/^[A-Za-z0-9_-]{20,80}$/.test(purchaseCaptureId)))fail('invalid-purchase-capture-id');
  account(accountKey);
  if(!store||typeof store.runTransaction!=='function'||typeof store.serverTimestamp!=='function')fail('invalid-operation-review-store');
  if(typeof originalId!=='string'||!/^@DEDA-[A-Z0-9]{6}$/.test(originalId))fail('canonical-original-required');
@@ -72,9 +75,16 @@ async function saveLegacyOperationReview(options){
   const routeOwner=await tx.get(`users/${route.ownerUid}`);
   if(!routeOwner||routeOwner.accountKey!==accountKey||
    (routeOwner.sharePersonalId!=null&&routeOwner.sharePersonalId!==originalId))fail('operation-review-owner-not-proven');
+  let purchaseRaw=null,purchaseJournalEvidence=null;
+  if(purchaseCaptureId!==undefined){
+   purchaseRaw=await tx.get(`deda_purchase_evidence/${accountKey}/captures/${purchaseCaptureId}`);
+   purchaseJournalEvidence=assessPurchaseEvidence(purchaseRaw,{accountKey,captureId:purchaseCaptureId,originalId,
+    progressCaptureId:assessment.captureId,sourceUid:raw.sourceUid,installId:raw.installId});
+  }
   const native=await tx.get(`deda_native_account_cosmetics/${originalId}`);
   if(native!==null&&native.originalId!==originalId)fail('operation-review-cosmetic-owner-conflict');
-  const issues=new Set(['legacy-writer-fence-not-established','style-checkout-has-no-atomic-payment-inventory-proof','local-native-payment-journal-not-captured']);
+  const issues=new Set(['legacy-writer-fence-not-established','style-checkout-has-no-atomic-payment-inventory-proof']);
+  issues.add(purchaseJournalEvidence===null?'local-native-payment-journal-not-captured':'local-payment-journal-not-server-attested');
   const list=field=>{
    if(native===null||!Object.hasOwn(native,field)){issues.add(`native-${field}:not-recorded`);return null;}
    const values=native[field];
@@ -92,16 +102,16 @@ async function saveLegacyOperationReview(options){
     receipt.frameId===frameId&&receipt.cost===1000&&ownership.publicId===originalId&&ownership.frameId===frameId&&
     ownership.receiptId===`${originalId}_${frameId}`;
    if(!confirmed&&(receipt!==null||ownership!==null))issues.add(`frame-${frameId}:partial-or-invalid-receipt-pair`);
-   frameObservations.push({frameId,receiptConfirmed:confirmed,nativePending:pending===null?null:pending.includes(frameId),
+   frameObservations.push({frameId,localJournal:purchaseJournalEvidence===null?{state:'not-captured',valueType:null}:purchaseJournalEvidence.journals[frameId],receiptConfirmed:confirmed,nativePending:pending===null?null:pending.includes(frameId),
     nativeOwned:owned===null?null:owned.includes(frameId),
     disposition:confirmed?'ownership-confirmed-payment-review-still-required':'payment-not-proven',canAutoCharge:false,canAutoRefund:false});
   }
   const pointTiers=pointTierObservations(raw,assessment);
   for(const issue of pointTiers.issues)issues.add(issue);
-  const inputDigest=digest({accountKey,migrationId,originalId,evidenceDigest:assessment.evidenceDigest,profile,route,routeOwner,native,receiptInputs});
+  const inputDigest=digest({accountKey,migrationId,originalId,evidenceDigest:assessment.evidenceDigest,profile,route,routeOwner,native,receiptInputs,purchaseRaw});
   const report={format:1,accountKey,migrationId,originalId,evidenceDigest:assessment.evidenceDigest,inputDigest,
    status:'requires-operation-review',canAutoSettle:false,canReleaseBalance:false,
-   pendingPurchases:'unknown',nativePendingFrames:pending,nativeOwnedFrames:owned,
+   purchaseJournalEvidence,pendingPurchases:'unknown',nativePendingFrames:pending,nativeOwnedFrames:owned,
    nativeSnapshot:native,frames:frameObservations,pointTiers,issues:[...issues].sort()};
   const path=`${root}/operationReviews/${inputDigest}`,stored=await tx.get(path);
   if(stored!==null){

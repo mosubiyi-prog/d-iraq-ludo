@@ -532,3 +532,35 @@ test('operation review failed atomic write leaves original pending purchase avai
  assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
  assert.deepEqual((await db.doc(nativeCosmeticPath).get()).data(),before);
 });
+const localPurchaseCaptureId='purchase_capture_origin_00001';
+const localPurchaseSource=`deda_purchase_evidence/${account}/captures/${localPurchaseCaptureId}`;
+async function localPurchaseArchive(){
+ const frames=['FRAME_03','FRAME_05','FRAME_06','FRAME_07','FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12','FRAME_13','FRAME_14','FRAME_15','FRAME_16'];
+ const values=Object.fromEntries(frames.map(id=>[id,null]));values.FRAME_03='paid';values.FRAME_05='charging';
+ await assertSucceeds(setDoc(doc(client('old-device'),localPurchaseSource),{format:1,kind:'legacy-purchase-evidence',accountKey:account,
+  sourceUid:'old-device',installId:'old-install',captureId:localPurchaseCaptureId,createdAt:serverTimestamp(),records:{
+   originalId:operationsOriginal,progressCaptureId:assessmentCaptureId,localSnapshot:JSON.stringify({format:1,accountKey:account,
+    originalId:operationsOriginal,inventory:' {"owned":["frame_3"]} ',frameJournals:values})}}));
+}
+test('real client purchase sidecar links into private operation review without charge/refund/pending cleanup',async()=>{
+ await operationsFixture();await localPurchaseArchive();const before=(await db.doc(nativeCosmeticPath).get()).data();
+ const r=await reviewOperations({purchaseCaptureId:localPurchaseCaptureId});
+ assert.equal(r.report.frames[0].localJournal.state,'paid-recorded');assert.equal(r.report.frames[1].localJournal.state,'charging-recorded');
+ assert.equal(r.report.purchaseJournalEvidence.sourceUid,'old-device');assert.equal(r.report.purchaseJournalEvidence.canProvePayment,false);
+ assert.equal(r.report.pendingPurchases,'unknown');assert.deepEqual((await db.doc(nativeCosmeticPath).get()).data(),before);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+ const read=await assertSucceeds(getDocFromServer(doc(client('new-device'),localPurchaseSource)));
+ assert.equal(read.data().sourceUid,'old-device');assert.equal(read.data().installId,'old-install');
+ await assertFails(getDocFromServer(doc(client('new-device'),r.path)));
+});
+for(const field of ['sourceUid','installId','progressCaptureId'])test(`worker purchase ${field} mismatch cannot create a settlement review`,async()=>{
+ await operationsFixture();await localPurchaseArchive();
+ if(field==='progressCaptureId')await db.doc(localPurchaseSource).update({'records.progressCaptureId':'different_capture_000001'});
+ else await db.doc(localPurchaseSource).update({[field]:'new-device'});
+ await assert.rejects(reviewOperations({purchaseCaptureId:localPurchaseCaptureId}),e=>e.code===(field==='progressCaptureId'?'purchase-evidence-parent-conflict':'purchase-evidence-origin-conflict'));
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
+});
+test('missing requested local payment evidence never becomes no pending purchases',async()=>{
+ await operationsFixture();await assert.rejects(reviewOperations({purchaseCaptureId:localPurchaseCaptureId}),e=>e.code==='purchase-evidence-missing');
+ assert.equal((await db.collection(`${assessmentRoot}/operationReviews`).get()).size,0);
+});

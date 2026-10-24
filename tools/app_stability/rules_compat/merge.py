@@ -5,11 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MARKER = 'DEDA_STABILITY_ARCHIVE_REVIEW_ONLY_V1'
-NAMESPACES = ('deda_progress_evidence', 'deda_progress_receipts',
+NAMESPACES = ('deda_purchase_evidence', 'deda_progress_evidence', 'deda_progress_receipts',
               'deda_progress_migrations', 'deda_verified_progress')
 RENAMES = {'ownsProgressAccount': 'dedaArchiveAccountOwnerV1',
            'validLegacyText': 'dedaArchiveLegacyTextV1',
-           'validEvidence': 'dedaArchiveEvidenceV1'}
+           'validEvidence': 'dedaArchiveEvidenceV1',
+           'ownsPurchaseOriginal': 'dedaArchivePurchaseOriginalV1',
+           'validPurchaseEvidence': 'dedaArchivePurchaseEvidenceV1'}
 
 
 class GuardError(Exception):
@@ -117,6 +119,7 @@ def extension(candidate):
     if re.search(r'\bmatch\s*/(?:users|deda_sessions)\b', scoped):
         raise GuardError('legacy-user-or-session-policy-in-extension')
     expected = {
+        '/deda_purchase_evidence/{accountKey}/captures/{captureId}',
         '/deda_progress_evidence/{accountKey}/captures/{captureId}',
         '/deda_progress_receipts/{accountKey}/events/{eventId}',
         '/deda_progress_migrations/{accountKey}/{document=**}',
