@@ -161,6 +161,7 @@ void main() {
     }
     setUp(() async {
       SharedPreferences.setMockInitialValues({
+        'deda_language_v1':'en',
         'deda_task_points_state_v1_$first':'keep raw points',
         'deda_diamonds_wallet_v1_$second':'keep raw diamonds',
       });
