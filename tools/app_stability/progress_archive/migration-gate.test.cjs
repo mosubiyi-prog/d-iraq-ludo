@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('./reconcile-core.cjs');
+const {assessLegacyEvidence}=require('./legacy-assessment.cjs');
 const {reconcileVerifiedReceipt} = require('./reconcile-store.cjs');
 const {parseMigration, reconcileMigratedReceipt} = require('./migration-gate.cjs');
 const account = '07700000000', root = `deda_progress_migrations/${account}`;
@@ -10,7 +11,16 @@ const baselineId = 'baseline_receipt_00000001', awardId = 'award_receipt_0000000
 const baseline = {format:1,accountKey:account,source:'legacy-baseline-v1',sourceId:'approved-review',kind:'baseline',delta:{points:100,coins:30,xp:20,earnedDiamonds:9}};
 const award = {format:1,accountKey:account,source:'task-claim-v1',sourceId:'day|task',kind:'award',delta:{points:5,coins:10,xp:20,earnedDiamonds:0}};
 const key = core.eventKey(award), baselineKey = core.eventKey(baseline);
-const migration = () => ({format:1,accountKey:account,migrationId:'migration_review_00000001',phase:'cutover-complete',evidenceDigest:'a'.repeat(64),baselineEventKey:baselineKey,settlementId:'settlement_review_0000001'});
+const captureId='baseline_capture_00000001';
+const sourcePath=`deda_progress_evidence/${account}/captures/${captureId}`;
+const reviewPath=`${root}/reviews/migration_review_00000001`;
+const evidence=()=>({format:1,kind:'legacy-local-evidence',accountKey:account,captureId,
+ sourceUid:'old-device',installId:'old-install',createdAt:{seconds:1,nanoseconds:0},records:{
+ taskPoints:'{"version":1,"completions":{},"awards":{"old":{"points":100}},"ledger":[]}',
+ socialCoinsAndXp:'{"coins":30,"xp":20,"taskClaims":[]}',
+ earnedDiamonds:'{"balance":9,"day":"2026-10-24","viewsToday":1}'}});
+const assessment=()=>assessLegacyEvidence(evidence(),account,captureId);
+const migration = () => ({format:1,accountKey:account,migrationId:'migration_review_00000001',phase:'cutover-complete',evidenceDigest:assessment().evidenceDigest,baselineEventKey:baselineKey,settlementId:'settlement_review_0000001'});
 const settlement = () => ({format:1,accountKey:account,migrationId:migration().migrationId,evidenceDigest:migration().evidenceDigest,baselineEventKey:baselineKey,legacyFenceId:'legacy_writer_fence_00001',pendingPurchases:0,pendingReservations:0});
 const classification = disposition => ({format:1,accountKey:account,migrationId:migration().migrationId,evidenceDigest:migration().evidenceDigest,disposition,receipt:structuredClone(award)});
 const classificationPath = `${root}/classifications/${key}`;
@@ -39,6 +49,8 @@ async function fixture(disposition = 'included-in-baseline') {
   store.docs.set(`deda_progress_receipts/${account}/events/${baselineId}`,structuredClone(baseline));
   store.docs.set(`deda_progress_receipts/${account}/events/${awardId}`,structuredClone(award));
   await reconcileVerifiedReceipt({store,accountKey:account,receiptId:baselineId});
+  store.docs.set(sourcePath,evidence());
+  store.docs.set(reviewPath,{...assessment(),migrationId:migration().migrationId,sourcePath,createdAt:'fixture-time'});
   store.docs.set(root,migration()); store.docs.set(settlementPath,settlement());
   store.docs.set(classificationPath,classification(disposition));
   store.writes = 0;
@@ -142,4 +154,54 @@ test('a debit already included in baseline cannot be charged again',async()=>{
   store.docs.set(`${root}/classifications/${core.eventKey(debit)}`,{...classification('included-in-baseline'),receipt:debit});
   const result = await apply(store,id);assert.equal(result.includedInBaseline,true);
   assert.equal(result.state.balances.coins,30);assert.equal(store.writes,0);
+});
+
+test('completed migration with missing private review cannot apply money',async()=>{
+ const store=await fixture('after-cutover');store.docs.delete(reviewPath);await reject(store,'migration-reviewed-evidence-required');
+});
+test('missing original archive cannot be replaced by its review summary',async()=>{
+ const store=await fixture('after-cutover');store.docs.delete(sourcePath);await reject(store,'migration-evidence-missing');
+});
+for(const field of ['records','sourceUid','installId','createdAt'])test(`changed archived ${field} blocks cutover`,async()=>{
+ const store=await fixture('after-cutover'),raw=store.docs.get(sourcePath);
+ if(field==='records')raw.records.socialCoinsAndXp+=' ';
+ else if(field==='createdAt')raw.createdAt.seconds++;
+ else raw[field]+='-changed';
+ await reject(store,'migration-reviewed-evidence-conflict');
+});
+for(const field of ['sourcePath','evidenceDigest','observedBalances','issues','canAutoApprove','settlement'])test(`changed review ${field} cannot bless a baseline`,async()=>{
+ const store=await fixture('after-cutover'),review=store.docs.get(reviewPath);
+ review[field]=field==='canAutoApprove'?true:'changed';
+ await reject(store,'migration-reviewed-evidence-conflict');
+});
+test('review capture path traversal is rejected before archive lookup',async()=>{
+ const store=await fixture();store.docs.get(reviewPath).captureId='../other';await reject(store,'migration-reviewed-evidence-required');
+});
+test('matching marker and baseline with inflated amount still fail against original evidence',async()=>{
+ const store=await fixture('after-cutover');
+ store.docs.get(`${statePath}/events/${baselineKey}`).receipt.delta.coins=9999;
+ await reject(store,'migration-baseline-evidence-conflict');
+});
+test('retry rereads original archived bytes before committing an award',async()=>{
+ const store=await fixture('after-cutover'),run=store.runTransaction.bind(store);
+ store.runTransaction=async action=>{let first=true;return run(async tx=>{
+  const result=await action(tx);
+  if(first){first=false;store.docs.get(sourcePath).records.socialCoinsAndXp+=' ';return action({get:async path=>structuredClone(store.docs.get(path)??null),set:()=>assert.fail('must not stage retry writes')});}
+  return result;
+ });};
+ await assert.rejects(apply(store),e=>e.code==='migration-reviewed-evidence-conflict');assert.equal(store.writes,0);assert.equal(store.docs.get(statePath).version,1);
+});
+for(const kind of ['missing','malformed','negative-points','derived-manager-bonus'])test(`${kind} cannot be converted to an importable baseline`,async()=>{
+ const store=await fixture('after-cutover'),raw=store.docs.get(sourcePath);
+ if(kind==='missing')raw.records.socialCoinsAndXp=null;
+ if(kind==='malformed')raw.records.socialCoinsAndXp='{broken';
+ if(kind==='negative-points')raw.records.taskPoints='{"version":1,"completions":{},"awards":{"spent":{"points":-5}},"ledger":[]}';
+ const assessment=assessLegacyEvidence(raw,account,captureId);
+ store.docs.set(reviewPath,{...assessment,migrationId:migration().migrationId,sourcePath,createdAt:'fixture-time'});
+ for(const path of [root,settlementPath,classificationPath])store.docs.get(path).evidenceDigest=assessment.evidenceDigest;
+ const receipt=store.docs.get(`${statePath}/events/${baselineKey}`).receipt;
+ if(kind==='missing'||kind==='malformed'){receipt.delta.coins=0;receipt.delta.xp=0;}
+ if(kind==='negative-points')receipt.delta.points=0;
+ if(kind==='derived-manager-bonus')receipt.delta.points+=1000000;
+ await reject(store,'migration-baseline-evidence-conflict');
 });

@@ -7,6 +7,7 @@ const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const core=require('./reconcile-core.cjs');
 const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
+const {assessLegacyEvidence}=require('./legacy-assessment.cjs');
 const {saveMigrationAssessment}=require('./migration-assessment-store.cjs');
 const account='07700000000',otherAccount='07700000001';
 const zero=()=>({points:0,coins:0,xp:0,earnedDiamonds:0});
@@ -266,8 +267,14 @@ test('event history belongs to the account on new device, never another account'
 const migrationRoot=`deda_progress_migrations/${account}`;
 async function migrationFixture(disposition='included-in-baseline'){
   await initialize();await seed(awardId,award());
+  const captureId='baseline_capture_00000001',sourcePath=`deda_progress_evidence/${account}/captures/${captureId}`;
+  const records=assessmentRecords();records.taskPoints='{"version":1,"completions":{},"awards":{"old":{"points":5000}},"ledger":[]}';
+  const raw={format:1,kind:'legacy-local-evidence',accountKey:account,captureId,sourceUid:'old-device',installId:'old-install',records,createdAt:FieldValue.serverTimestamp()};
+  await db.doc(sourcePath).set(raw);
+  const review=assessLegacyEvidence((await db.doc(sourcePath).get()).data(),account,captureId);
+  await db.doc(`${migrationRoot}/reviews/migration_fixture_000001`).set({...review,migrationId:'migration_fixture_000001',sourcePath,createdAt:FieldValue.serverTimestamp()});
   const migration={format:1,accountKey:account,migrationId:'migration_fixture_000001',phase:'cutover-complete',
-    evidenceDigest:'a'.repeat(64),baselineEventKey:core.eventKey(baseline()),settlementId:'settlement_fixture_000001'};
+    evidenceDigest:review.evidenceDigest,baselineEventKey:core.eventKey(baseline()),settlementId:'settlement_fixture_000001'};
   await db.doc(migrationRoot).set(migration);
   await db.doc(`${migrationRoot}/settlements/${migration.settlementId}`).set({format:1,accountKey:account,
     migrationId:migration.migrationId,evidenceDigest:migration.evidenceDigest,baselineEventKey:migration.baselineEventKey,
@@ -308,7 +315,7 @@ test('migration same event with different amount cannot reuse old review',async(
 test('migration included historical debit is not deducted a second time',async()=>{
   await migrationFixture();await seed(debitId,debit('already-settled-purchase'));
   await db.doc(`${migrationRoot}/classifications/${core.eventKey(debit('already-settled-purchase'))}`).set({
-    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:'a'.repeat(64),
+    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:(await db.doc(migrationRoot).get()).data().evidenceDigest,
     disposition:'included-in-baseline',receipt:debit('already-settled-purchase')});
   assert.equal((await applyMigrated(debitId)).includedInBaseline,true);
   assert.equal((await state()).balances.coins,30);assert.equal((await state()).version,1);
@@ -316,7 +323,7 @@ test('migration included historical debit is not deducted a second time',async()
 test('new device reads the current balance after migrated award and spending',async()=>{
   await migrationFixture('after-cutover');await applyMigrated(awardId);await seed(debitId,debit());
   await db.doc(`${migrationRoot}/classifications/${core.eventKey(debit())}`).set({
-    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:'a'.repeat(64),
+    format:1,accountKey:account,migrationId:'migration_fixture_000001',evidenceDigest:(await db.doc(migrationRoot).get()).data().evidenceDigest,
     disposition:'after-cutover',receipt:debit()});
   await applyMigrated(debitId);await applyMigrated(awardId);
   const snapshot=await assertSucceeds(getDocFromServer(doc(client('new-device'),statePath)));
@@ -329,3 +336,21 @@ for(const path of [migrationRoot,`${migrationRoot}/classifications/${core.eventK
     await assertFails(deleteDoc(ref));
   });
 }
+
+for(const kind of ['missing-review','missing-archive','changed-bytes','changed-origin','changed-review','inflated-baseline'])test(`real transaction rejects ${kind} without money or marker changes`,async()=>{
+ await migrationFixture('after-cutover');
+ const source=`deda_progress_evidence/${account}/captures/baseline_capture_00000001`;
+ const review=`${migrationRoot}/reviews/migration_fixture_000001`;
+ const codes={'missing-review':'migration-reviewed-evidence-required','missing-archive':'migration-evidence-missing',
+  'changed-bytes':'migration-reviewed-evidence-conflict','changed-origin':'migration-reviewed-evidence-conflict',
+  'changed-review':'migration-reviewed-evidence-conflict','inflated-baseline':'migration-baseline-evidence-conflict'};
+ if(kind==='missing-review')await db.doc(review).delete();
+ if(kind==='missing-archive')await db.doc(source).delete();
+ if(kind==='changed-bytes'){const raw=(await db.doc(source).get()).data();raw.records.socialCoinsAndXp+=' ';await db.doc(source).set(raw);}
+ if(kind==='changed-origin')await db.doc(source).update({installId:'different-install'});
+ if(kind==='changed-review')await db.doc(review).update({canAutoApprove:true});
+ if(kind==='inflated-baseline')await db.doc(`${statePath}/events/${core.eventKey(baseline())}`).update({'receipt.delta.coins':9999});
+ const before=await state(),markers=(await events()).length;
+ await assert.rejects(applyMigrated(awardId),e=>e.code===codes[kind]);
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,markers);
+});
