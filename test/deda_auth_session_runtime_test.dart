@@ -117,13 +117,13 @@ void main() {
     expect(called,isFalse);
   });
   test('expired parent context cannot be reused by late delegated helpers', () async {
-    final h=Harness();late Future<void> Function() late;
+    final h=Harness();late Future<void> Function() lateHelper;
     await h.run(() async {
       final zone=Zone.current;
-      late=()=>zone.run(()=>h.runtime.run<void>(kind:DedaSessionTransitionKind.logout,
+      lateHelper=()=>zone.run(()=>h.runtime.run<void>(kind:DedaSessionTransitionKind.logout,
         origin:explicit,action:() async {fail('late logout dispatched');}));
     });
-    await expectLater(late(),throwsA(isA<DedaStaleSessionTransition>()));
+    await expectLater(lateHelper(),throwsA(isA<DedaStaleSessionTransition>()));
   });
   test('password dialog snapshot rejects changed identity without holding a lane', () async {
     final h=Harness();final before=h.live;

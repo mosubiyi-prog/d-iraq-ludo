@@ -133,6 +133,9 @@ def bind_pin(source):
 
 
 def bind_backend(source):
+    source = once(source, "    if (current == null) throw StateError('deda-session-required');",
+      "    if (current == null) throw StateError('deda-session-required');\n    final recoveryRequester = current;")
+    source = once(source, "'requesterUid': current.uid,", "'requesterUid': recoveryRequester.uid,")
     source = guard_awaits(sdk_calls(source))
     for name, kind in [('signInAdmin', 'adminLogin'),
         ('activateAdminInvitation', 'adminInviteActivation'),
@@ -141,7 +144,8 @@ def bind_backend(source):
     for name in ['_ensurePublicUser', '_ensureOwnerSessionForAccountKey',
         'currentDedaAccountCanSeeAdminEntry', 'currentDedaAccountIsGeneralManager',
         'currentAdminSessionMatchesDedaEntry', 'syncCurrentAdminEntryAccessForDedaAccount',
-        'currentAdminProfile', 'registerAdminNotifications', '_writeAdminAudit']:
+        'currentAdminProfile', 'registerAdminNotifications', '_writeAdminAudit',
+        'requestAdminPasswordRecovery']:
         source = wrap_method(source, name, 'sessionInspection', origin='activeSection')
     return "import 'deda_auth_session_runtime.dart';\n" + source
 
