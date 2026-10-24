@@ -133,6 +133,15 @@ def bind_pin(source):
 
 
 def bind_backend(source):
+    source = once(source, '''  static Stream<List<Map<String, dynamic>>> ownerPlaceNotificationsStream(
+    String accountKey,
+  ) {
+    final clean = accountKey.trim();
+    if (clean.isEmpty) {''', '''  static Stream<List<Map<String, dynamic>>> ownerPlaceNotificationsStream(
+    String accountKey,
+  ) {
+    final clean = accountKey.trim();
+    if (clean.isEmpty || (DedaAuthRuntime.enabled && !isReady)) {''')
     opening, closing, _, _ = body_range(source, 'recoverPublishedPlaceForSignedInOwner')
     source = source[:opening+1] + '''
     if (DedaAuthRuntime.enabled) {
