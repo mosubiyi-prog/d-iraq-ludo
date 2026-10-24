@@ -6,7 +6,7 @@
   "sourceRunId": 40136116286,
   "policyRunId": 40133921189,
   "nativeTransportRunId": 40136116294,
-  "status": "combined-source-all-five-passed-final-native-results-pending",
+  "status": "combined-source-native-transport-and-original-pin-passed",
   "tests": {
     "node": 241,
     "authFirestoreEmulator": 146,
@@ -40,6 +40,7 @@
   "canAutoSettle": false,
   "actualTwoPhoneAcceptance": false,
   "remaining": [
+    "production-activation-and-compatible-rules-owner-review",
     "authorized-settlement",
     "point-tier-entitlement-transfer",
     "legacy-writer-fence",
@@ -68,5 +69,56 @@
     "stoppedReason": "wait-script-expected-18-instead-of-20-before-cold-restart",
     "waitGuardCorrected": true
   },
-  "nativePinStatus": "attempt-2-pending-first-attempt-failed-at-original-archive-denial"
+  "nativePinStatus": "passed-attempt-2-with-unchanged-code",
+  "nativeTransport": {
+    "runId": 40136116294,
+    "codeCommit": "c08f03c95cc547de8e90febbcdb2d7bf7d139c02",
+    "passed": 24,
+    "failed": 0,
+    "coldRestart": true,
+    "actualAndroidBackgroundResume": true,
+    "defaultRuntimeFactoryTested": true,
+    "privilegedCanonicalRouteSeeds": true,
+    "actualDedaPinTested": false,
+    "sourceHashesVerified": 10,
+    "pinnedTransportPackages": 16,
+    "distinctProcessPids": [
+      2979,
+      4082
+    ],
+    "artifactId": 12577830315,
+    "artifactSHA256": "ec35c02213e3e74c91f1a22c137350bec7bcd861c735f0a0828d00b6047f0e47"
+  },
+  "nativePin": {
+    "runId": 40135421319,
+    "codeCommit": "73fcd1fe89aa2071dd5c70e8281336944e9fd427",
+    "attempt": 2,
+    "passed": 24,
+    "failed": 0,
+    "coldRestart": true,
+    "privilegedDocumentSeeds": false,
+    "nativeProcessErrorsAbsent": true,
+    "commonSourceHashesVerified": 9,
+    "originalPinAuthSHA256": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+    "pinnedTransportPackages": 16,
+    "distinctProcessPids": [
+      3682,
+      4229
+    ],
+    "policyPassed": 93,
+    "policyVerifiedAtUTC": "2026-10-24T22:04:15.145923+00:00",
+    "artifactId": 12577830677,
+    "artifactSHA256": "c5b72811182506523e37801d31007176ea640015d8e5cecceec956ee5f344ed0",
+    "firstAttemptFailure": {
+      "passed": 8,
+      "case": "original-native-archive-scope-still-denied",
+      "codes": [
+        "uncaught-error",
+        "case-failed"
+      ],
+      "fullyDiagnosed": false,
+      "sameCodeAndAssertionsRerun": true
+    }
+  },
+  "canAutoRestoreFinancialProgress": false
 }
