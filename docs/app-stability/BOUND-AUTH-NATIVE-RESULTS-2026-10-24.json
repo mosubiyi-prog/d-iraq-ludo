@@ -1,31 +1,31 @@
 {
-  "codeCommit": "f12adef97851d11ba3fcf6155a45e7e17ff4667a",
+  "codeCommit": "8111f3be6e9d2b8a6b6172c2889130a0ec843573",
   "dateBaghdad": "2026-10-24",
   "sourceRun": {
-    "id": 40107002080,
+    "id": 40109464028,
     "status": "success",
     "jobs": 5,
     "pythonTests": 65,
-    "authRuntimeTests": 29,
+    "authRuntimeTests": 52,
     "preservedAccountOwnershipUiTests": 38
   },
   "nativeRun": {
-    "id": 40107002065,
+    "id": 40109464026,
     "status": "success",
     "nativeCases": 13,
     "rulesComparisonCases": 93,
     "coldRestart": true,
     "processPids": [
-      "3411",
-      "4235"
+      "3412",
+      "4293"
     ],
     "boundOriginalPinAuth": true,
     "realNativePlugins": true,
     "privilegedDocumentSeeds": false
   },
   "artifact": {
-    "id": 12565103116,
-    "sha256": "c0b883b96f9754cb926caeb852016c9cb80cc7e1f3150e0b1298517b4de7d26e",
+    "id": 12566576170,
+    "sha256": "9557355f2ba18a4bb51fbfcbc46cc694ef2b30591adddecdba99caf3e6081cd8",
     "downloadHashVerified": true,
     "manifestSourceFilesVerified": 4,
     "pinnedTransportPackages": 16
@@ -51,8 +51,22 @@
     "fixScope": "One import in harness only; no runtime behavior or production configuration changes"
   },
   "next": [
-    "Validate complete app UI and partial preference failure paths before enabling auth runtime",
-    "Complete original remaining financial and nonfinancial continuity work recorded in CURRENT",
+    "Complete remaining admin/section UI busy and partial IO integration acceptance",
+    "Complete original financial and nonfinancial continuity work recorded in CURRENT",
     "Finish remaining sections/network/performance acceptance and two-phone signed build acceptance"
-  ]
+  ],
+  "localAccountScope": {
+    "logoutConfirmationGuard": "Settings and account hub source; Settings widgets tested",
+    "checkedLocalIdentityCommits": "mock platform false/exception/reload tests",
+    "afterSuccess": "new inspection after successful parent, same account epoch/SDK, no SDK mutation",
+    "newCasesComparedToPrevious29": 23,
+    "fullNativeDedaPreferencesFailureTests": false
+  },
+  "latestResolvedBlocker": {
+    "run": 40108997092,
+    "sourcePassed": 45,
+    "sourceFailed": 1,
+    "reason": "Task initializer spawned manager refresh inside an expired login Zone",
+    "fix": "Defer under a fresh account-bound inspection after parent success; retain failing success-path test"
+  }
 }
