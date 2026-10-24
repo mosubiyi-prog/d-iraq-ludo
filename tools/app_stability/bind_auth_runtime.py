@@ -179,10 +179,10 @@ def guard_local_account_commits(source):
     accountPhone = normalizedPhone;
     accountType = type;
     isLoggedIn = true;'''
-    safe = once(original, publish, '''    if (!await prefs.setBool(_loggedInKey, false)) {
+    safe = once(original, publish, '''    isLoggedIn = false;
+    if (!await prefs.setBool(_loggedInKey, false)) {
       throw StateError('account-local-save-failed');
-    }
-    isLoggedIn = false;''')
+    }''')
     safe = once(safe, '    profileAvatarStyle =', '    final savedAvatarStyle =')
     safe = once(safe, '    profileFrameStyle =', '    final savedFrameStyle =')
     safe = once(safe, '    profileBackgroundStyle =', '    final savedBackgroundStyle =')

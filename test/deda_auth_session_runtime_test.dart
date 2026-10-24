@@ -308,11 +308,11 @@ void main() {
         expect((await store.getAll())['flutter.deda_logged_in_v1'],isFalse);
       },skip:!dedaAuthSessionRuntimeEnabled);
     }
-    test('failure to close the previous login marker preserves the previous selection', () async {
+    test('failure to close the previous login marker blocks publication and preserves previous identity', () async {
       store.failKey='flutter.deda_logged_in_v1';
       await expectLater(app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
         type:app.DedaAccountType.user),throwsStateError);
-      expect(app.DedaPreferences.isLoggedIn,isTrue);
+      expect(app.DedaPreferences.isLoggedIn,isFalse);
       expect(app.DedaPreferences.phone,first);
       expect((await store.getAll())['flutter.deda_phone_v1'],first);
       await preservesProgress();
