@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_legacy_progress_capture.dart';
 import 'deda_legacy_purchase_evidence.dart';
+import 'deda_owner_session_firebase_port.dart';
 import 'deda_progress_evidence_store.dart';
 import 'deda_session_transition_gate.dart';
 
