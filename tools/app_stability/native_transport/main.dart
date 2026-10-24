@@ -19,6 +19,10 @@ import 'deda_session_flow_prototype.dart';
 // under its application ID. Emulator identities are seeded by a LOCAL fixture
 // authority: no DEDA PIN, production data, role, reward or balance is exercised.
 const project='demo-deda-progress-archive';
+const demoOptions=FirebaseOptions(
+  apiKey:'AIzaSy000000000000000000000000000000000',
+  appId:'1:1234567890:android:0000000000000000000000',
+  messagingSenderId:'1234567890',projectId:project);
 const account='07700000000',otherAccount='07700000001';
 const install='native-primary-install-v1';
 const firstId='native_transport_first_capture_0001';
@@ -78,10 +82,7 @@ class NativeClient {
       archive:store,journal:DedaSharedPreferencesBackupJournal(),timeout:const Duration(seconds:5));
   static Future<NativeClient> connect(String name,{bool allowCreate=true}) async {
     check(project.startsWith('demo-'),'demo project is mandatory');
-    final app=await Firebase.initializeApp(name:name,options:const FirebaseOptions(
-      apiKey:'AIzaSy000000000000000000000000000000000',
-      appId:'1:1234567890:android:0000000000000000000000',
-      messagingSenderId:'1234567890',projectId:project));
+    final app=await Firebase.initializeApp(name:name,options:demoOptions);
     final auth=FirebaseAuth.instanceFor(app:app);
     await auth.useAuthEmulator('10.0.2.2',9099);
     final firestore=FirebaseFirestore.instanceFor(app:app);
@@ -279,6 +280,14 @@ Future<void> main() async {
   PlatformDispatcher.instance.onError=(error,stack){failures.add('unhandled: $error');return false;};
   runApp(const MaterialApp(home:Scaffold(body:Center(child:Text('DEDA isolated native transport QA')))));
   try {
+    // This pinned Firestore platform interface bootstraps its singleton through
+    // Firebase.app() even when instanceFor is used with a named application.
+    // DEDA already initializes DEFAULT; the standalone harness must do so too.
+    final defaultApp=await Firebase.initializeApp(options:demoOptions);
+    await FirebaseAuth.instanceFor(app:defaultApp).useAuthEmulator('10.0.2.2',9099);
+    final defaultStore=FirebaseFirestore.instanceFor(app:defaultApp);
+    defaultStore.settings=const Settings(persistenceEnabled:false);
+    defaultStore.useFirestoreEmulator('10.0.2.2',8080);
     final prefs=await SharedPreferences.getInstance();await prefs.reload();
     final marker=prefs.getString('qa_phase');
     if(marker=='restart-ready'){await secondPhase(prefs);}
