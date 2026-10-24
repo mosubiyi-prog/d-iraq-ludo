@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 
 import 'deda_legacy_progress_capture.dart';
+import 'deda_legacy_purchase_evidence.dart';
 import 'deda_owner_session_firebase_port.dart';
 import 'deda_progress_backup_coordinator.dart';
 import 'deda_progress_evidence_store.dart';
@@ -64,12 +65,15 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
     return DedaFirebaseProgressBackupDriver._(session,
       DedaProgressBackupCoordinator(
         reader: DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
-        archive: archive, journal: DedaSharedPreferencesBackupJournal()), session.dispose);
+        archive: archive, journal: DedaSharedPreferencesBackupJournal(),
+        purchaseReader: DedaLegacyPurchaseReader(DedaSharedPreferencesPurchaseReadStore()),
+        purchaseArchive: DedaLegacyPurchaseEvidenceStore(archive)), session.dispose);
   }
   final DedaOwnerSessionIo session;
   final Future<void> Function() _dispose;
   final DedaProgressBackupCoordinator coordinator;
-  String? _lastAccount, _lastAcknowledged;
+  String? _lastAccount, _lastAcknowledged, _lastPurchaseAcknowledged;
+  bool _lastPurchaseObserved=false;
   @override
   bool get ready => session.ready;
   @override
@@ -98,7 +102,12 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
       if (pending == null) {
         final local = await coordinator.reader.capture(
           accountKey: accountKey, isCurrent: isCurrent);
-        if (local.encode() == _lastAcknowledged) return false;
+        if (local.encode() == _lastAcknowledged) {
+          if(coordinator.purchaseReader==null) return false;
+          final purchase=await coordinator.capturePurchase(accountKey:accountKey,isCurrent:isCurrent);
+          if(!isCurrent()) throw const DedaStaleSessionTransition();
+          if(_lastPurchaseObserved && purchase?.encode()==_lastPurchaseAcknowledged) return false;
+        }
       }
     }
     final intent = await coordinator.prepare(accountKey: accountKey,
@@ -110,6 +119,8 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
     if (result.journalCleared) {
       _lastAccount = accountKey;
       _lastAcknowledged = intent.capture.encode();
+      _lastPurchaseObserved=result.purchaseCaptureObserved;
+      _lastPurchaseAcknowledged=result.purchaseEvidence?.capture.encode();
     }
     return true;
   }

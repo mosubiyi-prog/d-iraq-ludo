@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_legacy_progress_capture.dart';
+import 'deda_legacy_purchase_evidence.dart';
 import 'deda_owner_session_firebase_port.dart';
 import 'deda_progress_backup_coordinator.dart';
 import 'deda_progress_backup_runtime.dart';
@@ -30,6 +31,8 @@ const firstId='native_transport_first_capture_0001';
 const restartId='native_transport_restart_capture_001';
 const runtimeRestartId='native_runtime_restart_capture_0001';
 const runtimeInstall='native-runtime-install-b-v1';
+const purchaseOriginal='@DEDA-ABC123';
+const paidJournal='deda_native_frame_pending_v1_${purchaseOriginal}_FRAME_03';
 const rawPoints=' {"awards":{"spent":{"points":-5000}},"label":"تقدم محفوظ"} ';
 const rawSocial='{"coins":17,"xp":3020,"taskClaims":["day|task"]}';
 const rawDiamonds='{"balance":9,"day":"fixture","viewsToday":1}';
@@ -79,6 +82,10 @@ class NativeClient {
   final DedaFirebaseProgressEvidenceIo transport;
   late final archive=DedaProgressEvidenceStore(transport);
   late final backup=coordinator(archive);
+  late final dual=DedaProgressBackupCoordinator(reader:DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
+    archive:archive,journal:DedaSharedPreferencesBackupJournal(),
+    purchaseReader:DedaLegacyPurchaseReader(DedaSharedPreferencesPurchaseReadStore()),
+    purchaseArchive:DedaLegacyPurchaseEvidenceStore(archive),timeout:const Duration(seconds:8));
   String get uid=>auth.currentUser!.uid;
   DedaProgressBackupCoordinator coordinator(DedaProgressEvidenceStore store)=>
     DedaProgressBackupCoordinator(reader:DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
@@ -222,6 +229,8 @@ Future<void> nativeRuntimeFirstPhase(SharedPreferences prefs) async {
     check(RegExp(r'^[a-f0-9]{48}$').hasMatch(owned.single.id),'runtime capture ID is not secure 24-byte hex');
     check((owned.single.data()['records'] as Map)['taskPoints']==rawPoints,'root altered source text');
     check(factories==1 && await DedaSharedPreferencesBackupJournal().read(account)==null,'root did not settle its one shared driver');
+    final sidecar=await DedaLegacyPurchaseEvidenceStore(client.archive).read(accountKey:account,captureId:owned.single.id,isCurrent:()=>true);
+    check(sidecar.capture.journals['FRAME_03']=='paid' && sidecar.sourceUid==uid,'default factory omitted purchase sidecar');
   });
   await record('native-runtime-unchanged-skips-upload-after-owner-proof',() async {
     final before=(await captures(client,account)).length;
@@ -229,6 +238,16 @@ Future<void> nativeRuntimeFirstPhase(SharedPreferences prefs) async {
     check(runtime.status==DedaProgressBackupStatus.unchanged,'unchanged capture not suppressed');
     check((await captures(client,account)).length==before,'unchanged capture uploaded again');
     check(factories==1 && client.uid==uid,'root recreated driver or mutated Auth');
+  });
+  await record('native-runtime-purchase-only-change-not-skipped',() async {
+    final before=(await captures(client,account)).length;
+    await prefs.setString(paidJournal,'charging');await runtime.request();
+    check(runtime.status==DedaProgressBackupStatus.saved,'purchase-only change suppressed by progress cache');
+    final rows=await captures(client,account);check(rows.length==before+1,'purchase change did not create one new pair');
+    final sidecars=await client.firestore.collection('deda_purchase_evidence/$account/captures').get(const GetOptions(source:Source.server));
+    check(sidecars.docs.any((row)=>((jsonDecode((row.data()['records'] as Map)['localSnapshot'] as String) as Map)['frameJournals'] as Map)['FRAME_03']=='charging'),'changed journal missing');
+    check(prefs.getString(paidJournal)=='charging','capture cleared original charging state');
+    await prefs.setString(paidJournal,'paid');
   });
   await record('native-runtime-changed-source-archives-without-overwrite',() async {
     const changed=' {"awards":{"new":5,"spent":-2},"nativeRuntime":true} ';
@@ -464,14 +483,25 @@ Future<void> firstPhase(SharedPreferences prefs) async {
     } finally {await prefs.setString('deda_install_id_v1',install);}
     await client.backup.uploadPending(accountKey:account,isCurrent:()=>true);
   });
+  await record('native-purchase-reader-keeps-typed-values-and-original-journals',() async {
+    await prefs.setString(paidJournal,'paid');
+    await prefs.setString('deda_native_frame_pending_v1_${purchaseOriginal}_FRAME_05','charging');
+    await prefs.setBool('deda_native_frame_pending_v1_${purchaseOriginal}_FRAME_06',true);
+    await prefs.setString('deda_style_inventory_v1_$account',' {"owned":["frame_3"]} ');
+    final capture=await DedaLegacyPurchaseReader(DedaSharedPreferencesPurchaseReadStore()).capture(accountKey:account,
+      originalId:purchaseOriginal,isCurrent:()=>true);
+    check(capture.journals['FRAME_03']=='paid' && capture.journals['FRAME_05']=='charging' && capture.journals['FRAME_06']==true,'native types changed');
+    check(prefs.getString(paidJournal)=='paid' && capture.inventory==' {"owned":["frame_3"]} ','reader altered source');
+  });
   await nativeRuntimeFirstPhase(prefs);
   await record('native-pending-journal-prepared-for-cold-restart',() async {
-    final intent=await client.backup.prepare(accountKey:account,captureId:restartId,isCurrent:()=>true);
+    final intent=await client.dual.prepare(accountKey:account,captureId:restartId,isCurrent:()=>true);
     check(await prefs.setString('qa_restart_intent',intent.encode()),'restart intent not saved');
     check(await prefs.setString('qa_owner_uid',client.uid),'restart UID not saved');
     check(intent.capture.raw[DedaLegacyProgressPart.taskPoints]==rawPoints,'restart source changed');
+    check(intent.purchaseCaptureObserved && intent.purchaseCapture?.journals['FRAME_03']=='paid','restart journal omitted purchase snapshot');
   });
-  check(passed.length==18 && failures.isEmpty,'first phase incomplete');
+  check(passed.length==20 && failures.isEmpty,'first phase incomplete');
   check(await prefs.setString('qa_passed',jsonEncode(passed)),'pass history not persisted');
   check(await prefs.setString('qa_phase','restart-ready'),'restart marker not persisted');
   await prefs.reload();
@@ -483,7 +513,7 @@ Future<void> firstPhase(SharedPreferences prefs) async {
 Future<void> secondPhase(SharedPreferences prefs) async {
   phase=2;
   final previous=jsonDecode(prefs.getString('qa_passed') ?? 'null');
-  check(previous is List && previous.length==18,'first process pass history did not survive');
+  check(previous is List && previous.length==20,'first process pass history did not survive');
   passed.addAll((previous as List).cast<String>());
   await record('native-preferences-and-pending-survive-process-restart',() async {
     final encoded=prefs.getString('qa_restart_intent');
@@ -491,20 +521,22 @@ Future<void> secondPhase(SharedPreferences prefs) async {
     final intent=DedaProgressBackupIntent.decode(encoded!,account);
     check(intent.captureId==restartId,'restart capture ID changed');
     check(await DedaSharedPreferencesBackupJournal().read(account)==encoded,'native journal did not survive');
+    check(intent.purchaseCaptureObserved && intent.purchaseCapture?.journals['FRAME_03']=='paid','purchase payload lost across cold restart');
     check(prefs.getString(sourcePoints)==rawPoints && prefs.getString(sourceSocial)==rawSocial &&
       prefs.getString(sourceDiamonds)==rawDiamonds,'native source records changed or disappeared');
   });
   await record('native-auth-owner-and-pending-upload-after-restart',() async {
     final client=await NativeClient.connect('qa-owner',allowCreate:false);
     check(client.uid==prefs.getString('qa_owner_uid'),'Auth UID did not persist across process restart');
-    final result=await client.backup.uploadPending(accountKey:account,isCurrent:()=>true);
+    final result=await client.dual.uploadPending(accountKey:account,isCurrent:()=>true);
     check(result.journalCleared && result.evidence.captureId==restartId,'pending recovery incomplete');
     check(result.evidence.sourceUid==client.uid && result.evidence.installId==install,'pending provenance changed');
     check(result.evidence.capture.raw[DedaLegacyProgressPart.taskPoints]==rawPoints,'recovered raw source changed');
     check(prefs.getString(sourcePoints)==rawPoints,'recovery overwrote source preferences');
+    check(result.purchaseEvidence?.capture.journals['FRAME_03']=='paid' && prefs.getString(paidJournal)=='paid','cold recovery omitted sidecar or changed paid marker');
   });
   await nativeRuntimeSecondPhase(prefs);
-  check(passed.length==22 && failures.isEmpty,'second phase incomplete');
+  check(passed.length==24 && failures.isEmpty,'second phase incomplete');
   await prefs.setString('qa_phase','completed');
   await post('/finish',{'passed':passed,'failures':failures,'phase':2,
     'coldRestart':true,'nativeAuthUidPersisted':true,'runtimeHostTested':true,

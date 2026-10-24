@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_legacy_progress_capture.dart';
+import 'deda_legacy_purchase_evidence.dart';
 import 'deda_progress_evidence_store.dart';
 import 'deda_session_transition_gate.dart';
 
@@ -17,26 +18,44 @@ class DedaProgressBackupOriginChanged implements Exception {
 /// An untrusted, immutable pending archive request, never a balance receipt.
 class DedaProgressBackupIntent {
   DedaProgressBackupIntent({required this.captureId,required this.capture,
-    required this.sourceUid,required this.installId}) {
+    required this.sourceUid,required this.installId,this.purchaseCapture,
+    bool purchaseCaptureObserved=false}) : purchaseCaptureObserved=purchaseCaptureObserved || purchaseCapture!=null {
     if(!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId) ||
         sourceUid.isEmpty || installId.isEmpty || installId.length > 128) {
       throw const FormatException('invalid-backup-intent');
     }
+    if(purchaseCapture!=null && purchaseCapture!.accountKey!=capture.accountKey) {
+      throw const FormatException('purchase-backup-account-conflict');
+    }
   }
   final String captureId,sourceUid,installId;
   final DedaLegacyProgressCapture capture;
-  String encode() => jsonEncode({'format':1,'captureId':captureId,
+  final DedaLegacyPurchaseCapture? purchaseCapture;
+  final bool purchaseCaptureObserved;
+  String encode() => jsonEncode({'format':purchaseCaptureObserved?2:1,'captureId':captureId,
     'accountKey':capture.accountKey,'sourceUid':sourceUid,'installId':installId,
-    'capture':capture.encode()});
+    'capture':capture.encode(),
+    if(purchaseCaptureObserved) 'purchaseCapture':purchaseCapture?.encode()});
   static DedaProgressBackupIntent decode(String text,String accountKey) {
     final dynamic value=jsonDecode(text);
-    const keys={'format','captureId','accountKey','sourceUid','installId','capture'};
+    final keys={'format','captureId','accountKey','sourceUid','installId','capture',
+      if(value is Map && value['format']==2) 'purchaseCapture'};
     if(value is! Map || value.length != keys.length || !keys.every(value.containsKey) ||
-        value['format'] != 1 || value['accountKey'] != accountKey ||
+        ![1,2].contains(value['format']) || value['accountKey'] != accountKey ||
         ['captureId','sourceUid','installId','capture'].any((key)=>value[key] is! String)) {
       throw const FormatException('invalid-backup-journal');
     }
+    final dynamic purchase=value['purchaseCapture'];
+    if(purchase!=null && purchase is! String) throw const FormatException('invalid-purchase-backup-journal');
+    DedaLegacyPurchaseCapture? purchaseCapture;
+    if(purchase is String) {
+      final dynamic decoded=jsonDecode(purchase);
+      if(decoded is! Map || decoded['originalId'] is! String) throw const FormatException('invalid-purchase-backup-journal');
+      purchaseCapture=DedaLegacyPurchaseCapture.decode(purchase,accountKey:accountKey,originalId:decoded['originalId'] as String);
+      if(purchaseCapture.encode()!=purchase) throw const FormatException('noncanonical-purchase-backup-journal');
+    }
     return DedaProgressBackupIntent(captureId:value['captureId'] as String,
+      purchaseCapture:purchaseCapture,purchaseCaptureObserved:value['format']==2,
       sourceUid:value['sourceUid'] as String,installId:value['installId'] as String,
       capture:DedaLegacyProgressCapture.decodeForAccount(value['capture'] as String,
         expectedAccountKey:accountKey));
@@ -94,9 +113,12 @@ class DedaSharedPreferencesBackupJournal implements DedaProgressBackupJournal {
 }
 
 class DedaProgressBackupResult {
-  const DedaProgressBackupResult(this.evidence,{required this.journalCleared});
+  const DedaProgressBackupResult(this.evidence,{required this.journalCleared,
+    this.purchaseEvidence,this.purchaseCaptureObserved=false});
   final DedaStoredProgressEvidence evidence;
   final bool journalCleared;
+  final DedaStoredPurchaseEvidence? purchaseEvidence;
+  final bool purchaseCaptureObserved;
 }
 
 /// Composes the real local capture, pending journal and server archive APIs.
@@ -105,12 +127,17 @@ class DedaProgressBackupResult {
 /// Share ONE instance and pass an account-intent epoch (A -> B -> A invalidates).
 class DedaProgressBackupCoordinator {
   DedaProgressBackupCoordinator({required this.reader,required this.archive,
-    required this.journal,this.timeout=const Duration(seconds:20)}) {
+    required this.journal,this.purchaseReader,this.purchaseArchive,
+    this.timeout=const Duration(seconds:20)}) {
+    if((purchaseReader==null)!=(purchaseArchive==null)) throw ArgumentError('purchase-reader-and-archive-required-together');
+    if(purchaseArchive!=null && !identical(purchaseArchive!.progress,archive)) throw ArgumentError('purchase-archive-must-share-progress-proof');
     if(timeout <= Duration.zero) throw ArgumentError('invalid-backup-timeout');
   }
   final DedaLegacyProgressReader reader;
   final DedaProgressEvidenceStore archive;
   final DedaProgressBackupJournal journal;
+  final DedaLegacyPurchaseReader? purchaseReader;
+  final DedaLegacyPurchaseEvidenceStore? purchaseArchive;
   final Duration timeout;
   bool _busy=false;
   bool get busy => _busy;
@@ -150,6 +177,33 @@ class DedaProgressBackupCoordinator {
   };
   bool Function() _current(void Function() check) => () {check();return true;};
 
+  Future<DedaLegacyPurchaseCapture?> _capturePurchase(String accountKey,
+    DedaProgressEvidenceOwner owner,void Function() bound) async {
+    final reader=purchaseReader;
+    if(reader==null) return null;
+    bound();
+    final doc=await archive.io.readServer('users/${owner.user.uid}');bound();
+    if(doc.fromCache || doc.pendingWrites || doc.data==null || doc.data!['accountKey']!=accountKey) {
+      throw const DedaSessionProofRejected();
+    }
+    final original=doc.data!['sharePersonalId'];
+    // Never guess a canonical ID from an equipped premium alias or local name.
+    // An account with no canonical ID keeps progress backup, with explicit
+    // purchaseCaptureObserved=true and purchaseCapture=null, not zero purchases.
+    if(original==null) return null;
+    if(original is! String || !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original)) {
+      throw const DedaSessionProofRejected();
+    }
+    final capture=await reader.capture(accountKey:accountKey,originalId:original,isCurrent:_current(bound));
+    bound();return capture;
+  }
+  Future<DedaLegacyPurchaseCapture?> capturePurchase({required String accountKey,
+    required bool Function() isCurrent}) => _run(isCurrent,(check) async {
+      final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
+      final bound=_bound(owner,check);bound();
+      return _capturePurchase(accountKey,owner,bound);
+    });
+
   Future<DedaProgressBackupIntent> prepare({required String accountKey,
     required String captureId,required bool Function() isCurrent}) =>
     _run(isCurrent,(check) async {
@@ -162,7 +216,9 @@ class DedaProgressBackupCoordinator {
       // Never replace a previous uncertain request with a newer local snapshot.
       if(old != null) return DedaProgressBackupIntent.decode(old,accountKey);
       final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
+      final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
       final intent=DedaProgressBackupIntent(captureId:captureId,capture:capture,
+        purchaseCapture:purchaseCapture,purchaseCaptureObserved:purchaseReader!=null,
         sourceUid:owner.user.uid,installId:owner.installId);
       await journal.writeOnce(accountKey,intent.encode(),bound);bound();
       final persisted=await journal.read(accountKey);bound();
@@ -195,9 +251,31 @@ class DedaProgressBackupCoordinator {
           evidence.sourceUid != intent.sourceUid || evidence.installId != intent.installId) {
         throw const DedaProgressEvidenceConflict();
       }
+      DedaStoredPurchaseEvidence? purchaseEvidence;
+      final purchaseCapture=intent.purchaseCapture;
+      if(purchaseCapture!=null) {
+        final purchaseStore=purchaseArchive;
+        if(purchaseStore==null) throw StateError('purchase-archive-required-for-pending-intent');
+        DedaStoredPurchaseEvidence savedPurchase;
+        try {
+          savedPurchase=await purchaseStore.read(accountKey:accountKey,captureId:intent.captureId,isCurrent:_current(bound));bound();
+        } on DedaProgressEvidenceMissing {
+          bound();
+          if(owner.user.uid!=intent.sourceUid || owner.installId!=intent.installId) {
+            throw const DedaProgressBackupOriginChanged();
+          }
+          savedPurchase=await purchaseStore.save(captureId:intent.captureId,progressCaptureId:intent.captureId,
+            capture:purchaseCapture,isCurrent:_current(bound));bound();
+        }
+        if(savedPurchase.capture.encode()!=purchaseCapture.encode() ||
+          savedPurchase.progressCaptureId!=intent.captureId || savedPurchase.sourceUid!=intent.sourceUid ||
+          savedPurchase.installId!=intent.installId) throw const DedaProgressEvidenceConflict();
+        purchaseEvidence=savedPurchase;
+      }
       // Only the exact pending journal entry is retired, AFTER verified server
       // readback. Never delete the source progress keys or another pending entry.
       final cleared=await journal.removeIfSame(accountKey,encoded,bound);bound();
-      return DedaProgressBackupResult(evidence,journalCleared:cleared);
+      return DedaProgressBackupResult(evidence,journalCleared:cleared,
+        purchaseEvidence:purchaseEvidence,purchaseCaptureObserved:intent.purchaseCaptureObserved);
     });
 }

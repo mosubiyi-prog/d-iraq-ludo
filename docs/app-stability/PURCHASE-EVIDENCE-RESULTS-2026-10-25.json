@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "date": "2026-10-25",
+  "timezone": "Asia/Baghdad",
+  "codeCommit": "d08b56ed7d90cd138199812cdd19214056ece096",
+  "sourceRunId": 40133921144,
+  "policyRunId": 40133921189,
+  "nativeTransportRunId": 40133921133,
+  "status": "reader-and-policy-passed-bound-integration-ci-pending",
+  "tests": {
+    "node": 241,
+    "authFirestoreEmulator": 146,
+    "purchaseReaderStoreFlutter": 28,
+    "python": 66,
+    "authAndPlaceFlutter": 94,
+    "preservedAccountOwnershipUi": 38,
+    "currentPolicyCompatibility": 93,
+    "newCombinedCoordinatorFlutterCasesPending": 14
+  },
+  "policy": {
+    "originalSHA256": "9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed",
+    "candidateSHA256": "9587badb4ab5556dc9356b2e230265de2c5f10d3b84612d497ce6a3f15120885",
+    "preservedByteExact": true,
+    "sameReleaseBeforeAfter": true,
+    "rulesApiGets": 4,
+    "productionDocumentApiCalls": 0,
+    "productionMutationCalls": 0,
+    "artifactId": 12576730432,
+    "artifactSHA256": "3a7bfa8ae412286d364e3ad8ae4137d8899ebb884905b245574c5e8f5440d8b5"
+  },
+  "deployed": false,
+  "liveUserDataCaptured": false,
+  "runtimeCallsitesAdded": true,
+  "newPendingIntentJournalImplemented": true,
+  "paymentJournalProvesPayment": false,
+  "financialWrites": false,
+  "canAutoSettle": false,
+  "actualTwoPhoneAcceptance": false,
+  "remaining": [
+    "authorized-settlement",
+    "point-tier-entitlement-transfer",
+    "legacy-writer-fence",
+    "baseline-issuance",
+    "app-restore-integration",
+    "two-phone-acceptance"
+  ],
+  "readerCodeCommit": "d08b56ed7d90cd138199812cdd19214056ece096",
+  "runtimeFactoryBound": true,
+  "pendingIntentVersions": [
+    1,
+    2
+  ],
+  "pendingRetiredOnlyAfterBothArchives": true,
+  "newOriginCanCreateMissingOldSidecar": false,
+  "activationFlagDefault": false,
+  "nativeTransportExpectedCases": 24
+}

@@ -38,7 +38,9 @@ class OriginalNativePinBoundaryTest(unittest.TestCase):
     def test_original_pin_and_real_modules_are_copied_exactly_without_configuration(self):
         native.prepare(self.harness, self.baseline)
         manifest = json.loads((self.harness / 'native-pin-source-manifest.json').read_text())
-        self.assertEqual(len(manifest['files']), 10)
+        self.assertEqual(len(manifest['files']), 11)
+        self.assertEqual(manifest['files']['lib/deda_legacy_purchase_evidence.dart'],
+                         hashlib.sha256((ROOT / 'lib/deda_legacy_purchase_evidence.dart').read_bytes()).hexdigest())
         self.assertEqual(len(manifest['pinnedTransportVersions']), 16)
         self.assertEqual((self.harness / 'lib/deda_pin_auth.dart').read_bytes(),
                          (self.baseline / 'lib/deda_pin_auth.dart').read_bytes())
