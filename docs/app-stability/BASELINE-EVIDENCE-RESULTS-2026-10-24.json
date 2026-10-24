@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "date": "2026-10-24",
+  "codeCommit": "b6d91aa640e1879fccbf9e6e2727f7107faf935d",
+  "runId": 40126914673,
+  "status": "all-five-ci-jobs-passed",
+  "tests": {
+    "node": {
+      "passed": 139,
+      "new": 19
+    },
+    "firestoreEmulator": {
+      "passed": 94,
+      "new": 6
+    },
+    "authAndPublishedPlace": {
+      "passed": 94
+    },
+    "preservedAccountOwnershipUi": {
+      "passed": 38
+    },
+    "python": {
+      "passed": 66
+    }
+  },
+  "deployment": false,
+  "liveAccountWrites": false,
+  "automaticBaselineApproval": false,
+  "realLegacyWriterFence": false,
+  "financialDeviceRestoreComplete": false,
+  "actualTwoPhoneAcceptance": false,
+  "checkpointBefore": "ae94ca4983f239ab104db4d83725f8a3f14a8182",
+  "limits": [
+    "integrity-only-not-source-attestation",
+    "does-not-create-or-approve-baseline",
+    "does-not-rollback-existing-baseline",
+    "purchase-reservation-settlement-unfinished",
+    "synthetic-admin-fixtures-only"
+  ],
+  "jobs": [
+    "source-qa (baseline)",
+    "source-qa (pilot)",
+    "source-qa (measured-pilot)",
+    "source-qa (auth-bound)",
+    "progress-archive-rules"
+  ]
+}
