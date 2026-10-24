@@ -1,0 +1,58 @@
+{
+  "codeCommit": "f12adef97851d11ba3fcf6155a45e7e17ff4667a",
+  "dateBaghdad": "2026-10-24",
+  "sourceRun": {
+    "id": 40107002080,
+    "status": "success",
+    "jobs": 5,
+    "pythonTests": 65,
+    "authRuntimeTests": 29,
+    "preservedAccountOwnershipUiTests": 38
+  },
+  "nativeRun": {
+    "id": 40107002065,
+    "status": "success",
+    "nativeCases": 13,
+    "rulesComparisonCases": 93,
+    "coldRestart": true,
+    "processPids": [
+      "3411",
+      "4235"
+    ],
+    "boundOriginalPinAuth": true,
+    "realNativePlugins": true,
+    "privilegedDocumentSeeds": false
+  },
+  "artifact": {
+    "id": 12565103116,
+    "sha256": "c0b883b96f9754cb926caeb852016c9cb80cc7e1f3150e0b1298517b4de7d26e",
+    "downloadHashVerified": true,
+    "manifestSourceFilesVerified": 4,
+    "pinnedTransportPackages": 16
+  },
+  "production": {
+    "rulesApiGets": 4,
+    "documentApiCalls": 0,
+    "mutationCalls": 0,
+    "sameRulesReleaseBeforeAfter": true,
+    "deployed": false
+  },
+  "limits": {
+    "fullDedaUiTested": false,
+    "physicalTwoPhonesTested": false,
+    "financialMigrationCompleted": false,
+    "nonfinancialContinuityCompleted": false,
+    "signedDedaApkProduced": false,
+    "enabledForUsers": false
+  },
+  "resolvedBlocker": {
+    "failedRun": 40105429405,
+    "reason": "Missing direct imports of DedaSessionTransitionDenied and DedaSessionTransitionBusy in isolated native harness main.dart",
+    "fixScope": "One import in harness only; no runtime behavior or production configuration changes"
+  },
+  "next": [
+    "Validate complete app UI and partial preference failure paths before enabling auth runtime",
+    "Complete original remaining financial and nonfinancial continuity work recorded in CURRENT",
+    "Finish remaining sections/network/performance acceptance and two-phone signed build acceptance"
+  ]
+}
