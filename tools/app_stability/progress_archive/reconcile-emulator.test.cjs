@@ -7,6 +7,7 @@ const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const core=require('./reconcile-core.cjs');
 const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
+const {saveMigrationAssessment}=require('./migration-assessment-store.cjs');
 const account='07700000000',otherAccount='07700000001';
 const zero=()=>({points:0,coins:0,xp:0,earnedDiamonds:0});
 const baselineId='baseline_receipt_00000001',awardId='award_receipt_0000000001',debitId='debit_receipt_0000000001';
@@ -35,6 +36,135 @@ test.beforeEach(async()=>{
     await db.doc(`deda_sessions/${uid}`).set({uid,accountKey:key,installId:install});
     await db.doc(`users/${uid}`).set({accountKey:key});
   }
+});
+const assessmentCaptureId='legacy_capture_review_00001',assessmentMigrationId='migration_review_00000001';
+const assessmentSource=`deda_progress_evidence/${account}/captures/${assessmentCaptureId}`;
+const assessmentRoot=`deda_progress_migrations/${account}`;
+const assessmentPath=`${assessmentRoot}/reviews/${assessmentMigrationId}`;
+const assessmentRecords=()=>({
+ taskPoints:JSON.stringify({version:1,completions:{},awards:{income:{points:6000},'point_tier_reserve|5000':{points:-5000}},ledger:[]}),
+ socialCoinsAndXp:'{"coins":30,"xp":3020,"taskClaims":[]}',
+ earnedDiamonds:'{"balance":9,"day":"2026-10-24","viewsToday":1}',
+});
+async function archiveAssessment(records=assessmentRecords()){
+ await assertSucceeds(setDoc(doc(client('old-device'),assessmentSource),{
+  format:1,kind:'legacy-local-evidence',accountKey:account,captureId:assessmentCaptureId,
+  sourceUid:'old-device',installId:'old-install',records,createdAt:serverTimestamp(),
+ }));
+}
+const assessArchive=(extra={})=>saveMigrationAssessment({store,accountKey:account,
+ captureId:assessmentCaptureId,migrationId:assessmentMigrationId,...extra});
+test('assessment worker commits only private evidence-saved inputs and preserves source and original wallets',async()=>{
+ await archiveAssessment();
+ const wallet=db.doc(`deda_gm_personal_diamond_wallets/${account}`);
+ await wallet.set({balance:1000000,tag:'existing-unchanged'});
+ const before=(await db.doc(assessmentSource).get()).data();
+ const result=await assessArchive();
+ assert.equal(result.phase,'evidence-saved');assert.equal(result.assessment.canAutoApprove,false);
+ assert.deepEqual(result.assessment.observedBalances,{points:1000,coins:30,xp:3020,earnedDiamonds:9});
+ assert.deepEqual((await db.doc(assessmentSource).get()).data(),before);
+ assert.deepEqual((await wallet.get()).data(),{balance:1000000,tag:'existing-unchanged'});
+ assert.equal((await db.doc(assessmentRoot).get()).data().baselineEventKey,null);
+ assert.equal((await db.doc(assessmentPath).get()).data().status,'requires-verification');
+ assert.equal((await db.doc(statePath).get()).exists,false);assert.equal((await events()).length,0);
+ assert.equal((await db.collection(`deda_progress_receipts/${account}/events`).get()).size,0);
+});
+test('concurrent assessment workers create one review and replay without changing timestamps',async()=>{
+ await archiveAssessment();const results=await Promise.all([assessArchive(),assessArchive()]);
+ assert.equal(results.filter(r=>r.replayed).length,1);
+ const before=(await db.doc(assessmentPath).get()).data();
+ assert.equal((await assessArchive()).replayed,true);
+ assert.deepEqual((await db.doc(assessmentPath).get()).data(),before);
+ assert.equal((await db.collection(`${assessmentRoot}/reviews`).get()).size,1);
+});
+test('assessment replay cannot downgrade a later approval phase',async()=>{
+ await archiveAssessment();await assessArchive();
+ await db.doc(assessmentRoot).update({phase:'baseline-approved',baselineEventKey:'a'.repeat(64),settlementId:'settlement_review_0000001'});
+ const before=(await db.doc(assessmentRoot).get()).data();
+ assert.equal((await assessArchive()).phase,'baseline-approved');
+ assert.deepEqual((await db.doc(assessmentRoot).get()).data(),before);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('missing archived progress never becomes a zero balance or empty migration',async()=>{
+ await assert.rejects(assessArchive(),e=>e.code==='migration-evidence-missing');
+ assert.equal((await db.doc(assessmentRoot).get()).exists,false);
+ assert.equal((await db.doc(assessmentPath).get()).exists,false);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('capture from another account cannot be relabelled by worker lookup',async()=>{
+ await archiveAssessment();await assert.rejects(assessArchive({accountKey:otherAccount}),e=>e.code==='migration-evidence-missing');
+ assert.equal((await db.doc(`deda_progress_migrations/${otherAccount}`).get()).exists,false);
+ assert.equal((await db.doc(assessmentRoot).get()).exists,false);
+});
+test('malformed archived text is retained with unknown balances rather than zero defaults',async()=>{
+ const records={taskPoints:'{broken',socialCoinsAndXp:null,earnedDiamonds:'[]'};
+ await archiveAssessment(records);const r=await assessArchive();
+ assert.deepEqual(r.assessment.observedBalances,{points:null,coins:null,xp:null,earnedDiamonds:null});
+ assert.equal(r.assessment.canAutoApprove,false);
+ assert.deepEqual((await db.doc(assessmentSource).get()).data().records,records);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('new same-account UID reads original archive but not private assessment or approval inputs',async()=>{
+ await archiveAssessment();await assessArchive();
+ const old=await assertSucceeds(getDocFromServer(doc(client('new-device'),assessmentSource)));
+ assert.equal(old.data().sourceUid,'old-device');assert.equal(old.data().installId,'old-install');
+ await assertFails(getDocFromServer(doc(client('new-device'),assessmentPath)));
+ await assertFails(getDocFromServer(doc(client('new-device'),assessmentRoot)));
+});
+test('neither owner nor other account can forge or edit private assessment and migration phase',async()=>{
+ await archiveAssessment();await assessArchive();
+ for(const uid of ['old-device','new-device','other-device']){
+  await assertFails(setDoc(doc(client(uid),assessmentPath),{canAutoApprove:true},{merge:true}));
+  await assertFails(setDoc(doc(client(uid),assessmentRoot),{phase:'cutover-complete'},{merge:true}));
+  await assertFails(deleteDoc(doc(client(uid),assessmentPath)));
+ }
+ await assertFails(getDocFromServer(doc(client('other-device'),assessmentSource)));
+ assert.equal((await db.doc(assessmentRoot).get()).data().phase,'evidence-saved');
+});
+test('competing migration IDs cannot overwrite each other in real transactions',async()=>{
+ await archiveAssessment();const second='competing_migration_00001';
+ const results=await Promise.allSettled([assessArchive(),assessArchive({migrationId:second})]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ assert.equal(results.filter(r=>r.status==='rejected'&&r.reason.code==='migration-review-conflict').length,1);
+ assert.equal((await db.collection(`${assessmentRoot}/reviews`).get()).size,1);
+});
+test('failed server write validation commits neither migration nor private review',async()=>{
+ await archiveAssessment();const badStore=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>undefined});
+ await assert.rejects(assessArchive({store:badStore}));
+ assert.equal((await db.doc(assessmentRoot).get()).exists,false);
+ assert.equal((await db.doc(assessmentPath).get()).exists,false);
+ assert.equal((await db.doc(assessmentSource).get()).exists,true);
+});
+test('changed archived bytes cannot overwrite an existing reviewed digest',async()=>{
+ await archiveAssessment();await assessArchive();const before=(await db.doc(assessmentPath).get()).data();
+ const records=(await db.doc(assessmentSource).get()).data().records;records.taskPoints+=' ';
+ await db.doc(assessmentSource).update({records});
+ await assert.rejects(assessArchive(),e=>e.code==='migration-review-conflict');
+ assert.deepEqual((await db.doc(assessmentPath).get()).data(),before);
+});
+test('an existing pending migration attaches evidence without approving or bootstrapping',async()=>{
+ await archiveAssessment();await db.doc(assessmentRoot).set({format:1,accountKey:account,migrationId:assessmentMigrationId,
+  phase:'pending',evidenceDigest:null,baselineEventKey:null,settlementId:null});
+ const r=await assessArchive();assert.equal(r.phase,'evidence-saved');
+ assert.equal((await db.doc(statePath).get()).exists,false);
+ assert.equal((await db.doc(assessmentRoot).get()).data().settlementId,null);
+});
+test('new-device higher snapshot is retained without sum/max or replacing the prior evidence choice',async()=>{
+ await archiveAssessment();await assessArchive();const secondId='second_device_capture_0001';
+ const path=`deda_progress_evidence/${account}/captures/${secondId}`,records=assessmentRecords();
+ records.socialCoinsAndXp='{"coins":99999,"xp":99999,"taskClaims":[]}';
+ await assertSucceeds(setDoc(doc(client('new-device'),path),{format:1,kind:'legacy-local-evidence',
+  accountKey:account,captureId:secondId,sourceUid:'new-device',installId:'new-install',records,createdAt:serverTimestamp()}));
+ await assert.rejects(assessArchive({captureId:secondId}),e=>e.code==='migration-review-conflict');
+ assert.equal((await db.doc(assessmentPath).get()).data().observedBalances.coins,30);
+ assert.deepEqual((await db.doc(path).get()).data().records,records);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('produced assessment is not a verified receipt and cannot pass the financial cutover gate',async()=>{
+ await archiveAssessment();await assessArchive();
+ await assert.rejects(apply(assessmentCaptureId),e=>e.code==='verified-receipt-missing');
+ await assert.rejects(reconcileMigratedReceipt({store,accountKey:account,receiptId:awardId}),e=>e.code==='migration-pending');
+ assert.equal((await db.doc(statePath).get()).exists,false);assert.equal((await events()).length,0);
 });
 test('trusted Admin transaction commits approved baseline and marker together',async()=>{
   await initialize();assert.deepEqual((await state()).balances,baseline().delta);
