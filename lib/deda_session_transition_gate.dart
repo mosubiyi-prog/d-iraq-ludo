@@ -15,7 +15,7 @@ enum DedaSessionReadiness {
 }
 
 enum DedaSessionTransitionKind {
-  anonymousPreparation, ownerRestore, ownerLogin, accountCreate,
+  sessionInspection, anonymousPreparation, ownerRestore, ownerLogin, accountCreate,
   adminLogin, adminInviteActivation, credentialChange, logout,
 }
 enum DedaSessionTransitionOrigin { background, activeSection, userAction }
@@ -61,6 +61,7 @@ class DedaSessionReadinessPolicy {
     if (origin == DedaSessionTransitionOrigin.userAction) {
       return DedaSessionAdmission.allowed;
     }
+    if (kind == DedaSessionTransitionKind.sessionInspection) return DedaSessionAdmission.allowed;
     if (kind == DedaSessionTransitionKind.anonymousPreparation) {
       if (auth == DedaSessionAuthKind.none) return DedaSessionAdmission.allowed;
       return DedaSessionAdmission.sessionAlreadyPresent;

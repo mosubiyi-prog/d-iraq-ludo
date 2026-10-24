@@ -3,6 +3,8 @@ on:
   push:
     branches: [deda-app-stability-isolated-2026-10-23]
     paths:
+      - 'lib/deda_auth_session_runtime.dart'
+      - 'test/deda_auth_session_runtime_test.dart'
       - 'tools/app_stability/**'
       - 'tools/restore_deda_stability_baseline.py'
       - 'lib/deda_stability_read_scope.dart'
@@ -43,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [baseline, pilot, measured-pilot]
+        mode: [baseline, pilot, measured-pilot, auth-bound]
     env:
       CI: 'true'
       FLUTTER_SUPPRESS_ANALYTICS: 'true'
@@ -56,7 +58,9 @@ jobs:
         run: python3 -m unittest discover -s tools/app_stability/tests -v
       - name: Restore hash-verified source without Android or signing files
         run: |
-          if [ '${{ matrix.mode }}' = measured-pilot ]; then
+          if [ '${{ matrix.mode }}' = auth-bound ]; then
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --auth-runtime --pilot --startup-metrics --admin-firebase-adapter --progress-backup-runtime
+          elif [ '${{ matrix.mode }}' = measured-pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store --progress-backup-coordinator --progress-backup-runtime
           elif [ '${{ matrix.mode }}' = pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot
@@ -87,9 +91,17 @@ jobs:
             test/deda_owner18_avatar_editor_test.dart \
             test/deda_sticky_edit_preview_100343_test.dart \
             test/deda_royal_avatar_choice_100341_test.dart
+      - name: Verify actual auth source wiring and complete shared lanes
+        timeout-minutes: 4
+        if: matrix.mode == 'auth-bound'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_backend.dart lib/deda_pin_auth.dart
+          flutter analyze --no-pub --fatal-infos lib/deda_auth_session_runtime.dart test/deda_auth_session_runtime_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --reporter expanded test/deda_auth_session_runtime_test.dart
       - name: Exercise read coordination with delayed and failed fake requests only
         timeout-minutes: 3
-        if: matrix.mode != 'baseline'
+        if: matrix.mode == 'pilot' || matrix.mode == 'measured-pilot'
         working-directory: ${{ runner.temp }}/deda-stability
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_stability_read_scope.dart lib/deda_qa32_active_account_scope.dart test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
