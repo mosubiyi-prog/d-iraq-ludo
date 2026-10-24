@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'deda_auth_session_runtime.dart';
 import 'deda_pin_auth.dart';
+import 'deda_session_transition_gate.dart' show DedaSessionTransitionDenied, DedaSessionTransitionBusy;
 
 const project='demo-deda-live-progress-compat',account='07700000012',pin='583921';
 const options=FirebaseOptions(apiKey:'AIzaSy000000000000000000000000000000000',
