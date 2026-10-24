@@ -1,0 +1,51 @@
+{
+  "format": 1,
+  "date": "2026-10-25",
+  "timezone": "Asia/Baghdad",
+  "codeCommit": "7ec0f97838079602f66bde518c823ad45f31ab32",
+  "runId": 40137930765,
+  "status": "all-five-ci-jobs-passed",
+  "tests": {
+    "node": {
+      "passed": 273,
+      "new": 32
+    },
+    "authFirestoreEmulator": {
+      "passed": 160,
+      "new": 14
+    },
+    "python": 66,
+    "purchaseReaderStoreFlutter": 28,
+    "combinedCoordinatorFlutter": 43,
+    "authAndPlaceFlutter": 94,
+    "preservedAccountOwnershipUi": 38
+  },
+  "deployed": false,
+  "liveAccountWrites": false,
+  "clientApiExported": false,
+  "historicalApprovalRequired": true,
+  "currentRoleAndPolicyRechecked": true,
+  "freshReviewerIdTokenRevocationCheck": false,
+  "writes": [
+    "private-five-stage-candidates",
+    "private-atomic-summary"
+  ],
+  "canClaimNow": false,
+  "canRefundNow": false,
+  "canReleaseBalance": false,
+  "canAutoSettle": false,
+  "moneyReceiptOrStateWritten": false,
+  "migrationPhaseAdvanced": false,
+  "terminal25000Refundable": false,
+  "actualTwoPhoneAcceptance": false,
+  "checkpointBefore": "1b9487e2aea37f2865d6876e300a693d0ed33f4e",
+  "nativeDartOrRulesChanged": false,
+  "remaining": [
+    "authorized-payment-settlement",
+    "actual-legacy-writer-fence",
+    "trusted-baseline-issuance",
+    "one-time-rights-release-after-cutover",
+    "app-restore-integration",
+    "two-phone-acceptance"
+  ]
+}

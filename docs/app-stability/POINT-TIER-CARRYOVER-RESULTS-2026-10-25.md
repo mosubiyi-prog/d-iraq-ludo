@@ -19,7 +19,7 @@
 
 ## الفحص
 
-Node273/273 محلياً (241 سابقة+32 جديدة). أضيفت14حالة Auth/Firestore Emulator تستخدم approveLegacyBaseline مع token صادر من Auth emulator والتحقق الحقيقي السابق عبر Admin SDK، ثم عامل النقل ومعاملاته. تغطي الحفظ المحمي والتزامن ومرحلة مستلمة/أخيرة وبيانات غير متسقة وتغيير الدور/السياسة والأصل ومنع العميل وفشل commit وتعارض replay. CI قيد الانتظار.
+Node273/273 محلياً وفي CI (241 سابقة+32 جديدة). نجحت160/160 حالة Auth/Firestore Emulator، منها14جديدة تستخدم approveLegacyBaseline مع token صادر من Auth emulator والتحقق الحقيقي السابق عبر Admin SDK، ثم عامل النقل ومعاملاته. تغطي الحفظ المحمي والتزامن ومرحلة مستلمة/أخيرة وبيانات غير متسقة وتغيير الدور/السياسة والأصل ومنع العميل وفشل commit وتعارض replay. نجحت مهام CI الخمس في [40137930765](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40137930765)، مع بقاء Python66 وقارئ/مخزن الشراء28 والمنسق43 والدخول/المكان94 والواجهة38 ناجحة. المصدر7ec0f97838079602f66bde518c823ad45f31ab32.
 
 لا تغيير Flutter أو قواعد أو مخطط الأرشيف أو PIN/SDK أو native harness؛ لم تُكرر native24/PIN24 التي اجتازتها نسخة الربط المحفوظة في checkpoint-stability-purchase-evidence-native-pass-2026-10-25. لا حسابات حية أو Firebase deploy أو تفعيل سياسة إنتاج أو APK ديدا.
 
