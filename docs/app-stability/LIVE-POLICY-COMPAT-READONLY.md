@@ -16,7 +16,7 @@ The merger lexes comments and quoted strings, locates the single Firestore docum
 
 An existing wildcard grant that could bypass server-only receipt/state protection is not silently retained and called safe. That case stops for review rather than weakening the new contract or changing old rules automatically.
 
-## Planned local-emulator comparisons
+## Local-emulator comparisons
 
 72 checks: 18 legacy permission observations per policy (36), 16 baseline private-namespace denial probes, and 20 merged-policy archive/server-state checks. Synthetic records cover owner/other/manager/unauthenticated actors, a recognized general-manager list permission, existing self-profile update, sessions, public places, requests/support, gift-wallet reads, admin-entry probes and denial of client privilege grants. Both policies are loaded separately into the SAME localhost demo emulator with clean seeded fixtures.
 
@@ -24,6 +24,10 @@ Merged checks cover immutable evidence creation/readback, replacement UID/instal
 
 ## Validation status
 
-47 offline Python checks (including previous restoration/harness checks) passed before CI submission. Node/YAML syntax and diff whitespace checks passed. Actual API access, published-policy compatibility and the planned 72 emulator checks remain pending until the workflow result is recorded. No Dart/native transport module, runtime callsite, app signature, wallet or production rule is modified here.
+The initial CI source `5a529156854f38bf197a8c45a824909ebfe54c70` passed both [published-policy comparison 40087368309](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40087368309) and [all four source regression jobs 40087368231](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40087368231). All 72 synthetic comparisons passed, including exact equality of the 18 old permission observations before/after. Four Rules API GETs succeeded; zero production document API calls and zero production mutations. The release remained unchanged throughout. Original source SHA256: `9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed`. Candidate source SHA256: `1f4156dd8731b6267c1ac45d128b63821ba7c4f76edc1d26fc640b787c227d60`.
+
+The downloaded artifact contained only the sanitized report; ZIP SHA256 `f31afb2ccd888d8086576e00de48333556d685090145e0672a3e7f032ecd6714` matched GitHub. The checked report is LIVE-POLICY-COMPAT-RESULTS-2026-10-24.json. Full rules were neither downloaded here nor committed. These results apply to that immutable ruleset and the specified synthetic fixtures, not future policy changes or full-app behavior.
+
+A follow-up preserves UTF-8 bytes explicitly through private-file storage and verification, including CRLF policy text. Local Python checks are now 48/48; rerun CI for that follow-up before treating it as validated remotely. No Dart/native transport module, runtime callsite, app signature, wallet or production rule is modified here.
 
 Official API scope references: https://firebase.google.com/docs/reference/rules/rest/v1/projects.rulesets/get and https://firebase.google.com/docs/reference/rules/rest/v1/projects.releases/get . Both document firebase.readonly for these GET operations; create/update release operations are not implemented by this tool.

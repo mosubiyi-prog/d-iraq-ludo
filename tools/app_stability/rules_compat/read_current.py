@@ -91,7 +91,7 @@ def prepare(reader, private_dir, public_dir):
     for name, text in {'original.private.rules': active, 'candidate.private.rules': merged,
                        'release.private.json': json.dumps(metadata)}.items():
         target = private_dir / name
-        target.write_text(text)
+        target.write_bytes(text.encode('utf-8'))
         os.chmod(target, 0o600)
     (private_dir / 'firebase.json').write_text(json.dumps({
         'firestore': {'rules': 'candidate.private.rules'},
@@ -113,8 +113,8 @@ def verify_after(reader, private_dir, public_dir):
     report = json.loads(report_path.read_text())
     if report.get('status') != 'emulator-passed-awaiting-release-verify':
         raise GuardError('emulator-result-not-passed')
-    if (digest((private_dir / 'original.private.rules').read_text()) != report.get('originalSHA256') or
-            digest((private_dir / 'candidate.private.rules').read_text()) != report.get('candidateSHA256') or
+    if (digest((private_dir / 'original.private.rules').read_bytes().decode('utf-8')) != report.get('originalSHA256') or
+            digest((private_dir / 'candidate.private.rules').read_bytes().decode('utf-8')) != report.get('candidateSHA256') or
             digest(metadata['rulesetName']) != report.get('rulesetNameSHA256')):
         raise GuardError('review-files-changed-after-snapshot')
     current = reader.get(RELEASE)

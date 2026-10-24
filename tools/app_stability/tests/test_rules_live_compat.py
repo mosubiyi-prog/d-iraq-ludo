@@ -235,3 +235,16 @@ class RulesReadOnlyGuardTest(unittest.TestCase):
                     {'DEDA_RULES_PRIMARY_SA': json.dumps({'type': 'service_account', 'project_id': 'other'})}]:
             with self.subTest(env=bool(env)), patch.dict(os.environ, env, clear=True), self.assertRaises(merger.GuardError):
                 reader.session_reader()
+
+    def test_crlf_policy_bytes_survive_private_storage_and_freshness_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            private, public = root / 'private', root / 'public'
+            original = BASE.replace('\n', '\r\n')
+            reader.prepare(reader.ReadOnlyRules(Http(source=original)), private, public)
+            self.assertEqual((private / 'original.private.rules').read_bytes(), original.encode('utf-8'))
+            path = public / 'rules-compat-report.json'
+            value = json.loads(path.read_text())
+            value['status'] = 'emulator-passed-awaiting-release-verify'
+            path.write_text(json.dumps(value))
+            self.assertEqual(reader.verify_after(reader.ReadOnlyRules(Http()), private, public)['status'], 'verified')

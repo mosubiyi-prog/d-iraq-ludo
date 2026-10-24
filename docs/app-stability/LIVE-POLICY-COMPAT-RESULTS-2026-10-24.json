@@ -1,0 +1,369 @@
+{
+  "originalSHA256": "9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed",
+  "candidateSHA256": "1f4156dd8731b6267c1ac45d128b63821ba7c4f76edc1d26fc640b787c227d60",
+  "extensionSHA256": "fb8f260e674f2e1388b430c3808b1ebfa933725c3f1d3a5d8e1303d1b0e13c46",
+  "preservedByteExact": true,
+  "insertAtUnicodeOffset": 132237,
+  "insertedUnicodeLength": 3139,
+  "namespaces": [
+    "deda_progress_evidence",
+    "deda_progress_receipts",
+    "deda_progress_migrations",
+    "deda_verified_progress"
+  ],
+  "status": "verified",
+  "readScope": "https://www.googleapis.com/auth/firebase.readonly",
+  "readAtUTC": "2026-10-24T10:49:07.297076+00:00",
+  "releaseUpdateTime": "2026-10-23T12:07:17.652182Z",
+  "rulesetNameSHA256": "afc2fee314b9f8314934803649dd53f4a311351ef78e4103a2965395385644c8",
+  "rulesApiGets": 4,
+  "productionDocumentApiCalls": 0,
+  "productionMutationCalls": 0,
+  "privateSourceUploaded": false,
+  "emulator": {
+    "project": "demo-deda-live-progress-compat",
+    "expectedCases": 72,
+    "completedCases": 72,
+    "passed": 72,
+    "failed": 0,
+    "cases": [
+      {
+        "name": "before/legacy/own-user-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/other-user-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/own-profile-update",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/own-session-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/other-session-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/public-place-authed",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/public-place-anonymous",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/gift-wallet-read",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/own-place-request",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/other-place-request",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/own-support-request",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/own-admin-entry-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/other-admin-entry-get",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/normal-user-admin-list",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/recognized-manager-admin-list",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/normal-user-self-admin-grant",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/normal-user-entry-grant",
+        "passed": true
+      },
+      {
+        "name": "before/legacy/manager-audit-list",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/evidence/owner",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/evidence/other",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/evidence/manager",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/evidence/anonymous",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/receipt/owner",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/receipt/other",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/receipt/manager",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/receipt/anonymous",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/migration/owner",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/migration/other",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/migration/manager",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/migration/anonymous",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/progress/owner",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/progress/other",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/progress/manager",
+        "passed": true
+      },
+      {
+        "name": "before/new-private-scope-denied/progress/anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-user-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/other-user-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-profile-update",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-session-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/other-session-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/public-place-authed",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/public-place-anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/gift-wallet-read",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-place-request",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/other-place-request",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-support-request",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/own-admin-entry-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/other-admin-entry-get",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/normal-user-admin-list",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/recognized-manager-admin-list",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/normal-user-self-admin-grant",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/normal-user-entry-grant",
+        "passed": true
+      },
+      {
+        "name": "after/legacy/manager-audit-list",
+        "passed": true
+      },
+      {
+        "name": "after/owner-evidence-read-and-create",
+        "passed": true
+      },
+      {
+        "name": "after/owner-evidence-update-and-delete-denied",
+        "passed": true
+      },
+      {
+        "name": "after/new-uid-same-account-can-read-old-evidence",
+        "passed": true
+      },
+      {
+        "name": "after/private-account-access-denied/other",
+        "passed": true
+      },
+      {
+        "name": "after/private-account-access-denied/manager",
+        "passed": true
+      },
+      {
+        "name": "after/private-account-access-denied/anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/receipt/owner",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/receipt/other",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/receipt/manager",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/receipt/anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/migration/owner",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/migration/other",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/migration/manager",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/migration/anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/progress/owner",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/progress/other",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/progress/manager",
+        "passed": true
+      },
+      {
+        "name": "after/client-server-state-write-denied/progress/anonymous",
+        "passed": true
+      },
+      {
+        "name": "after/owner-verified-projection-read-only",
+        "passed": true
+      },
+      {
+        "name": "after/old-wallet-balance-and-profile-still-present",
+        "passed": true
+      }
+    ],
+    "legacyObservations": {
+      "before": {
+        "own-user-get": true,
+        "other-user-get": false,
+        "own-profile-update": true,
+        "own-session-get": true,
+        "other-session-get": false,
+        "public-place-authed": false,
+        "public-place-anonymous": false,
+        "gift-wallet-read": true,
+        "own-place-request": true,
+        "other-place-request": false,
+        "own-support-request": true,
+        "own-admin-entry-get": true,
+        "other-admin-entry-get": false,
+        "normal-user-admin-list": false,
+        "recognized-manager-admin-list": true,
+        "normal-user-self-admin-grant": false,
+        "normal-user-entry-grant": false,
+        "manager-audit-list": true
+      },
+      "after": {
+        "own-user-get": true,
+        "other-user-get": false,
+        "own-profile-update": true,
+        "own-session-get": true,
+        "other-session-get": false,
+        "public-place-authed": false,
+        "public-place-anonymous": false,
+        "gift-wallet-read": true,
+        "own-place-request": true,
+        "other-place-request": false,
+        "own-support-request": true,
+        "own-admin-entry-get": true,
+        "other-admin-entry-get": false,
+        "normal-user-admin-list": false,
+        "recognized-manager-admin-list": true,
+        "normal-user-self-admin-grant": false,
+        "normal-user-entry-grant": false,
+        "manager-audit-list": true
+      }
+    },
+    "data": "synthetic only, no production documents read or written"
+  },
+  "sameReleaseBeforeAfter": true,
+  "verifiedAtUTC": "2026-10-24T10:49:22.159563+00:00",
+  "verificationSourceCommit": "5a529156854f38bf197a8c45a824909ebfe54c70",
+  "workflowRun": 40087368309,
+  "artifactId": 12557353454,
+  "artifactZipSHA256": "f31afb2ccd888d8086576e00de48333556d685090145e0672a3e7f032ecd6714"
+}
