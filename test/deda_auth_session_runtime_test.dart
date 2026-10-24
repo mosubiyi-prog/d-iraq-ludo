@@ -154,6 +154,72 @@ void main() {
     await expectLater(h.run(()=>h.runtime.wait<void>(() async {calls++;throw error;})),throwsA(same(error)));
     expect(calls,1);expect(h.runtime.gate.diagnostics['inFlight'],0);
   });
+  test('post-login continuation starts once under a new inspection permit', () async {
+    final h=Harness();late Future<void> followup;final events=<String>[];
+    await h.run(() async {
+      events.add('login');
+      followup=h.runtime.afterSuccess(isCurrent:()=>true,action:() async {
+        await h.runtime.wait(() async {events.add('refresh');});
+      });
+      expect(events,['login']);
+    });
+    await followup;
+    expect(events,['login','refresh']);
+    expect(h.runtime.gate.diagnostics['started'],2);
+    expect(h.runtime.gate.diagnostics['succeeded'],2);
+  });
+  test('failed login does not dispatch its registered continuation', () async {
+    final h=Harness();late Future<void> followup;var called=false;
+    await expectLater(h.run(() async {
+      followup=h.runtime.afterSuccess(isCurrent:()=>true,action:() async {called=true;});
+      throw StateError('login-failed');
+    }),throwsStateError);
+    await followup;expect(called,isFalse);
+    expect(h.runtime.gate.diagnostics['started'],1);
+  });
+  test('expired login skips continuation even after its original transport settles', () async {
+    final h=Harness(timeout:const Duration(milliseconds:30));
+    final hold=Completer<void>();late Future<void> followup;var called=false;
+    await expectLater(h.run(() async {
+      followup=h.runtime.afterSuccess(isCurrent:()=>true,action:() async {called=true;});
+      await h.runtime.wait(()=>hold.future);
+    }),throwsA(isA<TimeoutException>()));
+    await followup;hold.complete();await flush();
+    expect(called,isFalse);expect(h.runtime.gate.diagnostics['inFlight'],0);
+  });
+  test('changed account intent rejects the post-login continuation', () async {
+    final h=Harness();late Future<void> outcome;var called=false;
+    await h.run(() async {
+      final followup=h.runtime.afterSuccess(isCurrent:()=>false,action:() async {called=true;});
+      outcome=expectLater(followup,throwsA(isA<DedaStaleSessionTransition>()));
+    });
+    await outcome;
+    expect(called,isFalse);
+  });
+  test('post-login continuation cannot change SDK authentication', () async {
+    final h=Harness();late Future<void> outcome;var called=false;
+    await h.run(() async {
+      final followup=h.runtime.afterSuccess(isCurrent:()=>true,action:() async {
+        await h.runtime.transition<void>(kind:DedaSessionTransitionKind.logout,
+          action:() async {called=true;},accepts:(_,live)=>true);
+      });
+      outcome=expectLater(followup,throwsA(isA<DedaSessionTransitionDenied>()));
+    });
+    await outcome;
+    expect(called,isFalse);expect(h.live.uid,'owner');
+  });
+  test('changed SDK during a continuation blocks its later publication', () async {
+    final h=Harness();late Future<void> followup;
+    final entered=Completer<void>(),hold=Completer<void>();var published=false;
+    await h.run(() async {
+      followup=h.runtime.afterSuccess(isCurrent:()=>true,action:() async {
+        entered.complete();await h.runtime.wait(()=>hold.future);published=true;
+      });
+    });
+    final outcome=expectLater(followup,throwsA(isA<DedaStaleSessionTransition>()));
+    await entered.future;h.change('other',DedaSessionAuthKind.authenticated);
+    hold.complete();await outcome;expect(published,isFalse);
+  });
 
   group('personal logout confirmation uses the original account', () {
     const first='07700000010',second='07700000011';
@@ -291,7 +357,8 @@ void main() {
       expect(disk['flutter.deda_phone_v1'],second);
       expect(disk['flutter.deda_user_name_v1'],'Second owner');
       expect(disk['flutter.deda_account_type_v1'],'placeOwner');
-      await preservesProgress();await flush();
+      await preservesProgress();
+      await Future<void>.delayed(const Duration(milliseconds:20));
     },skip:!dedaAuthSessionRuntimeEnabled);
     for(final key in ['deda_user_name_v1','deda_phone_v1','deda_account_phone_v1','deda_account_type_v1']) {
       test('failed $key does not publish a new account or leave a committed login', () async {

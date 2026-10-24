@@ -213,6 +213,18 @@ def guard_local_account_commits(source):
     profileAvatarStyle = savedAvatarStyle;
     profileFrameStyle = savedFrameStyle;
     profileBackgroundStyle = savedBackgroundStyle;''')
+    start = safe.index('    unawaited(DedaTaskEngine.initializeForCurrentAccount());')
+    safe = safe[:start] + '''    final followupEpoch = _authAccountEpoch;
+    unawaited(DedaAuthRuntime.afterSuccess(
+      isCurrent: () => isLoggedIn && phone == normalizedPhone &&
+        _authAccountEpoch == followupEpoch,
+      action: () async {
+        await DedaTaskEngine.initializeForCurrentAccount();
+        await DedaBackend.syncCurrentUserProfile(
+          name: resolvedName, phone: normalizedPhone, accountType: type.name);
+      },
+    ).catchError((Object _) {}));
+'''
     body = '\n    if (!DedaAuthRuntime.enabled) {' + original + '\n      return;\n    }\n' + safe
     source = source[:opening+1] + body + source[closing:]
     opening, closing, _, _ = body_range(source, 'logout')
@@ -240,6 +252,23 @@ def bind_main(source):
         opening, _, _, _ = body_range(source, name)
         source = source[:opening+1] + '\n    if (DedaAuthRuntime.enabled) ++_authAccountEpoch;' + source[opening+1:]
         source = wrap_method(source, name, kind)
+    opening, closing, _, _ = body_range(source, 'initializeForCurrentAccount',
+      after=source.index('class DedaTaskEngine'))
+    body = once(source[opening+1:closing],
+      '    unawaited(_refreshGeneralManagerBonus(accountKey));', '''    if (DedaAuthRuntime.enabled) {
+      final bonusAccountEpoch = DedaPreferences._authAccountEpoch;
+      unawaited(DedaAuthRuntime.afterSuccess(
+        isCurrent: () => DedaPreferences.isLoggedIn && _loadedAccountKey == accountKey &&
+          bonusAccountEpoch == DedaPreferences._authAccountEpoch,
+        action: () => _refreshGeneralManagerBonus(accountKey),
+      ).catchError((Object _) {}));
+    } else {
+      unawaited(_refreshGeneralManagerBonus(accountKey));
+    }''')
+    source = source[:opening+1] + guard_awaits(body) + source[closing:]
+    opening, closing, _, _ = body_range(source, '_refreshGeneralManagerBonus',
+      after=source.index('class DedaTaskEngine'))
+    source = source[:opening+1] + guard_awaits(source[opening+1:closing]) + source[closing:]
     for name, kind in [('_create','accountCreate'),('_signIn','ownerLogin'),('_enterWithNewPin','ownerLogin')]:
         source = wrap_ui_try(source, name, kind)
     # This older account type flow has no network wait or open-ended dialog.

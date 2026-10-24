@@ -22,11 +22,13 @@ class DedaAuthSnapshot {
 }
 
 class _AuthContext {
-  _AuthContext(this.controller, this.permit, this.origin, this.expected);
+  _AuthContext(this.controller, this.permit, this.origin, this.expected, this.parentZone);
   final DedaAuthSessionController controller;
   final DedaSessionTransitionPermit permit;
   final DedaSessionTransitionOrigin origin;
   DedaAuthSnapshot expected;
+  final Zone parentZone;
+  final settled = Completer<bool>();
   void check() {
     permit.checkCurrent();
     if (!expected.matches(controller.current())) {
@@ -63,10 +65,15 @@ class DedaAuthSessionController {
       if (isCurrent != null && !isCurrent()) throw const DedaStaleSessionTransition();
       return result;
     }
-    return gate.run<T>(key: Object(), kind: kind, origin: origin,
+    final parentZone=Zone.current;
+    _AuthContext? completed;
+    var succeeded=false;
+    try {
+    final result=await gate.run<T>(key: Object(), kind: kind, origin: origin,
       currentAuthKind: () => current().kind, isCurrent: isCurrent ?? () => true,
       action: (permit) async {
-        final context = _AuthContext(this, permit, origin, current());
+        final context = _AuthContext(this, permit, origin, current(), parentZone);
+        completed=context;
         return runZoned(() async {
           context.check();
           final result = await action();
@@ -74,6 +81,29 @@ class DedaAuthSessionController {
           return result;
         }, zoneValues: {_authContextKey: context});
       });
+    succeeded=true;
+    return result;
+    } finally {
+      final context=completed;
+      if(context!=null && !context.settled.isCompleted) context.settled.complete(succeeded);
+    }
+  }
+  /// A single continuation after successful completion, in the caller's original
+  /// Zone with a NEW inspection permit. Never reuse an expired login permit.
+  /// Failure/expiry skips it; changed SDK/account intent rejects before work.
+  /// No retries or session mutation are admitted for these continuations.
+  Future<void> afterSuccess({required Future<void> Function() action,
+    required bool Function() isCurrent}) async {
+    final context=_context;
+    context?.check();
+    final identity=current();
+    final parentZone=context?.parentZone ?? Zone.current;
+    if(context!=null && !await context.settled.future) return;
+    return parentZone.run(() => run<void>(
+      kind:DedaSessionTransitionKind.sessionInspection,
+      origin:DedaSessionTransitionOrigin.activeSection,
+      isCurrent:isCurrent,
+      action:() async {checkSnapshot(identity);await action();}));
   }
   Future<T> wait<T>(FutureOr<T> Function() action) async {
     final context = _context;
@@ -141,6 +171,10 @@ class DedaAuthRuntime {
       : action();
   static Future<T> wait<T>(FutureOr<T> Function() action) => enabled
     ? controller.wait(action) : Future<T>.sync(action);
+  static Future<void> afterSuccess({required Future<void> Function() action,
+    required bool Function() isCurrent}) => enabled
+      ? controller.afterSuccess(action:action,isCurrent:isCurrent)
+      : Future<void>.sync(action);
   static void check() { if (enabled) controller.check(); }
   static DedaAuthSnapshot? capture() => enabled ? controller.current() : null;
   static void checkSnapshot(DedaAuthSnapshot? value) {
