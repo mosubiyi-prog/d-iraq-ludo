@@ -267,6 +267,19 @@ def bind_owner_place_load(source):
               _placeId = recoveredId;
               await prefs.setString(_placeIdKey, recoveredId);
             }''')
+    body = once(body, '''    if (mounted && !_loading) {
+      await _refreshOwnerMetrics();
+    }''', '''    if (mounted && !_loading) {
+      if (DedaAuthRuntime.enabled) {
+        unawaited(DedaAuthRuntime.afterSuccess(
+          isCurrent: () => mounted && recoveryAccountEpoch == DedaPreferences._authAccountEpoch &&
+            recoveryAccountKey == _ownerStorageAccountKey,
+          action: _refreshOwnerMetrics,
+        ).catchError((Object _) {}));
+      } else {
+        await _refreshOwnerMetrics();
+      }
+    }''')
     body = guard_awaits(body)
     source = source[:opening+1] + '''
     final recoveryIdentity = DedaAuthRuntime.capture();
