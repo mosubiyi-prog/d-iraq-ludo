@@ -23,7 +23,8 @@ function parseMigration(raw, accountKey) {
     if (!hash(raw.evidenceDigest)) fail('invalid-migration');
     if (raw.phase === 'evidence-saved') {
       if (raw.baselineEventKey !== null || raw.settlementId !== null) fail('invalid-migration');
-    } else if (!hash(raw.baselineEventKey) || !id(raw.settlementId)) fail('invalid-migration');
+    } else if (!hash(raw.baselineEventKey) ||
+      (raw.phase === 'baseline-approved' ? raw.settlementId !== null && !id(raw.settlementId) : !id(raw.settlementId))) fail('invalid-migration');
   }
   return Object.freeze({...raw});
 }

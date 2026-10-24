@@ -3,6 +3,8 @@ const test=require('node:test');const assert=require('node:assert/strict');const
 const {initializeTestEnvironment,assertFails,assertSucceeds}=require('@firebase/rules-unit-testing');
 const {doc,setDoc,getDocFromServer,deleteDoc,collection,getDocs,serverTimestamp}=require('firebase/firestore');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
+const {getAuth}=require('firebase-admin/auth');
+const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
 const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const core=require('./reconcile-core.cjs');
@@ -16,7 +18,16 @@ const baseline=()=>({format:1,accountKey:account,source:'legacy-baseline-v1',sou
 const award=(sourceId='day|task')=>({format:1,accountKey:account,source:'task-claim-v1',sourceId,kind:'award',delta:{points:5,coins:10,xp:20,earnedDiamonds:0}});
 const debit=(sourceId='fixture-debit')=>({format:1,accountKey:account,source:'cosmetic-debit-v1',sourceId,kind:'spend',delta:{...zero(),coins:-20}});
 const statePath=`deda_verified_progress/${account}`;
-let env,app,db,store;
+let env,app,db,store,adminAuth,reviewManager,reviewOrdinary,reviewAnonymous;
+async function authFixture(email){
+ const host=process.env.FIREBASE_AUTH_EMULATOR_HOST;
+ assert.match(host||'',/^(127\.0\.0\.1|localhost):[0-9]+$/);
+ const response=await fetch(`http://${host}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=isolated-demo-key`,{
+ method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify(email?{email,password:'emulator-only-password-9!',returnSecureToken:true}:{returnSecureToken:true})});
+ const data=await response.json();assert.equal(response.ok,true,JSON.stringify(data));
+ assert.equal(typeof data.idToken,'string');return {uid:data.localId,idToken:data.idToken,email};
+}
 const client=uid=>env.authenticatedContext(uid).firestore();
 const seed=async(id,data)=>db.doc(`deda_progress_receipts/${account}/events/${id}`).set(data);
 const apply=id=>reconcileVerifiedReceipt({store,accountKey:account,receiptId:id});
@@ -29,6 +40,10 @@ test.before(async()=>{
   env=await initializeTestEnvironment({projectId,firestore:{rules:fs.readFileSync(path.join(__dirname,'firestore.rules'),'utf8')}});
   app=initializeApp({projectId},'isolated-progress-reconcile');db=getFirestore(app);
   store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>FieldValue.serverTimestamp()});
+  adminAuth=getAuth(app);
+  reviewManager=await authFixture('review-manager@example.test');
+  reviewOrdinary=await authFixture('ordinary-user@example.test');
+  reviewAnonymous=await authFixture(null);
 });
 test.after(async()=>{if(db)await db.terminate();if(app)await deleteApp(app);if(env)await env.cleanup();});
 test.beforeEach(async()=>{
@@ -353,4 +368,91 @@ for(const kind of ['missing-review','missing-archive','changed-bytes','changed-o
  const before=await state(),markers=(await events()).length;
  await assert.rejects(applyMigrated(awardId),e=>e.code===codes[kind]);
  assert.deepEqual(await state(),before);assert.equal((await events()).length,markers);
+});
+
+// Tokens below are issued by the localhost Auth emulator and verified by the
+// actual Admin SDK with checkRevoked=true, NOT authenticatedContext claims.
+const reviewPolicyRevision='owner_review_policy_00001';
+const approvalPath=`${assessmentRoot}/approvals/${assessmentMigrationId}`;
+async function reviewFixture(){
+ await adminAuth.updateUser(reviewManager.uid,{disabled:false});
+ await archiveAssessment();await assessArchive();
+ await db.doc(`admins/${reviewManager.uid}`).set({active:true,status:'active',role:'general_manager',
+  email:reviewManager.email,mustChangePassword:false});
+ await db.doc(policyPath).set({format:1,enabled:true,revision:reviewPolicyRevision,
+  decisionBasis:'owner-reviewed-grandfathering',acceptedIssues:[
+   'local-values-not-server-attested','legacy-writer-fence-not-established','pending-operations-not-reviewed',
+   'taskPoints:reservations-require-review']});
+}
+async function approveArchive(overrides={}){
+ return approveLegacyBaseline({store,auth:adminAuth,idToken:reviewManager.idToken,accountKey:account,
+  migrationId:assessmentMigrationId,expectedEvidenceDigest:(await db.doc(assessmentRoot).get()).data().evidenceDigest,
+  policyRevision:reviewPolicyRevision,...overrides});
+}
+test('real Auth SDK manager review writes only private approval and no financial state or receipt',async()=>{
+ await reviewFixture();const before=(await db.doc(assessmentSource).get()).data();const r=await approveArchive();
+ assert.equal(r.phase,'baseline-approved');assert.equal(r.canReleaseBalance,false);
+ const approval=(await db.doc(approvalPath).get()).data();
+ assert.equal(approval.reviewerUid,reviewManager.uid);assert.equal(approval.receipt.delta.points,1000);
+ assert.equal(approval.status,'approved-awaiting-settlement');assert.equal(approval.createdAt.constructor.name,'Timestamp');
+ assert.equal((await db.doc(assessmentRoot).get()).data().settlementId,null);
+ assert.deepEqual((await db.doc(assessmentSource).get()).data(),before);
+ assert.equal((await db.doc(statePath).get()).exists,false);
+ assert.equal((await db.collection(`deda_progress_receipts/${account}/events`).get()).size,0);
+ await assert.rejects(applyMigrated(awardId),e=>e.code==='migration-pending');
+});
+test('concurrent real-token reviews produce one approval with stable original timestamp',async()=>{
+ await reviewFixture();const results=await Promise.all([approveArchive(),approveArchive()]);
+ assert.equal(results.filter(r=>r.replayed).length,1);const before=(await db.doc(approvalPath).get()).data();
+ assert.equal((await approveArchive()).replayed,true);assert.deepEqual((await db.doc(approvalPath).get()).data(),before);
+ assert.equal((await db.collection(`${assessmentRoot}/approvals`).get()).size,1);
+});
+for(const kind of ['ordinary','anonymous','invalid','disabled-manager'])test(`real Auth SDK rejects ${kind} approval without private or wallet writes`,async()=>{
+ await reviewFixture();let idToken=reviewManager.idToken;
+ if(kind==='ordinary')idToken=reviewOrdinary.idToken;
+ if(kind==='anonymous')idToken=reviewAnonymous.idToken;
+ if(kind==='invalid')idToken='not-a-firebase-token';
+ if(kind==='disabled-manager')await adminAuth.updateUser(reviewManager.uid,{disabled:true});
+ await assert.rejects(approveArchive({idToken}),e=>kind==='ordinary'?e.code==='baseline-review-general-manager-required':
+  kind==='anonymous'?e.code==='baseline-review-admin-sign-in-required':/^auth\//.test(e.code||''));
+ assert.equal((await db.doc(approvalPath).get()).exists,false);
+ assert.equal((await db.doc(assessmentRoot).get()).data().phase,'evidence-saved');
+ assert.equal((await db.doc(statePath).get()).exists,false);
+});
+for(const kind of ['missing-policy','disabled-policy','stopped-manager','demoted-manager','email-mismatch','stale-digest','changed-archive'])test(`real review ${kind} fails closed`,async()=>{
+ await reviewFixture();const extra={};
+ if(kind==='missing-policy')await db.doc(policyPath).delete();
+ if(kind==='disabled-policy')await db.doc(policyPath).update({enabled:false});
+ if(kind==='stopped-manager')await db.doc(`admins/${reviewManager.uid}`).update({active:false});
+ if(kind==='demoted-manager')await db.doc(`admins/${reviewManager.uid}`).update({role:'admin'});
+ if(kind==='email-mismatch')await db.doc(`admins/${reviewManager.uid}`).update({email:'different@example.test'});
+ if(kind==='stale-digest')extra.expectedEvidenceDigest='f'.repeat(64);
+ if(kind==='changed-archive')await db.doc(assessmentSource).update({'records.socialCoinsAndXp':'{"coins":999,"xp":20,"taskClaims":[]}'});
+ const expected={'missing-policy':'baseline-review-policy-disabled','disabled-policy':'baseline-review-policy-disabled',
+  'stopped-manager':'baseline-review-general-manager-required','demoted-manager':'baseline-review-general-manager-required',
+  'email-mismatch':'baseline-review-general-manager-required','stale-digest':'baseline-review-migration-conflict',
+  'changed-archive':'migration-reviewed-evidence-conflict'};
+ await assert.rejects(approveArchive(extra),e=>e.code===expected[kind]);
+ assert.equal((await db.doc(approvalPath).get()).exists,false);assert.equal((await db.doc(statePath).get()).exists,false);
+});
+test('valid emulator manager client still cannot read/create private approval or enable review policy',async()=>{
+ await reviewFixture();await approveArchive();
+ for(const c of [client('new-device'),env.authenticatedContext(reviewManager.uid,{email:reviewManager.email}).firestore()]){
+  for(const path of [approvalPath,policyPath]){
+   await assertFails(getDocFromServer(doc(c,path)));await assertFails(setDoc(doc(c,path),{enabled:true},{merge:true}));
+   await assertFails(deleteDoc(doc(c,path)));
+  }
+ }
+});
+test('approval atomic commit failure preserves evidence-saved state and creates no partial approval',async()=>{
+ await reviewFixture();const badStore=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>undefined});
+ await assert.rejects(approveArchive({store:badStore}));
+ assert.equal((await db.doc(approvalPath).get()).exists,false);
+ assert.equal((await db.doc(assessmentRoot).get()).data().phase,'evidence-saved');
+});
+test('assessment retry after approval does not erase reviewer decision or advance money',async()=>{
+ await reviewFixture();await approveArchive();const before=(await db.doc(approvalPath).get()).data();
+ assert.equal((await assessArchive()).phase,'baseline-approved');
+ assert.deepEqual((await db.doc(approvalPath).get()).data(),before);
+ assert.equal((await db.doc(statePath).get()).exists,false);
 });
