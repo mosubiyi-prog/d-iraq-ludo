@@ -1,0 +1,96 @@
+{
+  "result": {
+    "passed": [
+      "native-owner-proof-and-raw-roundtrip",
+      "native-immutable-replay-preserves-server-time",
+      "native-conflicting-capture-preserves-source",
+      "native-private-read-and-write-rules",
+      "native-missing-user-proof-blocks-backup",
+      "native-offline-pending-recovery",
+      "native-lost-ack-read-before-resend",
+      "native-new-uid-reads-original-provenance",
+      "native-new-uid-missing-origin-remains-pending",
+      "native-pending-journal-prepared-for-cold-restart",
+      "native-preferences-and-pending-survive-process-restart",
+      "native-auth-owner-and-pending-upload-after-restart"
+    ],
+    "failures": [],
+    "phase": 2,
+    "coldRestart": true,
+    "nativeAuthUidPersisted": true,
+    "scope": "demo native transport harness",
+    "status": "passed",
+    "projectId": "demo-deda-progress-archive",
+    "realNativePlugins": true,
+    "actualDedaPinTested": false,
+    "physicalTwoPhonesTested": false
+  },
+  "processIds": [
+    "3078",
+    "3766"
+  ],
+  "manifest": {
+    "scope": "disposable native plugin harness, not DEDA APK",
+    "projectId": "demo-deda-progress-archive",
+    "files": {
+      "lib/deda_session_transition_gate.dart": "c36c8736fbff6c272f4b0501f6642c38e84c056c8aa50a84f79ae01d4b26a6f5",
+      "lib/deda_session_flow_prototype.dart": "d27dca06534b06d7692df202b90352c7111a41b0ea54763ae7ec063e6e77552c",
+      "lib/deda_session_principal_tracker.dart": "2c74eaa84bda5458322769980df92bda7459afd4a6a37c9da8f9aa26d710824b",
+      "lib/deda_owner_session_firebase_port.dart": "84d659edd479e59f540139e0bcc3b11e1e3efb038ec5d338e9415ec5cda2a41b",
+      "lib/deda_legacy_progress_capture.dart": "7a1d7668a3b4458a76bd9e1b379dbc22943e272cb876c183bde4d34a9c33f3e5",
+      "lib/deda_progress_evidence_store.dart": "4c7c7a4d1128113f1b82628cbf9a0212c9a5ba3fd107d9bd5b1c1c6a6a84ac91",
+      "lib/deda_progress_backup_coordinator.dart": "a1ceb6b46ee87e6aec6e9f4212d5244842f4de6f7674a7560d24f9ba9db073a8",
+      "lib/main.dart": "1e1cccf96f0c7a01bd53364ccbb24cbed26cb6479a7890cead0644a9da9fb724"
+    },
+    "pinnedTransportVersions": {
+      "cloud_firestore": "5.6.12",
+      "cloud_firestore_platform_interface": "6.6.12",
+      "cloud_firestore_web": "4.4.12",
+      "firebase_auth": "5.7.0",
+      "firebase_auth_platform_interface": "7.7.3",
+      "firebase_auth_web": "5.15.3",
+      "firebase_core": "3.15.2",
+      "firebase_core_platform_interface": "6.0.3",
+      "firebase_core_web": "2.24.1",
+      "shared_preferences": "2.5.6",
+      "shared_preferences_android": "2.5.3",
+      "shared_preferences_foundation": "2.5.7",
+      "shared_preferences_linux": "2.4.1",
+      "shared_preferences_platform_interface": "2.4.2",
+      "shared_preferences_web": "2.4.3",
+      "shared_preferences_windows": "2.4.1"
+    }
+  },
+  "rulesSHA256": "0b671d8cd995dc60f6c73022b565cd49e12d071dc2ec6a2eb33a1fe253cecd08",
+  "artifactDigest": "62aeb50ade4fe4cf5a2dd08ff526e35bd1cb33c2528987c98219e345b548a51a",
+  "artifactId": 12540587647,
+  "runId": 40043426916,
+  "sourceCommit": "59720a61a55042d31cc93ce22812a28ee07f20b5",
+  "sourceRegressionRunId": 40043426967,
+  "sourceRegression": {
+    "status": "success",
+    "restorationAndHarnessBoundary": 24,
+    "nodeReconciliation": 78,
+    "firestoreEmulator": 74,
+    "measuredPilotGroups": [
+      38,
+      30,
+      13,
+      21,
+      36,
+      35,
+      43,
+      27,
+      40,
+      29
+    ],
+    "inheritedMainIssues": 181
+  },
+  "limitations": [
+    "Standalone debug harness, not the signed DEDA application",
+    "Sessions/users seeded by privileged localhost fixture; real DEDA PIN not tested",
+    "New UID/install simulated on one emulator; physical two-phone acceptance not tested",
+    "No authoritative legacy balance migration or live app activation",
+    "Candidate rules only; deployed Firebase rules were not read or changed in this run"
+  ]
+}
