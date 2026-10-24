@@ -27,3 +27,8 @@ Local Node: 36 migration tests + 42 existing reconciliation tests = 78/78 passed
 ## Next
 
 Run immutable evidence through the assessment producer, then implement a reviewed baseline approval policy with real source proofs, resolve pending operations and enforce old-writer fencing before enabling the gate. Assessment success is not financial approval; the phase remains evidence-saved and is rejected by this gate. Complete remaining data inventory and consistent session-flow integration. Only then test actual SDK reads/writes and phone continuity; the four delivery bundles are still incomplete.
+
+
+## Point-tier proof consumption — 25 October 2026 Baghdad
+
+After baseline/raw review validation, the same gated transaction now consumes the immutable carryover summary and all five stages whenever any historical stage reserve/claim exists. It rederives the exact proof from the historical protected approval and original evidence. Missing/changed proof, orphan stages, changed state/amount/flags or mixed timestamps block included-event responses and follow-up wallet/marker writes. An empty history creates no default rights. Current reviewer role/policy enablement are not dependencies of post-cutover rewards; the producer still checks them when creating the proof. Future claims must use separate exactly-once event records and preserve this archived proof. This is not baseline initialization or a cutover/fence/settlement producer. Sourcebfdd9bb; CI40139097898 passed all5jobs, Node302 and Emulator171. See CARRYOVER-GATE-RESULTS-2026-10-25.md/.json.

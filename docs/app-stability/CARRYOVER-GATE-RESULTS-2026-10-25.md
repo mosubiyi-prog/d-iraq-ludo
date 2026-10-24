@@ -1,6 +1,6 @@
 # Point-tier proof consumed by migration gate — 25 October 2026 Baghdad
 
-Status: local Node302 passed; CI pending. Isolated development only, no deploy or activation.
+Status: PASS. Source `bfdd9bb370acbed420d882f4b67c95d7b2cefbd5`; all five CI jobs succeeded on first attempt. Isolated development only, no deploy or activation.
 
 ## Behavior
 
@@ -16,7 +16,9 @@ Current manager role and current review-policy enablement are checked when produ
 
 - Local Node302/302: all273 previous plus29 new financial gate cases.
 - New Emulator cases exercise an actual Auth-SDK-approved baseline and real carryover producer, followed by synthetic cutover/settlement fixtures. Concurrent wrappers, missing/changed proof, absent unobserved final stage, approval revision, mismatched timestamp, role/policy change, terminal prize and earlier claimed stages are covered.
-- CI and final counts pending; no Flutter/Android/rule changes. Existing native evidence is unchanged, not rerun for this server-only step.
+- GitHub CI https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40139097898: Node302/302 and Auth/Firestore171/171 (11 new Emulator cases above160), both zero failures. All five jobs succeeded on the first attempt. Python66, preserved UI38, auth/place94, purchase reader/store28 and combined coordinator43 remain successful in their applicable jobs.
+- No Flutter/Android/rule changes. Existing native evidence is unchanged, not rerun for this server-only step.
+- Confirmed the extracted original point-tier history function is byte-for-byte identical to the previous checkpoint.
 
 ## Limits
 

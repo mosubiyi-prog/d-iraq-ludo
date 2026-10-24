@@ -1,0 +1,85 @@
+{
+  "format": 1,
+  "dateBaghdad": "2026-10-25",
+  "status": "passed",
+  "sourceCommit": "bfdd9bb370acbed420d882f4b67c95d7b2cefbd5",
+  "runId": 40139097898,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40139097898",
+  "jobs": [
+    {
+      "id": 121006812924,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121006813114,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121006813136,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121006813147,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121006813159,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    }
+  ],
+  "tests": {
+    "node": {
+      "passed": 302,
+      "failed": 0,
+      "new": 29
+    },
+    "authFirestoreEmulator": {
+      "passed": 171,
+      "failed": 0,
+      "new": 11
+    },
+    "python": 66,
+    "preservedUi": 38,
+    "authPlace": 94,
+    "purchaseReaderStore": 28,
+    "combinedCoordinator": 43
+  },
+  "changes": {
+    "gatedEventsValidateImmutableStageProof": true,
+    "sameTransaction": true,
+    "historicalApprovalBound": true,
+    "allFiveStagesValidated": true,
+    "emptyHistoryDoesNotInventRights": true,
+    "orphanStagesRejected": true,
+    "postCutoverIndependentOfCurrentReviewerRole": true,
+    "originalHistoryFunctionPreservedByteForByte": true
+  },
+  "productionMutations": false,
+  "rulesChanged": false,
+  "dartChanged": false,
+  "nativeRerun": false,
+  "activation": false,
+  "remaining": [
+    "payment and reservation settlement",
+    "actual old-writer fence",
+    "trusted cutover and reward producers",
+    "balance and secondary-data restore bindings",
+    "two-device acceptance and review APK"
+  ],
+  "limits": [
+    "Gate protects migrated events after an initialized baseline; it does not initialize it.",
+    "Cutover/settlement/fence used by tests are privileged synthetic fixtures.",
+    "No actual point claim or refund is released.",
+    "Future active claims must preserve archived carryover and use separate exactly-once events."
+  ],
+  "checkpointBefore": {
+    "branch": "checkpoint-stability-before-carryover-gate-2026-10-25",
+    "sha": "d4ed43b3e2e2e613810643b10409cca8c43fa458"
+  }
+}
