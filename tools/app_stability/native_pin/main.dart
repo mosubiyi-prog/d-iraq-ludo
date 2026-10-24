@@ -35,6 +35,15 @@ int phase=1;
 FirebaseAuth get auth=>FirebaseAuth.instance;
 FirebaseFirestore get db=>FirebaseFirestore.instance;
 void check(bool value){if(!value)throw StateError('native-pin-check-failed');}
+bool sameValue(Object? a,Object? b) {
+  if(a is Map && b is Map) {
+    return a.length==b.length && a.keys.every((key)=>b.containsKey(key) && sameValue(a[key],b[key]));
+  }
+  if(a is List && b is List) {
+    return a.length==b.length && List.generate(a.length,(i)=>sameValue(a[i],b[i])).every((v)=>v);
+  }
+  return a==b;
+}
 Future<void> post(String route,Map<String,dynamic> value) async {
   check(Platform.isAndroid);
   final client=HttpClient()..connectionTimeout=const Duration(seconds:5);
@@ -147,11 +156,15 @@ Future<void> contract(String mode,String account,String pin,SharedPreferences pr
   });
   await record('$mode-native-owner-adapter-completes-binding',() async {
     final uid=auth.currentUser!.uid;
+    final before=(await get('deda_account_profiles/$account')).data()!;
     final flow=DedaSessionFlowPrototype(
       port:DedaOwnerSessionFirebasePort(io:driver.session,phone:account),gate:DedaSessionTransitionGate());
-    final result=await flow.ownerLogin(accountKey:account,pin:pin,
+    final result=await flow.completeTrustedOwnerBinding(accountKey:account,
       origin:DedaSessionTransitionOrigin.userAction,isCurrent:()=>true);
-    check(result.user.uid==uid && result.proof.ownerVerified && result.profile?.name=='Synthetic Native Owner');
+    check(result.user.uid==uid && result.proof.ownerVerified && result.proof.trustedInstallation &&
+      result.profile?.name=='Synthetic Native Owner');
+    final after=(await get('deda_account_profiles/$account')).data()!;
+    check(sameValue(before,after));
     await proof(driver,account);sourceIntact(prefs,account);
   });
 }

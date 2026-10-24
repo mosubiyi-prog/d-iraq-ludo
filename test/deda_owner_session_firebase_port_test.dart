@@ -262,10 +262,77 @@ void main() {
     expect(h.io.writes[3].fields['authMethod'], 'deda_pin_firestore_v1');
     expect(h.io.writes[2].fields['trustedInstallIds'], isA<_Union>());
     expect(h.io.events.where((e) => e.startsWith('read:')), [
-      'read:deda_sessions/fixture-sdk', 'read:deda_account_profiles/$_account']);
+      'read:deda_sessions/fixture-sdk', 'read:deda_account_profiles/$_account',
+      'read:users/fixture-sdk']);
     expect(h.io.events.any((e) => e.startsWith('read:deda_auth_attempts/')), isFalse);
     h.gate.dispose();
   });
+  test('explicit trusted binding preserves SDK, profile and unrelated user balances', () async {
+    final h = _Harness();
+    final user = h.io.user('restored-uid')!;
+    final before = Map<String,dynamic>.of(h.io.docs['deda_account_profiles/$_account']!);
+    h.io.docs['users/restored-uid'] = {'diamonds': 1000000, 'level': 19, 'role': 'unchanged'};
+    final result = await h.flow.completeTrustedOwnerBinding(accountKey:_account,
+      origin:_explicit,isCurrent:()=>true);
+    expect(result.user,same(user));
+    expect(result.proof.trustedInstallation,isTrue);
+    expect(h.io.docs['deda_account_profiles/$_account'],before);
+    expect(h.io.docs['users/restored-uid'],containsPair('diamonds',1000000));
+    expect(h.io.docs['users/restored-uid'],containsPair('level',19));
+    expect(h.io.docs['users/restored-uid'],containsPair('role','unchanged'));
+    expect(h.io.writes.map((w)=>w.path),['deda_sessions/restored-uid','users/restored-uid']);
+    expect(h.io.events,isNot(contains('sdk.signOut')));
+    expect(h.io.events,isNot(contains('sdk.anonymous')));
+    expect(h.io.events.indexOf('read:users/restored-uid'),lessThan(h.io.events.indexOf('remember.prepare')));
+    h.gate.dispose();
+  });
+  for (final invalid in ['missing','cache','pending','accountKey','name','phone','accountType','authMethod','trustedInstallIds']) {
+    test('projection readback rejects $invalid without remembering, retry or rollback', () async {
+      final h = _Harness();
+      final data = <String,dynamic>{'accountKey':_account,'name':'Fixture Owner',
+        'phone':_phone.trim(),'accountType':'user','authMethod':'deda_pin_firestore_v1',
+        'trustedInstallIds':['fixture-install']};
+      if (!['missing','cache','pending'].contains(invalid)) data[invalid] = 'other';
+      h.io.overrides['users/fixture-sdk'] = DedaOwnerServerDocument(
+        invalid=='missing'?null:data,fromCache:invalid=='cache',pendingWrites:invalid=='pending');
+      await expectLater(h.login(),throwsA(isA<DedaSessionProofRejected>()));
+      expect(h.io.remembered,isNull);
+      expect(h.io.events.where((e)=>e=='read:users/fixture-sdk'),hasLength(1));
+      expect(h.io.events,isNot(contains('sdk.signOut')));
+      h.gate.dispose();
+    });
+  }
+  for (final change in ['timeout','SDK','intent','unavailable']) {
+    test('binding readback $change cannot publish success or end a newer session', () async {
+      final h = _Harness(shortWait:change=='timeout');
+      h.io.user('restored-uid');
+      final wait = h.hold('read:users/restored-uid');
+      var current = true;
+      final result = h.flow.completeTrustedOwnerBinding(accountKey:_account,
+        origin:_explicit,isCurrent:()=>current);
+      final outcome = expectLater(result,throwsA(change=='timeout'?isA<TimeoutException>():
+        change=='unavailable'?isA<FirebaseException>():isA<DedaStaleSessionTransition>()));
+      await _reached(h,'read:users/restored-uid');
+      if(change=='timeout') {
+        await outcome;
+        await expectLater(h.login(),throwsA(isA<DedaSessionTransitionBusy>()));
+      } else if(change=='SDK') {
+        h.io.user('new-admin',DedaSessionAuthKind.authenticated);
+      } else if(change=='intent') {
+        current=false;
+      } else {
+        h.io.failures['read:users/restored-uid']=FirebaseException(plugin:'cloud_firestore',code:'unavailable');
+      }
+      wait.complete();
+      await outcome;
+      await Future<void>.delayed(Duration.zero);
+      expect(h.io.remembered,isNull);
+      expect(h.io.events,isNot(contains('sdk.signOut')));
+      expect(h.gate.diagnostics['succeeded'],0);
+      expect(h.gate.diagnostics['inFlight'],0);
+      h.gate.dispose();
+    });
+  }
   test('profile is bound by server session and document key without stored uid field', () async {
     final h = _Harness();
     h.io.docs['deda_account_profiles/$_account']!['phone'] = 'stored-phone';

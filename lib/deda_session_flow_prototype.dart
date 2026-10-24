@@ -193,6 +193,39 @@ class DedaSessionFlowPrototype {
       });
   }
 
+  /// Explicitly finishes the users projection after a trusted restore. It
+  /// re-proves installation membership on the server and never replaces an SDK
+  /// identity, trusts a new install, or changes the account profile. Keep this
+  /// separate from passive restore; no production authentication callsites yet.
+  Future<DedaOwnerFlowResult> completeTrustedOwnerBinding({required String accountKey,
+    required DedaSessionTransitionOrigin origin, required bool Function() isCurrent}) {
+    final account = accountKey.trim();
+    if (account.isEmpty) return Future<DedaOwnerFlowResult>.error(ArgumentError('empty-account-key'));
+    if (origin != DedaSessionTransitionOrigin.userAction) {
+      return Future<DedaOwnerFlowResult>.error(const DedaSessionTransitionDenied(
+        DedaSessionAdmission.explicitUserActionRequired));
+    }
+    return _run(kind: DedaSessionTransitionKind.ownerRestore, origin: origin,
+      isCurrent: isCurrent, action: (permit) async {
+        _ready(permit);
+        final user = port.currentUser;
+        if (user == null || user.kind != DedaSessionAuthKind.anonymous) {
+          throw const DedaSessionProofRejected();
+        }
+        _check(permit, user);
+        await _step(permit, user, () => port.writeOwnerSession(permit, user, account, trustedRestore: true));
+        final proof = await _step(permit, user, () => port.readOwnerProof(permit, user, account));
+        _ownerProof(proof, user, account, restore: true);
+        final profile = await _step(permit, user, () => port.readOwnerProfile(permit, user, account));
+        if (profile.uid != user.uid || profile.accountKey != account || profile.name.trim().isEmpty) {
+          throw const DedaSessionProofRejected();
+        }
+        await _step(permit, user, () => port.writeOwnerProjection(permit, user, profile));
+        await _step(permit, user, () => port.rememberKnownOwner(permit, user, account));
+        return DedaOwnerFlowResult(user, proof, profile);
+      });
+  }
+
   Future<DedaAdminFlowResult> adminLogin({required String email, required String password,
     required DedaSessionTransitionOrigin origin, required bool Function() isCurrent}) {
     if (email.trim().isEmpty || password.isEmpty) {

@@ -296,6 +296,18 @@ class DedaOwnerSessionFirebasePort implements DedaSessionFlowPort {
       'updatedAt': io.serverTimestamp(), 'lastSeenAt': io.serverTimestamp(),
     }, merge: true);
     _check(permit, user);
+    // A completed write or cached users row is not a verified account binding.
+    // Preserve all unrelated server fields; only confirm this projection.
+    final projection = _server(await io.readServer('users/${user.uid}'));
+    _check(permit, user);
+    final installs = projection['trustedInstallIds'];
+    if (projection['accountKey'] != profile.accountKey ||
+        projection['name'] != profile.name || projection['phone'] != profile.phone ||
+        projection['accountType'] != profile.accountType ||
+        projection['authMethod'] != 'deda_pin_firestore_v1' ||
+        installs is! List || !installs.contains(install)) {
+      throw const DedaSessionProofRejected();
+    }
   }
   @override
   Future<void> rememberKnownOwner(DedaSessionTransitionPermit permit,

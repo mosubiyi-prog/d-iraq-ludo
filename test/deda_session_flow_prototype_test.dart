@@ -162,6 +162,45 @@ Future<void> _reached(_Harness h, String label) async {
 }
 
 void main() {
+  for (final origin in [DedaSessionTransitionOrigin.background,DedaSessionTransitionOrigin.activeSection]) {
+    test('trusted binding refuses $origin before SDK or server effects', () async {
+      final h = _Harness();
+      h.port.setUser('restored',DedaSessionAuthKind.anonymous);
+      await expectLater(h.flow.completeTrustedOwnerBinding(accountKey:_account,origin:origin,
+        isCurrent:()=>true),throwsA(isA<DedaSessionTransitionDenied>()));
+      expect(h.port.events,isEmpty);
+      h.gate.dispose();
+    });
+  }
+  for (final kind in [DedaSessionAuthKind.none,DedaSessionAuthKind.authenticated]) {
+    test('trusted binding refuses $kind without replacing SDK identity', () async {
+      final h = _Harness();
+      if(kind!=DedaSessionAuthKind.none) h.port.setUser('protected-admin',kind);
+      final user=h.port.currentUser;
+      await expectLater(h.flow.completeTrustedOwnerBinding(accountKey:_account,origin:_explicit,
+        isCurrent:()=>true),throwsA(isA<DedaSessionProofRejected>()));
+      expect(h.port.currentUser,same(user));
+      expect(h.port.events,isEmpty);
+      h.gate.dispose();
+    });
+  }
+  for(final invalid in ['untrusted','proof','profile-account','profile-uid','profile-name']) {
+    test('trusted binding rejects $invalid before projection', () async {
+      final h = _Harness();
+      h.port.setUser('restored',DedaSessionAuthKind.anonymous);
+      if(invalid=='untrusted')h.port.trusted=false;
+      if(invalid=='proof')h.port.ownerVerified=false;
+      if(invalid=='profile-account')h.port.profileAccount='other';
+      if(invalid=='profile-uid')h.port.profileUid='other';
+      if(invalid=='profile-name')h.port.profileName=' ';
+      await expectLater(h.flow.completeTrustedOwnerBinding(accountKey:_account,origin:_explicit,
+        isCurrent:()=>true),throwsA(invalid=='untrusted'?isA<StateError>():isA<DedaSessionProofRejected>()));
+      expect(h.port.events,isNot(contains('owner.projection')));
+      expect(h.port.events,isNot(contains('pin')));
+      expect(h.port.events,isNot(contains('trust.write')));
+      h.gate.dispose();
+    });
+  }
   test('owner login runs the complete guarded sequence without nested gate entry', () async {
     final h = _Harness();
     h.port.trusted = false; // Valid PIN can trust a new device later in the flow.
