@@ -165,7 +165,69 @@ def wrap_ui_try(source, name, kind, *, after=0):
     return source[:opening+1] + body + source[closing:]
 
 
+def guard_local_account_commits(source):
+    """Keep legacy behavior disabled; publish enabled login after checked IO.
+
+    The existing logged-in flag is a commit marker, not owner/admin proof.
+    Partial identity writes stay signed out on a subsequent native reload.
+    Source progress/appearance ownership records are never removed or reset.
+    """
+    opening, closing, _, _ = body_range(source, 'saveLogin')
+    original = source[opening+1:closing]
+    publish = '''    userName = resolvedName;
+    phone = normalizedPhone;
+    accountPhone = normalizedPhone;
+    accountType = type;
+    isLoggedIn = true;'''
+    safe = once(original, publish, '''    if (!await prefs.setBool(_loggedInKey, false)) {
+      throw StateError('account-local-save-failed');
+    }
+    isLoggedIn = false;''')
+    safe = once(safe, '    profileAvatarStyle =', '    final savedAvatarStyle =')
+    safe = once(safe, '    profileFrameStyle =', '    final savedFrameStyle =')
+    safe = once(safe, '    profileBackgroundStyle =', '    final savedBackgroundStyle =')
+    writes = '''    await Future.wait([
+      prefs.setString(_userNameKey, resolvedName),
+      prefs.setString(_phoneKey, normalizedPhone),
+      prefs.setString(_accountPhoneKey, normalizedPhone),
+      prefs.setString(_accountTypeKey, type.name),
+      prefs.setBool(_loggedInKey, true),
+    ]);'''
+    safe = once(safe, writes, '''    final loginWrites = await Future.wait<bool>([
+      prefs.setString(_userNameKey, resolvedName),
+      prefs.setString(_phoneKey, normalizedPhone),
+      prefs.setString(_accountPhoneKey, normalizedPhone),
+      prefs.setString(_accountTypeKey, type.name),
+    ]);
+    if (loginWrites.any((saved) => !saved) ||
+        prefs.getString(_userNameKey) != resolvedName ||
+        prefs.getString(_phoneKey) != normalizedPhone ||
+        prefs.getString(_accountPhoneKey) != normalizedPhone ||
+        prefs.getString(_accountTypeKey) != type.name) {
+      throw StateError('account-local-save-failed');
+    }
+    if (!await prefs.setBool(_loggedInKey, true)) {
+      throw StateError('account-local-save-failed');
+    }
+''' + publish + '''
+    profileAvatarStyle = savedAvatarStyle;
+    profileFrameStyle = savedFrameStyle;
+    profileBackgroundStyle = savedBackgroundStyle;''')
+    body = '\n    if (!DedaAuthRuntime.enabled) {' + original + '\n      return;\n    }\n' + safe
+    source = source[:opening+1] + body + source[closing:]
+    opening, closing, _, _ = body_range(source, 'logout')
+    original = source[opening+1:closing]
+    safe = once(original, '    await prefs.setBool(_loggedInKey, false);\n', '')
+    safe = once(safe, '    isLoggedIn = false;', '''    if (!await prefs.setBool(_loggedInKey, false)) {
+      throw StateError('account-local-logout-failed');
+    }
+    isLoggedIn = false;''')
+    body = '\n    if (!DedaAuthRuntime.enabled) {' + original + '\n      return;\n    }\n' + safe
+    return source[:opening+1] + body + source[closing:]
+
+
 def bind_main(source):
+    source = guard_local_account_commits(source)
     source = once(source, 'class DedaPreferences {', '''class DedaPreferences {
   static int _authAccountEpoch = 0;
 ''')

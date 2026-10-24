@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:d_iraq_ludo/deda_auth_session_runtime.dart';
 import 'package:d_iraq_ludo/deda_session_transition_gate.dart';
 import 'package:d_iraq_ludo/deda_backend.dart';
@@ -21,6 +22,21 @@ class Harness {
   void change(String? uid, DedaSessionAuthKind kind) => live = DedaAuthSnapshot(uid,kind,live.epoch+1);
 }
 Future<void> flush() => Future<void>.delayed(Duration.zero);
+
+class FailingPreferencesStore extends InMemorySharedPreferencesStore {
+  FailingPreferencesStore(Map<String,Object> values):super.withData(values);
+  String? failKey;
+  int failAt=1,calls=0;
+  bool throwFailure=false;
+  @override
+  Future<bool> setValue(String type,String key,Object value) async {
+    if(key==failKey && ++calls==failAt) {
+      if(throwFailure) throw StateError('fixture-storage-failure');
+      return false;
+    }
+    return super.setValue(type,key,value);
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -238,6 +254,99 @@ void main() {
       await unchanged(first);
       expect(find.byType(AlertDialog),findsNothing);
       expect(tester.takeException(),isNull);
+    },skip:!dedaAuthSessionRuntimeEnabled);
+  });
+
+  group('local account commit failures', () {
+    const first='07700000010',second='07700000011';
+    late FailingPreferencesStore store;
+    setUp(() async {
+      final initial=<String,Object>{
+        'deda_logged_in_v1':true,'deda_user_name_v1':'First owner',
+        'deda_phone_v1':first,'deda_account_phone_v1':first,
+        'deda_account_type_v1':'user',
+        'deda_task_points_state_v1_$first':'keep raw points',
+        'deda_diamonds_wallet_v1_$second':'keep raw diamonds',
+      };
+      SharedPreferences.setMockInitialValues(initial);
+      store=FailingPreferencesStore(initial.map((key,value)=>MapEntry('flutter.$key',value)));
+      SharedPreferencesStorePlatform.instance=store;
+      await app.DedaPreferences.load();
+    });
+    Future<void> preservesProgress() async {
+      final disk=await store.getAll();
+      expect(disk['flutter.deda_task_points_state_v1_$first'],'keep raw points');
+      expect(disk['flutter.deda_diamonds_wallet_v1_$second'],'keep raw diamonds');
+    }
+    test('successful local commit publishes all selected identity fields together', () async {
+      await app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
+        type:app.DedaAccountType.placeOwner);
+      expect(app.DedaPreferences.isLoggedIn,isTrue);
+      expect(app.DedaPreferences.phone,second);
+      expect(app.DedaPreferences.accountPhone,second);
+      expect(app.DedaPreferences.userName,'Second owner');
+      expect(app.DedaPreferences.accountType,app.DedaAccountType.placeOwner);
+      final disk=await store.getAll();
+      expect(disk['flutter.deda_logged_in_v1'],isTrue);
+      expect(disk['flutter.deda_phone_v1'],second);
+      expect(disk['flutter.deda_user_name_v1'],'Second owner');
+      expect(disk['flutter.deda_account_type_v1'],'placeOwner');
+      await preservesProgress();await flush();
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    for(final key in ['deda_user_name_v1','deda_phone_v1','deda_account_phone_v1','deda_account_type_v1']) {
+      test('failed $key does not publish a new account or leave a committed login', () async {
+        store.failKey='flutter.$key';
+        await expectLater(app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
+          type:app.DedaAccountType.user),throwsStateError);
+        expect(app.DedaPreferences.isLoggedIn,isFalse);
+        expect(app.DedaPreferences.phone,first);
+        expect(app.DedaPreferences.userName,'First owner');
+        await preservesProgress();
+        final prefs=await SharedPreferences.getInstance();
+        await prefs.reload();await app.DedaPreferences.load();
+        expect(app.DedaPreferences.isLoggedIn,isFalse);
+        expect((await store.getAll())['flutter.deda_logged_in_v1'],isFalse);
+      },skip:!dedaAuthSessionRuntimeEnabled);
+    }
+    test('failure to close the previous login marker preserves the previous selection', () async {
+      store.failKey='flutter.deda_logged_in_v1';
+      await expectLater(app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
+        type:app.DedaAccountType.user),throwsStateError);
+      expect(app.DedaPreferences.isLoggedIn,isTrue);
+      expect(app.DedaPreferences.phone,first);
+      expect((await store.getAll())['flutter.deda_phone_v1'],first);
+      await preservesProgress();
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    test('failure of the final login marker stays uncommitted after native reload', () async {
+      store.failKey='flutter.deda_logged_in_v1';store.failAt=2;
+      await expectLater(app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
+        type:app.DedaAccountType.user),throwsStateError);
+      expect(app.DedaPreferences.isLoggedIn,isFalse);
+      expect(app.DedaPreferences.phone,first);
+      final prefs=await SharedPreferences.getInstance();
+      await prefs.reload();await app.DedaPreferences.load();
+      expect(app.DedaPreferences.isLoggedIn,isFalse);
+      await preservesProgress();
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    test('a native identity write exception does not publish the new identity', () async {
+      store.failKey='flutter.deda_phone_v1';store.throwFailure=true;
+      await expectLater(app.DedaPreferences.saveLogin(name:'Second owner',normalizedPhone:second,
+        type:app.DedaAccountType.user),throwsStateError);
+      expect(app.DedaPreferences.isLoggedIn,isFalse);
+      expect(app.DedaPreferences.phone,first);
+      expect((await store.getAll())['flutter.deda_logged_in_v1'],isFalse);
+      await preservesProgress();
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    test('failed logout marker does not clear the selected identity', () async {
+      store.failKey='flutter.deda_logged_in_v1';
+      await expectLater(app.DedaPreferences.logout(),throwsStateError);
+      expect(app.DedaPreferences.isLoggedIn,isTrue);
+      expect(app.DedaPreferences.phone,first);
+      expect(app.DedaPreferences.userName,'First owner');
+      final disk=await store.getAll();
+      expect(disk['flutter.deda_logged_in_v1'],isTrue);
+      expect(disk['flutter.deda_phone_v1'],first);
+      await preservesProgress();
     },skip:!dedaAuthSessionRuntimeEnabled);
   });
 
