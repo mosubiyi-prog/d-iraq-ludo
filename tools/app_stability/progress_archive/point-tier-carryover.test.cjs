@@ -208,3 +208,107 @@ test('an existing empty-history summary must be checked rather than skipped',asy
  const f=await activatedFixture({});f.store.docs.get(summaryPath).canReleaseBalance=true;
  await rejectGate(f,'migration-point-carryover-conflict');
 });
+
+const {claimMigratedPointTier}=require('./point-tier-claim.cjs');
+const claimRight=(f,threshold=5000)=>claimMigratedPointTier({store:f.store,accountKey:A,threshold});
+const claimRecord=t=>`${root}/pointTierClaims/${t}`;
+async function rejectClaim(f,code,threshold=5000){
+ const before=structuredClone([...f.store.docs]);await assert.rejects(claimRight(f,threshold),e=>e.code===code);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+}
+test('first migrated claim atomically credits exact reserved return with receipt, classification, event and claim marker',async()=>{
+ const f=await activatedFixture(),before=structuredClone([...f.store.docs]),result=await claimRight(f);
+ assert.equal(result.replayed,false);assert.equal(result.returnedPoints,5050);assert.equal(result.state.balances.points,100050);
+ assert.deepEqual(result.state.balances,{points:100050,coins:30,xp:20,earnedDiamonds:9});assert.equal(result.state.version,2);
+ assert.equal(f.store.writes.length,5);const marker=f.store.docs.get(claimRecord(5000));assert.equal(marker.status,'claimed');
+ const receipt=f.store.docs.get(`deda_progress_receipts/${A}/events/${result.eventKey}`);
+ assert.equal(receipt.source,'point-tier-return-v1');assert.equal(receipt.delta.points,5050);
+ for(const [path,value]of before)if(path!==`deda_verified_progress/${A}`)assert.deepEqual(f.store.docs.get(path),value);
+ assert.equal(f.store.docs.get(stage(5000)).status,'reserved-awaiting-cutover');
+});
+test('lost successful claim response and repeated request preserve proof and do not award again',async()=>{
+ const f=await activatedFixture();await claimRight(f);const before=structuredClone([...f.store.docs]);f.store.writes=[];
+ const replay=await claimRight(f);assert.equal(replay.replayed,true);assert.equal(replay.state.balances.points,100050);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+test('claim retry after a later award returns current balances rather than restoring old after-balance',async()=>{
+ const f=await activatedFixture();await claimRight(f);await gate(f);f.store.writes=[];
+ const replay=await claimRight(f);assert.equal(replay.state.balances.points,100055);assert.equal(replay.state.version,3);
+ assert.deepEqual(f.store.writes,[]);
+});
+test('generic gated receipt replay cannot credit a claim produced by the atomic worker again',async()=>{
+ const f=await activatedFixture(),first=await claimRight(f);f.store.writes=[];
+ const r=await reconcileMigratedReceipt({store:f.store,accountKey:A,receiptId:first.eventKey});
+ assert.equal(r.replayed,true);assert.equal(r.state.version,2);assert.equal(r.state.balances.points,100050);
+ assert.deepEqual(f.store.writes,[]);
+});
+for(const threshold of [10000,15000,20000])test(`stage ${threshold} uses its original fixed return after previous stages were claimed in raw evidence`,async()=>{
+ const awards={};for(const t of [5000,10000,15000,20000]){
+ if(t>threshold)break;awards[`point_tier_reserve|${t}`]=reserve(t);if(t<threshold)awards[`point_tier_claim|${t}`]=claim(t);}
+ const f=await activatedFixture(awards),prior=f.store.docs.get(`deda_verified_progress/${A}`).balances.points;
+ const r=await claimRight(f,threshold);assert.equal(r.returnedPoints,threshold+threshold/100);
+ assert.equal(r.state.balances.points,prior+threshold+threshold/100);
+});
+for(const threshold of [25000,0,-5000,5000.5,'5000',100000])test(`invalid or terminal stage ${JSON.stringify(threshold)} never grants points`,async()=>{
+ const f=await activatedFixture();await rejectClaim(f,'point-tier-return-ineligible',threshold);
+});
+for(const field of ['amount','verified','reviewerUid','sourceId','migrationId'])test(`client ${field} cannot control a claim receipt`,async()=>{
+ const f=await activatedFixture();await assert.rejects(claimMigratedPointTier({store:f.store,accountKey:A,threshold:5000,[field]:true}),e=>e.code==='invalid-point-tier-claim-request');
+ assert.deepEqual(f.store.writes,[]);
+});
+test('a return already included in the baseline cannot be claimed a second time',async()=>{
+ const f=await activatedFixture({'point_tier_reserve|5000':reserve(5000),'point_tier_claim|5000':claim(5000)});
+ await rejectClaim(f,'point-tier-return-ineligible');
+});
+test('an unobserved local stage cannot be claimed as an implicit empty entitlement',async()=>{
+ const f=await activatedFixture({});await rejectClaim(f,'point-tier-return-ineligible');
+});
+for(const phase of ['baseline-approved','evidence-saved'])test(`${phase} prevents a reserved right from being released early`,async()=>{
+ const f=await activatedFixture();const m=f.store.docs.get(root);m.phase=phase;
+ if(phase==='evidence-saved'){m.baselineEventKey=null;m.settlementId=null;}
+ await rejectClaim(f,'migration-pending');
+});
+for(const field of ['pendingPurchases','pendingReservations'])test(`${field} stops claims without partial receipt or wallet write`,async()=>{
+ const f=await activatedFixture();f.store.docs.get(`${root}/settlements/settlement_fixture_000001`)[field]=1;
+ await rejectClaim(f,'migration-not-settled');
+});
+test('missing immutable stage proof blocks the claim producer as well as ordinary financial events',async()=>{
+ const f=await activatedFixture();f.store.docs.delete(stage(25000));await rejectClaim(f,'migration-point-carryover-conflict');
+});
+test('failed transaction leaves all five claim writes and original archived rights untouched',async()=>{
+ const f=await activatedFixture(),before=structuredClone([...f.store.docs]);f.store.fail=true;
+ await assert.rejects(claimRight(f),/fixture-commit-failure/);assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+test('retry rechecks pending settlement and cannot release a right after it changes',async()=>{
+ const f=await activatedFixture();f.store.retry=docs=>docs.get(`${root}/settlements/settlement_fixture_000001`).pendingPurchases=1;
+ await assert.rejects(claimRight(f),e=>e.code==='migration-not-settled');assert.deepEqual(f.store.writes,[]);
+ assert.equal(f.store.docs.get(`deda_verified_progress/${A}`).version,1);
+});
+for(const partial of ['claim','receipt','event','classification'])test(`orphan ${partial} cannot be overwritten to grant a second return`,async()=>{
+ const f=await activatedFixture(),r=await claimRight(f),paths={claim:claimRecord(5000),receipt:`deda_progress_receipts/${A}/events/${r.eventKey}`,
+ event:`deda_verified_progress/${A}/events/${r.eventKey}`,classification:`${root}/classifications/${r.eventKey}`};
+ if(partial==='claim'){for(const key of ['receipt','event','classification'])f.store.docs.delete(paths[key]);}
+ else{f.store.docs.delete(paths.claim);for(const key of ['receipt','event','classification'])if(key!==partial)f.store.docs.delete(paths[key]);}
+ f.store.writes=[];await rejectClaim(f,'point-tier-claim-conflict');
+});
+for(const [field,value]of [['returnedPoints',999999],['basisDigest','f'.repeat(64)],['migrationId','different_migration_000001'],
+ ['threshold',10000],['appliedVersion',99],['status','pending'],['receiptId','other_receipt_00000001']])test(`tampered claim ${field} cannot authorize replay or another award`,async()=>{
+ const f=await activatedFixture();await claimRight(f);f.store.docs.get(claimRecord(5000))[field]=value;f.store.writes=[];
+ await rejectClaim(f,'point-tier-claim-conflict');
+});
+test('claim after current manager demotion consumes the historical protected right without requiring a new review',async()=>{
+ const f=await activatedFixture();f.store.docs.get('admins/reviewer').active=false;f.store.docs.get(policyPath).enabled=false;
+ assert.equal((await claimRight(f)).returnedPoints,5050);
+});
+for(const points of [1,5000,5051,25250])test(`point-return receipt amount ${points} cannot masquerade as a valid original stage`,()=>{
+ assert.throws(()=>core.parseReceipt({format:1,accountKey:A,source:'point-tier-return-v1',sourceId:`${migrationId}|5000|${'a'.repeat(64)}`,
+ kind:'award',delta:{points,coins:0,xp:0,earnedDiamonds:0}},A),e=>e.code==='invalid-point-tier-return');
+});
+for(const unit of ['coins','xp','earnedDiamonds'])test(`point-return receipt cannot add unrelated ${unit}`,()=>{
+ assert.throws(()=>core.parseReceipt({format:1,accountKey:A,source:'point-tier-return-v1',sourceId:`${migrationId}|5000|${'a'.repeat(64)}`,
+ kind:'award',delta:{points:5050,coins:0,xp:0,earnedDiamonds:0,[unit]:1}},A),e=>e.code==='invalid-point-tier-return');
+});
+for(const sourceId of ['arbitrary',`${migrationId}|25000|${'a'.repeat(64)}`,`${migrationId}|5000|not-a-basis`])test(`malformed or terminal source ID is not a return authority: ${sourceId.slice(0,40)}`,()=>{
+ assert.throws(()=>core.parseReceipt({format:1,accountKey:A,source:'point-tier-return-v1',sourceId,kind:'award',
+ delta:{points:5050,coins:0,xp:0,earnedDiamonds:0}},A),e=>e.code==='invalid-point-tier-return');
+});

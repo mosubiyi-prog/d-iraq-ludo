@@ -63,7 +63,7 @@ async function validatePointTierCarryover(tx,migration,raw,assessment){
  for(const tier of plan.tiers)stages.push(await tx.get(`${root}/pointTierEntitlements/${tier.threshold}`));
  if(stored===null&&plan.tiers.every(t=>!t.hasReserve&&!t.hasClaim)){
   if(stages.some(stage=>stage!==null))fail('migration-point-carryover-conflict');
-  return;
+  return null;
  }
  if(stored===null)fail('migration-point-carryover-required');
  const approval=await tx.get(`${root}/approvals/${migration.migrationId}`);
@@ -74,5 +74,6 @@ async function validatePointTierCarryover(tx,migration,raw,assessment){
   const stage=stages[index];
   if(!sameStored(stage,expected)||!isDeepStrictEqual(time(stage.createdAt),stamp))fail('migration-point-carryover-conflict');
  }
+ return {records,summary};
 }
 module.exports={buildPointTierCarryover,validatePointTierCarryover,sameStored,time};

@@ -716,3 +716,93 @@ test('real final-stage carried proof never refunds terminal prize or previously 
  assert.equal((await applyMigrated(awardId)).state.balances.points,initial.points+5);
  assert.deepEqual((await db.doc(carriedStage(25000)).get()).data(),terminal);assert.equal(terminal.futureReturnPoints,null);
 });
+
+const {claimMigratedPointTier}=require('./point-tier-claim.cjs');
+const claimCarried=(threshold=5000,claimStore=store)=>claimMigratedPointTier({store:claimStore,accountKey:account,threshold});
+const carriedClaim=t=>`${assessmentRoot}/pointTierClaims/${t}`;
+test('real concurrent migrated point claims create one return and five atomic records without changing archived rights',async()=>{
+ const initial=await activatedCarryoverFixture(),proof=(await db.doc(carriedStage(5000)).get()).data();
+ const results=await Promise.all([claimCarried(),claimCarried()]);
+ assert.equal(results.filter(r=>r.replayed).length,1);assert.equal((await state()).balances.points,initial.points+5050);
+ assert.equal((await state()).version,2);assert.equal((await events()).length,2);
+ const r=results[0],receipt=(await db.doc(`deda_progress_receipts/${account}/events/${r.eventKey}`).get()).data();
+ assert.equal(receipt.source,'point-tier-return-v1');assert.equal(receipt.delta.points,5050);
+ assert.equal((await db.doc(carriedClaim(5000)).get()).data().status,'claimed');
+ assert.deepEqual((await db.doc(carriedStage(5000)).get()).data(),proof);
+});
+test('lost claim response is recovered without another return and new UID reads the same account balance',async()=>{
+ const initial=await activatedCarryoverFixture();
+ await assert.rejects((async()=>{await claimCarried();throw Error('injected-lost-response');})(),/injected-lost-response/);
+ const second=await claimCarried();assert.equal(second.replayed,true);
+ assert.equal(second.state.balances.points,initial.points+5050);assert.equal((await events()).length,2);
+ const recovered=await assertSucceeds(getDocFromServer(doc(client('new-device'),statePath)));
+ assert.equal(recovered.data().balances.points,initial.points+5050);
+ await assertFails(getDocFromServer(doc(client('other-device'),statePath)));
+});
+test('original gated receipt replay cannot re-award a generated point return',async()=>{
+ await activatedCarryoverFixture();const first=await claimCarried(),before=await state();
+ const replay=await applyMigrated(first.eventKey);assert.equal(replay.replayed,true);assert.deepEqual(replay.state,before);
+ assert.equal((await events()).length,2);
+});
+test('claim replay after later point spending returns current balances and preserves all other wallets',async()=>{
+ const initial=await activatedCarryoverFixture();await claimCarried();
+ const spend={format:1,accountKey:account,source:'point-reservation-v1',sourceId:'later-spend-fixture',kind:'spend',
+ delta:{points:-100,coins:0,xp:0,earnedDiamonds:0}};
+ const migration=(await db.doc(assessmentRoot).get()).data();
+ await seed(debitId,spend);await db.doc(`${assessmentRoot}/classifications/${core.eventKey(spend)}`).set({format:1,
+ accountKey:account,migrationId:assessmentMigrationId,evidenceDigest:migration.evidenceDigest,disposition:'after-cutover',receipt:spend});
+ await db.doc(`deda_gm_personal_diamond_wallets/${account}`).set({balance:1000000});
+ await applyMigrated(debitId);const replay=await claimCarried();
+ assert.equal(replay.state.balances.points,initial.points+5050-100);assert.equal(replay.state.version,3);
+ assert.equal(replay.state.balances.xp,initial.xp);assert.equal(replay.state.balances.earnedDiamonds,initial.earnedDiamonds);
+ assert.deepEqual((await db.doc(`deda_gm_personal_diamond_wallets/${account}`).get()).data(),{balance:1000000});
+});
+for(const threshold of [10000,15000,20000])test(`real stage ${threshold} returns its fixed original amount once`,async()=>{
+ const awards={};for(const t of [5000,10000,15000,20000]){
+ if(t>threshold)break;awards[`point_tier_reserve|${t}`]={points:-t};if(t<threshold)awards[`point_tier_claim|${t}`]={points:t+t/100};}
+ const initial=await activatedCarryoverFixture(awards),r=await claimCarried(threshold);
+ assert.equal(r.returnedPoints,threshold+threshold/100);assert.equal(r.state.balances.points,initial.points+r.returnedPoints);
+ assert.equal((await claimCarried(threshold)).replayed,true);assert.equal((await events()).length,2);
+});
+for(const condition of ['already-claimed','not-observed','terminal'])test(`real ${condition} stage cannot create a return receipt`,async()=>{
+ if(condition==='already-claimed')await activatedCarryoverFixture({'point_tier_reserve|5000':{points:-5000},'point_tier_claim|5000':{points:5050}});
+ else await activatedCarryoverFixture();
+ const threshold=condition==='terminal'?25000:condition==='not-observed'?10000:5000,before=await state();
+ await assert.rejects(claimCarried(threshold),e=>e.code==='point-tier-return-ineligible');
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+ assert.equal((await db.doc(carriedClaim(threshold)).get()).exists,false);
+});
+for(const condition of ['pending-cutover','unsettled-purchase','missing-stage'])test(`real ${condition} blocks the claim producer before any of its five writes`,async()=>{
+ await activatedCarryoverFixture();
+ if(condition==='pending-cutover')await db.doc(assessmentRoot).update({phase:'baseline-approved'});
+ if(condition==='unsettled-purchase')await db.doc(`${assessmentRoot}/settlements/carried_settlement_000001`).update({pendingPurchases:1});
+ if(condition==='missing-stage')await db.doc(carriedStage(25000)).delete();
+ const before=await state(),code=condition==='pending-cutover'?'migration-pending':condition==='unsettled-purchase'?'migration-not-settled':'migration-point-carryover-conflict';
+ await assert.rejects(claimCarried(),e=>e.code===code);assert.deepEqual(await state(),before);
+ assert.equal((await events()).length,1);assert.equal((await db.doc(carriedClaim(5000)).get()).exists,false);
+});
+test('real claim serialization failure rolls back receipt, classification, applied event, wallet and claim together',async()=>{
+ await activatedCarryoverFixture();const before=await state(),proof=(await db.doc(carriedStage(5000)).get()).data();
+ const receiptsBefore=(await db.collection(`deda_progress_receipts/${account}/events`).get()).size;
+ const classesBefore=(await db.collection(`${assessmentRoot}/classifications`).get()).size;
+ const badStore=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>undefined});
+ await assert.rejects(claimCarried(5000,badStore));assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+ assert.equal((await db.doc(carriedClaim(5000)).get()).exists,false);
+ assert.equal((await db.collection(`deda_progress_receipts/${account}/events`).get()).size,receiptsBefore);
+ assert.equal((await db.collection(`${assessmentRoot}/classifications`).get()).size,classesBefore);
+ assert.deepEqual((await db.doc(carriedStage(5000)).get()).data(),proof);
+});
+for(const condition of ['tampered-claim','orphan-receipt','missing-event'])test(`real ${condition} does not cause a replacement or second return`,async()=>{
+ await activatedCarryoverFixture();const first=await claimCarried();
+ if(condition==='tampered-claim')await db.doc(carriedClaim(5000)).update({returnedPoints:999999});
+ if(condition==='orphan-receipt')await db.doc(carriedClaim(5000)).delete();
+ if(condition==='missing-event')await db.doc(`${statePath}/events/${first.eventKey}`).delete();
+ const before=await state();await assert.rejects(claimCarried(),e=>e.code==='point-tier-claim-conflict');
+ assert.deepEqual(await state(),before);
+});
+test('clients including manager and recovered UID cannot read, forge or delete the private once-only claim record',async()=>{
+ await activatedCarryoverFixture();await claimCarried();
+ for(const uid of ['old-device','new-device','other-device',reviewManager.uid]){
+ const ref=doc(client(uid),carriedClaim(5000));await assertFails(getDocFromServer(ref));
+ await assertFails(setDoc(ref,{status:'pending',returnedPoints:999999},{merge:true}));await assertFails(deleteDoc(ref));}
+});

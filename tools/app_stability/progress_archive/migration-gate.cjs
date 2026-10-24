@@ -36,14 +36,8 @@ function validateSettlement(raw, migration) {
       raw.baselineEventKey !== migration.baselineEventKey || !id(raw.legacyFenceId) ||
       raw.pendingPurchases !== 0 || raw.pendingReservations !== 0) fail('migration-not-settled');
 }
-async function reconcileMigratedReceipt({store, accountKey, receiptId}) {
+async function loadMigratedContext(tx,accountKey){
   core.account(accountKey);
-  if (!id(receiptId)) fail('invalid-receipt-id');
-  // Wrap the SAME transaction. Approval/classification reads participate in
-  // conflicts/retries; no check outside a transaction or second wallet write.
-  const gatedStore = {
-    serverTimestamp: () => store.serverTimestamp(),
-    runTransaction: action => store.runTransaction(async tx => {
       const root = `deda_progress_migrations/${accountKey}`;
       const migration = parseMigration(await tx.get(root), accountKey);
       if (migration.phase !== 'cutover-complete') fail('migration-pending');
@@ -56,7 +50,18 @@ async function reconcileMigratedReceipt({store, accountKey, receiptId}) {
       const initial = core.parseReceipt(baseline.receipt, accountKey);
       if (initial.source !== 'legacy-baseline-v1' || core.eventKey(initial) !== migration.baselineEventKey) fail('migration-baseline-conflict');
       const {raw:evidence,assessment}=await validateBaselineEvidence(tx,migration,initial);
-      await validatePointTierCarryover(tx,migration,evidence,assessment);
+      const carryover=await validatePointTierCarryover(tx,migration,evidence,assessment);
+  return {root,migration,state,carryover};
+}
+async function reconcileMigratedReceipt({store, accountKey, receiptId}) {
+  core.account(accountKey);
+  if (!id(receiptId)) fail('invalid-receipt-id');
+  // Wrap the SAME transaction. Approval/classification reads participate in
+  // conflicts/retries; no check outside a transaction or second wallet write.
+  const gatedStore = {
+    serverTimestamp: () => store.serverTimestamp(),
+    runTransaction: action => store.runTransaction(async tx => {
+      const {root,migration,state}=await loadMigratedContext(tx,accountKey);
       const raw = await tx.get(`deda_progress_receipts/${accountKey}/events/${receiptId}`);
       if (raw === null) fail('verified-receipt-missing');
       const receipt = core.parseReceipt(raw, accountKey);
@@ -78,4 +83,4 @@ async function reconcileMigratedReceipt({store, accountKey, receiptId}) {
   };
   return reconcileVerifiedReceipt({store: gatedStore, accountKey, receiptId});
 }
-module.exports = {parseMigration, validateSettlement, reconcileMigratedReceipt};
+module.exports = {parseMigration, validateSettlement, loadMigratedContext, reconcileMigratedReceipt};

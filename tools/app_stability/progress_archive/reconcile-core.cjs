@@ -3,7 +3,7 @@ const {createHash}=require('node:crypto');
 const units=Object.freeze(['points','coins','xp','earnedDiamonds']);
 const sources=Object.freeze({
   'account-bootstrap-v1':'baseline','legacy-baseline-v1':'baseline',
-  'task-claim-v1':'award','rewarded-ad-v1':'award',
+  'task-claim-v1':'award','rewarded-ad-v1':'award','point-tier-return-v1':'award',
   'cosmetic-debit-v1':'spend','point-reservation-v1':'spend',
 });
 function fail(code){throw Object.assign(new Error(code),{code});}
@@ -32,6 +32,11 @@ function parseReceipt(value,expectedAccount){
   if(value.source==='rewarded-ad-v1'&&(delta.points!==0||delta.coins!==0||delta.xp!==0))fail('invalid-rewarded-ad-units');
   if(value.source==='cosmetic-debit-v1'&&(delta.points!==0||delta.xp!==0))fail('invalid-cosmetic-units');
   if(value.source==='point-reservation-v1'&&(delta.coins!==0||delta.xp!==0||delta.earnedDiamonds!==0))fail('invalid-point-units');
+  if(value.source==='point-tier-return-v1'){
+    const match=/^[A-Za-z0-9_-]{20,80}\|(5000|10000|15000|20000)\|[a-f0-9]{64}$/.exec(value.sourceId);
+    const threshold=match?Number(match[1]):null;
+    if(threshold===null||delta.points!==threshold+threshold/100||delta.coins!==0||delta.xp!==0||delta.earnedDiamonds!==0)fail('invalid-point-tier-return');
+  }
   return Object.freeze({...value,delta});
 }
 function eventKey(receipt){
