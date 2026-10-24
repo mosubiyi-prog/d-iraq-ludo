@@ -1,0 +1,48 @@
+{
+  "dateBaghdad": "2026-10-24",
+  "codeCommit": "faefdc1185893acba729ff17bec74ba5ed139168",
+  "runId": 40125466460,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40125466460",
+  "allFiveJobsPassed": true,
+  "tests": {
+    "nodeTotal": 120,
+    "nodeNewAssessment": 42,
+    "nodePreviousReconciliationAndGate": 78,
+    "firestoreEmulatorTotal": 88,
+    "firestoreEmulatorNewAssessment": 14,
+    "firestoreEmulatorPrevious": 74,
+    "preservedSessionAndPlace": 94,
+    "preservedAccountOwnershipUi": 38,
+    "pythonRestoration": 66
+  },
+  "behavior": {
+    "observedAmountsAreUntrusted": true,
+    "canAutoApprove": false,
+    "phaseWritten": "evidence-saved",
+    "onlyWritesMigrationRootAndPrivateReview": true,
+    "sourceArchiveUnchanged": true,
+    "missingOrInvalidAmountsBecomeUnknownNotZero": true,
+    "netDebitsPreservedWithoutClamping": true,
+    "managerBonusGiftedDiamondsAndManagerWalletsExcluded": true,
+    "secondDeviceCapturesRetainedWithoutMaxOrSum": true,
+    "replayDoesNotDowngradeLaterApproval": true,
+    "clientCannotReadOrWriteReview": true,
+    "receiptOrVerifiedBalanceCreated": false
+  },
+  "limits": {
+    "functionsEntryPointExposed": false,
+    "deployed": false,
+    "productionAccountDataReadOrChanged": false,
+    "automaticFinancialRestore": false,
+    "approvedBaselineProducer": false,
+    "realLegacyWriterFence": false,
+    "sourceRewardVerificationProducers": false,
+    "physicalTwoPhonesTested": false,
+    "signedDedaApkProduced": false
+  },
+  "next": [
+    "Approve the legacy baseline using a reviewed source policy and actual account evidence, not arbitrary client balances",
+    "Settle reservations/purchases, classify included events, enforce a real legacy-writer fence and verified future event production",
+    "Wire bounded restoration/continuous persistence and accept all relevant data on two actual phones before signed delivery"
+  ]
+}

@@ -10,7 +10,7 @@ An event classified `included-in-baseline` returns current state without another
 
 ## Trust boundary and remaining implementation
 
-All migration/classification/settlement documents are trusted-worker inputs; their producer is NOT implemented here. The gate does not authenticate a reward provider, approve local values, inspect pending operations or stop old APK writers itself. `legacyFenceId` is a required reference, not proof that an actual fence exists. Actual settlement review, evidence verification, writer fencing and verified event production must precede activation. Low-level `reconcileVerifiedReceipt` remains a prototype and is not a permitted bypass for a future migrated account API. No API is exposed.
+The evidence-saved assessment producer is now implemented in `legacy-assessment.cjs` and `migration-assessment-store.cjs`: it binds the immutable capture and creates private requires-verification review inputs atomically, without creating any approval, receipt or balance. See PROGRESS-ASSESSMENT-RESULTS-2026-10-24.md. Trusted baseline approval, event classification and settlement producers are still NOT implemented. The gate does not authenticate a reward provider, approve local values, inspect pending operations or stop old APK writers itself. `legacyFenceId` is a required reference, not proof that an actual fence exists. Actual settlement review, evidence verification, writer fencing and verified event production must precede activation. Low-level `reconcileVerifiedReceipt` remains a prototype and is not a permitted bypass for a future migrated account API. No API is exposed.
 
 The isolated rules explicitly deny client reads and writes to migration documents. These are candidate rules, not merged or published production rules. App runtime, functions/index.js, existing wallets, purchases, roles, signing and production rules are unchanged. No actual account data was read or migrated.
 
@@ -20,4 +20,4 @@ Local Node: 36 migration tests + 42 existing reconciliation tests = 78/78 passed
 
 ## Next
 
-Implement an auditable migration-review producer and real source proofs, resolve pending operations and enforce old-writer fencing before enabling the gate. Complete remaining data inventory and consistent session-flow integration. Only then test actual SDK reads/writes and phone continuity; the four delivery bundles are still incomplete.
+Run immutable evidence through the assessment producer, then implement a reviewed baseline approval policy with real source proofs, resolve pending operations and enforce old-writer fencing before enabling the gate. Assessment success is not financial approval; the phase remains evidence-saved and is rejected by this gate. Complete remaining data inventory and consistent session-flow integration. Only then test actual SDK reads/writes and phone continuity; the four delivery bundles are still incomplete.
