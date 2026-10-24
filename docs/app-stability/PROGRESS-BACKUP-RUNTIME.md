@@ -1,5 +1,10 @@
 # First application binding: opt-in passive evidence backup
 
+## Purchase evidence integration — 25 October 2026
+
+The existing default-false pilot now configures combined progress/purchase backup in its default driver factory. The in-process unchanged fast path also captures and compares payment journals and inventory, so a purchase-only change is not suppressed by an unchanged balance. Existing v1 pending requests are resolved first; a later trigger backfills purchase evidence before unchanged suppression. Missing canonical original IDs keep progress backup with an explicit unavailable purchase observation, not a zero-purchases assertion. There is no new checkout/wallet hook, financial restore, retry queue, or production activation. See PURCHASE-EVIDENCE-RESULTS-2026-10-25.md for current validation and limits.
+
+
 24 October 2026. The source assembler now accepts `--progress-backup-runtime` and binds the existing coordinator to the real immutable 100380 main/preferences code. The separate Dart define `DEDA_STABILITY_PROGRESS_BACKUP_PILOT` defaults to false. Assembly alone never enables it, and existing official build/signing workflows and archive remain unchanged. No production rules have been deployed. Do not enable this against production before reviewing/deploying compatible rules with the owner's approval.
 
 ## Bound execution

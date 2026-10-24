@@ -2,11 +2,11 @@
   "format": 1,
   "date": "2026-10-25",
   "timezone": "Asia/Baghdad",
-  "codeCommit": "d08b56ed7d90cd138199812cdd19214056ece096",
-  "sourceRunId": 40133921144,
+  "codeCommit": "73fcd1fe89aa2071dd5c70e8281336944e9fd427",
+  "sourceRunId": 40136116286,
   "policyRunId": 40133921189,
-  "nativeTransportRunId": 40133921133,
-  "status": "reader-and-policy-passed-bound-integration-ci-pending",
+  "nativeTransportRunId": 40136116294,
+  "status": "combined-source-all-five-passed-final-native-results-pending",
   "tests": {
     "node": 241,
     "authFirestoreEmulator": 146,
@@ -15,7 +15,10 @@
     "authAndPlaceFlutter": 94,
     "preservedAccountOwnershipUi": 38,
     "currentPolicyCompatibility": 93,
-    "newCombinedCoordinatorFlutterCasesPending": 14
+    "combinedCoordinatorFlutter": {
+      "passed": 43,
+      "new": 14
+    }
   },
   "policy": {
     "originalSHA256": "9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed",
@@ -53,5 +56,17 @@
   "pendingRetiredOnlyAfterBothArchives": true,
   "newOriginCanCreateMissingOldSidecar": false,
   "activationFlagDefault": false,
-  "nativeTransportExpectedCases": 24
+  "nativeTransportExpectedCases": 24,
+  "qaGuardCommit": "c08f03c95cc547de8e90febbcdb2d7bf7d139c02",
+  "originalNativePinRunId": 40135421319,
+  "nativeTransportFirstPhase": {
+    "passed": 20,
+    "failed": 0,
+    "runId": 40135421313,
+    "artifactId": 12576129616,
+    "artifactSHA256": "1512b3fb32894638205ffc1afb4fed098e98b1bedff751e58c5cfc67ddd2b594",
+    "stoppedReason": "wait-script-expected-18-instead-of-20-before-cold-restart",
+    "waitGuardCorrected": true
+  },
+  "nativePinStatus": "attempt-2-pending-first-attempt-failed-at-original-archive-denial"
 }

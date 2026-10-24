@@ -1,5 +1,10 @@
 # Pending evidence backup coordinator — not activated in the app
 
+## Combined purchase evidence update — 25 October 2026
+
+The opt-in runtime now configures a purchase reader/store alongside progress. A v2 intent freezes both payloads under one stable capture ID before dispatch; v1 remains byte compatible. Parent progress and purchase sidecar readbacks must both match the original payload/UID/install before the private pending intent is retired. Origin-changed missing sidecars remain pending; existing old-origin sidecars can be reconciled without relabeling. Native source charging/paid/inventory keys are never removed or applied. These are untrusted observations, not payment settlement or a transaction-consistent snapshot. See PURCHASE-EVIDENCE-RESULTS-2026-10-25.md for current validation and remaining prerequisites.
+
+
 24 October 2026, Baghdad. This composes existing local capture and server evidence APIs; no live callsite is enabled and it does not restore balances.
 
 ## Data flow
