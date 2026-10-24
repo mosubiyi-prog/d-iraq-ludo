@@ -202,6 +202,48 @@ class RestoreBaselineTest(unittest.TestCase):
         for name in ['android', 'firebase.json', 'firestore.rules']:
             self.assertFalse((backup / name).exists())
 
+    def test_bound_backup_runtime_changes_main_only_and_preserves_auth_platform_boundary(self):
+        baseline, bound = self.root / 'baseline', self.root / 'bound'
+        restore_module.restore(baseline)
+        result = restore_module.restore(bound, progress_backup_runtime=True)
+        self.assertTrue(result['progressBackupRuntime'])
+        source = (bound / 'lib/main.dart').read_text()
+        self.assertEqual(source.count('runApp(DedaProgressBackupHost('), 1)
+        self.assertEqual(source.count('dedaProgressBackupAccount.begin();'), 3)
+        self.assertEqual(source.count('dedaProgressBackupAccount.complete('), 2)
+        for method in ['load()', 'saveLogin({', 'logout()']:
+            start = source.index('  static Future<void> ' + method)
+            body = source.index(' async {', start) + len(' async {')
+            first = source[body:].splitlines()[1]
+            self.assertIn('dedaProgressBackupAccount.begin();', first)
+        for name in ['lib/deda_backend.dart', 'lib/deda_pin_auth.dart']:
+            self.assertEqual((bound / name).read_bytes(), (baseline / name).read_bytes())
+        for name in ['android', 'firebase.json', 'firestore.rules']:
+            self.assertFalse((bound / name).exists())
+        self.assertEqual((bound / restore_module.PROGRESS_RUNTIME_MODULE).read_bytes(),
+                         (REPO / restore_module.PROGRESS_RUNTIME_MODULE).read_bytes())
+
+    def test_bound_backup_is_compatible_with_both_startup_paths(self):
+        output = self.root / 'combined'
+        restore_module.restore(output, pilot=True, startup_metrics=True, progress_backup_runtime=True)
+        source = (output / 'lib/main.dart').read_text()
+        self.assertEqual(source.count('runApp(DedaProgressBackupHost('), 2)
+        self.assertIn('await runDedaMeasuredStartup(', source)
+        self.assertIn('if (!dedaStabilityStartupMetricsEnabled)', source)
+        self.assertEqual(source.count("import 'deda_progress_backup_runtime.dart';"), 1)
+
+    def test_bound_backup_refuses_drift_and_second_binding(self):
+        baseline = self.root / 'baseline'
+        restore_module.restore(baseline)
+        original = (baseline / 'lib/main.dart').read_text()
+        with self.assertRaisesRegex(ValueError, 'exact baseline'):
+            restore_module.bind_progress_backup('bad', 'bad')
+        with self.assertRaisesRegex(ValueError, 'exact generated'):
+            restore_module.bind_progress_backup(original + ' ', original)
+        bound = restore_module.bind_progress_backup(original, original)
+        with self.assertRaisesRegex(ValueError, 'exact generated'):
+            restore_module.bind_progress_backup(bound, original)
+
     def test_refuses_output_inside_repository(self):
         with self.assertRaisesRegex(ValueError, 'outside the repository'):
             restore_module.restore(REPO / 'do-not-create-this')

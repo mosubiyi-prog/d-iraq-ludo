@@ -9,6 +9,7 @@ Output MUST be absent or empty. --pilot overlays the two identity files.
 --legacy-progress-capture adds a read-only UNWIRED local evidence module.
 --progress-evidence-store adds UNWIRED immutable archive IO with owner dependencies.
 --progress-backup-coordinator composes capture/journal/archive, without app callsites.
+--progress-backup-runtime binds an opt-in root host and account selection epochs.
 Existing APK/build workflows and the immutable archive remain unchanged.
 """
 import argparse
@@ -30,6 +31,7 @@ SESSION_MODULE = 'lib/deda_session_transition_gate.dart'
 SESSION_FLOW_MODULE = 'lib/deda_session_flow_prototype.dart'
 PROGRESS_EVIDENCE_MODULE = 'lib/deda_progress_evidence_store.dart'
 PROGRESS_BACKUP_MODULE = 'lib/deda_progress_backup_coordinator.dart'
+PROGRESS_RUNTIME_MODULE = 'lib/deda_progress_backup_runtime.dart'
 LEGACY_PROGRESS_MODULE = 'lib/deda_legacy_progress_capture.dart'
 ADMIN_ADAPTER_MODULE = 'lib/deda_admin_session_firebase_adapter.dart'
 OWNER_PORT_MODULES = ('lib/deda_owner_session_firebase_port.dart',
@@ -72,7 +74,51 @@ BASELINE_BODY
     return source[:first_import] + "import 'deda_startup_measurements.dart';\n" + source[first_import:]
 
 
-def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False, legacy_progress_capture=False, progress_evidence_store=False, progress_backup_coordinator=False):
+
+def bind_progress_backup(source, original, *, measured=False):
+    """Exact-source root/preferences binding; pilot stays false by default."""
+    manifest = json.loads((REPO / 'tools/app_stability/100380-baseline-manifest.json').read_text())
+    if hashlib.sha256(original.encode()).hexdigest() != manifest['files']['lib/main.dart']:
+        raise ValueError('Backup binding requires exact baseline main')
+    expected = instrument_startup(original) if measured else original
+    if source != expected:
+        raise ValueError('Backup binding requires exact generated source')
+    source = source.replace('class DedaPreferences {', """class DedaPreferences {
+  static String? get progressBackupAccountKey {
+    if (!isLoggedIn) return null;
+    final key = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    return key.isEmpty ? null : key;
+  }
+""", 1)
+    for method in ['load()', 'saveLogin({', 'logout()']:
+        header = '  static Future<void> ' + method
+        start = source.index(header)
+        body = source.index(' async {', start) + len(' async {')
+        source = source[:body] + "\n    final backupSelection = dedaProgressBackupAccount.begin();" + source[body:]
+        if method == 'load()':
+            end = source.index('\n  static Future<void> setLanguage(', body)
+            close = source.rindex('\n  }', body, end)
+            source = source[:close] + "\n    dedaProgressBackupAccount.complete(backupSelection, progressBackupAccountKey);" + source[close:]
+        elif method == 'saveLogin({':
+            end = source.index('    unawaited(DedaTaskEngine.initializeForCurrentAccount());', body)
+            source = source[:end] + "    dedaProgressBackupAccount.complete(backupSelection, progressBackupAccountKey);\n" + source[end:]
+        else:
+            # No completion on logout: intent remains absent even if SDK fails.
+            source = source[:body] + source[body:].replace(
+                'final backupSelection = dedaProgressBackupAccount.begin();',
+                'dedaProgressBackupAccount.begin();', 1)
+    launch = 'runApp(const DedaApp());'
+    count = 2 if measured else 1
+    if source.count(launch) != count:
+        raise ValueError('Backup binding requires exact app launches')
+    source = source.replace(launch, """runApp(DedaProgressBackupHost(
+      currentAccount: () => DedaPreferences.progressBackupAccountKey,
+      child: const DedaApp()));""")
+    first_import = source.index('import ')
+    return source[:first_import] + "import 'deda_progress_backup_runtime.dart';\n" + source[first_import:]
+
+
+def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False, legacy_progress_capture=False, progress_evidence_store=False, progress_backup_coordinator=False, progress_backup_runtime=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -116,29 +162,35 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         shutil.copy2(REPO / STARTUP_MODULE, output / STARTUP_MODULE)
         main_path = output / 'lib/main.dart'
         main_path.write_text(instrument_startup(main_path.read_text()))
-    if session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator:
+    if session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / SESSION_MODULE, output / SESSION_MODULE)
-    if session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator:
+    if session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / SESSION_FLOW_MODULE, output / SESSION_FLOW_MODULE)
-    if owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator:
+    if owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         for name in OWNER_PORT_MODULES:
             shutil.copy2(REPO / name, output / name)
     if admin_firebase_adapter:
         shutil.copy2(REPO / ADMIN_ADAPTER_MODULE, output / ADMIN_ADAPTER_MODULE)
-    if legacy_progress_capture or progress_evidence_store or progress_backup_coordinator:
+    if legacy_progress_capture or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / LEGACY_PROGRESS_MODULE, output / LEGACY_PROGRESS_MODULE)
-    if progress_evidence_store or progress_backup_coordinator:
+    if progress_evidence_store or progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / PROGRESS_EVIDENCE_MODULE, output / PROGRESS_EVIDENCE_MODULE)
-    if progress_backup_coordinator:
+    if progress_backup_coordinator or progress_backup_runtime:
         shutil.copy2(REPO / PROGRESS_BACKUP_MODULE, output / PROGRESS_BACKUP_MODULE)
+    if progress_backup_runtime:
+        shutil.copy2(REPO / PROGRESS_RUNTIME_MODULE, output / PROGRESS_RUNTIME_MODULE)
+        main_path = output / 'lib/main.dart'
+        main_path.write_text(bind_progress_backup(main_path.read_text(),
+            verified['lib/main.dart'].decode(), measured=startup_metrics))
     return {'verifiedFiles':len(verified), 'pilot':pilot,
-            'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator,
-            'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator,
-            'ownerFirebasePort':owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator,
+            'startupMetrics':startup_metrics, 'sessionGateFoundation':session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
+            'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
+            'ownerFirebasePort':owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'adminFirebaseAdapter':admin_firebase_adapter,
-            'legacyProgressCapture':legacy_progress_capture or progress_evidence_store or progress_backup_coordinator,
-            'progressEvidenceStore':progress_evidence_store or progress_backup_coordinator,
-            'progressBackupCoordinator':progress_backup_coordinator,
+            'legacyProgressCapture':legacy_progress_capture or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
+            'progressEvidenceStore':progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
+            'progressBackupCoordinator':progress_backup_coordinator or progress_backup_runtime,
+            'progressBackupRuntime':progress_backup_runtime,
             'flutterVersion':manifest['flutterVersion']}
 
 
@@ -154,5 +206,6 @@ if __name__ == '__main__':
     parser.add_argument('--legacy-progress-capture',action='store_true')
     parser.add_argument('--progress-evidence-store',action='store_true')
     parser.add_argument('--progress-backup-coordinator',action='store_true')
+    parser.add_argument('--progress-backup-runtime',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter,args.legacy_progress_capture,args.progress_evidence_store,args.progress_backup_coordinator)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter,args.legacy_progress_capture,args.progress_evidence_store,args.progress_backup_coordinator,args.progress_backup_runtime)))
