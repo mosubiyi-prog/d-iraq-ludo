@@ -47,6 +47,8 @@ test('public report refuses unknown cases, raw exception fields and incomplete s
  for(const report of [{phase:1,passed:['unknown'],failures:[]},
   {phase:1,passed:[],failures:[{name:'bootstrap',code:'private source with spaces'}]},
   {phase:1,passed:[],failures:[{name:'bootstrap',code:'case-failed',exception:'DO_NOT_DISCLOSE'}]},
+  {phase:1,passed:[],failures:[{name:'bootstrap',secret:'DO_NOT_DISCLOSE'}]},
+  {phase:1,passed:[],failures:[{name:'bootstrap',code:123}]},
   {phase:2,passed:[],failures:[]}]){
   assert.equal((await f.call('/finish',report)).code,400);
  }

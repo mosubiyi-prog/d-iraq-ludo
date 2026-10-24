@@ -45,8 +45,8 @@ const server=http.createServer(async(req,res)=>{
   }else if(req.url==='/checkpoint'||req.url==='/finish'){
    if(Object.keys(data).length!==3||![1,2].includes(data.phase)||!Array.isArray(data.passed)||!Array.isArray(data.failures)||
       data.passed.some(n=>!cases.has(n))||new Set(data.passed).size!==data.passed.length||
-      data.failures.some(f=>!f||Object.keys(f).length!==2||!['bootstrap','framework','uncaught',...cases].includes(f.name)||!/^[-a-z0-9_]{1,60}$/.test(f.code)))throw Error('invalid-sanitized-report');
-   const next={passed:data.passed,failures:data.failures,phase:data.phase,
+      data.failures.some(f=>!f||Object.keys(f).length!==2||typeof f.name!=='string'||typeof f.code!=='string'||!Object.keys(f).every(k=>['name','code'].includes(k))||!['bootstrap','framework','uncaught',...cases].includes(f.name)||!/^[-a-z0-9_]{1,60}$/.test(f.code)))throw Error('invalid-sanitized-report');
+   const next={passed:data.passed,failures:data.failures.map(f=>({name:f.name,code:f.code})),phase:data.phase,
      status:data.failures.length?'failed':req.url==='/checkpoint'?'restart-ready':'passed'};
    if(next.status==='restart-ready'&&(data.phase!==1||data.passed.length!==21))throw Error('incomplete-checkpoint');
    if(next.status==='passed'&&(data.phase!==2||data.passed.length!==24))throw Error('incomplete-result');
