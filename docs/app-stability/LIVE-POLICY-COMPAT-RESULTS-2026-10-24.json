@@ -13,7 +13,7 @@
   ],
   "status": "verified",
   "readScope": "https://www.googleapis.com/auth/firebase.readonly",
-  "readAtUTC": "2026-10-24T10:49:07.297076+00:00",
+  "readAtUTC": "2026-10-24T10:59:31.109923+00:00",
   "releaseUpdateTime": "2026-10-23T12:07:17.652182Z",
   "rulesetNameSHA256": "afc2fee314b9f8314934803649dd53f4a311351ef78e4103a2965395385644c8",
   "rulesApiGets": 4,
@@ -22,9 +22,9 @@
   "privateSourceUploaded": false,
   "emulator": {
     "project": "demo-deda-live-progress-compat",
-    "expectedCases": 72,
-    "completedCases": 72,
-    "passed": 72,
+    "expectedCases": 93,
+    "completedCases": 93,
+    "passed": 93,
     "failed": 0,
     "cases": [
       {
@@ -97,6 +97,46 @@
       },
       {
         "name": "before/legacy/manager-audit-list",
+        "passed": true
+      },
+      {
+        "name": "before/pin/client-registration-and-first-session",
+        "passed": true
+      },
+      {
+        "name": "before/pin/credential-and-attempt-remain-unreadable",
+        "passed": true
+      },
+      {
+        "name": "before/pin/wrong-pin-cannot-open-session-or-profile",
+        "passed": true
+      },
+      {
+        "name": "before/pin/new-device-correct-pin-session-readback",
+        "passed": true
+      },
+      {
+        "name": "before/pin/new-device-profile-trust-and-users-binding",
+        "passed": true
+      },
+      {
+        "name": "before/pin/trusted-install-new-uid-without-pin",
+        "passed": true
+      },
+      {
+        "name": "before/pin/untrusted-install-without-pin-denied",
+        "passed": true
+      },
+      {
+        "name": "before/pin/valid-proof-cannot-switch-to-other-account",
+        "passed": true
+      },
+      {
+        "name": "before/pin/cannot-write-another-uid-proof-session-or-user",
+        "passed": true
+      },
+      {
+        "name": "before/pin/original-profile-and-both-trust-entries-preserved",
         "passed": true
       },
       {
@@ -236,6 +276,50 @@
         "passed": true
       },
       {
+        "name": "after/pin/client-registration-and-first-session",
+        "passed": true
+      },
+      {
+        "name": "after/pin/credential-and-attempt-remain-unreadable",
+        "passed": true
+      },
+      {
+        "name": "after/pin/wrong-pin-cannot-open-session-or-profile",
+        "passed": true
+      },
+      {
+        "name": "after/pin/new-device-correct-pin-session-readback",
+        "passed": true
+      },
+      {
+        "name": "after/pin/new-device-profile-trust-and-users-binding",
+        "passed": true
+      },
+      {
+        "name": "after/pin/trusted-install-new-uid-without-pin",
+        "passed": true
+      },
+      {
+        "name": "after/pin/untrusted-install-without-pin-denied",
+        "passed": true
+      },
+      {
+        "name": "after/pin/valid-proof-cannot-switch-to-other-account",
+        "passed": true
+      },
+      {
+        "name": "after/pin/cannot-write-another-uid-proof-session-or-user",
+        "passed": true
+      },
+      {
+        "name": "after/pin/original-profile-and-both-trust-entries-preserved",
+        "passed": true
+      },
+      {
+        "name": "after/pin/client-proven-new-uid-reads-original-evidence",
+        "passed": true
+      },
+      {
         "name": "after/owner-evidence-read-and-create",
         "passed": true
       },
@@ -361,9 +445,52 @@
     "data": "synthetic only, no production documents read or written"
   },
   "sameReleaseBeforeAfter": true,
-  "verifiedAtUTC": "2026-10-24T10:49:22.159563+00:00",
-  "verificationSourceCommit": "5a529156854f38bf197a8c45a824909ebfe54c70",
-  "workflowRun": 40087368309,
-  "artifactId": 12557353454,
-  "artifactZipSHA256": "f31afb2ccd888d8086576e00de48333556d685090145e0672a3e7f032ecd6714"
+  "verifiedAtUTC": "2026-10-24T10:59:47.204752+00:00",
+  "verificationSourceCommit": "c0995d64f9701a27871a9af788e351113db206ca",
+  "workflowRun": 40088043427,
+  "artifactId": 12557553662,
+  "artifactZipSHA256": "a2e207a8d6acd90a1098b9256a3b81bc06b6a241119097c67e35b0da7c7ae1bc",
+  "sourceRegressionRun": 40088043453,
+  "sourceRegressionStatus": "success",
+  "immutablePinAuthSHA256": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+  "sourceRegressionJobs": [
+    {
+      "id": 120854952332,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120854952473,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 120854952500,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120854952544,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    }
+  ],
+  "sourceRegressionCounts": {
+    "offlinePython": 48,
+    "nodeReconciliation": 78,
+    "standaloneEmulator": 74,
+    "measuredPilotGroups": [
+      38,
+      30,
+      13,
+      21,
+      36,
+      35,
+      43,
+      27,
+      40,
+      29
+    ],
+    "inheritedMainIssues": 181
+  }
 }
