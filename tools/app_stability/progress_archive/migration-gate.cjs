@@ -2,6 +2,7 @@
 // UNWIRED trusted-worker contract, not an approval producer or client API.
 // Every document below must be produced by a separate migration reviewer.
 const core = require('./reconcile-core.cjs');
+const {validatePointTierCarryover}=require('./point-tier-carryover-proof.cjs');
 const {validateBaselineEvidence}=require('./baseline-evidence.cjs');
 const {reconcileVerifiedReceipt} = require('./reconcile-store.cjs');
 function fail(code) { throw Object.assign(new Error(code), {code}); }
@@ -54,7 +55,8 @@ async function reconcileMigratedReceipt({store, accountKey, receiptId}) {
           baseline.eventKey !== migration.baselineEventKey || baseline.appliedVersion !== 1) fail('migration-baseline-missing');
       const initial = core.parseReceipt(baseline.receipt, accountKey);
       if (initial.source !== 'legacy-baseline-v1' || core.eventKey(initial) !== migration.baselineEventKey) fail('migration-baseline-conflict');
-      await validateBaselineEvidence(tx,migration,initial);
+      const {raw:evidence,assessment}=await validateBaselineEvidence(tx,migration,initial);
+      await validatePointTierCarryover(tx,migration,evidence,assessment);
       const raw = await tx.get(`deda_progress_receipts/${accountKey}/events/${receiptId}`);
       if (raw === null) fail('verified-receipt-missing');
       const receipt = core.parseReceipt(raw, accountKey);

@@ -7,7 +7,7 @@ const {getAuth}=require('firebase-admin/auth');
 const {savePointTierCarryover}=require('./point-tier-carryover.cjs');
 const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
 const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
-const {getFirestore,FieldValue}=require('firebase-admin/firestore');
+const {getFirestore,FieldValue,Timestamp}=require('firebase-admin/firestore');
 const {reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore}=require('./reconcile-store.cjs');
 const core=require('./reconcile-core.cjs');
 const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
@@ -660,4 +660,59 @@ test('closed migration cannot reimport legacy rights or reset a later claim hist
  await approvedCarryoverFixture();await db.doc(assessmentRoot).update({phase:'cutover-complete',settlementId:'settlement_review_0000001'});
  await assert.rejects(carryover(),e=>e.code==='point-carryover-reviewed-baseline-required');
  assert.equal((await db.doc(carryoverSummary).get()).exists,false);
+});
+
+// Gated follow-up events consume a real SDK-approved and saved carryover.
+// Settlement, fence and cutover remain privileged synthetic fixtures; this
+// does not implement or attest any production cutover or old-writer fence.
+async function activatedCarryoverFixture(awards){
+ await approvedCarryoverFixture(awards);await carryover();
+ const approval=(await db.doc(approvalPath).get()).data();
+ await seed(baselineId,approval.receipt);await apply(baselineId);
+ const migration=(await db.doc(assessmentRoot).get()).data();
+ const settlementId='carried_settlement_000001';
+ await db.doc(assessmentRoot).update({phase:'cutover-complete',settlementId});
+ await db.doc(`${assessmentRoot}/settlements/${settlementId}`).set({format:1,accountKey:account,
+ migrationId:assessmentMigrationId,evidenceDigest:migration.evidenceDigest,baselineEventKey:migration.baselineEventKey,
+ legacyFenceId:'writer_fence_fixture_00001',pendingPurchases:0,pendingReservations:0});
+ await seed(awardId,award());
+ await db.doc(`${assessmentRoot}/classifications/${core.eventKey(award())}`).set({format:1,accountKey:account,
+ migrationId:assessmentMigrationId,evidenceDigest:migration.evidenceDigest,disposition:'after-cutover',receipt:award()});
+ return approval.receipt.delta;
+}
+test('real gated award consumes carried proof atomically without claiming the reserved return',async()=>{
+ const initial=await activatedCarryoverFixture(),rights=(await db.doc(carriedStage(5000)).get()).data();
+ const second='carried_award_wrapper_00001';await seed(second,award());
+ const results=await Promise.all([applyMigrated(awardId),applyMigrated(second)]);
+ assert.equal(results.filter(r=>r.replayed).length,1);assert.equal((await state()).balances.points,initial.points+5);
+ assert.equal((await state()).version,2);assert.equal((await events()).length,2);
+ assert.deepEqual((await db.doc(carriedStage(5000)).get()).data(),rights);assert.equal(rights.canClaimNow,false);
+});
+for(const change of ['missing-summary','missing-5000','missing-25000','inflated-return','early-claim','changed-summary','changed-approval','changed-time'])
+ test(`real financial transaction blocks ${change} without changing wallet, markers or raw source`,async()=>{
+ await activatedCarryoverFixture();
+ if(change==='missing-summary')await db.doc(carryoverSummary).delete();
+ if(change==='missing-5000')await db.doc(carriedStage(5000)).delete();
+ if(change==='missing-25000')await db.doc(carriedStage(25000)).delete();
+ if(change==='inflated-return')await db.doc(carriedStage(5000)).update({futureReturnPoints:999999});
+ if(change==='early-claim')await db.doc(carriedStage(5000)).update({canClaimNow:true});
+ if(change==='changed-summary')await db.doc(carryoverSummary).update({observedUnclaimedReturns:0});
+ if(change==='changed-approval')await db.doc(approvalPath).update({policyRevision:'different_policy_0000001'});
+ if(change==='changed-time')await db.doc(carriedStage(25000)).update({createdAt:Timestamp.fromMillis(0)});
+ const before=await state(),source=(await db.doc(assessmentSource).get()).data();
+ await assert.rejects(applyMigrated(awardId),e=>e.code===(change==='missing-summary'?'migration-point-carryover-required':'migration-point-carryover-conflict'));
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+ assert.deepEqual((await db.doc(assessmentSource).get()).data(),source);
+});
+test('historical manager demotion and review-policy disable do not freeze already-cutover rewards',async()=>{
+ await activatedCarryoverFixture();await db.doc(policyPath).update({enabled:false});
+ await db.doc(`admins/${reviewManager.uid}`).update({active:false});
+ assert.equal((await applyMigrated(awardId)).state.version,2);
+});
+test('real final-stage carried proof never refunds terminal prize or previously claimed tiers',async()=>{
+ const awards={};for(const t of [5000,10000,15000,20000,25000]){
+ awards[`point_tier_reserve|${t}`]={points:-t};if(t!==25000)awards[`point_tier_claim|${t}`]={points:t+t/100};}
+ const initial=await activatedCarryoverFixture(awards),terminal=(await db.doc(carriedStage(25000)).get()).data();
+ assert.equal((await applyMigrated(awardId)).state.balances.points,initial.points+5);
+ assert.deepEqual((await db.doc(carriedStage(25000)).get()).data(),terminal);assert.equal(terminal.futureReturnPoints,null);
 });

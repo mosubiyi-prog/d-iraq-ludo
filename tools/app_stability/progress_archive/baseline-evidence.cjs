@@ -17,9 +17,10 @@ async function loadReviewedEvidence(tx,migration){
   return {raw,assessment,sourcePath};
 }
 async function validateBaselineEvidence(tx,migration,receipt){
-  const {assessment}=await loadReviewedEvidence(tx,migration);
+  const {raw,assessment}=await loadReviewedEvidence(tx,migration);
   // Unknown/negative legacy values cannot be silently zeroed or replaced by
   // derived GM bonuses. Reject instead; separate policy/review is still needed.
   if(!isDeepStrictEqual(receipt.delta,assessment.observedBalances))fail('migration-baseline-evidence-conflict');
+  return {raw,assessment};
 }
 module.exports={validateBaselineEvidence,loadReviewedEvidence};

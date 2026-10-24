@@ -117,3 +117,94 @@ test('atomic commit failure retains all old reservations and writes no private s
  const f=await fixture();f.store.fail=true;const before=structuredClone([...f.store.docs]);
  await assert.rejects(carry(f),/fixture-commit-failure/);assert.deepEqual([...f.store.docs],before);
 });
+
+// The real migration gate consumes the writer's output in the SAME financial
+// transaction. Cutover and settlement here remain explicit test fixtures.
+const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
+const {reconcileVerifiedReceipt}=require('./reconcile-store.cjs');
+const core=require('./reconcile-core.cjs');
+const nextReceiptId='after_cutover_award_000001';
+const nextReceipt={format:1,accountKey:A,source:'task-claim-v1',sourceId:'day|new-task',kind:'award',
+ delta:{points:5,coins:10,xp:20,earnedDiamonds:0}};
+const gate=f=>reconcileMigratedReceipt({store:f.store,accountKey:A,receiptId:nextReceiptId});
+async function activatedFixture(awards){
+ const f=await fixture(awards);await carry(f);
+ const approval=f.store.docs.get(`${root}/approvals/${migrationId}`);
+ const baselineReceiptId='approved_baseline_0000001';
+ f.store.docs.set(`deda_progress_receipts/${A}/events/${baselineReceiptId}`,approval.receipt);
+ await reconcileVerifiedReceipt({store:f.store,accountKey:A,receiptId:baselineReceiptId});
+ const migration=f.store.docs.get(root);migration.phase='cutover-complete';migration.settlementId='settlement_fixture_000001';
+ f.store.docs.set(`${root}/settlements/${migration.settlementId}`,{format:1,accountKey:A,migrationId,
+ evidenceDigest:migration.evidenceDigest,baselineEventKey:migration.baselineEventKey,
+ legacyFenceId:'writer_fence_fixture_00001',pendingPurchases:0,pendingReservations:0});
+ f.store.docs.set(`deda_progress_receipts/${A}/events/${nextReceiptId}`,structuredClone(nextReceipt));
+ f.store.docs.set(`${root}/classifications/${core.eventKey(nextReceipt)}`,{format:1,accountKey:A,migrationId,
+ evidenceDigest:migration.evidenceDigest,disposition:'after-cutover',receipt:structuredClone(nextReceipt)});
+ f.store.writes=[];return f;
+}
+async function rejectGate(f,code){
+ const before=structuredClone([...f.store.docs]);await assert.rejects(gate(f),e=>e.code===code);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+}
+test('gated award validates the real saved five-stage proof without releasing a reserved return',async()=>{
+ const f=await activatedFixture(),before=structuredClone(f.store.docs.get(stage(5000)));
+ const result=await gate(f);assert.equal(result.state.balances.points,95005);assert.equal(result.state.version,2);
+ assert.deepEqual(f.store.docs.get(stage(5000)),before);assert.equal(before.futureReturnPoints,5050);
+ f.store.writes=[];assert.equal((await gate(f)).replayed,true);assert.deepEqual(f.store.writes,[]);
+});
+test('completed root and zero pending counters cannot replace missing carried rights',async()=>{
+ const f=await activatedFixture();f.store.docs.delete(summaryPath);await rejectGate(f,'migration-point-carryover-required');
+});
+for(const threshold of [5000,10000,15000,20000,25000])test(`missing stage ${threshold} blocks financial write even when not observed locally`,async()=>{
+ const f=await activatedFixture();f.store.docs.delete(stage(threshold));await rejectGate(f,'migration-point-carryover-conflict');
+});
+for(const [field,value]of [['futureReturnPoints',999999],['status','claimed-in-baseline'],['canClaimNow',true],
+ ['canRefundNow',true],['recordedReservePoints',0],['sourceReserveKey','other-key'],['evidenceDigest','f'.repeat(64)],
+ ['migrationId','different_migration_000001'],['basisDigest','a'.repeat(64)]])test(`changed carried ${field} cannot cross the financial gate`,async()=>{
+ const f=await activatedFixture();f.store.docs.get(stage(5000))[field]=value;await rejectGate(f,'migration-point-carryover-conflict');
+});
+for(const [field,value]of [['observedUnclaimedReturns',0],['canReleaseBalance',true],['stageCount',4],['canAutoSettle',true]])test(`changed summary ${field} blocks even a verified award`,async()=>{
+ const f=await activatedFixture();f.store.docs.get(summaryPath)[field]=value;await rejectGate(f,'migration-point-carryover-conflict');
+});
+test('missing historical approval cannot be replaced by carried stages and a completed flag',async()=>{
+ const f=await activatedFixture();f.store.docs.delete(`${root}/approvals/${migrationId}`);await rejectGate(f,'point-carryover-approval-required');
+});
+test('changed historical policy revision does not silently rebase approved stage rights',async()=>{
+ const f=await activatedFixture();f.store.docs.get(`${root}/approvals/${migrationId}`).policyRevision='different_policy_0000001';
+ await rejectGate(f,'migration-point-carryover-conflict');
+});
+test('different stage timestamp rejects a mixed or partial carryover commit',async()=>{
+ const f=await activatedFixture();f.store.docs.get(stage(10000)).createdAt.seconds++;
+ await rejectGate(f,'migration-point-carryover-conflict');
+});
+test('malformed proof timestamp is rejected instead of ignored',async()=>{
+ const f=await activatedFixture();f.store.docs.get(summaryPath).createdAt='fixture-time';
+ await rejectGate(f,'point-carryover-invalid-approval-time');
+});
+test('transaction retry rechecks rights and cannot credit after a carryover changed',async()=>{
+ const f=await activatedFixture();f.store.retry=docs=>docs.get(stage(5000)).futureReturnPoints++;
+ await assert.rejects(gate(f),e=>e.code==='migration-point-carryover-conflict');
+ assert.deepEqual(f.store.writes,[]);assert.equal(f.store.docs.get(`deda_verified_progress/${A}`).version,1);
+});
+test('post-cutover rewards do not depend on a historical reviewer remaining a manager or a review policy staying enabled',async()=>{
+ const f=await activatedFixture();f.store.docs.get(policyPath).enabled=false;f.store.docs.get('admins/reviewer').active=false;
+ assert.equal((await gate(f)).state.version,2);
+});
+test('final prize stays spent and previous claimed stages receive no second returns through the gate',async()=>{
+ const awards={};for(const t of [5000,10000,15000,20000,25000]){
+ awards[`point_tier_reserve|${t}`]=reserve(t);if(t!==25000)awards[`point_tier_claim|${t}`]=claim(t);}
+ const f=await activatedFixture(awards),before=structuredClone([...f.store.docs].filter(([path])=>path.includes('/pointTier')));
+ const balance=f.store.docs.get(`deda_verified_progress/${A}`).balances.points;
+ assert.equal((await gate(f)).state.balances.points,balance+5);
+ assert.deepEqual([...f.store.docs].filter(([path])=>path.includes('/pointTier')),before);
+});
+test('no observed stage history needs no invented zero entitlements, but orphan records block it',async()=>{
+ const f=await activatedFixture({});f.store.docs.delete(summaryPath);
+ for(const t of [5000,10000,15000,20000,25000])f.store.docs.delete(stage(t));
+ assert.equal((await gate(f)).state.version,2);f.store.writes=[];
+ f.store.docs.set(stage(5000),{canClaimNow:true});await rejectGate(f,'migration-point-carryover-conflict');
+});
+test('an existing empty-history summary must be checked rather than skipped',async()=>{
+ const f=await activatedFixture({});f.store.docs.get(summaryPath).canReleaseBalance=true;
+ await rejectGate(f,'migration-point-carryover-conflict');
+});
