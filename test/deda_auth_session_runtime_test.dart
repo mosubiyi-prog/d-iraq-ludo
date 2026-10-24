@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:d_iraq_ludo/deda_auth_session_runtime.dart';
@@ -136,6 +137,107 @@ void main() {
     final h=Harness();var calls=0;final error=StateError('fixture');
     await expectLater(h.run(()=>h.runtime.wait<void>(() async {calls++;throw error;})),throwsA(same(error)));
     expect(calls,1);expect(h.runtime.gate.diagnostics['inFlight'],0);
+  });
+
+  group('personal logout confirmation uses the original account', () {
+    const first='07700000010',second='07700000011';
+    Future<void> select(String phone) async {
+      final prefs=await SharedPreferences.getInstance();
+      await prefs.setString('deda_phone_v1',phone);
+      await prefs.setString('deda_account_phone_v1',phone);
+      await prefs.setString('deda_user_name_v1','Fixture $phone');
+      await prefs.setString('deda_account_type_v1','user');
+      await prefs.setBool('deda_logged_in_v1',true);
+      await app.DedaPreferences.load();
+    }
+    Future<void> unchanged(String phone) async {
+      final prefs=await SharedPreferences.getInstance();
+      expect(app.DedaPreferences.phone,phone);
+      expect(app.DedaPreferences.isLoggedIn,isTrue);
+      expect(prefs.getString('deda_phone_v1'),phone);
+      expect(prefs.getBool('deda_logged_in_v1'),isTrue);
+      expect(prefs.getString('deda_task_points_state_v1_$first'),'keep raw points');
+      expect(prefs.getString('deda_diamonds_wallet_v1_$second'),'keep raw diamonds');
+    }
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({
+        'deda_task_points_state_v1_$first':'keep raw points',
+        'deda_diamonds_wallet_v1_$second':'keep raw diamonds',
+      });
+      await select(first);
+      app.DedaLanguageState.current=app.DedaLanguage.en;
+    });
+    for(final path in ['different account','A-B-A','same account reloaded']) {
+      test('$path invalidates the open confirmation before any cleanup', () async {
+        final intent=app.DedaPersonalLogoutIntent();
+        if(path!='same account reloaded') await select(second);
+        if(path!='different account') await select(first);
+        await expectLater(intent.commit(isCurrent:()=>true),
+          throwsA(isA<DedaStaleSessionTransition>()));
+        await unchanged(path=='different account'?second:first);
+      },skip:!dedaAuthSessionRuntimeEnabled);
+    }
+    test('an unmounted confirmation cannot dispatch logout', () async {
+      final intent=app.DedaPersonalLogoutIntent();
+      await expectLater(intent.commit(isCurrent:()=>false),
+        throwsA(isA<DedaStaleSessionTransition>()));
+      await unchanged(first);
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    test('confirmation does not hold the lane and busy admission does not clean preferences', () async {
+      final intent=app.DedaPersonalLogoutIntent();
+      expect(DedaAuthRuntime.controller.gate.diagnostics['inFlight'],0);
+      final hold=Completer<void>();
+      final active=DedaAuthRuntime.run<void>(kind:DedaSessionTransitionKind.ownerLogin,
+        action:()=>hold.future);
+      await flush();
+      try {
+        await expectLater(intent.commit(isCurrent:()=>true),
+          throwsA(isA<DedaSessionTransitionBusy>()));
+        await unchanged(first);
+      } finally {hold.complete();await active;}
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    test('unchanged confirmation logs out once and preserves all account progress', () async {
+      final firstIntent=app.DedaPersonalLogoutIntent();
+      final duplicate=app.DedaPersonalLogoutIntent();
+      await firstIntent.commit(isCurrent:()=>true);
+      final prefs=await SharedPreferences.getInstance();
+      expect(app.DedaPreferences.isLoggedIn,isFalse);
+      expect(app.DedaPreferences.phone,isEmpty);
+      expect(prefs.getBool('deda_logged_in_v1'),isFalse);
+      expect(prefs.getString('deda_phone_v1'),isNull);
+      expect(prefs.getString('deda_task_points_state_v1_$first'),'keep raw points');
+      expect(prefs.getString('deda_diamonds_wallet_v1_$second'),'keep raw diamonds');
+      await expectLater(duplicate.commit(isCurrent:()=>true),
+        throwsA(isA<DedaStaleSessionTransition>()));
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    testWidgets('Settings confirmation rejects a changed account and stays on Settings', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home:app.DedaSettingsPage()));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Sign out'));
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog),findsOneWidget);
+      await select(second);
+      await tester.tap(find.widgetWithText(FilledButton,'Sign out'));
+      await tester.pumpAndSettle();
+      await unchanged(second);
+      expect(find.byType(app.DedaSettingsPage),findsOneWidget);
+      expect(find.byType(app.LoginPage),findsNothing);
+      expect(find.text('The account changed during confirmation. Open sign out again.'),findsOneWidget);
+      expect(tester.takeException(),isNull);
+    },skip:!dedaAuthSessionRuntimeEnabled);
+    testWidgets('cancelling the Settings confirmation leaves the account selected', (tester) async {
+      await tester.pumpWidget(const MaterialApp(home:app.DedaSettingsPage()));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Sign out'));
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton,'Cancel'));
+      await tester.pumpAndSettle();
+      await unchanged(first);
+      expect(find.byType(AlertDialog),findsNothing);
+      expect(tester.takeException(),isNull);
+    },skip:!dedaAuthSessionRuntimeEnabled);
   });
 
   // These checks invoke the actual transformed 100380 entrypoints, not ports.

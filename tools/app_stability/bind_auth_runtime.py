@@ -166,19 +166,72 @@ def wrap_ui_try(source, name, kind, *, after=0):
 
 
 def bind_main(source):
+    source = once(source, 'class DedaPreferences {', '''class DedaPreferences {
+  static int _authAccountEpoch = 0;
+''')
     # Preference methods share the UI lane; callbacks still run under original
     # account-specific data code. Their later data migration is a separate stage.
     for name in ['load', 'saveLogin', 'logout', '_loadRoyalSafeAvatarStyle']:
         opening, closing, _, _ = body_range(source, name)
         source = source[:opening+1] + guard_awaits(source[opening+1:closing]) + source[closing:]
     for name, kind in [('load','sessionInspection'),('saveLogin','ownerLogin'),('logout','logout')]:
+        opening, _, _, _ = body_range(source, name)
+        source = source[:opening+1] + '\n    if (DedaAuthRuntime.enabled) ++_authAccountEpoch;' + source[opening+1:]
         source = wrap_method(source, name, kind)
     for name, kind in [('_create','accountCreate'),('_signIn','ownerLogin'),('_enterWithNewPin','ownerLogin')]:
         source = wrap_ui_try(source, name, kind)
     # This older account type flow has no network wait or open-ended dialog.
     source = wrap_method(source, '_continue', 'ownerLogin',
       after=source.index('class _AccountTypePageState'))
-    return "import 'deda_auth_session_runtime.dart';\n" + source
+    for method, page in [('_logoutPersonalAccount', 'class _DedaSettingsPageState'),
+                         ('_logout', 'class _DedaAccountHubPageState')]:
+        opening, closing, _, _ = body_range(source, method, after=source.index(page))
+        body = source[opening+1:closing]
+        body = once(body, '    final confirmed = await showDialog<bool>(',
+          '    final logoutIntent = DedaPersonalLogoutIntent();\n    final confirmed = await showDialog<bool>(')
+        body = once(body, '    if (confirmed != true) return;',
+          '    if (confirmed != true || !mounted) return;')
+        body = once(body, '    await DedaPreferences.logout();', '''    try {
+      await logoutIntent.commit(isCurrent: () => mounted);
+    } catch (error) {
+      if (!DedaAuthRuntime.enabled) rethrow;
+      if (!mounted) return;
+      final busy = error is DedaSessionTransitionBusy;
+      final stale = error is DedaStaleSessionTransition;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dedaText(
+        busy ? 'توجد عملية دخول أو خروج جارية. انتظر اكتمالها ثم حاول مجددًا.'
+          : stale ? 'تغيّر الحساب أثناء التأكيد. افتح تسجيل الخروج من جديد.'
+          : 'تعذر إكمال تسجيل الخروج الآن. تحقق من حالة الحساب ثم حاول مجددًا.',
+        busy ? 'A sign-in or sign-out is still running. Wait for it to finish and try again.'
+          : stale ? 'The account changed during confirmation. Open sign out again.'
+          : 'Could not finish signing out. Check the account state and try again.',
+      ))));
+      return;
+    }''')
+        source = source[:opening+1] + body + source[closing:]
+    source = once(source, '\nenum DedaTaskEvent {', '''
+// A dialog is not an auth reservation. Revalidate its original local selection
+// and SDK epoch INSIDE the shared lane before any logout preference/SDK work.
+class DedaPersonalLogoutIntent {
+  DedaPersonalLogoutIntent()
+      : _identity = DedaAuthRuntime.capture(),
+        _epoch = DedaPreferences._authAccountEpoch,
+        _phone = DedaPreferences.phone;
+  final DedaAuthSnapshot? _identity;
+  final int _epoch;
+  final String _phone;
+  Future<void> commit({required bool Function() isCurrent}) =>
+    DedaAuthRuntime.forSnapshot<void>(_identity,
+      kind: DedaSessionTransitionKind.logout, isCurrent: isCurrent,
+      action: () async {
+        if (DedaAuthRuntime.enabled && (_epoch != DedaPreferences._authAccountEpoch ||
+            _phone != DedaPreferences.phone)) throw const DedaStaleSessionTransition();
+        await DedaPreferences.logout();
+      });
+}
+
+enum DedaTaskEvent {''')
+    return "import 'deda_auth_session_runtime.dart';\nimport 'deda_session_transition_gate.dart' show DedaSessionTransitionBusy, DedaStaleSessionTransition;\n" + source
 
 
 def bind_admin(source):
