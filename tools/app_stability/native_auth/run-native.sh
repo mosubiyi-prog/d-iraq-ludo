@@ -41,10 +41,10 @@ import json,os
 from pathlib import Path
 private,public=Path(os.environ['DEDA_PIN_PRIVATE']),Path(os.environ['DEDA_RULES_PUBLIC'])
 p=public/'native-pin-result.json';r=json.loads(p.read_text())
-assert r['status']=='passed' and len(r['passed'])==13 and not r['failures']
+assert r['status']=='passed' and len(r['passed'])==20 and not r['failures']
 pids=(private/'process-pids.txt').read_text().split()
 assert len(pids)==2 and all(p.isdigit() for p in pids) and pids[0]!=pids[1]
 r.update(coldRestart=True,firstProcessPid=pids[0],secondProcessPid=pids[1],
- nativeProcessErrorsAbsent=True,actualNativeAuthCases=13)
+ nativeProcessErrorsAbsent=True,actualNativeAuthCases=13,nativePlaceRecoveryCases=7,nativeTotalCases=20)
 p.write_text(json.dumps(r,indent=2)+'\n')
 PY

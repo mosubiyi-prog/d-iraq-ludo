@@ -435,6 +435,7 @@ void main() {
       'preferences load':app.DedaPreferences.load,
       'preferences selection':()=>app.DedaPreferences.saveLogin(name:'Fixture',normalizedPhone:'07700000000',type:app.DedaAccountType.user),
       'phone gateway match':() async { await DedaBackend.currentAdminSessionMatchesDedaEntry(phone:'07700000000'); },
+      'published place recovery':() async { await DedaBackend.recoverPublishedPlaceForSignedInOwner(expectedAccountKey:'07700000000'); },
     };
     for(final entry in calls.entries) {
       test('${entry.key} cannot bypass an active complete-flow lane', () async {

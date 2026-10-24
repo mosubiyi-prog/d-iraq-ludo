@@ -55,4 +55,8 @@ final text = 'await ignored()'; final ok = !await h();'''
             self.assertEqual(main.count('await logoutIntent.commit(isCurrent: () => mounted);'),2)
             self.assertEqual(main.count('if (DedaAuthRuntime.enabled) ++_authAccountEpoch;'),3)
             self.assertIn('_epoch != DedaPreferences._authAccountEpoch',main)
+            self.assertIn('DedaPublishedPlaceRecovery(DedaFirebasePlaceRecoveryIo()).recover',backend)
+            self.assertIn('expectedAccountKey: recoveryAccountKey',main)
+            self.assertIn('prefs.setString(recoveryPlaceKey, recoveredId)',main)
+            self.assertIn('recoveryAccountEpoch == DedaPreferences._authAccountEpoch',main)
             with self.assertRaisesRegex(ValueError,'exact baseline'): binding.bind(output)

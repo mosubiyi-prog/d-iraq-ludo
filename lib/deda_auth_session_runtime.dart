@@ -182,7 +182,8 @@ class DedaAuthRuntime {
   }
   static Future<T> forSnapshot<T>(DedaAuthSnapshot? snapshot, {
     required DedaSessionTransitionKind kind, required Future<T> Function() action,
-    bool Function()? isCurrent}) => run(kind: kind, isCurrent: isCurrent, action: () async {
+    DedaSessionTransitionOrigin origin = DedaSessionTransitionOrigin.userAction,
+    bool Function()? isCurrent}) => run(kind: kind, origin: origin, isCurrent: isCurrent, action: () async {
       checkSnapshot(snapshot);
       return action();
     });

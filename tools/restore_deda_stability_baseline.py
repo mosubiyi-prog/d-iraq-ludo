@@ -188,6 +188,7 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         from bind_auth_runtime import bind
         bind(output, startup_metrics=startup_metrics, progress_backup_runtime=progress_backup_runtime)
         shutil.copy2(REPO / 'lib/deda_auth_session_runtime.dart', output / 'lib/deda_auth_session_runtime.dart')
+        shutil.copy2(REPO / 'lib/deda_published_place_recovery.dart', output / 'lib/deda_published_place_recovery.dart')
     return {'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,

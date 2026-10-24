@@ -16,7 +16,7 @@ while time.monotonic() < deadline:
         if value['status'] == 'failed':
             raise SystemExit('native-pin-check-failed-see-sanitized-report')
         if value['status'] == args.expected:
-            expected = {'waiting': 0, 'restart-ready': 10, 'passed': 13}[args.expected]
+            expected = {'waiting': 0, 'restart-ready': 16, 'passed': 20}[args.expected]
             if len(value['passed']) != expected or (args.expected == 'passed' and value['phase'] != 2):
                 raise SystemExit('incomplete-native-pin-result')
             print(json.dumps({'status': value['status'], 'passed': len(value['passed'])}))

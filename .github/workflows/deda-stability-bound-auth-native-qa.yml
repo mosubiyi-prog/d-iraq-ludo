@@ -4,6 +4,7 @@ on:
     branches: [deda-app-stability-isolated-2026-10-23]
     paths:
       - 'lib/deda_auth_session_runtime.dart'
+      - 'lib/deda_published_place_recovery.dart'
       - 'tools/app_stability/bind_auth_runtime.py'
       - 'tools/app_stability/native_auth/**'
       - 'tools/app_stability/tests/test_native_auth_harness.py'
@@ -123,8 +124,9 @@ jobs:
           import json,os
           from pathlib import Path
           r=json.loads((Path(os.environ['DEDA_RULES_PUBLIC'])/'native-pin-result.json').read_text())
-          assert r['status']=='passed' and len(r['passed'])==13 and not r['failures'] and r['coldRestart']
-          assert r['boundDedaPinAuth'] and not r['privilegedDocumentSeeds']
+          assert r['status']=='passed' and len(r['passed'])==20 and not r['failures'] and r['coldRestart']
+          assert r['boundDedaPinAuth'] and not r['privilegedIdentitySeeds']
+          assert r['privilegedPublishedPlaceFixtureSeeds'] and r['nativePlaceRecoveryCases']==7
           PY
       - name: GET release again and reject policy changes during native testing
         env:

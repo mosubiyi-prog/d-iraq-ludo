@@ -46,7 +46,8 @@ def prepare(harness, baseline):
     (harness / 'analysis_options.yaml').unlink(missing_ok=True)
     shutil.rmtree(harness / 'test', ignore_errors=True)
     sources = {'lib/deda_session_transition_gate.dart': ROOT / 'lib/deda_session_transition_gate.dart',
-               'lib/deda_auth_session_runtime.dart': ROOT / 'lib/deda_auth_session_runtime.dart'}
+               'lib/deda_auth_session_runtime.dart': ROOT / 'lib/deda_auth_session_runtime.dart',
+               'lib/deda_published_place_recovery.dart': ROOT / 'lib/deda_published_place_recovery.dart'}
     sources.update({'lib/deda_pin_auth.dart': pin, 'lib/main.dart': Path(__file__).with_name('main.dart')})
     hashes = {}
     for name, source in sources.items():
@@ -62,7 +63,7 @@ def prepare(harness, baseline):
         text = text.replace('<application', '<uses-permission android:name="android.permission.INTERNET"/>\n    <application', 1)
     manifest.write_text(text)
     (harness / 'native-pin-source-manifest.json').write_text(json.dumps({
-        'scope': 'runtime-bound original PIN flow, isolated native SDK, no privileged document seeds',
+        'scope': 'runtime-bound PIN and place recovery, isolated native SDK, no privileged identity seeds; fixed approved-place fixtures only',
         'projectId': PROJECT, 'package': PACKAGE, 'files': hashes,
         'originalPinAuthSHA256': expected['files']['lib/deda_pin_auth.dart'],
         'pinnedTransportVersions': wanted}, indent=2) + '\n')

@@ -133,6 +133,14 @@ def bind_pin(source):
 
 
 def bind_backend(source):
+    opening, closing, _, _ = body_range(source, 'recoverPublishedPlaceForSignedInOwner')
+    source = source[:opening+1] + '''
+    if (DedaAuthRuntime.enabled) {
+      return DedaPublishedPlaceRecovery(DedaFirebasePlaceRecoveryIo()).recover(
+        expectedAccountKey: expectedAccountKey,
+        isCurrent: () { DedaAuthRuntime.check(); return true; });
+    }
+''' + source[opening+1:]
     source = once(source, "    if (current == null) throw StateError('deda-session-required');",
       "    if (current == null) throw StateError('deda-session-required');\n    final recoveryRequester = current;")
     source = once(source, "'requesterUid': current.uid,", "'requesterUid': recoveryRequester.uid,")
@@ -145,9 +153,9 @@ def bind_backend(source):
         'currentDedaAccountCanSeeAdminEntry', 'currentDedaAccountIsGeneralManager',
         'currentAdminSessionMatchesDedaEntry', 'syncCurrentAdminEntryAccessForDedaAccount',
         'currentAdminProfile', 'registerAdminNotifications', '_writeAdminAudit',
-        'requestAdminPasswordRecovery']:
+        'requestAdminPasswordRecovery', 'recoverPublishedPlaceForSignedInOwner']:
         source = wrap_method(source, name, 'sessionInspection', origin='activeSection')
-    return "import 'deda_auth_session_runtime.dart';\n" + source
+    return "import 'deda_auth_session_runtime.dart';\nimport 'deda_published_place_recovery.dart';\n" + source
 
 
 def wrap_ui_try(source, name, kind, *, after=0):
@@ -238,6 +246,59 @@ def guard_local_account_commits(source):
     return source[:opening+1] + body + source[closing:]
 
 
+def bind_owner_place_load(source):
+    page = source.index('class _OwnerPlacePageState')
+    for name in ['_legacyPlaceBelongsToCurrentAccount', '_migrateLegacyOwnerStorageIfOwned',
+                 '_loadDraftOnly', '_resetOwnerAfterDeletedPlace', '_refreshOwnerMetrics']:
+        opening, closing, _, _ = body_range(source, name, after=page)
+        source = source[:opening+1] + guard_awaits(source[opening+1:closing]) + source[closing:]
+    opening, closing, _, _ = body_range(source, '_loadState', after=page)
+    body = source[opening+1:closing]
+    body = once(body, 'expectedAccountKey: _ownerStorageAccountKey,',
+      'expectedAccountKey: recoveryAccountKey,')
+    body = once(body, '''            _placeId = recoveredId;
+            await prefs.setString(_placeIdKey, recoveredId);''', '''            if (DedaAuthRuntime.enabled) {
+              if (!await prefs.setString(recoveryPlaceKey, recoveredId)) {
+                throw StateError('owner-recovery-local-save-failed');
+              }
+              DedaAuthRuntime.check();
+              _placeId = recoveredId;
+            } else {
+              _placeId = recoveredId;
+              await prefs.setString(_placeIdKey, recoveredId);
+            }''')
+    body = guard_awaits(body)
+    source = source[:opening+1] + '''
+    final recoveryIdentity = DedaAuthRuntime.capture();
+    final recoveryAccountEpoch = DedaPreferences._authAccountEpoch;
+    final recoveryAccountKey = _ownerStorageAccountKey;
+    final recoveryPlaceKey = _placeIdKey;
+    try {
+      await DedaAuthRuntime.forSnapshot<void>(recoveryIdentity,
+        kind: DedaSessionTransitionKind.sessionInspection,
+        origin: DedaSessionTransitionOrigin.activeSection,
+        isCurrent: () => mounted && recoveryAccountEpoch == DedaPreferences._authAccountEpoch &&
+          recoveryAccountKey == _ownerStorageAccountKey,
+        action: () async {
+''' + body + '''
+        });
+    } catch (error) {
+      if (!DedaAuthRuntime.enabled) rethrow;
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _status = 'recovery_blocked';
+        _ownerRecoveryIssue = error is DedaSessionTransitionBusy
+          ? dedaText('توجد عملية حساب جارية. انتظر اكتمالها ثم حدّث حالة مكانك.',
+              'An account operation is running. Wait for it to finish and refresh your place.')
+          : dedaText('تعذر إكمال التحقق من حساب مكانك. حدّث الحالة بعد التأكد من تسجيل الدخول.',
+              'Could not finish verifying your place account. Check your sign-in and refresh.');
+      });
+    }
+''' + source[closing:]
+    return source
+
+
 def bind_main(source):
     source = guard_local_account_commits(source)
     source = once(source, 'class DedaPreferences {', '''class DedaPreferences {
@@ -269,6 +330,7 @@ def bind_main(source):
     opening, closing, _, _ = body_range(source, '_refreshGeneralManagerBonus',
       after=source.index('class DedaTaskEngine'))
     source = source[:opening+1] + guard_awaits(source[opening+1:closing]) + source[closing:]
+    source = bind_owner_place_load(source)
     for name, kind in [('_create','accountCreate'),('_signIn','ownerLogin'),('_enterWithNewPin','ownerLogin')]:
         source = wrap_ui_try(source, name, kind)
     # This older account type flow has no network wait or open-ended dialog.

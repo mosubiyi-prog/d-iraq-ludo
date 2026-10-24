@@ -4,6 +4,8 @@ on:
     branches: [deda-app-stability-isolated-2026-10-23]
     paths:
       - 'lib/deda_auth_session_runtime.dart'
+      - 'lib/deda_published_place_recovery.dart'
+      - 'test/deda_published_place_recovery_test.dart'
       - 'test/deda_auth_session_runtime_test.dart'
       - 'tools/app_stability/**'
       - 'tools/restore_deda_stability_baseline.py'
@@ -97,8 +99,8 @@ jobs:
         working-directory: ${{ runner.temp }}/deda-stability
         run: |
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_backend.dart lib/deda_pin_auth.dart
-          flutter analyze --no-pub --fatal-infos lib/deda_auth_session_runtime.dart test/deda_auth_session_runtime_test.dart
-          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --reporter expanded test/deda_auth_session_runtime_test.dart
+          flutter analyze --no-pub --fatal-infos lib/deda_auth_session_runtime.dart lib/deda_published_place_recovery.dart test/deda_auth_session_runtime_test.dart test/deda_published_place_recovery_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --reporter expanded test/deda_auth_session_runtime_test.dart test/deda_published_place_recovery_test.dart
       - name: Exercise read coordination with delayed and failed fake requests only
         timeout-minutes: 3
         if: matrix.mode == 'pilot' || matrix.mode == 'measured-pilot'
