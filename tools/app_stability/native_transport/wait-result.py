@@ -16,7 +16,7 @@ while time.monotonic() < deadline:
         if value['status'] == 'failed':
             raise SystemExit(json.dumps(value))
         if value['status'] == args.expected:
-            if args.expected == 'restart-ready' and len(value['passed']) != 18:
+            if args.expected == 'restart-ready' and len(value['passed']) != 20:
                 raise SystemExit('incomplete first-phase result')
             if args.expected == 'passed' and (len(value['passed']) != 24 or value.get('phase') != 2):
                 raise SystemExit('incomplete cold-restart result')
