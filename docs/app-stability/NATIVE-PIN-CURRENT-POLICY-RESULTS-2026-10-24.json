@@ -1,0 +1,601 @@
+{
+  "verificationSourceCommit": "e71d3bfe6fe2a1ff45f146d0645194e90d0a3ac0",
+  "workflowRun": 40094176258,
+  "jobId": 120873157433,
+  "artifactId": 12560895314,
+  "artifactZipSHA256": "05a805174a596d71c2f3a1b2ba7c5f258ca26a40afef41ae06f350e67707afdd",
+  "artifactJSONOnly": true,
+  "sourceRegressionRun": 40094176266,
+  "native": {
+    "passed": [
+      "original-native-create-account-and-server-binding",
+      "original-native-credential-and-attempt-private",
+      "original-native-local-lockout-persists-and-clears",
+      "original-native-wrong-pin-fresh-uid-denied",
+      "original-native-untrusted-install-restore-denied",
+      "original-native-correct-pin-new-uid-profile-preserved",
+      "original-native-trusted-restore-session-alone-insufficient-for-backup",
+      "original-native-owner-adapter-completes-binding",
+      "original-native-archive-scope-still-denied",
+      "merged-native-create-account-and-server-binding",
+      "merged-native-credential-and-attempt-private",
+      "merged-native-local-lockout-persists-and-clears",
+      "merged-native-wrong-pin-fresh-uid-denied",
+      "merged-native-untrusted-install-restore-denied",
+      "merged-native-correct-pin-new-uid-profile-preserved",
+      "merged-native-trusted-restore-session-alone-insufficient-for-backup",
+      "merged-native-owner-adapter-completes-binding",
+      "merged-native-archive-roundtrip",
+      "merged-native-cross-account-profile-and-evidence-denied",
+      "merged-native-new-uid-reads-original-evidence",
+      "merged-native-pending-prepared-for-force-stop",
+      "cold-native-auth-install-and-journal-survive",
+      "cold-native-root-recovers-original-pending",
+      "cold-native-root-skips-unchanged-and-secrets-stay-private"
+    ],
+    "failures": [],
+    "phase": 2,
+    "status": "passed",
+    "projectId": "demo-deda-live-progress-compat",
+    "realNativePlugins": true,
+    "originalDedaPinAuth": true,
+    "privilegedDocumentSeeds": false,
+    "physicalTwoPhonesTested": false,
+    "fullDedaUiTested": false,
+    "policyLoads": [
+      {
+        "mode": "original",
+        "sha256": "9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed"
+      },
+      {
+        "mode": "merged",
+        "sha256": "1f4156dd8731b6267c1ac45d128b63821ba7c4f76edc1d26fc640b787c227d60"
+      }
+    ],
+    "coldRestart": true,
+    "firstProcessPid": "3425",
+    "secondProcessPid": "4109",
+    "nativeProcessErrorsAbsent": true,
+    "actualNativePinCases": 24
+  },
+  "rules": {
+    "originalSHA256": "9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed",
+    "candidateSHA256": "1f4156dd8731b6267c1ac45d128b63821ba7c4f76edc1d26fc640b787c227d60",
+    "extensionSHA256": "fb8f260e674f2e1388b430c3808b1ebfa933725c3f1d3a5d8e1303d1b0e13c46",
+    "preservedByteExact": true,
+    "insertAtUnicodeOffset": 132237,
+    "insertedUnicodeLength": 3139,
+    "namespaces": [
+      "deda_progress_evidence",
+      "deda_progress_receipts",
+      "deda_progress_migrations",
+      "deda_verified_progress"
+    ],
+    "status": "verified",
+    "readScope": "https://www.googleapis.com/auth/firebase.readonly",
+    "readAtUTC": "2026-10-24T12:36:28.831079+00:00",
+    "releaseUpdateTime": "2026-10-23T12:07:17.652182Z",
+    "rulesetNameSHA256": "afc2fee314b9f8314934803649dd53f4a311351ef78e4103a2965395385644c8",
+    "rulesApiGets": 4,
+    "productionDocumentApiCalls": 0,
+    "productionMutationCalls": 0,
+    "privateSourceUploaded": false,
+    "emulator": {
+      "project": "demo-deda-live-progress-compat",
+      "expectedCases": 93,
+      "completedCases": 93,
+      "passed": 93,
+      "failed": 0,
+      "cases": [
+        {
+          "name": "before/legacy/own-user-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/other-user-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/own-profile-update",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/own-session-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/other-session-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/public-place-authed",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/public-place-anonymous",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/gift-wallet-read",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/own-place-request",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/other-place-request",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/own-support-request",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/own-admin-entry-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/other-admin-entry-get",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/normal-user-admin-list",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/recognized-manager-admin-list",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/normal-user-self-admin-grant",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/normal-user-entry-grant",
+          "passed": true
+        },
+        {
+          "name": "before/legacy/manager-audit-list",
+          "passed": true
+        },
+        {
+          "name": "before/pin/client-registration-and-first-session",
+          "passed": true
+        },
+        {
+          "name": "before/pin/credential-and-attempt-remain-unreadable",
+          "passed": true
+        },
+        {
+          "name": "before/pin/wrong-pin-cannot-open-session-or-profile",
+          "passed": true
+        },
+        {
+          "name": "before/pin/new-device-correct-pin-session-readback",
+          "passed": true
+        },
+        {
+          "name": "before/pin/new-device-profile-trust-and-users-binding",
+          "passed": true
+        },
+        {
+          "name": "before/pin/trusted-install-new-uid-without-pin",
+          "passed": true
+        },
+        {
+          "name": "before/pin/untrusted-install-without-pin-denied",
+          "passed": true
+        },
+        {
+          "name": "before/pin/valid-proof-cannot-switch-to-other-account",
+          "passed": true
+        },
+        {
+          "name": "before/pin/cannot-write-another-uid-proof-session-or-user",
+          "passed": true
+        },
+        {
+          "name": "before/pin/original-profile-and-both-trust-entries-preserved",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/evidence/owner",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/evidence/other",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/evidence/manager",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/evidence/anonymous",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/receipt/owner",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/receipt/other",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/receipt/manager",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/receipt/anonymous",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/migration/owner",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/migration/other",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/migration/manager",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/migration/anonymous",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/progress/owner",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/progress/other",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/progress/manager",
+          "passed": true
+        },
+        {
+          "name": "before/new-private-scope-denied/progress/anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-user-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/other-user-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-profile-update",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-session-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/other-session-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/public-place-authed",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/public-place-anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/gift-wallet-read",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-place-request",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/other-place-request",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-support-request",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/own-admin-entry-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/other-admin-entry-get",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/normal-user-admin-list",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/recognized-manager-admin-list",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/normal-user-self-admin-grant",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/normal-user-entry-grant",
+          "passed": true
+        },
+        {
+          "name": "after/legacy/manager-audit-list",
+          "passed": true
+        },
+        {
+          "name": "after/pin/client-registration-and-first-session",
+          "passed": true
+        },
+        {
+          "name": "after/pin/credential-and-attempt-remain-unreadable",
+          "passed": true
+        },
+        {
+          "name": "after/pin/wrong-pin-cannot-open-session-or-profile",
+          "passed": true
+        },
+        {
+          "name": "after/pin/new-device-correct-pin-session-readback",
+          "passed": true
+        },
+        {
+          "name": "after/pin/new-device-profile-trust-and-users-binding",
+          "passed": true
+        },
+        {
+          "name": "after/pin/trusted-install-new-uid-without-pin",
+          "passed": true
+        },
+        {
+          "name": "after/pin/untrusted-install-without-pin-denied",
+          "passed": true
+        },
+        {
+          "name": "after/pin/valid-proof-cannot-switch-to-other-account",
+          "passed": true
+        },
+        {
+          "name": "after/pin/cannot-write-another-uid-proof-session-or-user",
+          "passed": true
+        },
+        {
+          "name": "after/pin/original-profile-and-both-trust-entries-preserved",
+          "passed": true
+        },
+        {
+          "name": "after/pin/client-proven-new-uid-reads-original-evidence",
+          "passed": true
+        },
+        {
+          "name": "after/owner-evidence-read-and-create",
+          "passed": true
+        },
+        {
+          "name": "after/owner-evidence-update-and-delete-denied",
+          "passed": true
+        },
+        {
+          "name": "after/new-uid-same-account-can-read-old-evidence",
+          "passed": true
+        },
+        {
+          "name": "after/private-account-access-denied/other",
+          "passed": true
+        },
+        {
+          "name": "after/private-account-access-denied/manager",
+          "passed": true
+        },
+        {
+          "name": "after/private-account-access-denied/anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/receipt/owner",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/receipt/other",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/receipt/manager",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/receipt/anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/migration/owner",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/migration/other",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/migration/manager",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/migration/anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/progress/owner",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/progress/other",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/progress/manager",
+          "passed": true
+        },
+        {
+          "name": "after/client-server-state-write-denied/progress/anonymous",
+          "passed": true
+        },
+        {
+          "name": "after/owner-verified-projection-read-only",
+          "passed": true
+        },
+        {
+          "name": "after/old-wallet-balance-and-profile-still-present",
+          "passed": true
+        }
+      ],
+      "legacyObservations": {
+        "before": {
+          "own-user-get": true,
+          "other-user-get": false,
+          "own-profile-update": true,
+          "own-session-get": true,
+          "other-session-get": false,
+          "public-place-authed": false,
+          "public-place-anonymous": false,
+          "gift-wallet-read": true,
+          "own-place-request": true,
+          "other-place-request": false,
+          "own-support-request": true,
+          "own-admin-entry-get": true,
+          "other-admin-entry-get": false,
+          "normal-user-admin-list": false,
+          "recognized-manager-admin-list": true,
+          "normal-user-self-admin-grant": false,
+          "normal-user-entry-grant": false,
+          "manager-audit-list": true
+        },
+        "after": {
+          "own-user-get": true,
+          "other-user-get": false,
+          "own-profile-update": true,
+          "own-session-get": true,
+          "other-session-get": false,
+          "public-place-authed": false,
+          "public-place-anonymous": false,
+          "gift-wallet-read": true,
+          "own-place-request": true,
+          "other-place-request": false,
+          "own-support-request": true,
+          "own-admin-entry-get": true,
+          "other-admin-entry-get": false,
+          "normal-user-admin-list": false,
+          "recognized-manager-admin-list": true,
+          "normal-user-self-admin-grant": false,
+          "normal-user-entry-grant": false,
+          "manager-audit-list": true
+        }
+      },
+      "data": "synthetic only, no production documents read or written"
+    },
+    "sameReleaseBeforeAfter": true,
+    "verifiedAtUTC": "2026-10-24T12:39:44.236574+00:00"
+  },
+  "sourceManifest": {
+    "scope": "original PinAuth plus passive backup, isolated native SDK, no privileged document seeds",
+    "projectId": "demo-deda-live-progress-compat",
+    "package": "dev.deda.qa.deda_pin_qa",
+    "files": {
+      "lib/deda_session_transition_gate.dart": "c36c8736fbff6c272f4b0501f6642c38e84c056c8aa50a84f79ae01d4b26a6f5",
+      "lib/deda_session_flow_prototype.dart": "d27dca06534b06d7692df202b90352c7111a41b0ea54763ae7ec063e6e77552c",
+      "lib/deda_session_principal_tracker.dart": "2c74eaa84bda5458322769980df92bda7459afd4a6a37c9da8f9aa26d710824b",
+      "lib/deda_owner_session_firebase_port.dart": "84d659edd479e59f540139e0bcc3b11e1e3efb038ec5d338e9415ec5cda2a41b",
+      "lib/deda_legacy_progress_capture.dart": "7a1d7668a3b4458a76bd9e1b379dbc22943e272cb876c183bde4d34a9c33f3e5",
+      "lib/deda_progress_evidence_store.dart": "4c7c7a4d1128113f1b82628cbf9a0212c9a5ba3fd107d9bd5b1c1c6a6a84ac91",
+      "lib/deda_progress_backup_coordinator.dart": "a1ceb6b46ee87e6aec6e9f4212d5244842f4de6f7674a7560d24f9ba9db073a8",
+      "lib/deda_progress_backup_runtime.dart": "22198544813b4266560de8fc02553bb7dba34cd256fcdcf9a2abb628a7fe5d72",
+      "lib/deda_pin_auth.dart": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+      "lib/main.dart": "2f526d5174c21c775ea81f8d43a654d44023058e5a254864c6ab34284f725277"
+    },
+    "originalPinAuthSHA256": "884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786",
+    "pinnedTransportVersions": {
+      "cloud_firestore": "5.6.12",
+      "cloud_firestore_platform_interface": "6.6.12",
+      "cloud_firestore_web": "4.4.12",
+      "firebase_auth": "5.7.0",
+      "firebase_auth_platform_interface": "7.7.3",
+      "firebase_auth_web": "5.15.3",
+      "firebase_core": "3.15.2",
+      "firebase_core_platform_interface": "6.0.3",
+      "firebase_core_web": "2.24.1",
+      "shared_preferences": "2.5.6",
+      "shared_preferences_android": "2.5.3",
+      "shared_preferences_foundation": "2.5.7",
+      "shared_preferences_linux": "2.4.1",
+      "shared_preferences_platform_interface": "2.4.2",
+      "shared_preferences_web": "2.4.3",
+      "shared_preferences_windows": "2.4.1"
+    }
+  },
+  "pinnedVersions": {
+    "pinnedTransportPackages": 16,
+    "verified": true
+  },
+  "productionPilotEnabled": false,
+  "productionRulesDeployed": false,
+  "financialRestoreTested": false,
+  "sourceTree": "6b295bc838ce4abbe46bb4d256ed85ae63422715",
+  "sourceRegressionStatus": "success",
+  "sourceRegressionJobs": [
+    {
+      "id": 120872870094,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120872870122,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120872870173,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 120872870209,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    }
+  ],
+  "sourceRegressionCounts": {
+    "offlinePython": 59,
+    "embeddedOfflineProtocolNodeCases": 5,
+    "nodeReconciliation": 78,
+    "standaloneEmulator": 74,
+    "measuredGroups": [
+      38,
+      30,
+      32,
+      13,
+      21,
+      36,
+      35,
+      43,
+      27,
+      40,
+      29
+    ],
+    "inheritedMainIssues": 181,
+    "selectedStrictAnalysesWithoutIssues": 10
+  },
+  "nativeAccountsCreatedByClientRules": true,
+  "nativeOwnerAdapterLoginTested": true,
+  "trustedRestoreUsersProofBoundaryTested": true
+}

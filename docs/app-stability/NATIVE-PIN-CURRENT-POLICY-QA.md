@@ -1,4 +1,4 @@
-# Original DedaPinAuth on native Android, private current policy — pending
+# Original DedaPinAuth on native Android, private current policy — verified 24/24
 
 24 October 2026 Baghdad. This stage tests the immutable original `deda_pin_auth.dart` (SHA256 `884ffcc7eeb81533f22507670976b390269402ea8591c46745b6df182c6cc786`) with the real Android Auth/Firestore/SharedPreferences plugins. It is a disposable debug app `dev.deda.qa.deda_pin_qa`, never the DEDA application package or signature. The existing passive runtime module is copied unchanged; the application auth implementation/production rules are not changed or enabled.
 
@@ -8,7 +8,7 @@ The established GET-only client obtains the current immutable Firebase Rules def
 
 First the existing 93-case Node original/additive comparison must pass. A local rules-only loader then loads ORIGINAL for native account A, followed by MERGED for native account B. It exposes no seed/document API and uses no Admin document SDK. New native accounts' credentials, directory, sessions, profiles and users records are created by the original Dart client and existing owner adapter under client rules. The earlier Node comparison uses separate fixture account keys; native account keys are fresh and registration fails if they already exist.
 
-## Planned cases: 21 before process stop, 3 after
+## Verified cases: 21 before process stop, 3 after
 
 For each original/merged policy, eight cases cover original account creation/server binding, unreadable credential/proof docs, native local lockout state, wrong PIN on fresh UID, unknown-install trusted-restore denial, correct PIN with preserved profile on a new UID, trusted-install restore on another UID, and completing that user's projection with the existing real owner adapter under its gate. A bare trusted restore intentionally creates a session only; new-UID users proof remains absent and backup must reject it until the complete explicit PIN owner flow binds the user. This boundary is not bypassed by seeding or manual fixture document writes.
 
@@ -18,4 +18,10 @@ Install-ID replacement is explicit simulation on one emulator. Local lockout pri
 
 ## Current validation
 
-59 offline Python checks pass, including five no-network Node VM protocol cases, exact original-source preservation, target/configuration rejection, transport lock drift, no overwrite, secret-step scope and explicit JSON artifact boundaries. New shell/Node syntax and workflow YAML parse pass. Native 24 and the fresh policy comparison remain pending until CI and the downloaded sanitized artifact are verified. Underlying native22 and controller32 proofs remain as recorded in CURRENT.
+59 offline Python checks pass, including five no-network Node VM protocol cases, exact original-source preservation, target/configuration rejection, transport lock drift, no overwrite, secret-step scope and explicit JSON artifact boundaries. New shell/Node syntax and workflow YAML parse pass. [Native PIN run 40094176258](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40094176258), source `e71d3bfe6fe2a1ff45f146d0645194e90d0a3ac0`, passed **24/24** with no failures, plus the 93-case original/additive policy comparison. The same binary/native data directory survived force-stop; PID changed **3425→4109**. Both native original-PIN and owner-adapter flows created/updated their own protected documents under client rules. No privileged document seed was used for these native accounts. The trusted-restore/users-proof rejection and explicit complete owner-login binding passed in both policy modes. The new UID read old provenance and the restarted root recovered its original pending capture, then suppressed an unchanged upload.
+
+Four Rules API GETs succeeded with firebase.readonly scope, zero production document API calls and zero production mutations. The release remained unchanged. Original SHA256 `9ef41b19bc07bc67052ea76d0d7099f497f0430f4f8d013ac2bc46455f89beed` and merged SHA256 `1f4156dd8731b6267c1ac45d128b63821ba7c4f76edc1d26fc640b787c227d60` match the earlier policy comparison.
+
+Artifact 12560895314 was downloaded and ZIP SHA256 `05a805174a596d71c2f3a1b2ba7c5f258ca26a40afef41ae06f350e67707afdd` verified. It contains exactly four JSON files and no policy, log, PIN/UID record, APK or signing file. Nine copied modules plus harness main match their source hashes; the original PinAuth hash matches the immutable baseline and all sixteen pinned transport versions are verified. Full sanitized result: NATIVE-PIN-CURRENT-POLICY-RESULTS-2026-10-24.json.
+
+[Source regression 40094176266](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40094176266) passed all four jobs. Decoded logs confirm Python59 (including five offline protocol cases), Node78, standalone emulator74 and measured groups 38/30/32/13/21/36/35/43/27/40/29. Ten selected strict analyses are clean; inherited main issues remain 181. Underlying native22 and controller32 proofs remain as recorded in CURRENT. No production pilot, rule deployment or financial restore was enabled. No code change followed this successful verification; result documentation only.
