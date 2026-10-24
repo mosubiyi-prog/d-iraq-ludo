@@ -52,7 +52,10 @@ abstract class DedaProgressBackupDriver {
 /// No auth mutation is called by this adapter. The shared session IO is used
 /// solely for principal observation/install ID; archive rechecks server proof.
 class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
-  DedaFirebaseProgressBackupDriver._(this.session, this.coordinator);
+  DedaFirebaseProgressBackupDriver._(this.session, this.coordinator, this._dispose);
+  DedaFirebaseProgressBackupDriver.forTesting({required this.session,
+    required this.coordinator, required Future<void> Function() dispose})
+      : _dispose = dispose;
   factory DedaFirebaseProgressBackupDriver.create() {
     final session = DedaFirebaseOwnerSessionIo(
       auth: FirebaseAuth.instance, firestore: FirebaseFirestore.instance);
@@ -61,9 +64,10 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
     return DedaFirebaseProgressBackupDriver._(session,
       DedaProgressBackupCoordinator(
         reader: DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
-        archive: archive, journal: DedaSharedPreferencesBackupJournal()));
+        archive: archive, journal: DedaSharedPreferencesBackupJournal()), session.dispose);
   }
-  final DedaFirebaseOwnerSessionIo session;
+  final DedaOwnerSessionIo session;
+  final Future<void> Function() _dispose;
   final DedaProgressBackupCoordinator coordinator;
   String? _lastAccount, _lastAcknowledged;
   @override
@@ -110,7 +114,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
     return true;
   }
   @override
-  Future<void> dispose() => session.dispose();
+  Future<void> dispose() => _dispose();
 }
 
 /// One controller/driver for the application root. No retries, queues, timers,

@@ -16,6 +16,7 @@ on:
       - 'lib/deda_progress_backup_coordinator.dart'
       - 'lib/deda_progress_backup_runtime.dart'
       - 'test/deda_progress_backup_runtime_test.dart'
+      - 'test/deda_progress_backup_driver_test.dart'
       - 'test/deda_progress_backup_coordinator_test.dart'
       - 'test/deda_progress_evidence_store_test.dart'
       - 'test/deda_legacy_progress_capture_test.dart'
@@ -154,8 +155,8 @@ jobs:
         if: matrix.mode == 'measured-pilot'
         working-directory: ${{ runner.temp }}/deda-stability
         run: |
-          flutter analyze --no-pub --fatal-infos lib/deda_progress_backup_runtime.dart test/deda_progress_backup_runtime_test.dart
-          flutter test --no-pub --timeout 20s --reporter expanded test/deda_progress_backup_runtime_test.dart
+          flutter analyze --no-pub --fatal-infos lib/deda_progress_backup_runtime.dart test/deda_progress_backup_runtime_test.dart test/deda_progress_backup_driver_test.dart
+          flutter test --no-pub --timeout 20s --reporter expanded test/deda_progress_backup_runtime_test.dart test/deda_progress_backup_driver_test.dart
       - name: Verify no installable application was produced
         if: always()
         run: |
