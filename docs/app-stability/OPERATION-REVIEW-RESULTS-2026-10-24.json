@@ -1,0 +1,48 @@
+{
+  "format": 1,
+  "date": "2026-10-24",
+  "timezone": "Asia/Baghdad",
+  "codeCommit": "80305df3c51866bc988ef33901f19146761ce995",
+  "runId": 40132613822,
+  "status": "all-five-ci-jobs-passed",
+  "tests": {
+    "node": {
+      "passed": 205,
+      "new": 34
+    },
+    "authFirestoreEmulator": {
+      "passed": 122,
+      "new": 12
+    },
+    "authAndPublishedPlace": {
+      "passed": 94
+    },
+    "preservedAccountOwnershipUi": {
+      "passed": 38
+    },
+    "python": {
+      "passed": 66
+    }
+  },
+  "deployed": false,
+  "liveAccountWrites": false,
+  "operationReviewOnly": true,
+  "pendingPurchaseCount": "unknown",
+  "canAutoSettle": false,
+  "canReleaseBalance": false,
+  "nativeJournalCaptured": false,
+  "clearsPendingFrames": false,
+  "grantsOrRemovesOwnership": false,
+  "chargesOrRefunds": false,
+  "pointTierTerminal25000Refundable": false,
+  "actualTwoPhoneAcceptance": false,
+  "remaining": [
+    "native-charging-paid-journal-capture",
+    "authorized-operation-resolution",
+    "point-tier-entitlement-transfer",
+    "legacy-writer-fence",
+    "baseline-issuance",
+    "app-restore-integration",
+    "two-phone-acceptance"
+  ]
+}
