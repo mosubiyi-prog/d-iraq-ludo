@@ -5,6 +5,17 @@ on:
     paths:
       - 'tools/app_stability/native_pin/**'
       - 'tools/app_stability/tests/test_native_pin_harness.py'
+      # The PIN harness copies these shared transport modules verbatim.
+      - 'tools/app_stability/native_transport/prepare-harness.py'
+      - 'lib/deda_progress_backup_coordinator.dart'
+      - 'lib/deda_progress_backup_runtime.dart'
+      - 'lib/deda_progress_evidence_store.dart'
+      - 'lib/deda_legacy_progress_capture.dart'
+      - 'lib/deda_legacy_purchase_evidence.dart'
+      - 'lib/deda_owner_session_firebase_port.dart'
+      - 'lib/deda_session_principal_tracker.dart'
+      - 'lib/deda_session_flow_prototype.dart'
+      - 'lib/deda_session_transition_gate.dart'
       - '.github/workflows/deda-stability-native-pin-current-policy-qa.yml'
   workflow_dispatch:
 permissions:
