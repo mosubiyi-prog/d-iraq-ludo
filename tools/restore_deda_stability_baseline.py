@@ -220,6 +220,9 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
                      output / 'lib/deda_protected_section_entry.dart')
         shutil.copy2(REPO / 'lib/deda_incoming_request_lifecycle.dart',
                      output / 'lib/deda_incoming_request_lifecycle.dart')
+        from bind_owned_frame_reader import bind as bind_owned_frame_reader
+        shutil.copy2(REPO/'lib/deda_owned_frame_reader.dart', output/'lib/deda_owned_frame_reader.dart')
+        bind_owned_frame_reader(output)
         bind_directory(output)
         # Append after the common lifetime binding, preserving existing UI.
         from bind_account_choice import bind as bind_account_choice

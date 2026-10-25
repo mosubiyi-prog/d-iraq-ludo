@@ -9,6 +9,7 @@ ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'tools/app_stability'))
 from bind_all_sections import bind_file, reachable, STATE, AUTH_STATES, INFRASTRUCTURE_STATES
 from bind_auth_runtime import body_range, tokens, pairs
+from bind_owned_frame_reader import bind_source as bind_owned_frame_reads
 spec=importlib.util.spec_from_file_location('all_sections_restore',ROOT/'tools/restore_deda_stability_baseline.py')
 restore=importlib.util.module_from_spec(spec);spec.loader.exec_module(restore)
 
@@ -76,7 +77,8 @@ class AllSectionBindingTest(unittest.TestCase):
         for name in ['deda_backend.dart','deda_pin_auth.dart','deda_lab_frame_secure_checkout.dart',
                      'deda_owner18_frame_checkout.dart','deda_social_service.dart']:
             old=(self.base/'lib'/name).read_text();new=(self.bound/'lib'/name).read_text()
-            self.assertEqual(old,remove_section_guards(new),name)
+            expected=bind_owned_frame_reads(old) if name=='deda_lab_frame_secure_checkout.dart' else old
+            self.assertEqual(expected,remove_section_guards(new),name)
 
     def test_generated_sources_stay_balanced_and_cannot_be_bound_twice(self):
         for name in self.report:
