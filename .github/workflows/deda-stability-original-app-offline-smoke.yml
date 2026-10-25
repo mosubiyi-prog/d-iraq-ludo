@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 - <<'PYWAIT'
           import json, os, time, urllib.request
-          source_url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40239825125'
+          source_url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40240750523'
           for attempt in range(80):
               request = urllib.request.Request(source_url, headers={
                   'Authorization': 'Bearer ' + os.environ['DEDA_BUILD_READ_TOKEN'],
@@ -38,7 +38,7 @@ jobs:
               })
               with urllib.request.urlopen(request, timeout=30) as response:
                   source_result = json.load(response)
-              if source_result.get('head_sha') != '63337bb38aeb54fe52fd200ecff4fa674e4667c2':
+              if source_result.get('head_sha') != 'cc32a4358fd2a91e4226d78efbd0943293d60471':
                   raise SystemExit('Source QA mismatch; no APK downloaded or launched')
               if source_result.get('status') == 'completed':
                   if source_result.get('conclusion') != 'success':
