@@ -19,6 +19,7 @@ class SocialLifecycleBindingTest(unittest.TestCase):
             self.assertTrue((output/'lib/deda_incoming_request_lifecycle.dart').is_file())
             self.assertEqual(main.count('DedaIncomingRequestNotifications.accountChanged();'), 3)
             self.assertIn('_lifecycle.start(isCurrent: current, prepare:', main)
+            self.assertEqual(main.count('await dedaPrepareSocialSectionEntry(current);'), 2)
             self.assertIn('DedaAuthRuntime.checkSnapshot(principal)', main)
             self.assertIn('prefs.setStringList(_prefsKey(scope), ids)', main)
             self.assertNotIn('prefs.setStringList(_prefsKey(_scope)', main)

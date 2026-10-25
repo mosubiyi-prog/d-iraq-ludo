@@ -40,7 +40,7 @@ def bind(source):
         epoch == DedaPreferences._authAccountEpoch &&
         account == DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
     await _lifecycle.start(isCurrent: current, prepare: () async {
-      final session = await dedaEnsurePersonalSocialSession();
+      final session = await dedaPrepareSocialSectionEntry(current);
       final principal = DedaAuthRuntime.capture();
       bool samePrincipal() {
         if (!current()) return false;
@@ -88,7 +88,7 @@ def bind(source):
       account.isNotEmpty && account == DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim();
   try {
     if (!current()) return;
-    final session = await dedaEnsurePersonalSocialSession();
+    final session = await dedaPrepareSocialSectionEntry(current);
     if (!current()) return;
     final principal = DedaAuthRuntime.capture();
     final relations = await DedaSocialService.watchRelations(session.uid)

@@ -34,6 +34,10 @@ class DedaIncomingRequestLifecycle {
       if (!current()) return;
       final feed = await prepare();
       if (!current() || !feed.isCurrent() || feed.scope.isEmpty) return;
+      // A previous start may still be saving this same account's seen IDs.
+      // Read only after that write settles, including an A -> B -> A return.
+      await _writes;
+      if (!current() || !feed.isCurrent()) return;
       final seen = await loadSeen(feed.scope);
       if (!current() || !feed.isCurrent()) return;
       _feed = feed; _seen = Set.of(seen);

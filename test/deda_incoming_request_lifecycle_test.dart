@@ -102,6 +102,32 @@ void main() {
     saved.complete(); await first; await second;
     expect(h.saved.last.$1, 'A'); expect(h.saved.last.$2, ['one', 'two']); expect(h.counts.last, 0); await h.close();
   });
+  test('returning to A waits for its pending write before reading seen history', () async {
+    final h = Harness(), pending = Completer<void>();
+    final disk = <String, Set<String>>{};
+    h.read = (scope) async => Set<String>.of(disk[scope] ?? <String>{});
+    h.write = (scope, ids) async {
+      await pending.future;
+      disk[scope] = ids.toSet();
+    };
+    await h.start('A'); await h.emit('A', {'old'});
+    final marking = h.lifecycle.markSeen();
+    await Future<void>.delayed(Duration.zero);
+    final toB = h.start('B');
+    await Future<void>.delayed(Duration.zero);
+    h.streams['A'] = StreamController<Set<String>>();
+    final backToA = h.start('A');
+    await Future<void>.delayed(Duration.zero);
+    expect(h.loads, ['A']);
+    pending.complete(); await marking; await toB; await backToA;
+    expect(h.loads, ['A', 'A']);
+    await h.emit('A', {'old', 'new'});
+    expect(h.counts.last, 1);
+    await h.lifecycle.markSeen();
+    expect(disk['A'], {'old', 'new'});
+    expect(h.saved.last.$2, ['new', 'old']);
+    await h.close();
+  });
   test('failed local write keeps unseen state and does not poison the next explicit mark', () async {
     final h = Harness(); h.write = (_, __) async { throw StateError('disk unavailable'); };
     await h.start('A'); await h.emit('A', {'one'});
