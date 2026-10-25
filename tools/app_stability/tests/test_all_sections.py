@@ -94,11 +94,26 @@ class _ExampleState extends State<Example> {
         updated,rows=bind_file(source)
         self.assertTrue('with DedaSectionState<Example>' in updated)
         self.assertTrue('return dedaRunSectionVoid' in updated)
-        self.assertTrue('DedaSectionOperationContext.wait(() => showDialog<void>' in updated)
+        self.assertTrue('DedaSectionOperationContext.wait<void>(() => showDialog<void>' in updated)
         self.assertEqual(updated.count('service.buy()'),1)
         self.assertNotIn('.timeout(',updated)
         self.assertNotIn('retry',updated)
         self.assertEqual(rows[0]['asyncBodies'],1)
+
+    def test_nullable_dialog_results_and_expired_navigation_cleanup_are_explicit(self):
+        source="""import 'package:flutter/material.dart';
+class _ExampleState extends State<Example> {
+ Future<bool> confirm() async { return (await showDialog<bool>(context: context, builder: (_) => const SizedBox())) ?? false; }
+ Widget build(BuildContext context) => const SizedBox();
+}
+"""
+        updated,_=bind_file(source)
+        self.assertTrue('DedaSectionOperationContext.wait<bool?>(() => showDialog<bool>' in updated)
+        route=next(r for r in self.report['main.dart'] if r['state']=='_DedaRoutePageState')
+        self.assertEqual(set(route['subscriptionsCancelled']),{'_positionSubscription','_compassSubscription'})
+        self.assertIn('_positionAnimationTimer',route['timersCancelled'])
+        main=(self.bound/'lib/main.dart').read_text()
+        self.assertTrue('dedaCancelSectionResource(() => _tts.stop());' in main)
 
 
 def remove_section_guards(source):
