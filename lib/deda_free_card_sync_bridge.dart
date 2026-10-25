@@ -27,7 +27,8 @@ class DedaFreeCardSyncBridge {
           snapshot!=null && live!=null && snapshot.matches(live);
       } catch (_) {return false;}
     }
-    return DedaAuthRuntime.run<String?>(kind:DedaSessionTransitionKind.sessionInspection,
+    try {
+    return await DedaAuthRuntime.run<String?>(kind:DedaSessionTransitionKind.sessionInspection,
       isCurrent:current, action:() async {
         bool permitted() {
           try {DedaAuthRuntime.check();return current();} catch (_) {return false;}
@@ -38,5 +39,10 @@ class DedaFreeCardSyncBridge {
         _statuses[original]=result.status;
         return result.value;
       });
+    } catch (_) {
+      if(!current()) throw const DedaChoiceStale();
+      _statuses[original]=DedaChoiceSyncStatus.unavailable;
+      rethrow;
+    }
   }
 }

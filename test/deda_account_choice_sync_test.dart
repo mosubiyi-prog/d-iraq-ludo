@@ -1,7 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/deda_account_choice_sync.dart';
+import '../lib/deda_auth_session_runtime.dart';
+import '../lib/deda_backend.dart';
+import '../lib/deda_free_card_sync_bridge.dart';
+import '../lib/deda_stage71_free_id_cards.dart';
+import '../lib/main.dart' show DedaPreferences,DedaPremiumIdCardColor;
 
 const account='07700000000',original='@DEDA-ABC123';
 class Server {final values=<String,DedaChoiceRevision>{};int writes=0;}
@@ -44,6 +50,44 @@ Future<DedaChoiceResult> choose(MemoryIo io,String value,{bool Function()? curre
   DedaAccountChoiceSync(io).use(account:account,original:original,value:value,isCurrent:current??()=>true);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  group('actual bound free card API without a live Firebase project',() {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      DedaPreferences.phone=account;DedaPreferences.isLoggedIn=true;
+      DedaStage71FreeCards.clearView(original);
+    });
+    test('existing choice remains usable offline and a new choice is journaled',() async {
+      SharedPreferences.setMockInitialValues({'deda_stage71_free_card_choice_v1_$original':'gold'});
+      await DedaStage71FreeCards.restore(original);
+      expect(DedaStage71FreeCards.notifier(original).value,DedaPremiumIdCardColor.gold);
+      await DedaStage71FreeCards.use(original,DedaPremiumIdCardColor.pink);
+      final prefs=await SharedPreferences.getInstance();
+      expect(prefs.getString('deda_stage71_free_card_choice_v1_$original'),'pink');
+      final key=prefs.getKeys().singleWhere((key)=>key.startsWith('deda_free_card_sync_v1_'));
+      expect(jsonDecode(prefs.getString(key)!)['pending'],'pink');
+      expect(DedaFreeCardSyncBridge.statusFor(original),DedaChoiceSyncStatus.pending);
+    });
+    test('malformed journal cannot erase the existing visible local choice',() async {
+      final key='deda_free_card_sync_v1_${DedaBackend.accountKeyForPhone(account)}_$original';
+      SharedPreferences.setMockInitialValues({key:'{broken','deda_stage71_free_card_choice_v1_$original':'royal'});
+      await DedaStage71FreeCards.restore(original);
+      expect(DedaStage71FreeCards.notifier(original).value,DedaPremiumIdCardColor.royal);
+      expect((await SharedPreferences.getInstance()).getString(key),'{broken');
+      expect(DedaFreeCardSyncBridge.statusFor(original),DedaChoiceSyncStatus.unavailable);
+    });
+    test('a busy shared auth lane preserves the existing cosmetic selection',() async {
+      SharedPreferences.setMockInitialValues({'deda_stage71_free_card_choice_v1_$original':'diamond'});
+      final entered=Completer<void>(),release=Completer<void>();
+      final busy=DedaAuthRuntime.run<void>(kind:DedaSessionTransitionKind.sessionInspection,
+        action:() async {entered.complete();await release.future;});
+      await entered.future;
+      try {
+        await DedaStage71FreeCards.restore(original);
+        expect(DedaStage71FreeCards.notifier(original).value,DedaPremiumIdCardColor.diamond);
+      } finally {release.complete();await busy;}
+    });
+  });
   test('new handset reads the same account choice without writing or granting anything',() async {
     final server=Server();
     final phone=MemoryIo(server);await choose(phone,'gold');

@@ -11,7 +11,10 @@ def bind(output):
     if ((_versions[originalId] ?? 0) != previousVersion) return;'''
     replacement='''    var value = prefs.getString(key);
     if (dedaAccountChoiceSyncEnabled) {
-      value = await DedaFreeCardSyncBridge.restore(originalId);
+      try {
+        value = await DedaFreeCardSyncBridge.restore(originalId);
+      } on DedaChoiceStale { rethrow; }
+      catch (_) { /* Retain the same original ID's existing local choice. */ }
     }
     if ((_versions[originalId] ?? 0) != previousVersion) return;'''
     use='''    final key = _key(originalId);
