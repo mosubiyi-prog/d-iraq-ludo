@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "dateBaghdad": "2026-10-25",
+  "status": "passed-source-qa",
+  "sourceCommit": "859a85a5469886b0153253784f4735cf48c48fec",
+  "runId": 40197265239,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40197265239",
+  "jobs": [
+    {
+      "id": 121180700486,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121180700623,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121180700692,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121180700735,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121180700792,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    }
+  ],
+  "tests": {
+    "python": 71,
+    "protectedEntry": 10,
+    "controlledControllerCases": 8,
+    "actualFailedPageWidgetCases": 2,
+    "preservedUi": 38,
+    "authPlace": 94,
+    "lazyWidget": 8,
+    "readerStore": 28,
+    "combinedCoordinator": 43,
+    "node": 388,
+    "emulator": 203
+  },
+  "boundEntryCallsites": [
+    "DedaFriendsPage._prepare",
+    "DedaFriendRequestsPage._prepare",
+    "DedaAddFriendPage._prepare"
+  ],
+  "behavior": {
+    "existingSharedAuthController": true,
+    "newGateOrQueue": false,
+    "automaticRetry": false,
+    "accountIntentEpochGuard": true,
+    "originalOwnerProofPreserved": true,
+    "adminSessionConversionDenied": true,
+    "timeoutRetainsOriginalOperation": true,
+    "requestsFailedEntryHasRetry": true
+  },
+  "reviewConfiguration": {
+    "restoreOption": "--section-entry",
+    "requiredDefines": [
+      "DEDA_STABILITY_AUTH_RUNTIME=true",
+      "DEDA_STABILITY_SECTION_ENTRY=true"
+    ],
+    "defaultEnabled": false,
+    "priorLazyBindingPreserved": true
+  },
+  "limits": [
+    "Actual Widget cases exercise failed preparation only, not a real Firebase social success flow.",
+    "Only three entry preparations are bound in this step.",
+    "Streams, notification markSeen and all other section policies are not covered by this step.",
+    "No APK, phone/tablet acceptance or general live activation."
+  ],
+  "productionMutations": false,
+  "checkpointBefore": {
+    "branch": "checkpoint-stability-before-social-entry-guard-2026-10-25",
+    "sha": "33f2eb518cf06100779a598fd14220e5c8f0d74e"
+  }
+}
