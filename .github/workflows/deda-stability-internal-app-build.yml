@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/deda-stability-internal-app-build.yml'
       - 'tools/app_stability/app_package/**'
+      - 'lib/deda_incoming_request_lifecycle.dart'
+      - 'tools/app_stability/bind_social_lifecycle.py'
   workflow_dispatch:
 permissions:
   contents: read
