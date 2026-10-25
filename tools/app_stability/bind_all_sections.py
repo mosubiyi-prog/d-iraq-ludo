@@ -78,6 +78,19 @@ def bind_file(source):
         header = m.group()[:-1].rstrip()
         mixin = (', ' if re.search(r'\bwith\b', header) else ' with ') + 'DedaSectionState<' + widget + '> '
         edits.append((m.end()-1, m.end()-1, mixin))
+        body_source=source[body_start:body_end]
+        subscriptions=re.findall(r'\bStreamSubscription(?:<[^;\n]+>)?\?\s+(\w+)\s*;',body_source)
+        timers=re.findall(r'\bTimer\?\s+(\w+)\s*;',body_source)
+        cleanup=[]
+        for field in subscriptions:
+            cleanup.append('    dedaCancelSectionResource(() => '+field+'?.cancel());\n    '+field+' = null;')
+        for field in timers:
+            cleanup.append('    '+field+'?.cancel();\n    '+field+' = null;')
+        if state=='_DedaRoutePageState':
+            cleanup.append('    dedaCancelSectionResource(() => _tts.stop());')
+        if cleanup:
+            if 'dedaOnSectionExpired' in body_source:raise ValueError('Section cleanup already declared')
+            edits.append((body_start,body_start,'\n  @override\n  void dedaOnSectionExpired() {\n'+'\n'.join(cleanup)+'\n  }\n'))
         # Find declared Future methods and intentional account-transition spans.
         methods, excluded = {}, []
         for method in re.finditer(r'\bFuture<([^;\n]+?)>\s+(\w+)\s*\(', source[body_start:body_end]):
@@ -146,6 +159,16 @@ def bind_file(source):
                               (ts[end][1],ts[end][1],')')])
                 continue
             begin=ts[j][1]
+            helper='DedaSectionOperationContext.wait'
+            if ts[j][0] in ('showDialog','showModalBottomSheet') and ts[j+1][0]=='<':
+                depth,k=1,j+2
+                while depth and k<closing:
+                    if ts[k][0]=='<':depth+=1
+                    if ts[k][0]=='>':depth-=1
+                    k+=1
+                result_type=source[ts[j+1][2]:ts[k-1][1]].strip()
+                nullable=result_type if result_type=='void' or result_type.endswith('?') else result_type+'?'
+                helper+='<'+nullable+'>'
             if ts[j][0]=='(': j=match[j]+1
             elif re.fullmatch(r'[A-Za-z_$][A-Za-z_0-9$]*',ts[j][0]): j+=1
             else: raise ValueError('Unsupported section await')
@@ -164,7 +187,7 @@ def bind_file(source):
                     if depth or k>=closing or ts[k][0] not in ('(','.'): break
                     j=k
                 else: break
-            edits.extend([(begin,begin,'DedaSectionOperationContext.wait(() => '),
+            edits.extend([(begin,begin,helper+'(() => '),
                           (ts[j-1][2],ts[j-1][2],')')])
         for i in range(opening+1,closing):
             if ts[i][0]=='mounted' and not exempt(i) and ts[i-1][0] not in ('.','?.'):
@@ -193,6 +216,7 @@ def bind_file(source):
             edits.append((ts[k][1],ts[k][1],') : dedaSectionExpiredView()'))
         report.append({'state':state,'binding':'section-lifetime',
                        'asyncBodies':len(asynchronous),
+                       'subscriptionsCancelled':subscriptions,'timersCancelled':timers,
                        'accountMethodsPreserved':[name for _,name in methods.values() if name in ACCOUNT_METHODS]})
     if not any(row['binding']=='section-lifetime' for row in report):
         return source, report
@@ -237,7 +261,19 @@ def bind_directory(output):
     for name in reachable(lib):
         path=lib/name
         original=path.read_text()
-        updated,rows=bind_file(original)
+        prepared=original
+        if name=='deda_qa32_admin_gift_recipient_alias_bridge.dart':
+            before='    if (canonical == null) return null;'
+            if prepared.count(before)!=1:raise ValueError('Canonical recipient guard changed')
+            prepared=prepared.replace(before,'    final canonicalTarget = canonical;\n    if (canonicalTarget == null) return null;',1)
+            prepared=prepared.replace('adminDiamondGiftTarget(canonical)','adminDiamondGiftTarget(canonicalTarget)',1)
+        if name=='deda_stage71_dual_admin_page.dart':
+            before="        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(target)) return;"
+            if prepared.count(before)!=1:raise ValueError('Admin recipient selection changed')
+            prepared=prepared.replace(before,before+'\n    final selectedTarget = target;',1)
+            prepared=prepared.replace('recipientOriginalId: target,','recipientOriginalId: selectedTarget,',1)
+            prepared=prepared.replace('            target,\n            row.identifier,','            selectedTarget,\n            row.identifier,',1)
+        updated,rows=bind_file(prepared)
         updated,stateless_rows=bind_stateless(updated)
         rows+=stateless_rows
         if name=='main.dart':

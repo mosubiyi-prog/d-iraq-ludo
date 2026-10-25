@@ -18,6 +18,7 @@ mixin DedaSectionState<T extends StatefulWidget> on State<T> {
   late final String _sectionAccount;
   late final int _sectionEpoch;
   bool _sectionDisposed = false;
+  bool _sectionExpiredHandled = false;
   bool get dedaSectionCurrent => mounted && !_sectionDisposed &&
       (!dedaProtectedSectionEntryEnabled ||
        (_sectionEpoch == DedaPreferences.stabilityAccountEpoch &&
@@ -33,10 +34,25 @@ mixin DedaSectionState<T extends StatefulWidget> on State<T> {
 
   void _accountChanged() {
     if (mounted && !_sectionDisposed && dedaProtectedSectionEntryEnabled) {
+      if (!dedaSectionCurrent && !_sectionExpiredHandled) {
+        _sectionExpiredHandled = true;
+        dedaOnSectionExpired();
+      }
       // Deliberately bypass the stale-result setState guard: remove old-account
       // controls/StreamBuilders immediately on the following frame.
       super.setState(() {});
     }
+  }
+
+  void dedaOnSectionExpired() {}
+
+  void dedaCancelSectionResource(Future<dynamic>? Function() cancel) {
+    try {
+      final future = cancel();
+      if (future != null) {
+        unawaited(future.then<void>((_) {}, onError: (Object _, StackTrace stack) {}));
+      }
+    } catch (_) { /* Cleanup failure cannot revive an expired section. */ }
   }
 
   @override
