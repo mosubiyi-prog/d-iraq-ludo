@@ -15,7 +15,7 @@ concurrency:
 jobs:
   offline-smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,18 +24,44 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Wait for the exact source-verified internal build before downloading
+        env:
+          DEDA_BUILD_READ_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PYWAIT'
+          import json, os, time, urllib.request
+          url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40216827180'
+          expected = '7389317c3ab4ec409dbf6508fbbb92f321d8df31'
+          for attempt in range(80):
+              request = urllib.request.Request(url, headers={
+                  'Authorization': 'Bearer ' + os.environ['DEDA_BUILD_READ_TOKEN'],
+                  'Accept': 'application/vnd.github+json',
+              })
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  result = json.load(response)
+              if result.get('head_sha') != expected:
+                  raise SystemExit('Internal build source mismatch; no APK downloaded or launched')
+              if result.get('status') == 'completed':
+                  if result.get('conclusion') != 'success':
+                      raise SystemExit('Internal build did not pass; no APK downloaded or launched')
+                  print('Exact internal build passed; downloading its verified artifacts')
+                  break
+              time.sleep(15)
+          else:
+              raise SystemExit('Internal build still pending; no APK downloaded or launched')
+          PYWAIT
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           repository: mosubiyi-prog/d-iraq-ludo
-          run-id: 40205599141
+          run-id: 40216827180
           name: DEDA-STABILITY-INTERNAL-control-NOT-FINAL
           path: ${{ runner.temp }}/internal-control
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           repository: mosubiyi-prog/d-iraq-ludo
-          run-id: 40205599141
+          run-id: 40216827180
           name: DEDA-STABILITY-INTERNAL-candidate-NOT-FINAL
           path: ${{ runner.temp }}/internal-candidate
       - name: Enable KVM for the disposable emulator only
