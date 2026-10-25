@@ -806,3 +806,63 @@ test('clients including manager and recovered UID cannot read, forge or delete t
  const ref=doc(client(uid),carriedClaim(5000));await assertFails(getDocFromServer(ref));
  await assertFails(setDoc(ref,{status:'pending',returnedPoints:999999},{merge:true}));await assertFails(deleteDoc(ref));}
 });
+
+const {claimPointTierForOwnerSession}=require('./point-tier-session.cjs');
+async function authenticatedClaimFixture(){
+ await activatedCarryoverFixture();
+ const old=await authFixture(null),next=await authFixture(null);
+ for(const [owner,install]of [[old,'old-install'],[next,'new-install']]){
+  await db.doc(`deda_sessions/${owner.uid}`).set({uid:owner.uid,accountKey:account,installId:install});
+  await db.doc(`users/${owner.uid}`).set({accountKey:account,authMethod:'deda_pin_firestore_v1',trustedInstallIds:[install]});
+ }
+ await db.doc(`deda_account_profiles/${account}`).set({accountKey:account,trustedInstallIds:['old-install','new-install']});
+ await db.doc(`deda_account_directory/${account}`).set({accountKey:account,active:true});
+ await db.doc(`deda_credentials/${account}`).set({accountKey:account,active:true});
+ return {old,next};
+}
+const sessionReturn=owner=>claimPointTierForOwnerSession({store,auth:adminAuth,idToken:owner.idToken,threshold:5000});
+test('actual Admin SDK token verification authorizes the atomic claim from derived server owner proof',async()=>{
+ const {old}=await authenticatedClaimFixture(),before=await state();
+ const r=await sessionReturn(old);assert.equal(r.state.accountKey,account);assert.equal(r.state.balances.points,before.balances.points+5050);
+ assert.equal((await events()).length,2);assert.equal((await db.doc(carriedClaim(5000)).get()).data().status,'claimed');
+});
+test('two actual anonymous Auth UIDs proven for one account share one concurrent once-only claim',async()=>{
+ const {old,next}=await authenticatedClaimFixture(),before=await state();
+ const result=await Promise.all([sessionReturn(old),sessionReturn(next)]);
+ assert.equal(result.filter(r=>r.replayed).length,1);assert.equal(result[0].eventKey,result[1].eventKey);
+ assert.equal((await state()).balances.points,before.balances.points+5050);assert.equal((await events()).length,2);
+});
+test('actual recovered owner token replays current state after an older UID has already claimed',async()=>{
+ const {old,next}=await authenticatedClaimFixture();const first=await sessionReturn(old);
+ const replay=await sessionReturn(next);assert.equal(replay.replayed,true);assert.equal(replay.eventKey,first.eventKey);
+ assert.equal(replay.state.version,2);assert.deepEqual(replay.state.balances,first.state.balances);
+});
+for(const condition of ['missing-session','wrong-session-uid','different-account','untrusted-user-install','untrusted-profile-install','inactive-directory','inactive-credential'])
+ test(`real SDK token cannot bypass ${condition} owner proof`,async()=>{
+ const {old}=await authenticatedClaimFixture();
+ if(condition==='missing-session')await db.doc(`deda_sessions/${old.uid}`).delete();
+ if(condition==='wrong-session-uid')await db.doc(`deda_sessions/${old.uid}`).update({uid:'other-device'});
+ if(condition==='different-account')await db.doc(`users/${old.uid}`).update({accountKey:otherAccount});
+ if(condition==='untrusted-user-install')await db.doc(`users/${old.uid}`).update({trustedInstallIds:[]});
+ if(condition==='untrusted-profile-install')await db.doc(`deda_account_profiles/${account}`).update({trustedInstallIds:['new-install']});
+ if(condition==='inactive-directory')await db.doc(`deda_account_directory/${account}`).update({active:false});
+ if(condition==='inactive-credential')await db.doc(`deda_credentials/${account}`).update({active:false});
+ const before=await state();await assert.rejects(sessionReturn(old),e=>e.code==='point-session-owner-proof-required');
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);assert.equal((await db.doc(carriedClaim(5000)).get()).exists,false);
+});
+test('actual password-manager token cannot substitute for an anonymous owner account session',async()=>{
+ await authenticatedClaimFixture();const before=await state();
+ await assert.rejects(sessionReturn(reviewManager),e=>e.code==='point-session-owner-sign-in-required');
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+});
+test('actual disabled Auth user is refused by Admin SDK before replay or a financial write',async()=>{
+ const {old}=await authenticatedClaimFixture();await sessionReturn(old);const before=await state();
+ await adminAuth.updateUser(old.uid,{disabled:true});
+ await assert.rejects(sessionReturn(old),e=>e.code==='auth/user-disabled');
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,2);
+});
+test('invalid token is rejected by the actual Admin SDK without a claim or wallet write',async()=>{
+ await authenticatedClaimFixture();const before=await state();
+ await assert.rejects(sessionReturn({idToken:'invalid-synthetic-token'}),e=>typeof e.code==='string'&&e.code.startsWith('auth/'));
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+});
