@@ -34,7 +34,7 @@ void main() {
     final closed=source.close();await tester.pump();await closed;
     debugPrint('section-boundary: closed');
     expect(tester.takeException(),isNull);
-  });
+  }, timeout: const Timeout(Duration(seconds:30)));
   testWidgets('expired confirmation cannot perform a stateless administrative action', (tester) async {
     final confirmation=Completer<bool>();var writes=0;
     await tester.pumpWidget(MaterialApp(home:DedaSectionBoundary(builder:(context) =>
