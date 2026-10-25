@@ -77,7 +77,7 @@ void main() {
     await h.start('A'); await h.emit('A', {'one'});
     final marking = h.lifecycle.markSeen(); await Future<void>.delayed(Duration.zero);
     await h.emit('A', {'one', 'two'}); saved.complete(); await marking;
-    expect(h.saved.single, ('A', ['one'])); expect(h.counts.last, 1); await h.close();
+    expect(h.saved.single.$1, 'A'); expect(h.saved.single.$2, ['one']); expect(h.counts.last, 1); await h.close();
   });
   test('in-flight A write keeps its A key and cannot clear B badge', () async {
     final h = Harness(), saved = Completer<void>(); h.write = (_, __) => saved.future;
@@ -95,7 +95,7 @@ void main() {
     await h.emit('A', {'one', 'two'}); final second = h.lifecycle.markSeen();
     await Future<void>.delayed(Duration.zero); expect(h.saved, hasLength(1));
     saved.complete(); await first; await second;
-    expect(h.saved.last, ('A', ['one', 'two'])); expect(h.counts.last, 0); await h.close();
+    expect(h.saved.last.$1, 'A'); expect(h.saved.last.$2, ['one', 'two']); expect(h.counts.last, 0); await h.close();
   });
   test('failed local write keeps unseen state and does not poison the next explicit mark', () async {
     final h = Harness(); h.write = (_, __) async { throw StateError('disk unavailable'); };
