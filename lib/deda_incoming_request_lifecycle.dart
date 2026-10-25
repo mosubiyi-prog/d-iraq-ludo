@@ -20,7 +20,6 @@ class DedaIncomingRequestLifecycle {
   StreamSubscription<Set<String>>? _subscription;
   DedaIncomingRequestFeed? _feed;
   Set<String> _seen = {}, _incoming = {};
-  Future<void> _writes = Future<void>.value();
   final Map<String, Future<void>> _scopeWrites = {};
 
   Future<void> start({required bool Function() isCurrent,
@@ -63,7 +62,8 @@ class DedaIncomingRequestLifecycle {
     bool current() => generation == _generation && identical(feed, _feed) && feed.isCurrent();
     // Serialize local writes across generations too: an already-issued A write
     // must settle before a later A -> B -> A write to that same preference key.
-    final operation = _writes.then((_) async {
+    final previous = _scopeWrites[feed.scope] ?? Future<void>.value();
+    final operation = previous.then((_) async {
       if (!current()) return;
       var next = {..._seen, ...requested};
       if (next.length > 250) next = next.skip(next.length - 250).toSet();
@@ -76,7 +76,6 @@ class DedaIncomingRequestLifecycle {
       onCount(_incoming.difference(_seen).length);
     });
     final settled = operation.then<void>((_) {}, onError: (Object _, StackTrace stack) {});
-    _writes = settled;
     _scopeWrites[feed.scope] = settled;
     unawaited(settled.then((_) {
       if (identical(_scopeWrites[feed.scope], settled)) _scopeWrites.remove(feed.scope);

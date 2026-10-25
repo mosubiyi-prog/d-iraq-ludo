@@ -107,7 +107,7 @@ void main() {
     final disk = <String, Set<String>>{};
     h.read = (scope) async => Set<String>.of(disk[scope] ?? <String>{});
     h.write = (scope, ids) async {
-      await pending.future;
+      if (scope == 'A') await pending.future;
       disk[scope] = ids.toSet();
     };
     await h.start('A'); await h.emit('A', {'old'});
@@ -117,6 +117,9 @@ void main() {
     await toB;
     await h.emit('B', {'b-unseen'});
     expect(h.counts.last, 1);
+    await h.lifecycle.markSeen();
+    expect(disk['B'], {'b-unseen'});
+    expect(h.counts.last, 0);
     h.streams['A'] = StreamController<Set<String>>();
     final backToA = h.start('A');
     await Future<void>.delayed(Duration.zero);
