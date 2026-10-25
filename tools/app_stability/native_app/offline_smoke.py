@@ -82,10 +82,20 @@ def current_client_matches(record, target):
             raise ValueError('Internal APK does not match current client source: '+path)
 
 
+def artifact_source_commit(records):
+    commits = {record.get('sourceCommit') for record in records}
+    if len(commits) != 1:
+        raise ValueError('Internal APK pair has mixed source commits')
+    commit = commits.pop()
+    if not isinstance(commit, str) or re.fullmatch(r'[0-9a-f]{40}', commit) is None:
+        raise ValueError('Internal APK source commit missing or malformed')
+    return commit
+
+
 def run(control, candidate, out):
     out.mkdir(parents=True, exist_ok=False)
     report = {'format': 1, 'sourceCommit': os.environ.get('GITHUB_SHA'),
-              'artifactSourceCommit': '66797aaedb549d28885e5b844293cb2335e99573',
+              'artifactSourceCommit': None,
               'completeOwnerDelivery': False, 'physicalPhoneTabletTested': False,
               'authenticatedSectionsTested': False, 'sectionSpeedupProven': False,
               'offlineGuardVerified': False, 'appLaunched': False, 'variants': {}}
@@ -101,6 +111,7 @@ def run(control, candidate, out):
                 raise ValueError('Internal APK transport fingerprint mismatch')
             current_client_matches(record, out.parent/('expected-client-'+variant))
             records.append((variant, apks[0], record))
+        report['artifactSourceCommit'] = artifact_source_commit([record for _, _, record in records])
         block_network()
         report['offlineGuardVerified'] = True
         for variant, apk, record in records:

@@ -8,6 +8,18 @@ smoke = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(smoke)
 
 class NativeOfflineBoundaryTest(unittest.TestCase):
+    def test_report_uses_actual_apk_source_instead_of_a_fixed_prior_build(self):
+        commit = '3179619841a46f96bb7db5da3a10eb6541d3f96a'
+        self.assertEqual(smoke.artifact_source_commit([
+            {'sourceCommit': commit}, {'sourceCommit': commit}]), commit)
+
+    def test_missing_or_mixed_apk_provenance_is_refused_before_launch(self):
+        commit = '3179619841a46f96bb7db5da3a10eb6541d3f96a'
+        for records in ([], [{}], [{'sourceCommit': None}],
+                        [{'sourceCommit': 'old-label'}],
+                        [{'sourceCommit': commit}, {'sourceCommit': '0'*40}]):
+            with self.assertRaises(ValueError): smoke.artifact_source_commit(records)
+
     def test_only_loopback_and_emulator_host_return_before_final_reject(self):
         text='-N X\n-A X -d 127.0.0.0/8 -j RETURN\n-A X -d 10.0.2.2/32 -j RETURN\n-A X -j REJECT --reject-with icmp-port-unreachable\n'
         self.assertTrue(smoke.valid_firewall(text, 'X'))
