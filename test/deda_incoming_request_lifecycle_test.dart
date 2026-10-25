@@ -12,7 +12,12 @@ class Harness {
   Future<void> Function(String, List<String>)? write;
   late final lifecycle = DedaIncomingRequestLifecycle(
     onCount: counts.add,
-    loadSeen: (scope) async { loads.add(scope); return read == null ? <String>{} : read!(scope); },
+    loadSeen: (scope) async {
+      loads.add(scope);
+      final reader = read;
+      if (reader == null) return <String>{};
+      return await reader(scope);
+    },
     saveSeen: (scope, ids) async { saved.add((scope, List.of(ids))); await write?.call(scope, ids); },
   );
   DedaIncomingRequestFeed feed(String scope, {bool Function()? current}) =>
