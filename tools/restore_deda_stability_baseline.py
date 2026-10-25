@@ -26,6 +26,7 @@ PILOT_FILES = ('lib/deda_stability_read_scope.dart',
                'lib/deda_qa32_active_account_scope.dart')
 
 
+LAZY_SECTIONS_MODULE = 'lib/deda_lazy_section_stack.dart'
 STARTUP_MODULE = 'lib/deda_startup_measurements.dart'
 SESSION_MODULE = 'lib/deda_session_transition_gate.dart'
 SESSION_FLOW_MODULE = 'lib/deda_session_flow_prototype.dart'
@@ -37,6 +38,21 @@ PURCHASE_EVIDENCE_MODULE = 'lib/deda_legacy_purchase_evidence.dart'
 ADMIN_ADAPTER_MODULE = 'lib/deda_admin_session_firebase_adapter.dart'
 OWNER_PORT_MODULES = ('lib/deda_owner_session_firebase_port.dart',
                       'lib/deda_session_principal_tracker.dart')
+
+
+def bind_lazy_sections(source):
+    """Only replace the original social hub's stack, preserving its children."""
+    start = source.index('class _DedaSocialHubPageState ')
+    end = source.index('class _DedaSocialTabSpec', start)
+    section = source[start:end]
+    before = 'body: IndexedStack(\n        index: _selectedIndex,'
+    if section.count(before) != 1:
+        raise ValueError('Social hub does not match original stack')
+    after = 'body: DedaLazySectionStack(\n        enabled: dedaStabilityLazySections,\n        index: _selectedIndex,'
+    section = section.replace(before, after, 1)
+    source = source[:start] + section + source[end:]
+    first_import = source.index('import ')
+    return source[:first_import] + "import 'deda_lazy_section_stack.dart';\n" + source[first_import:]
 
 
 def instrument_startup(source):
@@ -119,7 +135,7 @@ def bind_progress_backup(source, original, *, measured=False):
     return source[:first_import] + "import 'deda_progress_backup_runtime.dart';\n" + source[first_import:]
 
 
-def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False, legacy_progress_capture=False, progress_evidence_store=False, progress_backup_coordinator=False, progress_backup_runtime=False, auth_runtime=False):
+def restore(output, pilot=False, startup_metrics=False, session_gate=False, session_flow=False, owner_firebase_port=False, admin_firebase_adapter=False, legacy_progress_capture=False, progress_evidence_store=False, progress_backup_coordinator=False, progress_backup_runtime=False, auth_runtime=False, lazy_sections=False):
     output = output.resolve()
     if output == REPO or REPO in output.parents:
         raise ValueError('Output must be outside the repository')
@@ -191,7 +207,11 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         bind(output, startup_metrics=startup_metrics, progress_backup_runtime=progress_backup_runtime)
         shutil.copy2(REPO / 'lib/deda_auth_session_runtime.dart', output / 'lib/deda_auth_session_runtime.dart')
         shutil.copy2(REPO / 'lib/deda_published_place_recovery.dart', output / 'lib/deda_published_place_recovery.dart')
-    return {'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
+    if lazy_sections:
+        shutil.copy2(REPO / LAZY_SECTIONS_MODULE, output / LAZY_SECTIONS_MODULE)
+        main_path = output / 'lib/main.dart'
+        main_path.write_text(bind_lazy_sections(main_path.read_text()))
+    return {'lazySections':lazy_sections, 'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'ownerFirebasePort':owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
@@ -206,6 +226,7 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output',type=Path)
+    parser.add_argument('--lazy-sections',action='store_true')
     parser.add_argument('--auth-runtime',action='store_true')
     parser.add_argument('--pilot',action='store_true')
     parser.add_argument('--startup-metrics',action='store_true')
@@ -218,4 +239,4 @@ if __name__ == '__main__':
     parser.add_argument('--progress-backup-coordinator',action='store_true')
     parser.add_argument('--progress-backup-runtime',action='store_true')
     args = parser.parse_args()
-    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter,args.legacy_progress_capture,args.progress_evidence_store,args.progress_backup_coordinator,args.progress_backup_runtime,args.auth_runtime)))
+    print(json.dumps(restore(args.output,args.pilot,args.startup_metrics,args.session_gate,args.session_flow,args.owner_firebase_port,args.admin_firebase_adapter,args.legacy_progress_capture,args.progress_evidence_store,args.progress_backup_coordinator,args.progress_backup_runtime,args.auth_runtime,args.lazy_sections)))

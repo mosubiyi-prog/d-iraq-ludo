@@ -269,3 +269,43 @@ class RestoreBaselineTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LazySectionBindingTest(unittest.TestCase):
+    def test_only_social_stack_and_import_change_in_main(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base, lazy = Path(tmp)/'base', Path(tmp)/'lazy'
+            restore_module.restore(base)
+            restore_module.restore(lazy, lazy_sections=True)
+            source = (base/'lib/main.dart').read_text()
+            generated = (lazy/'lib/main.dart').read_text()
+            restored = generated.replace("import 'deda_lazy_section_stack.dart';\n", '', 1).replace(
+                'body: DedaLazySectionStack(\n        enabled: dedaStabilityLazySections,',
+                'body: IndexedStack(', 1)
+            self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
+                             hashlib.sha256(source.encode()).hexdigest())
+            self.assertEqual(generated.count('body: DedaLazySectionStack('), 1)
+            self.assertEqual((lazy/restore_module.LAZY_SECTIONS_MODULE).read_bytes(),
+                             (REPO/restore_module.LAZY_SECTIONS_MODULE).read_bytes())
+
+    def test_drift_and_double_binding_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)/'source'
+            restore_module.restore(output)
+            source = (output/'lib/main.dart').read_text()
+            with self.assertRaises(ValueError):
+                restore_module.bind_lazy_sections(source.replace('index: _selectedIndex,', 'index: 9,'))
+            with self.assertRaises(ValueError):
+                restore_module.bind_lazy_sections(restore_module.bind_lazy_sections(source))
+
+    def test_combines_with_full_runtime_without_altering_their_bindings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)/'source'
+            restore_module.restore(output, auth_runtime=True, pilot=True,
+                                   startup_metrics=True, progress_backup_runtime=True,
+                                   lazy_sections=True)
+            source = (output/'lib/main.dart').read_text()
+            self.assertTrue('body: DedaLazySectionStack(' in source, 'missing body: DedaLazySectionStack(')
+            self.assertTrue('DedaAuthRuntime' in source, 'missing DedaAuthRuntime')
+            self.assertTrue('runDedaMeasuredStartup' in source, 'missing runDedaMeasuredStartup')
+            self.assertTrue('DedaProgressBackupHost' in source, 'missing DedaProgressBackupHost')

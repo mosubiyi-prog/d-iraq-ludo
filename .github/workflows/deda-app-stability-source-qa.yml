@@ -3,6 +3,8 @@ on:
   push:
     branches: [deda-app-stability-isolated-2026-10-23]
     paths:
+      - 'lib/deda_lazy_section_stack.dart'
+      - 'test/deda_lazy_section_stack_test.dart'
       - 'lib/deda_auth_session_runtime.dart'
       - 'lib/deda_published_place_recovery.dart'
       - 'test/deda_published_place_recovery_test.dart'
@@ -63,7 +65,7 @@ jobs:
           if [ '${{ matrix.mode }}' = auth-bound ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --auth-runtime --pilot --startup-metrics --admin-firebase-adapter --progress-backup-runtime
           elif [ '${{ matrix.mode }}' = measured-pilot ]; then
-            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store --progress-backup-coordinator --progress-backup-runtime
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store --progress-backup-coordinator --progress-backup-runtime --lazy-sections
           elif [ '${{ matrix.mode }}' = pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot
           else
@@ -84,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_qa32_active_account_scope.dart lib/deda_six_active_identity.dart
-          flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true --dart-define=DEDA_STABILITY_IDENTITY_PILOT=${{ matrix.mode != 'baseline' }} --reporter expanded \
+          flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true --dart-define=DEDA_STABILITY_IDENTITY_PILOT=${{ matrix.mode != 'baseline' }} --dart-define=DEDA_STABILITY_LAZY_SECTIONS=${{ matrix.mode == 'measured-pilot' }} --reporter expanded \
             test/deda_qa32_active_account_scope_test.dart \
             test/deda_six_notes_test.dart \
             test/deda_six_badge_visual_test.dart \
@@ -108,6 +110,13 @@ jobs:
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_stability_read_scope.dart lib/deda_qa32_active_account_scope.dart test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
           flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_IDENTITY_PILOT=true --reporter expanded test/deda_stability_read_scope_test.dart test/deda_stability_identity_lifecycle_test.dart
+      - name: Verify lazy social tab entry and retained visited state
+        timeout-minutes: 3
+        if: matrix.mode == 'measured-pilot'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_lazy_section_stack.dart test/deda_lazy_section_stack_test.dart
+          flutter test --no-pub --dart-define=DEDA_STABILITY_LAZY_SECTIONS=true --reporter expanded test/deda_lazy_section_stack_test.dart
       - name: Verify bound backup runtime, account epochs and lifecycle without live Firebase
         timeout-minutes: 3
         if: matrix.mode == 'measured-pilot'
