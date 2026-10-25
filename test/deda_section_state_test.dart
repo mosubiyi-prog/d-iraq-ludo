@@ -106,7 +106,7 @@ class _RewardProbeState extends State<_RewardProbe> with DedaSectionState<_Rewar
   @override
   void initState() {
     super.initState();
-    widget.ready(dedaSectionCallback2<Object,Object>((_,_) {widget.claim();}));
+    widget.ready(dedaSectionCallback2<Object,Object>((ad,reward) {widget.claim();}));
   }
   @override
   Widget build(BuildContext context)=>dedaSectionCurrent?const Text('reward'):dedaSectionExpiredView();
