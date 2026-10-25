@@ -10,17 +10,26 @@ async function claimPointTierForOwnerSession(options){
  if(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).length!==4||
  !['store','auth','idToken','threshold'].every(key=>Object.hasOwn(options,key)))fail('invalid-point-session-request');
  const {store,auth,idToken,threshold}=options;
- if(!store||typeof store.runTransaction!=='function'||typeof store.serverTimestamp!=='function'||
+ if(!store||typeof store.runTransaction!=='function'||typeof store.serverTimestamp!=='function'||typeof store.readOwnerSession!=='function'||
  !auth||typeof auth.verifyIdToken!=='function'||typeof idToken!=='string'||!idToken.length)fail('invalid-point-session-dependencies');
  if(![5000,10000,15000,20000].includes(threshold))fail('point-tier-return-ineligible');
+ // Read-only routing hint, NOT authorization. It lets every financial worker
+ // start its transaction at the same shared account document before UID-local
+ // records, avoiding opposite lock acquisition paths across recovered UIDs.
+ const routingToken=await auth.verifyIdToken(idToken,true);
+ if(!routingToken||!validId(routingToken.uid)||routingToken.firebase?.sign_in_provider!=='anonymous')fail('point-session-owner-sign-in-required');
+ const hint=await store.readOwnerSession(routingToken.uid);
+ if(!hint||hint.uid!==routingToken.uid||typeof hint.accountKey!=='string'||!/^[0-9]+$/.test(hint.accountKey))fail('point-session-owner-proof-required');
  return store.runTransaction(async tx=>{
   // On EVERY SDK transaction retry, repeat token validation/revocation and
   // all owner proof reads. Never accept account/UID/install/name from request.
   const token=await auth.verifyIdToken(idToken,true);
-  if(!token||!validId(token.uid)||token.firebase?.sign_in_provider!=='anonymous')fail('point-session-owner-sign-in-required');
+  if(!token||!validId(token.uid)||token.uid!==routingToken.uid||token.firebase?.sign_in_provider!=='anonymous')fail('point-session-owner-sign-in-required');
+  // This read orders locks; its data grants no authority and is not cached.
+  await tx.get(`deda_progress_migrations/${hint.accountKey}`);
   const session=await tx.get(`deda_sessions/${token.uid}`);
   if(!session||session.uid!==token.uid||typeof session.accountKey!=='string'||
-   !/^[0-9]+$/.test(session.accountKey)||!validId(session.installId))fail('point-session-owner-proof-required');
+   !/^[0-9]+$/.test(session.accountKey)||session.accountKey!==hint.accountKey||!validId(session.installId))fail('point-session-owner-proof-required');
   const accountKey=session.accountKey,install=session.installId;
   const user=await tx.get(`users/${token.uid}`);
   const profile=await tx.get(`deda_account_profiles/${accountKey}`);

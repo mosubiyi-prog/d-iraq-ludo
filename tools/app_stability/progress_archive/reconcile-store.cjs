@@ -41,6 +41,11 @@ async function reconcileVerifiedReceipt({store,accountKey,receiptId}){
 // by functions/index.js; tests provide a security-disabled EMULATOR context.
 class DedaTrustedProgressTransactionStore{
   constructor({db,serverTimestamp}){this.db=db;this.serverTimestamp=serverTimestamp;}
+  async readOwnerSession(uid){
+    if(typeof uid!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(uid))fail('invalid-owner-session-uid');
+    const snap=await this.db.doc(`deda_sessions/${uid}`).get();
+    return snap.exists?snap.data():null;
+  }
   runTransaction(action){
     return this.db.runTransaction(async transaction=>action({
       get:async path=>{const snap=await transaction.get(this.db.doc(path));return snap.exists?snap.data():null;},

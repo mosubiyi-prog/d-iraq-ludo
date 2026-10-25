@@ -866,3 +866,10 @@ test('invalid token is rejected by the actual Admin SDK without a claim or walle
  await assert.rejects(sessionReturn({idToken:'invalid-synthetic-token'}),e=>typeof e.code==='string'&&e.code.startsWith('auth/'));
  assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
 });
+test('routing hint changed before the transaction cannot authorize a different account',async()=>{
+ const {old}=await authenticatedClaimFixture(),before=await state();
+ const changedStore={serverTimestamp:()=>store.serverTimestamp(),runTransaction:action=>store.runTransaction(action),
+ readOwnerSession:async uid=>{const hint=await store.readOwnerSession(uid);await db.doc(`deda_sessions/${uid}`).update({accountKey:otherAccount});return hint;}};
+ await assert.rejects(claimPointTierForOwnerSession({store:changedStore,auth:adminAuth,idToken:old.idToken,threshold:5000}),e=>e.code==='point-session-owner-proof-required');
+ assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+});

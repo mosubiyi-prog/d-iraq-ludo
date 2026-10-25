@@ -9,6 +9,7 @@ const summaryPath=`${root}/pointTierCarryovers/${migrationId}`,stage=t=>`${root}
 const revision='owner_review_policy_00001';
 class Store{
  constructor(){this.docs=new Map();this.writes=[];this.retry=null;this.fail=false;}
+ async readOwnerSession(uid){return structuredClone(this.docs.get(`deda_sessions/${uid}`)??null);}
  serverTimestamp(){return {seconds:10,nanoseconds:0};}
  async runTransaction(action){
   const run=async()=>{const writes=new Map();const result=await action({get:async path=>{assert.equal(writes.size,0);return structuredClone(this.docs.get(path)??null);},set:(path,data)=>writes.set(path,structuredClone(data))});return {writes,result};};
@@ -333,7 +334,7 @@ test('session adapter derives account from server proof and commits the original
  const f=await activatedFixture(),s=ownerSession(f);let transactions=0;const run=f.store.runTransaction.bind(f.store);
  f.store.runTransaction=async action=>{transactions++;return run(action);};
  const r=await sessionClaim(s);assert.equal(r.returnedPoints,5050);assert.equal(r.state.accountKey,A);
- assert.equal(transactions,1);assert.equal(f.store.writes.length,5);assert.deepEqual(s.calls,[[s.idToken,true]]);
+ assert.equal(transactions,1);assert.equal(f.store.writes.length,5);assert.deepEqual(s.calls,[[s.idToken,true],[s.idToken,true]]);
 });
 test('new verified UID/install for the same account replays the original claim without a second return',async()=>{
  const f=await activatedFixture(),old=ownerSession(f);const first=await sessionClaim(old);f.store.writes=[];
@@ -367,15 +368,21 @@ for(const [path,field,value]of [
 });
 test('retry revalidates token revocation before accepting staged financial writes',async()=>{
  const f=await activatedFixture(),s=ownerSession(f);f.store.retry=()=>{};
- s.auth.verifyIdToken=async(token,checkRevoked)=>{s.calls.push([token,checkRevoked]);if(s.calls.length===2)throw Object.assign(Error('revoked'),{code:'auth/id-token-revoked'});return {uid:'owner-old',firebase:{sign_in_provider:'anonymous'}};};
- await assert.rejects(sessionClaim(s),e=>e.code==='auth/id-token-revoked');assert.deepEqual(s.calls,[[s.idToken,true],[s.idToken,true]]);
+ s.auth.verifyIdToken=async(token,checkRevoked)=>{s.calls.push([token,checkRevoked]);if(s.calls.length===3)throw Object.assign(Error('revoked'),{code:'auth/id-token-revoked'});return {uid:'owner-old',firebase:{sign_in_provider:'anonymous'}};};
+ await assert.rejects(sessionClaim(s),e=>e.code==='auth/id-token-revoked');assert.deepEqual(s.calls,[[s.idToken,true],[s.idToken,true],[s.idToken,true]]);
  assert.deepEqual(f.store.writes,[]);assert.equal(f.store.docs.get(`deda_verified_progress/${A}`).version,1);
 });
 test('retry rereads server owner proof instead of reusing authorization across transaction attempts',async()=>{
  const f=await activatedFixture(),s=ownerSession(f);f.store.retry=docs=>docs.get(`deda_account_profiles/${A}`).trustedInstallIds=[];
- await assert.rejects(sessionClaim(s),e=>e.code==='point-session-owner-proof-required');assert.equal(s.calls.length,2);assert.deepEqual(f.store.writes,[]);
+ await assert.rejects(sessionClaim(s),e=>e.code==='point-session-owner-proof-required');assert.equal(s.calls.length,3);assert.deepEqual(f.store.writes,[]);
 });
 test('wrong-account session cannot consume another account carried right or fall back to its old identity',async()=>{
  const f=await activatedFixture(),s=ownerSession(f);f.store.docs.get('deda_sessions/owner-old').accountKey='07700000001';
  await rejectSession(f,s,'point-session-owner-proof-required');
+});
+
+test('changed account after routing hint is rejected inside the transaction, never re-routed using cached authorization',async()=>{
+ const f=await activatedFixture(),s=ownerSession(f),read=f.store.readOwnerSession.bind(f.store);
+ f.store.readOwnerSession=async uid=>{const hint=await read(uid);f.store.docs.get(`deda_sessions/${uid}`).accountKey='07700000001';return hint;};
+ await assert.rejects(sessionClaim(s),e=>e.code==='point-session-owner-proof-required');assert.deepEqual(f.store.writes,[]);
 });
