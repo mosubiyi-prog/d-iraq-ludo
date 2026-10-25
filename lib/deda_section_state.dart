@@ -81,9 +81,12 @@ mixin DedaSectionState<T extends StatefulWidget> on State<T> {
       isCurrent: () => dedaSectionCurrent, principal: _principal, action: action);
   }
 
-  void Function(A, B) dedaSectionCallback2<A, B>(void Function(A, B) action) => (a, b) {
+  void Function(A, B) dedaSectionCallback2<A, B>(FutureOr<void> Function(A, B) action) => (a, b) {
     if (!dedaProtectedSectionEntryEnabled) { action(a, b); return; }
-    unawaited(dedaRunSectionVoid(() async { action(a, b); }));
+    final future = dedaRunSectionVoid(() => Future<void>.sync(() => action(a, b)));
+    unawaited(future.then<void>((_) {}, onError: (Object error, StackTrace stack) {
+      if (error is! DedaSectionOperationExpired) Zone.current.handleUncaughtError(error, stack);
+    }));
   };
 
   Widget dedaSectionExpiredView() => Center(child: Padding(

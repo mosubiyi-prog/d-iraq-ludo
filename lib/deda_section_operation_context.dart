@@ -99,6 +99,14 @@ class DedaSectionOperationContext {
     }
     checkCurrent();
   }
+
+  /// Observe detached work without changing what an existing await receives.
+  /// A cancelled page may never reach its original later await (e.g. AdMob
+  /// dismissal after a reward callback). Its old future must still be observed.
+  static Future<T> observe<T>(Future<T> future) {
+    unawaited(future.then<void>((_) {}, onError: (Object _, StackTrace __) {}));
+    return future;
+  }
 }
 
 class DedaSectionOperationExpired implements Exception {

@@ -91,6 +91,13 @@ void main() {
     final h=ScopeHarness(); final error=StateError('denied');
     await expectLater(h.event(() async {throw error;}),throwsA(same(error)));
   });
+  test('observing detached work preserves the error for its original await', () async {
+    final pending=Completer<int>(),error=StateError('original failure');
+    final original=pending.future;
+    expect(identical(DedaSectionOperationContext.observe(original),original),isTrue);
+    pending.completeError(error);
+    await expectLater(original,throwsA(same(error)));
+  });
   test('verified own principal transition can continue the same account', () async {
     final h=ScopeHarness();
     expect(await h.run(() async {

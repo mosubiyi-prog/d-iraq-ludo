@@ -217,6 +217,21 @@ def bind_directory(output):
     hook='      DedaIncomingRequestNotifications.accountChanged();'
     if source.count(hook)!=3: raise ValueError('All account transitions required')
     source=source.replace(hook,hook+'\n      DedaSectionAccountChanges.changed();')
+    # The awaited SDK expression becomes a closure. Snapshot the selected
+    # nullable voice first so Dart promotion and the original choice survive.
+    voice="""        if (female != null) {
+          await _tts.setVoice({
+            'name': (female['name'] ?? '').toString(),
+            'locale': (female['locale'] ?? locale).toString(),
+          });
+        }"""
+    replacement=voice.replace('if (female != null)',
+        'final selectedVoice = female;\n        if (selectedVoice != null)').replace("female['", "selectedVoice['")
+    if source.count(voice)!=1:raise ValueError('Original voice selection changed')
+    source=source.replace(voice,replacement,1)
+    reward='claimFuture = DedaDiamondsWallet.claimReward();'
+    if source.count(reward)!=1:raise ValueError('Original reward future changed')
+    source=source.replace(reward,'claimFuture = DedaSectionOperationContext.observe(DedaDiamondsWallet.claimReward());',1)
     main.write_text(source)
     report={}
     for name in reachable(lib):
