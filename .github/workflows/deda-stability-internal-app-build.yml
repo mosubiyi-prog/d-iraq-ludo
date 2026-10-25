@@ -8,6 +8,10 @@ on:
       - 'lib/deda_incoming_request_lifecycle.dart'
       - 'tools/app_stability/bind_social_lifecycle.py'
       - 'tools/app_stability/bind_location_identity.py'
+      - 'tools/app_stability/bind_all_sections.py'
+      - 'tools/app_stability/bind_section_entries.py'
+      - 'lib/deda_section_state.dart'
+      - 'lib/deda_section_operation_context.dart'
   workflow_dispatch:
 permissions:
   contents: read
