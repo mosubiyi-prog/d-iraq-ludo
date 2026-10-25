@@ -1,0 +1,100 @@
+{
+  "format": 1,
+  "dateBaghdad": "2026-10-25",
+  "status": "passed",
+  "sourceCommit": "510b2861ceee9b1994e3e886864cb8a6fe24e8fe",
+  "runId": 40191811451,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40191811451",
+  "jobs": [
+    {
+      "id": 121164196425,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121164196578,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121164196600,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121164196646,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121164196671,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    }
+  ],
+  "tests": {
+    "node": {
+      "passed": 388,
+      "failed": 0,
+      "new": 37
+    },
+    "authFirestoreEmulator": {
+      "passed": 203,
+      "failed": 0,
+      "new": 14
+    },
+    "python": 66,
+    "preservedUi": 38,
+    "authPlace": 94,
+    "purchaseReaderStore": 28,
+    "combinedCoordinator": 43
+  },
+  "ownerAuthorization": {
+    "adminSdkVerifyIdTokenCheckRevoked": true,
+    "provider": "anonymous",
+    "accountAndInstallFromServerSession": true,
+    "sameTransactionAsClaim": true,
+    "sdkAuthorizationReverifiedEachAttempt": true,
+    "readOnlyRoutingHintIsNotAuthorization": true,
+    "sharedMigrationRootFirstTransactionRead": true,
+    "staleRoutingRejected": true,
+    "callerAccountUidInstallAmountAccepted": false,
+    "ownerProofFixtureSeeds": true,
+    "actualPinUiTestedByThisStep": false
+  },
+  "priorFailures": [
+    {
+      "sourceCommit": "84d6ca68f84e0a64baeb7a445da36202bcbe9cac",
+      "runId": 40191043581,
+      "attempts": [
+        1,
+        2
+      ],
+      "emulatorPassed": 201,
+      "emulatorTotal": 202,
+      "case": "two actual anonymous Auth UIDs proven for one account share one concurrent once-only claim",
+      "errorCode": 3,
+      "error": "INVALID_ARGUMENT: Transaction is invalid or closed",
+      "rootCauseFullyEstablished": false,
+      "assertionsRelaxed": false,
+      "applicationRetryAdded": false
+    }
+  ],
+  "productionMutations": false,
+  "httpOrCallableExport": false,
+  "dartOrRulesChanged": false,
+  "nativeRerun": false,
+  "activation": false,
+  "remaining": [
+    "actual financial writer fencing",
+    "purchase settlement and trusted cutover producer",
+    "server endpoint and app binding",
+    "other trusted award producers and secondary data restore",
+    "two physical devices and review APK"
+  ],
+  "checkpointBefore": {
+    "branch": "checkpoint-stability-before-point-claim-session-2026-10-25",
+    "sha": "f86ae9294e0463b1722269ce2be9885dc3805e67"
+  }
+}
