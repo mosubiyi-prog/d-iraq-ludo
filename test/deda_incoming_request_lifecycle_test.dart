@@ -114,13 +114,15 @@ void main() {
     final marking = h.lifecycle.markSeen();
     await Future<void>.delayed(Duration.zero);
     final toB = h.start('B');
-    await Future<void>.delayed(Duration.zero);
+    await toB;
+    await h.emit('B', {'b-unseen'});
+    expect(h.counts.last, 1);
     h.streams['A'] = StreamController<Set<String>>();
     final backToA = h.start('A');
     await Future<void>.delayed(Duration.zero);
-    expect(h.loads, ['A']);
+    expect(h.loads, ['A', 'B']);
     pending.complete(); await marking; await toB; await backToA;
-    expect(h.loads, ['A', 'A']);
+    expect(h.loads, ['A', 'B', 'A']);
     await h.emit('A', {'old', 'new'});
     expect(h.counts.last, 1);
     await h.lifecycle.markSeen();

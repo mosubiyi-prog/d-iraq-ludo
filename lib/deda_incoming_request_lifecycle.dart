@@ -21,6 +21,7 @@ class DedaIncomingRequestLifecycle {
   DedaIncomingRequestFeed? _feed;
   Set<String> _seen = {}, _incoming = {};
   Future<void> _writes = Future<void>.value();
+  final Map<String, Future<void>> _scopeWrites = {};
 
   Future<void> start({required bool Function() isCurrent,
     required Future<DedaIncomingRequestFeed> Function() prepare}) async {
@@ -36,7 +37,8 @@ class DedaIncomingRequestLifecycle {
       if (!current() || !feed.isCurrent() || feed.scope.isEmpty) return;
       // A previous start may still be saving this same account's seen IDs.
       // Read only after that write settles, including an A -> B -> A return.
-      await _writes;
+      final pendingWrite = _scopeWrites[feed.scope];
+      if (pendingWrite != null) await pendingWrite;
       if (!current() || !feed.isCurrent()) return;
       final seen = await loadSeen(feed.scope);
       if (!current() || !feed.isCurrent()) return;
@@ -73,7 +75,12 @@ class DedaIncomingRequestLifecycle {
       // erased by the old unconditional zero after an await.
       onCount(_incoming.difference(_seen).length);
     });
-    _writes = operation.then<void>((_) {}, onError: (Object _, StackTrace stack) {});
+    final settled = operation.then<void>((_) {}, onError: (Object _, StackTrace stack) {});
+    _writes = settled;
+    _scopeWrites[feed.scope] = settled;
+    unawaited(settled.then((_) {
+      if (identical(_scopeWrites[feed.scope], settled)) _scopeWrites.remove(feed.scope);
+    }));
     return operation;
   }
 
