@@ -16,23 +16,19 @@ void main() {
   testWidgets('stateless boundary removes old-account controls and cancels its stream', (tester) async {
     var cancellations=0;
     final source=StreamController<int>();source.onCancel=() {cancellations++;};
-    debugPrint('section-boundary: mount');
     await tester.pumpWidget(MaterialApp(home:DedaSectionBoundary(builder:(context) =>
       StreamBuilder<int>(stream:source.stream,builder:(context,snapshot) =>
         FilledButton(onPressed:(){},child:Text('account-a-${snapshot.data ?? 0}'))))));
-    debugPrint('section-boundary: mounted');
     source.add(7);await tester.pump();expect(find.text('account-a-7'),findsOneWidget);
-    debugPrint('section-boundary: first value');
     app.DedaPreferences.phone='07700000001';DedaSectionAccountChanges.changed();
     await tester.pump();await tester.pump();
-    debugPrint('section-boundary: account invalidated');
     expect(find.byType(FilledButton),findsNothing);expect(cancellations,1);
     expect(find.text('تغيّر الحساب. ارجع وافتح هذا القسم من جديد.'),findsOneWidget);
     source.add(9);await tester.pump();expect(find.text('account-a-9'),findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
-    debugPrint('section-boundary: disposed');
-    final closed=source.close();await tester.pump();await closed;
-    debugPrint('section-boundary: closed');
+    // The subscription cancellation is asserted above. Close the fixture and
+    // drain its microtasks without awaiting StreamController.done in FakeAsync.
+    unawaited(source.close());await tester.pump();
     expect(tester.takeException(),isNull);
   }, timeout: const Timeout(Duration(seconds:30)));
   testWidgets('expired confirmation cannot perform a stateless administrative action', (tester) async {
