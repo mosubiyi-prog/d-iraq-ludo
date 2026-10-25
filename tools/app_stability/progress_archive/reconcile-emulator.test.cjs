@@ -873,3 +873,36 @@ test('routing hint changed before the transaction cannot authorize a different a
  await assert.rejects(claimPointTierForOwnerSession({store:changedStore,auth:adminAuth,idToken:old.idToken,threshold:5000}),e=>e.code==='point-session-owner-proof-required');
  assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
 });
+
+function injectClosedTransaction({afterCommit=false,always=false,afterFirstFailure}={}){
+ let calls=0;
+ const closed=()=>Object.assign(Error('3 INVALID_ARGUMENT: Transaction is invalid or closed.'),{code:3,details:'Transaction is invalid or closed.'});
+ const wrapped={doc:path=>db.doc(path),runTransaction:async action=>{
+  calls++;const fail=always||calls===1;
+  if(afterCommit){const result=await db.runTransaction(action);if(fail)throw closed();return result;}
+  try{return await db.runTransaction(async tx=>{const result=await action(tx);if(fail)throw closed();return result;});}
+  catch(error){if(calls===1&&afterFirstFailure)await afterFirstFailure();throw error;}
+ }};
+ return {store:new DedaTrustedProgressTransactionStore({db:wrapped,serverTimestamp:()=>FieldValue.serverTimestamp()}),calls:()=>calls};
+}
+for(const afterCommit of [false,true])test(`full owner claim recovers closed transaction ${afterCommit?'after commit/lost reply':'before commit'} without another award`,async()=>{
+ const {old}=await authenticatedClaimFixture(),before=await state(),wrapped=injectClosedTransaction({afterCommit});
+ let checks=0;const auth={verifyIdToken:async(token,revoked)=>{checks++;assert.equal(revoked,true);return adminAuth.verifyIdToken(token,revoked);}};
+ const result=await claimPointTierForOwnerSession({store:wrapped.store,auth,idToken:old.idToken,threshold:5000});
+ assert.equal(wrapped.calls(),2);assert.equal(checks,3);assert.equal(result.replayed,afterCommit);
+ assert.equal((await state()).balances.points,before.balances.points+5050);assert.equal((await state()).version,2);
+ assert.equal((await events()).length,2);assert.equal((await db.doc(carriedClaim(5000)).get()).data().status,'claimed');
+});
+test('repeated closed transactions stop after one recreation and leave no partial owner claim',async()=>{
+ const {old}=await authenticatedClaimFixture(),before=await state(),wrapped=injectClosedTransaction({always:true});
+ await assert.rejects(claimPointTierForOwnerSession({store:wrapped.store,auth:adminAuth,idToken:old.idToken,threshold:5000}),e=>e.code===3);
+ assert.equal(wrapped.calls(),2);assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+ assert.equal((await db.doc(carriedClaim(5000)).get()).exists,false);
+});
+test('closed transaction recovery revalidates actual SDK disabled-user state before any replacement claim',async()=>{
+ const {old}=await authenticatedClaimFixture(),before=await state();
+ const wrapped=injectClosedTransaction({afterFirstFailure:()=>adminAuth.updateUser(old.uid,{disabled:true})});
+ await assert.rejects(claimPointTierForOwnerSession({store:wrapped.store,auth:adminAuth,idToken:old.idToken,threshold:5000}),e=>e.code==='auth/user-disabled');
+ assert.equal(wrapped.calls(),2);assert.deepEqual(await state(),before);assert.equal((await events()).length,1);
+ assert.equal((await db.doc(carriedClaim(5000)).get()).exists,false);
+});

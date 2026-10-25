@@ -46,11 +46,25 @@ class DedaTrustedProgressTransactionStore{
     const snap=await this.db.doc(`deda_sessions/${uid}`).get();
     return snap.exists?snap.data():null;
   }
-  runTransaction(action){
-    return this.db.runTransaction(async transaction=>action({
-      get:async path=>{const snap=await transaction.get(this.db.doc(path));return snap.exists?snap.data():null;},
-      set:(path,data)=>transaction.set(this.db.doc(path),data),
-    }));
+  async runTransaction(action){
+    // Admin SDK may surface a CLOSED transaction as INVALID_ARGUMENT rather
+    // than its usual retryable ABORTED. Recreate the WHOLE atomic transaction
+    // once for this exact closed status only; never retry an individual set,
+    // a purchase/provider callback, malformed data or an arbitrary error.
+    // Like SDK transaction retries, action must contain only transactional
+    // reads/writes and repeatable verification reads (e.g. verifyIdToken).
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        return await this.db.runTransaction(async transaction=>action({
+          get:async path=>{const snap=await transaction.get(this.db.doc(path));return snap.exists?snap.data():null;},
+          set:(path,data)=>transaction.set(this.db.doc(path),data),
+        }));
+      }catch(error){
+        const closed=error?.code===3&&(error.details==='Transaction is invalid or closed.'||
+          error.message==='3 INVALID_ARGUMENT: Transaction is invalid or closed.');
+        if(attempt!==0||!closed)throw error;
+      }
+    }
   }
 }
 module.exports={reconcileVerifiedReceipt,DedaTrustedProgressTransactionStore};

@@ -144,3 +144,52 @@ test('Admin transport composition uses the original transaction and server snaps
   const result=await store.runTransaction(async tx=>{const data=await tx.get('fixture/path');tx.set('fixture/result',data);return data;});
   assert.deepEqual(result,{path:'fixture/path'});assert.deepEqual(calls,[['fixture/result',result]]);
 });
+
+function closedTransactionError(){return Object.assign(Error('3 INVALID_ARGUMENT: Transaction is invalid or closed.'),
+ {code:3,details:'Transaction is invalid or closed.'});}
+function retryDatabase({failure,commitBeforeError=false,alwaysFail=false}={}){
+ const db={docs:new Map(),calls:0,writes:0,doc:path=>({path}),async runTransaction(action){
+  this.calls++;const staged=new Map();
+  const result=await action({get:async ref=>({exists:this.docs.has(ref.path),data:()=>structuredClone(this.docs.get(ref.path))}),
+   set:(ref,value)=>staged.set(ref.path,structuredClone(value))});
+  const fails=failure&&(this.calls===1||alwaysFail);
+  if(!fails||commitBeforeError)for(const [path,value]of staged){this.docs.set(path,value);this.writes++;}
+  if(fails)throw failure;return result;
+ }};
+ return db;
+}
+test('closed transaction before commit is recreated in full without partial writes',async()=>{
+ const db=retryDatabase({failure:closedTransactionError()});const store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>({seconds:1,nanoseconds:0})});
+ const id='closed_baseline_receipt_001';db.docs.set(`deda_progress_receipts/${account}/events/${id}`,receipt());
+ const result=await reconcileVerifiedReceipt({store,accountKey:account,receiptId:id});
+ assert.equal(db.calls,2);assert.equal(db.writes,2);assert.equal(result.state.version,1);
+ assert.equal(result.state.balances.points,5000);
+});
+test('closed response after atomic commit is reconciled from marker and never credits baseline twice',async()=>{
+ const db=retryDatabase({failure:closedTransactionError(),commitBeforeError:true});
+ const store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>({seconds:1,nanoseconds:0})});
+ const id='closed_baseline_receipt_001';db.docs.set(`deda_progress_receipts/${account}/events/${id}`,receipt());
+ const result=await reconcileVerifiedReceipt({store,accountKey:account,receiptId:id});
+ assert.equal(result.replayed,true);assert.equal(db.calls,2);assert.equal(db.writes,2);
+ assert.equal(result.state.version,1);assert.equal(result.state.balances.points,5000);
+});
+test('closed transaction recreation is bounded to one extra full transaction',async()=>{
+ const db=retryDatabase({failure:closedTransactionError(),alwaysFail:true});
+ const store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>0});
+ await assert.rejects(store.runTransaction(async tx=>{await tx.get('private/proof');tx.set('private/result',{ok:true});}),e=>e.code===3);
+ assert.equal(db.calls,2);assert.equal(db.writes,0);
+});
+for(const error of [Object.assign(Error('invalid field'),{code:3}),Object.assign(Error('denied'),{code:7}),
+ Object.assign(Error('unavailable'),{code:14}),Error('application-failure')])test(`non-closed status ${String(error.code??'application')} never triggers the extra transaction`,async()=>{
+ const db=retryDatabase({failure:error});const store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>0});
+ await assert.rejects(store.runTransaction(async tx=>{await tx.get('private/proof');tx.set('private/result',{ok:true});}),e=>e===error);
+ assert.equal(db.calls,1);assert.equal(db.writes,0);
+});
+test('whole-transaction recreation repeats verification and refuses changed authority before writing',async()=>{
+ const db=retryDatabase({failure:closedTransactionError()});let checks=0;
+ const store=new DedaTrustedProgressTransactionStore({db,serverTimestamp:()=>0});
+ await assert.rejects(store.runTransaction(async tx=>{
+  checks++;if(checks===2)throw Object.assign(Error('revoked'),{code:'auth/id-token-revoked'});
+  await tx.get('private/proof');tx.set('private/result',{ok:true});
+ }),e=>e.code==='auth/id-token-revoked');assert.equal(checks,2);assert.equal(db.calls,2);assert.equal(db.writes,0);
+});
