@@ -1,6 +1,6 @@
 # Social hub entry: defer hidden tab initialization — 25 October 2026 Baghdad
 
-Status: Python69 passed locally; Flutter/source CI pending. Review opt-in, not a released app or measured phone speedup.
+Status: PASS. Sourceafbc4903bab4957f7d54cfc536a9e80fd3bd5303; CI40193807993 passed all five jobs on the first attempt. Review opt-in, not a released app or measured phone speedup.
 
 ## Concrete source behavior
 
@@ -16,8 +16,14 @@ The hub-wide incoming-request notification watcher remains in its original place
 
 ## Validation and acceptance
 
-Python69/69 (66 previous +3 binding checks). Planned Flutter Widget checks cover initial1 versus original5 probe-State initializations, first visit/revisit state, live parent inputs, direct request-tab jump, disposal, opt-in toggling and fresh reopening. These are mount-count and retained-state assertions, not Android timing or live Firebase tests. The source QA checks the actual restored main under the enabled define and preserves existing account/ownership/UI tests.
+Python69/69 (66 previous +3 binding checks). Flutter Widget8/8 passed and covers initial1 versus original5 probe-State initializations, first visit/revisit state, live parent inputs, direct request-tab jump, disposal, opt-in toggling and fresh reopening. These are mount-count and retained-state assertions, not Android timing or live Firebase tests. The source QA checks the actual restored main under the enabled define and preserves existing account/ownership/UI tests.
 
 A measured before/after on the same Android device and a review APK are still required to claim user-visible speedup. Use identical source base and comparable network conditions; report actual timings when available, not fake-clock or CI duration. No whole-app performance claim or completion of account restoration follows from this step.
 
 All previous financial/auth/account continuity work is retained. No Firebase rules/Functions, production account/balance, Android/signing configuration or APK is changed. Unrelated local avatar artwork is excluded. Checkpoint before: checkpoint-stability-before-social-lazy-entry-2026-10-25 at cced3397f9a4ffb6c8e45e2195e313a40e166ed4.
+
+## Verified CI outcome
+
+https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40193807993 — all5jobs passed first attempt. Python69/69 and Widget8/8, strict analysis of the new component/test without issues, preserved UI/account/ownership38 in all modes, auth/place94, reader/store28 and combined coordinator43 passed in applicable jobs. Server regression remains Node388/388 and Emulator203/203. The enabled define is used in the measured-pilot source path. The initial local binding check used a mistaken existing host-class name; it was corrected to the actual DedaProgressBackupHost before the successful local/CI runs. No test expectation about lazy behavior was weakened.
+
+Next acceptance output must be an actual app review build and comparable Android entry measurements; the work is not complete at source tests. The signed-build foundation must be matched to the reference before producing such a build. No new backend scope is implied by this entry improvement; prior continuity work remains preserved.

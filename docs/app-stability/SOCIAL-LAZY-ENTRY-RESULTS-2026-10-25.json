@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "dateBaghdad": "2026-10-25",
+  "status": "passed-source-qa",
+  "sourceCommit": "afbc4903bab4957f7d54cfc536a9e80fd3bd5303",
+  "runId": 40193807993,
+  "runAttempt": 1,
+  "runUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40193807993",
+  "jobs": [
+    {
+      "id": 121170226500,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121170226616,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121170226621,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121170226644,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121170226753,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    }
+  ],
+  "tests": {
+    "python": 69,
+    "lazyWidget": 8,
+    "preservedUi": 38,
+    "authPlace": 94,
+    "readerStore": 28,
+    "combinedCoordinator": 43,
+    "node": 388,
+    "emulator": 203
+  },
+  "sourceChange": {
+    "section": "social/profile hub",
+    "originalInitialMountedTabs": 5,
+    "newInitialMountedTabs": 1,
+    "visitedStatePreserved": true,
+    "originalTabCallbacksPreserved": true,
+    "hubNotificationWatcherPreserved": true,
+    "requestMarkSeenDeferredUntilFirstVisit": true,
+    "defaultEnabled": false,
+    "restoreOption": "--lazy-sections",
+    "dartDefine": "DEDA_STABILITY_LAZY_SECTIONS"
+  },
+  "measurements": {
+    "liveRpcCountsMeasured": false,
+    "androidEntryTimingsMeasured": false,
+    "userVisibleSpeedupProven": false
+  },
+  "apkProduced": false,
+  "productionMutation": false,
+  "rulesOrFinancialLogicChanged": false,
+  "previousContinuityWorkPreserved": true,
+  "remaining": [
+    "match original signed build foundation",
+    "prepare review app with explicit enabled review flags",
+    "comparable Android before/after entry measurement",
+    "remaining stability and full account-continuity acceptance"
+  ],
+  "checkpointBefore": {
+    "branch": "checkpoint-stability-before-social-lazy-entry-2026-10-25",
+    "sha": "cced3397f9a4ffb6c8e45e2195e313a40e166ed4"
+  }
+}
