@@ -1,6 +1,6 @@
 # Atomic closed-transaction recovery — 25 October 2026 Baghdad
 
-Status: local Node396/396 passed; new source/Emulator CI pending. Server-internal, undeployed. No client Dart/auth SDK package changed.
+Status: source CI40202478326 succeeded in all five jobs at866d319a47bf67042c42eabacd067e0a77f6a815. Node396/396 and Auth/Firestore Emulator207/207 passed, including the unchanged concurrent-owner assertion. Server-internal, undeployed. No client Dart/auth SDK package changed in this transaction fix.
 
 Evidence: run40200445729 again failed the same actual-Auth two-owner-UID concurrent claim with3 INVALID_ARGUMENT: Transaction is invalid or closed (202/203). Previous root-first ordering alone is not a fully demonstrated cure. Historical Firebase-maintainer issue https://github.com/firebase/firebase-tools/issues/4473 documents the same error family; that history alone does not establish this run's exact emulator/internal cause.
 
@@ -8,4 +8,6 @@ DedaTrustedProgressTransactionStore now permits ONE extra fresh full SDK transac
 
 Each rerun executes all original authorization/evidence reads again. Existing protected event/claim markers reconcile an already committed but lost result and return current state rather than awarding again. No original timestamp/receipt or baseline is reset. A second closed result stops and propagates the error. Fresh owner SDK disabled/revoked or changed proof still blocks further writes.
 
-Eight new Node boundary cases cover no-commit closure, ambiguous committed closure, bounded termination, four unrelated/nonclosed errors, and reverified authority. Four new actual Auth/Firestore cases inject closure before/after a real Admin SDK transaction, repeat closure and disable the actual synthetic user between attempts. The original concurrent-UID assertion stays unchanged. Final CI result is pending and must not be inferred from local counts.
+Eight new Node boundary cases cover no-commit closure, ambiguous committed closure, bounded termination, four unrelated/nonclosed errors, and reverified authority. Four new actual Auth/Firestore cases inject closure before/after a real Admin SDK transaction, repeat closure and disable the actual synthetic user between attempts. The original concurrent-UID assertion stays unchanged. CI passed all these cases; this does not establish live service activation or full account restoration.
+
+The exact original-signed internal APK pair also passed offline Android16 smoke40202478446, job121196384137, artifact12602696603. Each variant started three times on a disposable emulator; candidate installed over control. All external IPv4/IPv6 was blocked before launch, with empty account data. This proves basic offline launch/upgrade only, not authenticated sections, phone/tablet acceptance, measurable whole-app acceleration or restored balances.

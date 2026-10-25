@@ -112,6 +112,7 @@ def prepare(project, variant):
                 and p.name != 'local.properties'}
     data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100380,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
+            'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'platformHashes': platform, 'googleConfigSha256': sha(REPO/'google-services.json'),
             'completeOwnerDelivery': False, 'financialRestoreEnabled': False,
             'productionExecutionPerformed': False, 'purpose': 'INTERNAL INTEGRATION ONLY - NOT FINAL OWNER DELIVERY'}

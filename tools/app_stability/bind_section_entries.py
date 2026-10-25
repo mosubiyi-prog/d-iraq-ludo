@@ -79,5 +79,6 @@ def bind(source):
 
 
 def bind_directory(output):
+    from bind_location_entries import bind as bind_location
     path = Path(output) / 'lib/main.dart'
-    path.write_text(bind(path.read_text()))
+    path.write_text(bind_location(bind(path.read_text())))
