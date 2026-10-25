@@ -10,13 +10,14 @@ class MemoryIo implements DedaAccountChoiceIo {
   final Server server;String? legacy;String? journal;
   bool offline=false,deny=false,loseReply=false,failJournal=false;
   int ids=0,proofs=0;Future<void> Function()? beforeRead,beforeWrite;
+  Future<void> Function(String)? beforeLegacyWrite;
   @override String newMutationId() => (++ids).toRadixString(16).padLeft(48,'0');
   @override Future<String?> readJournal(String a,String o) async => journal;
   @override Future<void> writeJournal(String a,String o,String s) async {
     if(failJournal) throw StateError('disk');journal=s;
   }
   @override Future<String?> readLegacyChoice(String o) async => legacy;
-  @override Future<void> writeLegacyChoice(String o,String v) async {legacy=v;}
+  @override Future<void> writeLegacyChoice(String o,String v) async {await beforeLegacyWrite?.call(v);legacy=v;}
   @override Future<void> verifyOwner(String a,String o,void Function() check) async {
     check();proofs++;if(offline||deny) throw StateError('unavailable');check();
   }
@@ -143,6 +144,16 @@ void main() {
     final results=await Future.wait(['gold','pink','royal'].map((v)=>actual.use(account:account,original:original,value:v,isCurrent:()=>true)));
     expect(results.every((r)=>r.status==DedaChoiceSyncStatus.saved),isTrue);
     expect(io.legacy,'royal');expect(io.server.writes,3);
+  });
+  test('a delayed local cache write cannot finish after a later selection',() async {
+    final io=MemoryIo(Server());
+    final sync=DedaAccountChoiceSync(io),started=Completer<void>(),release=Completer<void>();
+    io.beforeLegacyWrite=(value) async {if(value=='gold') {started.complete();await release.future;}};
+    final first=sync.use(account:account,original:original,value:'gold',isCurrent:()=>true);
+    await started.future;
+    final second=sync.use(account:account,original:original,value:'pink',isCurrent:()=>true);
+    await Future<void>.delayed(Duration.zero);expect(io.server.writes,1);
+    release.complete();await Future.wait([first,second]);expect(io.legacy,'pink');
   });
   test('tampered revision or financial fields cannot enter the journal',() async {
     final io=MemoryIo(Server());await choose(io,'gold');final raw=jsonDecode(io.journal!) as Map;

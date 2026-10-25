@@ -132,10 +132,10 @@ class DedaAccountChoiceSync {
         if(journal.pending!=null && remote.mutationId==journal.id) {
           if(remote.value!=journal.pending) throw const FormatException('choice-mutation-conflict');
           journal.base=remote;journal.pending=null;journal.id=null;await save();
-          return result(DedaChoiceSyncStatus.saved);
+          return await result(DedaChoiceSyncStatus.saved);
         }
         if(journal.pending!=null && selected==null && remote.version!=journal.base.version) {
-          return result(DedaChoiceSyncStatus.conflict);
+          return await result(DedaChoiceSyncStatus.conflict);
         }
         if(selected!=null || journal.pending==null) journal.base=remote;
         // Bootstrap ONLY this proven original ID's old local cosmetic choice,
@@ -145,19 +145,19 @@ class DedaAccountChoiceSync {
           journal.pending=journal.legacy;journal.id=io.newMutationId();
         }
         await save();
-        if(journal.pending==null) return result(DedaChoiceSyncStatus.saved);
+        if(journal.pending==null) return await result(DedaChoiceSyncStatus.saved);
         final next=await io.compareAndSet(account,original,journal.base,
           journal.pending!,journal.id!,check);check();next.validate();
         if(next.value!=journal.pending || next.mutationId!=journal.id ||
           next.version!=journal.base.version+1) throw const FormatException('choice-write-not-confirmed');
         journal.base=next;journal.pending=null;journal.id=null;await save();
-        return result(DedaChoiceSyncStatus.saved);
+        return await result(DedaChoiceSyncStatus.saved);
       } on DedaChoiceConflict {
-        check();return result(DedaChoiceSyncStatus.conflict);
+        check();return await result(DedaChoiceSyncStatus.conflict);
       } on DedaChoiceStale {rethrow;}
       on FormatException {rethrow;}
       catch (_) {
-        check();return result(journal.pending!=null?DedaChoiceSyncStatus.pending:DedaChoiceSyncStatus.unavailable);
+        check();return await result(journal.pending!=null?DedaChoiceSyncStatus.pending:DedaChoiceSyncStatus.unavailable);
       }
     } finally {
       completed.complete();if(identical(_lanes[key],completed.future)) _lanes.remove(key);
