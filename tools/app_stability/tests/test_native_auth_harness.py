@@ -24,7 +24,9 @@ class NativeAuthBoundaryTest(unittest.TestCase):
             (app/'src/main/AndroidManifest.xml').write_text('<manifest><application/></manifest>')
             native.prepare(harness,baseline)
             manifest=json.loads((harness/'native-pin-source-manifest.json').read_text())
-            self.assertEqual(len(manifest['files']),5)
+            self.assertEqual(len(manifest['files']),6)
+            self.assertEqual((harness/'lib/deda_section_operation_context.dart').read_bytes(),
+                             (ROOT/'lib/deda_section_operation_context.dart').read_bytes())
             self.assertEqual(len(manifest['pinnedTransportVersions']),16)
             self.assertIn('DedaAuthRuntime.run', (harness/'lib/deda_pin_auth.dart').read_text())
             self.assertEqual((harness/'lib/deda_auth_session_runtime.dart').read_bytes(),(ROOT/'lib/deda_auth_session_runtime.dart').read_bytes())

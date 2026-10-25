@@ -318,7 +318,7 @@ class SectionEntryBindingTest(unittest.TestCase):
             result = restore_module.restore(out, section_entry=True, lazy_sections=True)
             source = (out/'lib/main.dart').read_text()
             self.assertTrue(result['authRuntime'])
-            self.assertEqual(source.count('await dedaPrepareSocialSectionEntry(() => mounted);'), 3)
+            self.assertEqual(source.count('DedaSectionOperationContext.wait(() => dedaPrepareSocialSectionEntry(() => dedaSectionCurrent))'), 3)
             self.assertTrue('DedaPreferences._authAccountEpoch' in source)
             self.assertTrue('Object? _entryError;' in source)
             self.assertTrue('catch (error)' in source[source.index('class _DedaFriendRequestsPageState'):])

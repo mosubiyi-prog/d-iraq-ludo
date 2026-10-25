@@ -26,7 +26,7 @@ class LocationEntriesTest(unittest.TestCase):
             self.assertEqual(updated.count('Geolocator.getPositionStream('), original.count('Geolocator.getPositionStream('))
             self.assertIn('return widget.currentPosition;', updated)
             self.assertNotIn(').timeout(const Duration(seconds: 12));\n    } catch (_) {\n      // If a fresh GPS fix', updated)
-            self.assertIn('if (!mounted || position == null) return;', updated)
+            self.assertTrue('if (!dedaSectionCurrent || position == null) return;' in updated)
 
     def test_changed_settings_or_callsite_count_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

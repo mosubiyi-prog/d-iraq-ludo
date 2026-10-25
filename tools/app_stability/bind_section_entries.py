@@ -84,3 +84,5 @@ def bind_directory(output):
     from bind_location_identity import bind as bind_location_identity
     path = Path(output) / 'lib/main.dart'
     path.write_text(bind_location_identity(bind_lifecycle(bind_location(bind(path.read_text())))))
+    from bind_all_sections import bind_directory as bind_all_sections
+    bind_all_sections(output)

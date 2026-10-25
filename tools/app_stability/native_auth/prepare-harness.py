@@ -47,6 +47,7 @@ def prepare(harness, baseline):
     shutil.rmtree(harness / 'test', ignore_errors=True)
     sources = {'lib/deda_session_transition_gate.dart': ROOT / 'lib/deda_session_transition_gate.dart',
                'lib/deda_auth_session_runtime.dart': ROOT / 'lib/deda_auth_session_runtime.dart',
+               'lib/deda_section_operation_context.dart': ROOT / 'lib/deda_section_operation_context.dart',
                'lib/deda_published_place_recovery.dart': ROOT / 'lib/deda_published_place_recovery.dart'}
     sources.update({'lib/deda_pin_auth.dart': pin, 'lib/main.dart': Path(__file__).with_name('main.dart')})
     hashes = {}

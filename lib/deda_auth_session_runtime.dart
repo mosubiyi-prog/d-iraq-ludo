@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_session_transition_gate.dart';
+import 'deda_section_operation_context.dart';
 export 'deda_session_transition_gate.dart' show DedaSessionTransitionKind, DedaSessionTransitionOrigin;
 
 const dedaAuthSessionRuntimeEnabled = bool.fromEnvironment(
@@ -30,6 +31,7 @@ class _AuthContext {
   final Zone parentZone;
   final settled = Completer<bool>();
   void check() {
+    DedaSectionOperationContext.checkCurrent();
     permit.checkCurrent();
     if (!expected.matches(controller.current())) {
       throw const DedaStaleSessionTransition();
@@ -132,6 +134,7 @@ class DedaAuthSessionController {
     final live = current();
     if (!accepts(result, live)) throw const DedaStaleSessionTransition();
     context.expected = live; // Adopt only the identity produced by this operation.
+    DedaSectionOperationContext.adoptVerifiedPrincipal();
     context.check();
     return result;
   }
@@ -169,8 +172,9 @@ class DedaAuthRuntime {
     required Future<T> Function() action, bool Function()? isCurrent}) => enabled
       ? controller.run(kind: kind, origin: origin, action: action, isCurrent: isCurrent)
       : action();
-  static Future<T> wait<T>(FutureOr<T> Function() action) => enabled
-    ? controller.wait(action) : Future<T>.sync(action);
+  static Future<T> wait<T>(FutureOr<T> Function() action) =>
+    DedaSectionOperationContext.wait(() => enabled
+      ? controller.wait(action) : Future<T>.sync(action));
   static Future<void> afterSuccess({required Future<void> Function() action,
     required bool Function() isCurrent}) => enabled
       ? controller.afterSuccess(action:action,isCurrent:isCurrent)

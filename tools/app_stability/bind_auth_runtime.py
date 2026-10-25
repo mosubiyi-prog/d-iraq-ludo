@@ -32,7 +32,7 @@ def pairs(ts, first_only=False):
     return result
 
 
-def guard_awaits(source):
+def guard_awaits(source, helper='DedaAuthRuntime.wait'):
     """Wrap await unary/postfix expressions, preserving ??/operators/casts.
 
     Fail closed for unsupported await syntax. Comments and strings are opaque;
@@ -71,7 +71,7 @@ def guard_awaits(source):
                 j = k
             else: break
         end = ts[j-1][2]
-        insertions += [(start, 'DedaAuthRuntime.wait(() => '), (end, ')')]
+        insertions += [(start, helper+'(() => '), (end, ')')]
     for offset, text in sorted(insertions, reverse=True):
         source = source[:offset] + text + source[offset:]
     return source

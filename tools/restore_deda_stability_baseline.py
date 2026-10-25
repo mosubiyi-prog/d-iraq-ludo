@@ -207,18 +207,20 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         from bind_auth_runtime import bind
         bind(output, startup_metrics=startup_metrics, progress_backup_runtime=progress_backup_runtime)
         shutil.copy2(REPO / 'lib/deda_auth_session_runtime.dart', output / 'lib/deda_auth_session_runtime.dart')
+        shutil.copy2(REPO / 'lib/deda_section_operation_context.dart', output / 'lib/deda_section_operation_context.dart')
         shutil.copy2(REPO / 'lib/deda_published_place_recovery.dart', output / 'lib/deda_published_place_recovery.dart')
     if lazy_sections:
         shutil.copy2(REPO / LAZY_SECTIONS_MODULE, output / LAZY_SECTIONS_MODULE)
         main_path = output / 'lib/main.dart'
         main_path.write_text(bind_lazy_sections(main_path.read_text()))
     if section_entry:
+        shutil.copy2(REPO / 'lib/deda_section_state.dart', output / 'lib/deda_section_state.dart')
         from bind_section_entries import bind_directory
-        bind_directory(output)
         shutil.copy2(REPO / 'lib/deda_protected_section_entry.dart',
                      output / 'lib/deda_protected_section_entry.dart')
         shutil.copy2(REPO / 'lib/deda_incoming_request_lifecycle.dart',
                      output / 'lib/deda_incoming_request_lifecycle.dart')
+        bind_directory(output)
     return {'sectionEntry':section_entry, 'lazySections':lazy_sections, 'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
