@@ -56,7 +56,7 @@ async function start(){
      }
      await setDoc(doc(db,`deda_diamond_gift_balances/${original}`),{publicId:original,balance:42000,updatedAt:serverTimestamp()});
      await setDoc(doc(db,`deda_native_account_cosmetics/${original}`),{originalId:original,ownedFrames:['FRAME_05'],pendingFrames:[],
-       ownedStyles:['badge_star'],activeBadges:['badge_star'],avatar:2,frame:7,background:1,updatedAt:serverTimestamp()});
+       ownedStyles:['badge_spark'],activeBadges:['badge_spark'],avatar:2,frame:7,background:1,updatedAt:serverTimestamp()});
      historyHash=await fingerprint(db);
     });
    }else if(req.url==='/check-unchanged'){

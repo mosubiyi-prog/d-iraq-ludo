@@ -70,8 +70,8 @@ Future<void> run() async {
     check(await DedaLabFrameSecureCheckout.isOwned(originalId:original,frameId:'FRAME_03'));
     final appearance=await DedaOwner18Cosmetics.read(original);
     check(appearance['avatar']==2 && appearance['frame']==7 && appearance['background']==1);
-    check((appearance['ownedStyles'] as List).contains('badge_star'));
-    check((appearance['activeBadges'] as List).contains('badge_star'));
+    check((appearance['ownedStyles'] as List).contains('badge_spark'));
+    check((appearance['activeBadges'] as List).contains('badge_spark'));
   });
   await record('native-other-account-cannot-read-original-ownership',() async {
     await signOut();await prefs.remove('deda_install_id_v1');
