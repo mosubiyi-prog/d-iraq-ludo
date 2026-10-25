@@ -21,9 +21,12 @@ class OwnedFrameReadBindingTest(unittest.TestCase):
             self.assertIn('DedaOwnedFrameReader(',self.new[a:b])
             self.assertIn(target,self.new[a:b])
     def test_buy_preflight_price_and_transaction_are_byte_exact(self):
-        for method in ['_verifyOwner','verifiedPurchaseBalance','buyOnce']:
+        for method in ['verifiedPurchaseBalance','buyOnce']:
             a,b,_,_=body_range(self.old,method);c,d,_,_=body_range(self.new,method)
             self.assertEqual(self.old[a:b+1],self.new[c:d+1],method)
+        a=self.old.index('  static Future<String> _verifyOwner(');b=self.old.index('  static DocumentReference',a)
+        c=self.new.index('  static Future<String> _verifyOwner(');d=self.new.index('  static DocumentReference',c)
+        self.assertEqual(self.old[a:b],self.new[c:d])
         a=self.old.index('  static bool _valid(');b=self.old.index('  /// Readback',a)
         c=self.new.index('  static bool _valid(');d=self.new.index('  /// Readback',c)
         self.assertEqual(self.old[a:b],self.new[c:d])

@@ -13,6 +13,12 @@ def bind_source(source):
         a,b,_,_=body_range(source,name)
         edits.append((a+1,b,body))
     for a,b,text in sorted(edits,reverse=True):source=source[:a]+text+source[b:]
+    # The pinned 100380 source already delegates account proof and carries two
+    # obsolete imports. Remove them only when their symbols are absent.
+    if 'Firebase.apps' not in source:
+        source=source.replace("import 'package:firebase_core/firebase_core.dart';\n",'',1)
+    if 'DedaQa32ManagerOriginalOwnerProof.' not in source:
+        source=source.replace("import 'deda_qa32_manager_original_owner_proof.dart';\n",'',1)
     return "// DEDA_OWNED_FRAME_READER_BOUND_V1\nimport 'deda_owned_frame_reader.dart';\n"+source
 
 
