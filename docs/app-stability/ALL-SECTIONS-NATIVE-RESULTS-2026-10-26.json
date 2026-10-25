@@ -1,0 +1,91 @@
+{
+  "sourceQa": {
+    "commit": "3962ce68d5deec22bddf540a7565349b8c0b6e91",
+    "runId": 40241146450,
+    "jobsPassed": 5,
+    "pythonTests": 97,
+    "sectionTests": 27,
+    "nodeTests": 396,
+    "firebaseEmulatorTests": 207
+  },
+  "build": {
+    "commit": "83e84db3480584f4f7134ff4c1eed9bd7857cb93",
+    "runId": 40239877928,
+    "originalCertificateSha256": "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a",
+    "runtimeMatchesQaSource": true,
+    "changesBetweenBuildAndQa": [
+      ".github/workflows/deda-app-stability-source-qa.yml",
+      ".github/workflows/deda-stability-original-app-offline-smoke.yml",
+      "test/deda_section_state_test.dart"
+    ]
+  },
+  "native": {
+    "runId": 40241534997,
+    "artifactId": 12616959755,
+    "downloadSha256": "383397f75c3536b51873ad8dfd2ae62a6b2a40734db240b94a1c065b18f81166",
+    "downloadHashVerified": true,
+    "bothLoginScreensVisuallyReviewed": true,
+    "report": {
+      "format": 1,
+      "sourceCommit": "c3d871f423d16f22c2bbb174ebea581f348e330d",
+      "artifactSourceCommit": "83e84db3480584f4f7134ff4c1eed9bd7857cb93",
+      "completeOwnerDelivery": false,
+      "physicalPhoneTabletTested": false,
+      "authenticatedSectionsTested": false,
+      "sectionSpeedupProven": false,
+      "offlineGuardVerified": true,
+      "appLaunched": true,
+      "variants": {
+        "control": {
+          "apkSha256": "531842e47f1a7359b226fd6c54d5db2b0aebdc3a0083352a48c5c3684a907f8a",
+          "runs": [
+            {
+              "TotalTimeMs": 7190,
+              "WaitTimeMs": 7211
+            },
+            {
+              "TotalTimeMs": 6131,
+              "WaitTimeMs": 6626
+            },
+            {
+              "TotalTimeMs": 5856,
+              "WaitTimeMs": 5891
+            }
+          ],
+          "medianAndroidTotalTimeMs": 6131,
+          "processAlive": true,
+          "fatalSignatureAbsent": true
+        },
+        "candidate": {
+          "apkSha256": "d1fab399b7f153bf8a3a525cc29b8263abe89e1c65003662c9829b247d893c58",
+          "runs": [
+            {
+              "TotalTimeMs": 5292,
+              "WaitTimeMs": 5407
+            },
+            {
+              "TotalTimeMs": 5160,
+              "WaitTimeMs": 5167
+            },
+            {
+              "TotalTimeMs": 2860,
+              "WaitTimeMs": 2879
+            }
+          ],
+          "medianAndroidTotalTimeMs": 5160,
+          "processAlive": true,
+          "fatalSignatureAbsent": true
+        }
+      },
+      "passed": true,
+      "productionNetworkBlocked": true,
+      "scope": "Logged-out OFFLINE Android launch only; NOT authenticated section timing, full restoration or final acceptance."
+    }
+  },
+  "limits": {
+    "completeDelivery": false,
+    "financialRestoreEnabled": false,
+    "productionDeployed": false,
+    "physicalPhoneTabletAccepted": false
+  }
+}
