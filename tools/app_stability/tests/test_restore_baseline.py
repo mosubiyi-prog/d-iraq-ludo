@@ -309,3 +309,30 @@ class LazySectionBindingTest(unittest.TestCase):
             self.assertTrue('DedaAuthRuntime' in source, 'missing DedaAuthRuntime')
             self.assertTrue('runDedaMeasuredStartup' in source, 'missing runDedaMeasuredStartup')
             self.assertTrue('DedaProgressBackupHost' in source, 'missing DedaProgressBackupHost')
+
+
+class SectionEntryBindingTest(unittest.TestCase):
+    def test_three_real_section_preparations_use_shared_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/'source'
+            result = restore_module.restore(out, section_entry=True, lazy_sections=True)
+            source = (out/'lib/main.dart').read_text()
+            self.assertTrue(result['authRuntime'])
+            self.assertEqual(source.count('await dedaPrepareSocialSectionEntry(() => mounted);'), 3)
+            self.assertTrue('DedaPreferences._authAccountEpoch' in source)
+            self.assertTrue('Object? _entryError;' in source)
+            self.assertTrue('catch (error)' in source[source.index('class _DedaFriendRequestsPageState'):])
+            self.assertTrue((out/'lib/deda_protected_section_entry.dart').exists())
+            self.assertTrue('body: DedaLazySectionStack(' in source)
+
+    def test_unbound_or_repeated_source_is_refused(self):
+        import sys
+        sys.path.insert(0, str(REPO/'tools/app_stability'))
+        from bind_section_entries import bind
+        with self.assertRaises(ValueError):
+            bind('original without auth runtime')
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/'source'
+            restore_module.restore(out, section_entry=True)
+            with self.assertRaises(ValueError):
+                bind((out/'lib/main.dart').read_text())

@@ -3,6 +3,8 @@ on:
   push:
     branches: [deda-app-stability-isolated-2026-10-23]
     paths:
+      - 'lib/deda_protected_section_entry.dart'
+      - 'test/deda_protected_section_entry_test.dart'
       - 'lib/deda_lazy_section_stack.dart'
       - 'test/deda_lazy_section_stack_test.dart'
       - 'lib/deda_auth_session_runtime.dart'
@@ -63,7 +65,7 @@ jobs:
       - name: Restore hash-verified source without Android or signing files
         run: |
           if [ '${{ matrix.mode }}' = auth-bound ]; then
-            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --auth-runtime --pilot --startup-metrics --admin-firebase-adapter --progress-backup-runtime
+            python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --auth-runtime --pilot --startup-metrics --admin-firebase-adapter --progress-backup-runtime --section-entry
           elif [ '${{ matrix.mode }}' = measured-pilot ]; then
             python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-stability" --pilot --startup-metrics --session-gate --session-flow --owner-firebase-port --admin-firebase-adapter --legacy-progress-capture --progress-evidence-store --progress-backup-coordinator --progress-backup-runtime --lazy-sections
           elif [ '${{ matrix.mode }}' = pilot ]; then
@@ -103,6 +105,13 @@ jobs:
           flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_backend.dart lib/deda_pin_auth.dart
           flutter analyze --no-pub --fatal-infos lib/deda_auth_session_runtime.dart lib/deda_published_place_recovery.dart test/deda_auth_session_runtime_test.dart test/deda_published_place_recovery_test.dart
           flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --reporter expanded test/deda_auth_session_runtime_test.dart test/deda_published_place_recovery_test.dart
+      - name: Verify bound social section entry, timeout and actual failed-page retry UI
+        timeout-minutes: 4
+        if: matrix.mode == 'auth-bound'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_protected_section_entry.dart test/deda_protected_section_entry_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true --reporter expanded test/deda_protected_section_entry_test.dart
       - name: Exercise read coordination with delayed and failed fake requests only
         timeout-minutes: 3
         if: matrix.mode == 'pilot' || matrix.mode == 'measured-pilot'
