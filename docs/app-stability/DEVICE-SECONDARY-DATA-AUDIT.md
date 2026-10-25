@@ -1,5 +1,7 @@
 # Secondary data continuity audit — 24 October 2026
 
+Update 26 October: the free ID-card cosmetic choice now has an actual source binding, versioned Firestore adapter, durable pending journal and conflict handling, tested in source QA 40243724276. Its activation flag remains OFF and additive rules are undeployed; it is not live cross-phone recovery. See ACCOUNT-CHOICE-CONTINUITY-2026-10-26.md and CURRENT.md. The table below remains the original 24 October baseline audit; other categories have not been migrated by this change.
+
 Read-only inspection of restored 100380 baseline. This is source evidence, not a successful account recovery or a live rules audit. File fingerprints are recorded in DEVICE-SECONDARY-DATA-SOURCE-HASHES.json. No account values were loaded.
 
 | Data | Observed source and boundary | Continuity requirement |
