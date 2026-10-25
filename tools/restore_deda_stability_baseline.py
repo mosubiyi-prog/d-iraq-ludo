@@ -217,6 +217,8 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         bind_directory(output)
         shutil.copy2(REPO / 'lib/deda_protected_section_entry.dart',
                      output / 'lib/deda_protected_section_entry.dart')
+        shutil.copy2(REPO / 'lib/deda_incoming_request_lifecycle.dart',
+                     output / 'lib/deda_incoming_request_lifecycle.dart')
     return {'sectionEntry':section_entry, 'lazySections':lazy_sections, 'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,

@@ -6,6 +6,8 @@ on:
       - 'lib/deda_protected_section_entry.dart'
       - 'test/deda_protected_section_entry_test.dart'
       - 'test/deda_location_section_entry_test.dart'
+      - 'lib/deda_incoming_request_lifecycle.dart'
+      - 'test/deda_incoming_request_lifecycle_test.dart'
       - 'lib/deda_lazy_section_stack.dart'
       - 'test/deda_lazy_section_stack_test.dart'
       - 'lib/deda_auth_session_runtime.dart'
@@ -115,6 +117,8 @@ jobs:
           flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true --reporter expanded test/deda_protected_section_entry_test.dart
           flutter analyze --no-pub --fatal-infos test/deda_location_section_entry_test.dart
           flutter test --no-pub --timeout 20s --reporter expanded test/deda_location_section_entry_test.dart
+          flutter analyze --no-pub --fatal-infos lib/deda_incoming_request_lifecycle.dart test/deda_incoming_request_lifecycle_test.dart
+          flutter test --no-pub --timeout 20s --reporter expanded test/deda_incoming_request_lifecycle_test.dart
       - name: Exercise read coordination with delayed and failed fake requests only
         timeout-minutes: 3
         if: matrix.mode == 'pilot' || matrix.mode == 'measured-pilot'
