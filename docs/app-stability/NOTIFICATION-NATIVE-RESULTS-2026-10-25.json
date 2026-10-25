@@ -1,0 +1,56 @@
+{
+  "format": 1,
+  "sourceCommit": "eaea2ab771ba31627a36fee44678ca231a576829",
+  "artifactSourceCommit": "7389317c3ab4ec409dbf6508fbbb92f321d8df31",
+  "completeOwnerDelivery": false,
+  "physicalPhoneTabletTested": false,
+  "authenticatedSectionsTested": false,
+  "sectionSpeedupProven": false,
+  "offlineGuardVerified": true,
+  "appLaunched": true,
+  "variants": {
+    "control": {
+      "apkSha256": "50ad5d66a08bd5d0804846b4b0f9f17246c583a39e9c0b5917ec4b844a1478a7",
+      "runs": [
+        {
+          "TotalTimeMs": 7263,
+          "WaitTimeMs": 7279
+        },
+        {
+          "TotalTimeMs": 4937,
+          "WaitTimeMs": 4959
+        },
+        {
+          "TotalTimeMs": 7053,
+          "WaitTimeMs": 7061
+        }
+      ],
+      "medianAndroidTotalTimeMs": 7053,
+      "processAlive": true,
+      "fatalSignatureAbsent": true
+    },
+    "candidate": {
+      "apkSha256": "c736b67a3b29a269ce2f847f05b498dd2c2812db2fb5ef8ff5874f9c3c085f6d",
+      "runs": [
+        {
+          "TotalTimeMs": 5632,
+          "WaitTimeMs": 5668
+        },
+        {
+          "TotalTimeMs": 4426,
+          "WaitTimeMs": 4452
+        },
+        {
+          "TotalTimeMs": 3575,
+          "WaitTimeMs": 3578
+        }
+      ],
+      "medianAndroidTotalTimeMs": 4426,
+      "processAlive": true,
+      "fatalSignatureAbsent": true
+    }
+  },
+  "passed": true,
+  "productionNetworkBlocked": true,
+  "scope": "Logged-out OFFLINE Android launch only; NOT authenticated section timing, full restoration or final acceptance."
+}
