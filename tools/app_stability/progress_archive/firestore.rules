@@ -61,6 +61,26 @@ service cloud.firestore {
         && p.captureId == d.records.progressCaptureId && p.sourceUid == d.sourceUid && p.installId == d.installId
         && ownsPurchaseOriginal(accountKey, d.records.originalId);
     }
+    function validFreeCardChoice(accountKey, originalId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['format','accountKey','originalId','version','choice','mutationId','sourceUid','updatedAt'])
+        && d.keys().hasOnly(['format','accountKey','originalId','version','choice','mutationId','sourceUid','updatedAt'])
+        && d.format == 1 && d.accountKey == accountKey && d.originalId == originalId
+        && d.version is int && d.version >= 1 && d.version <= 9007199254740990
+        && d.choice in ['gold','diamond','royal','pink']
+        && d.mutationId is string && d.mutationId.matches('^[a-f0-9]{48}$')
+        && d.sourceUid == request.auth.uid && d.updatedAt == request.time;
+    }
+    match /deda_free_card_choices/{accountKey}/cards/{originalId} {
+      allow get: if ownsProgressAccount(accountKey) && ownsPurchaseOriginal(accountKey,originalId);
+      allow create: if ownsProgressAccount(accountKey) && ownsPurchaseOriginal(accountKey,originalId)
+        && validFreeCardChoice(accountKey,originalId) && request.resource.data.version == 1;
+      allow update: if ownsProgressAccount(accountKey) && ownsPurchaseOriginal(accountKey,originalId)
+        && validFreeCardChoice(accountKey,originalId)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.mutationId != resource.data.mutationId;
+      allow list, delete: if false;
+    }
     match /deda_purchase_evidence/{accountKey}/captures/{captureId} {
       allow get, list: if ownsProgressAccount(accountKey);
       allow create: if ownsProgressAccount(accountKey) && validPurchaseEvidence(accountKey,captureId);
