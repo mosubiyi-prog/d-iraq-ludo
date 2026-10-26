@@ -1,0 +1,64 @@
+{
+  "format": 1,
+  "sourceCommit": "20d62ab7ac888eceff80248ebf72930235b522a7",
+  "workflowRun": 40320370487,
+  "workflowUrl": "https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40320370487",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 121563475069,
+      "name": "progress-archive-rules",
+      "conclusion": "success"
+    },
+    {
+      "id": 121563475201,
+      "name": "source-qa (auth-bound)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121563475324,
+      "name": "source-qa (measured-pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121563475391,
+      "name": "source-qa (pilot)",
+      "conclusion": "success"
+    },
+    {
+      "id": 121563475470,
+      "name": "source-qa (baseline)",
+      "conclusion": "success"
+    }
+  ],
+  "checks": {
+    "python": 124,
+    "privateDataDartAndUi": 28,
+    "node": 451,
+    "authFirestoreEmulator": 261
+  },
+  "implemented": [
+    "Atomic six-record reviewed baseline activation",
+    "Replay returns current balances without resetting spending",
+    "Owner read and point-tier claim require actual activation records",
+    "Live legacy operation sources rechecked within initial activation transaction"
+  ],
+  "testBoundaries": [
+    "Deployment, enforced-fence and settlement-review records are explicit controlled fixtures, not production enforcement",
+    "Auth uses actual Admin SDK and emulator tokens; PIN session records in this batch are fixtures",
+    "No live accounts, balances, rules, Functions or policies changed"
+  ],
+  "notComplete": [
+    "Real writer fence enforcement and deployment approval",
+    "Real settlement review producer and reviewed unresolved payments",
+    "Trusted future reward and atomic purchase providers",
+    "Service endpoint and Flutter financial integration",
+    "Full integrated app acceptance"
+  ],
+  "androidChanged": false,
+  "newApkBuilt": false,
+  "priorSignedApkSource": "9a7366a3b8eb2bfa59ca213240d07091f569057c",
+  "priorSignedApkContainsThisBackendBatch": false,
+  "readyForFinalDelivery": false,
+  "rollbackCommit": "e99363155a2a41bb53508ecd34724cd2fe642177"
+}
