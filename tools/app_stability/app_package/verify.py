@@ -75,7 +75,9 @@ def verify(project, reference):
         raise ValueError('Original public signing certificate mismatch')
     old = package_info(output([str(tool/'aapt'), 'dump', 'badging', str(reference)]))
     new = package_info(output([str(tool/'aapt'), 'dump', 'badging', str(apk)]))
-    if (new['package'] != PACKAGE or old['package'] != PACKAGE or\n        new['versionCode'] != data['versionCode'] or\n        new['versionCode'] <= old['versionCode']):
+    if (new['package'] != PACKAGE or old['package'] != PACKAGE or
+        new['versionCode'] != data['versionCode'] or
+        new['versionCode'] <= old['versionCode']):
         raise ValueError('Internal package/version mismatch')
     for key in ('minSdk', 'targetSdk', 'permissions', 'versionName'):
         if new[key] != old[key]:
