@@ -81,4 +81,18 @@ def bind(output):
     if (dedaStabilityIdentityPilot && _paused) return;""",
         'same-owner refresh',
     )
+    scope = _replace_exact(
+        scope,
+        """  void _refresh() {
+    _reads.invalidate();
+    _load();
+  }""",
+        """  void _refresh() {
+    // Active-ID selection changed on this same device. Do not keep showing
+    // the PREVIOUS premium ID while checking the newly chosen one.
+    _invalidateProof();
+    _load();
+  }""",
+        'active selection update',
+    )
     scope_path.write_text(scope)
