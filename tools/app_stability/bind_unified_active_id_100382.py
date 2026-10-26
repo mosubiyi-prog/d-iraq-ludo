@@ -100,36 +100,31 @@ def bind(output):
         "import 'deda_verified_active_id_store.dart';\n"
         "import 'deda_qa32_active_account_scope.dart';",
         'stage71 import shared proof and scope')
-    # The verified temporary archive is Dart-formatted. Anchor the exact
-    # compiled Use implementation, not the unformatted repository copy.
-    social = once(social,
+    # Scope all changes to the actual service Use method. Other Stage71
+    # helpers legitimately compare the same identifiers.
+    start = social.index('static Future<void> use(String originalId, String identifier) async {')
+    stop = social.index("\n}\n\n/// User's Edit Profile:", start)
+    use_body = social[start:stop]
+    use_body = once(use_body,
         "    if (identifier != originalId) {",
         "    String? selectedColor;\n    if (identifier != originalId) {",
-        'capture server verified selection color')
-    social = once(social,
+        'capture server-verified Use selection color')
+    use_body = once(use_body,
         "DedaStage71OwnedIdentifier.read(owner.id, owner.data() ?? {}, originalId);",
         "final selectedGrant = DedaStage71OwnedIdentifier.read(\n"
         "          owner.id, owner.data() ?? {}, originalId);\n"
         "      selectedColor = selectedGrant.baseColor;",
-        'capture grant color without a new server lookup')
-    social = once(social,
-        """    DedaStage71ActiveIdRefresh.changed();
-  }
-}
-
-/// User's Edit Profile:""",
-        """    // After existing server readback, gift check and public projection,
-    // update every on-device display synchronously, before sending refresh.
+        'capture original grant color')
+    use_body = once(use_body,
+        "    DedaStage71ActiveIdRefresh.changed();",
+        """    // Existing server readback and public projection succeeded.
     DedaVerifiedActiveIdStore.confirmed(
       uid: uid, originalId: originalId, displayId: identifier,
       fixedColor: selectedColor,
     );
-    DedaStage71ActiveIdRefresh.changed();
-  }
-}
-
-/// User's Edit Profile:""",
-        'confirm shared display after existing Use/readback')
+    DedaStage71ActiveIdRefresh.changed();""",
+        'broadcast owner ID only after confirmed Use')
+    social = social[:start] + use_body + social[stop:]
     social = once(social,
         "if (currentRows != null)",
         "if (currentRows != null \n                && currentActive == widget.originalId)",
