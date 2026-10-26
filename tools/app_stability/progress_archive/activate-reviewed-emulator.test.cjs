@@ -14,6 +14,7 @@ const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
 const {activateReviewedBaseline,deploymentPath}=require('./activate-reviewed-baseline.cjs');
 const {reviewLegacySettlement}=require('./review-legacy-settlement.cjs');
 const {frames}=require('./purchase-frames.cjs');
+const {purchaseReviewedFrameForOwnerSession}=require('./purchase-reviewed-frame.cjs');
 const {readMigratedProgressForOwnerSession,claimReviewedPointTierForOwnerSession}=require('./point-tier-session.cjs');
 const A='07700000000',original='@DEDA-ABC234',captureId='sdk_activation_capture_0001';
 const migrationId='sdk_activation_migration_01',settlementId='sdk_activation_settlement_1';
@@ -183,4 +184,49 @@ test('concurrent real settlement review writes one immutable resolution and does
  const result=await Promise.all([reviewLegacySettlement(request),reviewLegacySettlement(request)]);
  assert.equal(result.filter(r=>r.replayed).length,1);assert.equal(await current(),null);
  assert.equal((await db.collection(`${root}/settlementReviews`).get()).size,1);
+});
+const purchase=(user,frameId='FRAME_03')=>purchaseReviewedFrameForOwnerSession({store,auth,idToken:user.idToken,frameId});
+async function fundedPurchase(){
+ await reviewedFixture();await activate();
+ await db.doc(`deda_diamond_gift_balances/${original}`).set({publicId:original,balance:1991,lastClaimGiftId:'fixture-only'});
+}
+test('actual concurrent recovered-UID purchases create one payment and one receipt/ownership pair',async()=>{
+ await fundedPurchase();const results=await Promise.all([purchase(owner),purchase(next)]);
+ assert.equal(results.filter(r=>r.replayed).length,1);
+ assert.deepEqual((await current()).balances,{points:1000,coins:30,xp:20,earnedDiamonds:0});
+ assert.equal((await current()).version,2);
+ assert.equal((await db.doc(`deda_diamond_gift_balances/${original}`).get()).data().balance,1000);
+ assert.equal((await db.collection(`${root}/framePurchases`).get()).size,1);
+ assert.equal((await db.collection(`deda_lab_frame_receipts/${original}/frames`).get()).size,1);
+ assert.equal((await db.collection(`deda_lab_owned_frames/${original}/frames`).get()).size,1);
+ assert.equal((await db.doc(`deda_gm_personal_diamond_wallets/${A}`).get()).data().balance,1000000);
+});
+test('actual different frame transactions share the same balance and cannot overspend it',async()=>{
+ await fundedPurchase();
+ const results=await Promise.all([purchase(owner,'FRAME_03'),purchase(next,'FRAME_05')]);
+ assert.equal(results.every(r=>r.replayed===false),true);
+ assert.equal((await db.doc(`deda_diamond_gift_balances/${original}`).get()).data().balance,0);
+ assert.equal((await current()).balances.earnedDiamonds,0);assert.equal((await current()).version,2);
+ await assert.rejects(purchase(owner,'FRAME_06'),e=>e.code==='frame-insufficient-diamonds');
+ assert.equal((await db.doc(`deda_lab_owned_frames/${original}/frames/FRAME_06`).get()).exists,false);
+});
+test('actual GM purchase uses only protected personal wallet and leaves both ordinary sources intact',async()=>{
+ await fundedPurchase();
+ await db.doc(`admin_entry_access/${A}`).set({accountKey:A,active:true,status:'active',
+  accessType:'general_manager_gateway',allowedRole:'general_manager'});
+ await db.doc(`deda_gm_personal_diamond_wallets/${A}`).set({accountKey:A,initialBalance:1000000,balance:1000000});
+ const before=await current(),result=await purchase(owner);
+ assert.equal(result.managerBalance,999000);assert.deepEqual(await current(),before);
+ assert.equal((await db.doc(`deda_diamond_gift_balances/${original}`).get()).data().balance,1991);
+});
+test('actual aborted atomic purchase writes neither debit, payment, receipt nor native ownership',async()=>{
+ await fundedPurchase();const before=await current();
+ const aborting={readOwnerSession:uid=>store.readOwnerSession(uid),serverTimestamp:()=>store.serverTimestamp(),
+  runTransaction:work=>store.runTransaction(async tx=>{await work(tx);throw Error('atomic-purchase-abort');})};
+ await assert.rejects(purchaseReviewedFrameForOwnerSession({store:aborting,auth,idToken:owner.idToken,frameId:'FRAME_03'}),/atomic-purchase-abort/);
+ assert.deepEqual(await current(),before);
+ assert.equal((await db.doc(`deda_diamond_gift_balances/${original}`).get()).data().balance,1991);
+ assert.equal((await db.collection(`${root}/framePurchases`).get()).size,0);
+ assert.equal((await db.doc(`deda_lab_frame_receipts/${original}/frames/FRAME_03`).get()).exists,false);
+ assert.deepEqual((await db.doc(`deda_native_account_cosmetics/${original}`).get()).data().ownedFrames,[]);
 });

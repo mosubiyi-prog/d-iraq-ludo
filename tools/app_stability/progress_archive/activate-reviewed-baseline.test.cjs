@@ -332,3 +332,146 @@ test('failed settlement commit changes no source, carryover, approval, balance o
  const f=await settlementFixture();f.store.fail=true;const before=structuredClone([...f.store.docs]);
  await assert.rejects(settle(f),/fixture-commit-failure/);assert.deepEqual([...f.store.docs],before);
 });
+
+const {purchaseReviewedFrameForOwnerSession}=require('./purchase-reviewed-frame.cjs');
+const giftPath=`deda_diamond_gift_balances/${original}`;
+const gmPath=`deda_gm_personal_diamond_wallets/${A}`;
+async function purchaseFixture(gifts=991){
+ const f=await ownersFixture();
+ f.store.docs.get('users/new-owner').sharePersonalId=original;
+ f.store.docs.get('users/old-owner').sharePersonalId=original;
+ f.store.docs.set(giftPath,{publicId:original,balance:gifts,lastClaimGiftId:'preserved',createdAt:f.store.serverTimestamp()});
+ f.purchaseRequest={store:f.store,auth:ownerAuth(),idToken:'owner-fixture-only',frameId:'FRAME_03'};
+ f.store.writes=[];return f;
+}
+const buy=f=>purchaseReviewedFrameForOwnerSession(f.purchaseRequest);
+async function purchaseRejected(f,code){
+ const before=structuredClone([...f.store.docs]);await assert.rejects(buy(f),e=>e.code===code);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+}
+function makeManager(f,balance=1000000){
+ f.store.docs.set(`admin_entry_access/${A}`,{accountKey:A,active:true,status:'active',
+  accessType:'general_manager_gateway',allowedRole:'general_manager'});
+ f.store.docs.set(gmPath,{accountKey:A,initialBalance:1000000,balance,createdAt:f.store.serverTimestamp()});
+}
+test('atomic frame purchase uses earned then gifted diamonds and preserves points coins XP and GM',async()=>{
+ const f=await purchaseFixture(),gmBefore=structuredClone(f.store.docs.get(gmPath));
+ const result=await buy(f);assert.equal(result.replayed,false);assert.equal(result.owned,true);
+ assert.deepEqual(result.payment,{earnedDiamonds:9,giftedDiamonds:991,managerDiamonds:0});
+ assert.deepEqual(result.state.balances,{points:5000,coins:30,xp:20,earnedDiamonds:0});
+ assert.equal(result.giftedBalance,0);assert.deepEqual(f.store.docs.get(gmPath),gmBefore);
+ assert.deepEqual(f.store.docs.get(`deda_native_account_cosmetics/${original}`).ownedFrames,['FRAME_03']);
+ assert.equal(f.store.docs.get(`deda_lab_frame_receipts/${original}/frames/FRAME_03`).cost,1000);
+ assert.equal(f.store.docs.get(`deda_lab_owned_frames/${original}/frames/FRAME_03`).receiptId,`${original}_FRAME_03`);
+ assert.equal(f.store.docs.get(`${root}/framePurchases/FRAME_03`).progressVersion,2);
+});
+test('lost purchase response replays under recovered UID without charging again',async()=>{
+ const f=await purchaseFixture(1991);await buy(f);const before=structuredClone([...f.store.docs]);f.store.writes=[];
+ f.purchaseRequest.auth=ownerAuth('old-owner');const replay=await buy(f);
+ assert.equal(replay.replayed,true);assert.equal(replay.legacyOwned,false);assert.equal(replay.giftedBalance,1000);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+test('gift-only second purchase creates no zero-valued financial event and debits exactly 1000',async()=>{
+ const f=await purchaseFixture(1991);await buy(f);f.store.writes=[];f.purchaseRequest.frameId='FRAME_05';
+ const r=await buy(f);assert.equal(r.state.version,2);assert.equal(r.giftedBalance,0);
+ assert.deepEqual(r.payment,{earnedDiamonds:0,giftedDiamonds:1000,managerDiamonds:0});
+ assert.equal(f.store.docs.get(`${root}/framePurchases/FRAME_05`).eventKey,null);
+ assert.equal(f.store.writes.filter(p=>p.startsWith(`${statePath}/events/`)).length,0);
+});
+test('manager uses only separate personal million, with no changes to earned, gifts or admin pool',async()=>{
+ const f=await purchaseFixture(5000);makeManager(f);
+ f.store.docs.set('deda_admin_gift_wallets/reviewer',{balance:1000000});
+ const before=structuredClone(f.store.docs.get(statePath));
+ const r=await buy(f);assert.deepEqual(r.payment,{earnedDiamonds:0,giftedDiamonds:0,managerDiamonds:1000});
+ assert.equal(r.managerBalance,999000);assert.equal(r.giftedBalance,5000);
+ assert.deepEqual(f.store.docs.get(statePath),before);assert.equal(f.store.docs.get('deda_admin_gift_wallets/reviewer').balance,1000000);
+});
+for(const amount of [0,999])test(`insufficient manager wallet ${amount} never falls back to earned or gifts`,async()=>{
+ const f=await purchaseFixture(5000);makeManager(f,amount);await purchaseRejected(f,'frame-insufficient-diamonds');
+});
+for(const frameId of frames)test(`existing frame ${frameId} uses the fixed original 1000 price`,async()=>{
+ const f=await purchaseFixture(0);makeManager(f);f.purchaseRequest.frameId=frameId;
+ const r=await buy(f);assert.equal(r.managerBalance,999000);assert.equal(r.frameId,frameId);
+});
+for(const kind of ['native-owned','receipt-pair'])test(`historical ${kind} stays owned without a second charge or new receipt`,async()=>{
+ const f=await purchaseFixture();
+ if(kind==='native-owned')f.store.docs.get(`deda_native_account_cosmetics/${original}`).ownedFrames=['FRAME_03'];
+ else{
+  f.store.docs.set(`deda_lab_frame_receipts/${original}/frames/FRAME_03`,{publicId:original,frameId:'FRAME_03',kind:'lab_frame',cost:1000});
+  f.store.docs.set(`deda_lab_owned_frames/${original}/frames/FRAME_03`,{publicId:original,frameId:'FRAME_03',receiptId:`${original}_FRAME_03`});
+ }
+ const before=structuredClone([...f.store.docs]),r=await buy(f);assert.equal(r.legacyOwned,true);assert.equal(r.payment,null);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+for(const kind of ['pending-native','partial-receipt','foreign-canonical-owner','negative-gifts','missing-activation'])test(`frame purchase refuses ${kind}`,async()=>{
+ const f=await purchaseFixture();
+ if(kind==='pending-native')f.store.docs.get(`deda_native_account_cosmetics/${original}`).pendingFrames=['FRAME_03'];
+ if(kind==='partial-receipt')f.store.docs.set(`deda_lab_frame_receipts/${original}/frames/FRAME_03`,{cost:1000});
+ if(kind==='foreign-canonical-owner')f.store.docs.get('users/new-owner').sharePersonalId='@DEDA-OTHER1';
+ if(kind==='negative-gifts')f.store.docs.get(giftPath).balance=-1;
+ if(kind==='missing-activation')f.store.docs.delete(`${root}/activations/${migrationId}`);
+ await purchaseRejected(f,{'pending-native':'frame-native-payment-pending','partial-receipt':'frame-conflicting-ownership-proof',
+  'foreign-canonical-owner':'frame-canonical-owner-required','negative-gifts':'frame-invalid-wallet',
+  'missing-activation':'reviewed-activation-proof-required'}[kind]);
+});
+for(const extra of [{amount:1},{cost:0},{accountKey:A},{originalId:original},{isGeneralManager:true}])test(`frame purchase derives authority, ignores no caller fields: ${Object.keys(extra)}`,async()=>{
+ const f=await purchaseFixture();Object.assign(f.purchaseRequest,extra);await purchaseRejected(f,'invalid-reviewed-frame-request');
+});
+test('purchase retry rechecks the combined live balance before any atomic charge',async()=>{
+ const f=await purchaseFixture();f.store.retry=docs=>{docs.get(giftPath).balance=0;};
+ await assert.rejects(buy(f),e=>e.code==='frame-insufficient-diamonds');
+ assert.equal(f.store.docs.get(statePath).balances.earnedDiamonds,9);
+ assert.equal(f.store.docs.has(`${root}/framePurchases/FRAME_03`),false);assert.deepEqual(f.store.writes,[]);
+});
+test('failed purchase transaction commits neither money nor ownership and remains safely retryable',async()=>{
+ const f=await purchaseFixture();f.store.fail=true;const before=structuredClone([...f.store.docs]);
+ await assert.rejects(buy(f),/fixture-commit-failure/);assert.deepEqual([...f.store.docs],before);
+ f.store.fail=false;assert.equal((await buy(f)).replayed,false);
+});
+test('damaged purchase audit cannot authorize a new debit or silently return ownership',async()=>{
+ const f=await purchaseFixture();await buy(f);f.store.writes=[];
+ f.store.docs.get(`${root}/framePurchases/FRAME_03`).payment.giftedDiamonds=1;
+ await purchaseRejected(f,'frame-purchase-audit-conflict');
+});
+
+const {createOwnerCallableHandlers,createOwnerCallableExports}=require('./owner-callable-handlers.cjs');
+const {readReviewedPurchaseBalanceForOwnerSession}=require('./purchase-reviewed-frame.cjs');
+const callableRequest=(data={})=>({data,auth:{uid:'new-owner'},app:{appId:'controlled-framework-fixture-only'},
+ rawRequest:{headers:{authorization:'Bearer owner-fixture-only'}}});
+test('read-only purchase view is account-proven and preserves all balances without initialization',async()=>{
+ const f=await purchaseFixture(),before=structuredClone([...f.store.docs]);
+ const r=await readReviewedPurchaseBalanceForOwnerSession({store:f.store,auth:ownerAuth(),idToken:'owner-fixture-only'});
+ assert.equal(r.purchasableBalance,1000);assert.equal(r.giftedBalance,991);assert.equal(r.managerBalance,null);
+ assert.deepEqual(r.state.balances,{points:5000,coins:30,xp:20,earnedDiamonds:9});
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+test('callable handlers run actual owner-proof workers and accept no caller account or amounts',async()=>{
+ const f=await purchaseFixture(),api=createOwnerCallableHandlers({store:f.store,auth:ownerAuth()});
+ const r=await api.dedaReadMigratedProgress(callableRequest());assert.equal(r.purchasableBalance,1000);
+ await assert.rejects(api.dedaReadMigratedProgress(callableRequest({accountKey:A})),e=>e.code==='invalid-owner-api-request');
+ const buy=await api.dedaPurchaseMigratedFrame(callableRequest({frameId:'FRAME_03'}));
+ assert.equal(buy.purchasableBalance,0);assert.equal(buy.replayed,false);
+ assert.equal((await api.dedaPurchaseMigratedFrame(callableRequest({frameId:'FRAME_03'}))).replayed,true);
+});
+for(const missing of ['auth','app','token','wrong-uid','caller-token'])test(`callable boundary rejects ${missing} before accessing progress`,async()=>{
+ const f=await purchaseFixture(),api=createOwnerCallableHandlers({store:f.store,auth:ownerAuth()}),req=callableRequest();
+ if(missing==='auth')delete req.auth;if(missing==='app')delete req.app;
+ if(missing==='token')delete req.rawRequest.headers.authorization;
+ if(missing==='wrong-uid')req.auth.uid='foreign-user';
+ if(missing==='caller-token'){delete req.rawRequest.headers.authorization;req.data.idToken='owner-fixture-only';}
+ const before=structuredClone([...f.store.docs]);
+ await assert.rejects(api.dedaReadMigratedProgress(req),e=>e.code===(missing==='caller-token'?'invalid-owner-api-request':'owner-api-auth-required'));
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+});
+test('actual callable factory enforces App Check, sanitizes errors and does not expose admin activation',async()=>{
+ const f=await purchaseFixture(0);
+ class HttpsError extends Error{constructor(code,message){super(message);this.code=code;}}
+ const api=createOwnerCallableExports({store:f.store,auth:ownerAuth(),HttpsError,onCall:(options,action)=>({options,action})});
+ assert.deepEqual(Object.keys(api).sort(),['dedaClaimMigratedPointTier','dedaPurchaseMigratedFrame','dedaReadMigratedProgress']);
+ for(const entry of Object.values(api))assert.equal(entry.options.enforceAppCheck,true);
+ await assert.rejects(api.dedaPurchaseMigratedFrame.action(callableRequest({frameId:'FRAME_03'})),
+  e=>e.code==='failed-precondition'&&e.message==='insufficient-diamonds');
+ await assert.rejects(api.dedaReadMigratedProgress.action({...callableRequest(),auth:null}),
+  e=>e.code==='unauthenticated'&&e.message==='account-session-required');
+ assert.deepEqual(f.store.writes,[]);
+});

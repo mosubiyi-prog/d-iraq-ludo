@@ -237,6 +237,10 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
                      'deda_private_data_page.dart'):
             shutil.copy2(REPO/'lib'/name, output/'lib'/name)
         bind_private_data(output)
+        from bind_migrated_frame_checkout import bind as bind_migrated_frame_checkout
+        for name in ('deda_migrated_progress.dart', 'deda_migrated_progress_firebase.dart'):
+            shutil.copy2(REPO/'lib'/name, output/'lib'/name)
+        bind_migrated_frame_checkout(output)
     return {'sectionEntry':section_entry, 'lazySections':lazy_sections, 'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,

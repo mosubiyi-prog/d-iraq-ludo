@@ -70,7 +70,7 @@ class AllSectionBindingTest(unittest.TestCase):
         self.assertEqual(main.count('DedaSectionAccountChanges.changed();'),3)
         self.assertEqual(main.count('static int get stabilityAccountEpoch'),1)
 
-    def test_backend_rules_and_all_purchase_contracts_are_untouched(self):
+    def test_backend_and_legacy_purchase_contracts_remain_exact_under_explicit_overlays(self):
         for old in (self.base/'lib').glob('*.dart'):
             if old.name not in self.report and old.name not in ('main.dart',):
                 self.assertEqual(old.read_bytes(),(self.bound/'lib'/old.name).read_bytes(),old.name)
@@ -78,6 +78,9 @@ class AllSectionBindingTest(unittest.TestCase):
                      'deda_owner18_frame_checkout.dart','deda_social_service.dart']:
             old=(self.base/'lib'/name).read_text();new=(self.bound/'lib'/name).read_text()
             expected=bind_owned_frame_reads(old) if name=='deda_lab_frame_secure_checkout.dart' else old
+            if name=='deda_owner18_frame_checkout.dart':
+                from bind_migrated_frame_checkout import unbind_source
+                new=unbind_source(new)
             self.assertEqual(expected,remove_section_guards(new),name)
 
     def test_generated_sources_stay_balanced_and_cannot_be_bound_twice(self):

@@ -41,7 +41,7 @@ async function forOwnerSession(options,work){
    !profile||profile.accountKey!==accountKey||!trusted(profile,install)||
    !directory||directory.accountKey!==accountKey||directory.active!==true||
    !credential||credential.accountKey!==accountKey||credential.active!==true)fail('point-session-owner-proof-required');
-  return work(tx,accountKey);
+  return work(tx,accountKey,{uid:token.uid});
  });
 }
 async function claimPointTierForOwnerSession(options){
@@ -79,4 +79,5 @@ async function claimReviewedPointTierForOwnerSession(options){
   return claimMigratedPointTier({store:transactionStore,accountKey,threshold});
  });
 }
-module.exports={claimPointTierForOwnerSession,readMigratedProgressForOwnerSession,claimReviewedPointTierForOwnerSession};
+module.exports={claimPointTierForOwnerSession,readMigratedProgressForOwnerSession,claimReviewedPointTierForOwnerSession,
+ withVerifiedOwnerSession:forOwnerSession};
