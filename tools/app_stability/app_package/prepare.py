@@ -117,6 +117,18 @@ def prepare(project, variant):
         unified = importlib.util.module_from_spec(unified_spec)
         unified_spec.loader.exec_module(unified)
         unified.bind(source)
+        # Build one candidate with both approved task replacements and 500
+        # traffic questions. No extra APKs, wallet migrations or deployments.
+        tasks_spec = importlib.util.spec_from_file_location(
+            'deda_tasks_500', REPO/'tools/app_stability/bind_tasks_integrated_100383.py')
+        tasks = importlib.util.module_from_spec(tasks_spec)
+        tasks_spec.loader.exec_module(tasks)
+        traffic_spec = importlib.util.spec_from_file_location(
+            'deda_traffic_500', REPO/'tools/app_stability/bind_traffic_500_100383.py')
+        traffic = importlib.util.module_from_spec(traffic_spec)
+        traffic_spec.loader.exec_module(traffic)
+        tasks.bind(source)
+        traffic.bind(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
@@ -126,7 +138,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100382,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100383,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
