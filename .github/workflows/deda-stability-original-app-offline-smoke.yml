@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 - <<'PYWAIT'
           import json, os, time, urllib.request
-          source_url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40241146450'
+          source_url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40248685103'
           for attempt in range(80):
               request = urllib.request.Request(source_url, headers={
                   'Authorization': 'Bearer ' + os.environ['DEDA_BUILD_READ_TOKEN'],
@@ -38,7 +38,7 @@ jobs:
               })
               with urllib.request.urlopen(request, timeout=30) as response:
                   source_result = json.load(response)
-              if source_result.get('head_sha') != '3962ce68d5deec22bddf540a7565349b8c0b6e91':
+              if source_result.get('head_sha') != '608a387c2715583feea9c95fa82c4cd18918439a':
                   raise SystemExit('Source QA mismatch; no APK downloaded or launched')
               if source_result.get('status') == 'completed':
                   if source_result.get('conclusion') != 'success':
@@ -47,8 +47,8 @@ jobs:
               time.sleep(15)
           else:
               raise SystemExit('Source QA still pending; no APK downloaded or launched')
-          url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40239877928'
-          expected = '83e84db3480584f4f7134ff4c1eed9bd7857cb93'
+          url = 'https://api.github.com/repos/mosubiyi-prog/d-iraq-ludo/actions/runs/40248730692'
+          expected = '68686d5a93b46c780e1c0eba77ed7a382608412d'
           for attempt in range(80):
               request = urllib.request.Request(url, headers={
                   'Authorization': 'Bearer ' + os.environ['DEDA_BUILD_READ_TOKEN'],
@@ -71,14 +71,14 @@ jobs:
         with:
           github-token: ${{ github.token }}
           repository: mosubiyi-prog/d-iraq-ludo
-          run-id: 40239877928
+          run-id: 40248730692
           name: DEDA-STABILITY-INTERNAL-control-NOT-FINAL
           path: ${{ runner.temp }}/internal-control
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           repository: mosubiyi-prog/d-iraq-ludo
-          run-id: 40239877928
+          run-id: 40248730692
           name: DEDA-STABILITY-INTERNAL-candidate-NOT-FINAL
           path: ${{ runner.temp }}/internal-candidate
       - name: Enable KVM for the disposable emulator only
