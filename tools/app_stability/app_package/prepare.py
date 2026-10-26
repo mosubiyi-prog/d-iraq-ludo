@@ -121,7 +121,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100380,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100381,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
