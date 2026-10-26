@@ -17,13 +17,18 @@ SOURCES = (
 
 class IdentityNoFlashTests(unittest.TestCase):
     def _restore_two_sources(self, root):
-        with tarfile.open(ARCHIVE, 'r:gz') as tar:
-            for name in SOURCES:
-                member = tar.getmember(name)
-                content = tar.extractfile(member).read()
-                target = root / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(content)
+        # Use the exact packaged candidate, not two raw files extracted from
+        # the historical archive. Section/auth binders transform the source
+        # before the no-flash patch is applied in the real APK.
+        spec = importlib.util.spec_from_file_location(
+            'candidate_restore', REPO / 'tools/restore_deda_stability_baseline.py')
+        restore = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(restore)
+        restore.restore(
+            root, pilot=True, startup_metrics=True, auth_runtime=True,
+            admin_firebase_adapter=True, progress_backup_runtime=True,
+            section_entry=True, lazy_sections=True,
+        )
 
     def test_verified_identifier_never_uses_old_id_while_loading(self):
         spec = importlib.util.spec_from_file_location('identity_no_flash', BINDER)
