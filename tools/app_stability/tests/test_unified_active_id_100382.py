@@ -28,6 +28,10 @@ class UnifiedIdentifierTest(unittest.TestCase):
             )
             old.bind(root)
             original = (root/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
+            use_at = original.find('static Future<void> use(')
+            print('STAGE71 USE CODE HEAD:', repr(original[use_at:use_at+1050]))
+            print('ACTIVE CHANGE TAIL:', repr(original[original.index('DedaStage71ActiveIdRefresh.changed();')-450:original.index('DedaStage71ActiveIdRefresh.changed();')+85]))
+
             updated = binder.bind(root)
             scope = (root/'lib/deda_qa32_active_account_scope.dart').read_text()
             profile = (root/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
