@@ -54,11 +54,11 @@ class UnifiedIdentifierTest(unittest.TestCase):
             # routing, profile, gifts, ownership and wallet code untouched.
             self.assertEqual(
                 original.count("db.collection(activeCollection).doc(originalId).set("),
-                profile.count("db.collection(activeCollection).doc(originalId).set("))
+                profile.count("db.collection(activeCollection).doc(originalId).set(")
             )
             self.assertEqual(
                 original.count('DedaStage74IdGiftService.isReceived('),
-                profile.count('DedaStage74IdGiftService.isReceived('))
+                profile.count('DedaStage74IdGiftService.isReceived(')
             )
             self.assertEqual(
                 original.count('publishOwnerVerified('),
