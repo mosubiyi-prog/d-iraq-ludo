@@ -100,20 +100,18 @@ def bind(output):
         "import 'deda_verified_active_id_store.dart';\n"
         "import 'deda_qa32_active_account_scope.dart';",
         'stage71 import shared proof and scope')
+    # The verified temporary archive is Dart-formatted. Anchor the exact
+    # compiled Use implementation, not the unformatted repository copy.
     social = once(social,
-        """    if (identifier!=originalId) {""",
-        """    String? selectedColor;
-    if (identifier!=originalId) {""",
+        "    if (identifier != originalId) {",
+        "    String? selectedColor;\\n    if (identifier != originalId) {",
         'capture server verified selection color')
     social = once(social,
-        """      DedaStage71OwnedIdentifier.read(
-        owner.id,owner.data() ?? {},originalId);
-      if (owner.data()?['kind']=='gifted' &&""",
-        """      final selectedGrant = DedaStage71OwnedIdentifier.read(
-        owner.id,owner.data() ?? {},originalId);
-      selectedColor = selectedGrant.baseColor;
-      if (owner.data()?['kind']=='gifted' &&""",
-        'capture grant color without new read')
+        "DedaStage71OwnedIdentifier.read(owner.id, owner.data() ?? {}, originalId);",
+        "final selectedGrant = DedaStage71OwnedIdentifier.read(\\n"
+        "          owner.id, owner.data() ?? {}, originalId);\\n"
+        "      selectedColor = selectedGrant.baseColor;",
+        'capture grant color without a new server lookup')
     social = once(social,
         """    DedaStage71ActiveIdRefresh.changed();
   }
@@ -133,18 +131,9 @@ def bind(output):
 /// User's Edit Profile:""",
         'confirm shared display after existing Use/readback')
     social = once(social,
-        """            // QA32: original is never lost and is always available to
-            // reactivate when a gifted or self-used premium ID is active.
-            // Switching only changes the ACTIVE display alias, not the
-            // immutable original account/share routing identifier.
-            if (currentRows != null)""",
-        """            // The canonical key is retained privately for routing, but
-            // hidden from My IDs once a premium display alias is active.
-            // While canonical is currently selected, this row allows the
-            // owner's agreed original-to-premium QA sequence.
-            if (currentRows != null &&
-                currentActive == widget.originalId)""",
-        'no old ID in My IDs once premium is active')
+        "if (currentRows != null)",
+        "if (currentRows != null \\n                && currentActive == widget.originalId)",
+        'old ID is never offered for display while premium active')
     before = "class DedaStage71ActiveProfileFoil extends StatefulWidget {"
     if social.count(before) != 1:
         raise ValueError('profile-foil anchor changed')
