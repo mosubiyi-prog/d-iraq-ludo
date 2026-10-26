@@ -5,6 +5,8 @@ const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
 const {saveMigrationAssessment}=require('./migration-assessment-store.cjs');
 const {savePointTierCarryover}=require('./point-tier-carryover.cjs');
 const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
+const {reviewLegacySettlement}=require('./review-legacy-settlement.cjs');
+const {frames}=require('./purchase-frames.cjs');
 const {reconcileMigratedReceipt}=require('./migration-gate.cjs');
 const {claimMigratedPointTier}=require('./point-tier-claim.cjs');
 const core=require('./reconcile-core.cjs');
@@ -238,4 +240,95 @@ test('reviewed owner claim shares the exact verified activation transaction and 
  const request={store:f.store,auth:ownerAuth(),idToken:'owner-fixture-only',threshold:5000};
  const a=await claimReviewedPointTierForOwnerSession(request),b=await claimReviewedPointTierForOwnerSession(request);
  assert.equal(a.state.balances.points,10050);assert.equal(b.replayed,true);assert.equal(b.state.balances.points,10050);
+});
+
+const purchaseCaptureId='settlement_purchase_capture_01';
+const purchasePath=`deda_purchase_evidence/${A}/captures/${purchaseCaptureId}`;
+async function settlementFixture(change=()=>{}){
+ const f=await fixture();f.store.docs.delete(resolutionPath);
+ const snapshot={format:1,accountKey:A,originalId:original,inventory:null,
+  frameJournals:Object.fromEntries(frames.map(frame=>[frame,null]))};
+ change(snapshot,f);
+ f.store.docs.set(purchasePath,{format:1,kind:'legacy-purchase-evidence',accountKey:A,
+  sourceUid:'old-device',installId:'old-install',captureId:purchaseCaptureId,
+  records:{originalId:original,progressCaptureId:captureId,localSnapshot:JSON.stringify(snapshot)},
+  createdAt:f.store.serverTimestamp()});
+ const {report}=await saveLegacyOperationReview({store:f.store,accountKey:A,migrationId,originalId:original,purchaseCaptureId});
+ f.settlementRequest={store:f.store,auth:f.request.auth,idToken:f.request.idToken,accountKey:A,migrationId,
+  settlementId,expectedOperationReviewDigest:report.inputDigest,purchaseCaptureId,originalId:original,legacyFenceId:fenceId};
+ f.store.writes=[];return f;
+}
+const settle=f=>reviewLegacySettlement(f.settlementRequest);
+async function settlementRejected(f,code){
+ const before=structuredClone([...f.store.docs]);
+ await assert.rejects(settle(f),e=>e.code===code);
+ assert.deepEqual([...f.store.docs],before);assert.deepEqual(f.store.writes,[]);
+}
+test('settlement producer consumes real captured absence and carryover, writes only immutable resolution',async()=>{
+ const f=await settlementFixture(),before=structuredClone([...f.store.docs]);
+ const result=await settle(f);assert.equal(result.replayed,false);assert.equal(result.canReleaseBalance,false);
+ assert.deepEqual(f.store.writes,[resolutionPath]);
+ for(const [p,d]of before)assert.deepEqual(f.store.docs.get(p),d,p);
+ const resolution=f.store.docs.get(resolutionPath);
+ assert.equal(resolution.purchaseCaptureId,purchaseCaptureId);assert.equal(resolution.pendingPurchases,0);
+ assert.equal(resolution.pendingReservations,0);assert.equal(f.store.docs.has(statePath),false);
+ f.store.writes=[];const stored=structuredClone(resolution);
+ assert.equal((await settle(f)).replayed,true);assert.deepEqual(f.store.docs.get(resolutionPath),stored);
+ assert.deepEqual(f.store.writes,[]);
+});
+test('actual produced settlement permits six-record activation then replays without resetting later inventory',async()=>{
+ const f=await settlementFixture();await settle(f);f.store.writes=[];
+ assert.equal((await activate(f)).state.balances.points,5000);
+ f.store.docs.get(`deda_native_account_cosmetics/${original}`).pendingFrames.push('FRAME_03');
+ f.store.writes=[];assert.equal((await settle(f)).replayed,true);assert.deepEqual(f.store.writes,[]);
+ assert.equal((await activate(f)).replayed,true);
+});
+for(const value of ['charging','paid',false,1,['paid']])test(`settlement cannot erase uncertain payment ${JSON.stringify(value)}`,async()=>{
+ const f=await settlementFixture(snapshot=>{snapshot.frameJournals.FRAME_03=value;});
+ await settlementRejected(f,'settlement-payment-journal-needs-review');
+});
+for(const value of ['{"owned":["badge_gold"]}',false,1,[]])test(`settlement cannot assume style history settled ${JSON.stringify(value)}`,async()=>{
+ const f=await settlementFixture(snapshot=>{snapshot.inventory=value;});
+ await settlementRejected(f,'settlement-style-history-needs-review');
+});
+for(const kind of ['pending','missing-pending','unknown-owned','partial-receipt'])test(`settlement blocks ${kind} without changing native sources`,async()=>{
+ const f=await settlementFixture((_snapshot,f)=>{
+  const native=f.store.docs.get(`deda_native_account_cosmetics/${original}`);
+  if(kind==='pending')native.pendingFrames=['FRAME_03'];
+  if(kind==='missing-pending')delete native.pendingFrames;
+  if(kind==='unknown-owned')native.ownedFrames=['FRAME_FUTURE'];
+  if(kind==='partial-receipt')f.store.docs.set(`deda_lab_frame_receipts/${original}/frames/FRAME_03`,{kind:'lab_frame'});
+ });await settlementRejected(f,'settlement-native-purchases-needs-review');
+});
+test('stale review is recomputed within the settlement transaction, not trusted from counters',async()=>{
+ const f=await settlementFixture();f.store.docs.get(`deda_native_account_cosmetics/${original}`).pendingFrames=['FRAME_03'];
+ await settlementRejected(f,'settlement-operation-review-changed');
+});
+test('settlement retry rechecks changed inventory and commits no resolution',async()=>{
+ const f=await settlementFixture();f.store.retry=docs=>docs.get(`deda_native_account_cosmetics/${original}`).pendingFrames.push('FRAME_03');
+ await assert.rejects(settle(f),e=>e.code==='settlement-operation-review-changed');
+ assert.equal(f.store.docs.has(resolutionPath),false);assert.deepEqual(f.store.writes,[]);
+});
+test('settlement retry revalidates manager identity and revocation',async()=>{
+ const f=await settlementFixture();let calls=0;
+ f.settlementRequest.auth={verifyIdToken:async()=>{calls++;if(calls===2)throw Object.assign(Error('revoked'),{code:'auth/id-token-revoked'});
+  return {uid:'reviewer',email:'reviewer@example.test',firebase:{sign_in_provider:'password'}};}};
+ f.store.retry=()=>{};await settlementRejected(f,'auth/id-token-revoked');assert.equal(calls,2);
+});
+test('settlement rejects caller amounts, zero counters and absent source capture',async()=>{
+ for(const extra of [{pendingPurchases:0},{amount:0},{approved:true}]){
+  const f=await settlementFixture();Object.assign(f.settlementRequest,extra);await settlementRejected(f,'invalid-settlement-review-request');
+ }
+ const f=await settlementFixture();f.store.docs.delete(purchasePath);await settlementRejected(f,'purchase-evidence-missing');
+});
+for(const missing of ['fence','deployment','approval','carryover'])test(`settlement requires ${missing} before writing resolution`,async()=>{
+ const f=await settlementFixture();
+ f.store.docs.delete(missing==='fence'?fencePath:missing==='deployment'?deploymentPath:
+  missing==='approval'?`${root}/approvals/${migrationId}`:`${root}/pointTierCarryovers/${migrationId}`);
+ await settlementRejected(f,{fence:'cutover-enforced-fence-required',deployment:'cutover-deployment-not-approved',
+  approval:'settlement-baseline-approval-required',carryover:'migration-point-carryover-required'}[missing]);
+});
+test('failed settlement commit changes no source, carryover, approval, balance or resolution',async()=>{
+ const f=await settlementFixture();f.store.fail=true;const before=structuredClone([...f.store.docs]);
+ await assert.rejects(settle(f),/fixture-commit-failure/);assert.deepEqual([...f.store.docs],before);
 });

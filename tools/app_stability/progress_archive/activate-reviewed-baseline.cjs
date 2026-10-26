@@ -151,4 +151,4 @@ async function activateReviewedBaseline(options){
   return Object.freeze({replayed:false,state:next});
  });
 }
-module.exports={activateReviewedBaseline,deploymentPath};
+module.exports={activateReviewedBaseline,deploymentPath,parseDeployment,validateFence};

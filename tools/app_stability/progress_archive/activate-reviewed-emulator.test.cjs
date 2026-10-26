@@ -12,6 +12,8 @@ const {approveLegacyBaseline,policyPath}=require('./baseline-review.cjs');
 const {savePointTierCarryover}=require('./point-tier-carryover.cjs');
 const {saveLegacyOperationReview}=require('./legacy-operation-review.cjs');
 const {activateReviewedBaseline,deploymentPath}=require('./activate-reviewed-baseline.cjs');
+const {reviewLegacySettlement}=require('./review-legacy-settlement.cjs');
+const {frames}=require('./purchase-frames.cjs');
 const {readMigratedProgressForOwnerSession,claimReviewedPointTierForOwnerSession}=require('./point-tier-session.cjs');
 const A='07700000000',original='@DEDA-ABC234',captureId='sdk_activation_capture_0001';
 const migrationId='sdk_activation_migration_01',settlementId='sdk_activation_settlement_1';
@@ -52,7 +54,7 @@ test.beforeEach(async()=>{
  await db.doc(`admins/${manager.uid}`).set({active:true,status:'active',role:'general_manager',email:manager.email});
  await db.doc(`deda_gm_personal_diamond_wallets/${A}`).set({balance:1000000,fixture:'unchanged'});
 });
-async function reviewedFixture(){
+async function reviewedFixture(journalValue=null){
  const client=env.authenticatedContext(owner.uid).firestore();
  await assertSucceeds(setDoc(doc(client,`deda_progress_evidence/${A}/captures/${captureId}`),{
   format:1,kind:'legacy-local-evidence',accountKey:A,captureId,sourceUid:owner.uid,installId:'old-install',
@@ -71,9 +73,15 @@ async function reviewedFixture(){
   expectedEvidenceDigest:migration.evidenceDigest,policyRevision:revision});
  await savePointTierCarryover({store,accountKey:A,migrationId});
  const reviewed=(await db.doc(root).get()).data();
- const operations=await saveLegacyOperationReview({store,accountKey:A,migrationId,originalId:original});
- // Deliberate private server TEST inputs, not actual published rules, a real
- // writer fence, manual production settlement, PIN UI or provider attestation.
+ const purchaseCaptureId='sdk_purchase_settlement_001';
+ await assertSucceeds(setDoc(doc(client,`deda_purchase_evidence/${A}/captures/${purchaseCaptureId}`),{
+  format:1,kind:'legacy-purchase-evidence',accountKey:A,captureId:purchaseCaptureId,sourceUid:owner.uid,
+  installId:'old-install',createdAt:serverTimestamp(),records:{originalId:original,progressCaptureId:captureId,
+   localSnapshot:JSON.stringify({format:1,accountKey:A,originalId:original,inventory:null,
+    frameJournals:Object.fromEntries(frames.map((frame,index)=>[frame,index===0?journalValue:null]))})}}));
+ const operations=await saveLegacyOperationReview({store,accountKey:A,migrationId,originalId:original,purchaseCaptureId});
+ // Deployment/fence remain deliberate private TEST inputs, not published
+ // protection, production settlement, actual PIN UI or provider attestation.
  await db.doc(deploymentPath).set({format:1,enabled:true,revision:deploymentRevision,
   protocol:'deda-verified-progress-v1',enforcementRevision:'e'.repeat(64),clientBound:true,
   providersReady:true,atomicPurchasesReady:true});
@@ -81,12 +89,10 @@ async function reviewedFixture(){
   evidenceDigest:reviewed.evidenceDigest,originalId:original,legacyFenceId:fenceId,
   protocol:'deda-verified-progress-v1',deploymentRevision,enforcementRevision:'e'.repeat(64),
   status:'enforced',createdAt:FieldValue.serverTimestamp()});
- await db.doc(`${root}/settlementReviews/${settlementId}`).set({format:1,accountKey:A,migrationId,
-  evidenceDigest:reviewed.evidenceDigest,baselineEventKey:reviewed.baselineEventKey,settlementId,
-  originalId:original,operationReviewDigest:operations.report.inputDigest,purchaseCaptureId:null,
-  legacyFenceId:fenceId,policyRevision:revision,reviewerUid:manager.uid,reviewerEmail:manager.email,
-  status:'resolved',decision:'preserve-reviewed-balances-and-carried-rights',pendingPurchases:0,
-  pendingReservations:0,createdAt:FieldValue.serverTimestamp()});
+ const settlementRequest={store,auth,idToken:manager.idToken,accountKey:A,migrationId,settlementId,
+  originalId:original,expectedOperationReviewDigest:operations.report.inputDigest,purchaseCaptureId,legacyFenceId:fenceId};
+ if(journalValue===null)await reviewLegacySettlement(settlementRequest);
+ return settlementRequest;
 }
 const activate=(overrides={})=>activateReviewedBaseline({store,auth,idToken:manager.idToken,
  accountKey:A,migrationId,settlementId,...overrides});
@@ -163,4 +169,18 @@ test('clients including the manager cannot forge activation, settlement review o
   }
  }
  assert.equal(await current(),null);
+});
+test('real captured charging journal prevents settlement and leaves all source records untouched',async()=>{
+ const request=await reviewedFixture('charging');
+ const before=(await db.doc(`deda_purchase_evidence/${A}/captures/${request.purchaseCaptureId}`).get()).data();
+ await assert.rejects(reviewLegacySettlement(request),e=>e.code==='settlement-payment-journal-needs-review');
+ assert.equal((await db.doc(`${root}/settlementReviews/${settlementId}`).get()).exists,false);
+ assert.equal(await current(),null);
+ assert.deepEqual((await db.doc(`deda_purchase_evidence/${A}/captures/${request.purchaseCaptureId}`).get()).data(),before);
+});
+test('concurrent real settlement review writes one immutable resolution and does not release balances',async()=>{
+ const request=await reviewedFixture();await db.doc(`${root}/settlementReviews/${settlementId}`).delete();
+ const result=await Promise.all([reviewLegacySettlement(request),reviewLegacySettlement(request)]);
+ assert.equal(result.filter(r=>r.replayed).length,1);assert.equal(await current(),null);
+ assert.equal((await db.collection(`${root}/settlementReviews`).get()).size,1);
 });
