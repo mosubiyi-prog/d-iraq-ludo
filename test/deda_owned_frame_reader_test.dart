@@ -60,7 +60,7 @@ void main() {
     });
   }
   for(final defect in ['missing-receipt','missing-owned','price','account','frame','receipt-id']) {
-    test('partial or forged $defect never becomes owned',() async {
+    test('partial or forged $defect fails recovery visibly instead of hiding a paid item',() async {
       final io=Io()..own('FRAME_03');final p=io.receipts['FRAME_03']!;
       final r=Map<String,dynamic>.of(p.receipt!),o=Map<String,dynamic>.of(p.ownership!);
       if(defect=='price')r['cost']=1;
@@ -68,10 +68,19 @@ void main() {
       if(defect=='frame')o['frameId']='FRAME_99';
       if(defect=='receipt-id')o['receiptId']='foreign';
       io.receipts['FRAME_03']=DedaOwnedFramePair(defect=='missing-receipt'?null:r,defect=='missing-owned'?null:o);
-      expect(await reader(io).owned(original),isEmpty);
+      await expectLater(reader(io).owned(original),throwsStateError);
       await expectLater(reader(io).isOwned(original,'FRAME_03'),throwsStateError);
     });
   }
+  test('an incomplete record rejects the entire scan even when another frame is verified',() async {
+    final io=Io()..own('FRAME_03')..own('FRAME_05');
+    final p=io.receipts['FRAME_05']!;
+    io.receipts['FRAME_05']=DedaOwnedFramePair(p.receipt,null);
+    await expectLater(reader(io).owned(original),throwsStateError);
+    // A later explicit recovery can succeed after the server record is fixed.
+    io.own('FRAME_05');
+    expect(await reader(io).owned(original),{'FRAME_03','FRAME_05'});
+  });
   test('approved single frame ownership and absence preserve existing results',() async {
     final io=Io()..own('FRAME_03');expect(await reader(io).isOwned(original,'FRAME_03'),isTrue);
     expect(await reader(io).isOwned(original,'FRAME_05'),isFalse);

@@ -16,12 +16,30 @@ def bind_source(source):
     failure='''    } catch (_) { /* Keep unpaid frames locked until server proof succeeds. */ }'''
     notice='''            const DedaUnifiedCurrencyStrip(),
             Expanded('''
-    for anchor in [fields,load,success,failure,notice]:
+    prerequisites='''    if (Firebase.apps.isEmpty || DedaPreferences.phone.trim().isEmpty) return;
+    final phone = DedaPreferences.phone;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;'''
+    appearance='''      final appearance = await DedaOwner18Cosmetics.read(
+        DedaBackend.personalShareIdForPhone(phone).trim());'''
+    for anchor in [fields,load,success,failure,notice,prerequisites,appearance]:
         if page.count(anchor)!=1:raise ValueError('exact original owned inventory editor required')
     page=page.replace(fields,fields+'''
   // DEDA_OWNED_FRAME_RECOVERY_STATUS_V1
   bool _loadingOwnedFrames = false;
   bool _ownedFramesUnavailable = false;''',1)
+    page=page.replace(prerequisites,'''    final phone = DedaPreferences.phone;
+    if (phone.trim().isEmpty) return;
+    if (Firebase.apps.isEmpty || FirebaseAuth.instance.currentUser?.uid == null) {
+      if (mounted) setState(() => _ownedFramesUnavailable = true);
+      return;
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;''',1)
+    # Only the read is bounded; no purchase/equip/session write is retried or
+    # timed out. A late read cannot run the continuation after this deadline.
+    page=page.replace(appearance,'''      final appearance = await DedaOwner18Cosmetics.read(
+        DedaBackend.personalShareIdForPhone(phone).trim())
+        .timeout(const Duration(seconds: 12));''',1)
     page=page.replace(load,'''    if (_loadingOwnedFrames) return;
     setState(() { _loadingOwnedFrames = true; _ownedFramesUnavailable = false; });
 '''+load,1)

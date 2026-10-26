@@ -27,6 +27,8 @@ class OwnedFrameStatusBindingTest(unittest.TestCase):
         self.assertNotIn('buyOnce(',load)
         self.assertNotIn('.spend(',load)
         self.assertIn('finally',load)
+        self.assertIn('.timeout(const Duration(seconds: 12))',load)
+        self.assertIn('if (Firebase.apps.isEmpty || FirebaseAuth.instance.currentUser?.uid == null)',load)
         pairs(tokens(updated))
 
     def test_edit_save_equip_purchase_and_all_other_pages_are_unchanged(self):

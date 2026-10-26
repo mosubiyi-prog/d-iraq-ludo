@@ -11,6 +11,7 @@ on:
       - 'tools/app_stability/bind_all_sections.py'
       - 'tools/app_stability/bind_owned_frame_reader.py'
       - 'tools/app_stability/bind_owned_frame_status.py'
+      - 'tools/app_stability/bind_owned_frame_status.py'
       - 'lib/deda_owned_frame_reader.dart'
       - 'tools/app_stability/bind_account_choice.py'
       - 'lib/deda_account_choice_sync.dart'

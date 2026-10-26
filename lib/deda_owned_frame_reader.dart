@@ -60,6 +60,12 @@ class DedaOwnedFrameReader {
       r['frameId']==frame && r['cost']==1000 && o['publicId']==original &&
       o['frameId']==frame && o['receiptId']=='${original}_$frame';
   }
+  bool _ownedOrMissing(DedaOwnedFramePair pair,String original,String frame) {
+    if(pair.fromCache || pair.pendingWrites) throw StateError('frame-server-proof-required');
+    if(pair.receipt==null && pair.ownership==null) return false;
+    if(!_valid(pair,original,frame)) throw StateError('partial-or-forged-frame-ownership');
+    return true;
+  }
   Future<DedaOwnedFramePair> _read(String original,String frame,Object? principal) async {
     _check(principal);
     final p=await io.readPair(original,frame).timeout(deadline);_check(principal);
@@ -70,10 +76,7 @@ class DedaOwnedFrameReader {
     final principal=io.principal;_check(principal);
     await io.verifyOriginalOwner(original).timeout(deadline);_check(principal);
     final pair=await _read(original,frame,principal);
-    if(pair.fromCache || pair.pendingWrites) throw StateError('frame-server-proof-required');
-    if(pair.receipt==null && pair.ownership==null) return false;
-    if(!_valid(pair,original,frame)) throw StateError('partial-or-forged-frame-ownership');
-    return true;
+    return _ownedOrMissing(pair,original,frame);
   }
   Future<Set<String>> owned(String original) async {
     _original(original);final principal=io.principal;_check(principal);
@@ -83,7 +86,7 @@ class DedaOwnedFrameReader {
     // successful empty inventory that could hide already-purchased items.
     final found=await Future.wait<String?>(ids.map((frame) async {
       final pair=await _read(original,frame,principal);
-      return _valid(pair,original,frame)?frame:null;
+      return _ownedOrMissing(pair,original,frame)?frame:null;
     }));
     _check(principal);return Set.unmodifiable(found.whereType<String>());
   }
