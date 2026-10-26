@@ -46,6 +46,12 @@ class IdentityNoFlashTests(unittest.TestCase):
             self.assertIn('  void _refresh() {\n    // Active-ID selection changed', scope)
             self.assertIn('    _invalidateProof();\n    _load();', scope)
             self.assertNotIn('if (_proof != null) setState(() => _proof = null);', scope)
+            self.assertIn('static final Map<(String, String, int)', scope)
+            self.assertIn('DedaStage71ActiveIdRefresh.notifier.value', scope)
+            self.assertIn('DedaStage71OwnedIdentifier.read(', scope)
+            self.assertNotIn('await DedaStage71OwnedIdentifierService.owned(original);', scope)
+            self.assertIn('Never copy an unverified old ID', owner)
+            self.assertIn('} catch(_) {\n', owner)
             self.assertEqual(before[SOURCES[0]].count('class DedaSixIdentityCopy'),
                              owner.count('class DedaSixIdentityCopy'))
             # Same source cannot be patched twice; any drift must fail closed.
