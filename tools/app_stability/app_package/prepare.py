@@ -38,6 +38,9 @@ def flags(variant):
             'DEDA_STABILITY_AUTH_RUNTIME': enabled,
             'DEDA_STABILITY_SECTION_ENTRY': enabled,
             'DEDA_STABILITY_LAZY_SECTIONS': enabled,
+            # The client is packaged for isolated integration. The new rules
+            # still need an explicit reviewed production deployment.
+            'DEDA_STABILITY_PRIVATE_DATA': enabled,
             'DEDA_STABILITY_PROGRESS_BACKUP_PILOT': False}
 
 

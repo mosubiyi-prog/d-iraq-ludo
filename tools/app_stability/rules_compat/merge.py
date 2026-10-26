@@ -5,9 +5,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MARKER = 'DEDA_STABILITY_ARCHIVE_REVIEW_ONLY_V1'
-NAMESPACES = ('deda_free_card_choices', 'deda_purchase_evidence', 'deda_progress_evidence', 'deda_progress_receipts',
+NAMESPACES = ('deda_private_account_data', 'deda_free_card_choices', 'deda_purchase_evidence', 'deda_progress_evidence', 'deda_progress_receipts',
               'deda_progress_migrations', 'deda_verified_progress')
-RENAMES = {'validFreeCardChoice': 'dedaArchiveFreeCardChoiceV1', 'ownsProgressAccount': 'dedaArchiveAccountOwnerV1',
+RENAMES = {'validPrivateData': 'dedaArchivePrivateDataV1', 'validFreeCardChoice': 'dedaArchiveFreeCardChoiceV1', 'ownsProgressAccount': 'dedaArchiveAccountOwnerV1',
            'validLegacyText': 'dedaArchiveLegacyTextV1',
            'validEvidence': 'dedaArchiveEvidenceV1',
            'ownsPurchaseOriginal': 'dedaArchivePurchaseOriginalV1',
@@ -119,6 +119,7 @@ def extension(candidate):
     if re.search(r'\bmatch\s*/(?:users|deda_sessions)\b', scoped):
         raise GuardError('legacy-user-or-session-policy-in-extension')
     expected = {
+        '/deda_private_account_data/{accountKey}',
         '/deda_free_card_choices/{accountKey}/cards/{originalId}',
         '/deda_purchase_evidence/{accountKey}/captures/{captureId}',
         '/deda_progress_evidence/{accountKey}/captures/{captureId}',
@@ -132,7 +133,7 @@ def extension(candidate):
         depth = prefix.count('{') - prefix.count('}')
         if depth == 0:
             top.add(match[1])
-        elif depth != 1 or match[1] != '/events/{eventId}':
+        elif depth != 1 or match[1] not in ('/events/{eventId}', '/versions/{mutationId}'):
             raise GuardError('unexpected-extension-path')
     if top != expected:
         raise GuardError('extension-top-level-scope-changed')

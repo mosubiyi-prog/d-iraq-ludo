@@ -17,6 +17,11 @@ on:
       - 'lib/deda_owned_frame_reader.dart'
       - 'test/deda_owned_frame_reader_test.dart'
       - 'test/deda_owned_frame_recovery_status_test.dart'
+      - 'lib/deda_private_data_sync.dart'
+      - 'lib/deda_private_data_bridge.dart'
+      - 'lib/deda_private_data_page.dart'
+      - 'test/deda_private_data_sync_test.dart'
+      - 'test/deda_private_data_page_test.dart'
       - 'lib/deda_account_choice_sync.dart'
       - 'lib/deda_account_choice_firebase.dart'
       - 'lib/deda_free_card_sync_bridge.dart'
@@ -118,6 +123,13 @@ jobs:
         run: |
           flutter analyze --no-pub --fatal-infos lib/deda_owned_frame_reader.dart test/deda_owned_frame_reader_test.dart test/deda_owned_frame_recovery_status_test.dart
           flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true --reporter expanded test/deda_owned_frame_reader_test.dart test/deda_owned_frame_recovery_status_test.dart
+      - name: Verify private account data backup, conflict recovery and actual confirmation UI
+        timeout-minutes: 3
+        if: matrix.mode == 'auth-bound'
+        working-directory: ${{ runner.temp }}/deda-stability
+        run: |
+          flutter analyze --no-pub --fatal-infos lib/deda_private_data_sync.dart lib/deda_private_data_bridge.dart lib/deda_private_data_page.dart test/deda_private_data_sync_test.dart test/deda_private_data_page_test.dart
+          flutter test --no-pub --timeout 20s --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_STABILITY_SECTION_ENTRY=true --dart-define=DEDA_STABILITY_PRIVATE_DATA=true --reporter expanded test/deda_private_data_sync_test.dart test/deda_private_data_page_test.dart
       - name: Verify account-bound free card continuity and conflict recovery
         timeout-minutes: 3
         if: matrix.mode == 'auth-bound'
@@ -277,4 +289,4 @@ jobs:
         timeout-minutes: 8
         run: |
           export NODE_PATH="$RUNNER_TEMP/progress-rules-qa/node_modules"
-          "$RUNNER_TEMP/progress-rules-qa/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-progress-archive --config tools/app_stability/progress_archive/firebase.json 'node --test --test-concurrency=1 tools/app_stability/progress_archive/rules.test.cjs tools/app_stability/progress_archive/reconcile-emulator.test.cjs tools/app_stability/progress_archive/account-choice-rules.test.cjs'
+          "$RUNNER_TEMP/progress-rules-qa/node_modules/.bin/firebase" emulators:exec --only auth,firestore --project demo-deda-progress-archive --config tools/app_stability/progress_archive/firebase.json 'node --test --test-concurrency=1 tools/app_stability/progress_archive/rules.test.cjs tools/app_stability/progress_archive/reconcile-emulator.test.cjs tools/app_stability/progress_archive/account-choice-rules.test.cjs tools/app_stability/progress_archive/private-data-rules.test.cjs'

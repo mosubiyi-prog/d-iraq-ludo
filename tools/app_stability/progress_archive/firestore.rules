@@ -71,6 +71,36 @@ service cloud.firestore {
         && d.mutationId is string && d.mutationId.matches('^[a-f0-9]{48}$')
         && d.sourceUid == request.auth.uid && d.updatedAt == request.time;
     }
+    function validPrivateData(accountKey) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['format','accountKey','originalId','version','mutationId','payload','sourceUid','updatedAt'])
+        && d.keys().hasOnly(['format','accountKey','originalId','version','mutationId','payload','sourceUid','updatedAt'])
+        && d.format == 1 && d.accountKey == accountKey
+        && d.originalId is string && ownsPurchaseOriginal(accountKey,d.originalId)
+        && d.version is int && d.version >= 1 && d.version <= 9007199254740990
+        && d.mutationId is string && d.mutationId.matches('^[a-f0-9]{48}$')
+        && d.payload is string && d.payload.size() <= 200000
+        && d.sourceUid == request.auth.uid && d.updatedAt == request.time;
+    }
+    match /deda_private_account_data/{accountKey} {
+      allow get: if ownsProgressAccount(accountKey);
+      allow create: if ownsProgressAccount(accountKey) && validPrivateData(accountKey)
+        && request.resource.data.version == 1
+        && getAfter(/databases/$(database)/documents/deda_private_account_data/$(accountKey)/versions/$(request.resource.data.mutationId)).data == request.resource.data;
+      allow update: if ownsProgressAccount(accountKey) && validPrivateData(accountKey)
+        && request.resource.data.originalId == resource.data.originalId
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.mutationId != resource.data.mutationId
+        && getAfter(/databases/$(database)/documents/deda_private_account_data/$(accountKey)/versions/$(request.resource.data.mutationId)).data == request.resource.data;
+      allow list, delete: if false;
+      match /versions/{mutationId} {
+        allow get: if ownsProgressAccount(accountKey);
+        allow create: if ownsProgressAccount(accountKey) && validPrivateData(accountKey)
+          && mutationId == request.resource.data.mutationId
+          && getAfter(/databases/$(database)/documents/deda_private_account_data/$(accountKey)).data == request.resource.data;
+        allow list, update, delete: if false;
+      }
+    }
     match /deda_free_card_choices/{accountKey}/cards/{originalId} {
       allow get: if ownsProgressAccount(accountKey) && ownsPurchaseOriginal(accountKey,originalId);
       allow create: if ownsProgressAccount(accountKey) && ownsPurchaseOriginal(accountKey,originalId)

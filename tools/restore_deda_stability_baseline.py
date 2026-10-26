@@ -232,6 +232,11 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
                      'deda_free_card_sync_bridge.dart'):
             shutil.copy2(REPO/'lib'/name, output/'lib'/name)
         bind_account_choice(output)
+        from bind_private_data import bind as bind_private_data
+        for name in ('deda_private_data_sync.dart', 'deda_private_data_bridge.dart',
+                     'deda_private_data_page.dart'):
+            shutil.copy2(REPO/'lib'/name, output/'lib'/name)
+        bind_private_data(output)
     return {'sectionEntry':section_entry, 'lazySections':lazy_sections, 'authRuntime':auth_runtime, 'verifiedFiles':len(verified), 'pilot':pilot,
             'startupMetrics':startup_metrics, 'sessionGateFoundation':auth_runtime or session_gate or session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
             'sessionFlowPrototype':session_flow or owner_firebase_port or admin_firebase_adapter or progress_evidence_store or progress_backup_coordinator or progress_backup_runtime,
