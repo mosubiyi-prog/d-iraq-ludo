@@ -223,6 +223,8 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         from bind_owned_frame_reader import bind as bind_owned_frame_reader
         shutil.copy2(REPO/'lib/deda_owned_frame_reader.dart', output/'lib/deda_owned_frame_reader.dart')
         bind_owned_frame_reader(output)
+        from bind_owned_frame_status import bind as bind_owned_frame_status
+        bind_owned_frame_status(output)
         bind_directory(output)
         # Append after the common lifetime binding, preserving existing UI.
         from bind_account_choice import bind as bind_account_choice
