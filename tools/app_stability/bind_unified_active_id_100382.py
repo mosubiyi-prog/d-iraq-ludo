@@ -101,12 +101,8 @@ def bind(output):
         "import 'deda_qa32_active_account_scope.dart';",
         'stage71 import shared proof and scope')
     social = once(social,
-        """    final uid=await _requireOriginal(originalId);
-    final db=FirebaseFirestore.instance;
-    if (identifier!=originalId) {""",
-        """    final uid=await _requireOriginal(originalId);
-    final db=FirebaseFirestore.instance;
-    String? selectedColor;
+        """    if (identifier!=originalId) {""",
+        """    String? selectedColor;
     if (identifier!=originalId) {""",
         'capture server verified selection color')
     social = once(social,
