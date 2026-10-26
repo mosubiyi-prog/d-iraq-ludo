@@ -105,10 +105,16 @@ def bind(output):
     start = social.index('static Future<void> use(String originalId, String identifier) async {')
     stop = social.index("\n}\n\n/// User's Edit Profile:", start)
     use_body = social[start:stop]
-    use_body = once(use_body,
-        "    if (identifier != originalId) {",
-        "    String? selectedColor;\n    if (identifier != originalId) {",
-        'capture server-verified Use selection color')
+    # Use compares this identifier twice (grant, then public publish).
+    # Bind only the first comparison, before the grant is checked.
+    comparison = "    if (identifier != originalId) {"
+    if use_body.count(comparison) != 2:
+        raise ValueError('expected Use grant and public-publish comparisons')
+    use_body = use_body.replace(
+        comparison,
+        "    String? selectedColor;\n" + comparison,
+        1,
+    )
     use_body = once(use_body,
         "DedaStage71OwnedIdentifier.read(owner.id, owner.data() ?? {}, originalId);",
         "final selectedGrant = DedaStage71OwnedIdentifier.read(\n"
