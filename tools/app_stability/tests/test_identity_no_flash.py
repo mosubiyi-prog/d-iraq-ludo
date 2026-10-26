@@ -43,6 +43,8 @@ class IdentityNoFlashTests(unittest.TestCase):
             self.assertIn('return const SizedBox.shrink(); // No unverified sender ID flash.', owner)
             self.assertIn('if (!snapshot.hasData ||', owner)
             self.assertIn('!_proof!.verifiedFor(uid, original)', scope)
+            self.assertIn('  void _refresh() {\n    // Active-ID selection changed', scope)
+            self.assertIn('    _invalidateProof();\n    _load();', scope)
             self.assertNotIn('if (_proof != null) setState(() => _proof = null);', scope)
             self.assertEqual(before[SOURCES[0]].count('class DedaSixIdentityCopy'),
                              owner.count('class DedaSixIdentityCopy'))
