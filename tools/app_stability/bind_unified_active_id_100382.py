@@ -19,6 +19,8 @@ def bind(output):
     repo = Path(__file__).resolve().parents[2]
     shutil.copy2(repo/'lib/deda_verified_active_id_store.dart',
                  root/'lib/deda_verified_active_id_store.dart')
+    shutil.copy2(repo/'test/deda_verified_active_id_store_test.dart',
+                 root/'test/deda_verified_active_id_store_test.dart')
 
     path = root/'lib/deda_qa32_active_account_scope.dart'
     scope = path.read_text()
