@@ -180,4 +180,5 @@ def bind(output):
         "    } catch(_) {\n      // Never copy an unverified old ID on failure.\n      return null;\n    }",
         'copy resolution does not fall back to stale original ID',
     )
+    path.write_text(source)
     scope_path.write_text(scope)
