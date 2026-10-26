@@ -104,6 +104,14 @@ def prepare(project, variant):
         options.update(auth_runtime=True, pilot=True, admin_firebase_adapter=True,
                        progress_backup_runtime=True, section_entry=True, lazy_sections=True)
     restore.restore(source, **options)
+    if variant == 'candidate':
+        # Verified identity remains server-authoritative. Suppress the old-ID
+        # flash while it is being resolved, without touching auth or wallets.
+        patch_spec = importlib.util.spec_from_file_location(
+            'deda_id_no_flash', REPO/'tools/app_stability/bind_active_id_no_flash.py')
+        patch = importlib.util.module_from_spec(patch_spec)
+        patch_spec.loader.exec_module(patch)
+        patch.bind(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
