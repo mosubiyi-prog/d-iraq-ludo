@@ -1,0 +1,55 @@
+name: DEDA identity no-flash internal source QA (NO DEPLOY)
+on:
+  push:
+    branches: [deda-response-id-no-flash-2026-10-26]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-identity-no-flash-source-qa
+  cancel-in-progress: true
+jobs:
+  source-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify original 100380 source and no-flash overlay
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_identity_no_flash.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_internal_app_package.py' -v
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Restore exact candidate and bind the presentation-only no-flash change
+        run: |
+          set -euo pipefail
+          python3 tools/restore_deda_stability_baseline.py "$RUNNER_TEMP/deda-id-candidate" \
+            --pilot --startup-metrics --auth-runtime --admin-firebase-adapter \
+            --progress-backup-runtime --section-entry --lazy-sections
+          python3 - "$RUNNER_TEMP/deda-id-candidate" <<'PY'
+          import importlib.util,sys
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location('patch', 'tools/app_stability/bind_active_id_no_flash.py')
+          patch=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(patch)
+          root=Path(sys.argv[1])
+          patch.bind(root)
+          owner=(root/'lib/deda_six_active_identity.dart').read_text()
+          assert 'deda-active-id-awaiting-verification' in owner
+          assert 'final id = proof?.displayId ?? originalId;' not in owner
+          print('Presentation-only ID flash fix bound to verified 100380 source.')
+          PY
+      - name: Resolve locked dependencies and analyze touched UI source
+        working-directory: ${{ runner.temp }}/deda-id-candidate
+        run: |
+          flutter pub get --enforce-lockfile
+          dart analyze lib/deda_six_active_identity.dart lib/deda_qa32_active_account_scope.dart
+      - name: Never deploy to Firebase or Play
+        run: |
+          printf '%s\n' 'Source QA only: no Firebase deployment, no Play release, no production user-data change.'
