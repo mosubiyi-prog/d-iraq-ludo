@@ -105,12 +105,19 @@ class _PrivateOwner {
   final String account, original;
   final int epoch;
   final DedaAuthSnapshot? principal;
+  bool selected() {
+    try {
+      DedaSectionOperationContext.checkCurrent();
+      return DedaPreferences.isLoggedIn && epoch == DedaPreferences.stabilityAccountEpoch &&
+          account == DedaBackend.accountKeyForPhone(DedaPreferences.phone);
+    } catch (_) { return false; }
+  }
+  void checkSelection() { if (!selected()) throw const DedaPrivateDataStale(); }
   bool current() {
     try {
       DedaSectionOperationContext.checkCurrent();
       final live = DedaAuthRuntime.capture();
-      return DedaPreferences.isLoggedIn && epoch == DedaPreferences.stabilityAccountEpoch &&
-          account == DedaBackend.accountKeyForPhone(DedaPreferences.phone) &&
+      return selected() &&
           principal != null && principal!.kind == DedaSessionAuthKind.anonymous &&
           live != null && principal!.matches(live);
     } catch (_) { return false; }
@@ -149,13 +156,17 @@ class DedaPrivateDataBridge {
   }
   static Future<Object?> read(SharedPreferences prefs, String key) async {
     if (!dedaPrivateDataEnabled || !DedaPreferences.isLoggedIn) return prefs.get(key);
-    final owner = _PrivateOwner(); owner.check(); final account = owner.account;
+    final owner = _PrivateOwner(); owner.checkSelection(); final account = owner.account;
     final field = _logical(key, account)!;
     var bundle = _bundle(prefs, account);
+    // Local records are not authorization. Keep them usable offline or while
+    // the SDK is not ready; only server restore/backup requires owner proof.
+    if (bundle != null) return bundle.fields[field];
+    if (!owner.current()) return prefs.get(key);
     final emptyDevice = const ['deda_favorites_v1', 'deda_recent_v1',
       'deda_personal_places_v1', 'deda_contact_draft_v1'].every((k) => !prefs.containsKey(k));
     final attempt = '$account/${owner.epoch}';
-    if (bundle == null && emptyDevice && !_autoRestored.contains(attempt)) {
+    if (emptyDevice && !_autoRestored.contains(attempt)) {
       // New handset only. Existing device-wide content needs explicit adoption.
       // Add the marker only after a successful verified read; failures can retry.
       final result = await restoreConfirmed(); owner.check();
@@ -176,15 +187,16 @@ class DedaPrivateDataBridge {
   static Future<bool?> readBool(SharedPreferences prefs, String key) async => (await read(prefs, key)) as bool?;
   static Future<bool> write(SharedPreferences prefs, String key, Object? value) async {
     if (!dedaPrivateDataEnabled || !DedaPreferences.isLoggedIn) return _nativeWrite(prefs, key, value);
-    final owner = _PrivateOwner(); owner.check(); final field = _logical(key, owner.account)!;
+    final owner = _PrivateOwner(); owner.checkSelection(); final field = _logical(key, owner.account)!;
     final before = _localLanes[owner.account], done = Completer<void>(); _localLanes[owner.account] = done.future;
     try {
-      if (before != null) await before; owner.check();
+      if (before != null) await before; owner.checkSelection();
       final bundle = _bundle(prefs, owner.account);
       if (bundle == null) return await _nativeWrite(prefs, key, value);
       final next = DedaPrivateDataPayload({...bundle.fields, field: value});
       if (!await prefs.setString(_bundleKey(owner.account), next.encode())) return false;
-      owner.check();
+      owner.checkSelection();
+      statuses[owner.account] = DedaPrivateDataStatus.pending; changes.value++;
       // Native persistence is complete before returning. Background upload is
       // observed; later edits retain their own durable bundle if it fails.
       unawaited(_upload(owner, next).then<void>((_) {}, onError: (Object _, StackTrace __) {}));
