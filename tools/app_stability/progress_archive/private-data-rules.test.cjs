@@ -51,9 +51,10 @@ for(const u of [foreign,null])test(`${u||'unauthenticated'} cannot read, enumera
   await assertFails(write(db,data(u||uid,2)));
 });
 test('head cannot advance without its exact immutable history entry',async()=>{
-  await assertFails(setDoc(doc(dbFor(uid),target),data()));
-  const b=writeBatch(dbFor(uid));b.set(doc(dbFor(uid),target),data());
-  b.set(doc(dbFor(uid),`${target}/versions/${hex(1)}`),{...data(),payload:'different'});
+  const db=dbFor(uid);
+  await assertFails(setDoc(doc(db,target),data()));
+  const b=writeBatch(db);b.set(doc(db,target),data());
+  b.set(doc(db,`${target}/versions/${hex(1)}`),{...data(),payload:'different'});
   await assertFails(b.commit());
 });
 test('history cannot be created without matching the account head',async()=>{

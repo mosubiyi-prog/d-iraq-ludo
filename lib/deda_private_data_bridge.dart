@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -182,7 +181,7 @@ class DedaPrivateDataBridge {
     try {
       if (before != null) await before; owner.check();
       final bundle = _bundle(prefs, owner.account);
-      if (bundle == null) return _nativeWrite(prefs, key, value);
+      if (bundle == null) return await _nativeWrite(prefs, key, value);
       final next = DedaPrivateDataPayload({...bundle.fields, field: value});
       if (!await prefs.setString(_bundleKey(owner.account), next.encode())) return false;
       owner.check();

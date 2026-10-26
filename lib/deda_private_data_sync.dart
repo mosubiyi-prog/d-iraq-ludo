@@ -5,7 +5,10 @@ import 'dart:convert';
 /// remain byte-for-byte intact; no wallet, role, ID ownership or reward enters.
 class DedaPrivateDataPayload {
   DedaPrivateDataPayload(Map<String, Object?> fields)
-      : fields = Map.unmodifiable(jsonDecode(jsonEncode(fields)) as Map<String, dynamic>) {
+      : fields = Map<String, Object?>.unmodifiable({
+          for (final entry in (jsonDecode(jsonEncode(fields)) as Map<String, dynamic>).entries)
+            entry.key: entry.value is List ? List<Object?>.unmodifiable(entry.value as List) : entry.value,
+        }) {
     for (final entry in this.fields.entries) {
       if (!validKey(entry.key)) throw const FormatException('unsupported-private-data-key');
       final value = entry.value;

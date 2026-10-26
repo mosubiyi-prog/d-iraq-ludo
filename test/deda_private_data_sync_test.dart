@@ -158,6 +158,13 @@ void main() {
   test('oversized backup fails without truncating source records', () {
     expect(() => DedaPrivateDataPayload({'contactDraft': 'x' * 200001}), throwsFormatException);
   });
+  test('validated payload keeps its own immutable copy of native lists', () {
+    final source = <String>['original'];
+    final payload = DedaPrivateDataPayload({'favorites': source});
+    source.add('later native change');
+    expect(payload.fields['favorites'], ['original']);
+    expect(() => (payload.fields['favorites'] as List).add('invalid later edit'), throwsUnsupportedError);
+  });
   test('alias is not an account recovery identity', () async {
     final io = Io(Server(), 1);
     await expectLater(DedaPrivateDataSync(io).backup(account: account, original: '@DEDA-2020',
