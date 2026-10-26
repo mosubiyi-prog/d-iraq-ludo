@@ -1,9 +1,9 @@
-name: DEDA responsiveness and verified-ID signed QA APK NO DEPLOY
+name: DEDA 100381 faster verified ID and section responsiveness private QA NO DEPLOY
 on:
   push:
-    branches: [deda-response-id-no-flash-2026-10-26]
+    branches: [deda-response-speed-id-100381-2026-10-26]
     paths:
-      - '.github/workflows/deda-response-id-no-flash-signed-qa.yml'
+      - '.github/workflows/deda-response-speed-id-100381-signed-qa.yml'
       - 'tools/app_stability/bind_active_id_no_flash.py'
       - 'tools/app_stability/tests/test_identity_no_flash.py'
       - 'tools/app_stability/app_package/**'
@@ -32,7 +32,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: deda-response-id-no-flash-signed-qa
+  group: deda-response-speed-id-100381-signed-qa
   cancel-in-progress: true
 jobs:
   internal-apk:
@@ -52,6 +52,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate verified-ID no-flash and cross-widget read regression
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_identity_no_flash.py' -v
       - name: Verify original Android configuration sources and private export boundaries
         run: |
           set -euo pipefail
@@ -109,7 +113,7 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('internal-build-inputs.json').read_text())
           assert data['completeOwnerDelivery'] is False and data['financialRestoreEnabled'] is False
-          args=['flutter','build','apk','--release','--build-number=100380','--no-pub']
+          args=['flutter','build','apk','--release','--build-number=100381','--no-pub']
           args += ['--dart-define='+key+'='+str(value).lower() for key,value in data['flags'].items()]
           subprocess.run(args,check=True)
           PY
@@ -118,11 +122,11 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}"
           python3 tools/app_stability/app_package/verify.py "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}" "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" --output "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/verification.json"
-          cp "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/DEDA-INTERNAL-${{ matrix.variant }}-100380-NOT-FINAL.apk"
+          cp "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/DEDA-INTERNAL-${{ matrix.variant }}-100381-NOT-FINAL.apk"
           printf '%s\n' 'INTERNAL INTEGRATION ONLY. NOT FINAL OWNER DELIVERY.' 'No complete financial restore, phone/tablet acceptance or production deployment.' > "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/READ-ME.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: DEDA-RESPONSIVENESS-ID-NO-FLASH-100380-INTERNAL-QA
+          name: DEDA-RESPONSE-FAST-ID-100381-PRIVATE-QA
           path: |
             ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/*.apk
             ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/verification.json
