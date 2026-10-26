@@ -112,6 +112,11 @@ def prepare(project, variant):
         patch = importlib.util.module_from_spec(patch_spec)
         patch_spec.loader.exec_module(patch)
         patch.bind(source)
+        unified_spec = importlib.util.spec_from_file_location(
+            'deda_id_unified', REPO/'tools/app_stability/bind_unified_active_id_100382.py')
+        unified = importlib.util.module_from_spec(unified_spec)
+        unified_spec.loader.exec_module(unified)
+        unified.bind(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
@@ -121,7 +126,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100381,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100382,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
