@@ -6,7 +6,7 @@ const account = '07700000000', original = '@DEDA-ABC234';
 Map<String, Object?> wallet() => {
   'state': {'format': 1, 'accountKey': account, 'version': 2,
     'initializedBy': List.filled(64, 'a').join(),
-    'balances': {'points': 1000, 'coins': 30, 'xp': 20, 'earnedDiamonds': 9}},
+    'balances': <String, Object?>{'points': 1000, 'coins': 30, 'xp': 20, 'earnedDiamonds': 9}},
   'originalId': original, 'giftedBalance': 991, 'managerBalance': null, 'purchasableBalance': 1000,
 };
 class Io implements DedaMigratedProgressIo {
@@ -26,7 +26,9 @@ void main() {
     expect(result.earnedDiamonds, 9); expect(result.giftedDiamonds, 991);
     expect(result.managerDiamonds, isNull); expect(result.purchasableDiamonds, 1000);
     await DedaMigratedProgressService(io).read(original);
-    expect(io.calls, [('dedaReadMigratedProgress', <String, Object?>{})]);
+    expect(io.calls, hasLength(1));
+    expect(io.calls.single.$1, 'dedaReadMigratedProgress');
+    expect(io.calls.single.$2, isEmpty);
   });
   test('manager wallet remains exclusive and is never added to ordinary funds', () async {
     final io = Io()..response = {...wallet(), 'managerBalance': 999000, 'purchasableBalance': 999000};
@@ -68,7 +70,9 @@ void main() {
     final io = Io()..response = {...wallet(), 'frameId': 'FRAME_03', 'owned': true,
       'replayed': false, 'legacyOwned': false};
     await DedaMigratedProgressService(io).purchaseFrame(original, 'FRAME_03');
-    expect(io.calls, [('dedaPurchaseMigratedFrame', {'frameId': 'FRAME_03'})]);
+    expect(io.calls, hasLength(1));
+    expect(io.calls.single.$1, 'dedaPurchaseMigratedFrame');
+    expect(io.calls.single.$2, {'frameId': 'FRAME_03'});
     io.response = {...wallet(), 'frameId': 'FRAME_05', 'owned': true, 'replayed': false, 'legacyOwned': false};
     await expectLater(DedaMigratedProgressService(io).purchaseFrame(original, 'FRAME_03'), throwsFormatException);
   });
