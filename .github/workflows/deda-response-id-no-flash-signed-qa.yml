@@ -1,0 +1,134 @@
+name: DEDA responsiveness and verified-ID signed QA APK NO DEPLOY
+on:
+  push:
+    branches: [deda-response-id-no-flash-2026-10-26]
+    paths:
+      - '.github/workflows/deda-response-id-no-flash-signed-qa.yml'
+      - 'tools/app_stability/bind_active_id_no_flash.py'
+      - 'tools/app_stability/tests/test_identity_no_flash.py'
+      - 'tools/app_stability/app_package/**'
+      - 'lib/deda_incoming_request_lifecycle.dart'
+      - 'tools/app_stability/bind_social_lifecycle.py'
+      - 'tools/app_stability/bind_location_identity.py'
+      - 'tools/app_stability/bind_all_sections.py'
+      - 'tools/app_stability/bind_owned_frame_reader.py'
+      - 'tools/app_stability/bind_owned_frame_status.py'
+      - 'tools/app_stability/bind_owned_frame_status.py'
+      - 'lib/deda_owned_frame_reader.dart'
+      - 'lib/deda_private_data_sync.dart'
+      - 'lib/deda_private_data_bridge.dart'
+      - 'lib/deda_private_data_page.dart'
+      - 'tools/app_stability/bind_private_data.py'
+      - 'tools/restore_deda_stability_baseline.py'
+      - 'tools/app_stability/bind_account_choice.py'
+      - 'lib/deda_account_choice_sync.dart'
+      - 'lib/deda_account_choice_firebase.dart'
+      - 'lib/deda_free_card_sync_bridge.dart'
+      - 'tools/app_stability/bind_section_entries.py'
+      - 'lib/deda_section_state.dart'
+      - 'lib/deda_section_operation_context.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deda-response-id-no-flash-signed-qa
+  cancel-in-progress: true
+jobs:
+  internal-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [candidate]
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify original Android configuration sources and private export boundaries
+        run: |
+          set -euo pipefail
+          git diff --quiet 08535d34a0028a916f978dc77a9a0f1a942a7c1b -- google-services.json deda_app_icon.png tools/configure_rewarded_ads_android_build_2026_10_02.py tools/apply_admob_android16_workmanager_fix_2026_10_02.py tools/android_media_save_patch.py tools/apply_real_admob_ids_100257_2026_10_03.py tools/restore_signing_key_2026_10_02.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_internal_app_package.py' -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Prepare pinned source and established original Android configuration in a fresh workspace
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}" --variant '${{ matrix.variant }}'
+      - name: Resolve exact locked packages and generate the original launcher icon
+        working-directory: ${{ runner.temp }}/deda-internal-${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          dart run flutter_launcher_icons
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          p=Path('internal-build-inputs.json')
+          data=json.loads(p.read_text())
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
+          data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+          p.write_text(json.dumps(data,indent=2)+'\n')
+          PY
+      - name: Validate original signing key without printing or exporting it
+        working-directory: ${{ runner.temp }}/deda-internal-${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+      - name: Compile internal app with reviewed explicit flags without launching or deploying
+        working-directory: ${{ runner.temp }}/deda-internal-${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          data=json.loads(Path('internal-build-inputs.json').read_text())
+          assert data['completeOwnerDelivery'] is False and data['financialRestoreEnabled'] is False
+          args=['flutter','build','apk','--release','--build-number=100380','--no-pub']
+          args += ['--dart-define='+key+'='+str(value).lower() for key,value in data['flags'].items()]
+          subprocess.run(args,check=True)
+          PY
+      - name: Verify original certificate, package, SDK permissions, source and original artwork
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}"
+          python3 tools/app_stability/app_package/verify.py "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}" "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" --output "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/verification.json"
+          cp "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/DEDA-INTERNAL-${{ matrix.variant }}-100380-NOT-FINAL.apk"
+          printf '%s\n' 'INTERNAL INTEGRATION ONLY. NOT FINAL OWNER DELIVERY.' 'No complete financial restore, phone/tablet acceptance or production deployment.' > "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/READ-ME.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-RESPONSIVENESS-ID-NO-FLASH-100380-INTERNAL-QA
+          path: |
+            ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/*.apk
+            ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/verification.json
+            ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/READ-ME.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove ephemeral signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/android/app/deda-release.jks"
