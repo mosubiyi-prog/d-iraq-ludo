@@ -1,0 +1,53 @@
+{
+  "dateBaghdad": "2026-10-26",
+  "implementationCommit": "9a7366a3b8eb2bfa59ca213240d07091f569057c",
+  "smokeConfigurationCommit": "fc7ccd1a46131f8837a44952212c95532862a6b0",
+  "sourceQaRun": 40314532931,
+  "sourceQaAllFiveJobsPassed": true,
+  "pythonTests": 124,
+  "privateDataAndActualUiTests": 28,
+  "changedSourceStrictAnalysis": "no issues",
+  "nodeTests": 396,
+  "firestoreEmulatorTests": 250,
+  "sourceHashes": {
+    "lib/deda_private_data_sync.dart": "9abd07fa60d8fccc1dd97c13cd77a6af0541a1a9efaf3e0135d1e3be408d418e",
+    "lib/deda_private_data_bridge.dart": "e17b99f76583e2d5288585a9ac83f37c4725a5033483611f4f89bc40d7e032cc",
+    "lib/deda_private_data_page.dart": "27de5e920f06a1694f13598f8304e4e398b100aa529c98e4c138b1638f1064c8",
+    "tools/app_stability/bind_private_data.py": "14d413cb8763cdf5d8b00d390652067cb0db0f4eb5babd3a2273c925a051dea5",
+    "tools/app_stability/progress_archive/firestore.rules": "0e139c74fd02134a808326a1d2cc7f9735c7a652b2d5383d55be0b8c61471a45"
+  },
+  "coveredRecords": [
+    "favorites",
+    "recent places",
+    "personal places",
+    "contact draft text",
+    "traffic quiz seen questions",
+    "traffic quiz daily questions",
+    "traffic quiz answers/progress",
+    "traffic quiz daily completion"
+  ],
+  "legacyAdoption": "explicit owner confirmation; original native records retained",
+  "serverConflictPolicy": "version CAS; no silent rebase, max, sum or resurrection of deletions",
+  "history": "immutable snapshot and current head written atomically",
+  "originalFinancialAuthAndRewardBodies": "unchanged, verified by binding tests",
+  "priorFailure": {
+    "sourceCommit": "10a3099ddf4fb882ad49ac12abd202613db92c95",
+    "sourceRun": 40312729139,
+    "reason": [
+      "unused import and unawaited return analysis warnings",
+      "one fixture mixed Firestore instances; no policy relaxation was used"
+    ]
+  },
+  "internalBuildRun": 40314532923,
+  "internalBuildStatusAtCheckpoint": "in_progress",
+  "signedAndroidSmokeRun": 40314714663,
+  "signedAndroidSmokeStatusAtCheckpoint": "waiting for exact verified source/build",
+  "currentPolicyCompatibilityRun": 40312729119,
+  "currentPolicyCompatibilityStatus": "success; no production mutation",
+  "productionRulesDeployed": false,
+  "fullFinancialMigrationComplete": false,
+  "allAccountDataMigrated": false,
+  "completeOwnerDelivery": false,
+  "physicalPhoneTabletAcceptance": "owner phase after delivery; excluded from execution deadline",
+  "remaining": "financial baseline/settlement/writer fence and trusted event integration; remaining account record categories; final integration and signed build acceptance"
+}
