@@ -45,6 +45,16 @@ Future<void> identity(String phone,{bool createRoute=false}) async {
     'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
 }
 Future<void> signOut() async {await DedaPinAuth.signOutFirebase();await Future<void>.delayed(Duration.zero);}
+Future<void> verifyGiftReads(String original) async {
+  check(await DedaBackend.personalGiftedDiamondBalance(original)==42000);
+  final gifts=await DedaBackend.watchPersonalDiamondGifts(original).first.timeout(const Duration(seconds:12));
+  check(gifts.length==2);
+  final byId={for(final g in gifts) g['giftId']:g};
+  check(byId['native-owned-gift-received']?['status']=='received');
+  check(byId['native-owned-gift-received']?['amount']==42000);
+  check(byId['native-owned-gift-pending']?['status']=='pending');
+  check(byId['native-owned-gift-pending']?['amount']==150);
+}
 Future<void> run() async {
   final prefs=await SharedPreferences.getInstance();String firstUid='',firstInstall='';
   final original=DedaBackend.personalShareIdForPhone(account);
@@ -58,6 +68,7 @@ Future<void> run() async {
     final owned=await DedaLabFrameSecureCheckout.verifiedOwnedFrameIds(original);
     check(owned.length==13 && owned.containsAll(DedaLabFrameSecureCheckout.paidFrameIds));
   });
+  await record('native-original-gift-balance-and-history-read-by-real-backend',() => verifyGiftReads(original));
   await record('native-same-pin-new-uid-and-new-install',() async {
     await signOut();await prefs.remove('deda_install_id_v1');
     await DedaPinAuth.signIn(phone:account,pin:pin);DedaPreferences.phone=account;
@@ -73,12 +84,15 @@ Future<void> run() async {
     check((appearance['ownedStyles'] as List).contains('badge_spark'));
     check((appearance['activeBadges'] as List).contains('badge_spark'));
   });
+  await record('native-new-uid-recovers-server-gift-balance-without-claiming-pending-gift',() => verifyGiftReads(original));
   await record('native-other-account-cannot-read-original-ownership',() async {
     await signOut();await prefs.remove('deda_install_id_v1');
     await DedaPinAuth.createAccount(phone:other,fullName:'Synthetic Other',pin:pin);
     DedaPreferences.phone=other;await identity(other);
     await reject(()=>DedaOwner18FrameCheckout.verifiedOwnedFrameIds(original));
     await reject(()=>DedaOwner18Cosmetics.read(original));
+    await reject(()=>DedaBackend.personalGiftedDiamondBalance(original));
+    await reject(()=>DedaBackend.watchPersonalDiamondGifts(original).first.timeout(const Duration(seconds:12)));
   });
   await record('native-original-account-recovers-after-another-login',() async {
     await signOut();await prefs.remove('deda_install_id_v1');
@@ -94,7 +108,7 @@ Future<void> run() async {
   await record('native-restoration-does-not-charge-or-rewrite-history',() async {
     check(DedaDiamondsWallet.calls==0);await post('/check-unchanged',{});
   });
-  check(passed.length==8 && failures.isEmpty);await post('/finish',{'passed':passed,'failures':failures});
+  check(passed.length==10 && failures.isEmpty);await post('/finish',{'passed':passed,'failures':failures});
 }
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

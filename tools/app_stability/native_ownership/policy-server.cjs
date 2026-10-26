@@ -17,19 +17,23 @@ const source=fs.readFileSync(path.join(priv,'original.private.rules'),'utf8');
 if(createHash('sha256').update(source).digest('hex')!==proof.originalSHA256)throw Error('policy-hash-mismatch');
 const frames=['03','05','06','07','08','09','10','11','12','13','14','15','16'].map(n=>'FRAME_'+n);
 const cases=['native-original-pin-account-and-route-created-by-client','native-original-owner-reads-all-thirteen-frames',
+ 'native-original-gift-balance-and-history-read-by-real-backend',
  'native-same-pin-new-uid-and-new-install','native-new-device-recovers-existing-inventory-and-appearance',
+ 'native-new-uid-recovers-server-gift-balance-without-claiming-pending-gift',
  'native-other-account-cannot-read-original-ownership','native-original-account-recovers-after-another-login',
  'native-offline-is-an-error-not-empty-ownership','native-restoration-does-not-charge-or-rewrite-history'];
 let env,original,historyHash,historyChecked=false,state={status:'waiting',passed:[],failures:[]};
 function stable(d){if(Array.isArray(d))return d.map(stable);if(d&&typeof d==='object')return Object.fromEntries(Object.keys(d).sort().map(k=>[k,stable(d[k])]));return d;}
 async function fingerprint(db){
  const paths=[`deda_diamond_gift_balances/${original}`,`deda_native_account_cosmetics/${original}`,
+  'deda_diamond_gifts/native-owned-gift-received','deda_diamond_gifts/native-owned-gift-pending',
   ...frames.flatMap(f=>[`deda_lab_frame_receipts/${original}/frames/${f}`,`deda_lab_owned_frames/${original}/frames/${f}`])];
  const values=[];for(const p of paths)values.push([p,(await getDocFromServer(doc(db,p))).data()]);
  return createHash('sha256').update(JSON.stringify(stable(values))).digest('hex');
 }
 function save(){fs.writeFileSync(path.join(pub,'native-owned-result.json'),JSON.stringify({...state,projectId:project,
  realNativePlugins:true,originalDedaPinAuth:true,privilegedIdentitySeeds:false,privilegedOwnershipHistoryFixtures:true,
+ originalGiftBackendReads:true,earnedBalanceMigrationTested:false,generalManagerWalletTested:false,
  actualPurchaseTested:false,physicalTwoPhonesTested:false,fullDedaUiTested:false,
  policySHA256:proof.originalSHA256,historyUnchangedVerified:state.status==='passed'&&historyChecked},null,2)+'\n');}
 async function body(req){let t='';for await(const c of req){t+=c;if(t.length>8000)throw Error('oversized');}return JSON.parse(t||'{}');}
@@ -55,6 +59,8 @@ async function start(){
       await setDoc(doc(db,`deda_lab_owned_frames/${original}/frames/${frameId}`),{publicId:original,frameId,receiptId:`${original}_${frameId}`,createdAt:serverTimestamp()});
      }
      await setDoc(doc(db,`deda_diamond_gift_balances/${original}`),{publicId:original,balance:42000,updatedAt:serverTimestamp()});
+     await setDoc(doc(db,'deda_diamond_gifts/native-owned-gift-received'),{targetPublicId:original,amount:42000,status:'received',createdAt:serverTimestamp(),claimedAt:serverTimestamp()});
+     await setDoc(doc(db,'deda_diamond_gifts/native-owned-gift-pending'),{targetPublicId:original,amount:150,status:'pending',createdAt:serverTimestamp()});
      await setDoc(doc(db,`deda_native_account_cosmetics/${original}`),{originalId:original,ownedFrames:['FRAME_05'],pendingFrames:[],
        ownedStyles:['badge_spark'],activeBadges:['badge_spark'],avatar:2,frame:7,background:1,updatedAt:serverTimestamp()});
      historyHash=await fingerprint(db);

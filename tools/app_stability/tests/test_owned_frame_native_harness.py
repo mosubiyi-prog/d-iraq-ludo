@@ -16,7 +16,7 @@ class OwnedFrameNativeHarnessTest(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.base=self.root/'base';self.harness=self.root/'app'
         (self.base/'lib').mkdir(parents=True);(self.harness/'lib').mkdir(parents=True)
         with tarfile.open(ROOT/'tools/app_stability/100380-baseline.tar.gz') as t:
-            for name in ['pubspec.lock',*['lib/'+n for n in native.ORIGINAL]]:
+            for name in ['pubspec.lock','lib/deda_backend.dart',*['lib/'+n for n in native.ORIGINAL]]:
                 (self.base/name).write_bytes(t.extractfile(name).read())
         app=self.harness/'android/app';(app/'src/main').mkdir(parents=True)
         (app/'src/main/AndroidManifest.xml').write_text('<manifest><application/></manifest>')
@@ -39,6 +39,38 @@ class OwnedFrameNativeHarnessTest(unittest.TestCase):
         (self.base/'lib/deda_owner18_frame_checkout.dart').write_text('drift')
         with self.assertRaisesRegex(ValueError,'hash drift'):native.prepare(self.harness,self.base)
         self.assertEqual(list((self.harness/'lib').iterdir()),[])
+    def test_gift_reads_are_exact_original_methods_without_any_wallet_mutator(self):
+        native.prepare(self.harness,self.base)
+        original=(self.base/'lib/deda_backend.dart').read_text()
+        output=(self.harness/'lib/deda_backend.dart').read_text()
+        methods=native.gift_read_methods(original)
+        self.assertIn(methods,output)
+        for name in ['personalGiftedDiamondBalance','watchPersonalDiamondGifts','_sortedGiftMaps']:
+            self.assertIn(name,methods)
+        for forbidden in ['claimDiamondGift','spendPersonalGiftedDiamonds','ensureGeneralManager', '.set(','.update(','.delete(','.runTransaction(']:
+            self.assertNotIn(forbidden,output)
+        data=json.loads((self.harness/'native-owned-source-manifest.json').read_text())
+        self.assertEqual(data['originalGiftReadMethodsSHA256'],hashlib.sha256(methods.encode()).hexdigest())
+        self.assertTrue(data['originalGiftReadMethodsByteExact'])
+        self.assertFalse(data['earnedBalanceMigrationTested'])
+    def test_changed_backend_or_extraction_anchors_are_rejected_before_writes(self):
+        original=(self.base/'lib/deda_backend.dart').read_text()
+        (self.base/'lib/deda_backend.dart').write_text(original+'\n// drift')
+        with self.assertRaisesRegex(ValueError,'backend source hash drift'):native.prepare(self.harness,self.base)
+        self.assertEqual(list((self.harness/'lib').iterdir()),[])
+        with self.assertRaisesRegex(ValueError,'gift read source drift'):
+            native.gift_read_methods(original.replace('personalGiftedDiamondBalance(', 'changed('))
+    def test_gift_reads_recover_only_existing_balance_and_never_accept_pending_gift(self):
+        main=(ROOT/'tools/app_stability/native_ownership/main.dart').read_text()
+        self.assertEqual(main.count('() => verifyGiftReads(original)'),2)
+        self.assertIn('DedaBackend.personalGiftedDiamondBalance(original)==42000',main)
+        self.assertIn("['native-owned-gift-pending']?['status']=='pending'",main)
+        self.assertIn('await reject(()=>DedaBackend.personalGiftedDiamondBalance(original))',main)
+        self.assertNotIn('claimDiamondGift(',main)
+        server=(ROOT/'tools/app_stability/native_ownership/policy-server.cjs').read_text()
+        fingerprint=server[server.index('async function fingerprint'):server.index('function save()')]
+        self.assertIn('native-owned-gift-received',fingerprint)
+        self.assertIn('native-owned-gift-pending',fingerprint)
     def test_preparation_never_overwrites_existing_harness_or_production_config(self):
         native.prepare(self.harness,self.base)
         with self.assertRaises(ValueError):native.prepare(self.harness,self.base)

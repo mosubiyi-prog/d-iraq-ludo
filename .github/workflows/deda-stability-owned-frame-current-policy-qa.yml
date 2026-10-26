@@ -123,7 +123,7 @@ jobs:
           import json,os
           from pathlib import Path
           r=json.loads((Path(os.environ['DEDA_RULES_PUBLIC'])/'native-owned-result.json').read_text())
-          assert r['status']=='passed' and len(r['passed'])==8 and not r['failures'] and r['historyUnchangedVerified']
+          assert r['status']=='passed' and len(r['passed'])==10 and not r['failures'] and r['historyUnchangedVerified']
           assert r['originalDedaPinAuth'] and not r['privilegedIdentitySeeds'] and r['privilegedOwnershipHistoryFixtures']
           PY
       - name: GET release again and reject policy changes during native testing

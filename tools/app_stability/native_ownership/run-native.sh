@@ -20,6 +20,6 @@ python3 - <<'PY'
 import json,os
 from pathlib import Path
 r=json.loads((Path(os.environ['DEDA_RULES_PUBLIC'])/'native-owned-result.json').read_text())
-assert r['status']=='passed' and len(r['passed'])==8 and not r['failures']
+assert r['status']=='passed' and len(r['passed'])==10 and not r['failures']
 assert r['originalDedaPinAuth'] and not r['privilegedIdentitySeeds'] and r['historyUnchangedVerified']
 PY
