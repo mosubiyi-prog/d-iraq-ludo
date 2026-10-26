@@ -104,12 +104,12 @@ def bind(output):
     # compiled Use implementation, not the unformatted repository copy.
     social = once(social,
         "    if (identifier != originalId) {",
-        "    String? selectedColor;\\n    if (identifier != originalId) {",
+        "    String? selectedColor;\n    if (identifier != originalId) {",
         'capture server verified selection color')
     social = once(social,
         "DedaStage71OwnedIdentifier.read(owner.id, owner.data() ?? {}, originalId);",
-        "final selectedGrant = DedaStage71OwnedIdentifier.read(\\n"
-        "          owner.id, owner.data() ?? {}, originalId);\\n"
+        "final selectedGrant = DedaStage71OwnedIdentifier.read(\n"
+        "          owner.id, owner.data() ?? {}, originalId);\n"
         "      selectedColor = selectedGrant.baseColor;",
         'capture grant color without a new server lookup')
     social = once(social,
@@ -132,7 +132,7 @@ def bind(output):
         'confirm shared display after existing Use/readback')
     social = once(social,
         "if (currentRows != null)",
-        "if (currentRows != null \\n                && currentActive == widget.originalId)",
+        "if (currentRows != null \n                && currentActive == widget.originalId)",
         'old ID is never offered for display while premium active')
     before = "class DedaStage71ActiveProfileFoil extends StatefulWidget {"
     if social.count(before) != 1:
