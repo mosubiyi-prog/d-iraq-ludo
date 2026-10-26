@@ -177,7 +177,7 @@ def bind(output):
     source = _replace_exact(
         source,
         "    } catch(_) {return same()?original:null;}",
-        "    } catch(_) {\\n      // Never copy an unverified old ID on failure.\\n      return null;\\n    }",
+        "    } catch(_) {\n      // Never copy an unverified old ID on failure.\n      return null;\n    }",
         'copy resolution does not fall back to stale original ID',
     )
     scope_path.write_text(scope)
