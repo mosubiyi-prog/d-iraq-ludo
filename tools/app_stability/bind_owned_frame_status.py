@@ -31,13 +31,13 @@ def bind_source(source):
     page=page.replace(failure,'''    } catch (_) {
       // Keep previously verified ownership; a failed read is never a new
       // empty inventory and never triggers a purchase or a refund.
-      if (mounted && DedaPreferences.phone == phone &&
-          FirebaseAuth.instance.currentUser?.uid == uid) {
+      if (mounted && DedaPreferences.phone == phone) {
         setState(() => _ownedFramesUnavailable = true);
       }
     } finally {
-      if (mounted && DedaPreferences.phone == phone &&
-          FirebaseAuth.instance.currentUser?.uid == uid) {
+      // Status-only cleanup also releases Retry if the SDK session changed.
+      // The shared page epoch guard still suppresses an expired account page.
+      if (mounted && DedaPreferences.phone == phone) {
         setState(() => _loadingOwnedFrames = false);
       }
     }''',1)
