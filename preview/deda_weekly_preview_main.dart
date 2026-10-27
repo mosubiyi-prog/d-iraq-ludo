@@ -47,8 +47,10 @@ class DedaPreviewHome extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Only the independent demo's launcher can scroll on
+                  // very short phones. The LEADERBOARD itself never scrolls.
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     children: [
                       const Icon(Icons.emoji_events_rounded,
                           color: Color(0xFFFFD15B), size: 74),
