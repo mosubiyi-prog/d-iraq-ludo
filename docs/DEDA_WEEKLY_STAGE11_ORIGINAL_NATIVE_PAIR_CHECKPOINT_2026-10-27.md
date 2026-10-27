@@ -19,3 +19,15 @@ Immutable phone-tested official app reference is DEDA 100387 source a0dd340e8843
 - After full guarded integration, deliver ONE original-package signed private 100387-derived APK and physically verify phone/tablet, no scrolling or clipping, real names and active IDs, current/previous weeks and account switching. Public Play deployment needs separate approval.
 
 No claims of real leaderboard availability, diamond credits, live Firebase changes, private APK release, or production CI until verified.
+
+
+## Confirmed QA status and wallet audit
+- First Stage11 GitHub Actions run 40556240490 finished with BOTH jobs SUCCESS:
+  https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40556240490
+  - Reconstructed ORIGINAL signed-100387-derived code, both leaderboard navigation routes, no DEMO user injection, session/account privacy, staged XP receipt-to-current/previous safe data pair, prior Stage6/7/9/10 regression suite PASS.
+  - Dart analyzer and phone/tablet viewport fixed non-scroll UI regression PASS.
+- Checked repo functions/index.js (1329 lines): no deployed-export source for dedaReadMigratedProgress or dedaPurchaseMigratedFrame; no weekly issuer, ranker or prize payout export here. This does NOT prove what may be deployed live; audit deployed Firebase environment before any release.
+- Checked repo firestore.rules (2445 lines): no deda_weekly-specific protections; README comments explicitly warn rules are an unverified snapshot not necessarily live.
+- Checked lib/deda_migrated_progress.dart: distinct earnedDiamonds, giftedBalance, nullable managerBalance, purchasableBalance; manager override means a naive earned+gift total can disagree with spendable balance.
+- Checked rules for deda_diamond_gift_balances: this is the protected ADMIN GIFT route, with pending gift -> received credit, NOT verified as an earned weekly-prize credit writer. Never use it for leaderboard prizes, nor users/{uid}.diamonds.
+- Conclusion: DO NOT DEPLOY a weekly prize credit (370 diamonds), fake XP records, new rules snapshot or unverified original APK. Live credentialed verification and a genuine earned wallet writer remain mandatory.
