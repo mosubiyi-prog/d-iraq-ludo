@@ -136,16 +136,11 @@ def bind(root):
     m = one(m, "  static Future<bool> isTaskCompleted(\n",
             reset + "  static Future<bool> isTaskCompleted(\n",
             "QA reset method")
-    m = one(m, """      case 6:
-        final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(
-          DedaTaskIds.trafficSkills,
-        );""",
-            """      case 6:
-        // First QA revisit after daily completion starts a fresh normal quiz.
-        await DedaTaskEngine.qaRestartTrafficOnlyOnce();
-        final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(
-          DedaTaskIds.trafficSkills,
-        );""",
+    m = one(m,
+            "final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(",
+            "// First QA revisit after daily completion starts a fresh normal quiz.\n"
+            "        await DedaTaskEngine.qaRestartTrafficOnlyOnce();\n"
+            "        final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(",
             "open real fresh task")
     m = one(m, """                label: trafficQaReplay
                     ? dedaText('فحص', 'Review')""",
