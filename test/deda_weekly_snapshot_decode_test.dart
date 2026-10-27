@@ -146,4 +146,54 @@ void main() {
   });
 
 
+  test('genuine public equipment proof binds exact original owner and frame', () {
+    final p = packet();
+    final current = p['current'] as Map<String, Object?>;
+    final rows = current['rows'] as List<Map<String, Object?>>;
+    rows[0]['activePublicId'] = '@DEDA-AAAA';
+    rows[0]['publicAppearance'] = <String, Object?>{
+      'originalPublicId': '@DEDA-ABC123',
+      'activePublicId': '@DEDA-AAAA',
+      'displayName': 'لاعب ديدا 1',
+      'avatarStyle': 2,
+      'equippedFrameStyle': 9,
+      'publicOwnerVerified': true,
+      'equippedAppearanceVerified': true,
+    };
+    final parsed = DedaWeeklyServerSnapshotPair.parse(p);
+    final first = parsed.current.profilesByUid['verified-participant-1']!;
+    expect(first.verifiedCompetitor!.canShowEquippedFrame, isTrue);
+    expect(first.verifiedCompetitor!.originalPublicId, '@DEDA-ABC123');
+    expect(first.verifiedCompetitor!.equippedFrameStyle, 9);
+    expect(parsed.previous.profilesByUid['verified-participant-1']!
+        .verifiedCompetitor, isNull);
+  });
+
+  test('tampered owner, falsely claimed frame and private metadata fail closed', () {
+    for (final mutation in <String, Object?>{
+      'originalPublicId': '@DEDA-INVALID!',
+      'activePublicId': '@DEDA-SPOOF',
+      'equippedFrameStyle': 19,
+      'equippedAppearanceVerified': false,
+      'managerBalance': 500000,
+    }.entries) {
+      final p = packet();
+      final current = p['current'] as Map<String, Object?>;
+      final rows = current['rows'] as List<Map<String, Object?>>;
+      final proof = <String, Object?>{
+        'originalPublicId': '@DEDA-ABC123',
+        'activePublicId': '@DEDA-PLAYER1',
+        'displayName': 'لاعب ديدا 1',
+        'avatarStyle': 2,
+        'equippedFrameStyle': 9,
+        'publicOwnerVerified': true,
+        'equippedAppearanceVerified': true,
+      };
+      proof[mutation.key] = mutation.value;
+      rows[0]['publicAppearance'] = proof;
+      expect(() => DedaWeeklyServerSnapshotPair.parse(p),
+          throwsFormatException);
+    }
+  });
+
 }
