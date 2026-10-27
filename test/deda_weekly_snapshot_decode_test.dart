@@ -135,4 +135,15 @@ void main() {
     expect(decoded.current.rows, isEmpty);
     expect(decoded.current.viewerRow, isNull);
   });
+  test('premium 4-letter DEDA identity is valid across the future verified pair', () {
+    final p=packet();
+    final current=p['current'] as Map<String,Object?>;
+    final rows=current['rows'] as List<Map<String,Object?>>;
+    rows[0]['activePublicId']='@DEDA-AAAA';
+    final parsed=DedaWeeklyServerSnapshotPair.parse(p);
+    expect(parsed.current.profilesByUid['verified-participant-1']!
+      .activePublicId,'@DEDA-AAAA');
+  });
+
+
 }
