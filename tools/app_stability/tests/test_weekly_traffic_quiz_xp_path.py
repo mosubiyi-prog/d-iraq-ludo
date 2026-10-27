@@ -48,8 +48,8 @@ class DedaWeeklyTrafficQuizXpContractTest(unittest.TestCase):
             self.assertIn('static const int pointsPerTask = 5;', main)
             self.assertIn('static const int xpPerTaskClaim = 20;', main)
             self.assertIn('static const int _dailyQuestionCount = 5;', quiz)
-            self.assertIn('pointAwarded = await widget.onCorrectAnswer(q.id)', quiz)
-            self.assertIn('await widget.onCompleted();', quiz)
+            self.assertIn('pointAwarded = await DedaSectionOperationContext.wait(() => widget.onCorrectAnswer(q.id))', quiz)
+            self.assertIn('widget.onCompleted()', quiz)
 
             # Quiz correctness and completion are different DedaTaskEvents.
             self.assertIn('DedaTaskEvent.trafficQuizCorrectAnswer', main)
