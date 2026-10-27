@@ -14,16 +14,16 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final lab=DedaWeeklyQaSandbox('07712345678');
     final date=DateTime.utc(2026,9,28,0,5);
-    await lab.choose(1);
+    await lab.choose(1,now:date);
     var s=await lab.settle(date);
     expect(DedaWeeklyQaSandbox.earned(s),150);
     s=await lab.settle(date);
     expect(DedaWeeklyQaSandbox.earned(s),150);
-    s=await lab.choose(2);
+    s=await lab.choose(2,now:date);
     expect(s['rank'],1);
-    s=await lab.next();
+    s=await lab.next(now:date);
     expect(s['offset'],1);
-    await lab.choose(2);
+    await lab.choose(2,now:date);
     s=await lab.settle(date);
     expect(DedaWeeklyQaSandbox.earned(s),250);
     expect((s['paid'] as Map).length,2);
@@ -38,7 +38,7 @@ void main() {
     });
     final first=DedaWeeklyQaSandbox('07712345678');
     final second=DedaWeeklyQaSandbox('07712345679');
-    await first.choose(3);
+    await first.choose(3,now:DateTime.utc(2026,9,28));
     final result=await first.settle(DateTime.utc(2026,9,28));
     expect(DedaWeeklyQaSandbox.earned(result),50);
     expect(DedaWeeklyQaSandbox.earned(await second.read()),0);
@@ -53,7 +53,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final lab=DedaWeeklyQaSandbox('07712345678');
     final date=DateTime.utc(2026,9,28);
-    await lab.choose(11);
+    await lab.choose(11,now:date);
     var s=await lab.settle(date);
     expect(DedaWeeklyQaSandbox.earned(s),0);
     expect((s['paid'] as Map).length,1);
@@ -67,9 +67,9 @@ void main() {
     final lab=DedaWeeklyQaSandbox('07712345678');
     await expectLater(lab.next(),throwsStateError);
     await expectLater(DedaWeeklyQaSandbox('bad').read(),throwsStateError);
-    expect(DedaWeeklyQaSandbox.week(0,DateTime.utc(2026,9,27,20,59)),
+    expect(DedaWeeklyQaSandbox.week(0,DateTime.utc(2026,10,27,20,59)),
       '2026-10-26');
-    expect(DedaWeeklyQaSandbox.week(0,DateTime.utc(2026,9,27,21,01)),
+    expect(DedaWeeklyQaSandbox.week(0,DateTime.utc(2026,10,27,21,01)),
       '2026-10-26');
     expect(DedaWeeklyQaSandbox.week(1,DateTime.utc(2026,9,27,21,01)),
       '2026-11-02');
