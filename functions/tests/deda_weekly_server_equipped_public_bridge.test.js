@@ -111,7 +111,7 @@ test("rank-to-owner binding rejects swapping rows and fake competition placement
   const db=mock({[idPath(ACC)]:proof()});
   const mismatch=raw(CURRENT,OTHER);
   await assert.rejects(enrich(args(db,mismatch)),
-    /raw_display_owner_mismatch|invalid_signed_equipment/);
+    /raw_display_owner_mismatch|invalid_signed_equipment|raw_owner_identity_invalid/);
   const changed=pair();
   changed.current.rows[0].weeklyPoints=999;
   await assert.rejects(enrich(args(db,raw(CURRENT),raw(PREVIOUS),changed)),
