@@ -66,7 +66,8 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('لاعب ديدا موثق'), findsOneWidget);
+    // A first-place user appears in both the podium and their own rank card.
+    expect(find.text('لاعب ديدا موثق'), findsNWidgets(2));
     expect(find.text('20 نقطة'), findsWidgets);
     expect(find.byType(Scrollable), findsNothing);
     expect(tester.takeException(), isNull);
