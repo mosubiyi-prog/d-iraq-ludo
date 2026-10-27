@@ -104,7 +104,7 @@ class VerifiedSourceXpAudit(unittest.TestCase):
                 at = dart.find(needle)
                 print('DEDA100387_CLAIM_LOCATION', label, 'found', at >= 0)
                 if at >= 0:
-                    first = dart[:at].count('\\n')
+                    first = dart[:at].count('\n')
                     excerpt = lines[max(0, first - 5):first + limit]
                     print('DEDA100387_CLAIM_EXCERPT', label,
                           ' | '.join(v.strip()[:130] for v in excerpt)[:4300])
