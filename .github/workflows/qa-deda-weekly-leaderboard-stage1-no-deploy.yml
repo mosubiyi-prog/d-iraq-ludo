@@ -48,4 +48,5 @@ jobs:
       - name: Test dynamic standings and prize boundaries
         run: flutter test test/deda_weekly_leaderboard_policy_test.dart --no-pub
       - name: No signing / package export / Firestore writes / deployment
-        run: echo 'QA done: NO APK, NO AAB, NO DEPLOY, NO WALLET GRANTS'
+        run: |
+          echo 'QA done: NO APK, NO AAB, NO DEPLOY, NO WALLET GRANTS'
