@@ -1,0 +1,41 @@
+name: DEDA 100386 FULL500 editorial and source QA NO DEPLOY
+on:
+  push:
+    branches: [deda-100386-full500-content-audit-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-100386-traffic-source.yml'
+      - 'tools/app_stability/bind_traffic_full500_100386.py'
+      - 'tools/traffic500_content_audit_100386.py'
+      - 'tools/app_stability/tests/test_traffic_full500_100386.py'
+      - 'tools/app_stability/app_package/prepare.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100386-editorial-source-qa
+  cancel-in-progress: true
+jobs:
+  audit-and-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and all complete 500 QA guards
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/app_stability/bind_traffic_full500_100386.py tools/traffic500_content_audit_100386.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_traffic_full500_100386.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_traffic_content_restart_100385.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_traffic_visual_100384.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_internal_app_package.py' -v
+      - name: Export transparent 500-row human/editorial review register
+        run: |
+          mkdir -p traffic-audit-100386
+          python3 tools/traffic500_content_audit_100386.py --csv traffic-audit-100386/DEDA_500_QUESTIONS_EDITORIAL_REVIEW_AR.csv --summary traffic-audit-100386/DEDA_500_AUDIT_SUMMARY.json
+          printf '%s\n' 'FOR INDEPENDENT EXPERT REVIEW ONLY. Public deployment is blocked.' > traffic-audit-100386/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100386-500-QUESTION-EDITORIAL-AUDIT
+          path: traffic-audit-100386/
+          if-no-files-found: error
+          retention-days: 14
