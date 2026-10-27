@@ -208,28 +208,26 @@ def bind(root):
     main_path = root / "lib/main.dart"
     main = main_path.read_text()
     main = one(main, """    final taskDone = completed;
+    return Container(""", """    final taskDone = completed;
     final trafficQaReplay = index == 6 && taskDone &&
         const bool.fromEnvironment('DEDA_TRAFFIC_QA_REPLAY',
           defaultValue: false);
-    return Container(""", """    final trafficDone = index == 6 && completed;
-    final trafficQaReplay = trafficDone &&
-        const bool.fromEnvironment('DEDA_TRAFFIC_QA_REPLAY',
-          defaultValue: false);
     return Container(""", "task card gate")
-    main = one(main, "onTap: taskDone && !trafficQaReplay ? null : () => _openTask(index),",
-               "onTap: trafficDone && !trafficQaReplay ? null : () => _openTask(index),",
+    main = one(main, """      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: taskDone ? null : () => _openTask(index),""",
+               """      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: taskDone && !trafficQaReplay ? null : () => _openTask(index),""",
                "task card can open QA preview")
-    main = one(main, """                label: trafficQaReplay
+    main = one(main, """                label: taskDone ? dedaText('تم', 'Done') : action,
+                onTap: taskDone ? null : () => _openTask(index),
+                done: taskDone,""", """                label: trafficQaReplay
                     ? dedaText('فحص', 'Review')
                     : taskDone ? dedaText('تم', 'Done') : action,
                 onTap: taskDone && !trafficQaReplay
                     ? null : () => _openTask(index),
-                done: taskDone && !trafficQaReplay,""", """                label: trafficQaReplay
-                    ? dedaText('فحص', 'Review')
-                    : trafficDone ? dedaText('تم', 'Done') : action,
-                onTap: trafficDone && !trafficQaReplay
-                    ? null : () => _openTask(index),
-                done: trafficDone && !trafficQaReplay,""", "task QA button")
+                done: taskDone && !trafficQaReplay,""", "task QA button")
     main_path.write_text(main)
     return {
         "bankRetained": 500,
