@@ -26,7 +26,7 @@ const MAX_EVENTS=50000,MAX_PLAYERS=5000;
 const ACCOUNT=/^[0-9]{10,16}$/;
 const DAY=/^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const TASK=/^[A-Za-z0-9_:-]{1,100}$/;
-const PUBLIC_ID=/^@DEDA-[A-Z0-9]{5,12}$/;
+const PUBLIC_ID=/^@DEDA-[A-Z0-9]{4,12}$/;
 const PRIVACY_NAME=/^[^\u0000-\u001f\u007f@]{2,60}$/u;
 const REWARDS=Object.freeze([150,100,50,10,10,10,10,10,10,10]);
 function fail(reason){throw Error("DEDA_STAGE10_WEEKLY_RANK_BLOCK_"+reason);}
