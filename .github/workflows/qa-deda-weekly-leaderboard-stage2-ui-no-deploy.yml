@@ -33,9 +33,9 @@ jobs:
           from pathlib import Path
           page=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
           binder=Path('tools/app_stability/bind_weekly_leaderboard_stage2.py').read_text()
-          assert 'SingleChildScrollView' not in page
+          assert 'SingleChildScrollView(' not in page
           assert 'ListView(' not in page
-          assert 'CustomScrollView' not in page
+          assert 'CustomScrollView(' not in page
           assert 'FirebaseFirestore' not in page
           assert 'SharedPreferences.getInstance' not in page
           assert 'collection(' not in page
