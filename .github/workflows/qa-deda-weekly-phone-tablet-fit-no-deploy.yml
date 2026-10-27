@@ -1,0 +1,53 @@
+name: DEDA weekly leaderboard phone and tablet fixed viewport QA NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-phone-tablet-viewport-qa-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-phone-tablet-fit-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'test/deda_weekly_phone_tablet_viewport_test.dart'
+      - 'docs/DEDA_WEEKLY_LEADERBOARD_PHONE_TABLET_FIT_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-phone-tablet-fit-no-deploy
+  cancel-in-progress: true
+jobs:
+  no-scroll-phone-and-tablet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse change to signed DEDA 100387, wallets, rules and Play inputs
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          page=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert "deda-weekly-leaderboard-stage" in page
+          assert "box.maxHeight * (2.0 / 3.0)" in page
+          for forbidden in ["ListView(", "SingleChildScrollView(", "CustomScrollView(", "FirebaseFirestore", "SharedPreferences.getInstance"]:
+              assert forbidden not in page, forbidden
+          print("Original DEDA source intact; fixed proportion phone and tablet page only")
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve temporary test dependencies
+        run: flutter pub get
+      - name: Check Dart API and UI layout source
+        run: |
+          dart analyze lib/deda_weekly_leaderboard_page.dart test/deda_weekly_phone_tablet_viewport_test.dart
+      - name: Full leaderboard, phone/tablet matrix and account UI regression
+        run: |
+          flutter test test/deda_weekly_phone_tablet_viewport_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_safe_screen_test.dart test/deda_weekly_leaderboard_earned_points_test.dart --no-pub
+      - name: No APK, Firebase payout, Play deployment or account migration
+        run: |
+          echo 'TESTS ONLY. NO APK/AAB. NO DEPLOY. NO WALLET/XP CHANGE.'
