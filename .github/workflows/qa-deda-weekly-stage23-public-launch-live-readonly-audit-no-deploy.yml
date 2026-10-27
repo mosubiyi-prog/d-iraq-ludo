@@ -1,0 +1,76 @@
+name: DEDA Stage23 Public League Launch Readiness LIVE READ-ONLY AUDIT NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage23-public-launch-readiness-live-audit-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage23-public-launch-live-readonly-audit-no-deploy.yml'
+      - 'tools/app_stability/deda_weekly_launch_gate_stage23.js'
+      - 'tools/app_stability/deda_weekly_live_cloud_readonly_audit_stage23.py'
+      - 'tools/app_stability/tests/deda_weekly_launch_gate_stage23.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE23_PUBLIC_ROLLOUT_SECURITY_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release-contract-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve original accounts social wallets Task XP Firestore and production
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart lib/deda_migrated_progress.dart lib/deda_migrated_progress_firebase.dart lib/deda_owner18_cosmetics.dart lib/deda_owned_frame_reader.dart pubspec.yaml pubspec.lock functions/index.js firestore.rules firebase.json
+          ! grep -Eq 'firebase-tools.*deploy|firebase deploy|gradle.*publish|flutter.*build appbundle' tools/app_stability/deda_weekly_live_cloud_readonly_audit_stage23.py
+      - name: Inspect actual repository release evidence PASS only as BLOCKED until secure release
+        run: |
+          set -euo pipefail
+          node --test tools/app_stability/tests/deda_weekly_launch_gate_stage23.test.js
+          node tools/app_stability/deda_weekly_launch_gate_stage23.js > "$RUNNER_TEMP/week23-tracked-repository-readiness.json"
+          grep -q 'BLOCKED_UNTIL_INDEPENDENT_SECURITY_APPROVAL' "$RUNNER_TEMP/week23-tracked-repository-readiness.json"
+      - name: Make release findings available
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-Stage23-Public-Release-Tracked-Repo-READONLY
+          path: ${{ runner.temp }}/week23-tracked-repository-readiness.json
+          if-no-files-found: error
+          retention-days: 30
+  live-production-metadata-get-only:
+    needs: release-contract-audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install auth for read-only Cloud Functions and active Firestore Rules metadata
+        run: python -m pip install --quiet google-auth requests
+      - name: GET current production function names/rules metadata never deploy never inspect player data
+        env:
+          DEDA_READONLY_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_STAGE23_AUDIT_OUT: ${{ runner.temp }}/week23-live-readonly-audit.json
+        run: |
+          set -euo pipefail
+          python tools/app_stability/deda_weekly_live_cloud_readonly_audit_stage23.py
+          python - <<'PY'
+          import json,os
+          p=os.path.join(os.environ["RUNNER_TEMP"],"week23-live-readonly-audit.json")
+          a=json.load(open(p))
+          assert a["productionReady"] is False
+          assert a["playDeployed"] is False
+          assert a["audit"]=="get_only_no_firebase_write"
+          PY
+      - name: Archive live read-only evidence without secrets or PII
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-Stage23-Current-Live-Firebase-Metadata-GETONLY
+          path: ${{ runner.temp }}/week23-live-readonly-audit.json
+          if-no-files-found: error
+          retention-days: 30
