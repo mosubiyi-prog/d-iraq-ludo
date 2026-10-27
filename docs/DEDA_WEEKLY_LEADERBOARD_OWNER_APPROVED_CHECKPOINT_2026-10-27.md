@@ -30,7 +30,7 @@ Date: 2026-10-27. Phase: stage 1 (read-only policy + tests); NO APK, NO AAB, NO 
 ## Phased implementation checklist
 1. [x] Owner reference and constraints captured. Safe isolated branch created from accepted 100387.
 2. [x] Existing tasks, phone-local ledger, and both home restaurant placements located.
-3. [ ] Implement/test isolated pure ranking + prize policy only. Does NOT create diamond claims.
+3. [x] Implement/test isolated pure ranking + prize policy only. Does NOT create diamond claims. GitHub Actions run 40521583292 SUCCESS: 8/8 Flutter tests, Dart analyzer no issues, original 100387 protected core files unchanged.
 4. [ ] Verify actual level/XP sources, trustworthy cross-device server receipts, normalized UID and spendable diamond grant path; halt if source of truth is missing.
 5. [ ] Design screen with exact approved image, fixed/non-scroll fitted viewport and real server-fed data; replace restaurant tile in both home layouts; *never connect mock data to actual users*.
 6. [ ] Implement server-authoritative weekly snapshot/time boundaries, idempotent grants and abuse protection only after separate backend review/approval.
@@ -38,4 +38,4 @@ Date: 2026-10-27. Phase: stage 1 (read-only policy + tests); NO APK, NO AAB, NO 
 8. [ ] Compare changed files against 100387, build *private* signed QA APK only after code/security/test gates; confirm Play Protect on device. Never push directly to Play.
 
 ## Status disclaimer
-This checkpoint records agreement and safe stage-1 technical findings only. The new screen, ranking backend and diamond payouts are **not implemented, not live, not tested on phone and not deployed**.
+This checkpoint records agreement and **stage-1 pure-ranking test success only**. The new screen, ranking backend and diamond payouts are **not implemented, not live, not tested on phone and not deployed**.
