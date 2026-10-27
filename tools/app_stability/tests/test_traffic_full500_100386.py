@@ -70,8 +70,9 @@ class TestTraffic500Candidate(unittest.TestCase):
                 (folder/"assets/deda_traffic_500_bank_ar_v1.json").read_bytes(),
                 bank_before)
             s=(folder/"lib/traffic_quiz_page.dart").read_text()
-            self.assertIn("final bank = fullBank;",s)
-            self.assertNotIn("fullBank.where((q) => q.visual != null)",s)
+            self.assertIn("DEDA_TRAFFIC_FULL500_QA",s)
+            self.assertIn("final bank = widget.isArabic && !full500Qa",s)
+            self.assertIn("fullBank.where((q) => q.visual != null)",s)
             self.assertNotIn("shownIndexes.indexOf(answer)",s)
             self.assertNotIn("wrongIndexes",s)
             self.assertIn("answersAr: options,\n      answersEn: options,\n      correctIndex: answer,",s)
