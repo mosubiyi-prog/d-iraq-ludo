@@ -78,6 +78,9 @@ class TestTraffic500Candidate(unittest.TestCase):
             self.assertIn("answersAr: options,\n      answersEn: options,\n      correctIndex: answer,",s)
             self.assertIn("List.generate(q.answersAr.length",s)
             self.assertIn("_DedaTrafficQuestionVisual(",s)
+            generated=s[s.index("class _DedaTrafficQuestionVisual"):]
+            self.assertNotIn(",,",generated)
+            self.assertIn("Icons.traffic_rounded,",generated)
             self.assertIn("رمز توضيحي للموضوع وليس علامة مرور رسمية",s)
             self.assertIn("if (n == 80)",s)
             self.assertIn("n == 76 || n == 77 || n == 78",s)
