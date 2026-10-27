@@ -47,6 +47,8 @@ class RestoreOriginal100(unittest.TestCase):
             flash.bind(root)
             unified.bind(root)
             tasks.bind(root)
+            prep = module(ROOT / 'tools/app_stability/app_package/prepare.py')
+            prep.omit_retired_500_bank(root)
             quiz_after = (root/'lib/traffic_quiz_page.dart').read_bytes()
             self.assertEqual(quiz_before, quiz_after)
             self.assertEqual(backend_before, (root/'lib/deda_backend.dart').read_bytes())
