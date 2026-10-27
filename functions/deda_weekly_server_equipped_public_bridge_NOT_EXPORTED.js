@@ -14,6 +14,7 @@
  * readiness. Missing proof => no frame, NO false profile/friend actions.
  */
 const crypto=require("node:crypto");
+const {competitorId}=require("./deda_weekly_receipts_to_standings_NOT_EXPORTED.js");
 const ACCOUNT=/^[0-9]{10,16}$/;
 const ACTIVE=/^@DEDA-[A-Z0-9]{4,12}$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
@@ -75,23 +76,24 @@ function validateProof(proof,row,account,now,key) {
     equippedAppearanceVerified:true,
   });
 }
-function rawIdentity(raw,week) {
+function rawIdentity(raw,week,rankerKey) {
   if(!raw||raw.weekId!==week.weekId||!Array.isArray(raw.rows)||
       raw.rows.length>5000)fail("raw_verified_week_required");
   const map=new Map();
   for(const rank of raw.rows) {
     if(!rank||!ACCOUNT.test(rank.accountKey||"")||
         !PARTICIPANT.test(rank.publicCompetitorId||"")||
+        rank.publicCompetitorId!==competitorId(rank.accountKey,rankerKey)||
         map.has(rank.publicCompetitorId))fail("raw_owner_identity_invalid");
     map.set(rank.publicCompetitorId,rank);
   }
   return map;
 }
-async function enrichVerifiedWeek({db,visible,raw,now,key,cache}) {
+async function enrichVerifiedWeek({db,visible,raw,now,key,rankerKey,cache}) {
   if(!visible ||visible.verified!==true||
       !Array.isArray(visible.rows)||visible.rows.length>11||
       visible.weekId!==raw.weekId)fail("verified_view_required");
-  const original=rawIdentity(raw,visible);
+  const original=rawIdentity(raw,visible,rankerKey);
   const rows=[];
   for(const row of visible.rows) {
     const account=original.get(row.participantId);
@@ -136,7 +138,7 @@ async function enrichVerifiedWeek({db,visible,raw,now,key,cache}) {
  * names from the phone or "isOwned" booleans from the client.
  */
 async function enrichVerifiedPairWithPublicAppearance({
-  db,serverPair,rawCurrent,rawPrevious,serverNowMs,serverSecret,
+  db,serverPair,rawCurrent,rawPrevious,serverNowMs,serverSecret,rankerKey,
 }) {
   if(!db||typeof db.doc!=="function"||
       !safeInt(serverNowMs)||serverNowMs<=0||
@@ -145,13 +147,14 @@ async function enrichVerifiedPairWithPublicAppearance({
       Object.keys(serverPair).some(x=>!["source","readOnly","current","previous"].includes(x)))
     fail("privileged_verified_pair_required");
   hmac(serverSecret,"validate");
+  competitorId("07700000000",rankerKey);
   const cache=new Map();
   const current=await enrichVerifiedWeek({
     db,visible:serverPair.current,raw:rawCurrent,now:serverNowMs,
-    key:serverSecret,cache});
+    key:serverSecret,rankerKey,cache});
   const previous=await enrichVerifiedWeek({
     db,visible:serverPair.previous,raw:rawPrevious,now:serverNowMs,
-    key:serverSecret,cache});
+    key:serverSecret,rankerKey,cache});
   return Object.freeze({
     source:"future_server_issued_only",readOnly:true,current,previous,
   });
