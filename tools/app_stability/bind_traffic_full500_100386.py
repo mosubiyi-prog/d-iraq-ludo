@@ -119,10 +119,10 @@ def bind(root):
                 isPortrait ? 10 : 18,
                 isPortrait ? 6 : 24,""",
        "compact content padding")
-    section=once(section, "SizedBox(height: isPortrait ? 9 : 16),",
-                 "SizedBox(height: isPortrait ? 5 : 16),", "sign question gap")
-    section=once(section, "SizedBox(height: isPortrait ? 9 : 16),",
-                 "SizedBox(height: isPortrait ? 5 : 16),", "question answer gap")
+    gap = "SizedBox(height: isPortrait ? 9 : 16),"
+    if section.count(gap) != 2:
+        raise ValueError("100386 expected exactly two layout gaps")
+    section=section.replace(gap, "SizedBox(height: isPortrait ? 5 : 16),")
     section=once(section, "fontSize: isPortrait ? 19.5 : 22,",
                  "fontSize: isPortrait ? 16.7 : 22,",
                  "compact question font")
