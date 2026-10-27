@@ -144,6 +144,13 @@ DedaLeaderboardViewData demoStandings({required bool previous}) {
         'demo-participant-${i + 1}': DedaLeaderboardProfile(
           accountUid: 'demo-participant-${i + 1}',
           displayName: labels[i],
+          // Existing DEDA art, displayed ONLY in this example-data demo.
+          // Official app will use authenticated users' approved avatars.
+          avatarImage: AssetImage(i % 3 == 0
+              ? 'assets/deda_owner_avatars_20261023/deda_male_royal_v2.jpg'
+              : i % 3 == 1
+                  ? 'assets/deda_owner_avatars_20261023/deda_couple_royal_v2.jpg'
+                  : 'assets/deda_owner_avatars_20261023/deda_female_royal_v2.jpg'),
           activePublicId:
               '@DEDA-DEMO${(i + 1).toString().padLeft(2, '0')}',
         ),
