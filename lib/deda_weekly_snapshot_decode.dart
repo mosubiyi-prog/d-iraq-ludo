@@ -37,7 +37,7 @@ class DedaWeeklyServerSnapshotPair {
   }
 
   static final _participant = RegExp(r'^[A-Za-z0-9_-]{16,90}$');
-  static final _activePublicId = RegExp(r'^@DEDA-[A-Z0-9]{5,12}$');
+  static final _activePublicId = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
   static final _displayName = RegExp(r'^[^\x00-\x1F\x7F@]{2,60}$');
 
   static DedaLeaderboardViewData _week(Object? raw, String expectedStatus) {
