@@ -68,7 +68,7 @@ jobs:
           p=pubspec.read_text()
           assert p.count('uses-material-design: true')==1
           p=p.replace('uses-material-design: true',
-              'uses-material-design: true\\n  assets:\\n    - assets/deda_owner_avatars_20261023/',1)
+              'uses-material-design: true\n  assets:\n    - assets/deda_owner_avatars_20261023/',1)
           pubspec.write_text(p)
           assert len(list((root/'assets/deda_owner_avatars_20261023').glob('*.jpg')))==3
           manifest=root/'android/app/src/main/AndroidManifest.xml'
