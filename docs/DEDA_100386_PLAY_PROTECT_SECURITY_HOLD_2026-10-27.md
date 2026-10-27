@@ -6,6 +6,9 @@ Status: **INSTALL BLOCKED. DO NOT SHIP. DO NOT BYPASS PLAY PROTECT.**
 - Owner's Android phone displayed Google Play Protect: "تم حظر تطبيق ضار".
 - Detailed message: "يحاول هذا التطبيق تجاوز إجراءات الحماية الأمنية لنظام التشغيل Android."
 - The second screenshot reports "التطبيق ليس مثبتاً".
+- Owner reattempted opening the same APK. Google Play Protect again displayed "تم حظر تطبيق ضار"; further details state "قد يكون هذا التطبيق ضاراً" and "قد يؤدي تثبيت هذا التطبيق إلى تعريض جهازك للخطر".
+- The screen offers "التثبيت على أي حال", but that is a security bypass and **must not be recommended or selected**. Owner has supplied enough screenshots; no further install attempts are needed.
+- Independent app behavior/security review remains pending. The existing CI package-signature/SDK/permission comparisons establish integrity, **not** Play Protect clearance.
 - These screenshots do **not** establish the underlying detector category or the exact cause.
 
 ## Reproducible build evidence
