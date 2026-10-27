@@ -51,8 +51,14 @@ class _DedaWeeklyLeaderboardSafeScreenState
       widget.loadVerifiedStandings != null &&
       widget.currentAccountStillAuthorized != null;
 
-  bool get _stillCurrent =>
-      _hasVerifiedReader && widget.currentAccountStillAuthorized!();
+  bool get _stillCurrent {
+    if (!_hasVerifiedReader) return false;
+    try {
+      return widget.currentAccountStillAuthorized!();
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
