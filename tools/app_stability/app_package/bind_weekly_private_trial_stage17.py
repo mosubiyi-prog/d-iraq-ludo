@@ -116,7 +116,7 @@ def bind(project):
         "  final int? privateTrialXp;",'trial amount')
     p=one(p,"                          : 'الترتيب قيد التحقق من الخادم؛ '\n"
         "                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',",
-        """                          : widget.privateTrialXp != null
+        """                          : widget.privateTrialXp != null && !previousWeek
                           ? 'فحص نقاط مهامي هذا الأسبوع: '
                             '@@{widget.privateTrialXp} XP محلياً؛ '
                             'لا ترتيب حقيقياً ولا جوائز.'
