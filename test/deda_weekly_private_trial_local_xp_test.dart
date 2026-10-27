@@ -14,8 +14,8 @@ void main(){
   test('Iraq midnight renews daily task receipts, not the weekly XP',
       ()async{
     final mon=DateTime.utc(2026,10,26,1);
-    final preMidnight=DateTime.utc(2026,9,27,20,59,59);
-    final postMidnight=DateTime.utc(2026,9,27,21,0,1);
+    final preMidnight=DateTime.utc(2026,10,27,20,59,59);
+    final postMidnight=DateTime.utc(2026,10,27,21,0,1);
     expect(DedaWeeklyPrivateTrialLocalXp.testWeekKey(preMidnight),
         '2026-10-26');
     expect(DedaWeeklyPrivateTrialLocalXp.testWeekKey(postMidnight),
