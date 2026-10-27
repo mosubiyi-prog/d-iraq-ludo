@@ -1,0 +1,51 @@
+name: DEDA weekly leaderboard stage1 isolated logic tests NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage1-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-leaderboard-stage1-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_policy.dart'
+      - 'test/deda_weekly_leaderboard_policy_test.dart'
+      - 'docs/DEDA_WEEKLY_LEADERBOARD_OWNER_APPROVED_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-leaderboard-stage1-isolated-qa
+  cancel-in-progress: true
+jobs:
+  policy-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Guard accepted phone-tested 100387 code and Firebase configuration
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/traffic_quiz_page.dart tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py google-services.json
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/deda_weekly_leaderboard_policy.dart').read_text()
+          assert 'FirebaseFirestore' not in p
+          assert 'SharedPreferences' not in p
+          assert 'cloud_functions' not in p
+          assert 'set(' not in p or 'seenAccountUids' in p
+          assert '150' in p and '100' in p and '50' in p
+          assert '370' in p
+          print('Stage1 is pure read-only; accepted core files unchanged')
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Fetch locked test dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze isolated weekly leaderboard source and tests
+        run: dart analyze lib/deda_weekly_leaderboard_policy.dart test/deda_weekly_leaderboard_policy_test.dart
+      - name: Test dynamic standings and prize boundaries
+        run: flutter test test/deda_weekly_leaderboard_policy_test.dart --no-pub
+      - name: No signing / package export / Firestore writes / deployment
+        run: echo 'QA done: NO APK, NO AAB, NO DEPLOY, NO WALLET GRANTS'
