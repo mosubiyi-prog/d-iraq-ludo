@@ -257,6 +257,8 @@ def bind(root):
     # This covers both sender and recipient, without credit for a pending request.
     liveMark="      final items = snapshot.docs"
     if a.count(liveMark)!=1:
+        p=a.find("static Stream<List<DedaFriendshipRecord>> watchRelations(")
+        print('FRIEND_WATCH_SHAPE',repr(a[p:p+2500]))
         raise ValueError('friendship verified observer source changed')
     a=a.replace(liveMark,"""      if (!snapshot.metadata.isFromCache &&
           !snapshot.metadata.hasPendingWrites) {
