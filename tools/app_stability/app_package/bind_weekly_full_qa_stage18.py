@@ -76,6 +76,106 @@ def bind(project):
       '      privateQaAccountScope: widget.localTrialAccountKey,\n'
       '      privateTrialXp: _privateTrialScope',
       'pass genuine user account scope')
+    # Owner-approved visual luxury polish for real leaderboard podium, never
+    # modifies row identity, XP, prizes or geometry/no-scroll policy.
+    p=once(p,
+      "                      Container(\n"
+      "                        width: (isFirst ? 72 : 65) * scale,",
+      """                      // Double metallic medal ring: gold / silver / bronze.
+                      Container(
+                        width: (isFirst ? 72 : 65) * scale,""",
+      "polish portrait rings")
+    p=once(p,
+      "                          gradient: LinearGradient(colors: [\n"
+      "                            accent, accent.withValues(alpha: .55), accent]),\n"
+      "                          boxShadow: [BoxShadow(\n"
+      "                            color: accent.withValues(alpha: .50),\n"
+      "                            blurRadius: 13 * scale)],",
+      """                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Colors.white.withValues(alpha: .85),
+                              accent, accent.withValues(alpha: .32), accent]),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .65),
+                            width: (isFirst ? 2 : 1.4) * scale),
+                          boxShadow: [
+                            BoxShadow(color: accent.withValues(alpha: .65),
+                              blurRadius: (isFirst ? 19 : 13) * scale,
+                              spreadRadius: 1.2 * scale),
+                            BoxShadow(color: Colors.black.withValues(alpha: .4),
+                              blurRadius: 6 * scale,
+                              offset: Offset(0, 4 * scale)),
+                          ],""",
+      "luxe medal ring shimmer")
+    p=once(p,
+      "                  if (isFirst)\n"
+      "                    Positioned.fill(",
+      """                  // Compact static star glints; no timers or frame churn.
+                  Positioned(
+                    left: 3 * scale, top: 17 * scale,
+                    child: Icon(Icons.auto_awesome_rounded,
+                      size: (isFirst ? 18 : 13) * scale,
+                      color: accent.withValues(alpha: .90))),
+                  Positioned(
+                    right: 4 * scale, top: 34 * scale,
+                    child: Icon(Icons.star_rounded,
+                      size: (isFirst ? 13 : 10) * scale,
+                      color: accent.withValues(alpha: .80))),
+                  if (isFirst)
+                    Positioned.fill(""",
+      "glints preserve podium space")
+    p=once(p,
+      "                        color: accent,\n"
+      "                        borderRadius: BorderRadius.circular(30),",
+      """                        gradient: LinearGradient(colors: [
+                          Colors.white.withValues(alpha: .95), accent,
+                          accent.withValues(alpha: .80)]),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .75),
+                          width: 1 * scale),
+                        boxShadow: [BoxShadow(
+                          color: accent.withValues(alpha: .38),
+                          blurRadius: 7 * scale)],
+                        borderRadius: BorderRadius.circular(30),""",
+      "metallic rank medallion")
+    p=once(p,
+      "                    colors: isFirst\n"
+      "                        ? const [Color(0xFF775015), Color(0xFF261B13)]\n"
+      "                        : place == 2\n"
+      "                            ? const [Color(0xFF174B80), Color(0xFF0B1C36)]\n"
+      "                            : const [Color(0xFF67413A), Color(0xFF1C1B31)],",
+      """                    colors: isFirst
+                        ? const [Color(0xFFB58123), Color(0xFF51340F),
+                            Color(0xFF1C1B28)]
+                        : place == 2
+                            ? const [Color(0xFF457FBC), Color(0xFF153D69),
+                                Color(0xFF101C39)]
+                            : const [Color(0xFFB77E5B), Color(0xFF50332F),
+                                Color(0xFF171D37)],""",
+      "premium dark tri-tone metallic podium")
+    p=once(p,
+      "border: Border.all(color: accent, width: 1.1 * scale),",
+      "border: Border.all(color: accent, width: (isFirst ? 1.8 : 1.35) * scale),",
+      "premium differentiated rim")
+    p=once(p,
+      "                    color: accent.withValues(alpha: .16),\n"
+      "                    blurRadius: 12 * scale)",
+      """                    color: accent.withValues(alpha: isFirst ? .38 : .24),
+                    blurRadius: (isFirst ? 18 : 12) * scale,
+                    spreadRadius: isFirst ? 1 * scale : 0)""",
+      "card stage glow")
+    p=once(p,
+      "                    fitted(name,\n"
+      "                        size: (isFirst ? 17 : 14) * scale),",
+      """                    fitted(name,
+                        size: (isFirst ? 17 : 14) * scale,
+                        color: isFirst ? gold : pale),""",
+      "first place golden headline")
+    if any(tag in p for tag in ("ListView(", "SingleChildScrollView(", "GridView(")):
+        raise ValueError('Never add scrolling to fixed royal leaderboard')
+    if p.count('Icons.auto_awesome_rounded') != 1:
+        raise ValueError('Podium adornments must be single addition')
     page.write_text(p)
     screen.write_text(s)
     shutil.copy2(ROOT/ADD,project/ADD)
@@ -100,6 +200,8 @@ def bind(project):
       'writesRealWallet':False,'writesRealXp':False,
       'writesFirestore':False,'fakePlayersInLiveLeaderboard':False,
       'signedOriginalPackage':True,
+      'podiumGoldSilverBronzeLuxuryPolish':True,
+      'originalNoScrollResponsive':True,
     }
     data['purpose']='ORIGINAL 100393 INTERACTIVE PRIVATE LEAGUE QA, NO REAL PAYOUT OR PLAY'
     meta.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
