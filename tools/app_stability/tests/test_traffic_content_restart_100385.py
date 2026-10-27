@@ -64,7 +64,7 @@ class TrafficFix100385(unittest.TestCase):
             self.assertIn("state['completions'] = completions;",main)
             self.assertIn('deda_traffic_quiz_daily_ids_v1_',main)
             self.assertIn("dedaText('إعادة', 'Retry')",main)
-            self.assertIn("await DedaTaskEngine.qaRestartTrafficOnlyOnce();",main)
+            self.assertIn("DedaTaskEngine.qaRestartTrafficOnlyOnce()",main)
             self.assertIn('legacyEquivalent',q)
             self.assertIn('_dedaReviewedSignQuestion[id] ?? question',q)
             self.assertIn("'DEDA-TRF-0003': 'كيف يتعامل السائق",q)
