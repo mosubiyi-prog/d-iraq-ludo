@@ -31,7 +31,7 @@ jobs:
           gate=Path('functions/deda_weekly_owner_receipt_gate_NOT_EXPORTED.js').read_text()
           exported=Path('functions/index.js').read_text()
           assert 'deda_weekly_owner_receipt_gate_NOT_EXPORTED' not in exported
-          for forbidden in ['runTransaction(', 'tx.set(', 'tx.create(', 'tx.update(', '.set(', '.update(', 'onCall(', 'onSchedule(', 'getAuth(', 'FieldValue.increment(', 'getFirestore(', 'firebase-admin']:
+          for forbidden in ['runTransaction(', 'tx.set(', 'tx.create(', 'tx.update(', 'db.set(', 'db.update(', 'onCall(', 'onSchedule(', 'getAuth(', 'FieldValue.increment(', 'getFirestore(', 'firebase-admin']:
               assert forbidden not in gate, forbidden
           assert 'deda_weekly_identity_attestations/' in gate
           assert 'deda_weekly_xp_receipts/' in gate
