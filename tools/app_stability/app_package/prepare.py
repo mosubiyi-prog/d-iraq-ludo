@@ -144,6 +144,13 @@ def prepare(project, variant):
         content = importlib.util.module_from_spec(content_spec)
         content_spec.loader.exec_module(content)
         content.bind(source)
+        # 100386 private-only full-bank five-answer educational layout.
+        full_spec = importlib.util.spec_from_file_location(
+            'deda_traffic_full500_100386',
+            REPO/'tools/app_stability/bind_traffic_full500_100386.py')
+        full = importlib.util.module_from_spec(full_spec)
+        full_spec.loader.exec_module(full)
+        full.bind(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
@@ -153,7 +160,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100385,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100386,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
