@@ -559,23 +559,33 @@ class _DedaWeeklyLeaderboardPageState
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, box) {
-            // Scale by BOTH dimensions. Never scroll or clip user records.
-            final scale = math.min(box.maxWidth / 390, box.maxHeight / 780)
-                .clamp(.60, 1.30)
+            // One owner-approved 2:3 leaderboard canvas for BOTH phone
+            // and tablet. Tall/wide tablets keep the original proportions
+            // instead of stretching podium and ranking rows edge to edge.
+            // SafeArea already subtracts system bars; never use a scroller.
+            final stageWidth =
+                math.min(box.maxWidth, box.maxHeight * (2.0 / 3.0));
+            final scale = math.min(stageWidth / 390, box.maxHeight / 780)
+                .clamp(.50, 2.10)
                 .toDouble();
             final gap = 7.0 * scale;
-            return Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF083363), navy, Color(0xFF061D3A)],
-                ),
-              ),
-              padding: EdgeInsets.symmetric(
-                  horizontal: 9 * scale, vertical: 5 * scale),
-              child: Column(
-                children: [
+            return Center(
+              child: SizedBox(
+                key: const ValueKey<String>('deda-weekly-leaderboard-stage'),
+                width: stageWidth,
+                height: box.maxHeight,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF083363), navy, Color(0xFF061D3A)],
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: 9 * scale, vertical: 5 * scale),
+                  child: Column(
+                    children: [
                   Expanded(flex: 14, child: header(scale)),
                   SizedBox(height: gap),
                   Expanded(
@@ -609,7 +619,9 @@ class _DedaWeeklyLeaderboardPageState
                           size: 11 * scale, color: silver),
                     ),
                   ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             );
           },
