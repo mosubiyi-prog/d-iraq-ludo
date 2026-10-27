@@ -193,8 +193,21 @@ class _DedaWeeklyQaFullTrialPageState extends State<DedaWeeklyQaFullTrialPage> {
             textAlign:TextAlign.center,
             style:const TextStyle(color:gold)),
           for(var i=1;i<=10;i++)
-            Card(color:navy,child:ListTile(
+            Card(
+              color:navy,
+              shape:RoundedRectangleBorder(
+                borderRadius:BorderRadius.circular(14),
+                side:BorderSide(
+                  color:!previous && !settled && selected==i
+                    ? gold : Colors.white24,
+                  width:!previous && !settled && selected==i ? 2.3 : .5)),
+              child:ListTile(
               dense:true,
+              enabled:!previous && !settled && !busy,
+              selected:!previous && selected==i,
+              selectedColor:gold,
+              onTap:previous || settled || busy ? null :
+                ()=>_act(()async{await lab.choose(i);}),
               leading:Icon(i==1?Icons.workspace_premium:Icons.emoji_events,
                 color:gold),
               title:Text('المركز $i — ${DedaWeeklyQaSandbox.prize(i)} ماسة',
@@ -206,9 +219,24 @@ class _DedaWeeklyQaFullTrialPageState extends State<DedaWeeklyQaFullTrialPage> {
                    : 'مقعد اختبار، ليس مستخدمًا حقيقيًا',
                 style:const TextStyle(color:Colors.white70)),
               trailing:result!=null&&result['rank']==i
-                ? const Icon(Icons.check_circle,color:gold):null,
+                ? const Icon(Icons.check_circle,color:gold)
+                : (!previous && !settled && selected==i
+                  ? const Icon(Icons.touch_app,color:gold) : null),
             )),
-          Card(color:navy,child:ListTile(
+          Card(
+            color:navy,
+            shape:RoundedRectangleBorder(
+              borderRadius:BorderRadius.circular(14),
+              side:BorderSide(
+                color:!previous && !settled && selected==11
+                    ? gold : Colors.white24,
+                width:!previous && !settled && selected==11 ? 2.3 : .5)),
+            child:ListTile(
+            enabled:!previous && !settled && !busy,
+            selected:!previous && selected==11,
+            selectedColor:gold,
+            onTap:previous || settled || busy ? null :
+              ()=>_act(()async{await lab.choose(11);}),
             title:const Text('المركز 11 — خارج الجوائز',
               style:TextStyle(color:Colors.white)),
             subtitle:Text(result!=null&&result['rank']==11
@@ -216,23 +244,57 @@ class _DedaWeeklyQaFullTrialPageState extends State<DedaWeeklyQaFullTrialPage> {
               : 'يُختبر عدم صرف ماسة خارج أول عشرة',
               style:const TextStyle(color:Colors.white70)))),
           if(!previous)...[
+            Text(
+              settled
+                ? 'الأسبوع التجريبي مغلق، ما يصير تغيير المركز بعد صرف الجائزة.'
+                : 'اضغط بطاقة المركز مباشرة أو اختاره من القائمة أدناه.',
+              textAlign:TextAlign.center,
+              style:const TextStyle(color:gold,fontSize:14)),
+            Text('مركزك المحدد للاختبار: $selected',
+              textAlign:TextAlign.center,
+              style:const TextStyle(color:Colors.white,
+                fontSize:17,fontWeight:FontWeight.bold)),
             DropdownButtonFormField<int>(
               value:selected,
               dropdownColor:navy,
-              style:const TextStyle(color:gold),
-              decoration:const InputDecoration(
+              iconEnabledColor:gold,
+              iconDisabledColor:Colors.white54,
+              style:const TextStyle(color:gold,fontSize:17,
+                fontWeight:FontWeight.w600),
+              decoration:InputDecoration(
+                filled:true,
+                fillColor:const Color(0xFF14365C),
                 labelText:'اختيار مركز اختبارك',
-                labelStyle:TextStyle(color:gold)),
+                labelStyle:const TextStyle(color:gold),
+                enabledBorder:OutlineInputBorder(
+                  borderRadius:BorderRadius.circular(12),
+                  borderSide:const BorderSide(color:gold,width:1.3)),
+                focusedBorder:OutlineInputBorder(
+                  borderRadius:BorderRadius.circular(12),
+                  borderSide:const BorderSide(color:gold,width:2)),
+                disabledBorder:OutlineInputBorder(
+                  borderRadius:BorderRadius.circular(12),
+                  borderSide:const BorderSide(color:Colors.white30))),
               items:List.generate(11,(i)=>DropdownMenuItem(
                 value:i+1,child:Text('المركز ${i+1}'))),
               onChanged:settled||busy?null:(i){
                 if(i!=null)_act(()async{await lab.choose(i);});
               }),
-            FilledButton(onPressed:settled||busy?null:
+            FilledButton(
+              style:FilledButton.styleFrom(
+                backgroundColor:gold,foregroundColor:navy,
+                disabledBackgroundColor:const Color(0xFF24523B),
+                disabledForegroundColor:Colors.white70,
+                textStyle:const TextStyle(fontWeight:FontWeight.bold)),
+              onPressed:settled||busy?null:
               ()=>_act(()async{await lab.settle(DateTime.now());}),
               child:Text(settled?'تم صرف جائزة هذا الأسبوع التجريبي':
                 'إغلاق أسبوع الاختبار وصرف الجائزة')),
             OutlinedButton(
+              style:OutlinedButton.styleFrom(
+                foregroundColor:gold,
+                disabledForegroundColor:Colors.white54,
+                side:const BorderSide(color:gold,width:1.3)),
               onPressed:!settled||busy?null:
                 ()=>_act(()async{await lab.next();}),
               child:const Text('بدء أسبوع تجريبي جديد (بدون تغيير التاريخ)')),
