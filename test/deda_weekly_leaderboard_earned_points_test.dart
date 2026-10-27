@@ -55,6 +55,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('شلون تحصل على نقاط الدوري؟'),
           findsOneWidget);
+      expect(find.textContaining('20 نقطة خبرة (XP)'), findsOneWidget);
+      expect(find.textContaining('5 نقاط عادية منفصلة'), findsOneWidget);
       expect(find.textContaining('10 نقاط لتسجيل الدخول اليومي'),
           findsOneWidget);
       expect(find.textContaining('5 نقاط لكل إجابة مرورية صحيحة'),
