@@ -1,0 +1,60 @@
+name: DEDA weekly leaderboard stage4 earned points clarity QA NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage4-earned-points-labels-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-leaderboard-stage4-earned-points-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'test/deda_weekly_leaderboard_earned_points_test.dart'
+      - 'docs/DEDA_WEEKLY_LEADERBOARD_STAGE4_EARNED_POINTS_SOURCE_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-leaderboard-stage4-earned-points-no-deploy
+  cancel-in-progress: true
+jobs:
+  safe-earning-label-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard original DEDA 100387 tasks, level, wallet and production inputs
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/traffic_quiz_page.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert s.count("'النقاط المكتسبة'") >= 2
+          assert 'شلون تحصل على نقاط الدوري؟' in s
+          assert '10 نقاط لتسجيل الدخول اليومي' in s
+          assert '5 نقاط لكل' in s
+          for forbidden in ['SingleChildScrollView(', 'ListView(', 'CustomScrollView(']:
+              assert forbidden not in s, forbidden
+          original=Path('lib/deda_migrated_progress.dart').read_text()
+          assert "{'points', 'coins', 'xp', 'earnedDiamonds'}" in original
+          assert 'FirebaseFirestore' not in s
+          assert 'SharedPreferences.getInstance' not in s
+          print('Label only: user progression, tasks, wallets, Firebase and publication untouched.')
+          PY
+      - name: Verify stage3 shadow server rules remain isolated
+        run: node --test functions/tests/deda_weekly_leaderboard_shadow_policy.test.js
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve CI test dependencies without modifying repository
+        run: flutter pub get
+      - name: Analyze read-only leaderboard and Arabic guidance
+        run: dart analyze lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_leaderboard_page.dart test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_earned_points_test.dart
+      - name: Run ranking, fixed-layout and earned-points explanation widget tests
+        run: flutter test test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_earned_points_test.dart --no-pub
+      - name: No APK or account/XP/diamond mutation
+        run: |
+          echo 'SAFE LABEL STAGE4: NO APK, NO AAB, NO PLAY DEPLOY.'
+          echo 'NO XP CHANGE, NO USER WALLET GRANT, NO FAKE LIVE STANDINGS.'
