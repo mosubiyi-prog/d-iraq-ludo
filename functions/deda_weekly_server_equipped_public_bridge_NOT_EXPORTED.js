@@ -118,6 +118,14 @@ async function enrichVerifiedWeek({db,visible,raw,now,key,cache}) {
       rows.push(Object.freeze({...row}));
       continue; // never pretend this competitor has a verified frame or profile
     }
+    // A player can legitimately change name / premium ID between weeks.
+    // The CURRENT equipped proof must not repaint historical weeks with a
+    // different identity; leave the old row without interactive cosmetics.
+    if(proof.activePublicId!==row.activePublicId ||
+       proof.displayName!==row.displayName) {
+      rows.push(Object.freeze({...row}));
+      continue;
+    }
     const safe=validateProof(proof,row,accountKey,now,key);
     rows.push(Object.freeze({...row,publicAppearance:safe}));
   }
