@@ -105,9 +105,11 @@ function verifyAndRedactSnapshot(raw,week,accountKey,nowMs,kind) {
         row.lastEarnedAtMs<week.startMs || row.lastEarnedAtMs>=week.endMs ||
         row.lastEarnedAtMs>nowMs ||
         !PUBLIC_ID.test(row.activePublicId||"") ||
-        !accounts.add(row.accountKey) || !tokens.add(row.publicCompetitorId)) {
+        accounts.has(row.accountKey) || tokens.has(row.publicCompetitorId)) {
       deny("rank_invalid");
     }
+    accounts.add(row.accountKey);
+    tokens.add(row.publicCompetitorId);
     const label = scrubDisplayName(row.displayName);
     const expectedDiamonds = DEFAULT_REWARDS[i]||0;
     if (row.potentialDiamonds!==expectedDiamonds) deny("prize_mismatch");
