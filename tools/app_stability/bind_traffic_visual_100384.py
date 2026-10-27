@@ -207,6 +207,9 @@ def bind(root):
 
     main_path = root / "lib/main.dart"
     main = main_path.read_text()
+    if "    final trafficDone = index == 6 && completed;" not in main:
+        pos = main.find("Widget _taskCard(")
+        print("TRAFFIC_100384_TASK_CARD_SHAPE", repr(main[pos:pos+6600]))
     main = one(main, """    final trafficDone = index == 6 && completed;
     return Container(""", """    final trafficDone = index == 6 && completed;
     final trafficQaReplay = trafficDone &&
