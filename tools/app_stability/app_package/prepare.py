@@ -129,6 +129,14 @@ def prepare(project, variant):
         traffic_spec.loader.exec_module(traffic)
         tasks.bind(source)
         traffic.bind(source)
+        # Sign/question presentation and no-reward owner QA rerun.
+        # Single integrated candidate, no task-state or wallet reset.
+        visual_spec = importlib.util.spec_from_file_location(
+            'deda_traffic_visual_100384',
+            REPO/'tools/app_stability/bind_traffic_visual_100384.py')
+        visual = importlib.util.module_from_spec(visual_spec)
+        visual_spec.loader.exec_module(visual)
+        visual.bind(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
@@ -138,7 +146,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100383,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100384,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
