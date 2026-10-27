@@ -1,0 +1,45 @@
+name: DEDA weekly leaderboard stage3 server shadow policy tests NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage3-server-shadow-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-leaderboard-stage3-shadow-no-deploy.yml'
+      - 'functions/deda_weekly_leaderboard_shadow_policy.js'
+      - 'functions/tests/deda_weekly_leaderboard_shadow_policy.test.js'
+      - 'docs/DEDA_WEEKLY_LEADERBOARD_STAGE3_SHADOW_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-leaderboard-stage3-shadow-qa
+  cancel-in-progress: true
+jobs:
+  source-only-security-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard stable DEDA 100387 and no changes to stage2 production inputs
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/traffic_quiz_page.dart lib/deda_social_service.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('functions/deda_weekly_leaderboard_shadow_policy.js').read_text()
+          main=Path('functions/index.js').read_text()
+          assert 'deda_weekly_leaderboard_shadow_policy' not in main
+          for forbidden in ['getFirestore()', 'runTransaction(', 'FieldValue.increment(', 'admin.firestore()', 'onCall(', 'onSchedule(', 'https.onRequest(', 'SharedPreferences', 'firebase-admin', 'firebase-functions']:
+              assert forbidden not in p, forbidden
+          assert "stage3_emulator_fixture_only" in p
+          assert "creditedDiamonds: 0" in p
+          print('NO production export, no wallet write, no backend/rules changes')
+          PY
+      - name: Node.js built-in test runner for isolated emulator-fixture policies
+        run: node --test functions/tests/deda_weekly_leaderboard_shadow_policy.test.js
+      - name: End without APK, deploy, cloud credentials or wallet payouts
+        run: |
+          echo 'STAGE3 SHADOW TEST ONLY. NO PRODUCTION RELEASE.'
+          echo 'NO live score, payment transaction, XP mutation or user-data read.'
