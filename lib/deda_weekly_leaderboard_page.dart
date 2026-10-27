@@ -92,6 +92,7 @@ class _DedaWeeklyLeaderboardPageState
     Color color = Colors.white,
     FontWeight weight = FontWeight.w700,
     TextAlign align = TextAlign.center,
+    bool ltr = false,
   }) =>
       FittedBox(
         fit: BoxFit.scaleDown,
@@ -99,7 +100,7 @@ class _DedaWeeklyLeaderboardPageState
           value,
           maxLines: 1,
           textAlign: align,
-          textDirection: TextDirection.rtl,
+          textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
           style: TextStyle(
             color: color,
             fontSize: size,
@@ -147,16 +148,22 @@ class _DedaWeeklyLeaderboardPageState
         SizedBox(width: compact ? 4 : 7),
         Flexible(
           child: Column(
+            mainAxisSize: MainAxisSize.max,
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              fitted(
-                details?.displayName ?? (row == null ? '—' : 'مستخدم DEDA'),
-                size: compact ? 12 : 16,
+              Expanded(
+                child: fitted(
+                  details?.displayName ?? (row == null ? '—' : 'مستخدم DEDA'),
+                  size: compact ? 12 : 16,
+                ),
               ),
               if (!compact)
-                fitted(details?.activePublicId ?? '—',
-                    size: 11, color: silver, weight: FontWeight.w500),
+                Expanded(
+                  child: fitted(details?.activePublicId ?? '—',
+                      size: 11, color: silver, weight: FontWeight.w500,
+                      ltr: true),
+                ),
             ],
           ),
         ),
@@ -286,7 +293,7 @@ class _DedaWeeklyLeaderboardPageState
                     fitted(name,
                         size: (isFirst ? 17 : 14) * scale),
                     fitted(profile(row)?.activePublicId ?? '—',
-                        size: 11 * scale, color: silver),
+                        size: 11 * scale, color: silver, ltr: true),
                     fitted(row == null ? '— نقطة' :
                         '${row.weeklyPoints} نقطة',
                         size: 17 * scale, color: pale),
