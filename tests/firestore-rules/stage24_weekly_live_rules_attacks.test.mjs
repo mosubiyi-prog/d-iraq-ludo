@@ -55,7 +55,7 @@ for(const [role,select] of [
   ['anonymous',()=>unauthenticated],
 ]) {
   for(const path of paths) {
-    test(\`\${role} cannot read, forge, edit or delete backend-only \${path}\`,async()=>{
+    test(role+' cannot read, forge, edit or delete backend-only '+path,async()=>{
       const ref=doc(select(),path);
       await assertFails(getDoc(ref));
       await assertFails(setDoc(ref,{
