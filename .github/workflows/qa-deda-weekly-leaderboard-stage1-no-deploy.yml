@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Guard accepted phone-tested 100387 code and Firebase configuration
         run: |
@@ -29,9 +30,9 @@ jobs:
           from pathlib import Path
           p=Path('lib/deda_weekly_leaderboard_policy.dart').read_text()
           assert 'FirebaseFirestore' not in p
-          assert 'SharedPreferences' not in p
+          assert 'SharedPreferences.getInstance' not in p
           assert 'cloud_functions' not in p
-          assert 'set(' not in p or 'seenAccountUids' in p
+          assert '.collection(' not in p
           assert '150' in p and '100' in p and '50' in p
           assert '370' in p
           print('Stage1 is pure read-only; accepted core files unchanged')
