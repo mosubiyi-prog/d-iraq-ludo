@@ -157,8 +157,8 @@ def bind(root):
            "child: _TrafficSign(kind: kind, size: isPortrait ? 88 : 150),",
            "compact true sign")
 
-    topic_labels=",\n".join("      "+repr(label)+"," for label in TOPIC_LABELS)
-    icons=",\n".join("      "+name+"," for name in TOPIC_ICON_NAMES)
+    topic_labels="\n".join("      "+repr(label)+"," for label in TOPIC_LABELS)
+    icons="\n".join("      "+name+"," for name in TOPIC_ICON_NAMES)
     extra = """
 /// QA illustrations: these are NOT certified Iraqi traffic signs.
 class _DedaTrafficQuestionVisual extends StatelessWidget {
