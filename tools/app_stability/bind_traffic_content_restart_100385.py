@@ -136,6 +136,11 @@ def bind(root):
     m = one(m, "  static Future<bool> isTaskCompleted(\n",
             reset + "  static Future<bool> isTaskCompleted(\n",
             "QA reset method")
+    if "final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(" not in m:
+        ix = m.find("DedaTrafficQuizPage(")
+        print("QA_100385_REAL_QUIZ_NAV", repr(m[max(0,ix-1300):ix+1000]))
+        ix2 = m.find("case 6:")
+        print("QA_100385_REAL_CASE6", repr(m[max(0,ix2-80):ix2+1100]))
     m = one(m,
             "final alreadyCompleted = await DedaTaskEngine.isTaskCompleted(",
             "// First QA revisit after daily completion starts a fresh normal quiz.\n"
