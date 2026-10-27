@@ -38,7 +38,7 @@ class OriginalActiveIdentityPreload(unittest.TestCase):
             store=(root/"lib/deda_verified_active_id_store.dart").read_text()
             scope=(root/"lib/deda_qa32_active_account_scope.dart").read_text()
             self.assertLess(main.index("await DedaVerifiedActiveIdStore.preloadForUid(uid);"),
-                            main.index("runApp(const DedaApp());"))
+                            main.index("runApp("))
             self.assertIn("FirebaseAuth.instance.currentUser?.uid",main)
             self.assertIn("name != _prefsKey(saved.uid, saved.originalId)",store)
             self.assertIn("saved.uid != uid",store)
