@@ -1,0 +1,61 @@
+name: DEDA Stage21 server XP identity + verified equipment bridge NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage21-verified-ids-public-appearance-bridge-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage21-verified-id-equipment-bridge-no-deploy.yml'
+      - 'functions/deda_weekly_server_equipped_public_bridge_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_receipts_to_standings_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_snapshot_reader_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_server_equipped_public_bridge.test.js'
+      - 'functions/tests/deda_weekly_receipts_to_standings.test.js'
+      - 'functions/tests/deda_weekly_snapshot_reader.test.js'
+      - 'lib/deda_weekly_snapshot_decode.dart'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'lib/deda_weekly_competitor_public_card.dart'
+      - 'test/deda_weekly_snapshot_decode_test.dart'
+      - 'docs/DEDA_WEEKLY_STAGE21_VERIFIED_EQUIPMENT_BRIDGE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  server-privacy-identity-and-protection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect original DEDA account, social, XP, purchases, Firebase and Play
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart lib/deda_migrated_progress.dart lib/deda_owner18_cosmetics.dart pubspec.yaml pubspec.lock functions/index.js firestore.rules firebase.json
+          ! grep -q 'deda_weekly_server_equipped_public_bridge_NOT_EXPORTED' functions/index.js
+          node --check functions/deda_weekly_server_equipped_public_bridge_NOT_EXPORTED.js
+          node --test functions/tests/deda_weekly_receipts_to_standings.test.js functions/tests/deda_weekly_snapshot_reader.test.js functions/tests/deda_weekly_server_equipped_public_bridge.test.js
+  flutter-verified-public-identity-contract:
+    runs-on: ubuntu-24.04
+    needs: server-privacy-identity-and-protection
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Compile verified client ID + outfit reader and preserve no-scroll leaderboard
+        run: |
+          set -euo pipefail
+          flutter create --project-name deda_weekly_stage21_check --platforms=android "$RUNNER_TEMP/stage21"
+          cp lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_policy.dart "$RUNNER_TEMP/stage21/lib/"
+          cp test/deda_weekly_snapshot_decode_test.dart "$RUNNER_TEMP/stage21/test/"
+          cd "$RUNNER_TEMP/stage21"
+          flutter pub get
+          flutter test test/deda_weekly_snapshot_decode_test.dart
+          ! grep -Eq 'ListView\(|SingleChildScrollView\(|GridView\(' lib/deda_weekly_leaderboard_page.dart
+          echo "Verified DEDA Stage21 contract passed; no user APK or backend deployed."
