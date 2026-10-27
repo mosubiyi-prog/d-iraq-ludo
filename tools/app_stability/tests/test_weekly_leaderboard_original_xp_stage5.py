@@ -93,6 +93,22 @@ class VerifiedSourceXpAudit(unittest.TestCase):
             xp_term_uses = sum('xpPerTaskClaim' in line for line in lines)
             self.assertGreaterEqual(xp_term_uses, 2,
                                     'XP constant unused beyond its declaration')
+            # Determine exact XP-trigger callsites, without assuming that
+            # ordinary login/quiz score automatically equals level XP.
+            for label, needle, limit in (
+                ('TASK_CLAIM_UI', 'Future<void> _claimTaskReward(', 28),
+                ('DAILY_LOGIN_UI', 'Future<void> _claimDailyLogin', 26),
+                ('SOCIAL_WALLET_CLAIM', 'final xp = snapshot.xp + xpPerTaskClaim;', 23),
+                ('TRAFFIC_QUIZ_CALLBACK', 'DedaTaskEvent.trafficQuizCorrectAnswer', 8),
+            ):
+                at = dart.find(needle)
+                print('DEDA100387_CLAIM_LOCATION', label, 'found', at >= 0)
+                if at >= 0:
+                    first = dart[:at].count('\\n')
+                    excerpt = lines[max(0, first - 5):first + limit]
+                    print('DEDA100387_CLAIM_EXCERPT', label,
+                          ' | '.join(v.strip()[:130] for v in excerpt)[:4300])
+
             print('DEDA100387_XP_AUDIT_PASS protected source and XP formula')
 
 if __name__ == '__main__':
