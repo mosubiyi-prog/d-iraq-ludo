@@ -1,0 +1,66 @@
+name: DEDA stage8 fixed home leaderboard route + safe data flow NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage8-safe-ui-dataflow-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage8-safe-ui-dataflow-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_safe_screen.dart'
+      - 'test/deda_weekly_leaderboard_safe_screen_test.dart'
+      - 'tools/app_stability/bind_weekly_leaderboard_stage8.py'
+      - 'tools/app_stability/tests/test_weekly_leaderboard_stage8.py'
+      - 'docs/DEDA_WEEKLY_STAGE8_SAFE_UI_DATAFLOW_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage8-weekly-safe-ui
+  cancel-in-progress: true
+jobs:
+  ui-integration-and-cross-account-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guarantee all original accepted 100387 sources unchanged
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          ui=Path('lib/deda_weekly_leaderboard_safe_screen.dart').read_text()
+          binder=Path('tools/app_stability/bind_weekly_leaderboard_stage8.py').read_text()
+          assert 'deda_weekly_leaderboard_safe_screen.dart' in binder
+          assert 'const DedaWeeklyLeaderboardSafeScreen()' in binder
+          assert 'serverBackendConnected' in binder
+          for bad in ['FirebaseFirestore', 'SharedPreferences', 'FieldValue.increment(', 'onCall(', 'getFirestore(']:
+              assert bad not in ui,bad
+          assert 'DedaWeeklyServerSnapshotPair.parse' in ui
+          assert 'currentAccountStillAuthorized' in ui
+          print('Original source and wallet untouched; no APK or live backend wired.')
+          PY
+      - name: Full restored-phone source integration and double-apply protection
+        run: |
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage8.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage2.py' -v
+      - name: Recheck server stand-ins refuse forged data and false owner
+        run: |
+          node --test functions/tests/deda_weekly_snapshot_reader.test.js functions/tests/deda_weekly_owner_receipt_gate.test.js
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve isolated Flutter test libraries
+        run: flutter pub get
+      - name: Analyze fixed UI, readonly response decoder and session-safe wrapper
+        run: |
+          dart analyze lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_leaderboard_safe_screen.dart test/deda_weekly_leaderboard_safe_screen_test.dart
+      - name: Verify pending state, valid data, logout race and no scrolling on phone
+        run: |
+          flutter test test/deda_weekly_leaderboard_safe_screen_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_snapshot_decode_test.dart --no-pub
+      - name: No production deploy or diamond transaction
+        run: |
+          echo 'Stage8 isolated Flutter/binder CI completed. NO APK, NO AAB, NO FIREBASE/PLAY DEPLOY.'
