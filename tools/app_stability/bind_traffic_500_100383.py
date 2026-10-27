@@ -34,11 +34,11 @@ def bind(root):
     s=one(s,"    final byId = <String, _TrafficQuestion>{\n      for (final q in _trafficQuestionBank) q.id: q,",
           "    final bank = widget.isArabic\n        ? await _loadDedaTraffic500Arabic() : _trafficQuestionBank;\n    final byId = <String, _TrafficQuestion>{\n      for (final q in bank) q.id: q,",
           'load 500 bank when Arabic')
-    s=one(s,"    final remaining = _trafficQuestionBank\n",
-          "    final remaining = bank\n",
+    s=one(s,"final remaining = _trafficQuestionBank",
+          "final remaining = bank",
           'non-repeat pool 500')
-    s=one(s,"      final pool = _trafficQuestionBank\n",
-          "      final pool = bank\n",
+    s=one(s,"final pool = _trafficQuestionBank",
+          "final pool = bank",
           'cycle reset only after 500')
     s=one(s,"                   _TrafficSignCard(kind: q.visual),",
           """                   if (q.visual != null)
