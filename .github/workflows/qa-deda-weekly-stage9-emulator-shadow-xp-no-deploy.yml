@@ -1,0 +1,47 @@
+name: DEDA Stage9 atomic weekly LEVEL XP shadow ledger - NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-xp-atomic-shadow-ledger-stage9-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage9-emulator-shadow-xp-no-deploy.yml'
+      - 'functions/deda_weekly_xp_atomic_shadow_issuer_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE9_ATOMIC_XP_RECEIPT_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage9-atomic-shadow-only
+  cancel-in-progress: true
+jobs:
+  secure-shadow-logic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify signed DEDA 100387, existing user progress, Firebase and wallet remain untouched
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          module=Path('functions/deda_weekly_xp_atomic_shadow_issuer_NOT_EXPORTED.js').read_text()
+          exported=Path('functions/index.js').read_text()
+          assert 'deda_weekly_xp_atomic_shadow_issuer' not in exported
+          assert 'FIRESTORE_EMULATOR_HOST' in module and 'GCLOUD_PROJECT' in module
+          assert 'demo-deda-weekly-xp-stage9' in module
+          assert 'deda_weekly_stage9_shadow_' in module
+          for dangerous in ['firebase-admin','functions.https','onCall(','onSchedule(', 'FieldValue.increment(','deda_weekly_xp_receipts/','deda_weekly_wallets/', 'userRef.update(','walletRef.update(']:
+            assert dangerous not in module,dangerous
+          print('Original release, all existing XP/balances, real Firebase Cloud exports unchanged')
+          PY
+      - name: Node shadow-only atomic simulation and older signed XP regression
+        run: |
+          node --test functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js functions/tests/deda_weekly_owner_receipt_gate.test.js functions/tests/deda_weekly_level_xp_shadow_policy.test.js functions/tests/deda_weekly_traffic_quiz_league_accounting.test.js
+      - name: Explicit no emulator network, no real users or diamond transfers
+        run: |
+          echo 'Transaction tests use a fake atomic document store; no actual Firebase emulator, no live account, no wallet mutations.'
+          echo 'DO NOT DEPLOY: original 100387 credits XP locally and privileged client-proof/receipt issuers still absent.'
