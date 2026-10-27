@@ -1,0 +1,87 @@
+name: DEDA Stage11 ORIGINAL 100387 weekly current previous safe native QA NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-stage11-original-app-projection-qa-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage11-original-native-pair-no-deploy.yml'
+      - 'functions/deda_weekly_verified_pair_for_app_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_verified_pair_for_app.test.js'
+      - 'tools/app_stability/tests/test_weekly_stage11_original_native_integration.py'
+      - 'docs/DEDA_WEEKLY_STAGE11_ORIGINAL_NATIVE_PAIR_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage11-original-app-read-model
+  cancel-in-progress: true
+jobs:
+  original-code-and-identity-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect official tested DEDA 100387 files and monetary paths
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('functions/deda_weekly_verified_pair_for_app_NOT_EXPORTED.js').read_text()
+          production=Path('functions/index.js').read_text()
+          assert 'deda_weekly_verified_pair_for_app_NOT_EXPORTED' not in production
+          for token in ('resolveFutureVerifiedAccount','validateServerCalendar','projectFutureServerWeek','verifyAndRedactSnapshot','readOnly:true','future_server_issued_only'):
+              assert token in src,token
+          for banned in ('onCall(', 'onSchedule(', 'FieldValue.increment(', 'db.runTransaction(', 'tx.set(', 'tx.create(', 'tx.update(', 'FirebaseAuth', 'SharedPreferences'):
+              assert banned not in src,banned
+          print('Official DEDA 100387 and protected balance/login source unchanged.')
+          PY
+      - name: Reconstruct exact ORIGINAL Android application and bind owner V2 ranks
+        run: |
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_stage11_original_native_integration.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage8.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage2.py' -v
+      - name: Verified current and previous week to safe app DTO
+        run: |
+          node --test \
+            functions/tests/deda_weekly_verified_pair_for_app.test.js \
+            functions/tests/deda_weekly_receipts_to_standings.test.js \
+            functions/tests/deda_weekly_snapshot_reader.test.js \
+            functions/tests/deda_weekly_owner_receipt_gate.test.js \
+            functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js
+      - name: NO real Firebase calls, wallet settlement or Play deployment
+        run: echo 'Tests only; no Firebase credentials, no signed QA APK, no Play release.'
+  original-native-visual-and-session-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve package
+        run: flutter pub get
+      - name: Dart analyze native standalone V2 + safe server decoder
+        run: |
+          dart analyze \
+            lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_leaderboard_policy.dart \
+            lib/deda_weekly_snapshot_decode.dart \
+            lib/deda_weekly_leaderboard_safe_screen.dart
+      - name: Phone/tablet fixed viewport and account-switch safety
+        run: |
+          flutter test \
+            test/deda_weekly_phone_tablet_viewport_test.dart \
+            test/deda_weekly_leaderboard_page_test.dart \
+            test/deda_weekly_snapshot_decode_test.dart \
+            test/deda_weekly_leaderboard_safe_screen_test.dart \
+            --no-pub
+      - name: Verify no live rewards issued
+        run: echo 'Single-viewport safe reader only. No demo data passed into the original app.'
