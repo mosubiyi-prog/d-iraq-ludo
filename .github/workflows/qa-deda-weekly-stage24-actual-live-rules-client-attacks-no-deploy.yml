@@ -1,0 +1,63 @@
+name: DEDA Stage24 TEST ACTUAL LIVE RULES AGAINST WEEKLY LEDGER ATTACKS IN DEMO EMULATOR NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage24-live-firestore-rules-client-attack-emulator-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage24-actual-live-rules-client-attacks-no-deploy.yml'
+      - 'tools/app_stability/deda_weekly_live_rules_emulator_fetch_stage24.py'
+      - 'tests/firestore-rules/stage24_weekly_live_rules_attacks.test.mjs'
+      - 'docs/DEDA_WEEKLY_STAGE24_LIVE_RULES_ATTACK_AUDIT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe-actual-production-rules-in-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Never mutate original DEDA Firebase or users
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart lib/deda_migrated_progress.dart functions/index.js firestore.rules firebase.json pubspec.yaml pubspec.lock
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local Firebase Emulator and rules-unit-testing libraries
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: GET currently deployed Firestore Rules to PRIVATE ephemeral runner memory/file only
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage24-actual-live.rules
+        run: |
+          set -euo pipefail
+          python tools/app_stability/deda_weekly_live_rules_emulator_fetch_stage24.py
+          test -s "$DEDA_STAGE24_LIVE_RULES_TMPFILE"
+      - name: Assert anonymous ordinary and general manager CLIENTS cannot forge rank score or rewards under ACTUAL deployed rules
+        env:
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage24-actual-live.rules
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-deda-stage24-live-rules-client-attack "cd tests/firestore-rules && node --test stage24_weekly_live_rules_attacks.test.mjs"
+          echo "ACTUAL LIVE FIRESTORE RULES DENY SERVER-OWNED WEEKLY LEDGER CLIENT ATTACKS IN A LOCAL EMULATOR. NO PRODUCTION WRITES."
+      - name: Erase copied live Rules from runner
+        if: always()
+        env:
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage24-actual-live.rules
+        run: |
+          rm -f "$DEDA_STAGE24_LIVE_RULES_TMPFILE"
+          echo "No actual Rules content was published as artifact."
