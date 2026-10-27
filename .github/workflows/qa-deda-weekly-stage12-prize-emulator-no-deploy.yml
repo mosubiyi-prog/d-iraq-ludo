@@ -1,0 +1,81 @@
+name: DEDA Stage12 REAL Firestore emulator weekly 370 diamond SHADOW payout NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-stage12-idempotent-prize-shadow-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage12-prize-emulator-no-deploy.yml'
+      - 'functions/deda_weekly_prize_shadow_settlement_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage12_real_emulator_prize_settlement.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE12_SHADOW_PAYOUT_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage12-shadow-prize-emulator
+  cancel-in-progress: true
+jobs:
+  protect-original-and-wallets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Original signed 100387 + earned wallet protected
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          node --check functions/deda_weekly_prize_shadow_settlement_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage12_real_emulator_prize_settlement.test.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('functions/deda_weekly_prize_shadow_settlement_NOT_EXPORTED.js').read_text()
+          index=Path('functions/index.js').read_text()
+          assert 'deda_weekly_prize_shadow_settlement_NOT_EXPORTED' not in index
+          for feature in ('FIRESTORE_EMULATOR_HOST','GCLOUD_PROJECT','shadowOnly',
+                          'tx.create(', 'tx.set(', 'already_settled',
+                          'verifiedWeek','verifyAndRedactSnapshot'):
+              assert feature in p,feature
+          assert 'users/' not in p and 'deda_diamond_gift_balances' not in p
+          assert 'deda_admin_diamond_wallets' not in p
+          assert 'deda_gm_personal_diamond_wallets' not in p
+          for banned in ['onCall(', 'onSchedule(', 'FieldValue.increment(',
+                         'getFirestore(', 'FirebaseAuth', 'SharedPreferences']:
+              assert banned not in p,banned
+          print('Protected: only dedicated stage12 shadow namespaces can be written in emulator.')
+          PY
+      - name: Read-only server receipt and identity regression
+        run: |
+          node --test functions/tests/deda_weekly_verified_pair_for_app.test.js functions/tests/deda_weekly_receipts_to_standings.test.js functions/tests/deda_weekly_snapshot_reader.test.js
+  real-firestore-emulator-only:
+    needs: protect-original-and-wallets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-prizes-stage12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install ephemeral Firestore emulator dependency only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Run REAL Firestore transactions, concurrency, 2 weeks, 370 earned SHADOW diamonds
+        run: |
+          set -euo pipefail
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-weekly-prizes-stage12 --only firestore \
+            'node --test functions/tests/deda_weekly_stage12_real_emulator_prize_settlement.test.js'
+  done:
+    needs: [protect-original-and-wallets, real-firestore-emulator-only]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo 'No Firebase/Rules deploy, NO actual balance update, NO real user, NO signed APK, NO Play rollout.'
