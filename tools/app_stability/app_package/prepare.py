@@ -67,6 +67,22 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def omit_retired_500_bank(source):
+    """Remove the retired 500 bank ONLY from an isolated build workspace.
+
+    Source/repository, historical question progress, wallets and all other
+    assets remain unchanged. An unregistered asset must never be bundled.
+    """
+    source = Path(source).resolve()
+    if source == REPO or REPO in source.parents or source in REPO.parents:
+        raise ValueError('Do not modify repository while omitting quiz assets')
+    retired = source/'assets/deda_traffic_500_bank_ar_v1.json'
+    if retired.is_file():
+        retired.unlink()
+    if retired.exists() or 'deda_traffic_500_bank_ar_v1.json' in (source/'pubspec.yaml').read_text():
+        raise ValueError('Retired 500-question bank still referenced by build')
+
+
 def prepare(project, variant):
     flags(variant)
     project = Path(project).resolve()
@@ -132,8 +148,7 @@ def prepare(project, variant):
                 or "if (expanded.length != 100)" not in old_quiz
                 or '_dedaTraffic500Asset' in old_quiz):
             raise ValueError('DEDA 100387: original 100-question quiz not restored')
-        if (source/'assets/deda_traffic_500_bank_ar_v1.json').exists():
-            raise ValueError('DEDA 100387: 500-question asset unexpectedly packaged')
+        omit_retired_500_bank(source)
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
