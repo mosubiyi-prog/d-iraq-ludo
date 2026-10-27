@@ -119,12 +119,14 @@ def bind(root):
           """          'إضافة صديق',
           'Add a friend',""",
           'replace long trip title')
-    s=one(s,
-          """          'استخدم إحدى خدمات الطريق أثناء رحلتك الطويلة',
-          'Use a road service during your long trip',""",
-          """          'أضف صديقاً جديداً بعد تأكيد طلب الصداقة',
-          'Add a friend after the invitation is accepted',""",
-          'replace long trip description')
+    # Verified restored build uses a dynamic 1000-m distance widget. The
+    # new friend task must never show old trip counters or distance.
+    s=one(s,"        _longTripProgressText(),",
+          """        dedaText(
+          'أضف صديقاً جديداً بعد قبول طلب الصداقة',
+          'Add a friend after acceptance of the request',
+        ),""",
+          'replace old trip distance progress with friend instruction')
     s=one(s,"        dedaText('استفد', 'Use'),",
           "        dedaText('أضف', 'Add'),",
           'friend task button')
