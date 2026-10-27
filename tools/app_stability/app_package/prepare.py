@@ -117,40 +117,23 @@ def prepare(project, variant):
         unified = importlib.util.module_from_spec(unified_spec)
         unified_spec.loader.exec_module(unified)
         unified.bind(source)
-        # Build one candidate with both approved task replacements and 500
-        # traffic questions. No extra APKs, wallet migrations or deployments.
+        # Retain the approved replacement task signals, not traffic modifications.
+        # The baseline quiz already has its original 20 sign topics x 5
+        # presentational variants = 100 items, with 4 choices each.
+        # No 500-bank asset, QA replay, one-time reset, or new quiz artwork.
+        # Keep identity, session, places, profiles and wallet code untouched.
         tasks_spec = importlib.util.spec_from_file_location(
-            'deda_tasks_500', REPO/'tools/app_stability/bind_tasks_integrated_100383.py')
+            'deda_tasks_100383', REPO/'tools/app_stability/bind_tasks_integrated_100383.py')
         tasks = importlib.util.module_from_spec(tasks_spec)
         tasks_spec.loader.exec_module(tasks)
-        traffic_spec = importlib.util.spec_from_file_location(
-            'deda_traffic_500', REPO/'tools/app_stability/bind_traffic_500_100383.py')
-        traffic = importlib.util.module_from_spec(traffic_spec)
-        traffic_spec.loader.exec_module(traffic)
         tasks.bind(source)
-        traffic.bind(source)
-        # Sign/question presentation and no-reward owner QA rerun.
-        # Single integrated candidate, no task-state or wallet reset.
-        visual_spec = importlib.util.spec_from_file_location(
-            'deda_traffic_visual_100384',
-            REPO/'tools/app_stability/bind_traffic_visual_100384.py')
-        visual = importlib.util.module_from_spec(visual_spec)
-        visual_spec.loader.exec_module(visual)
-        visual.bind(source)
-        # 100385 owner-only one-time restart and reviewed pictorial prompts.
-        content_spec = importlib.util.spec_from_file_location(
-            'deda_traffic_content_restart_100385',
-            REPO/'tools/app_stability/bind_traffic_content_restart_100385.py')
-        content = importlib.util.module_from_spec(content_spec)
-        content_spec.loader.exec_module(content)
-        content.bind(source)
-        # 100386 private-only full-bank five-answer educational layout.
-        full_spec = importlib.util.spec_from_file_location(
-            'deda_traffic_full500_100386',
-            REPO/'tools/app_stability/bind_traffic_full500_100386.py')
-        full = importlib.util.module_from_spec(full_spec)
-        full_spec.loader.exec_module(full)
-        full.bind(source)
+        old_quiz = (source/'lib/traffic_quiz_page.dart').read_text()
+        if ('const int _trafficVariantsPerBase = 5;' not in old_quiz
+                or "if (expanded.length != 100)" not in old_quiz
+                or '_dedaTraffic500Asset' in old_quiz):
+            raise ValueError('DEDA 100387: original 100-question quiz not restored')
+        if (source/'assets/deda_traffic_500_bank_ar_v1.json').exists():
+            raise ValueError('DEDA 100387: 500-question asset unexpectedly packaged')
     for name in ('lib', 'assets', 'test'):
         shutil.copytree(source/name, project/name, dirs_exist_ok=True)
     for name in ('pubspec.yaml', 'pubspec.lock'):
@@ -160,7 +143,7 @@ def prepare(project, variant):
     platform = {str(p.relative_to(project)): sha(p) for p in (project/'android').rglob('*')
                 if p.is_file() and (p.suffix in ('.kt', '.kts', '.xml', '.properties') or p.name == 'gradlew')
                 and p.name != 'local.properties'}
-    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100386,
+    data = {'format': 1, 'variant': variant, 'package': PACKAGE, 'versionCode': 100387,
             'flutterVersion': '3.47.7', 'flags': flags(variant), 'sourceHashes': sources,
             'locationAcquisitionDeadlineSeconds': 12 if variant == 'candidate' else None,
             'accountScopedNotificationLifecycle': variant == 'candidate',
