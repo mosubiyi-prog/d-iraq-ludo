@@ -67,9 +67,12 @@ def bind(root):
     s=once(s, """      final bank = widget.isArabic
           ? fullBank.where((q) => q.visual != null).toList(growable: false)
           : fullBank;""",
-          """      // The original five-choice Arabic bank is the QA source of truth.
-      // Never silently shrink it to the 23 sign-tagged questions.
-      final bank = fullBank;""",
+          """      // All 500 need independent traffic review; enable ONLY for private QA.
+      const full500Qa = bool.fromEnvironment(
+        'DEDA_TRAFFIC_FULL500_QA', defaultValue: false);
+      final bank = widget.isArabic && !full500Qa
+          ? fullBank.where((q) => q.visual != null).toList(growable: false)
+          : fullBank;""",
           "restore all 500 as candidates")
     s=once(s, """      answersAr: shownAnswers,
       answersEn: shownAnswers,
