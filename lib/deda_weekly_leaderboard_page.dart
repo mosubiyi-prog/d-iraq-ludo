@@ -326,7 +326,7 @@ class _DedaWeeklyLeaderboardPageState
                 Expanded(flex: 5,
                     child: fitted('المستخدم', size: 12 * scale)),
                 Expanded(flex: 2,
-                    child: fitted('النقاط', size: 12 * scale)),
+                    child: fitted('النقاط المكتسبة', size: 11 * scale, color: gold)),
                 Expanded(flex: 3,
                     child: fitted('الجائزة الأسبوعية',
                         size: 11 * scale)),
@@ -394,9 +394,16 @@ class _DedaWeeklyLeaderboardPageState
               )),
           SizedBox(width: 8 * scale),
           Expanded(flex: 2,
-              child: fitted(viewer == null ? '— نقطة' :
-                  '${viewer.weeklyPoints} نقطة',
-                  color: gold, size: 15 * scale)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(child: fitted('النقاط المكتسبة',
+                      color: pale, size: 9 * scale)),
+                  Expanded(child: fitted(viewer == null ? '— نقطة' :
+                      '${viewer.weeklyPoints} نقطة',
+                      color: gold, size: 15 * scale)),
+                ],
+              )),
           Expanded(flex: 4,
               child: identity(viewer,
                   avatarSize: 35 * scale, compact: true)),
@@ -458,9 +465,16 @@ class _DedaWeeklyLeaderboardPageState
                   builder: (context) => AlertDialog(
                     title: const Text('المتصدرون الأسبوعيون'),
                     content: const Text(
-                      'المراكز تتغير حسب نقاط المهام الأسبوعية '
-                      'الموثقة. الجوائز: 150 و100 و50 ماسة للمراكز '
-                      'الثلاثة الأولى، و10 ماسات للمراكز 4–10. '
+                      'شلون تحصل على نقاط الدوري؟\n'
+                      'تنجز المهام اليومية وتستلم نقاطها: 5 نقاط للمهمة، '
+                      '10 نقاط لتسجيل الدخول اليومي، و5 نقاط لكل '
+                      'إجابة مرورية صحيحة.\n'
+                      'العداد هنا يوضح النقاط المكتسبة من المهام '
+                      'خلال هذا الأسبوع فقط، بعد التحقق منها. '
+                      'نقاط حسابك السابقة ومستواك ما تتصفر.\n'
+                      'المراكز تتغير مع كل نقطة مكتسبة. '
+                      'الجوائز: 150 و100 و50 ماسة للمراكز الثلاثة '
+                      'الأولى، و10 ماسات للمراكز 4–10. '
                       'لا تُضاف الماسات إلا بعد اعتماد النتائج من الخادم.'),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(context),
@@ -585,8 +599,8 @@ class _DedaWeeklyLeaderboardPageState
                       decoration: panel(blue, radius: 13 * scale),
                       padding: EdgeInsets.symmetric(horizontal: 8 * scale),
                       child: fitted(view.verified
-                          ? 'الجوائز بنهاية الأسبوع لأفضل 10 مراكز؛ '
-                            'نقاط المستوى محفوظة ولا تتصفر.'
+                          ? 'النقاط المكتسبة من المهام خلال الأسبوع؛ '
+                            'رصيد حسابك ومستواك محفوظان.'
                           : 'الترتيب قيد التحقق من الخادم؛ '
                             'لن تُعرض نتائج وهمية أو تُصرف جوائز.',
                           size: 11 * scale, color: silver),
