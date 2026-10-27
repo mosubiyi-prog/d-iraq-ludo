@@ -1,5 +1,6 @@
 """Fail the ORIGINAL regression in 100389: prewarm absent in enabled measured startup."""
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -22,6 +23,12 @@ class PreloadInActuallyExecutedPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as work:
             app=Path(work)/"original-app"
             stable=helper.restored(app)
+            # The compact fixture must reproduce the ORIGINAL candidate's
+            # enabled STARTUP_METRICS compile-time build flag.
+            manifest=app/'internal-build-inputs.json'
+            cfg=json.loads(manifest.read_text())
+            cfg['flags']={'DEDA_STABILITY_STARTUP_METRICS':True}
+            manifest.write_text(json.dumps(cfg))
             thirteen.bind(app)
             fourteen.bind(app)
             before=(app/"lib/deda_verified_active_id_store.dart").read_bytes()
