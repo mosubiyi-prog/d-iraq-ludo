@@ -1,0 +1,46 @@
+name: DEDA Stage10 privileged receipt to weekly standings read model NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-receipts-to-standings-stage10-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage10-receipts-to-standings-no-deploy.yml'
+      - 'functions/deda_weekly_receipts_to_standings_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_receipts_to_standings.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE10_RANK_PROJECTION_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage10-rank-read-model
+  cancel-in-progress: true
+jobs:
+  task-xp-to-rank-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse to modify signed 100387 account, levels, gifts, Firebase or APK
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('functions/deda_weekly_receipts_to_standings_NOT_EXPORTED.js').read_text()
+          live=Path('functions/index.js').read_text()
+          assert 'deda_weekly_receipts_to_standings_NOT_EXPORTED' not in live
+          assert 'privileged_server_only_task_xp_issuer_v1' in s
+          assert 'verifiedAtMs' in s and 'levelXpApplied' in s and 'Hmac' in s or 'createHmac' in s
+          assert 'verifyAndRedactSnapshot' in s
+          for prohibited in ['onCall(', 'onSchedule(', 'FieldValue.increment(', 'tx.set(', 'tx.update(', 'tx.create(', 'FirebaseAuth', 'SharedPreferences', 'wallet.update(', 'db.runTransaction(']:
+              assert prohibited not in s,prohibited
+          print('100387 unchanged. Server read-model is not a live Cloud Function.')
+          PY
+      - name: Read-only current/closed week + XP receipt validation and private user redaction
+        run: |
+          node --test functions/tests/deda_weekly_receipts_to_standings.test.js functions/tests/deda_weekly_snapshot_reader.test.js functions/tests/deda_weekly_owner_receipt_gate.test.js functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js
+      - name: No real account, cloud backend, paid wallet or Play deployment
+        run: |
+          echo 'Only simulated receipt/profile document reads. Zero real Firestore reads/writes, no APK/AAB, NO DEPLOY.'
