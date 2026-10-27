@@ -4,11 +4,12 @@ const assert=require("node:assert/strict");
 const crypto=require("node:crypto");
 const {enrichVerifiedPairWithPublicAppearance:enrich}=
   require("../deda_weekly_server_equipped_public_bridge_NOT_EXPORTED.js");
+const {competitorId}=require("../deda_weekly_receipts_to_standings_NOT_EXPORTED.js");
 const KEY=Buffer.alloc(32,17);
 const NOW=Date.UTC(2026,9,28,0);
 const ACC="07712345678",OTHER="07709876543";
-const PID="leader-participant-0123456789";
-const OID="leader-participant-9876543210";
+const PID=competitorId(ACC,KEY);
+const OID=competitorId(OTHER,KEY);
 const CURRENT="week-current", PREVIOUS="week-previous";
 const idPath=a=> "deda_weekly_verified_equipped_public/"+
   crypto.createHmac("sha256",KEY).update("equip-proof|"+a).digest("hex");
@@ -60,7 +61,7 @@ function mock(docs={}) {
 }
 function args(db,current=raw(CURRENT),previous=raw(PREVIOUS),response=pair()) {
   return {db,rawCurrent:current,rawPrevious:previous,
-    serverPair:response,serverNowMs:NOW,serverSecret:KEY};
+    serverPair:response,serverNowMs:NOW,serverSecret:KEY,rankerKey:KEY};
 }
 test("authentic signed equipped frame paired to the SAME original account survives privacy projection",async()=>{
   const db=mock({[idPath(ACC)]:proof()});
