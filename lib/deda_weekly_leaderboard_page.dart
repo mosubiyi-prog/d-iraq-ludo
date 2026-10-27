@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'deda_weekly_leaderboard_policy.dart';
 import 'deda_weekly_competitor_public_card.dart';
+import 'deda_weekly_leaderboard_tap_surface.dart';
 
 /// Display-only verified leaderboard identity.
 //// Users and scores must come from the approved server, never test/mock data.
@@ -62,6 +63,10 @@ class DedaWeeklyLeaderboardPage extends StatefulWidget {
       rows: [],
       profilesByUid: {},
     ),
+    this.onOpenExistingPublicProfile,
+    this.onSendExistingFriendRequest,
+    this.friendRelationFor,
+    this.drawOriginalEquippedAvatar,
     this.previous = const DedaLeaderboardViewData(
       verified: false,
       rows: [],
@@ -73,6 +78,16 @@ class DedaWeeklyLeaderboardPage extends StatefulWidget {
   final bool previewOnly;
   final DedaLeaderboardViewData current;
   final DedaLeaderboardViewData previous;
+
+  /// Connected only by authenticated original DEDA profile/social coordinator.
+  final Future<void> Function(DedaWeeklyPublicCompetitor)?
+      onOpenExistingPublicProfile;
+  final Future<void> Function(DedaWeeklyPublicCompetitor)?
+      onSendExistingFriendRequest;
+  final DedaWeeklyFriendRelation Function(DedaWeeklyPublicCompetitor)?
+      friendRelationFor;
+  final Widget Function(BuildContext,int,int,double)?
+      drawOriginalEquippedAvatar;
 
   @override
   State<DedaWeeklyLeaderboardPage> createState() =>
@@ -133,7 +148,8 @@ class _DedaWeeklyLeaderboardPageState
   Widget identity(DedaWeeklyLeaderboardRow? row,
       {double avatarSize = 33, bool compact = false}) {
     final details = profile(row);
-    return Row(
+    final player = details?.verifiedCompetitor;
+    final original = Row(
       mainAxisSize: MainAxisSize.min,
       textDirection: TextDirection.rtl,
       children: [
@@ -147,13 +163,18 @@ class _DedaWeeklyLeaderboardPageState
                 blurRadius: avatarSize * .25)],
           ),
           padding: EdgeInsets.all(math.max(1.5, avatarSize * .065)),
-          child: CircleAvatar(
-            backgroundColor: blue,
-            backgroundImage: details?.avatarImage,
-            child: details?.avatarImage == null
-                ? Icon(Icons.person, size: avatarSize * .6, color: pale)
-                : null,
-          ),
+          child: player != null && player.canShowEquippedFrame &&
+                  widget.drawOriginalEquippedAvatar != null
+              ? widget.drawOriginalEquippedAvatar!(
+                  context, player.avatarStyle!, player.equippedFrameStyle!,
+                  avatarSize)
+              : CircleAvatar(
+                  backgroundColor: blue,
+                  backgroundImage: details?.avatarImage,
+                  child: details?.avatarImage == null
+                      ? Icon(Icons.person, size: avatarSize * .6, color: pale)
+                      : null,
+                ),
         ),
         SizedBox(width: compact ? 4 : 7),
         Flexible(
@@ -178,6 +199,17 @@ class _DedaWeeklyLeaderboardPageState
           ),
         ),
       ],
+    );
+    return DedaWeeklyLeaderboardTapSurface(
+      competitor: player,
+      viewerParticipantId: view.viewerUid,
+      friendRelation: player == null
+          ? DedaWeeklyFriendRelation.unknown
+          : widget.friendRelationFor?.call(player) ??
+              DedaWeeklyFriendRelation.unknown,
+      onOpenExistingPublicProfile: widget.onOpenExistingPublicProfile,
+      onSendExistingFriendRequest: widget.onSendExistingFriendRequest,
+      child: original,
     );
   }
 
@@ -215,8 +247,18 @@ class _DedaWeeklyLeaderboardPageState
     final isFirst = place == 1;
     final accent = isFirst ? gold : (place == 2 ? silver : bronze);
     final name = profile(row)?.displayName ?? '—';
+    final player = profile(row)?.verifiedCompetitor;
     return Expanded(
-      child: Padding(
+      child: DedaWeeklyLeaderboardTapSurface(
+        competitor: player,
+        viewerParticipantId: view.viewerUid,
+        friendRelation: player == null
+            ? DedaWeeklyFriendRelation.unknown
+            : widget.friendRelationFor?.call(player) ??
+                DedaWeeklyFriendRelation.unknown,
+        onOpenExistingPublicProfile: widget.onOpenExistingPublicProfile,
+        onSendExistingFriendRequest: widget.onSendExistingFriendRequest,
+        child: Padding(
         padding: EdgeInsets.only(
           left: 3 * scale,
           right: 3 * scale,
@@ -276,14 +318,20 @@ class _DedaWeeklyLeaderboardPageState
                             color: accent.withValues(alpha: .50),
                             blurRadius: 13 * scale)],
                         ),
-                        child: CircleAvatar(
-                          backgroundColor: blue,
-                          backgroundImage: profile(row)?.avatarImage,
-                          child: profile(row)?.avatarImage == null
-                              ? Icon(Icons.person, color: pale,
-                                  size: 34 * scale)
-                              : null,
-                        ),
+                        child: player != null && player.canShowEquippedFrame &&
+                                widget.drawOriginalEquippedAvatar != null
+                            ? widget.drawOriginalEquippedAvatar!(
+                                context, player.avatarStyle!,
+                                player.equippedFrameStyle!,
+                                (isFirst ? 72 : 65) * scale)
+                            : CircleAvatar(
+                                backgroundColor: blue,
+                                backgroundImage: profile(row)?.avatarImage,
+                                child: profile(row)?.avatarImage == null
+                                    ? Icon(Icons.person, color: pale,
+                                        size: 34 * scale)
+                                    : null,
+                              ),
                       ),
                     ],
                   ),
@@ -345,6 +393,7 @@ class _DedaWeeklyLeaderboardPageState
             ),
           ],
         ),
+      ),
       ),
     );
   }
