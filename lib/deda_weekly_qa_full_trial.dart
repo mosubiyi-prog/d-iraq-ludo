@@ -255,6 +255,7 @@ class _DedaWeeklyQaFullTrialPageState extends State<DedaWeeklyQaFullTrialPage> {
               style:const TextStyle(color:Colors.white,
                 fontSize:17,fontWeight:FontWeight.bold)),
             DropdownButtonFormField<int>(
+              key:ValueKey<int>(selected),
               value:selected,
               dropdownColor:navy,
               iconEnabledColor:gold,
