@@ -19,6 +19,7 @@ function receipt(accountKey, taskId, verifiedAtMs = START+5000) {
   return {
     fixtureSource:"stage5_emulator_only",
     verifiedByServer:true, eventType:"task_claim",
+    taskPointsAwarded:true, levelXpApplied:true,
     weekId:week.weekId, accountKey, taskId, verifiedAtMs,
     iraqDay:dateIraq(verifiedAtMs),
   };
@@ -31,6 +32,16 @@ test("original 100387 grants 20 LEVEL XP on claimed task, distinct from normal 5
   assert.equal(r.ranks[0].weeklyPoints,20);
   assert.equal(r.scoreUnit,"level_xp_earned_from_verified_weekly_task_claims");
   assert.equal(r.shadowOnly,true);
+});
+
+test("task completion without successful separate XP write cannot rank", () => {
+  const r = receipt("07711111111","map");
+  assert.throws(() => previewWeeklyLevelXp(week, [
+    {...r, levelXpApplied: false},
+  ]), /xp_not_applied/);
+  assert.throws(() => previewWeeklyLevelXp(week, [
+    {...r, taskPointsAwarded: false},
+  ]), /ordinary_task_not_claimed/);
 });
 
 test("daily login normal points or each correct answer do NOT become level XP", () => {
