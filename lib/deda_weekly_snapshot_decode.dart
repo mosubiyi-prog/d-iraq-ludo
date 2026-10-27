@@ -108,89 +108,36 @@ class DedaWeeklyServerSnapshotPair {
         verifiedTaskCompletions: completed,
         diamondsIfFinalWinner: diamonds,
       ));
-      // The privileged server may attach a separately signed and verified
-      // *current equipped* appearance for this very participant/account.
-      // Without such proof do not show a borrowed premium frame or allow a
-      // public-profile action based solely on a leaderboard alias.
       DedaWeeklyPublicCompetitor? verifiedCompetitor;
-      final publicAppearance = info['publicAppearance'];
-      if (publicAppearance != null) {
-        final appearance = _object(publicAppearance);
+      final appearanceRaw = info['publicAppearance'];
+      if (appearanceRaw != null) {
+        final appearance = _object(appearanceRaw);
         if (appearance.length != 7 ||
             appearance['publicOwnerVerified'] != true ||
             appearance['equippedAppearanceVerified'] != true ||
             appearance['activePublicId'] != publicId ||
             appearance['displayName'] != name) {
-          throw const FormatException('untrusted public equipped appearance');
+          throw const FormatException('invalid server-owned equipped appearance');
         }
-        final originalPublicId = _string(
-          appearance['originalPublicId'],
-          RegExp(r'^@DEDA-[A-Z0-9]{6}
-    }
-
-    final viewerIdValue = json['viewerParticipantId'];
-    final viewerId = viewerIdValue == null
-        ? null
-        : _string(viewerIdValue, _participant, 'viewer');
-    final viewerRankValue = json['viewerPlace'];
-    final viewerRank = viewerRankValue == null
-        ? null
-        : _whole(viewerRankValue, 'viewer rank');
-
-    if ((viewerId == null) != (viewerRank == null) ||
-        (viewerId != null &&
-            (rows.where((row) =>
-              row.accountUid == viewerId && row.place == viewerRank)
-            .length != 1))) {
-      throw const FormatException('viewer rank not in verified snapshot');
-    }
-    return DedaLeaderboardViewData(
-      verified: true,
-      rows: List.unmodifiable(rows),
-      profilesByUid: Map.unmodifiable(profiles),
-      viewerUid: viewerId,
-      remainingUntilWeekEnd: Duration(milliseconds: remainingMs),
-    );
-  }
-
-  /// Fails CLOSED if either current or previous period is unavailable.
-  static DedaWeeklyServerSnapshotPair parse(Object? source) {
-    final response = _object(source);
-    if (response['source'] != 'future_server_issued_only' ||
-        response['readOnly'] != true ||
-        response.containsKey('accountKey') ||
-        response.containsKey('phone') ||
-        response.containsKey('authUid') ||
-        response.containsKey('xpBalance') ||
-        response.containsKey('diamondBalance')) {
-      throw const FormatException('untrusted weekly leaderboard source');
-    }
-    return DedaWeeklyServerSnapshotPair(
-      current: _week(response['current'], 'live'),
-      previous: _week(response['previous'], 'closed'),
-    );
-  }
-}
-), 'canonical original public ID');
-        final avatarStyle = _whole(appearance['avatarStyle'], 'avatar style');
-        final frameStyle = _whole(
-          appearance['equippedFrameStyle'], 'equipped frame style');
-        if (avatarStyle > 18 || frameStyle > 18) {
-          throw const FormatException('out of range equipped style');
+        final original = _string(appearance['originalPublicId'],
+            RegExp(r'^@DEDA-[A-Z0-9]{6}'), 'canonical original ID');
+        if (original.length != 12) {
+          throw const FormatException('canonical original ID length');
+        }
+        final avatar = _whole(appearance['avatarStyle'], 'avatar style');
+        final frame = _whole(appearance['equippedFrameStyle'], 'equipped frame');
+        if (avatar > 18 || frame > 18) {
+          throw const FormatException('invalid equipped appearance styles');
         }
         final candidate = DedaWeeklyPublicCompetitor(
-          participantId: participant,
-          originalPublicId: originalPublicId,
-          activePublicId: publicId,
-          displayName: name,
-          rankVerified: true,
-          publicOwnerVerified: true,
+          participantId: participant, originalPublicId: original,
+          activePublicId: publicId, displayName: name,
+          rankVerified: true, publicOwnerVerified: true,
           equippedAppearanceVerified: true,
-          avatarStyle: avatarStyle,
-          equippedFrameStyle: frameStyle,
+          avatarStyle: avatar, equippedFrameStyle: frame,
         );
         if (!candidate.canShowEquippedFrame) {
-          throw const FormatException('invalid public equipped competitor');
+          throw const FormatException('equipment owner cannot be verified');
         }
         verifiedCompetitor = candidate;
       }
