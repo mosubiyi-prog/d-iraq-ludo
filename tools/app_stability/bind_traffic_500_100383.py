@@ -31,15 +31,64 @@ def bind(root):
     s=one(s,"import 'package:flutter/material.dart';",
           "import 'package:flutter/material.dart';\nimport 'package:flutter/services.dart' show rootBundle;",
           'asset reader import')
-    s=one(s,"    final byId = <String, _TrafficQuestion>{\n      for (final q in _trafficQuestionBank) q.id: q,",
-          "    final bank = widget.isArabic\n        ? await _loadDedaTraffic500Arabic() : _trafficQuestionBank;\n    final byId = <String, _TrafficQuestion>{\n      for (final q in bank) q.id: q,",
-          'load 500 bank when Arabic')
-    s=one(s,"final remaining = _trafficQuestionBank",
-          "final remaining = bank",
-          'non-repeat pool 500')
-    s=one(s,"final pool = _trafficQuestionBank",
-          "final pool = bank",
-          'cycle reset only after 500')
+    # The prepared 100382 source has account-scoped private-data reads and
+    # semantic de-duplication of the legacy twenty *core* questions. Replace
+    # that one method with real-ID de-duplication across all 500 new questions.
+    start=s.index("  Future<List<_TrafficQuestion>> _loadOrChooseQuestions(")
+    end=s.index("\n  void _restoreCurrentAnswer()",start)
+    replacement="""  Future<List<_TrafficQuestion>> _loadOrChooseQuestions(
+    SharedPreferences prefs,
+  ) async {
+    return dedaRunSection(() async {
+      final bank = widget.isArabic
+          ? await _loadDedaTraffic500Arabic()
+          : _trafficQuestionBank;
+      final byId = <String, _TrafficQuestion>{
+        for (final q in bank) q.id: q,
+      };
+      final savedIds = (await DedaPrivateDataBridge.readList(
+          prefs, _dailyIdsKey)) ?? const <String>[];
+      final saved = savedIds.map((id) => byId[id])
+          .whereType<_TrafficQuestion>().toList(growable: false);
+      if (saved.length == _dailyQuestionCount &&
+          saved.map((q) => q.id).toSet().length == _dailyQuestionCount) {
+        return saved;
+      }
+      final seen = ((await DedaPrivateDataBridge.readList(
+          prefs, _seenKey)) ?? const <String>[])
+          .where(byId.containsKey).toSet();
+      final unseen = bank.where((q) => !seen.contains(q.id)).toList()
+        ..shuffle(math.Random());
+      final selected = <_TrafficQuestion>[];
+      final newlySeen = <String>{...seen};
+      if (unseen.length >= _dailyQuestionCount) {
+        selected.addAll(unseen.take(_dailyQuestionCount));
+        newlySeen.addAll(selected.map((q) => q.id));
+      } else {
+        selected.addAll(unseen);
+        // A new cycle starts only after all previously unseen IDs were used.
+        newlySeen.clear();
+        final alreadyChosen = selected.map((q) => q.id).toSet();
+        final nextPool = bank.where((q) => !alreadyChosen.contains(q.id))
+            .toList()..shuffle(math.Random());
+        selected.addAll(nextPool.take(_dailyQuestionCount - selected.length));
+        newlySeen.addAll(selected.skip(unseen.length).map((q) => q.id));
+      }
+      if (selected.length != _dailyQuestionCount ||
+          selected.map((q) => q.id).toSet().length != _dailyQuestionCount) {
+        throw StateError('traffic500-daily-selection-not-five-unique');
+      }
+      // Keep existing private-data bridge; its account-scoped keys synchronize
+      // through existing integration where server permission is available.
+      await DedaPrivateDataBridge.write(
+          prefs, _dailyIdsKey, selected.map((q) => q.id).toList());
+      await DedaPrivateDataBridge.write(
+          prefs, _seenKey, newlySeen.toList()..sort());
+      return selected;
+    });
+  }
+"""
+    s=s[:start]+replacement+s[end:]
     s=one(s,"                   _TrafficSignCard(kind: q.visual),",
           """                   if (q.visual != null)
                      _TrafficSignCard(kind: q.visual!)
