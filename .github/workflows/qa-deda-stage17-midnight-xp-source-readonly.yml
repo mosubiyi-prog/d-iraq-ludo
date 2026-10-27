@@ -1,0 +1,53 @@
+name: DEDA 17 original XP claim source inspection and Iraq midnight policy NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-stage17-midnight-private-task-trial-2026-10-27]
+    paths: ['.github/workflows/qa-deda-stage17-midnight-xp-source-readonly.yml','functions/tests/deda_stage17_midnight_claim_rollover.test.js','functions/deda_stage17_midnight_claim_rollover_NOT_EXPORTED.js']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-source-xp-inspection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Extract actual immutable 100387 awardTaskClaim and weekly rollover source excerpts read-only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import tarfile,re,hashlib,json
+          from pathlib import Path
+          folder=Path('tools/app_stability')
+          archive=folder/'100380-baseline.tar.gz'
+          manifest=json.loads((folder/'100380-baseline-manifest.json').read_text())
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==manifest['archiveSHA256']
+          patterns=[r'awardTaskClaim',r'DedaSocialProgressWallet',r'DedaTaskEngine',r'Future<.*claim',r'claimDaily',r'pointsPerDailyLogin',r'rewardTask',r'task_claim',r'claimed.*task',r'xpNotifier',r'xp\s*\+=',r'DedaSocialProgress']
+          out=Path('/tmp/deda-original-xp-inspection.txt')
+          with out.open('w') as f,tarfile.open(archive,'r:gz') as t:
+            for member in t:
+              if not (member.name.startswith('lib/') and member.name.endswith('.dart')):continue
+              b=t.extractfile(member).read()
+              assert hashlib.sha256(b).hexdigest()==manifest['files'][member.name]
+              lines=b.decode().splitlines()
+              matches=[i for i,l in enumerate(lines) if any(re.search(p,l,re.I) for p in patterns)]
+              if not matches:continue
+              f.write('\n# '+member.name+' '+str(len(matches))+' matches\n')
+              spans=[]
+              for i in matches:
+                lo=max(0,i-14);hi=min(len(lines),i+26)
+                if spans and lo<=spans[-1][1]:
+                  spans[-1]=(spans[-1][0],max(hi,spans[-1][1]))
+                else:spans.append((lo,hi))
+              for lo,hi in spans:
+                f.write('\n')
+                for k in range(lo,hi):f.write(f'{k+1}: {lines[k]}\n')
+          print('Original XP trace bytes:',out.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-ORIGINAL-100387-XP-CLAIM-SOURCE-READONLY
+          path: /tmp/deda-original-xp-inspection.txt
+          if-no-files-found: error
