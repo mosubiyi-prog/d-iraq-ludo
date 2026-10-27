@@ -13,7 +13,7 @@ def mod(path):
     return module
 
 class SafeLeaderboardRouteTests(unittest.TestCase):
-    def test_both_home_routes_open_pending-safe_screen_and_preserve_account(self):
+    def test_both_home_routes_open_pending_safe_screen_and_preserve_account(self):
         restore=mod(ROOT/'tools/restore_deda_stability_baseline.py')
         flash=mod(ROOT/'tools/app_stability/bind_active_id_no_flash.py')
         active=mod(ROOT/'tools/app_stability/bind_unified_active_id_100382.py')
