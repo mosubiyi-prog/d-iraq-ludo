@@ -129,7 +129,7 @@ void main() {
       onOpenExistingPublicProfile:(_)async{count++;},
       onSendExistingFriendRequest:(_)async{count++;},
     )));
-    await tester.tap(find.text('متصدر أصيل'));
+    await tester.tap(find.text('متصدر أصيل').first);
     await tester.pumpAndSettle();
     expect(count,0);
     expect(find.text('إرسال طلب صداقة'),findsNothing);
