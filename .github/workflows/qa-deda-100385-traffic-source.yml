@@ -1,0 +1,29 @@
+name: DEDA 100385 traffic QA source tests NO APK NO DEPLOY
+on:
+  push:
+    branches: [deda-100385-traffic-content-restart-safe-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-100385-traffic-source.yml'
+      - 'tools/app_stability/bind_traffic_content_restart_100385.py'
+      - 'tools/app_stability/tests/test_traffic_content_restart_100385.py'
+      - 'tools/app_stability/app_package/prepare.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100385-source-qa
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify 100385 source integration, language and financial boundaries
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/app_stability/bind_traffic_content_restart_100385.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_traffic_visual_100384.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_traffic_content_restart_100385.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_internal_app_package.py' -v
+          echo SOURCE_100385_VERIFIED_NO_PRODUCTION_WRITES
