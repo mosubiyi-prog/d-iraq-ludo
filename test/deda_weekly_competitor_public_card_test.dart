@@ -109,7 +109,7 @@ void main() {
       DedaWeeklyCompetitorCard(
         profile:null,viewerParticipantId:'verified_participant_002',
       ))));
-    expect(find.text('—'),findsOneWidget);
+    expect(find.text('—'),findsNWidgets(2));
     expect(find.text('مشاهدة الملف الشخصي'),findsNothing);
   });
 
