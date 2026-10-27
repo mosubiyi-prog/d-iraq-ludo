@@ -12,6 +12,7 @@ import 'admin_recovery_pages.dart';
 import 'admin_team_pages.dart';
 import 'deda_backend.dart';
 import 'deda_admin_task_management_page.dart';
+import 'deda_admin_league_page.dart';
 import 'deda_admin_automation_toggle.dart';
 import 'deda_admin_compact_card.dart';
 import 'deda_exclusive_ids_admin_page.dart';
@@ -1384,6 +1385,26 @@ class _DedaAdminDashboardPageState extends State<DedaAdminDashboardPage> {
                           ),
                           onTap: () => _open(
                             DedaAdminPrizeWinnersPage(isArabic: ar),
+                          ),
+                        ),
+                      // Stage26: isolated private weekly league dashboard.
+                      // Only active general managers can see the entry;
+                      // destination always revalidates the backend role.
+                      if (DedaBackend.normalizeAdminRole(profile['role']) ==
+                              'general_manager' &&
+                          DedaBackend.normalizeAdminStatus(profile) == 'active')
+                        DedaAdminCompactCard(
+                          key: const Key('deda_admin_league_dashboard_tile'),
+                          icon: Icons.leaderboard_outlined,
+                          title: t('إدارة الدوري', 'League management'),
+                          subtitle: t(
+                            'المتصدرون • السجل الشهري • الجوائز',
+                            'Standings • monthly history • prizes',
+                          ),
+                          accentColor: const Color(0xFF133F65),
+                          backgroundColor: const Color(0xDCE7EEF7),
+                          onTap: () => _open(
+                            DedaAdminLeaguePage(isArabic: ar),
                           ),
                         ),
                       if (DedaBackend.adminHasPermission(profile, 'supportRead'))
