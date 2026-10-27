@@ -85,21 +85,22 @@ class DedaWeeklyCompetitorCard extends StatelessWidget {
 
     Future<void> showActions() async {
       if(!actionable || !context.mounted)return;
+      final target=data!;
       await showModalBottomSheet<void>(
         context:context,backgroundColor:navy,showDragHandle:true,
         builder:(sheet)=>SafeArea(child:Padding(
           padding:const EdgeInsets.all(16),
           child:Column(mainAxisSize:MainAxisSize.min,children:[
-            Text(data!.displayName,style:const TextStyle(
+            Text(target.displayName,style:const TextStyle(
               color:gold,fontSize:19,fontWeight:FontWeight.bold)),
-            Text(data.activePublicId,textDirection:TextDirection.ltr,
+            Text(target.activePublicId,textDirection:TextDirection.ltr,
               style:const TextStyle(color:Colors.white70)),
             if(onOpenExistingPublicProfile!=null)
               FilledButton.icon(icon:const Icon(Icons.person_outline),
                 label:const Text('مشاهدة الملف الشخصي'),
                 onPressed:(){
                   Navigator.pop(sheet);
-                  onOpenExistingPublicProfile!(data);
+                  onOpenExistingPublicProfile!(target);
                 }),
             if(relation==DedaWeeklyFriendRelation.notFriends &&
                onSendExistingFriendRequest!=null)
@@ -107,7 +108,7 @@ class DedaWeeklyCompetitorCard extends StatelessWidget {
                 label:const Text('إرسال طلب صداقة'),
                 onPressed:(){
                   Navigator.pop(sheet);
-                  onSendExistingFriendRequest!(data);
+                  onSendExistingFriendRequest!(target);
                 }),
             if(relation==DedaWeeklyFriendRelation.pending)
               const Text('طلب الصداقة قيد الانتظار',
