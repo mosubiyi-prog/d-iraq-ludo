@@ -134,10 +134,8 @@ def bind(root):
   static const bool _dedaQaReplayEnabled =
       bool.fromEnvironment('DEDA_TRAFFIC_QA_REPLAY', defaultValue: false);
   bool _qaReplayActive = false;""", "QA gate")
-    s = one(s, """  Future<void> _saveProgress() async {
-    final prefs = await SharedPreferences.getInstance();""", """  Future<void> _saveProgress() async {
-    if (_qaReplayActive) return;
-    final prefs = await SharedPreferences.getInstance();""", "never save QA replay")
+    s = one(s, """  Future<void> _saveProgress() async {""", """  Future<void> _saveProgress() async {
+    if (_qaReplayActive) return;""", "never save QA replay")
     s = one(s, """    if (correct) {
       try {
         pointAwarded = await widget.onCorrectAnswer(q.id);""", """    if (correct && !_qaReplayActive) {
