@@ -207,21 +207,24 @@ def bind(root):
 
     main_path = root / "lib/main.dart"
     main = main_path.read_text()
-    if "    final trafficDone = index == 6 && completed;" not in main:
-        pos = main.find("Widget _taskCard(")
-        print("TRAFFIC_100384_TASK_CARD_SHAPE", repr(main[pos:pos+6600]))
-    main = one(main, """    final trafficDone = index == 6 && completed;
+    main = one(main, """    final taskDone = completed;
+    final trafficQaReplay = index == 6 && taskDone &&
+        const bool.fromEnvironment('DEDA_TRAFFIC_QA_REPLAY',
+          defaultValue: false);
     return Container(""", """    final trafficDone = index == 6 && completed;
     final trafficQaReplay = trafficDone &&
         const bool.fromEnvironment('DEDA_TRAFFIC_QA_REPLAY',
           defaultValue: false);
     return Container(""", "task card gate")
-    main = one(main, "onTap: trafficDone ? null : () => _openTask(index),",
+    main = one(main, "onTap: taskDone && !trafficQaReplay ? null : () => _openTask(index),",
                "onTap: trafficDone && !trafficQaReplay ? null : () => _openTask(index),",
                "task card can open QA preview")
-    main = one(main, """                label: trafficDone ? dedaText('تم', 'Done') : action,
-                onTap: trafficDone ? null : () => _openTask(index),
-                done: trafficDone,""", """                label: trafficQaReplay
+    main = one(main, """                label: trafficQaReplay
+                    ? dedaText('فحص', 'Review')
+                    : taskDone ? dedaText('تم', 'Done') : action,
+                onTap: taskDone && !trafficQaReplay
+                    ? null : () => _openTask(index),
+                done: taskDone && !trafficQaReplay,""", """                label: trafficQaReplay
                     ? dedaText('فحص', 'Review')
                     : trafficDone ? dedaText('تم', 'Done') : action,
                 onTap: trafficDone && !trafficQaReplay
