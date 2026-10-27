@@ -1,0 +1,118 @@
+name: DEDA weekly owner royal avatar UI V2 private preview APK NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-owner-visual-polish-v2-safe-preview-2026-10-27
+    paths:
+      - '.github/workflows/deda-weekly-owner-visual-v2-royal-avatar-apk-no-deploy.yml'
+      - 'preview/deda_weekly_preview_main.dart'
+      - 'preview/deda_weekly_preview_test.dart'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'lib/deda_weekly_leaderboard_policy.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner-weekly-v2-royal-standalone-preview-apk
+  cancel-in-progress: true
+jobs:
+  standalone-ui-only-private-qa-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Immutable real DEDA 100387 protection and preview-only source guard
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('preview/deda_weekly_preview_main.dart').read_text()
+          page=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert 'previewOnly: true' in src and 'معاينة' in src and 'demoStandings' in src
+          assert 'widget.previewOnly' in page
+          assert "معاينة تصميم فقط" in page
+          for f in (src,page):
+            for banned in ('FirebaseFirestore', 'FirebaseAuth', 'DedaSocialProgressWallet.', 'claimTaskReward(', 'spendDiamonds(', 'runTransaction(', 'SharedPreferences.getInstance('):
+              assert banned not in f, banned
+          print('Original app untouched; preview-only page has zero account, Firebase, XP or wallet paths.')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Create a DIFFERENT app package, installed alongside DEDA
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org iq.deda --project-name weeklypreview "$RUNNER_TEMP/deda-weekly-visual-preview"
+          cp preview/deda_weekly_preview_main.dart "$RUNNER_TEMP/deda-weekly-visual-preview/lib/main.dart"
+          mkdir -p "$RUNNER_TEMP/deda-weekly-visual-preview/assets/deda_owner_avatars_20261023"
+          cp assets/deda_owner_avatars_20261023/*.jpg "$RUNNER_TEMP/deda-weekly-visual-preview/assets/deda_owner_avatars_20261023/"
+          cp lib/deda_weekly_leaderboard_page.dart "$RUNNER_TEMP/deda-weekly-visual-preview/lib/deda_weekly_leaderboard_page.dart"
+          cp lib/deda_weekly_leaderboard_policy.dart "$RUNNER_TEMP/deda-weekly-visual-preview/lib/deda_weekly_leaderboard_policy.dart"
+          cp preview/deda_weekly_preview_test.dart "$RUNNER_TEMP/deda-weekly-visual-preview/test/weekly_preview_test.dart"
+          rm -f "$RUNNER_TEMP/deda-weekly-visual-preview/test/widget_test.dart"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'deda-weekly-visual-preview'
+          pubspec=root/'pubspec.yaml'
+          p=pubspec.read_text()
+          assert p.count('uses-material-design: true')==1
+          p=p.replace('uses-material-design: true',
+              'uses-material-design: true\\n  assets:\\n    - assets/deda_owner_avatars_20261023/',1)
+          pubspec.write_text(p)
+          assert len(list((root/'assets/deda_owner_avatars_20261023').glob('*.jpg')))==3
+          manifest=root/'android/app/src/main/AndroidManifest.xml'
+          s=manifest.read_text()
+          assert 'android:label="weeklypreview"' in s
+          manifest.write_text(s.replace('android:label="weeklypreview"',
+              'android:label="DEDA Leaderboard Preview"',1))
+          gradle=(root/'android/app/build.gradle.kts').read_text()
+          assert 'applicationId = "iq.deda.weeklypreview"' in gradle
+          gradle=gradle.replace('applicationId = "iq.deda.weeklypreview"',
+              'applicationId = "iq.deda.weeklypreviewv2"',1)
+          (root/'android/app/build.gradle.kts').write_text(gradle)
+          assert 'applicationId = "iq.deda.weeklypreviewv2"' in gradle
+          assert 'com.diraq.ludo.d_iraq_ludo' not in gradle
+          print('INSTALLS SEPARATELY as iq.deda.weeklypreviewv2; original DEDA untouched.')
+          PY
+      - name: Resolve Flutter dependencies, analyze and test multiple viewport layouts
+        working-directory: ${{ runner.temp }}/deda-weekly-visual-preview
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze lib/main.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_policy.dart test/weekly_preview_test.dart
+          flutter test test/weekly_preview_test.dart --no-pub
+      - name: Build Android release-format side-by-side preview; NO original keystore
+        working-directory: ${{ runner.temp }}/deda-weekly-visual-preview
+        run: |
+          set -euo pipefail
+          flutter build apk --release --build-name=0.2.0 --build-number=2 --no-pub
+          test -s build/app/outputs/flutter-apk/app-release.apk
+      - name: Confirm package and publish download-only private QA artifact
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-weekly-preview-delivery"
+          cp "$RUNNER_TEMP/deda-weekly-visual-preview/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-weekly-preview-delivery/DEDA-WEEKLY-LEADERBOARD-ROYAL-V2-PREVIEW.apk"
+          sha256sum "$RUNNER_TEMP/deda-weekly-preview-delivery/DEDA-WEEKLY-LEADERBOARD-ROYAL-V2-PREVIEW.apk" > "$RUNNER_TEMP/deda-weekly-preview-delivery/SHA256.txt"
+          printf '%s\n' 'DEDA weekly leaderboard VISUAL PREVIEW ONLY — Android.' 'App package: iq.deda.weeklypreviewv2 (new app, separate from original DEDA and old UI preview).' 'On first screen tap leaderboard card or OPEN RANKS. Switch current/previous week inside the screen.' 'Royal avatar images are supplied from existing DEDA demo artwork; users, IDs, XP and diamonds shown here are DEMO DATA. The app has NO user login, no Firebase credentials, no money balance, no cloud communication, no tasks and no payout.' 'This is a visual UI test; leave your original DEDA 100387 installed. No production deploy.' 'If Android or Play Protect warns about the private unsigned/unknown-source installer, do not bypass any protection; tell the developer for further verification.' > "$RUNNER_TEMP/deda-weekly-preview-delivery/READ-ME-PRIVATE-VISUAL-QA.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-WEEKLY-LEADERBOARD-ROYAL-V2-PREVIEW-APK
+          path: |
+            ${{ runner.temp }}/deda-weekly-preview-delivery/*.apk
+            ${{ runner.temp }}/deda-weekly-preview-delivery/SHA256.txt
+            ${{ runner.temp }}/deda-weekly-preview-delivery/READ-ME-PRIVATE-VISUAL-QA.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: No Play deployment and no real-app source, XP or diamond changes
+        run: echo 'Visual standalone preview APK only; cannot access real DEDA account data.'
