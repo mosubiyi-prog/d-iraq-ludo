@@ -5,6 +5,10 @@ on:
     paths:
       - '.github/workflows/qa-deda-weekly-leaderboard-stage5-original-xp-audit.yml'
       - 'tools/app_stability/tests/test_weekly_leaderboard_original_xp_stage5.py'
+      - 'functions/deda_weekly_level_xp_shadow_policy.js'
+      - 'functions/tests/deda_weekly_level_xp_shadow_policy.test.js'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'test/deda_weekly_leaderboard_earned_points_test.dart'
       - 'docs/DEDA_WEEKLY_LEADERBOARD_STAGE5_ORIGINAL_XP_EVIDENCE_2026-10-27.md'
   workflow_dispatch:
 permissions:
@@ -15,7 +19,7 @@ concurrency:
 jobs:
   restore-and-prove-xp-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +33,32 @@ jobs:
       - name: Recover and audit actual signed QA source level XP and task points
         run: |
           python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_original_xp_stage5.py' -v
+      - name: Prohibit new XP preview from real Cloud Function or wallet
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('functions/index.js').read_text()
+          src=Path('functions/deda_weekly_level_xp_shadow_policy.js').read_text()
+          assert 'deda_weekly_level_xp_shadow_policy' not in main
+          for bad in ['getFirestore(', '.runTransaction(', '.collection(', 'onCall(', 'onSchedule(', 'firebase-admin']:
+              assert bad not in src, bad
+          assert 'XP_PER_TASK_CLAIM = 20' in src
+          print('No deployed XP leaderboard, fake client claims, or wallet writes')
+          PY
+      - name: Test old and XP-only shadow server ranking; no Firebase credentials
+        run: |
+          node --test functions/tests/deda_weekly_leaderboard_shadow_policy.test.js functions/tests/deda_weekly_level_xp_shadow_policy.test.js
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve ephemeral CI dependencies
+        run: flutter pub get
+      - name: Analyze existing ranking and corrected user-source explanation
+        run: dart analyze lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_leaderboard_page.dart test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_earned_points_test.dart
+      - name: Test leaderboard policy, no scroll, correct XP source on three sizes
+        run: flutter test test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_earned_points_test.dart --no-pub
       - name: No credentials, account migration, APK or payment
         run: |
           echo 'SOURCE AUDIT ONLY. NO PRODUCTION, NO DIAMOND GRANT, NO TASK OR LEVEL CHANGE.'
