@@ -1,0 +1,62 @@
+name: DEDA weekly stage7 read-only standings Android + server QA NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage7-readonly-snapshots-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage7-readonly-snapshot-no-deploy.yml'
+      - 'functions/deda_weekly_snapshot_reader_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_snapshot_reader.test.js'
+      - 'lib/deda_weekly_snapshot_decode.dart'
+      - 'test/deda_weekly_snapshot_decode_test.dart'
+      - 'docs/DEDA_WEEKLY_STAGE7_READONLY_STANDINGS_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage7-weekly-readonly-snapshots
+  cancel-in-progress: true
+jobs:
+  privacy-xp-standings-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard accepted 100387, current wallet, admin, XP and Firebase source
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          code=Path('functions/deda_weekly_snapshot_reader_NOT_EXPORTED.js').read_text()
+          flutter=Path('lib/deda_weekly_snapshot_decode.dart').read_text()
+          exports=Path('functions/index.js').read_text()
+          assert 'deda_weekly_snapshot_reader_NOT_EXPORTED' not in exports
+          assert 'firebase-admin' not in code
+          for banned in ['onCall(', 'onSchedule(', 'runTransaction(', 'tx.update(', 'tx.set(', 'tx.create(', 'db.set(', 'db.update(', 'FieldValue.increment(', 'getFirestore(']:
+            assert banned not in code,banned
+          assert 'accountKey' in code and 'viewerParticipantId' in code
+          assert 'rewardsCredited:false' in code
+          assert 'SharedPreferences' not in flutter
+          print('No legacy source, rules, APK or wallet modified; no live backend exported.')
+          PY
+      - name: Test stage6 account/XP gate and stage7 safe standings reader
+        run: |
+          node --test functions/tests/deda_weekly_owner_receipt_gate.test.js functions/tests/deda_weekly_snapshot_reader.test.js
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve CI-only dependencies
+        run: flutter pub get
+      - name: Analyze all leaderboard UI and read-only snapshot DTOs
+        run: dart analyze lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_snapshot_decode.dart test/deda_weekly_snapshot_decode_test.dart test/deda_weekly_leaderboard_page_test.dart
+      - name: Flutter offline adapter, fixed screen and weekly policy tests
+        run: flutter test test/deda_weekly_snapshot_decode_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_leaderboard_policy_test.dart --no-pub
+      - name: Test done without user account writes or deployment
+        run: |
+          echo 'STAGE7 PASSED SOURCE TEST ONLY, SERVER ISSUERS ARE NOT YET DEPLOYED.'
+          echo 'NO APK, NO AAB, NO PLAY, NO FIREBASE DEPLOY, NO XP OR DIAMOND CREDIT.'
