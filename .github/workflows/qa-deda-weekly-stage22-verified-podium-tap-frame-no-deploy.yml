@@ -1,0 +1,51 @@
+name: DEDA Stage22 verified top-three & top-ten tap profile friendship QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage22-verified-rank-tap-own-frame-qa-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage22-verified-podium-tap-frame-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'lib/deda_weekly_leaderboard_tap_surface.dart'
+      - 'test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart'
+      - 'docs/DEDA_WEEKLY_STAGE22_TOP_TEN_PROFILE_ACTIONS_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protected-original-read-only:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Ensure no original app/wallet/friend/social backend production files changed
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_social_service.dart lib/deda_backend.dart lib/deda_migrated_progress.dart lib/deda_owner18_cosmetics.dart pubspec.yaml pubspec.lock functions/index.js firestore.rules firebase.json
+          ! grep -Eq 'FirebaseFirestore|FieldValue\.increment|\.set\(|\.delete\(' lib/deda_weekly_leaderboard_tap_surface.dart
+          ! grep -Eq 'ListView\(|GridView\(|SingleChildScrollView\(' lib/deda_weekly_leaderboard_page.dart
+  responsive-user-taps-and-frames:
+    needs: protected-original-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Android-size/tablet-size verified podium+rows taps original equipped frame and privacy
+        run: |
+          set -euo pipefail
+          flutter create --project-name deda_weekly_stage22_check --platforms=android "$RUNNER_TEMP/stage22"
+          cp lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_policy.dart "$RUNNER_TEMP/stage22/lib/"
+          cp test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_phone_tablet_viewport_test.dart test/deda_weekly_snapshot_decode_test.dart "$RUNNER_TEMP/stage22/test/"
+          cd "$RUNNER_TEMP/stage22"
+          flutter pub get
+          flutter test test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart test/deda_weekly_leaderboard_page_test.dart test/deda_weekly_phone_tablet_viewport_test.dart test/deda_weekly_snapshot_decode_test.dart
+          echo "All Stage22 widget tests passed; no APK, Firebase or Play deployment."
