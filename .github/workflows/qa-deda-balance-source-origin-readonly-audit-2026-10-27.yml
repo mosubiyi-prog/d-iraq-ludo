@@ -43,6 +43,8 @@ jobs:
                   continue
                 data=tar.extractfile(member).read()
                 assert hashlib.sha256(data).hexdigest()==manifest['files'][member.name]
+                if member.name=='lib/main.dart':
+                  (output/'main-original.dart').write_bytes(data)
                 lines=data.decode('utf-8').splitlines()
                 hits=[i for i,line in enumerate(lines) if needle.search(line)]
                 if not hits: continue
