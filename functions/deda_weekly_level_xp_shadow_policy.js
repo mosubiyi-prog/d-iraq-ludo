@@ -34,6 +34,12 @@ function fixture(week, r) {
     error("unverified");
   }
   if (r.eventType !== "task_claim") error("not_task_claim");
+  // The 100387 task UI catches XP-store errors independently of the
+  // ordinary five-point task award. Count XP only after BOTH actions were
+  // verified by a future authoritative backend; a task completion alone is
+  // never enough to prove that XP was actually credited.
+  if (r.taskPointsAwarded !== true) error("ordinary_task_not_claimed");
+  if (r.levelXpApplied !== true) error("xp_not_applied");
   // The current app awards ordinary task points, login points and answer
   // points separately. ONLY the task-reward-claim path awards level XP.
   for (const key of ["clientXp", "clientPoints", "adminBonus", "level",
