@@ -71,7 +71,7 @@ void main() {
       '2026-10-26');
     expect(DedaWeeklyQaSandbox.week(0,DateTime.utc(2026,10,27,21,01)),
       '2026-10-26');
-    expect(DedaWeeklyQaSandbox.week(1,DateTime.utc(2026,9,27,21,01)),
+    expect(DedaWeeklyQaSandbox.week(1,DateTime.utc(2026,10,27,21,01)),
       '2026-11-02');
   });
 }
