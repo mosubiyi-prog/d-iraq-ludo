@@ -65,9 +65,8 @@ class OriginalDedaWeeklyNativeIntegration(unittest.TestCase):
             self.assertIn("متصدرين المهام", page)
             self.assertIn("👑", page)
             self.assertIn("activePublicId", page)
-            self.assertIn("Size(width", page) if "Size(width" in page else self.assertIn("scale", page)
-            self.assertIn("SingleChildScrollView", page) if False else self.assertNotIn(
-                "SingleChildScrollView(", page)
+            self.assertIn("scale", page)
+            self.assertNotIn("SingleChildScrollView(", page)
             self.assertNotIn("ListView(", page)
             self.assertNotIn("previewOnly: true", main)
             self.assertNotIn("demoStandings", main)
