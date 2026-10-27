@@ -65,7 +65,12 @@ class TestTraffic500Candidate(unittest.TestCase):
             self.assertEqual(res["visibleAnswersPerQuestion"],5)
             self.assertEqual(res["topicIllustrationClasses"],20)
             self.assertEqual(res["specializedIllustrations"],4)
-            self.assertEqual((folder/"lib/main.dart").read_bytes(), before_main)
+            after_main=(folder/"lib/main.dart").read_bytes()
+            self.assertIn(b"deda_100386_traffic_qa_once_", after_main)
+            self.assertNotIn(b"deda_100385_traffic_qa_once_", after_main)
+            self.assertEqual(after_main.replace(
+                b"deda_100386_traffic_qa_once_",
+                b"deda_100385_traffic_qa_once_"), before_main)
             self.assertEqual(
                 (folder/"assets/deda_traffic_500_bank_ar_v1.json").read_bytes(),
                 bank_before)
