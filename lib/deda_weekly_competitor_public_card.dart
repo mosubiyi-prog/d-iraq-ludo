@@ -85,7 +85,7 @@ class DedaWeeklyCompetitorCard extends StatelessWidget {
 
     Future<void> showActions() async {
       if(!actionable || !context.mounted)return;
-      final target=data!;
+      final target=data;
       await showModalBottomSheet<void>(
         context:context,backgroundColor:navy,showDragHandle:true,
         builder:(sheet)=>SafeArea(child:Padding(
