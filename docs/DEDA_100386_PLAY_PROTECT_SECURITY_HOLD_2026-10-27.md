@@ -21,6 +21,23 @@ Status: **INSTALL BLOCKED. DO NOT SHIP. DO NOT BYPASS PLAY PROTECT.**
 - No new Android permission, changed applicationId, or changed signing certificate has been established to explain the new Play Protect block.
 - **A malware verdict has not been proven false or true by these comparisons.** Treat the device block as a security-stop condition until further vendor/device diagnostics.
 
+## Independent local artifact comparison (100384, 100385, 100386; 2026-10-27)
+
+Actual signed APK bytes were inspected offline, not just workflow summaries.
+
+- 100384: 87,757,365 bytes; SHA256 `a6ef5e2a438bda49532a8d56167563796bb203e1234a3df4abaf0c141a72237c`.
+- 100385: 87,822,901 bytes; SHA256 `3353863addd06951dc0fa02e873a1a84375d72e66ca5844ee7de85c7800ae0f7`.
+- 100386: 87,824,321 bytes; SHA256 `dbd42152be480eecc857ad834eb95c89d5b314885177f2999c5a2b1850cfcb51`.
+- All three contain 571 ZIP entries; ZIP consistency checks passed.
+- Compared to 100385, 100386 contains **zero added or removed ZIP entries** and exactly **five altered entries**: `AndroidManifest.xml`, `MaterialIcons-Regular.otf`, and `libapp.so` for three ABIs.
+- The *only* AndroidManifest.xml binary change is one byte at offset 17524, the little-endian versionCode **100385 → 100386**. This rules out a changed manifest permission declaration between these particular two binaries.
+- The 8,371,160-byte `classes.dex` is byte-for-byte identical (SHA256 `84c235106675610ce1c6161b2e11f2879c5cc5db28f7e4ad82747eb1fec40473`).
+- The Android native executable/DEX module name sets are identical; no new DEX, SO, embedded APK, JAR, SH or EXE was introduced.
+- Each accompanying `verification.json` lists the same 17 Android permissions, package name and signing certificate; the certificate is `a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a`.
+- A limited byte-pattern check did not find accessibility-service, device-admin, app-install, overlay, SMS or VPN permission declarations. This is **not** a comprehensive malware scan.
+
+**Interpretation:** no newly added Android permission, DEX or native plugin library explains the 100386-only Play Protect warning. The changed Flutter Dart AOT code, version code, Google detection metadata or another factor remain possible. This result neither proves nor disproves malware or a false positive. Vendor diagnostics / independent assessment are necessary before treating an APK as safe.
+
 ## Required next investigation, no workaround or silent repackaging
 1. Preserve the warning screenshot; ask owner for what the Play Protect **More details** disclosure says, but do not tap install-anyway or disable Play Protect.
 2. Independently check APK provenance, permissions, bundled libraries, security-sensitive code paths and Android security behaviors; do not assume Dart quiz changes explain the warning.
