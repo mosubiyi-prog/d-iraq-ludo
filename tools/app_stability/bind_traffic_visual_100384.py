@@ -136,14 +136,18 @@ def bind(root):
   bool _qaReplayActive = false;""", "QA gate")
     s = one(s, """  Future<void> _saveProgress() async {""", """  Future<void> _saveProgress() async {
     if (_qaReplayActive) return;""", "never save QA replay")
-    s = one(s, """    if (correct) {
-      try {
-        pointAwarded = await widget.onCorrectAnswer(q.id);""", """    if (correct && !_qaReplayActive) {
-      try {
-        pointAwarded = await widget.onCorrectAnswer(q.id);""", "never reward QA answers")
-    s = one(s, """    setState(() => _saving = true);
-    try {
-      await widget.onCompleted();""", """    setState(() => _saving = true);
+        confirm_start = s.index("  Future<void> _confirmAnswer()")
+    confirm_end = s.index("  Future<void> _next()", confirm_start)
+    confirm = s[confirm_start:confirm_end]
+    confirm = one(confirm, "    if (correct) {",
+                  "    if (correct && !_qaReplayActive) {",
+                  "never reward QA answers")
+    s = s[:confirm_start] + confirm + s[confirm_end:]
+        finish_start = s.index("  Future<void> _finishQuiz()")
+    finish_end = s.index("  @override\n  Widget build(", finish_start)
+    finish = s[finish_start:finish_end]
+    finish = one(finish, "    setState(() => _saving = true);",
+                 """    setState(() => _saving = true);
     if (_qaReplayActive) {
       if (!mounted) return;
       setState(() {
@@ -151,9 +155,8 @@ def bind(root):
         _saving = false;
       });
       return;
-    }
-    try {
-      await widget.onCompleted();""", "never complete/award QA task")
+    }""", "never complete/award QA task")
+    s = s[:finish_start] + finish + s[finish_end:]
     s = one(s, """    final points = correctCount * 5;""", """    final points = _qaReplayActive ? 0 : correctCount * 5;""", "QA results have zero points")
     s = one(s, """                  'تم إكمال مهمة «اختبر مهاراتك». ارجع إلى المهام واضغط «استلام» لتحصل على مكافأة المهمة الإضافية +5 نقاط.',
                   'The “Test your skills” task is complete. Return to Tasks and tap “Claim” to receive the extra +5 task reward.',""", """                  _qaReplayActive
