@@ -52,6 +52,7 @@ class DedaLeaderboardViewData {
 class DedaWeeklyLeaderboardPage extends StatefulWidget {
   const DedaWeeklyLeaderboardPage({
     super.key,
+    this.previewOnly = false,
     this.current = const DedaLeaderboardViewData(
       verified: false,
       rows: [],
@@ -64,6 +65,8 @@ class DedaWeeklyLeaderboardPage extends StatefulWidget {
     ),
   });
 
+  /// Only for an entirely separate UI-only preview APK; never score real users.
+  final bool previewOnly;
   final DedaLeaderboardViewData current;
   final DedaLeaderboardViewData previous;
 
@@ -451,7 +454,9 @@ class _DedaWeeklyLeaderboardPageState
                   children: [
                     fitted('متصدرين المهام',
                         size: 26 * scale),
-                    fitted('أفضل المستخدمين هذا الأسبوع',
+                    fitted(widget.previewOnly
+                        ? 'معاينة تجريبية — بيانات توضيحية فقط'
+                        : 'أفضل المستخدمين هذا الأسبوع',
                         size: 12 * scale, color: pale),
                   ],
                 ),
@@ -611,7 +616,9 @@ class _DedaWeeklyLeaderboardPageState
                       alignment: Alignment.center,
                       decoration: panel(blue, radius: 13 * scale),
                       padding: EdgeInsets.symmetric(horizontal: 8 * scale),
-                      child: fitted(view.verified
+                      child: fitted(widget.previewOnly
+                          ? 'معاينة تصميم فقط؛ الأسماء والنقاط والجوائز وهمية.'
+                          : view.verified
                           ? 'XP المكتسبة من المهام هذا الأسبوع؛ '
                             'رصيد حسابك ومستواك محفوظان.'
                           : 'الترتيب قيد التحقق من الخادم؛ '
