@@ -8,6 +8,8 @@ import shutil
 
 def one(text, old, new, label):
     if text.count(old) != 1:
+        k=text.find("Add a friend")
+        print('TASK500_ACTION_CONTEXT',repr(text[k-180:k+650]))
         raise ValueError('task500 unexpected source '+label+': '+str(text.count(old)))
     return text.replace(old,new,1)
 
