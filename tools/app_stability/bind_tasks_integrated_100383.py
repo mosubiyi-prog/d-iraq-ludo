@@ -255,27 +255,36 @@ def bind(root):
     # When another user ACCEPTS our outgoing request, the confirmed
     # friendship appears in the server stream on the next friend-page view.
     # This covers both sender and recipient, without credit for a pending request.
-    liveMark="      final items = snapshot.docs"
-    if a.count(liveMark)!=1:
-        p=a.find("static Stream<List<DedaFriendshipRecord>> watchRelations(")
-        print('FRIEND_WATCH_SHAPE',repr(a[p:p+2500]))
-        raise ValueError('friendship verified observer source changed')
-    a=a.replace(liveMark,"""      if (!snapshot.metadata.isFromCache &&
-          !snapshot.metadata.hasPendingWrites) {
-        final today = DateTime.now().toLocal();
-        final acceptedToday = snapshot.docs.any((doc) {
-          final data = doc.data();
-          final when = data['respondedAt'];
-          if (data['status'] != 'accepted' || when is! Timestamp) return false;
-          final local = when.toDate().toLocal();
-          return local.year == today.year &&
-              local.month == today.month && local.day == today.day;
-        });
-        if (acceptedToday) {
-          unawaited(DedaTaskSignalBridge.friendAccepted());
-        }
+    start=a.index("static Stream<List<DedaFriendshipRecord>> watchRelations(")
+    end=a.index("static Future<String> sendFriendRequest(",start)
+    segment=a[start:end]
+    marker=".listen((snapshot) {"
+    if segment.count(marker)!=2:
+        raise ValueError('split friend observer listeners changed')
+    helper="""    void reportAcceptedToday(QuerySnapshot<Map<String, dynamic>> snapshot) {
+      if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
+        return;
       }
-      final items = snapshot.docs""",1)
+      final today = DateTime.now().toLocal();
+      final recent = snapshot.docs.any((doc) {
+        final d = doc.data();
+        final when = d['respondedAt'];
+        if (d['status'] != 'accepted' || when is! Timestamp) return false;
+        final day = when.toDate().toLocal();
+        return day.year == today.year &&
+            day.month == today.month && day.day == today.day;
+      });
+      if (recent) {
+        unawaited(DedaTaskSignalBridge.friendAccepted());
+      }
+    }
+
+"""
+    if segment.count('    void emit() {')!=1:
+        raise ValueError('friend stream emit anchor changed')
+    segment=segment.replace('    void emit() {',helper+'    void emit() {',1)
+    segment=segment.replace(marker,marker+"\n          reportAcceptedToday(snapshot);")
+    a=a[:start]+segment+a[end:]
     social.write_text(a)
     return {'preservedLegacyTaskAwardIds':True,'taskActions':4,
             'financialCodeTouched':False,'receivedPlaceUnchanged':True}
