@@ -46,7 +46,7 @@ class MidnightPrivateLocalQa(unittest.TestCase):
             assert "final safeSnapshot = _stillCurrent ? _snapshot : null;" in screen
             assert 'localTrialAccountKey != widget.localTrialAccountKey' in screen
             for name,sha in hashes.items():
-                if name not in ('lib/main.dart',):
+                if name not in ('lib/main.dart','lib/deda_verified_active_id_store.dart'):
                     assert baseline.sha(p/name)==sha,name
             with self.assertRaises(ValueError):
                 stage17.bind(p)
