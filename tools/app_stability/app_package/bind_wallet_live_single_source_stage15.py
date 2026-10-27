@@ -9,6 +9,7 @@ NO wallet writes, grants, migration, manager budget or purchase modifications.
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[3]
@@ -52,11 +53,24 @@ def bind(project):
     end=text.index("\nclass ",start+10)
     piece=text[start:end]
     original=piece
-    piece=one(piece,
-        "class _DedaStylePageState extends State<DedaStylePage> {",
-        "class _DedaStylePageState extends State<DedaStylePage>\n"
-        "    with WidgetsBindingObserver {",
-        "watch app resume")
+    # The verified original stability binder may already attach a section
+    # lifecycle mixin to StylePage. Preserve it and append only the normal
+    # Flutter observer; never replace an existing custom mixin.
+    head = re.compile(
+        r'class _DedaStylePageState extends State<DedaStylePage>'
+        r'(?:\s+with\s+[^{}]+?)?\s*\{'
+    )
+    matches=list(head.finditer(piece))
+    if len(matches)!=1:
+        raise ValueError("stage15 style lifecycle mixin anchor changed: "
+                         +repr(piece[:250]))
+    prior_header=matches[0].group(0)
+    if 'WidgetsBindingObserver' in prior_header:
+        raise ValueError("stage15 observer already applied")
+    mixin_sep = ', WidgetsBindingObserver' if ' with ' in prior_header \
+        else ' with WidgetsBindingObserver'
+    new_header=prior_header[:-1].rstrip() + mixin_sep + ' {'
+    piece=one(piece,prior_header,new_header,"observe native style lifecycle")
     piece=one(piece,"  int _diamonds = 0;",
         """  // Same live, account-scoped presentation as My Profile and daily tasks.
   // This is NOT the spendable wallet or an entitlement to buy.
