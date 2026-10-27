@@ -37,19 +37,14 @@ def bind(project):
     screen=project/'lib/deda_weekly_leaderboard_safe_screen.dart'
     page=project/'lib/deda_weekly_leaderboard_page.dart'
     s=main.read_text()
-    s=one(s,"const DedaWeeklyLeaderboardSafeScreen()",
+    if s.count('const DedaWeeklyLeaderboardSafeScreen()')!=2:
+        raise ValueError('Exactly two original leaderboard routes are required')
+    s=s.replace('const DedaWeeklyLeaderboardSafeScreen()',
         """DedaWeeklyLeaderboardSafeScreen(
         localTrialAccountKey: DedaBackend.accountKeyForPhone(
             DedaPreferences.phone).trim(),
         refreshSignal: DedaSocialProgressWallet.xpNotifier,
-      )""","first home tile")
-    # The second layout now has just one untouched const route.
-    s=s.replace("const DedaWeeklyLeaderboardSafeScreen()",
-        """DedaWeeklyLeaderboardSafeScreen(
-        localTrialAccountKey: DedaBackend.accountKeyForPhone(
-            DedaPreferences.phone).trim(),
-        refreshSignal: DedaSocialProgressWallet.xpNotifier,
-      )""",1)
+      )""")
     if s.count('localTrialAccountKey:')!=2 or \
        'const DedaWeeklyLeaderboardSafeScreen()' in s:
         raise ValueError('Must activate EXACTLY TWO private trial routes')
