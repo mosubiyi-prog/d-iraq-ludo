@@ -54,9 +54,10 @@ def bind(root):
           saved.map((q) => q.id).toSet().length == _dailyQuestionCount) {
         return saved;
       }
-      final seen = ((await DedaPrivateDataBridge.readList(
-          prefs, _seenKey)) ?? const <String>[])
-          .where(byId.containsKey).toSet();
+      final priorIds = (await DedaPrivateDataBridge.readList(
+          prefs, _seenKey)) ?? const <String>[];
+      // Older question histories are retained for safe rollback to 100382.
+      final seen = priorIds.where(byId.containsKey).toSet();
       final unseen = bank.where((q) => !seen.contains(q.id)).toList()
         ..shuffle(math.Random());
       final selected = <_TrafficQuestion>[];
@@ -83,7 +84,11 @@ def bind(root):
       await DedaPrivateDataBridge.write(
           prefs, _dailyIdsKey, selected.map((q) => q.id).toList());
       await DedaPrivateDataBridge.write(
-          prefs, _seenKey, newlySeen.toList()..sort());
+          prefs, _seenKey,
+          <String>{
+            ...priorIds.where((id) => !byId.containsKey(id)),
+            ...newlySeen,
+          }.toList()..sort());
       return selected;
     });
   }
@@ -103,6 +108,9 @@ def bind(root):
     s=one(s,"  final _TrafficVisual visual;",
           "  final _TrafficVisual? visual;",
           'optional sign for non-visual questions')
+    s=one(s,"final usedVisuals = <_TrafficVisual>{};",
+          "final usedVisuals = <_TrafficVisual?>{};",
+          'legacy helper accepts optional visual on generic safety question')
     s=one(s,"final usedVisuals = chosen.map((q) => q.visual).toSet();",
           "final usedVisuals = chosen.map((q) => q.visual).toSet();",
           'no change') if False else s
