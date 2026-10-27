@@ -211,11 +211,18 @@ def bind(root):
     setState(() {""",
           'count selecting real place')
     s=one(s,
+          "  final TextEditingController _mapSearchController = TextEditingController();",
+          "  final TextEditingController _mapSearchController = TextEditingController();\n"
+          "  bool _dedaSearchCharacterAlreadyCounted = false;",
+          'count first character only once per map-open session')
+    s=one(s,
           """                  controller: _mapSearchController,
                   textDirection: DedaLanguageState.direction,""",
           """                  controller: _mapSearchController,
                   onChanged: (value) {
-                    if (value.trim().isNotEmpty) {
+                    if (value.trim().isNotEmpty &&
+                        !_dedaSearchCharacterAlreadyCounted) {
+                      _dedaSearchCharacterAlreadyCounted = true;
                       unawaited(DedaTaskEngine.recordSuccessfulEvent(
                         DedaTaskEvent.mapSearchTyped,
                       ));
@@ -228,8 +235,8 @@ def bind(root):
     social=root/'lib/deda_social_service.dart'
     a=social.read_text()
     a=one(a,"import 'deda_backend.dart';",
-          "import 'deda_backend.dart';\nimport 'deda_task_signal_bridge.dart';",
-          'social bridge import')
+          "import 'dart:async';\nimport 'deda_backend.dart';\nimport 'deda_task_signal_bridge.dart';",
+          'social bridge and nonblocking event import')
     start=a.index("static Future<void> respondToRequest(")
     end=a.index("static Future<void> removeRelation(",start)
     segment=a[start:end]
@@ -245,6 +252,28 @@ def bind(root):
       await DedaTaskSignalBridge.friendAccepted();
     }"""+segment[finish:]
     a=a[:start]+segment+a[end:]
+    # When another user ACCEPTS our outgoing request, the confirmed
+    # friendship appears in the server stream on the next friend-page view.
+    # This covers both sender and recipient, without credit for a pending request.
+    liveMark="      final items = snapshot.docs"
+    if a.count(liveMark)!=1:
+        raise ValueError('friendship verified observer source changed')
+    a=a.replace(liveMark,"""      if (!snapshot.metadata.isFromCache &&
+          !snapshot.metadata.hasPendingWrites) {
+        final today = DateTime.now().toLocal();
+        final acceptedToday = snapshot.docs.any((doc) {
+          final data = doc.data();
+          final when = data['respondedAt'];
+          if (data['status'] != 'accepted' || when is! Timestamp) return false;
+          final local = when.toDate().toLocal();
+          return local.year == today.year &&
+              local.month == today.month && local.day == today.day;
+        });
+        if (acceptedToday) {
+          unawaited(DedaTaskSignalBridge.friendAccepted());
+        }
+      }
+      final items = snapshot.docs""",1)
     social.write_text(a)
     return {'preservedLegacyTaskAwardIds':True,'taskActions':4,
             'financialCodeTouched':False,'receivedPlaceUnchanged':True}
