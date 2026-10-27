@@ -183,3 +183,10 @@ test("read-only model contains no diamond balance payment or XP mutation",async(
   assert.equal(response.current.rewardsCredited,false);
   assert.equal(response.previous.rewardsCredited,false);
 });
+
+test("verified premium four-letter ID survives stage7 redaction",()=>{
+  const sample=snapshot("current",1);
+  sample.rows[0].activePublicId="@DEDA-ABAB";
+  const safe=verifyAndRedactSnapshot(sample,CURRENT,ACCOUNT,NOW,"current");
+  assert.equal(safe.rows[0].activePublicId,"@DEDA-ABAB");
+});
