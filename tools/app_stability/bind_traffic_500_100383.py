@@ -89,17 +89,17 @@ def bind(root):
   }
 """
     s=s[:start]+replacement+s[end:]
-    s=one(s,"                   _TrafficSignCard(kind: q.visual),",
-          """                   if (q.visual != null)
-                     _TrafficSignCard(kind: q.visual!)
-                   else
-                     Container(
-                       height: 110,
-                       alignment: Alignment.center,
-                       child: const Icon(Icons.shield_outlined,
-                           size: 72, color: Color(0xFF17652F)),
-                     ),""",
-          'do not show unrelated sign on generic safety question')
+    s=one(s,"_TrafficSignCard(kind: q.visual)",
+          """(q.visual == null
+                ? const SizedBox(
+                    height: 110,
+                    child: Center(
+                      child: Icon(Icons.shield_outlined,
+                        size: 72, color: Color(0xFF17652F)),
+                    ),
+                  )
+                : _TrafficSignCard(kind: q.visual!))""",
+          'no unrelated illustration for general traffic rule')
     s=one(s,"  final _TrafficVisual visual;",
           "  final _TrafficVisual? visual;",
           'optional sign for non-visual questions')
