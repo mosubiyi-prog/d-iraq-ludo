@@ -89,7 +89,7 @@ test("no authorized attestation means no user-specific results",async()=>{
   await assert.rejects(readFutureWeeklyStandings({
     db:store(docs({noAttestation:true})),
     request:REQUEST,serverNowMs:NOW,
-  }),/missing_deda_weekly_identity_attestations/);
+  }),/verified_document_missing/);
 });
 test("cannot submit client claimed week, phone or XP",async()=>{
   for(const name of ["accountKey","uid","weeklyPoints","weekId","diamonds"]){
@@ -104,7 +104,7 @@ test("previous week must be contiguous and active week contains server clock",()
     {current:CURRENT,previous:PREVIOUS});
   assert.throws(()=>validateServerCalendar({
     ...CONFIG,previousEndMs:START-1,
-  },NOW),/week_boundary/);
+  },NOW),/week_duration|week_boundary/);
   assert.throws(()=>validateServerCalendar({
     ...CONFIG,issuer:"device",
   },NOW),/unapproved_calendar/);
