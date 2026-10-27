@@ -235,12 +235,11 @@ def bind(root):
     segment=a[start:end]
     # Existing 100382 guard reformats Firestore update across several lines.
     # Extend ONLY the actual accepted-relationship write, after SDK success.
-    pos=segment.find("await ref.update(")
-    finish=segment.find("});",pos)
-    if pos<0 or finish<0 or segment.count("await ref.update(")!=1:
-        print('FRIEND_ACCEPT_SHAPE',repr(segment[:2500]))
-        raise ValueError('friend accept write shape changed')
-    finish+=3
+    pos=segment.find("await DedaSectionOperationContext.wait(() => ref.update(")
+    finish=segment.find("}));",pos)
+    if pos<0 or finish<0 or segment.count("ref.update(")!=1:
+        raise ValueError('guarded accepted-friend write changed')
+    finish+=4
     segment=segment[:finish]+"""
     if (accept) {
       await DedaTaskSignalBridge.friendAccepted();
