@@ -69,7 +69,7 @@ class TrafficVisualQA(unittest.TestCase):
                            "'إعادة فحص الأسئلة دون نقاط'"):
                 self.assertIn(needle, q)
             self.assertIn("    if (_qaReplayActive) {\n      if (!mounted) return;", q)
-            self.assertIn("    if (_qaReplayActive) return;\n    final prefs", q)
+            self.assertIn("Future<void> _saveProgress() async {\n    if (_qaReplayActive) return;", q)
             self.assertIn("    final points = _qaReplayActive ? 0 : correctCount * 5;", q)
             self.assertEqual((work/'assets/deda_traffic_500_bank_ar_v1.json').read_bytes(),
                              (ROOT/'assets/deda_traffic_500_bank_ar_v1.json').read_bytes())
