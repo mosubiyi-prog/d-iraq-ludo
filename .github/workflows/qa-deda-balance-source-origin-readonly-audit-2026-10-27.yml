@@ -1,0 +1,70 @@
+name: DEDA real signed original wallet source READ-ONLY trace NO DEPLOY
+on:
+  push:
+    branches: [deda-wallet-balance-readonly-origin-audit-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-balance-source-origin-readonly-audit-2026-10-27.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-wallet-readonly-source-audit-once
+  cancel-in-progress: false
+jobs:
+  audit-signed-original-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect source, wallet and real accounts from any modification
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/app_stability/app_package/verify.py tools/restore_deda_stability_baseline.py
+      - name: Extract only local archived original Dart wallet readers, NO database access
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,tarfile,re
+          from pathlib import Path
+          root=Path('tools/app_stability')
+          archive=root/'100380-baseline.tar.gz'
+          manifest=json.loads((root/'100380-baseline-manifest.json').read_text())
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==manifest['archiveSHA256']
+          needle=re.compile(r'diamond|gem|coin|gold|balance|wallet|manager|purchase|spend|رصيد|ماسة|ماس|ذهب|شراء|هدية',re.I)
+          output=Path('/tmp/deda_wallet_source_audit')
+          output.mkdir(exist_ok=True)
+          total=0
+          with (output/'wallet-trace.txt').open('w') as log:
+            with tarfile.open(archive,'r:gz') as tar:
+              for member in tar.getmembers():
+                if not member.name.startswith('lib/') or not member.name.endswith('.dart'):
+                  continue
+                data=tar.extractfile(member).read()
+                assert hashlib.sha256(data).hexdigest()==manifest['files'][member.name]
+                lines=data.decode('utf-8').splitlines()
+                hits=[i for i,line in enumerate(lines) if needle.search(line)]
+                if not hits: continue
+                log.write(f'\n\n===== {member.name} totalLines={len(lines)} matches={len(hits)} =====\n')
+                # One compact source context around each relevant group.
+                spans=[]
+                for i in hits:
+                  a=max(0,i-6);b=min(len(lines),i+8)
+                  if spans and a<=spans[-1][1]:
+                    spans[-1]=(spans[-1][0],max(spans[-1][1],b))
+                  else:spans.append((a,b))
+                for a,b in spans:
+                  log.write(f'\n--- L{a+1}-L{b} ---\n')
+                  for n in range(a,b):
+                    log.write(f'{n+1:06d} {lines[n]}\n')
+                total+=len(hits)
+          (output/'README.txt').write_text(f'Exact immutable source hashes verified. No app or Firebase production modifications. Matched lines: {total}\n')
+          print('Archived original verified; matched wallet source lines:',total)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-VERIFIED-ORIGINAL-WALLET-READONLY-TRACE
+          path: /tmp/deda_wallet_source_audit/
+          if-no-files-found: error
+          retention-days: 3
