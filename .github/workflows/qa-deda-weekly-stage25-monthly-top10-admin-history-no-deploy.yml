@@ -1,0 +1,42 @@
+name: DEDA Stage25 monthly top-ten and podium read-only archive QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage25-monthly-top10-admin-history-shadow-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage25-monthly-top10-admin-history-no-deploy.yml'
+      - 'functions/deda_weekly_monthly_top10_archive_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_monthly_top10_archive.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE25_MONTHLY_TOP10_ADMIN_HISTORY_SHADOW_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stage25-shadow-history-no-production-writes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify DEDA original app and Firebase critical files unchanged from Stage24
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet bd3e7087eab05956046b4a9bc820e81eb4dccf19 -- \
+            lib/main.dart lib/deda_social_service.dart \
+            pubspec.yaml pubspec.lock functions/index.js firestore.rules \
+            firebase.json firestore.spark.qa.rules
+          if grep -Eq 'require\(["\x27].*/deda_weekly_monthly_top10_archive_NOT_EXPORTED|exports\.dedaWeeklyMonthly' functions/index.js; then
+            echo "BLOCKED: archive module must not be exported to production"
+            exit 1
+          fi
+      - name: Test immutable top-ten history privacy and strict monthly boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          node --check functions/deda_weekly_monthly_top10_archive_NOT_EXPORTED.js
+          node --test functions/tests/deda_weekly_monthly_top10_archive.test.js
+          echo "Stage25 model tested; NO APK, Firebase deployment, rewards or Google Play publication."
