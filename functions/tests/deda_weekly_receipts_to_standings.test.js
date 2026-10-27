@@ -182,3 +182,13 @@ test("duplicate active DEDA IDs for different accounts fail closed",async()=>{
     profiles:[profiles[0],p2],
   }))),/duplicate_public_id/);
 });
+
+test("legitimate four-letter premium ID is retained in verified weekly ranking",async()=>{
+  const db=store({events:[receipt()],profiles:[
+    profile(ACCOUNT_A,"@DEDA-AAAA","لاعب أربع"),
+  ]});
+  const result=await projectFutureServerWeek(args(db));
+  assert.equal(result.rows[0].activePublicId,"@DEDA-AAAA");
+  const exposed=verifyAndRedactSnapshot(result,WEEK,ACCOUNT_A,NOW,"current");
+  assert.equal(exposed.rows[0].activePublicId,"@DEDA-AAAA");
+});
