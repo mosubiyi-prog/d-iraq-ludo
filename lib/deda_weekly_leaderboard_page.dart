@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'deda_weekly_leaderboard_policy.dart';
+import 'deda_weekly_competitor_public_card.dart';
 
 /// Display-only verified leaderboard identity.
 //// Users and scores must come from the approved server, never test/mock data.
@@ -11,12 +12,15 @@ class DedaLeaderboardProfile {
     required this.displayName,
     required this.activePublicId,
     this.avatarImage,
+    this.verifiedCompetitor,
   });
 
   final String accountUid;
   final String displayName;
   final String activePublicId;
   final ImageProvider? avatarImage;
+  /// Only a validated server-owned public equipment proof, never local viewer style.
+  final DedaWeeklyPublicCompetitor? verifiedCompetitor;
 }
 
 /// Server-supplied standings and privacy-filtered account profile data.
