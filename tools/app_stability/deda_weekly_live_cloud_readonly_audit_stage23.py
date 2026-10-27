@@ -59,26 +59,44 @@ def main():
         save(output)
         return
     output["credential"] = "authenticated"
-    try:
-        endpoint = (f"https://cloudfunctions.googleapis.com/v2/projects/"
-                    f"{PROJECT}/locations/-/functions")
-        names = set()
-        for _ in range(10):
-            response = session.get(endpoint, timeout=15)
-            if response.status_code != 200:
-                raise PermissionError("functions_metadata_unavailable")
-            body = response.json()
-            for function in body.get("functions", []):
-                name = function.get("name", "").rsplit("/", 1)[-1]
-                names.add(name)
-            token = body.get("nextPageToken")
-            if not token:
-                break
-            endpoint = (f"https://cloudfunctions.googleapis.com/v2/projects/"
-                        f"{PROJECT}/locations/-/functions?pageToken={token}")
+    # Cloud Functions has two API generations; read both independently.
+    # A failure is NOT evidence a function is absent. Do not mark missing
+    # until at least one authoritative location enumeration succeeds.
+    visible = False
+    seen = set()
+    for version in ("v2", "v1"):
+        try:
+            endpoint = (f"https://cloudfunctions.googleapis.com/{version}/"
+                        f"projects/{PROJECT}/locations/-/functions")
+            found = set()
+            completed = False
+            for _ in range(10):
+                response = session.get(endpoint, timeout=15)
+                if response.status_code != 200:
+                    raise PermissionError("functions_metadata_unavailable")
+                body = response.json()
+                for function in body.get("functions", []):
+                    found.add(function.get("name", "").rsplit("/", 1)[-1])
+                token = body.get("nextPageToken")
+                if not token:
+                    completed = True
+                    break
+                endpoint = (
+                    f"https://cloudfunctions.googleapis.com/{version}/"
+                    f"projects/{PROJECT}/locations/-/functions?pageToken={token}"
+                )
+            if not completed:
+                raise ValueError("functions_enumeration_incomplete")
+            visible = True
+            seen.update(found)
+        except Exception:
+            pass
+    if visible:
         output["functionsVisibility"] = "metadata_read_ok"
-        output["functionsNamedPresent"] = {name: name in names for name in NAMES}
-    except Exception:
+        output["functionsNamedPresent"] = {
+            name: name in seen for name in NAMES
+        }
+    else:
         output["functionsVisibility"] = "unknown_permission_or_api_limit"
     try:
         prefix = f"https://firebaserules.googleapis.com/v1/projects/{PROJECT}"
