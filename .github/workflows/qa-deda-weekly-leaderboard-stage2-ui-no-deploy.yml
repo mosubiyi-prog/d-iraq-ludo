@@ -1,0 +1,62 @@
+name: DEDA weekly leaderboard stage2 UI isolated tests NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage2-ui-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-leaderboard-stage2-ui-no-deploy.yml'
+      - 'lib/deda_weekly_leaderboard_policy.dart'
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'test/deda_weekly_leaderboard_policy_test.dart'
+      - 'test/deda_weekly_leaderboard_page_test.dart'
+      - 'tools/app_stability/bind_weekly_leaderboard_stage2.py'
+      - 'tools/app_stability/tests/test_weekly_leaderboard_stage2.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-leaderboard-stage2-ui-isolated-qa
+  cancel-in-progress: true
+jobs:
+  stage2-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guard exact 100387 original app, source, signing and Firebase inputs
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/traffic_quiz_page.dart lib/deda_social_service.dart pubspec.yaml pubspec.lock google-services.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          page=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          binder=Path('tools/app_stability/bind_weekly_leaderboard_stage2.py').read_text()
+          assert 'SingleChildScrollView' not in page
+          assert 'ListView(' not in page
+          assert 'CustomScrollView' not in page
+          assert 'FirebaseFirestore' not in page
+          assert 'SharedPreferences.getInstance' not in page
+          assert 'collection(' not in page
+          assert binder.count('categoryCard(restaurant)') >= 2
+          print('Source guard passed; no 100387 core change, no client finance path')
+          PY
+      - name: Run isolated restored-source binder regression
+        run: |
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage2.py' -v
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve CI-only dependencies without modifying committed lockfile
+        run: flutter pub get
+      - name: Analyze pure scores and UI
+        run: dart analyze lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_leaderboard_page.dart test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart
+      - name: Test weekly score policy and responsive fixed UI
+        run: flutter test test/deda_weekly_leaderboard_policy_test.dart test/deda_weekly_leaderboard_page_test.dart --no-pub
+      - name: Confirm no build, publication or wallet mutation
+        run: |
+          echo 'Isolated stage2 tests passed, not included in any user APK.'
+          echo 'NO APK, NO AAB, NO DEPLOY, NO DIAMOND CREDIT, NO XP RESET.'
