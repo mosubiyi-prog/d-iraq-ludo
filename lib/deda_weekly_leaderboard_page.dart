@@ -425,8 +425,16 @@ class _DedaWeeklyLeaderboardPageState
                   border: Border.all(color: gold, width: 1.5),
                   borderRadius: BorderRadius.circular(15 * scale),
                 ),
-                child: fitted('تابع إنجاز المهام',
-                    color: gold, size: 11 * scale),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.trending_up_rounded,
+                        color: gold, size: 13 * scale),
+                    SizedBox(width: 2 * scale),
+                    Flexible(child: fitted('تابع إنجاز المهام',
+                        color: gold, size: 11 * scale)),
+                  ],
+                ),
               )),
           SizedBox(width: 8 * scale),
           Expanded(flex: 2,
@@ -442,7 +450,7 @@ class _DedaWeeklyLeaderboardPageState
               )),
           Expanded(flex: 4,
               child: identity(viewer,
-                  avatarSize: 35 * scale, compact: true)),
+                  avatarSize: 35 * scale, compact: false)),
           SizedBox(width: 6 * scale),
           Expanded(flex: 2,
               child: Column(
