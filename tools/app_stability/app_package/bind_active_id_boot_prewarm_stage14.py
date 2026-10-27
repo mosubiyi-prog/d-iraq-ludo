@@ -63,7 +63,7 @@ def bind(project):
             "import 'deda_verified_active_id_store.dart';",
             "prewarm store import")
     main=once(main,
-        "  await DedaPreferences.load();\n  await DedaTaskEngine.initializeForCurrentAccount();",
+        "  await DedaPreferences.load();",
         """  await DedaPreferences.load();
   // Already server-confirmed display IDs are rehydrated BEFORE any profile
   // widget is mounted. Session UID is obtained from current Firebase Auth;
@@ -79,8 +79,8 @@ def bind(project):
     // Offline / first login / no saved owner display: Stage71 server
     // verification still handles the profile normally; no guessed ID.
   }
-  await DedaTaskEngine.initializeForCurrentAccount();""",
-        "boot before first Flutter profile frame")
+""",
+        "boot after loaded preferences before Flutter first frame")
     store=once(store,
         "  static Future<void> restore(String uid, String originalId) {",
         """  /// Cold-start hydration for one authenticated Firebase UID only.
