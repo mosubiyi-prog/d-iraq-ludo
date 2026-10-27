@@ -285,6 +285,15 @@ class _DedaTrafficStopLineIllustration extends StatelessWidget {
     if "_DedaTrafficQuestionVisual extends" in s:
         raise ValueError("100386 double visual widget binding")
     f.write_text(s+"\n"+extra)
+    # 100385's one-time owner replay marker may already have been consumed
+    # during yesterday's build review. Give the 100386 QA candidate its own
+    # one-time same-day refresh; keep awards and ledger untouched.
+    main_file=root/"lib/main.dart"
+    main=main_file.read_text()
+    main=once(main, "deda_100385_traffic_qa_once_",
+                    "deda_100386_traffic_qa_once_",
+                    "new owner-only QA cycle marker for this build")
+    main_file.write_text(main)
     return {"qaBankCount": 500, "visibleAnswersPerQuestion":5,
             "topicIllustrationClasses":20, "specializedIllustrations":4,
             "productionClaims":False}
