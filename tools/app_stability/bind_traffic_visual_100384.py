@@ -136,14 +136,14 @@ def bind(root):
   bool _qaReplayActive = false;""", "QA gate")
     s = one(s, """  Future<void> _saveProgress() async {""", """  Future<void> _saveProgress() async {
     if (_qaReplayActive) return;""", "never save QA replay")
-        confirm_start = s.index("  Future<void> _confirmAnswer()")
+    confirm_start = s.index("  Future<void> _confirmAnswer()")
     confirm_end = s.index("  Future<void> _next()", confirm_start)
     confirm = s[confirm_start:confirm_end]
     confirm = one(confirm, "    if (correct) {",
                   "    if (correct && !_qaReplayActive) {",
                   "never reward QA answers")
     s = s[:confirm_start] + confirm + s[confirm_end:]
-        finish_start = s.index("  Future<void> _finishQuiz()")
+    finish_start = s.index("  Future<void> _finishQuiz()")
     finish_end = s.index("  @override\n  Widget build(", finish_start)
     finish = s[finish_start:finish_end]
     finish = one(finish, "    setState(() => _saving = true);",
