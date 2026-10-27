@@ -54,10 +54,10 @@ class DedaWeeklyQaSandbox {
     await prefs.setString(key,jsonEncode(state));
     return state;
   }
-  Future<Map<String,dynamic>> choose(int rank) async {
+  Future<Map<String,dynamic>> choose(int rank, {DateTime? now}) async {
     if(rank<1||rank>11)throw RangeError('rank');
     final state=await read();
-    final current=week(state['offset'] as int,DateTime.now());
+    final current=week(state['offset'] as int,now??DateTime.now());
     if((state['paid'] as Map).containsKey(current))return state;
     state['rank']=rank;
     return save(state);
@@ -73,11 +73,11 @@ class DedaWeeklyQaSandbox {
     state['paid']=paid;
     return save(state);
   }
-  Future<Map<String,dynamic>> next() async {
+  Future<Map<String,dynamic>> next({DateTime? now}) async {
     final state=await read();
     final offset=state['offset'] as int;
     if(offset==52)throw RangeError('week');
-    final current=week(offset,DateTime.now());
+    final current=week(offset,now??DateTime.now());
     if(!(state['paid'] as Map).containsKey(current)) {
       throw StateError('settle-first');
     }
@@ -153,7 +153,8 @@ class _DedaWeeklyQaFullTrialPageState extends State<DedaWeeklyQaFullTrialPage> {
     final paid=state['paid'] as Map? ?? {};
     final week=DedaWeeklyQaSandbox.week(
         previous&&offset>0?offset-1:offset,DateTime.now());
-    final result=paid[week] is Map?paid[week] as Map:null;
+    final result=(previous && offset==0) ? null :
+        (paid[week] is Map ? paid[week] as Map : null);
     final settled=paid.containsKey(
         DedaWeeklyQaSandbox.week(offset,DateTime.now()));
     return Scaffold(
