@@ -1,16 +1,21 @@
-name: DEDA unified active ID 100382 secure private QA NO DEPLOY
+name: DEDA 100383 all five tasks + 500 traffic questions ONE PRIVATE QA APK NO DEPLOY
 on:
   push:
-    branches: [deda-single-active-id-100382-2026-10-27]
+    branches: [deda-tasks-traffic-500-integrated-2026-10-27]
     paths:
       - '.github/workflows/deda-response-id-no-flash-signed-qa.yml'
-      - '.github/workflows/deda-single-active-id-100382-signed-qa.yml'
+      - '.github/workflows/deda-response-id-no-flash-signed-qa.yml'
       - 'tools/app_stability/bind_active_id_no_flash.py'
-      - 'tools/app_stability/bind_unified_active_id_100382.py'
-      - 'tools/app_stability/tests/test_unified_active_id_100382.py'
+      - 'tools/app_stability/bind_unified_active_id_100383.py'
+      - 'tools/app_stability/tests/test_unified_active_id_100383.py'
       - 'lib/deda_verified_active_id_store.dart'
+      - 'lib/deda_task_signal_bridge.dart'
+      - 'tools/app_stability/bind_tasks_integrated_100383.py'
+      - 'tools/app_stability/bind_traffic_500_100383.py'
+      - 'tools/app_stability/tests/test_tasks_traffic_500_100383.py'
+      - 'assets/deda_traffic_500_bank_ar_v1.json'
       - 'test/deda_verified_active_id_store_test.dart'
-      - 'docs/DEDA_SINGLE_ACTIVE_DISPLAY_100382_OWNER_QA_2026-10-27.md'
+      - 'docs/DEDA_SINGLE_ACTIVE_DISPLAY_100383_OWNER_QA_2026-10-27.md'
       - 'tools/app_stability/tests/test_identity_no_flash.py'
       - 'tools/app_stability/app_package/**'
       - 'lib/deda_incoming_request_lifecycle.dart'
@@ -38,7 +43,7 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: deda-response-speed-id-100382-signed-qa
+  group: deda-response-speed-id-100383-signed-qa
   cancel-in-progress: true
 jobs:
   internal-apk:
@@ -63,6 +68,7 @@ jobs:
           set -euo pipefail
           python3 -m unittest discover -s tools/app_stability/tests -p 'test_identity_no_flash.py' -v
           python3 -m unittest discover -s tools/app_stability/tests -p 'test_unified_active_id_100382.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_tasks_traffic_500_100383.py' -v
       - name: Verify original Android configuration sources and private export boundaries
         run: |
           set -euo pipefail
@@ -125,7 +131,7 @@ jobs:
           from pathlib import Path
           data=json.loads(Path('internal-build-inputs.json').read_text())
           assert data['completeOwnerDelivery'] is False and data['financialRestoreEnabled'] is False
-          args=['flutter','build','apk','--release','--build-number=100382','--no-pub']
+          args=['flutter','build','apk','--release','--build-number=100383','--no-pub']
           args += ['--dart-define='+key+'='+str(value).lower() for key,value in data['flags'].items()]
           subprocess.run(args,check=True)
           PY
@@ -134,11 +140,11 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}"
           python3 tools/app_stability/app_package/verify.py "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}" "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" --output "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/verification.json"
-          cp "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/DEDA-INTERNAL-${{ matrix.variant }}-100382-NOT-FINAL.apk"
+          cp "$RUNNER_TEMP/deda-internal-${{ matrix.variant }}/build/app/outputs/flutter-apk/app-release.apk" "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/DEDA-INTERNAL-${{ matrix.variant }}-100383-NOT-FINAL.apk"
           printf '%s\n' 'INTERNAL INTEGRATION ONLY. NOT FINAL OWNER DELIVERY.' 'No complete financial restore, phone/tablet acceptance or production deployment.' > "$RUNNER_TEMP/deda-internal-artifact-${{ matrix.variant }}/READ-ME.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: DEDA-UNIFIED-ACTIVE-ID-100382-PRIVATE-QA
+          name: DEDA-TASKS-500-100383-ONE-PRIVATE-QA
           path: |
             ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/*.apk
             ${{ runner.temp }}/deda-internal-artifact-${{ matrix.variant }}/verification.json
