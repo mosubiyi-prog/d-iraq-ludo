@@ -1,0 +1,46 @@
+name: DEDA verified quiz-to-weekly-XP read-only regression NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-quiz-xp-readonly-contract-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-traffic-quiz-xp-readonly-no-deploy.yml'
+      - 'tools/app_stability/tests/test_weekly_traffic_quiz_xp_path.py'
+      - 'functions/tests/deda_weekly_traffic_quiz_league_accounting.test.js'
+      - 'docs/DEDA_WEEKLY_TRAFFIC_QUIZ_XP_LINK_CHECKPOINT_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-traffic-quiz-league-safe-qa
+  cancel-in-progress: true
+jobs:
+  original-task-wallet-protection:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Original accepted 100387 build, quiz, level and wallet must be unchanged
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/traffic_quiz_page.dart lib/deda_migrated_progress.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('functions/tests/deda_weekly_traffic_quiz_league_accounting.test.js').read_text()
+          assert 'levelXpApplied:false' in s
+          assert 'eventType:"traffic_answer"' in s
+          assert '20' in s and '5*correct' in s
+          print('Original app code and user balances unchanged: tests only.')
+          PY
+      - name: Reconstruct actual signed DEDA100387 traffic quiz source; verify distinct reward paths
+        run: python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_traffic_quiz_xp_path.py' -v
+      - name: Repeat original XP source audit
+        run: python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_original_xp_stage5.py' -v
+      - name: Guard ordinary quiz points and XP-only weekly shadow scores
+        run: |
+          node --test functions/tests/deda_weekly_traffic_quiz_league_accounting.test.js functions/tests/deda_weekly_level_xp_shadow_policy.test.js
+      - name: Finish without any APK or cloud account/wallet modifications
+        run: |
+          echo 'READ-ONLY XP/QUIZ REGRESSION SUCCESS. NO DEPLOY, NO XP CREDIT, NO DIAMOND GRANT.'
