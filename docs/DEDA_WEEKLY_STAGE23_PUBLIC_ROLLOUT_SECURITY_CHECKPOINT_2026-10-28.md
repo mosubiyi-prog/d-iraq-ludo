@@ -33,3 +33,11 @@ Owner instruction 2026-10-28: complete end-to-end original DEDA weekly league, t
 8. Owner review of QA results and safe staged Google Play rollout, with rollback. Never auto-upload to Play merely because GitHub CI green.
 
 Point of stop: Stage23 read-only live audit; NO public release until blockers removed with actual issuer/wallet/rules implementations and independent proof.
+
+## Independent LIVE Firebase result — verified by actual GitHub Actions read-only GET
+- GitHub Actions run `40601878790`: tracked source release gate, plus live Firebase GET-only metadata jobs PASSED.
+- Service account authenticated for Firebase project `deda-25b88`; active production Firestore Rules release and underlying ruleset were **successfully fetched** using Firebase Rules API read operations.
+- **Confirmed live fact:** active rules release **does not explicitly mention** `deda_weekly_xp_receipts`, `deda_weekly_standings`, `deda_weekly_identity_attestations`, or `deda_weekly_verified_equipped_public`. This does NOT prove a generic wildcard rule denies writes — MUST emulator-test exact active rules before deploying any collection.
+- Live Cloud Functions enumeration was **unknown**, even after trying the v1 and v2 REST endpoints. The service-account IAM/API access did not provide authoritative list. Do NOT claim cloud functions are absent in the real project; only tracked `functions/index.js` definitely does not export the five required weekly handlers.
+- Therefore **no production release** occurred and the public feature is still unverified. CI "success" means audit and safety block executed correctly, NOT that DEDA League is functional.
+- Precise production blockers now known: privileged server-side task XP authority/attestation, server-owned week/snapshot/portrait issuer, reviewed and deployed owner-deny rules, audited separate-earned spendable diamond wallet, and authenticated original social action coordinator with two accounts.
