@@ -1,0 +1,92 @@
+name: DEDA Stage26 ADMIN LEAGUE CARD general-manager-only UI QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage26-admin-league-card-gm-gated-private-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage26-admin-league-card-no-deploy.yml'
+      - 'lib/admin_pages.dart'
+      - 'lib/deda_admin_league_page.dart'
+      - 'test/deda_admin_league_page_stage26_test.dart'
+      - 'docs/DEDA_WEEKLY_STAGE26_ADMIN_LEAGUE_CARD_GM_PRIVATE_QA_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protect-original-and-manager-access:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm owner wallet and original app remain unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet dba173c55f8a350b40c9f28966a3a41ca522c96d -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_weekly_leaderboard_page.dart \
+            functions/index.js firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('lib/admin_pages.dart').read_text()
+          page=Path('lib/deda_admin_league_page.dart').read_text()
+          entry="key: const Key('deda_admin_league_dashboard_tile')"
+          assert source.count(entry)==1
+          x=source.index(entry)
+          before=source[x-290:x]
+          assert "'general_manager'" in before and "== 'active'" in before
+          assert 'DedaAdminLeaguePage(isArabic: ar)' in source[x:x+900]
+          assert "currentAdminProfile(" in page
+          assert "forceRefresh: true" in page
+          assert "normalizeAdminRole" in page and "normalizeAdminStatus" in page
+          assert "onPressed: null" in page and page.count("onPressed: null")>=2
+          assert "FirebaseFirestore" not in page
+          assert "FieldValue.increment" not in page
+          assert "SharedPreferences" not in page
+          assert "exports." not in page
+          print("Access/navigation and no-write source gates: PASS")
+          PY
+  stage26-flutter-widget-tests:
+    needs: protect-original-and-manager-access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Compile real new page and test phone/tablet manager preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --project-name d_iraq_ludo --platforms=android "$RUNNER_TEMP/stage26"
+          cp lib/deda_admin_league_page.dart "$RUNNER_TEMP/stage26/lib/"
+          cp test/deda_admin_league_page_stage26_test.dart "$RUNNER_TEMP/stage26/test/"
+          cat > "$RUNNER_TEMP/stage26/lib/deda_backend.dart" <<'DART'
+          // Dependency stub FOR ISOLATED WIDGET COMPILATION ONLY.
+          // The actual DEDA admin backend remains unchanged in the repository.
+          class DedaBackend {
+            static Future<Map<String, dynamic>> currentAdminProfile({
+              bool forceRefresh = false,
+            }) async => <String, dynamic>{
+              'role': 'general_manager',
+              'status': 'active',
+            };
+            static String normalizeAdminRole(dynamic role) => role.toString();
+            static String normalizeAdminStatus(Map<String,dynamic> profile) =>
+                (profile['status'] ?? '').toString();
+          }
+          DART
+          rm "$RUNNER_TEMP/stage26/test/widget_test.dart"
+          cd "$RUNNER_TEMP/stage26"
+          flutter pub get
+          flutter test test/deda_admin_league_page_stage26_test.dart
+          dart analyze lib/deda_admin_league_page.dart
+          echo "UI-only private tests passed; no live league, APK, Firestore or Play."
