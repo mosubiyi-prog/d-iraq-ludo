@@ -91,8 +91,10 @@ jobs:
           assert data['package']=='com.diraq.ludo.d_iraq_ludo'
           assert data['versionCode']==100389
           assert data['completeOwnerDelivery'] is False
-          assert data['weeklyStage14']['demoContestants'] is False
-          assert data['weeklyStage14']['realRankingsAvailable'] is False
+          assert data['weeklyStage13']['demoContestants'] is False
+          assert data['weeklyStage13']['realRankingsAvailable'] is False
+          assert data['activeIdStage14']['preloadedBeforeFirstFrame'] is True
+          assert data['activeIdStage14']['sessionScopedUidOnly'] is True
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
           data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
@@ -129,7 +131,7 @@ jobs:
             --output "$RUNNER_TEMP/deda-weekly-original-100389-artifact/verification.json"
           cp "$RUNNER_TEMP/deda-weekly-original-100389/build/app/outputs/flutter-apk/app-release.apk" \
             "$RUNNER_TEMP/deda-weekly-original-100389-artifact/DEDA-100389-ORIGINAL-WEEKLY-ID-FAST-PRIVATE-QA.apk"
-          sha256sum "$RUNNER_TEMP/deda-weekly-original-100389-artifact/DEDA-100389-ORIGINAL-WEEKLY-SIGNED-PRIVATE-QA.apk" \
+          sha256sum "$RUNNER_TEMP/deda-weekly-original-100389-artifact/DEDA-100389-ORIGINAL-WEEKLY-ID-FAST-PRIVATE-QA.apk" \
             > "$RUNNER_TEMP/deda-weekly-original-100389-artifact/SHA256.txt"
           printf '%s\n' \
             'DEDA ORIGINAL 100389 PRIVATE QA APK, same original app package and signing cert.' \
