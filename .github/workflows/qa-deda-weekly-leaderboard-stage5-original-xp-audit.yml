@@ -1,0 +1,34 @@
+name: DEDA 100387 level XP audit from immutable source NO DEPLOY
+on:
+  push:
+    branches: [deda-weekly-leaderboard-stage5-original-xp-audit-no-deploy-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-weekly-leaderboard-stage5-original-xp-audit.yml'
+      - 'tools/app_stability/tests/test_weekly_leaderboard_original_xp_stage5.py'
+      - 'docs/DEDA_WEEKLY_LEADERBOARD_STAGE5_ORIGINAL_XP_EVIDENCE_2026-10-27.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-leaderboard-stage5-original-xp-audit
+  cancel-in-progress: true
+jobs:
+  restore-and-prove-xp-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Guarantee accepted 100387 source untouched
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/restore_deda_stability_baseline.py
+          echo 'Untouched 100387 release and XP/wallet source verified'
+      - name: Recover and audit actual signed QA source level XP and task points
+        run: |
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_original_xp_stage5.py' -v
+      - name: No credentials, account migration, APK or payment
+        run: |
+          echo 'SOURCE AUDIT ONLY. NO PRODUCTION, NO DIAMOND GRANT, NO TASK OR LEVEL CHANGE.'
