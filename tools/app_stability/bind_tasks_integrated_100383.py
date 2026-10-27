@@ -238,6 +238,7 @@ def bind(root):
     pos=segment.find("await ref.update(")
     finish=segment.find("});",pos)
     if pos<0 or finish<0 or segment.count("await ref.update(")!=1:
+        print('FRIEND_ACCEPT_SHAPE',repr(segment[:2500]))
         raise ValueError('friend accept write shape changed')
     finish+=3
     segment=segment[:finish]+"""
