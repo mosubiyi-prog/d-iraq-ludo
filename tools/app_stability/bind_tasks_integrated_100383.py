@@ -230,22 +230,21 @@ def bind(root):
     a=one(a,"import 'deda_backend.dart';",
           "import 'deda_backend.dart';\nimport 'deda_task_signal_bridge.dart';",
           'social bridge import')
-    a=one(a,
-          """    await ref.update(<String, dynamic>{
-      'status': accept ? 'accepted' : 'rejected',
-      'respondedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });""",
-          """    await ref.update(<String, dynamic>{
-      'status': accept ? 'accepted' : 'rejected',
-      'respondedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    start=a.index("static Future<void> respondToRequest(")
+    end=a.index("static Future<void> removeRelation(",start)
+    segment=a[start:end]
+    # Existing 100382 guard reformats Firestore update across several lines.
+    # Extend ONLY the actual accepted-relationship write, after SDK success.
+    pos=segment.find("await ref.update(")
+    finish=segment.find("});",pos)
+    if pos<0 or finish<0 or segment.count("await ref.update(")!=1:
+        raise ValueError('friend accept write shape changed')
+    finish+=3
+    segment=segment[:finish]+"""
     if (accept) {
-      // ONLY confirmed accepted friendship, never sending/opening a form.
       await DedaTaskSignalBridge.friendAccepted();
-    }""",
-          'actual accepted friendship event')
+    }"""+segment[finish:]
+    a=a[:start]+segment+a[end:]
     social.write_text(a)
     return {'preservedLegacyTaskAwardIds':True,'taskActions':4,
             'financialCodeTouched':False,'receivedPlaceUnchanged':True}
