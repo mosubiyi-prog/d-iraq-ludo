@@ -33,6 +33,15 @@ function requireInteger(n, label) {
   return n;
 }
 
+function iraqDayOfServerInstant(milliseconds) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Baghdad",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(milliseconds));
+  const fields = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  return fields.year + "-" + fields.month + "-" + fields.day;
+}
+
 /**
  * Server-configured seven-day epoch bounds. No fixed start weekday and no
  * client-provided clock; a server-defined Iraq timezone resolver must supply
@@ -75,6 +84,9 @@ function validateFixtureReceipt(week, receipt) {
   }
   const iraqDay = requireText(receipt.iraqDay, "iraq_day",
       /^20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/);
+  if (iraqDay !== iraqDayOfServerInstant(verifiedAtMs)) {
+    fail("client_day_mismatch");
+  }
 
   // For one server Iraq day: one login; one credit per task ID; one credit per
   // correct question ID. Different phones yield the SAME protected event key.
