@@ -1,0 +1,162 @@
+name: DEDA Stage16 ORIGINAL 100391 measured boot ID preload SIGNED PRIVATE QA APK NO DEPLOY
+on:
+  push:
+    branches: [deda-id-stage16-measured-startup-100391-private-qa-2026-10-27]
+    paths:
+      - '.github/workflows/qa-deda-stage16-100391-measured-id-firstframe-private-apk-no-deploy.yml'
+      - 'tools/app_stability/app_package/bind_weekly_stage13.py'
+      - 'tools/app_stability/tests/test_weekly_stage13_original_signed_candidate.py'
+      - 'docs/DEDA_STAGE16_ACTIVE_ID_MEASURED_STARTUP_CHECKPOINT_2026-10-27.md'
+      - 'tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py'
+      - 'tools/app_stability/tests/test_active_id_stage16_measured_startup.py'
+      - 'tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py'
+      - 'tools/app_stability/tests/test_active_id_stage14_original_candidate.py'
+      - 'test/deda_verified_active_id_boot_prewarm_stage14_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: deda-stage16-original-100391-private-only
+  cancel-in-progress: true
+jobs:
+  immutable-original-and-preview-free-home-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Ensure original source, live rules, XP and wallet unchanged from 100387
+        run: |
+          set -euo pipefail
+          git diff --quiet a0dd340e8843162ac5fb89784cb54d0be82b23ec -- lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_migrated_progress.dart lib/traffic_quiz_page.dart pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json functions/index.js functions/package.json tools/app_stability/app_package/prepare.py tools/app_stability/app_package/verify.py tools/restore_deda_stability_baseline.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_stage13_original_signed_candidate.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_active_id_stage14_original_candidate.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_active_id_stage16_measured_startup.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_stage11_original_native_integration.py' -v
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_leaderboard_stage8.py' -v
+          node --test functions/tests/deda_weekly_verified_pair_for_app.test.js functions/tests/deda_weekly_receipts_to_standings.test.js
+      - name: Confirm no production changes or fake user rankings
+        run: echo 'Original DEDA 100387 preserved. Live competition still gated by secure server.'
+  original-100391-signed-private-owner-apk:
+    needs: immutable-original-and-preview-free-home-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Prepare original Android project from signed 100387 source
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-weekly-original-100391"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-weekly-original-100391" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$RUNNER_TEMP/deda-weekly-original-100391"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$RUNNER_TEMP/deda-weekly-original-100391"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$RUNNER_TEMP/deda-weekly-original-100391"
+      - name: Verify fixed page, original 100391 flags and generate original app icon
+        working-directory: ${{ runner.temp }}/deda-weekly-original-100391
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          dart analyze lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_policy.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_verified_active_id_store.dart
+          cp "$GITHUB_WORKSPACE/test/deda_verified_active_id_boot_prewarm_stage14_test.dart" test/
+          flutter test test/deda_verified_active_id_boot_prewarm_stage14_test.dart --no-pub
+          dart run flutter_launcher_icons
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          file=Path('internal-build-inputs.json')
+          data=json.loads(file.read_text())
+          assert data['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert data['versionCode']==100391
+          assert data['completeOwnerDelivery'] is False
+          assert data['weeklyStage13']['demoContestants'] is False
+          assert data['weeklyStage13']['realRankingsAvailable'] is False
+          assert data['activeIdStage14']['preloadedBeforeFirstFrame'] is True
+          assert data['activeIdStage14']['sessionScopedUidOnly'] is True
+          assert data['activeIdStage16']['measuredStartupActive'] is True
+          assert data['activeIdStage16']['measuredStartupBeforeRunApp'] is True
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
+          data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+          file.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n')
+          PY
+      - name: Restore original signing certificate in private workspace
+        working-directory: ${{ runner.temp }}/deda-weekly-original-100391
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+      - name: Build same-package 100391 APK - private owner test only
+        working-directory: ${{ runner.temp }}/deda-weekly-original-100391
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          data=json.loads(Path('internal-build-inputs.json').read_text())
+          assert data['completeOwnerDelivery'] is False
+          assert data['financialRestoreEnabled'] is False
+          assert data['versionCode']==100391
+          command=['flutter','build','apk','--release','--build-number=100391','--no-pub']
+          command += ['--dart-define='+key+'='+str(value).lower() for key,value in data['flags'].items()]
+          subprocess.run(command,check=True)
+          PY
+      - name: Verify original package, certificate, source, portrait assets, permissions
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-weekly-original-100391-artifact"
+          python3 tools/app_stability/app_package/verify.py \
+            "$RUNNER_TEMP/deda-weekly-original-100391" \
+            "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" \
+            --output "$RUNNER_TEMP/deda-weekly-original-100391-artifact/verification.json"
+          cp "$RUNNER_TEMP/deda-weekly-original-100391/build/app/outputs/flutter-apk/app-release.apk" \
+            "$RUNNER_TEMP/deda-weekly-original-100391-artifact/DEDA-100391-ORIGINAL-ID-MEASURED-FAST-PRIVATE-QA.apk"
+          sha256sum "$RUNNER_TEMP/deda-weekly-original-100391-artifact/DEDA-100391-ORIGINAL-ID-MEASURED-FAST-PRIVATE-QA.apk" \
+            > "$RUNNER_TEMP/deda-weekly-original-100391-artifact/SHA256.txt"
+          printf '%s\n' \
+            'DEDA ORIGINAL 100391 PRIVATE QA APK, same original app package and signing cert.' \
+            'Retains 100387 behavior and adds approved royal leaderboard home tile in place of Restaurants quick shortcut only.' \
+            'Stage14 preloads last server-confirmed same-UID display before app first frame. New phones may still wait for remote verification.' \
+            'NO real wallet/XP changes, prize payouts or new production Firebase rules. NOT finished league.' \
+            'DO NOT publish to Play. Stop if Play Protect blocks installation; never bypass security.' \
+            'Back up before private update testing; still requires physical phone/tablet QA.' \
+            > "$RUNNER_TEMP/deda-weekly-original-100391-artifact/READ-ME.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100391-ORIGINAL-ID-MEASURED-FAST-PRIVATE-QA-APK
+          path: |
+            ${{ runner.temp }}/deda-weekly-original-100391-artifact/*.apk
+            ${{ runner.temp }}/deda-weekly-original-100391-artifact/verification.json
+            ${{ runner.temp }}/deda-weekly-original-100391-artifact/SHA256.txt
+            ${{ runner.temp }}/deda-weekly-original-100391-artifact/READ-ME.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Delete temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deda-weekly-original-100391/android/app/deda-release.jks"
