@@ -47,6 +47,16 @@ class DedaRealAppSandboxQa(unittest.TestCase):
             self.assertEqual(main.count('localTrialAccountKey:'),2)
             self.assertIn("child: const Text('فتح مختبر الدوري')",page)
             self.assertIn("DedaWeeklyQaFullTrialPage(",page)
+            self.assertIn("Icons.auto_awesome_rounded",page)
+            self.assertIn("Compact static star glints",page)
+            self.assertIn("Double metallic medal ring",page)
+            self.assertIn("Color(0xFFB58123)",page)
+            self.assertIn("Color(0xFF457FBC)",page)
+            self.assertIn("Color(0xFFB77E5B)",page)
+            for forbidden in ("ListView(", "SingleChildScrollView(", "GridView("):
+                self.assertNotIn(forbidden,page)
+            self.assertTrue(details['podiumGoldSilverBronzeLuxuryPolish'])
+            self.assertTrue(details['originalNoScrollResponsive'])
             self.assertIn("privateQaAccountScope: widget.localTrialAccountKey",screen)
             self.assertIn("الترتيب قيد التحقق من الخادم",page)
             self.assertNotIn('FirebaseFirestore',(
