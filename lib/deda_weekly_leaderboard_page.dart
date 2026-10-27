@@ -138,8 +138,11 @@ class _DedaWeeklyLeaderboardPageState
           width: avatarSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: gold, width: 1.5),
+            gradient: const LinearGradient(colors: [gold, Color(0xFFA9701C), gold]),
+            boxShadow: [BoxShadow(color: gold.withValues(alpha: .25),
+                blurRadius: avatarSize * .25)],
           ),
+          padding: EdgeInsets.all(math.max(1.5, avatarSize * .065)),
           child: CircleAvatar(
             backgroundColor: blue,
             backgroundImage: details?.avatarImage,
@@ -235,18 +238,39 @@ class _DedaWeeklyLeaderboardPageState
                       ]),
                     ),
                   ),
+                  if (isFirst)
+                    Positioned.fill(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('❧', style: TextStyle(
+                            color: gold.withValues(alpha: .70),
+                            fontSize: 35 * scale)),
+                          Text('❧', textDirection: TextDirection.rtl,
+                            style: TextStyle(
+                              color: gold.withValues(alpha: .70),
+                              fontSize: 35 * scale)),
+                        ],
+                      ),
+                    ),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.workspace_premium_rounded,
-                          size: 29 * scale, color: accent),
+                      Text(isFirst ? '👑' : place == 2 ? '♛' : '♕',
+                          style: TextStyle(
+                            fontSize: (isFirst ? 27 : 25) * scale,
+                            color: accent, height: 1)),
                       Container(
-                        width: 65 * scale,
-                        height: 65 * scale,
-                        padding: EdgeInsets.all(4 * scale),
+                        width: (isFirst ? 72 : 65) * scale,
+                        height: (isFirst ? 72 : 65) * scale,
+                        padding: EdgeInsets.all(3 * scale),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: accent, width: 2),
+                          gradient: LinearGradient(colors: [
+                            accent, accent.withValues(alpha: .55), accent]),
+                          boxShadow: [BoxShadow(
+                            color: accent.withValues(alpha: .50),
+                            blurRadius: 13 * scale)],
                         ),
                         child: CircleAvatar(
                           backgroundColor: blue,
@@ -284,11 +308,20 @@ class _DedaWeeklyLeaderboardPageState
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(
                     horizontal: 5 * scale, vertical: 7 * scale),
-                decoration: panel(
-                  isFirst ? const Color(0xFF67400B) : blue,
-                  end: navy,
-                  radius: 16 * scale,
-                  outline: accent,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isFirst
+                        ? const [Color(0xFF775015), Color(0xFF261B13)]
+                        : place == 2
+                            ? const [Color(0xFF174B80), Color(0xFF0B1C36)]
+                            : const [Color(0xFF67413A), Color(0xFF1C1B31)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter),
+                  borderRadius: BorderRadius.circular(16 * scale),
+                  border: Border.all(color: accent, width: 1.1 * scale),
+                  boxShadow: [BoxShadow(
+                    color: accent.withValues(alpha: .16),
+                    blurRadius: 12 * scale)],
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -653,7 +686,8 @@ class DedaLeaderboardHomeCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF09294D), Color(0xFF72511B)],
+              colors: [Color(0xFF081C35), Color(0xFF144573),
+                  Color(0xFF805114)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
