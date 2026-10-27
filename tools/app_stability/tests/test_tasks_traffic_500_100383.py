@@ -38,6 +38,8 @@ class DedaTaskTrafficIntegrated(unittest.TestCase):
             flash.bind(root)
             account.bind(root)
             before=(root/'lib/main.dart').read_text()
+            raw_quiz=(root/'lib/traffic_quiz_page.dart').read_text()
+            print('QUIZ500_SOURCE:',repr(raw_quiz[raw_quiz.find('Future<List<_TrafficQuestion>> _loadOrChooseQuestions'):raw_quiz.find('Future<List<_TrafficQuestion>> _loadOrChooseQuestions')+2200]))
             quiz.bind(root)
             tasks.bind(root)
             after=(root/'lib/main.dart').read_text()
