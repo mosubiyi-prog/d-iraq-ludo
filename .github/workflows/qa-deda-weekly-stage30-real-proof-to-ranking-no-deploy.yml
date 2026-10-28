@@ -1,0 +1,103 @@
+name: DEDA Stage30 REAL emulator server action to weekly XP and rank NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage30-trusted-task-proof-emulator-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage30-real-proof-to-ranking-no-deploy.yml'
+      - 'functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage30_real_firestore_emulator.test.js'
+      - 'tools/app_stability/stage30/**'
+      - 'docs/DEDA_WEEKLY_STAGE30_TRUSTED_ACTION_TO_RANK_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage30-real-emulator-no-deploy
+  cancel-in-progress: true
+jobs:
+  protected-original-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Original DEDA source, real Firebase config and money MUST stay unchanged
+        run: |
+          set -euo pipefail
+          git diff --quiet c4cb183bb41aafa8010d57c9e6b0b004eef22a9d -- \
+            functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_private_trial_local_xp.dart \
+            tools/app_stability/app_package \
+            pubspec.yaml pubspec.lock
+          node --check functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage30_real_firestore_emulator.test.js
+          node - <<'JS'
+          const fs=require("node:fs");
+          const index=fs.readFileSync("functions/index.js","utf8");
+          const src=fs.readFileSync(
+            "functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js","utf8");
+          if(index.includes("deda_weekly_stage30_server_action_proof_emulator"))
+            throw Error("Live Cloud Function export forbidden");
+          for(const token of ["FIRESTORE_EMULATOR_HOST","GCLOUD_PROJECT",
+            "emulatorOnly","no_trusted_action_issuer_for_task",
+            "server_location_share_committed","missing_privileged"]){
+            if(!src.includes(token) && token!=="missing_privileged")
+              throw Error("Missing shadow-proof gate: "+token);
+          }
+          const rules=fs.readFileSync(
+            "tools/app_stability/stage30/firestore.rules","utf8");
+          if(!rules.includes("allow read, write: if false"))
+            throw Error("Emulator-only rules must deny all client access");
+          console.log("PASS — unchanged production code and deny-all local-only rules");
+          JS
+      - name: Stage29 existing owner/session/receipt/ranking regression
+        run: |
+          node --test \
+            functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js \
+            functions/tests/deda_weekly_stage29_task_to_rank_emulator.test.js \
+            functions/tests/deda_weekly_receipts_to_standings.test.js \
+            functions/tests/deda_weekly_verified_pair_for_app.test.js
+  real-local-firestore-integration:
+    needs: protected-original-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install ephemeral local Firebase emulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Check actual Firestore transactions and reject client writes
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage30_real_firestore_emulator.test.js'
+  complete-private-qa:
+    needs: [protected-original-source,real-local-firestore-integration]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "Stage30: server action fixture -> task +20 shadow XP -> same private ranks validated."
+          echo "NOT PRODUCTION: original task server proof producer remains absent."
+          echo "NO Play, Firebase, Firestore rules deployment, XP grant or diamonds credited."
