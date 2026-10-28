@@ -1,0 +1,132 @@
+name: DEDA Stage51 REAL Auth + Functions v2 + Firestore transport QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage51-real-auth-functions-emulator-transport-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage51/**'
+      - 'functions/tests/deda_weekly_stage51_real_auth_functions_transport.test.js'
+      - '.github/workflows/qa-deda-weekly-stage51-auth-functions-emulator-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE51_REAL_AUTH_FUNCTIONS_TRANSPORT_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage51-real-auth-functions-firestore-emulator-qa
+  cancel-in-progress: true
+jobs:
+  protect-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original signed APK, production Cloud Functions, users and Firestore Rules
+        run: |
+          set -euo pipefail
+          git diff --quiet 713c8a526e5ae36d7fc36f8d6d22b45e45a07df8 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            functions/deda_weekly_stage50_auth_appcheck_readonly_preflight_NOT_EXPORTED.js \
+            firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check tools/app_stability/stage51/functions/index.js
+          node --check functions/tests/deda_weekly_stage51_real_auth_functions_transport.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const source=fs.readFileSync('tools/app_stability/stage51/functions/index.js','utf8');
+          const production=fs.readFileSync('functions/index.js','utf8');
+          const probe=fs.readFileSync('functions/tests/deda_weekly_stage51_real_auth_functions_transport.test.js','utf8');
+          if(production.includes('dedaStage51')||production.includes('deda_weekly_stage51'))
+            throw Error('Stage51 CANNOT be exported in production Functions');
+          for(const check of [
+            'dedaStage51AuthOnlyProbe',
+            'dedaStage51ProtectedPreflight',
+            'makeStage50ReadOnlyPreflightCallable',
+            'enforceAppCheck:false',
+            'HOLD_NO_GRANTS',
+            'canCreditDiamonds:false',
+            'readOnly:true',
+          ])if(!source.includes(check))
+            throw Error('Stage51 no-live/read-only invariant missing: '+check);
+          for(const check of [
+            'signInWithPassword','identitytoolkit.googleapis.com',
+            'dedaStage51AuthOnlyProbe',
+            'dedaStage51ProtectedPreflight',
+            'FIREBASE_AUTH_EMULATOR_HOST',
+            'FIREBASE_FUNCTIONS_EMULATOR_HOST',
+            'canCreditDiamonds',
+          ])if(!probe.includes(check))
+            throw Error('Stage51 real Auth/Functions transport coverage missing: '+check);
+          const c=JSON.parse(fs.readFileSync('tools/app_stability/stage51/firebase.json','utf8'));
+          if(c.functions.source!=='functions'||!c.emulators.auth||
+             !c.emulators.functions||!c.emulators.firestore)
+            throw Error('Stage51 must launch real Auth, Functions and Firestore emulators');
+          console.log('PASS: no original APK, production functions, wallet or deployed Rules changes.');
+          JS
+  real-emulator-callable-transport:
+    needs: protect-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GCLOUD_PROJECT: demo-deda-stage51-auth-functions-qa
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      GOOGLE_CLOUD_PROJECT: demo-deda-stage51-auth-functions-qa
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable Firebase Auth + Functions Emulator + Firestore SDKs
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+          npm install --prefix tools/app_stability/stage51/functions --no-audit --no-fund
+      - name: REAL HTTP Auth Emulator unsigned ID token -> Functions emulator V2 callable
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage51/firebase.json \
+            --project demo-deda-stage51-auth-functions-qa \
+            --only auth,functions,firestore \
+            'node --test functions/tests/deda_weekly_stage51_real_auth_functions_transport.test.js'
+      - name: Stage50, Stage49 previous approved behavior regressions on fresh separate Firestore emulator
+        env:
+          GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+          GOOGLE_CLOUD_PROJECT: demo-deda-weekly-xp-stage9
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage50_auth_appcheck_readonly_preflight.test.js'
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage49_server_uid_bound_task_atomic.test.js'
+  private-checkpoint:
+    needs: [protect-production,real-emulator-callable-transport]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage51 only proves network Auth-EMULATOR-issued (UNSIGNED QA) token is accepted/rejected by Functions EMULATOR.'
+          echo 'Stage50 strict App Check option is tested as a rejection/zero-grant boundary, not actual device attestations.'
+          echo 'NO real Firebase production ID-token verification, App Check hardware validation, rewards or old APK revocation.'
+          echo 'NO APK/AAB/Play/cloud deploy. Owner all-additions review BEFORE any build remains mandatory.'
