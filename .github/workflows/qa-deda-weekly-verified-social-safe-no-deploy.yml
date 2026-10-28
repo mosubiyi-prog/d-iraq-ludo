@@ -1,0 +1,91 @@
+name: DEDA weekly verified social safe screen source-only QA NO APK NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-verified-social-screen-qa-no-deploy-2026-10-28
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-verified-social-qa-no-deploy
+  cancel-in-progress: true
+jobs:
+  immutable-original:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Allow only social presentation source/test/report/CI
+        run: |
+          set -euo pipefail
+          BASE=c444cca64673e1a9fbc5a73f99a4baa7b87dcad3
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/changes.txt
+          cat /tmp/changes.txt
+          while IFS= read -r path; do
+            case "$path" in
+              lib/deda_weekly_leaderboard_safe_screen.dart|\
+              test/deda_weekly_verified_social_bridge_test.dart|\
+              docs/DEDA_WEEKLY_VERIFIED_SOCIAL_INTEGRATION_CHECKPOINT_2026-10-28.md|\
+              .github/workflows/qa-deda-weekly-verified-social-safe-no-deploy.yml) ;;
+              *) echo "BLOCK unauthorized change: $path"; exit 1 ;;
+            esac
+          done < /tmp/changes.txt
+          git diff --quiet "$BASE" -- \
+            lib/main.dart lib/traffic_quiz_page.dart lib/deda_backend.dart \
+            lib/deda_pin_auth.dart lib/deda_social_service.dart \
+            lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_leaderboard_page.dart \
+            functions/ firestore.rules firebase.json pubspec.yaml pubspec.lock \
+            android/ assets/ tools/app_stability/
+          grep -q '_isCurrentVerifiedCompetitor' lib/deda_weekly_leaderboard_safe_screen.dart
+          grep -q '_requestVerifiedFriend' lib/deda_weekly_leaderboard_safe_screen.dart
+          echo "PASS: no quiz, reference APK, Firebase rules, wallet or production app changed"
+  flutter-safe-screen-tests:
+    needs: immutable-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Build throwaway Flutter test harness (NEVER APK)
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/verified-social-screen-qa"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
+          for f in \
+            deda_weekly_competitor_public_card.dart \
+            deda_weekly_leaderboard_policy.dart \
+            deda_weekly_leaderboard_tap_surface.dart \
+            deda_weekly_leaderboard_page.dart \
+            deda_weekly_snapshot_decode.dart \
+            deda_weekly_leaderboard_safe_screen.dart; do
+            cp "lib/$f" "$TARGET/lib/$f"
+          done
+          for f in \
+            deda_weekly_verified_social_bridge_test.dart \
+            deda_weekly_leaderboard_safe_screen_test.dart \
+            deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart \
+            deda_weekly_snapshot_decode_test.dart; do
+            cp "test/$f" "$TARGET/test/$f"
+          done
+          cd "$TARGET"
+          flutter pub get
+          dart analyze lib/deda_weekly_leaderboard_safe_screen.dart test/deda_weekly_verified_social_bridge_test.dart
+          flutter test --no-pub \
+            test/deda_weekly_verified_social_bridge_test.dart \
+            test/deda_weekly_leaderboard_safe_screen_test.dart \
+            test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart \
+            test/deda_weekly_snapshot_decode_test.dart
+          test -z "$(find "$TARGET" -name '*.apk' -o -name '*.aab' | head -n 1)"
+      - name: Explicit stop
+        run: |
+          echo "NO APK/AAB, no live users, no real account source, no prize credit, no Play"
+          echo "UI callback path only; original authenticated coordinator still not connected"
