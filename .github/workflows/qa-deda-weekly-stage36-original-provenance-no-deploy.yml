@@ -1,0 +1,92 @@
+name: DEDA Stage36 original task source provenance no deploy
+on:
+  push:
+    branches:
+      - deda-weekly-stage36-original-task-source-provenance-gate-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage36_original_source_provenance_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage36_original_source_provenance.test.js'
+      - '.github/workflows/qa-deda-weekly-stage36-original-provenance-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE36_ORIGINAL_SOURCE_PROVENANCE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage36-original-source-private
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm no original application or deployed backend changed
+        run: |
+          set -euo pipefail
+          git diff --quiet 588ce2eb608fe70243e647a490ca82aa1e82d9b7 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive
+          node --check functions/deda_weekly_stage36_original_source_provenance_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage36_original_source_provenance.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          if(index.includes('deda_weekly_stage36_original_source_provenance'))
+            throw Error('Private Stage36 must never be a deployed Cloud Function');
+          const source=fs.readFileSync(
+            'functions/deda_weekly_stage36_original_source_provenance_NOT_EXPORTED.js','utf8');
+          for(const marker of ['recipient.accountKey','sender.accountKey===recipient.accountKey',
+            'serverVerifiedOriginalTaskClaim:false','serverReconciledOriginalLevelXp:false',
+            'canWriteVerifiedProgress:false','canGrantDiamonds:false',
+            'private_emulator_required']){
+            if(!source.includes(marker))throw Error('Stage36 safety invariant missing: '+marker);
+          }
+          console.log('PASS: source-only audit; no original protected files modified');
+          JS
+  original-firestore-emulator:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Firebase local emulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Test two canonical accounts, attacker cases, freeze and preserved balances
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage36_original_source_provenance.test.js'
+      - name: Re-run existing XP compatibility and unchanged frozen-card tests
+        run: |
+          node --test \
+            functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-success:
+    needs: [protect-original, original-firestore-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage36 private original share source provenance and distinct account checks only.'
+          echo 'No server issuer, approved progress migration, live rules hardening or real XP proof.'
+          echo 'NO Firebase/Play deploy, client APK, AAB, wallet/diamond/rank changes.'
