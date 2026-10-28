@@ -1,0 +1,116 @@
+name: DEDA Stage39 ORIGINAL task local writer cutover fence QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage39-original-client-task-writer-fence-no-deploy-2026-10-28
+    paths:
+      - 'lib/main.dart'
+      - 'lib/deda_stage39_task_writer_fence.dart'
+      - 'test/deda_stage39_task_writer_fence_test.dart'
+      - '.github/workflows/qa-deda-weekly-stage39-original-task-writer-fence-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE39_CLIENT_WRITER_FENCE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage39-original-client-fence-private
+  cancel-in-progress: true
+jobs:
+  protect-original-and-fence-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Audit ONLY narrow original claim-path addition, no backend/wallet mutations
+        run: |
+          set -euo pipefail
+          git diff --quiet fc9efbc9c35db9e6e59c7438431d0ba711939ef1 -- \
+            android/ functions/ firestore.rules firebase.json storage.rules \
+            lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_migrated_progress.dart lib/deda_migrated_progress_firebase.dart \
+            lib/deda_legacy_progress_capture.dart \
+            lib/deda_weekly_leaderboard_page.dart \
+            tools/app_stability/progress_archive pubspec.yaml pubspec.lock
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          source=Path('lib/main.dart').read_text()
+          original=subprocess.check_output([
+            'git','show','fc9efbc9c35db9e6e59c7438431d0ba711939ef1:lib/main.dart'
+          ],text=True)
+          tag="static Future<DedaTaskEventResult> claimTaskReward("
+          end="static Future<DedaTaskEventResult> recordSuccessfulEvent("
+          def section(t):return t.split(tag,1)[1].split(end,1)[0]
+          old=section(original); new=section(source)
+          needle='    final prefs = await SharedPreferences.getInstance();'
+          assert old.count(needle)==1
+          stop='''    // Stage39 private cutover pilot: never issue +5 from the old local writer
+              // while a verified server-only task issuer is still being activated.
+              // Off in all existing/default builds. No legacy preferences are cleared.
+              if (!DedaStage39TaskWriterFence.allowOriginalLocalAward) {
+                return DedaTaskEventResult(
+                  accepted: false,
+                  completedNow: false,
+                  pointsAwarded: false,
+                  pointsDelta: 0,
+                  totalPoints: await totalPoints(),
+                  taskId: taskId,
+                  cycleId: cycle,
+                );
+              }
+
+          '''
+          assert new==old.replace(needle,stop+needle,1), 'Unexpected change to original local reward implementation'
+          assert new.index('allowOriginalLocalAward')<new.index('awards[awardId] = award;')
+          assert new.index('allowOriginalLocalAward')<new.index('_writeState(prefs, accountKey, state);')
+          gate=Path('lib/deda_stage39_task_writer_fence.dart').read_text()
+          assert "defaultValue: false" in gate
+          assert "static bool get allowOriginalLocalAward => !privatePilot;" in gate
+          assert source.count("import 'deda_stage39_task_writer_fence.dart';")==1
+          assert "DedaStage39TaskWriterFence.privatePilot" in source
+          changed=subprocess.check_output(['git','diff','--name-only',
+            'fc9efbc9c35db9e6e59c7438431d0ba711939ef1'],text=True).splitlines()
+          safe={'lib/main.dart','lib/deda_stage39_task_writer_fence.dart',
+            'test/deda_stage39_task_writer_fence_test.dart',
+            '.github/workflows/qa-deda-weekly-stage39-original-task-writer-fence-no-deploy.yml',
+            'docs/DEDA_WEEKLY_STAGE39_CLIENT_WRITER_FENCE_CHECKPOINT_2026-10-28.md'}
+          assert set(changed)<=safe,(set(changed)-safe)
+          print('PASS: default-OFF, exact original +5 writer guarded before local mutation')
+          PY
+  flutter-qa:
+    needs: protect-original-and-fence-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Install original Flutter dependencies without changing lockfile
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze new fence and original main together
+        run: dart analyze lib/deda_stage39_task_writer_fence.dart lib/main.dart
+      - name: Test default unchanged, offline safety and account boundaries
+        run: |
+          flutter test --no-pub test/deda_stage39_task_writer_fence_test.dart
+          flutter test --no-pub test/deda_daily_user_task_display_test.dart
+          flutter test --no-pub test/deda_weekly_stage28_tasks_cta_navigation_test.dart
+  private-complete:
+    needs: [protect-original-and-fence-source, flutter-qa]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage39 guarded +5 original local task writer only, default OFF.'
+          echo 'Original level XP writer, real server issuer and old installed APK enforcement remain to be completed.'
+          echo 'NO APK, Firebase deploy, live balance, receipt or Play changes.'
