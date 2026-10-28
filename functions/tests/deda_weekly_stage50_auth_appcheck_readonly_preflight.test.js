@@ -102,7 +102,7 @@ test("mobile changing installId/trustedInstallIds never authorizes points",async
  await db.doc("deda_account_profiles/"+ACCOUNT).update({
   trustedInstallIds:["mobile_changed_to_claim_new_device"]});
  assertHold(await handler(mk(A)));
- assert.equal((await db.doc("deda_progress_receipts").get()).exists,false);
+ assert.equal((await db.collection("deda_progress_receipts").get()).size,0);
 });
 test("client may not supply own accountKey, XP, week, place, installation or diamonds",async()=>{
  for(const data of [
