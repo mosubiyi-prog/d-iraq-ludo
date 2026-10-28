@@ -1,0 +1,13 @@
+{
+  "name": "deda-stage51-private-functions-auth-transport-qa",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.1.0"
+  }
+}
