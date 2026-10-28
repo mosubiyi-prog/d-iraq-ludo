@@ -50,7 +50,7 @@ jobs:
             'stage46_privileged_legacy_claim_reviewer_TEST_ONLY',
             'HMAC', 'crypto.timingSafeEqual',
             'independent_reviewed_task_claim_required',
-            'old.source', 'server_signed_task_claim_missing',
+            'old?.record', 'server_signed_task_claim_missing',
             'originalLocalCoinsReconciledInFixture',
             'canAuthorizeProduction:false',
           ])if(!(claim+ledger).includes(marker))
