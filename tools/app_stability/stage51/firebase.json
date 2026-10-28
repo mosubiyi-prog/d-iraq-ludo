@@ -1,0 +1,24 @@
+{
+  "functions": {
+    "source": "functions",
+    "codebase": "deda-stage51-transport-qa-private"
+  },
+  "firestore": {
+    "rules": "../stage30/firestore.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  }
+}
