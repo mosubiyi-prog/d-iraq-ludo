@@ -1,0 +1,91 @@
+name: DEDA Stage59 actual Flutter weekly league integration audit NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage59-live-integration-gap-audit-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage59/live_league_integration_audit.cjs'
+      - 'functions/tests/deda_weekly_stage59_original_integration_evidence_audit.test.js'
+      - '.github/workflows/qa-deda-weekly-stage59-live-integration-audit-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE59_ORIGINAL_LIVE_INTEGRATION_GAP_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage59-live-original-integration-audit-no-deploy
+  cancel-in-progress: true
+jobs:
+  exact-changes-no-production-file-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Four files only vs successful Stage58; original DEDA and reference APK safe
+        run: |
+          set -euo pipefail
+          BASE=6cfeedab73c8a3412d3a885260a7d263353cfbbe
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/stage59-allowlist.txt
+          cat /tmp/stage59-allowlist.txt
+          while IFS= read -r file; do
+            case "$file" in
+              tools/app_stability/stage59/live_league_integration_audit.cjs|\
+              functions/tests/deda_weekly_stage59_original_integration_evidence_audit.test.js|\
+              .github/workflows/qa-deda-weekly-stage59-live-integration-audit-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE59_ORIGINAL_LIVE_INTEGRATION_GAP_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "STAGE59_UNAPPROVED_CODE_PATH: $file"; exit 1;;
+            esac
+          done < /tmp/stage59-allowlist.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            assets/ tools/app_stability/progress_archive/ \
+            tools/app_stability/app_package/ \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json
+          node --check tools/app_stability/stage59/live_league_integration_audit.cjs
+          node --check functions/tests/deda_weekly_stage59_original_integration_evidence_audit.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const code=fs.readFileSync('tools/app_stability/stage59/live_league_integration_audit.cjs','utf8');
+          if(code.includes('admin.firestore().doc')||
+             !code.includes('releaseReady:false')||
+             !code.includes('canCreditWeeklyDiamonds:false')||
+             !code.includes('phoneAndTabletTested:false')||
+             !code.includes('STAGE58_GITHUB_BRANCH_SOURCE_NOT_INSTALLED_APK'))
+            throw Error('Stage59 must be read-only truthful source audit');
+          console.log('Source allowlist PASS; no Flutter app, backend, production Rules or asset changes.');
+          JS
+  actual-original-league-integration-evidence:
+    needs: exact-changes-no-production-file-mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Thirty tests against actual original Flutter, Functions, manager pages and Firestore Rules
+        run: |
+          set -euo pipefail
+          node --test functions/tests/deda_weekly_stage59_original_integration_evidence_audit.test.js
+      - name: Publish honest source wiring checklist to GitHub Actions log
+        run: |
+          set -euo pipefail
+          node tools/app_stability/stage59/live_league_integration_audit.cjs
+      - name: No APK, migration, award, backend release or production proof
+        run: |
+          echo 'Stage59 SOURCE-ONLY reviewed against GitHub Stage58 branch, not physical Android 16 phone/tablet or installed APK.'
+          echo 'The design/policy files do not mean full active league integration.'
+          echo 'Original main.dart has no weekly user home route or real verified reader; original backend has no exported weekly award issuer.'
+          echo 'Original GM admin league controls remain disabled; monthly archive and 06:00 card remain staged.'
+          echo 'No production Cloud Functions/Firestore Rules, user XP, balances, frames, premium ID or gifts touched.'
+          echo 'Owner must receive concise COMPLETE ALL-ADDITIONS REVIEW BEFORE ANY APK/AAB.'
