@@ -196,7 +196,7 @@ async function freezePrivateFriendSignedTopTen({
   }));
   const frozen={
    source:SOURCE,emulatorOnly:true,weekId:week.weekId,
-   sealedAtMs:previous?.sealedAtMs??serverNowMs,
+   sealedAtMs:previous?.payload?.sealedAtMs??serverNowMs,
    rows:leaders.map(r=>({
     place:r.place,participantId:r.participantId,
     weeklyXp:r.weeklyXp,verifiedTaskCount:r.verifiedTaskCount,
