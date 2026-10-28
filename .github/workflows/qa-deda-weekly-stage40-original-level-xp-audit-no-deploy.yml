@@ -8,6 +8,7 @@ on:
       - 'tools/app_stability/app_package/bind_weekly_stage40_original_xp_fence.py'
       - 'tools/app_stability/tests/test_weekly_stage40_original_xp_fence.py'
       - 'lib/deda_stage40_original_level_xp_fence.dart'
+      - 'test/deda_stage40_original_level_xp_fence_test.dart'
       - '.github/workflows/qa-deda-weekly-stage40-original-level-xp-audit-no-deploy.yml'
       - 'docs/DEDA_WEEKLY_STAGE40_ORIGINAL_XP_WRITER_CHECKPOINT_2026-10-28.md'
   workflow_dispatch:
@@ -49,3 +50,49 @@ jobs:
         run: |
           echo "Stage40 audit / temporary source-only private QA, not APK or Firebase live cutover."
           echo "No real XP/progress changes; original source immutable; signed device QA pending."
+
+  verify-original-dart-qa:
+    needs: audit-immutable-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Reconstruct original 100380 only in disposable temp directory, add QA fence
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,shutil
+          from tools.restore_deda_stability_baseline import restore
+          from tools.app_stability.app_package.bind_weekly_stage40_original_xp_fence import bind
+          output=Path(os.environ['RUNNER_TEMP'])/'deda-stage40-pristine-original'
+          restore(output)
+          results=bind(output)
+          assert results['taskPointsGuarded'] and results['socialXpGuarded']
+          assert results['socialCoinsGuarded'] and results['defaultProductionUnchanged']
+          shutil.copy2('test/deda_stage40_original_level_xp_fence_test.dart',
+                       output/'test/deda_stage40_original_level_xp_fence_test.dart')
+          print('QA: original source restored from immutable archive; fence bound in temporary workspace only')
+          PY
+      - name: Resolve dependencies only in disposable original Flutter source
+        working-directory: ${{ runner.temp }}/deda-stage40-pristine-original
+        run: flutter pub get
+      - name: Check actual original plus-20 XP wallet compilation and default-off policy
+        working-directory: ${{ runner.temp }}/deda-stage40-pristine-original
+        run: |
+          set -euo pipefail
+          dart analyze --no-fatal-warnings \
+            lib/main.dart lib/deda_stage40_original_level_xp_fence.dart
+          flutter test --no-pub test/deda_stage40_original_level_xp_fence_test.dart
+          echo 'ACTUAL original +5 / +20 XP / +10 social coins source analyzed; flag OFF'
+      - name: Confirm original repository files and production untouched
+        run: |
+          git diff --exit-code -- lib/ functions/ firestore.rules firebase.json pubspec.yaml pubspec.lock
+          echo 'NO signed APK, Play, Firebase deploy, live migration or wallet write'
