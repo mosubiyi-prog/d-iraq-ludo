@@ -14,11 +14,11 @@ const {PROJECT,LEAGUE_ROOT,previewPrivateTopTenFromAppliedXp}=
 const {validateSignedTaskClaimInTransaction}=
   require("../../../functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js");
 const {windowFor}=require(
-  "../../functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js");
+  "../../../functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js");
 const {ROOT:SOURCE_ROOT}=require(
-  "../../functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js");
+  "../../../functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js");
 const {ROOT:EPOCH_ROOT}=require(
-  "../../functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js");
+  "../../../functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js");
 const BINDING_ROOT="deda_weekly_stage62_private_qa_auth_account_bindings";
 const ISSUER="stage62_admin_only_authenticated_emulator_uid_binding";
 const ACCOUNT=/^[0-9]{10,16}$/,UID=/^[A-Za-z0-9_-]{8,128}$/;
@@ -115,7 +115,7 @@ async function previewForAuthedViewer({
    ({place,participantId,displayName,activePublicId,level,
     weeklyXp,verifiedTaskCount,plannedDiamonds}));
  const viewerTag=require(
-   "../../functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js"
+   "../../../functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js"
  ).qaId(account,backendSecret);
  return Object.freeze({
    schema:1,source:"stage62_PRIVATE_SIGNED_XP_PREVIEW_NOT_VERIFIED_LEAGUE",
