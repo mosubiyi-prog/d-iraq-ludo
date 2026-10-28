@@ -1,0 +1,67 @@
+name: DEDA Stage35 existing progress task-claim XP contract no deploy
+on:
+  push:
+    branches:
+      - deda-weekly-stage35-existing-verified-progress-task-receipt-bridge-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage35_existing_progress_task_bridge_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js'
+      - '.github/workflows/qa-deda-weekly-stage35-existing-progress-compatibility-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE35_EXISTING_PROGRESS_COMPATIBILITY_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage35-private-progress-compatible
+  cancel-in-progress: true
+jobs:
+  protected-contract-and-core-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original app, existing progress engine, Firebase and currencies
+        run: |
+          set -euo pipefail
+          git diff --quiet 6f7cc004421166cda6f6b092efd3ffb611e38cbf -- \
+            lib/main.dart lib/deda_backend.dart \
+            functions/index.js firebase.json firestore.rules storage.rules \
+            functions/package.json pubspec.yaml pubspec.lock \
+            tools/app_stability/app_package \
+            tools/app_stability/progress_archive
+          node --check functions/deda_weekly_stage35_existing_progress_task_bridge_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          if(index.includes('deda_weekly_stage35_existing_progress_task_bridge'))
+            throw Error('Stage35 is never allowed as a live Cloud Function');
+          const source=fs.readFileSync('functions/deda_weekly_stage35_existing_progress_task_bridge_NOT_EXPORTED.js','utf8');
+          for(const key of ['progress_archive/reconcile-core.cjs','task-claim-v1',
+            'canWriteRealProgress:false','earnedDiamonds:0',
+            'reviewed_fixture_only','canGrantDiamonds:false']){
+            if(!source.includes(key))throw Error('Stage35 compatibility guard missing: '+key);
+          }
+          console.log('Existing progress source and original DEDA preserved');
+          JS
+      - name: Existing trusted progress ledger regressions and new weekly task adapter
+        run: |
+          set -euo pipefail
+          node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-complete:
+    needs: protected-contract-and-core-tests
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "Existing undeployed progress architecture accepts guarded task receipt compatibility."
+          echo "Not a trusted production source, not cutover, not original level XP or wallet write."
+          echo "No Firebase deployment, APK, AAB or Play."
