@@ -63,6 +63,7 @@ class DedaWeeklyLeaderboardPage extends StatefulWidget {
       rows: [],
       profilesByUid: {},
     ),
+    this.onOpenDailyTasks,
     this.onOpenExistingPublicProfile,
     this.onSendExistingFriendRequest,
     this.friendRelationFor,
@@ -78,6 +79,11 @@ class DedaWeeklyLeaderboardPage extends StatefulWidget {
   final bool previewOnly;
   final DedaLeaderboardViewData current;
   final DedaLeaderboardViewData previous;
+
+  /// Navigate to the EXISTING official daily tasks page; a navigation-only
+  /// action. This must not claim XP, modify a task or grant any diamonds.
+  /// The original home screen supplies this callback in both layouts.
+  final VoidCallback? onOpenDailyTasks;
 
   /// Connected only by authenticated original DEDA profile/social coordinator.
   final Future<void> Function(DedaWeeklyPublicCompetitor)?
@@ -471,22 +477,31 @@ class _DedaWeeklyLeaderboardPageState
         textDirection: TextDirection.rtl,
         children: [
           Expanded(flex: 4,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                    horizontal: 3 * scale, vertical: 6 * scale),
-                decoration: BoxDecoration(
-                  border: Border.all(color: gold, width: 1.5),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: const Key('deda_weekly_continue_daily_tasks'),
+                  onTap: widget.onOpenDailyTasks,
                   borderRadius: BorderRadius.circular(15 * scale),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.trending_up_rounded,
-                        color: gold, size: 13 * scale),
-                    SizedBox(width: 2 * scale),
-                    Flexible(child: fitted('تابع إنجاز المهام',
-                        color: gold, size: 11 * scale)),
-                  ],
+                  splashColor: gold.withValues(alpha: .15),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: 3 * scale, vertical: 6 * scale),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: gold, width: 1.5),
+                      borderRadius: BorderRadius.circular(15 * scale),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.trending_up_rounded,
+                            color: gold, size: 13 * scale),
+                        SizedBox(width: 2 * scale),
+                        Flexible(child: fitted('تابع إنجاز المهام',
+                            color: gold, size: 11 * scale)),
+                      ],
+                    ),
+                  ),
                 ),
               )),
           SizedBox(width: 8 * scale),
