@@ -10,7 +10,7 @@ const {ROOT:SOURCE_ROOT,ISSUER:SOURCE_ISSUER,receiptFor}=require(
  "../deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js");
 const {ROOT:EPOCH_ROOT,ISSUER:EPOCH_ISSUER}=require(
  "../deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js");
-const {ROOT:LEAGUE_ROOT}=require(
+const {LEAGUE_ROOT}=require(
  "../deda_weekly_stage43_cutover_epoch_atomic_NOT_EXPORTED.js");
 const {profilePath}=require(
  "../deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js");
