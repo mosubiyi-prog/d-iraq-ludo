@@ -221,7 +221,8 @@ async function simulateMigratedTaskAndLeagueAtomic({
       if(existingStateEvent!==null||existingReceipt!==null||existingLeague!==null)
         fail("historical_task_conflicting_award");
       return Object.freeze({outcome:"included_in_original_baseline",
-        creditedPoints:0,creditedLevelXp:0,creditedLeagueXp:0,
+        creditedPoints:0,creditedSocialCoins:0,
+        creditedLevelXp:0,creditedLeagueXp:0,
         emulatorOnly:true});
     }
     activeFenceFixture(fence,account,migration);
@@ -243,7 +244,8 @@ async function simulateMigratedTaskAndLeagueAtomic({
           existingLeague.accountKey!==account))
         fail("conflicting_league_replay");
       return Object.freeze({outcome:"already_awarded",
-        creditedPoints:0,creditedLevelXp:0,creditedLeagueXp:0,
+        creditedPoints:0,creditedSocialCoins:0,
+        creditedLevelXp:0,creditedLeagueXp:0,
         emulatorOnly:true});
     }
     if(existingReceipt!==null||existingLeague!==null)
