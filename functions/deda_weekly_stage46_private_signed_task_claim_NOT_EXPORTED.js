@@ -172,20 +172,30 @@ async function issueReviewedTaskClaimFixture({
   return db.runTransaction(async tx=>{
     const read=path=>readerGet(db,path,tx);
     const approved=await verifiedDocuments(read,ctx);
-    const record=sealFields({...ctx,
-      reviewerDecisionId:approved.reviewerDecisionId,
-      serverConfirmedAtMs:serverNowMs});
-    const signature=sign(backendSecret,record);
     const ref=db.doc(confirmedPath(ctx.eventKey));
     const existing=await tx.get(ref);
     if(existing.exists){
+      // Retries from a later clock must be IDEMPOTENT, but must still
+      // revalidate the HMAC and the reviewed original authorization.
       const old=existing.data();
-      if(old.signature!==signature||
-         JSON.stringify(old.record)!==JSON.stringify(record))
+      const original=sealFields({...ctx,
+        reviewerDecisionId:approved.reviewerDecisionId,
+        serverConfirmedAtMs:old?.record?.serverConfirmedAtMs});
+      const expected=sign(backendSecret,original);
+      if(old?.emulatorOnly!==true||old?.canAuthorizeProduction!==false||
+         !safe(original.serverConfirmedAtMs)||
+         original.serverConfirmedAtMs<ctx.sourceCreatedAtMs||
+         original.serverConfirmedAtMs>serverNowMs||
+         old.signature!==expected||
+         JSON.stringify(old.record)!==JSON.stringify(original))
         fail("conflicting_server_claim_confirmation");
       return Object.freeze({outcome:"already_confirmed",
         pointsCredited:0,xpCredited:0,coinsCredited:0,emulatorOnly:true});
     }
+    const record=sealFields({...ctx,
+      reviewerDecisionId:approved.reviewerDecisionId,
+      serverConfirmedAtMs:serverNowMs});
+    const signature=sign(backendSecret,record);
     tx.create(ref,{record,signature,emulatorOnly:true,
       canAuthorizeProduction:false});
     return Object.freeze({outcome:"private_task_claim_confirmed",
