@@ -66,7 +66,7 @@ function strictClaim(x,account,receiptId,dayId,now){
      x.backendCheckedOriginalShare!==true||
      x.backendCheckedActualTaskClaim!==true||
      x.ordinaryTaskPointsConfirmed!==true||
-     x.originalOrdinaryTaskPoints===TASK_POINTS||
+     x.originalOrdinaryTaskPoints!==TASK_POINTS||
      x.levelXpAlreadyApplied!==false||
      !unsigned(x.verifiedAtMs)||x.verifiedAtMs>now||
      now-x.verifiedAtMs>5*60*1000||
@@ -102,7 +102,8 @@ async function simulateLevelXpAndLeagueReceipt({db,request,firstOpenMs,serverNow
     strictReconciled(baseline,account);
     if(existingSnap.exists){
       const old=get(existingSnap,"existing_level_receipt");
-      if(old.emulatorOnly!==true||old.accountKey!==account||
+      if(old.issuer!=="stage34_atomic_level_fixture_v1"||
+         old.emulatorOnly!==true||old.accountKey!==account||
          old.taskId!==TASK||old.dayId!==dayId||
          old.amount!==XP||old.receiptId!==receiptId||
          !["league","frozen"].includes(old.competitionStatus)||
