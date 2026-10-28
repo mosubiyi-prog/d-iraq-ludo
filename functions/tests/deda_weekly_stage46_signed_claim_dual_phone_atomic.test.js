@@ -415,8 +415,10 @@ test("source ACTION without separately signed claim refuses a future frozen-week
  const proof=confirmedPath(eventAt(at));
  assert.equal((await db.doc(proof).get()).exists,false);
  await assert.rejects(run(B,id,at),/server_signed_task_claim_missing|independent_reviewed_task_claim_required/);
- assert.equal((await db.doc(STATE).get()).data().version,2);
- // Restored by full independent review in later frozen-week test.
+ assert.equal((await db.doc(STATE).get()).data().version,1);
+ // Do not contaminate the same-day two-phone concurrency test.
+ await attest(NOW);
+ // Full independent freeze review will be seeded in the later frozen test.
 });
 
 test("two simultaneous authorized phones grant ONE +5/+20 and ONE weekly receipt",async()=>{
