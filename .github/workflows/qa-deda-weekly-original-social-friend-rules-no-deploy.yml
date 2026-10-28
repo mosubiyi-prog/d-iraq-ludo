@@ -1,0 +1,98 @@
+name: DEDA original social auth rules candidate & accepted friend QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-original-social-rules-friend-accepted-qa-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-original-social-friend-private-qa
+  cancel-in-progress: true
+jobs:
+  protect-existing-user-app-wallet-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify only three private social candidate/QA files changed
+        run: |
+          set -euo pipefail
+          BASE=6be7cd2ad536bec517fe4b58c896f14459da9d25
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/deda-social-qa-changes
+          cat /tmp/deda-social-qa-changes
+          while IFS= read -r f; do
+            case "$f" in
+              tools/app_stability/weekly_social_candidate/build_candidate_rules.cjs|\
+              tests/firestore-rules/weekly_original_social_candidate.test.mjs|\
+              .github/workflows/qa-deda-weekly-original-social-friend-rules-no-deploy.yml|\
+              docs/DEDA_WEEKLY_ORIGINAL_SOCIAL_FRIEND_RULES_PRIVATE_2026-10-29.md) ;;
+              *) echo "BLOCK original/production change: $f"; exit 1 ;;
+            esac
+          done </tmp/deda-social-qa-changes
+          git diff --quiet "$BASE" -- lib/ assets/ android/ pubspec.yaml \
+            pubspec.lock firestore.rules firebase.json functions/ \
+            tools/app_stability/app_package/ tests/firestore-rules/package.json
+          node --check tools/app_stability/weekly_social_candidate/build_candidate_rules.cjs
+          node --check tests/firestore-rules/weekly_original_social_candidate.test.mjs
+          ! grep -q 'deda_weekly_original_social_rules' functions/index.js
+  original-social-friendship-real-emulator:
+    needs: protect-existing-user-app-wallet-rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install sandbox-only client/emulator dependencies
+        run: |
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Generate disposable social rules candidate, run actual original client operations
+        run: |
+          set -euo pipefail
+          node tools/app_stability/weekly_social_candidate/build_candidate_rules.cjs
+          cat > firebase.weekly-social.qa.json <<'JSON'
+          {
+            "firestore": {"rules":"firebase.weekly-social.candidate.rules"},
+            "emulators": {"firestore":{"port":8080},"ui":{"enabled":false}}
+          }
+          JSON
+          trap 'rm -f firebase.weekly-social.candidate.rules firebase.weekly-social.qa.json' EXIT
+          node - <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const original=fs.readFileSync('firestore.rules');
+          const candidate=fs.readFileSync('firebase.weekly-social.candidate.rules');
+          if(candidate.length<=original.length||
+             !candidate.toString().includes('match /deda_friendships/{relationId}')||
+             !candidate.toString().includes('match /deda_social_profiles/{publicId}')||
+             candidate.toString().slice(-1000)!==original.toString().slice(-1000)||
+             crypto.createHash('sha256').update(original).digest('hex')!==
+             crypto.createHash('sha256').update(fs.readFileSync('firestore.rules')).digest('hex'))
+            throw Error('Deny candidate that modifies original rules');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.weekly-social.qa.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'cd tests/firestore-rules && node --test weekly_original_social_candidate.test.mjs'
+      - name: Never touch production
+        run: |
+          echo "Candidate social rules are NOT deployed, not production-authoritative friend XP."
+          echo "Original code, Firestore rules, users, XP, diamonds, quiz, APK/Play unchanged."
