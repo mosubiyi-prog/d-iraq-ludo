@@ -14,11 +14,16 @@ const expected=[
 ];
 test('eight original task keys EXACTLY match the original DEDA source',()=>{
  const original=fs.readFileSync('lib/main.dart','utf8');
- const body=original.split('static const List<String> weekly = <String>[')[1].split('];')[0];
- for(const id of expected) {
-  assert.match(body,new RegExp('\\b'+id.replaceAll('_','\\_')+'\\b'));
-  assert.match(original,new RegExp("'"+id+"'"));
- }
+ const definitions=original.split('class DedaTaskIds {')[1]
+   .split('class DedaTaskEventResult')[0];
+ const entries=new Map([...definitions.matchAll(
+   /static const String (\\w+) = '([^']+)';/g,
+ )].map(([,name,value])=>[name,value]));
+ const body=definitions.split('static const List<String> weekly = <String>[')[1]
+   .split('];')[0];
+ const tokens=[...body.matchAll(/([A-Za-z][A-Za-z0-9]*),/g)]
+   .map(([,name])=>name);
+ assert.deepEqual(tokens.map(name=>entries.get(name)),expected);
  assert.deepEqual(gate.TASK_IDS,expected);
  assert.equal(gate.PRIVATE_COVERAGE_COUNT,undefined);
 });
@@ -90,6 +95,6 @@ test('original production function is not using PRIVATE gate as an award issuer'
  const index=fs.readFileSync('functions/index.js','utf8');
  assert.ok(!index.includes('deda_weekly_original_eight_task_source_gate_NOT_EXPORTED'));
  const code=fs.readFileSync('functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js','utf8');
- for(const marker of ['NOT_EXPORTED','realProductionIssuerAvailable:false','readyForRealPrizes:false'])
+ for(const marker of ['Private original-source coverage gate','realProductionIssuerAvailable:false','readyForRealPrizes:false'])
   assert.ok(code.includes(marker),marker);
 });
