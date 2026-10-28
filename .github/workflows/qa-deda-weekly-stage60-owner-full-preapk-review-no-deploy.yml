@@ -1,0 +1,104 @@
+name: DEDA Stage60 ALL owner approved additions complete PRE-APK REPORT HOLD NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage60-owner-preapk-full-scope-review-hold-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage60/owner_preapk_review_manifest.json'
+      - 'tools/app_stability/stage60/owner_preapk_review_gate.cjs'
+      - 'functions/tests/deda_weekly_stage60_owner_preapk_review_gate.test.js'
+      - '.github/workflows/qa-deda-weekly-stage60-owner-full-preapk-review-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE60_OWNER_COMPLETE_PREAPK_REVIEW_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage60-owner-approval-pre-apk-report-hardhold-no-deploy
+  cancel-in-progress: true
+jobs:
+  preserve-all-original-sources-and-owner-phone-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact five-file allowlist against Stage59 successful HEAD
+        run: |
+          set -euo pipefail
+          BASE=926eb6cf11e7a42648913bd5b791814cd9c90d7c
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/deda-stage60-changes.txt
+          cat /tmp/deda-stage60-changes.txt
+          while IFS= read -r p; do
+            case "$p" in
+              tools/app_stability/stage60/owner_preapk_review_manifest.json|\
+              tools/app_stability/stage60/owner_preapk_review_gate.cjs|\
+              functions/tests/deda_weekly_stage60_owner_preapk_review_gate.test.js|\
+              .github/workflows/qa-deda-weekly-stage60-owner-full-preapk-review-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE60_OWNER_COMPLETE_PREAPK_REVIEW_2026-10-28.md) ;;
+              *) echo "STAGE60_REFUSE_CHANGED_ORIGINAL_APP_OR_UNAPPROVED_PATH: $p"; exit 1;;
+            esac
+          done </tmp/deda-stage60-changes.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock assets/ \
+            tools/app_stability/progress_archive/ \
+            tools/app_stability/app_package/ \
+            tools/app_stability/stage54/ \
+            tools/app_stability/stage55/ \
+            tools/app_stability/stage56/ \
+            tools/app_stability/stage57/ \
+            tools/app_stability/stage58/ \
+            tools/app_stability/stage59/ \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json
+          node --check tools/app_stability/stage60/owner_preapk_review_gate.cjs
+          node --check functions/tests/deda_weekly_stage60_owner_preapk_review_gate.test.js
+          node -e 'JSON.parse(require("node:fs").readFileSync("tools/app_stability/stage60/owner_preapk_review_manifest.json","utf8"));console.log("Source immutable and JSON valid")'
+  honest-report-validation:
+    needs: preserve-all-original-sources-and-owner-phone-reference
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Thirty source-grounded safeguards against false release and incomplete owner report
+        run: |
+          set -euo pipefail
+          node --test functions/tests/deda_weekly_stage60_owner_preapk_review_gate.test.js
+      - name: Evaluate owner pre-APK HOLD and 33 original-source-backed features
+        run: |
+          set -euo pipefail
+          node tools/app_stability/stage60/owner_preapk_review_gate.cjs
+      - name: Arabic owner checklist must retain all important sections
+        run: |
+          set -euo pipefail
+          FILE=docs/DEDA_WEEKLY_STAGE60_OWNER_COMPLETE_PREAPK_REVIEW_2026-10-28.md
+          for phrase in \
+            "33 مجموعة" "20 سؤالاً أساسياً" "4 خيارات" "3 اختيارات" \
+            "المرحلة 59" "المرحلة 58" "100342" "100391" \
+            "مليون ماسة" "10000 ماسة" "1000 ماسة" \
+            "هداياي" "المركز الثاني" "إطارات" "00:00" "06:00" \
+            "المرحلة 60" "موافقة" "الهاتف والتابلت"; do
+            if ! grep -Fq "$phrase" "$FILE"; then
+              echo "STAGE60_OWNER_REPORT_MISSING_REQUIRED_TOPIC: $phrase"
+              exit 1
+            fi
+          done
+          echo "PASS complete owner-review document validated; no build authorized"
+      - name: NO APK AAB Google Play production Firebase or real-account writes
+        run: |
+          echo 'STAGE60 CI PASS = inventory and blockers accurate; NOT release ready.'
+          echo 'No APK/AAB prepared, no Android signing, no Google Play release.'
+          echo 'No Firestore Rules, Functions, App Check settings or real wallets changed.'
+          echo 'Owner must review all additions and approve before ANY build.'
