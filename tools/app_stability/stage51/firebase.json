@@ -4,7 +4,7 @@
     "codebase": "deda-stage51-transport-qa-private"
   },
   "firestore": {
-    "rules": "../stage30/firestore.rules"
+    "rules": "firestore.rules"
   },
   "emulators": {
     "auth": {
