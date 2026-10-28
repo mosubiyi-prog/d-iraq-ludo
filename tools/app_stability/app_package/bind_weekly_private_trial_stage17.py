@@ -163,33 +163,3 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('project',type=Path)
     print(json.dumps(bind(parser.parse_args().project),ensure_ascii=False))
-)
-    p=one(p,footer_anchor,footer_replacement,'footer private XP notice')
-    page.write_text(p)
-    shutil.copy2(ROOT/ADDITION,project/ADDITION)
-    modifications={rel for rel,old in data['sourceHashes'].items()
-                   if sha(project/rel)!=old}
-    expected={'lib/main.dart','lib/deda_weekly_leaderboard_safe_screen.dart',
-              'lib/deda_weekly_leaderboard_page.dart'}
-    if modifications!=expected:raise ValueError('Unexpected changed files '+repr(modifications))
-    data['sourceHashes']={str(p.relative_to(project)):sha(p) for p in
-                          (project/'lib').rglob('*.dart')}
-    data['sourceHashes'].update({
-        p:sha(project/p) for p in ('pubspec.yaml','pubspec.lock')})
-    data['versionCode']=100392
-    data['weeklyStage17']={
-      'privateQa':True,'ownAccountLocalTrialXp':True,
-      'midnightRefreshOnResume':True,'taskAndXpDualReceiptRequired':True,
-      'noForgedGlobalRanks':True,'serverIssuedResults':False,
-      'verifiedProductionWeeklyLeague':False,'realPrizesCredited':False,
-      'originalWalletXpUnchanged':True,
-      'provisionalTrialWeekStart':'Monday 00:00 Iraq',
-    }
-    data['purpose']='ORIGINAL 100392 private TASK midnight trial, NO REAL LEAGUE'
-    manifest.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
-    return data['weeklyStage17']
-
-if __name__=='__main__':
-    parser=argparse.ArgumentParser()
-    parser.add_argument('project',type=Path)
-    print(json.dumps(bind(parser.parse_args().project),ensure_ascii=False))
