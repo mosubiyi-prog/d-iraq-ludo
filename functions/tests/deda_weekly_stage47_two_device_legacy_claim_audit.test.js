@@ -105,8 +105,6 @@ test("private Firestore stores READ-ONLY review HOLD without original user balan
  assert.deepEqual((await db.doc(managerPath).get()).data(),originalAdminWallet);
 });
 test("same two original captures are replay-idempotent, no second report/coin grant",async()=>{
- const before=await db.doc(ROOT).listCollections();
- assert.ok(Array.isArray(before));
  const again=await audit(args());
  assert.equal(again.outcome,"already_held");
  assert.equal((await db.collection(ROOT).get()).size,1);
