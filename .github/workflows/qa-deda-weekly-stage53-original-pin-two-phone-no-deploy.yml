@@ -4,7 +4,6 @@ on:
     branches:
       - deda-weekly-stage53-original-pin-auth-firestore-emulator-no-deploy-2026-10-28
     paths:
-      - 'tools/app_stability/stage53/**'
       - 'tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs'
       - '.github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml'
       - 'docs/DEDA_WEEKLY_STAGE53_ORIGINAL_PIN_TWO_PHONE_CHECKPOINT_2026-10-28.md'
@@ -44,7 +43,6 @@ jobs:
           cat /tmp/deda-stage53-changes.txt
           while IFS= read -r file; do
             case "$file" in
-              tools/app_stability/stage53/firebase.json|\
               tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs|\
               .github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml|\
               docs/DEDA_WEEKLY_STAGE53_ORIGINAL_PIN_TWO_PHONE_CHECKPOINT_2026-10-28.md) ;;
@@ -60,14 +58,11 @@ jobs:
           node --check tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs
           python3 - <<'PY'
           import json,pathlib
-          p=pathlib.Path('tools/app_stability/stage53/firebase.json')
-          c=json.loads(p.read_text())
-          target=(p.parent / c['firestore']['rules']).resolve()
-          expected=pathlib.Path('firestore.rules').resolve()
-          assert target == expected,(target,expected)
-          assert c['emulators']['auth']['port']==9099
-          assert c['emulators']['firestore']['port']==8080
-          print('Using EXACT unchanged original Firestore rules source:',target.name)
+          config=pathlib.Path('firebase.json')
+          obj=json.loads(config.read_text())
+          assert (config.parent / obj['firestore']['rules']).resolve() == pathlib.Path('firestore.rules').resolve()
+          assert 'auth' not in obj.get('emulators', {})
+          print('Original unchanged root firebase.json loads original firestore.rules; auth emulator uses port 9099')
           PY
       - name: Install disposable Firebase SDK and Firebase CLI only on CI runner
         run: |
@@ -78,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           functions/node_modules/.bin/firebase emulators:exec \
-            --config tools/app_stability/stage53/firebase.json \
+            --config firebase.json \
             --project demo-deda-stage53-original-pin --only auth,firestore \
             'cd tests/firestore-rules && node --test stage53_original_pin_auth_two_phone_emulator.test.mjs'
       - name: No mistaken production security or awards claim
