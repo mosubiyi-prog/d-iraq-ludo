@@ -71,7 +71,6 @@ function markerBody(d){
 }
 function verifyMarker(d,docId,week,now,key){
  const m=markerBody(d);
- if(digest(key,m)==="")fail("IMPOSSIBLE");
  const mac=crypto.createHmac("sha256",key)
   .update("DEDA_PRIVATE_FRIEND_ATOMIC_XP_MARKER_V1\n")
   .update(JSON.stringify(m)).digest("hex");
@@ -164,7 +163,7 @@ async function freezePrivateFriendSignedTopTen({
   }
   const records=[];
   for(const row of accounts.values()){
-   const t=await reader(TALLY_ROOT+"/"+week.weekId+"_"+row.accountKey);
+   const t=await reader.get(TALLY_ROOT+"/"+week.weekId+"_"+row.accountKey);
    if(!t||t.schema!==1||t.issuer!==EVENT_ISSUER||
       t.emulatorOnly!==true||t.canAuthorizeProduction!==false||
       t.canCreditOriginalXp!==false||t.canCreditDiamonds!==false||
@@ -174,7 +173,7 @@ async function freezePrivateFriendSignedTopTen({
       t.approvedTaskCount!==row.verifiedTaskCount||
       t.lastOriginalActionAtMs!==row.reachedAtMs)
     fail("MISSING_OR_CHANGED_SIGNED_TALLY");
-   const p=await reader(profilePath(row.accountKey,backendSecret));
+   const p=await reader.get(profilePath(row.accountKey,backendSecret));
    if(!p||p.issuer!=="stage44_private_profile_fixture_only"||
       p.emulatorOnly!==true||p.accountKey!==row.accountKey||
       typeof p.displayName!=="string"||!NAME.test(p.displayName)||
