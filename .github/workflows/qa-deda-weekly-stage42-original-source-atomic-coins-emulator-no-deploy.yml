@@ -1,0 +1,113 @@
+name: DEDA Stage42 original server-verified share +5/+20/+10 atomic emulator NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage42-original-share-server-evidence-coins-atomic-qa-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage42_original_action_migrated_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage42_real_original_action_coins_atomic.test.js'
+      - '.github/workflows/qa-deda-weekly-stage42-original-source-atomic-coins-emulator-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE42_ORIGINAL_SHARE_ACTION_COINS_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage42-original-event-and-coins-emulator-private
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original approved APK sources and all live wallets/rules
+        run: |
+          set -euo pipefail
+          git diff --quiet c071ab51e3dc67cc2729c84ba4d0966ca9513a36 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            tools/app_stability/progress_archive pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage42_original_action_migrated_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage42_real_original_action_coins_atomic.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          const source=fs.readFileSync('functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js','utf8');
+          const award=fs.readFileSync('functions/deda_weekly_stage42_original_action_migrated_atomic_NOT_EXPORTED.js','utf8');
+          if(index.includes('deda_weekly_stage42_'))
+            throw Error('STAGE42 must NOT be exported to production');
+          for(const value of [
+            'sourceCreatedAtMs','originalLocalClaimAwarded',
+            'UNKNOWN_REQUIRES_MIGRATION_REVIEW',
+            'coinsGranted:0','xpGranted:0',
+            'same_canonical_account_or_untrusted_install'
+          ])if(!source.includes(value))
+            throw Error('Stage42 source action validation weakened: '+value);
+          for(const value of [
+            'loadMigratedContext','receiptFor(account,dayId)',
+            'coins:10', 'activeFenceFixture',
+            'included-in-baseline',
+            'core.applyEvent(state,receipt)',
+            'server_verified_original_share_action_required',
+            'sourceCreatedAtMs',
+            'leagueEligible=clock.phase==="active"'
+          ])if(!(award+source).includes(value))
+            throw Error('Stage42 atomic cutover invariant missing: '+value);
+          console.log('Protected live project; all Stage42 source and rewards are private emulator only');
+          JS
+  real-firestore-qa:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install simulator dependencies without any production deployment
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Server-read original SHARE action then +5/+20/+10 ledger atomics on REAL LOCAL emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage42_real_original_action_coins_atomic.test.js'
+      - name: Existing Stage38 transaction and original progress reviewer regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-complete:
+    needs: [protect-original, real-firestore-qa]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "Stage42 verified original cross-account share ACTION in a real local Firestore emulator, NOT old phone reward history."
+          echo "Correct task +5; lifetime XP +20; social coins +10 and weekly XP +20 active / +0 frozen."
+          echo "Migration and writer cutoff are still PRIVATE reviewer + simulated fence fixtures."
+          echo "NO production issuer, AppCheck deployment, user wallet writes, signed APK/AAB, Rules or Play."
+          echo "Owner pre-APK review mandatory. Do not prepare an app build without reporting all additions."
