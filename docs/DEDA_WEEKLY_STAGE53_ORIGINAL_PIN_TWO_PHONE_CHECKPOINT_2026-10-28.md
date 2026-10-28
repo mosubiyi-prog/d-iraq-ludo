@@ -2,11 +2,11 @@
 
 Date: 2026-10-28. Isolated private branch: \`deda-weekly-stage53-original-pin-auth-firestore-emulator-no-deploy-2026-10-28\`.
 Approved successful Stage52 parent: \`75b38f9289edc13cad579289dbc434e553856ae4\`, CI https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40727575596.
-This branch ONLY adds a client-protocol test, CI workflow, and this checkpoint; the unmodified root `firebase.json` already configures the original rules. The first experimental nested config was removed after Firebase rejected its out-of-project rules path. It does NOT edit \`lib/\`, original \`firestore.rules\`, production Cloud Functions, app APK or user wallet.
+This branch ONLY adds a client-protocol test, CI workflow, and this checkpoint; the unmodified root `firebase.json` configures the original rules. The first experimental nested config was removed after Firebase rejected its out-of-project rules path. Since root firebase.json has NO Auth Emulator declaration, CI creates and removes an **UNTRACKED TEMPORARY root-local emulator config** that references the **same unchanged original rules** and explicitly starts anonymous Auth at port 9099 plus Firestore at 8080; this file is never committed or deployed. It does NOT edit \`lib/\`, original \`firestore.rules\`, production Cloud Functions, app APK or user wallet.
 
 ## Important: what this DOES test
 - Firebase Auth Emulator generates **distinct anonymous UIDs** on independent simulated phone clients using the Firebase JavaScript SDK.
-- Firebase Firestore Emulator loads the **unchanged repo's actual \`firestore.rules\`**, not a custom allow-all test copy. CI asserts that the unchanged root `firebase.json` resolves to the original repository rules file.
+- Firebase Firestore Emulator loads the **unchanged repo's actual \`firestore.rules\`**, not a custom allow-all test copy. CI asserts that the unchanged root `firebase.json` resolves to the original repository rules file. The runtime temporary config uses the same original rules, and is deleted with a CI shell trap.
 - The test reconstructs existing \`DedaPinAuth\` Firestore protocol by reading the actual Dart source: atomic creation of \`deda_credentials/{accountKey}\` and \`deda_account_directory/{accountKey}\`, writes a \`deda_auth_attempts/{uid}\` proof with a six-digit PIN, then \`deda_sessions/{uid}\` and \`deda_account_profiles/{accountKey}\`, and mirrors a \`users/{uid}\` profile.
 - Tests valid and wrong PIN, direct credential reads, second different UID with same account, unauthorized profile read, client-mutability of \`trustedInstallIds\`, borrowed installation-string login **without PIN** under original Rules, and repeated invalid attempts followed by correct PIN (absence of server-wide lockout at this layer). No real credentials are used or logged.
 
@@ -21,6 +21,11 @@ This branch ONLY adds a client-protocol test, CI workflow, and this checkpoint; 
 - \`tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs\` (10 sequential test cases, synthesized account and phones, real client SDK network to local emulators).
 - \`.github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml\` (exact 3-file allowlist; CI installs disposable Firebase tooling; checks source mutation guard).
 - This checkpoint. **Do not claim completion until final HEAD's CI run is green.**
+
+## CI test evidence (source/test commit before this final checkpoint update)
+- https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40729321735 at `5410894fc5b596f9150c61950fd20c3f633a777c`: **10 tests PASSED, 0 FAILED, 0 SKIPPED** with the actual original repo Firestore rules and real local Auth Emulator anonymous sign-in. Source-guard and no-production assertions passed.
+- This *validates* the two-UID account path and the client-mutable install-ID trust weakness in the **test environment only**. It does **not** demonstrate any actual attacker accessed a real account; no production users were accessed.
+- The final checkpoint HEAD must itself have green CI before reporting this stage complete.
 
 ## Critical production blockers still open
 1. Design a **backend-owned** identity challenge with per-account and per-device abuse throttling; preserve existing users' PIN sign-in until safe side-by-side upgrade and controlled cutover. Do not change existing production Rules blindly.
