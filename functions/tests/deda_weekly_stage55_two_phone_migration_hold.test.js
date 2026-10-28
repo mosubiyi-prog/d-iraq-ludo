@@ -66,7 +66,7 @@ async function seed(account,u1,u2,opts={}){
    batch.set(db.doc("users/"+uid+"/wallet/original"),
       opts.equalWallets?originalWallet:index?nextWallet:originalWallet);
   batch.set(db.doc("deda_sessions/"+uid),{
-   uid,accountKey,installId:"device-copyable",
+   uid,accountKey:account,installId:"device-copyable",
    signedInAt:0,lastSeenAt:0
   });
  }
