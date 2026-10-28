@@ -1,0 +1,157 @@
+name: DEDA original registered-place completion plus backend action proof NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-original-place-share-action-bridge-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-original-place-share-proof-and-client-qa
+  cancel-in-progress: true
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect ALL original sources, user balances and Play
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=bc65bb4bec33fcf5fc762bd9ed1aad3ec4b4c63a
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/changed.txt
+          cat /tmp/changed.txt
+          while IFS= read -r path; do
+            case "$path" in
+              functions/deda_weekly_original_published_place_action_NOT_EXPORTED.js|\
+              functions/tests/deda_weekly_original_published_place_action.test.js|\
+              tools/app_stability/app_package/bind_weekly_registered_place_completion_private.py|\
+              docs/DEDA_WEEKLY_ORIGINAL_REGISTERED_PLACE_ACTION_INTEGRATION_2026-10-29.md|\
+              .github/workflows/qa-deda-weekly-original-registered-place-qa-no-deploy.yml) ;;
+              *) echo "NO ORIGINAL / ADMIN / FINANCIAL SOURCE EDIT: $path"; exit 1 ;;
+            esac
+          done </tmp/changed.txt
+          git diff --quiet "$BASE" -- lib/ android/ assets/ functions/index.js \
+            functions/package.json firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock tools/app_stability/progress_archive/
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_registered_place_completion_private.py
+          node --check functions/deda_weekly_original_published_place_action_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_original_published_place_action.test.js
+          ! grep -q 'deda_weekly_original_published_place_action_NOT_EXPORTED' functions/index.js
+          node --test functions/tests/deda_weekly_original_eight_task_source_gate.test.js
+  real-firestore-private-place-proof:
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install dedicated simulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Confirm real original published-place action, replay and forgery safety
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_original_published_place_action.test.js'
+  original-app-temporary-task-completion:
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Restore original verified DEDA QA chain, then apply only successful registered-place completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-original-place-qa"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
+          python3 tools/app_stability/app_package/prepare.py "$TARGET" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$TARGET"
+          python3 tools/app_stability/app_package/restore_weekly_stage17_legacy_screen_only.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$TARGET"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_account_scope_stage61.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_registered_place_completion_private.py "$TARGET"
+          TARGET="$TARGET" python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          p=Path(os.environ['TARGET'])
+          meta=json.loads((p/'internal-build-inputs.json').read_text())
+          assert meta['weeklyRegisteredPlaceCompletionFix']['originalPostShareCompletionSignal']
+          assert meta['weeklyRegisteredPlaceCompletionFix']['realXpBalanceWrite'] is False
+          assert meta['weeklyRegisteredPlaceCompletionFix']['quizChanged'] is False
+          main=(p/'lib/main.dart').read_text()
+          assert main.count("DedaWeeklyAccountViewGate(")==2
+          assert main.count("DedaWeeklyLeaderboardSafeScreen(")==2
+          assert main.count("DedaTaskEvent.registeredPlaceShared,\n        );")==1
+          assert main.index("await DedaBackend.createLocationShare(") < main.index("DedaTaskEvent.registeredPlaceShared,\n        );")
+          assert main.count("DedaWeeklyOriginalPublicProfileViewer.open(")==2
+          print("PASS: original DEDA approved-place task completes after successful share only, both league routes intact")
+          PY
+      - name: Static Flutter original app and protected social regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-original-place-qa"
+          cp test/deda_weekly_original_public_profile_readonly_test.dart "$TARGET/test/"
+          cp test/deda_weekly_account_view_gate_stage61_test.dart "$TARGET/test/"
+          cp test/deda_weekly_verified_social_bridge_test.dart "$TARGET/test/"
+          cd "$TARGET"
+          flutter pub get --enforce-lockfile
+          set +e
+          dart analyze --format=machine lib/main.dart lib/deda_weekly_leaderboard_safe_screen.dart \
+            > "$RUNNER_TEMP/deda-place-analysis.txt" 2>&1
+          rc=$?
+          set -e
+          if grep -q '^ERROR|' "$RUNNER_TEMP/deda-place-analysis.txt"; then
+            cat "$RUNNER_TEMP/deda-place-analysis.txt"
+            exit 1
+          fi
+          if [ "$rc" -ne 0 ] && ! grep -Eq '^(WARNING|INFO)[|]' "$RUNNER_TEMP/deda-place-analysis.txt"; then
+            cat "$RUNNER_TEMP/deda-place-analysis.txt"
+            exit 1
+          fi
+          flutter test --no-pub \
+            test/deda_weekly_original_public_profile_readonly_test.dart \
+            test/deda_weekly_account_view_gate_stage61_test.dart \
+            test/deda_weekly_verified_social_bridge_test.dart
+          test -z "$(find "$TARGET" -name '*.apk' -o -name '*.aab' | head -n 1)"
+      - name: No export/release
+        run: |
+          echo "Original app and quiz untouched. Temporary candidate only."
+          echo "NO user data or wallet mutation, NO Firebase deploy or Play, NO APK"
