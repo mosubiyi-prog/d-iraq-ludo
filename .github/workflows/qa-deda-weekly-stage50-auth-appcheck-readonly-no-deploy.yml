@@ -1,0 +1,114 @@
+name: DEDA Stage50 Firebase v2 Auth AppCheck read-only cutover preflight NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage50-auth-appcheck-readonly-preflight-emulator-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage50_auth_appcheck_readonly_preflight_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage50_auth_appcheck_readonly_preflight.test.js'
+      - '.github/workflows/qa-deda-weekly-stage50-auth-appcheck-readonly-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE50_AUTH_APPCHECK_PREFLIGHT_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage50-private-auth-appcheck-hold-gate
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard original APK, Flutter, production Cloud Functions and Firestore Rules
+        run: |
+          set -euo pipefail
+          git diff --quiet 2e2b0818d998fc6eb393f51475f6c84f7faa9567 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firestore.rules firebase.json storage.rules \
+            pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage50_auth_appcheck_readonly_preflight_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage50_auth_appcheck_readonly_preflight.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const idx=fs.readFileSync('functions/index.js','utf8');
+          const code=fs.readFileSync('functions/deda_weekly_stage50_auth_appcheck_readonly_preflight_NOT_EXPORTED.js','utf8');
+          if(idx.includes('deda_weekly_stage50_'))
+            throw Error('Stage50 must not be exported from production index');
+          for(const m of [
+            'enforceAppCheck:true',
+            'consumeAppCheckToken:true',
+            'HOLD_NO_GRANTS',
+            'canCreditDiamonds:false',
+            'productionRewardReady:false',
+            'canCreditLeagueXp:false',
+            'request?.auth?.uid',
+            'request?.app?.appId',
+            'real-old-apk-server-write-cutover-not-verified',
+          ])if(!code.includes(m))throw Error('Stage50 fail-closed marker missing '+m);
+          console.log('STAGE50_REWARD_GATE_NEVER_EXPORTS_OR_CREDITS_REAL_WALLETS');
+          JS
+  local-callable-contract:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable Firebase SDK and Local Firestore Emulator tools
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Stage50 actual Firebase v2 onCall options + read-only Auth/AppCheck contract local emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage50_auth_appcheck_readonly_preflight.test.js'
+      - name: Stage49 UID-bound original reward and Stage46 signed task regressions on clean emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage49_server_uid_bound_task_atomic.test.js'
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js'
+      - name: Original wallet migration and approved weekly freeze regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  final-private-only:
+    needs: [protect-original,local-callable-contract]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage50 Callable transport declares enforceAppCheck and consumeAppCheckToken; NOT deployed.'
+          echo 'Unit tests simulate auth/app context; cannot independently certify real ID tokens or device integrity.'
+          echo 'Read-only HOLD gate authorizes no original task XP, weekly rankings, gifts, social coins or diamonds.'
+          echo 'No Firebase/Play deployment, no APK/AAB. Owner all-additions review required BEFORE ANY private build.'
