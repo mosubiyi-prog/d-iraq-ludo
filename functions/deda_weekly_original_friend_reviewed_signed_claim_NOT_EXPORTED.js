@@ -187,6 +187,48 @@ async function validatePrivateReviewedFriendClaim({
     eventKey});
  });
 }
+/**
+ * Transaction-scoped validator for a PRIVATE candidate league XP ledger.
+ * IMPORTANT: untrusted client data is never accepted; this merely checks
+ * synthetic fixture integrity against the SAME Firestore transaction that
+ * would write a *separate QA-only* weekly event. No live XP entitlement.
+ */
+async function validatePrivateFriendClaimInTransaction({
+ reader,backendSecret,accountKey,dayId,eventKey,serverNowMs
+}){
+ if(typeof reader?.get!=="function"||
+    process.env.GCLOUD_PROJECT!==PROJECT||
+    process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080"||
+    process.env.DEDA_FRIEND_REVIEW_EMULATOR_ONLY!=="true"||
+    !Buffer.isBuffer(backendSecret)||backendSecret.length<32||
+    !okay(serverNowMs))fail("PRIVATE_TRANSACTION_READER_REQUIRED");
+ const stored=await reader.get(ROOT+"/"+eventKey);
+ const issuedAtMs=stored?.record?.issuedAtMs;
+ if(!okay(issuedAtMs)||issuedAtMs>serverNowMs||
+    serverNowMs-issuedAtMs>300000)
+   fail("SIGNED_FRIEND_NOT_FRESH");
+ const record=await checked(path=>reader.get(path),{
+   accountKey,dayId,eventKey,issuedAtMs
+ });
+ const digest=sign(backendSecret,record);
+ if(stored?.emulatorOnly!==true||
+    stored.canAuthorizeProduction!==false||
+    !timingEquals(stored.signature,digest)||
+    JSON.stringify(record)!==JSON.stringify(stored.record)||
+    record.actuallyCreditedXp!==0||
+    record.actuallyCreditedLeagueXp!==0||
+    record.actuallyCreditedDiamonds!==0||
+    record.oldApkRevocationVerified!==false)
+   fail("SIGNED_FRIEND_REVIEW_INVALID");
+ return Object.freeze({emulatorOnly:true,
+   canAuthorizeProduction:false,
+   verifiedInSameTransaction:true,
+   canCreditXp:false,canCreditDiamonds:false,
+   eventKey,dayId,accountKey,approvedAtMs:record.approvedAtMs,
+   originalTaskReceipt:originalClaim(accountKey,dayId).receipt
+ });
+}
 module.exports=Object.freeze({PROJECT,ROOT,REVIEW_ISSUER,CLAIM_ISSUER,
  reviewPath,sealFields,sign,issuePrivateReviewedFriendClaim,
- validatePrivateReviewedFriendClaim});
+ validatePrivateReviewedFriendClaim,
+ validatePrivateFriendClaimInTransaction});
