@@ -119,7 +119,17 @@ async function seed(){
   await batch.commit();
 }
 test.before(async()=>{await seed();});
-test.after(async()=>deleteApp(app));
+test.after(async()=>{
+ // Prevent Stage44's 14 synthetic receipts from contaminating the
+ // independent Stage43 legacy test that checks collection size === 1.
+ // No live/project deletion: GCLOUD_PROJECT is the fixed emulator project.
+ const own=await db.collection(LEAGUE_ROOT)
+   .where("weekId","==",WEEK.weekId).get();
+ const batch=db.batch();
+ for(const snapshot of own.docs)batch.delete(snapshot.ref);
+ if(own.size)await batch.commit();
+ await deleteApp(app);
+});
 test("read ONLY correct original +5/+10/+20 applied ledger receipts -> top 10",async()=>{
  const result=await project(args());
  assert.equal(result.topTen.length,10);
