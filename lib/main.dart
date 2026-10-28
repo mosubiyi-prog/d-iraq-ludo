@@ -1215,7 +1215,7 @@ class DedaTaskEngine {
         completedNow: false,
         pointsAwarded: false,
         pointsDelta: 0,
-        totalPoints: 0,
+        totalPoints: await totalPoints(),
         taskId: taskId,
         cycleId: cycle,
       );
@@ -11862,7 +11862,12 @@ class _DedaDailyTasksPageState extends State<DedaDailyTasksPage> {
     if (!mounted) return;
     setState(() => _claimingTaskIds.remove(taskId));
 
-    final message = !result.accepted
+    final message = DedaStage39TaskWriterFence.privatePilot
+        ? dedaText(
+            'استلام نقاط المهمة متوقف مؤقتًا لحين اعتماد الترحيل الآمن.',
+            'Task reward claim is paused pending verified safe cutover.',
+          )
+        : !result.accepted
         ? dedaText(
             'أكمل المهمة أولًا حتى يتفعّل الاستلام.',
             'Complete the task first to enable claiming.',
