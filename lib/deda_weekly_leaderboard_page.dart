@@ -666,6 +666,32 @@ class _DedaWeeklyLeaderboardPageState
     );
   }
 
+  /// Status is the same for portrait and landscape; never present local
+  /// device XP or fake winners as verified league standing.
+  Widget statusPanel(double scale) => Container(
+        alignment: Alignment.center,
+        decoration: panel(blue, radius: 13 * scale),
+        padding: EdgeInsets.symmetric(horizontal: 8 * scale),
+        child: fitted(widget.previewOnly
+            ? 'معاينة تصميم فقط؛ الأسماء والنقاط والجوائز وهمية.'
+            : view.verified
+                ? 'XP المكتسبة من المهام هذا الأسبوع؛ '
+                    'رصيد حسابك ومستواك محفوظان.'
+                : 'الترتيب قيد التحقق من الخادم؛ '
+                    'لن تُعرض نتائج وهمية أو تُصرف جوائز.',
+            size: 11 * scale, color: silver),
+      );
+
+  Widget podiumRow(double scale) => Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        textDirection: TextDirection.ltr,
+        children: [
+          podium(2, scale),
+          podium(1, scale),
+          podium(3, scale),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -673,16 +699,20 @@ class _DedaWeeklyLeaderboardPageState
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, box) {
-            // One owner-approved 2:3 leaderboard canvas for BOTH phone
-            // and tablet. Tall/wide tablets keep the original proportions
-            // instead of stretching podium and ranking rows edge to edge.
-            // SafeArea already subtracts system bars; never use a scroller.
-            final stageWidth =
-                math.min(box.maxWidth, box.maxHeight * (2.0 / 3.0));
-            final scale = math.min(stageWidth / 390, box.maxHeight / 780)
-                .clamp(.50, 2.10)
-                .toDouble();
-            final gap = 7.0 * scale;
+            // Real landscape must USE the width: the old 2:3 portrait canvas
+            // shrank the entire league to a tiny central strip on tablets and
+            // landscape phones. Keep portrait EXACTLY as owner accepted.
+            final landscape = box.maxWidth >= 580 &&
+                box.maxWidth > box.maxHeight * 1.18;
+            final stageWidth = landscape
+                ? math.min(box.maxWidth, 1280.0)
+                : math.min(box.maxWidth, box.maxHeight * (2.0 / 3.0));
+            final scale = landscape
+                ? math.min(stageWidth / 950, box.maxHeight / 580)
+                    .clamp(.55, 1.45).toDouble()
+                : math.min(stageWidth / 390, box.maxHeight / 780)
+                    .clamp(.50, 2.10).toDouble();
+            final gap = (landscape ? 5.0 : 7.0) * scale;
             return Center(
               child: SizedBox(
                 key: const ValueKey<String>('deda-weekly-leaderboard-stage'),
@@ -698,45 +728,55 @@ class _DedaWeeklyLeaderboardPageState
                   ),
                   padding: EdgeInsets.symmetric(
                       horizontal: 9 * scale, vertical: 5 * scale),
-                  child: Column(
-                    children: [
-                  Expanded(flex: 14, child: header(scale)),
-                  SizedBox(height: gap),
-                  Expanded(
-                    flex: 29,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      textDirection: TextDirection.ltr,
-                      children: [
-                        podium(2, scale),
-                        podium(1, scale),
-                        podium(3, scale),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: gap),
-                  Expanded(flex: 40, child: rankingTable(scale)),
-                  SizedBox(height: gap),
-                  Expanded(flex: 9, child: viewerPanel(scale)),
-                  SizedBox(height: gap),
-                  Expanded(
-                    flex: 7,
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: panel(blue, radius: 13 * scale),
-                      padding: EdgeInsets.symmetric(horizontal: 8 * scale),
-                      child: fitted(widget.previewOnly
-                          ? 'معاينة تصميم فقط؛ الأسماء والنقاط والجوائز وهمية.'
-                          : view.verified
-                          ? 'XP المكتسبة من المهام هذا الأسبوع؛ '
-                            'رصيد حسابك ومستواك محفوظان.'
-                          : 'الترتيب قيد التحقق من الخادم؛ '
-                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',
-                          size: 11 * scale, color: silver),
-                    ),
-                  ),
-                    ],
-                  ),
+                  child: landscape
+                      ? Column(
+                          key: const ValueKey<String>(
+                              'deda-weekly-landscape-layout'),
+                          children: [
+                            Expanded(flex: 24, child: header(scale)),
+                            SizedBox(height: gap),
+                            Expanded(
+                              flex: 60,
+                              child: Row(
+                                textDirection: TextDirection.ltr,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(flex: 46, child: podiumRow(scale)),
+                                  SizedBox(width: 9 * scale),
+                                  Expanded(flex: 54, child: rankingTable(scale)),
+                                ],
+                              ),
+                            ),
+                            SizedBox(height: gap),
+                            Expanded(
+                              flex: 16,
+                              child: Row(
+                                textDirection: TextDirection.rtl,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(flex: 55, child: viewerPanel(scale)),
+                                  SizedBox(width: 9 * scale),
+                                  Expanded(flex: 45, child: statusPanel(scale)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          key: const ValueKey<String>(
+                              'deda-weekly-portrait-layout'),
+                          children: [
+                            Expanded(flex: 14, child: header(scale)),
+                            SizedBox(height: gap),
+                            Expanded(flex: 29, child: podiumRow(scale)),
+                            SizedBox(height: gap),
+                            Expanded(flex: 40, child: rankingTable(scale)),
+                            SizedBox(height: gap),
+                            Expanded(flex: 9, child: viewerPanel(scale)),
+                            SizedBox(height: gap),
+                            Expanded(flex: 7, child: statusPanel(scale)),
+                          ],
+                        ),
                 ),
               ),
             );
