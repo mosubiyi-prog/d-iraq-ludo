@@ -14,7 +14,7 @@
  * Firestore transaction. A stale/current production claim cannot be minted.
  */
 const crypto=require("node:crypto");
-const core=require("../../progress_archive/reconcile-core.cjs");
+const core=require("../progress_archive/reconcile-core.cjs");
 const {PROJECT,ISSUER:SOURCE_ISSUER,ROOT:SOURCE_ROOT,receiptFor}=
  require("../../../functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js");
 const {ROOT:EPOCH_ROOT,ISSUER:EPOCH_ISSUER}=
