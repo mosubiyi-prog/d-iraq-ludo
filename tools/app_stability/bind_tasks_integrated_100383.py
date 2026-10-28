@@ -297,7 +297,7 @@ def bind(root):
       accepted: false, completedNow: false, pointsAwarded: false,
       pointsDelta: 0, totalPoints: 0,
       taskId: """+task_expr+""",
-      cycleId: cycleId ?? currentLocalCycleId(occurredAt),
+      cycleId: currentLocalCycleId(occurredAt),
     );
     return DedaTaskWriteFence.serialized<DedaTaskEventResult>(
       stillCurrent: stillOnAccount,
