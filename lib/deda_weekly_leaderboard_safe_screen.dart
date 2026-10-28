@@ -18,7 +18,12 @@ class DedaWeeklyLeaderboardSafeScreen extends StatefulWidget {
     this.currentAccountStillAuthorized,
     this.refreshSignal,
     this.refreshInterval,
+    this.onOpenDailyTasks,
   });
+
+  /// Only passes navigation to DEDA's existing daily tasks screen.
+  /// Not an XP, task-claim or wallet operation.
+  final VoidCallback? onOpenDailyTasks;
 
   final Future<Object?> Function()? loadVerifiedStandings;
 
@@ -151,6 +156,7 @@ class _DedaWeeklyLeaderboardSafeScreenState
   Widget build(BuildContext context) {
     final safeSnapshot = _stillCurrent ? _snapshot : null;
     return DedaWeeklyLeaderboardPage(
+      onOpenDailyTasks: widget.onOpenDailyTasks,
       current: safeSnapshot?.current ??
           const DedaLeaderboardViewData(
             verified: false,
