@@ -1,0 +1,27 @@
+# DEDA Weekly — Stage47 original TWO-PHONE legacy local-claims risk audit (HOLD ONLY, NO DEPLOY)
+
+Date: 2026-10-28
+Independent branch: `deda-weekly-stage47-two-device-legacy-claim-conflict-audit-no-deploy-2026-10-28`
+Stage46 stable parent: `639ba14fdda66496f72ed8e1de5ab57eec2774d0` — https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40710292958
+Stage47 first passing CI: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40712277664 (at `2d00926695fedc7ce6f6565c33d390b1ea4cbf89`), 11/11 Stage47 tests, 26/26 Stage46 signed task-claim tests, 114 existing migration/original calendar tests passed, 1 pre-existing skipped, 0 failures.
+
+## Meaningful change
+The original signed Android version keeps daily task points, level XP and social coins locally on each device. Old users switching phones may have different account-local +5 task award histories, +20 XP task claims and +10 social coins; it is unsafe to blindly merge them or treat a blank new phone as proof a task was not previously paid.
+
+- `functions/deda_weekly_stage47_two_device_legacy_claim_audit_NOT_EXPORTED.js`: genuinely reads two different original-shaped `deda_progress_evidence/<account>/captures/<capture>` Firestore documents inside a LOCAL emulator. Uses the pre-existing real `assessLegacyEvidence` parser and legacy evidence digest. Independently validates JSON duplicate keys, expected task +5 awards, original wallet social task-claim list, history length caps, positive balances and separate install IDs.
+- Cross-compares two complete test capture histories per task (present on old but not new; points history without social claim; both present; both absent) plus differences in task points, XP, coins and earned diamonds. These differences require preservation and review, not overwriting a device.
+- Every outcome is `HOLD_FOR_INDEPENDENT_SERVER_REVIEW`, `canIssueServerClaim:false`, `canApplyXp:false`, `canCreditDiamonds:false`, `canApproveMigration:false`. Even two matching device archives are UNTRUSTED. Explicit blockers: no independently authoritative server receipt, old APKs not cut off, pending purchases/gifts not settled, local evidence cannot prove absent/paid rewards.
+- Audit uses a private HMAC key for opaque account/task/evidence tokens; no raw phone, original account keys or original task keys are written in the reviewer report. It creates one idempotent PRIVATE audit-hold record under `deda_weekly_stage47_private_two_device_legacy_audit_HOLD_ONLY`, only after an in-transaction re-read of both source captures. Changed capture after initial HOLD refuses replacing prior report.
+- **NO** original snapshots, user account progress, social coins, XP, actual cosmetics/frames, premium IDs, admin diamonds, gift inbox or storage migration records are changed.
+- `functions/tests/deda_weekly_stage47_two_device_legacy_claim_audit.test.js`: 11/11 passed on actual local Firestore emulator: matching old/new snapshot still hold; private HOLD document; replay idempotent; different coins conflict; old claimed task absent on new; both absent still not evidence of no award; intra-device +5 vs social history mismatch; malformed/duplicate JSON or truncated history rejection; same install/account mismatch rejection; concurrent report replay; no production environment/user wallet changes.
+- `.github/workflows/qa-deda-weekly-stage47-two-phone-original-reconciliation-no-deploy.yml`: protects original signed archive 100380, Flutter/Android, Firebase Functions and Rules, original progress migration tools, purchases, app wallets and Play. Runs Stage47 emulator, then Stage46 emulator **on a freshly clean environment**, plus existing actual legacy assessment, migration, progress and calendar regression tests.
+
+## STRICT remaining blockers
+**These inputs are synthetic original-shaped test captures, not records read from actual user devices.** They are UNTRUSTED local data; a SHA digest or HMAC is only an integrity tag, not proof of genuine original task payout. No real authenticated server task-claim producer, App Check, old-APK server write gate, owner-reviewed historical balance migration or external server attestation has been activated.
+Never use the Stage47 report to *issue* Stage46 signed claim: it ALWAYS says hold. It cannot revoke the old original Android local SharedPreferences writer; changing phones and restoring purchases safely requires a separate real production architecture, authorized cutover and rollback. No APK/AAB created and no Firebase/Google Play deployment.
+The existing Stage44/45 top-ten, frozen league (00:00–06:00 Baghdad), 06:00 card, prizes 150/100/50/10 and manager monthly archive still require real trusted backend and Android integration; they remain private test prototypes.
+
+## Owner's mandatory pre-APK review
+Before preparing ANY APK/AAB, deliver the owner a short copyable Arabic report of EVERY agreed additional item and its actual completed/unfinished status and review that list together. Owner's requirement already saved as `docs/DEDA_WEEKLY_OWNER_PREBUILD_ADDITIONS_REVIEW_GATE_2026-10-28.md`. No new Play publish, no actual Firestore Rules/Cloud Functions changes, no real user balance migration without separate authorization.
+
+Final branch-head CI after committing this checkpoint must be reverified SUCCESS.
