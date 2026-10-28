@@ -236,6 +236,7 @@ function inspectOriginalShare(){
 }
 test("inspect real-shaped original DEDA location share: server identity and ID only, NOT XP",async()=>{
   await db.doc("deda_location_shares/"+SHARE_ID).set(realShare());
+  const beforeCount=(await db.collection(ROOT.receipt).get()).size;
   const candidate=await inspectOriginalShare();
   assert.equal(candidate.sourceCollection,"deda_location_shares");
   assert.equal(candidate.taskId,"share_personal_location");
@@ -247,8 +248,7 @@ test("inspect real-shaped original DEDA location share: server identity and ID o
   assert.equal((await db.doc(ROOT.proof+"/"+actionRef(A,"share_personal_location")).get())
     .exists,true);
   // No new duplicate Stage9 XP is caused by merely observing the source.
-  const score=(await ranks()).rows.find(x=>x.weeklyXp===40);
-  assert.ok(score);
+  assert.equal((await db.collection(ROOT.receipt).get()).size,beforeCount);
 });
 test("wrong sender, premium alias, forged timestamp or place-share cannot prove original share",async()=>{
   for(const changes of [
