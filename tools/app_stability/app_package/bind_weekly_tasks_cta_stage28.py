@@ -12,16 +12,17 @@ import json
 ROOT = Path(__file__).resolve().parents[3]
 PRIOR = 100395
 VERSION = 100396
-ORIGINAL_ROUTE = 'const DedaWeeklyLeaderboardSafeScreen()'
-TARGET_ROUTE = """DedaWeeklyLeaderboardSafeScreen(
-                                      onOpenDailyTasks: () =>
-                                          Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) =>
-                                              const DedaDailyTasksPage(),
-                                        ),
-                                      ),
-                                    )"""
+# Stage17 already injected a local QA account + xp notifier into BOTH
+# launch routes. Never replace that constructor: append only navigation.
+ORIGINAL_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\\n"
+                  "      )")
+TARGET_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\\n"
+                "        onOpenDailyTasks: () => Navigator.of(context).push(\\n"
+                "          MaterialPageRoute<void>(\\n"
+                "            builder: (_) => const DedaDailyTasksPage(),\\n"
+                "          ),\\n"
+                "        ),\\n"
+                "      )")
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -59,6 +60,8 @@ def bind(project):
     ui = page.read_text()
     secure = screen.read_text()
     if (code.count(ORIGINAL_ROUTE) != 2
+        or code.count('localTrialAccountKey: DedaBackend.accountKeyForPhone(') != 2
+        or code.count('DedaWeeklyLeaderboardSafeScreen(') != 2
         or code.count('DedaLeaderboardHomeCard(') != 2
         or code.count('class DedaDailyTasksPage extends StatefulWidget') != 1
         or 'categoryCard(restaurant)' in code
@@ -69,6 +72,8 @@ def bind(project):
     result = code.replace(ORIGINAL_ROUTE, TARGET_ROUTE)
     if (result.count(TARGET_ROUTE) != 2
         or result.count(ORIGINAL_ROUTE) != 0
+        or result.count('localTrialAccountKey: DedaBackend.accountKeyForPhone(') != 2
+        or result.count('refreshSignal: DedaSocialProgressWallet.xpNotifier,') != 2
         or result.count('const DedaDailyTasksPage()') !=
                code.count('const DedaDailyTasksPage()') + 2):
         raise ValueError('Navigation patch not exactly two official routes')
