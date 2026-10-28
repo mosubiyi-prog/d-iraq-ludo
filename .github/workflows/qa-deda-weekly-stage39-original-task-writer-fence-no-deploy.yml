@@ -97,8 +97,14 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: false
-      - name: Install original Flutter dependencies without changing lockfile
-        run: flutter pub get --enforce-lockfile
+      - name: Resolve existing dependency set only inside disposable runner; preserve committed lock
+        run: |
+          set -euo pipefail
+          cp pubspec.lock "$RUNNER_TEMP/deda-original-pubspec.lock"
+          flutter pub get
+          cp "$RUNNER_TEMP/deda-original-pubspec.lock" pubspec.lock
+          git diff --exit-code -- pubspec.yaml pubspec.lock
+          echo "Temporary QA package resolution only; no original lockfile committed or modified"
       - name: Analyze new fence and original main together
         run: dart analyze lib/deda_stage39_task_writer_fence.dart lib/main.dart
       - name: Test default unchanged, offline safety and account boundaries
