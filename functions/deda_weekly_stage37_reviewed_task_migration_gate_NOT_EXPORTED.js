@@ -95,6 +95,9 @@ async function previewReviewedTaskCutover({
        !profile.trustedInstallIds.includes(session.installId)||
        profile.accountKey!==user.accountKey)
       fail("owner_install_changed");
+    const senderId=record(await tx.get(db.doc("deda_share_ids/"+source.senderPublicId)),"sender_id");
+    if(senderId.ownerUid!==uid||senderId.kind!=="personal"||senderId.active!==true)
+      fail("invalid_sender_id");
     const receiverId=record(await tx.get(db.doc(
       "deda_share_ids/"+source.recipientPublicId)),"recipient_id");
     if(!UID.test(receiverId.ownerUid||"")||
@@ -136,7 +139,10 @@ async function previewReviewedTaskCutover({
     // A historical or already-applied task cannot be awarded a second time;
     // ownership of another phone, client UI or alias changes nothing.
     if(applied!==null){
-      if(!applied.receipt||
+      if(applied.eventKey!==eventKey||
+         !Number.isSafeInteger(applied.appliedVersion)||
+         applied.appliedVersion<1||applied.appliedVersion>state.version||
+         !applied.receipt||
          !core.sameEvent(core.parseReceipt(applied.receipt,accountKey),
           normalized))fail("conflicting_applied_event");
     }
