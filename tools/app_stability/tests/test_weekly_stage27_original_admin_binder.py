@@ -53,6 +53,13 @@ class Stage27OriginalAdminBinderTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.blobs = original_sources()
+        # Emulate the Stage13/22 source-only leaderboard files which the
+        # verified 100394 bind chain introduces after the 100380 archive.
+        for path in (
+            'lib/deda_weekly_leaderboard_page.dart',
+            'lib/deda_weekly_snapshot_decode.dart',
+        ):
+            self.blobs[path] = (REPO / path).read_bytes()
         for rel, blob in self.blobs.items():
             p = self.root / rel
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -84,6 +91,12 @@ class Stage27OriginalAdminBinderTests(unittest.TestCase):
         modified = (self.root / 'lib/admin_pages.dart').read_text()
         self.assertEqual(modified.count("Key('deda_admin_league_dashboard_tile')"), 1)
         self.assertIn("DedaAdminLeaguePage(isArabic: ar)", modified)
+        for dependency in (
+            'lib/deda_weekly_competitor_public_card.dart',
+            'lib/deda_weekly_leaderboard_tap_surface.dart',
+        ):
+            self.assertEqual((self.root / dependency).read_bytes(),
+                             (REPO / dependency).read_bytes())
         self.assertIn("normalizeAdminStatus(profile) == 'active'", modified)
         self.assertIn("accentColor: const Color(0xFF133F65)", modified)
         self.assertIn("if (DedaBackend.adminHasPermission(\n                          profile, 'supportRead'))", modified)
