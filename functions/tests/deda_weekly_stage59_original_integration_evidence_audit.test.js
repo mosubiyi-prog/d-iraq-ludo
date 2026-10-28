@@ -56,7 +56,7 @@ test("08: safe screen has nullable verified reader, no active production source 
 });
 test("09: original exported Functions do not contain approved deployed league score/gift endpoints",()=>{
  result("original_live_weekly_server_callable","NOT_WIRED");
- assert.ok(source.serverTopTen.includes("NOT EXPORTED"));
+ assert.ok(source.serverTopTen.includes("no Cloud Function export"));
 });
 test("10: phone-local trial XP is not server-verified score authority",()=>{
  result("weekly_task_xp_source","LOCAL_QA_ONLY");
