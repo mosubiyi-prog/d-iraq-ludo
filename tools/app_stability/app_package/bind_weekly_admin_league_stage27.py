@@ -2,7 +2,8 @@
 original DEDA 100394 Android QA workspace, never in production source.
 
 Requires Stage13+14+16+17+18+19 original bind chain and its known hashes.
-Touches just workspace/lib/admin_pages.dart plus one new QA UI source file;
+Touches just workspace/lib/admin_pages.dart plus the GM QA page and two
+pure presentation dependencies introduced by the prior Stage22 leaderboard UI;
 the accepted DEDA 100387 and owner-tested 100394 are protected unchanged.
 No Firebase writes, league activation, admin grants, prizes or Play delivery.
 """
@@ -15,6 +16,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 META = 'internal-build-inputs.json'
 NEW_PAGE = 'lib/deda_admin_league_page.dart'
+STAGE22_UI_DEPENDENCIES = (
+    'lib/deda_weekly_competitor_public_card.dart',
+    'lib/deda_weekly_leaderboard_tap_surface.dart',
+)
 PACKAGE = 'com.diraq.ludo.d_iraq_ludo'
 PRIOR = 100394
 NEXT = 100395
@@ -55,8 +60,8 @@ def bind(project):
             raise ValueError('Previously signed-source bind drift: ' + relative)
 
     new_page = project / NEW_PAGE
-    if new_page.exists():
-        raise ValueError('No overriding existing administration league source')
+    if new_page.exists() or any((project / p).exists() for p in STAGE22_UI_DEPENDENCIES):
+        raise ValueError('No overriding existing administration league/Stage22 UI source')
     expected_page = ROOT / NEW_PAGE
     if not expected_page.is_file():
         raise ValueError('Expected Stage26 GM page not found')
@@ -116,10 +121,30 @@ def bind(project):
             'FirebaseFirestore', 'SharedPreferences', 'FieldValue.increment',
             'grantDiamonds(', 'awardTaskClaim(')):
         raise ValueError('This stage cannot write user balance/task data')
+    # Stage22 changed the league page imports AFTER the accepted 100394 QA
+    # original had been built. A Stage27 original-package build MUST bring
+    # along both pure-presentation dependencies; otherwise APK compilation
+    # fails even though the admin page itself passes isolated widget tests.
+    leaderboard = (project / 'lib/deda_weekly_leaderboard_page.dart').read_text()
+    decoder = (project / 'lib/deda_weekly_snapshot_decode.dart').read_text()
+    for dependency in STAGE22_UI_DEPENDENCIES:
+        filename = Path(dependency).name
+        if (f"import '{filename}';" not in leaderboard or
+                not (ROOT / dependency).is_file()):
+            raise ValueError('Unresolved Stage22 league UI import: ' + dependency)
+        content = (ROOT / dependency).read_text()
+        if any(token in content for token in (
+                'FirebaseFirestore', 'FirebaseAuth', 'SharedPreferences',
+                'FieldValue.increment', '.set(', '.delete(', '.update(')):
+            raise ValueError('Stage22 dependency must remain presentation-only')
+    if "import 'deda_weekly_competitor_public_card.dart';" not in decoder:
+        raise ValueError('Verified snapshot decoder missing Stage22 import')
 
     # All checks above finish BEFORE any temporary workspace modifications.
     original.write_text(src)
     shutil.copy2(expected_page, new_page)
+    for dependency in STAGE22_UI_DEPENDENCIES:
+        shutil.copy2(ROOT / dependency, project / dependency)
     changed = {p for p, before in earlier.items() if sha(project / p) != before}
     if changed != {'lib/admin_pages.dart'}:
         raise ValueError('Protected original files mutated: ' + repr(changed))
