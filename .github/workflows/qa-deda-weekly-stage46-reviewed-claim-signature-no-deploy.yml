@@ -1,0 +1,123 @@
+name: DEDA Stage46 independent reviewed task CLAIM + backend HMAC receipt local emulator NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage46-server-signed-task-claim-issuer-qa-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage46_private_signed_task_claim_atomic.test.js'
+      - '.github/workflows/qa-deda-weekly-stage46-reviewed-claim-signature-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE46_REVIEWED_CLAIM_SIGNATURE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage46-private-reviewed-task-claim
+  cancel-in-progress: true
+jobs:
+  protect-live-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source guards and no changes to original Android, live Firebase, wallets, prior QA
+        run: |
+          set -euo pipefail
+          git diff --quiet 56f36ece5fcb6d8e26e2c93bdc3dbdf66d03ed46 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            functions/deda_weekly_stage42_server_share_action_producer_NOT_EXPORTED.js \
+            functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js \
+            functions/deda_weekly_stage43_cutover_epoch_atomic_NOT_EXPORTED.js \
+            functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js \
+            functions/deda_weekly_stage45_private_gifts_inbox_atomic_NOT_EXPORTED.js \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage46_private_signed_task_claim_atomic.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          const claim=fs.readFileSync('functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js','utf8');
+          const award=fs.readFileSync('functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js','utf8');
+          if(index.includes('deda_weekly_stage46_'))
+            throw Error('Stage46 task claim must NOT be exported from live Firebase Functions');
+          for(const value of [
+            'emulator_and_private_secret_only',
+            'originalLocalTaskPointsReconciledInFixture',
+            'originalLocalXpReconciledInFixture',
+            'originalLocalCoinsReconciledInFixture',
+            'checkedAuthorization',
+            'crypto.timingSafeEqual',
+            'UNKNOWN_REQUIRES_MIGRATION_REVIEW',
+            'server_signed_task_claim_missing',
+            'canAuthorizeProduction:false'
+          ])if(!claim.includes(value))throw Error('Stage46 private reviewer integrity guard missing: '+value);
+          if(!award.includes('await validateSignedTaskClaimInTransaction(')||
+             !award.includes('backendSecret')||
+             !award.includes('creditedSocialCoins:10')||
+             !award.includes('leagueEligible=clock.phase==="active"'))
+            throw Error('Stage46 claim gate not applied atomically to award');
+          console.log('Protected original app and Firebase. Stage46 never enters production.');
+          JS
+  signed-private-task-claim-emulator:
+    needs: protect-live-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable local Firestore tools only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Independently reviewed signed task-claim -> Stage46 atomic +5/+20/+10 two phones and freeze
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage46_private_signed_task_claim_atomic.test.js'
+      - name: Original Stage43 signed issuer-independent transaction regression
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - name: Original migration and week clock regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  checkpoint-no-build:
+    needs: [protect-live-original,signed-private-task-claim-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Task claim source ACTION is NOT a sufficient old-local-reward claim proof.'
+          echo 'Stage46 reviews a separate TEST-ONLY authorization before it creates HMAC-signed PRIVATE proof.'
+          echo 'Even signing + correct guards DO NOT implement production original claim verification, real App Check or old APK revocation.'
+          echo 'NO original APK/AAB build, Firebase Rules, Functions, real user wallets or Play changes.'
+          echo 'Owner must review concise all-additions status BEFORE any private APK preparation.'
