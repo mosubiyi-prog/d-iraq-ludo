@@ -72,8 +72,17 @@ jobs:
       - name: Test REAL anonymous Auth Emulator, original Firestore PIN and second-phone path
         run: |
           set -euo pipefail
+          # Firebase CLI requires Auth emulator to be explicitly initialized.
+          # Create config ONLY as an untracked ephemeral file at repo root on CI.
+          cat > firebase.stage53.ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {"auth": {"port": 9099}, "firestore": {"port": 8080}}
+          }
+          JSON
+          trap 'rm -f firebase.stage53.ci.json' EXIT
           functions/node_modules/.bin/firebase emulators:exec \
-            --config firebase.json \
+            --config firebase.stage53.ci.json \
             --project demo-deda-stage53-original-pin --only auth,firestore \
             'cd tests/firestore-rules && node --test stage53_original_pin_auth_two_phone_emulator.test.mjs'
       - name: No mistaken production security or awards claim
