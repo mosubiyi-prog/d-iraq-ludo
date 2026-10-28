@@ -29,6 +29,7 @@ jobs:
             case "$f" in
               lib/deda_weekly_original_public_profile_readonly.dart|\
               tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py|\
+              tools/app_stability/app_package/restore_weekly_stage17_legacy_screen_only.py|\
               test/deda_weekly_original_public_profile_readonly_test.dart|\
               .github/workflows/qa-deda-weekly-original-profile-readonly-no-deploy.yml|\
               docs/DEDA_WEEKLY_ORIGINAL_PROFILE_READONLY_CHECKPOINT_2026-10-28.md) ;;
@@ -41,7 +42,7 @@ jobs:
             lib/traffic_quiz_page.dart lib/deda_pin_auth.dart functions/ \
             firestore.rules firebase.json pubspec.yaml pubspec.lock \
             assets/ android/ tools/app_stability/app_package/prepare.py
-          python3 -m py_compile tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py tools/app_stability/app_package/restore_weekly_stage17_legacy_screen_only.py
           echo "PASS: originals untouched; all new work isolated"
   restored-original-flutter-source:
     needs: guarded-diff
@@ -65,6 +66,7 @@ jobs:
           flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
           python3 tools/app_stability/app_package/prepare.py "$TARGET" --variant candidate
           python3 tools/app_stability/app_package/bind_weekly_stage13.py "$TARGET"
+          python3 tools/app_stability/app_package/restore_weekly_stage17_legacy_screen_only.py "$TARGET"
           python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$TARGET"
           python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$TARGET"
           python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$TARGET"
