@@ -7,6 +7,7 @@ on:
       - 'tests/firestore-rules/stage33_live_original_share_rules.test.mjs'
       - '.github/workflows/qa-deda-weekly-stage33-actual-live-original-share-rules-no-deploy.yml'
       - 'docs/DEDA_WEEKLY_STAGE33_ACTUAL_LIVE_SHARE_RULES_AUDIT_2026-10-28.md'
+      - 'tools/app_stability/deda_weekly_stage33_private_self_share_rules_candidate.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -52,19 +53,38 @@ jobs:
           set -euo pipefail
           python tools/app_stability/deda_weekly_live_rules_emulator_fetch_stage24.py
           test -s "$DEDA_STAGE24_LIVE_RULES_TMPFILE"
-      - name: Test original-share rules against legitimate writer and malicious clients in DEMO emulator
+      - name: Confirm observed unpatched self-share weakness in actual LIVE rules (local emulator only)
         env:
           DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage33-actual-live.rules
+          DEDA_STAGE33_EXPECT_CURRENT_SELF_SHARE_GAP: '1'
         run: |
           set -euo pipefail
           npx --yes firebase-tools@14 emulators:exec --only firestore \
             --project demo-deda-stage33-real-share-rules-audit \
             "cd tests/firestore-rules && node --test stage33_live_original_share_rules.test.mjs"
-          echo "Only private LIVE RULES snapshot tested on DEMO emulator; no production writes."
+          echo "Confirmed baseline self-recipient weakness. No production writes."
+      - name: Construct minimal candidate fix in PRIVATE runner temp (NOT LIVE)
+        env:
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage33-actual-live.rules
+          DEDA_STAGE33_PATCHED_RULES_FILE: ${{ runner.temp }}/deda-stage33-private-patched.rules
+        run: |
+          set -euo pipefail
+          python tools/app_stability/deda_weekly_stage33_private_self_share_rules_candidate.py
+          test -s "$DEDA_STAGE33_PATCHED_RULES_FILE"
+      - name: Confirm candidate self-share rule stops abuse and preserves genuine sharing
+        env:
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage33-private-patched.rules
+          DEDA_STAGE33_EXPECT_CURRENT_SELF_SHARE_GAP: '0'
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-deda-stage33-real-share-rules-audit \
+            "cd tests/firestore-rules && node --test stage33_live_original_share_rules.test.mjs"
+          echo "Private candidate rules tested; not deployed to Firebase."
       - name: Erase privately fetched production rules file
         if: always()
         env:
           DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage33-actual-live.rules
         run: |
-          rm -f "$DEDA_STAGE24_LIVE_RULES_TMPFILE"
+          rm -f "$DEDA_STAGE24_LIVE_RULES_TMPFILE" "${{ runner.temp }}/deda-stage33-private-patched.rules"
           echo "No ruleset contents uploaded or published."
