@@ -1,0 +1,55 @@
+name: DEDA Stage27 read-only immutable admin source structure audit NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage27-original-admin-league-100395-private-qa-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-stage27-immutable-admin-source-audit-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-verified-immutable-admin-structure:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read original signed-source archive and print safe structure only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json,tarfile,io
+          d=Path('tools/app_stability')
+          manifest=json.loads((d/'100380-baseline-manifest.json').read_text())
+          archive=(d/'100380-baseline.tar.gz').read_bytes()
+          assert hashlib.sha256(archive).hexdigest()==manifest['archiveSHA256']
+          with tarfile.open(fileobj=io.BytesIO(archive),mode='r:gz') as t:
+              blob=t.extractfile('lib/admin_pages.dart').read()
+          assert hashlib.sha256(blob).hexdigest()==manifest['files']['lib/admin_pages.dart']
+          source=blob.decode()
+          lines=source.splitlines()
+          criteria=['DedaAdminDashboardPage','DedaAdminCompactCard',
+                    'currentAdminProfile(', "if (DedaBackend.adminHasPermission(profile, 'supportRead'))",
+                    "import 'deda_admin_task_management_page.dart';",
+                    "profile, 'supportRead'", "_dashboardCard(", "GridView.count(",
+                    "DedaAdminTaskManagementPage", "DedaExclusiveIdsAdminPage",
+                    "DedaAdminPrizeWinnersPage"]
+          for marker in criteria:
+              print('CONTRACT',repr(marker),'PRESENT',marker in source, 'COUNT',source.count(marker))
+          headings=[i for i,line in enumerate(lines)
+                    if ('DedaAdminDashboardPage' in line or
+                        'DedaAdminCompactCard' in line or
+                        "'supportRead'" in line or
+                        "supportRead" in line or
+                        'GridView.count(' in line or
+                        'إدارة الفريق' in line or
+                        'إدارة المهام والمكافآت' in line)]
+          for i in headings[:15]:
+              print('STRUCTURE_LINES',i+1,'TO',min(len(lines),i+8))
+              for j in range(max(0,i-4),min(len(lines),i+9)):
+                  print('%04d: %s'%(j+1,lines[j][:180]))
+          print('VERIFIED immutable manifest: PASS; NO owner/prod data accessed')
+          PY
