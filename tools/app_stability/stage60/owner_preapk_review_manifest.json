@@ -1,0 +1,254 @@
+{
+  "schema": 1,
+  "sourceCommit": "926eb6cf11e7a42648913bd5b791814cd9c90d7c",
+  "ownerReviewRequired": true,
+  "apkBuildAuthorized": false,
+  "playPublishAuthorized": false,
+  "productionFirebaseDeployAuthorized": false,
+  "realWalletWritesAuthorized": false,
+  "installedApkCompared": false,
+  "deviceQAAccepted": false,
+  "weeklyProductionPayoutReady": false,
+  "crossDeviceTransferReady": false,
+  "referenceBuildProtected": 100342,
+  "statusKey": [
+    "IMPLEMENTED_IN_SOURCE_ONLY",
+    "QA_MODEL_ONLY",
+    "PARTIAL_PHONE_EVIDENCE",
+    "NOT_YET_VERIFIED_LIVE",
+    "SAFETY_HOLD"
+  ],
+  "items": [
+    {
+      "id": "L01",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "استبدال مدخل المطاعم بالمتصدرين في نسختَي واجهة DEDA الأصلية",
+      "evidence": "lib/main.dart",
+      "limitation": "بنية واجهة المتصدرين مستقلة؛ main.dart الحالي لا يستدعيها"
+    },
+    {
+      "id": "L02",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "واجهة العشرة بلا تمرير مع منصة المراكز 1–3 وتحجيم للهاتف والتابلت",
+      "evidence": "lib/deda_weekly_leaderboard_page.dart",
+      "limitation": "واجهة Flutter مستقلة؛ تجربة preview منفصلة ليست APK DEDA"
+    },
+    {
+      "id": "L03",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "نقاط الدوري نفس نقاط المهام وXP مستوى المستخدم بمصدر خادم أصلي موثوق",
+      "evidence": "lib/deda_weekly_private_trial_local_xp.dart",
+      "limitation": "قراءة SharedPreferences محلية لا تؤهل لصرف جوائز"
+    },
+    {
+      "id": "L04",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "دوري يبدأ بأي يوم مع 7 أيام تقويمية وتجميد 00:00–06:00 بغداد",
+      "evidence": "functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js",
+      "limitation": "منطق تجريبي غير منشور؛ مستوى المستخدم لا يتوقف أثناء التجميد"
+    },
+    {
+      "id": "L05",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "بطاقة تهنئة الأوائل العشرة بعد السادسة بالصورة والنص الموافق عليهما دون اسم أو آيدي",
+      "evidence": "functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js",
+      "limitation": "معاينة منطق فقط؛ عدم ثبوت ربط الصورة الأصلية والإظهار مرة واحدة"
+    },
+    {
+      "id": "L06",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "النقر على جميع المراكز وخاصة الثاني لعرض الملف أو إضافة صديق وإطار أول ثلاثة",
+      "evidence": "lib/deda_weekly_leaderboard_tap_surface.dart",
+      "limitation": "زر مشروط وهوية/علاقات ومظهر أصلي غير موصول فعلياً بالواجهة الرئيسية"
+    },
+    {
+      "id": "L07",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "جوائز ترتيب 150/100/50/10 ماسة لأول عشرة من الدوري",
+      "evidence": "lib/deda_weekly_leaderboard_policy.dart",
+      "limitation": "قيم عرض فقط، مجموع 370 عند وجود عشرة فائزين"
+    },
+    {
+      "id": "L08",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "إرسال هدية أسبوعية واحدة إلى هداياي ثم الاستلام مرة واحدة بلا مساس بمليون المدير",
+      "evidence": "functions/deda_weekly_stage45_private_gifts_inbox_atomic_NOT_EXPORTED.js",
+      "limitation": "محفظة ظل تجريبية؛ لا هدية حقيقية قابلة للصرف"
+    },
+    {
+      "id": "L09",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "أرشيف شهري بالإدارة لآخر أسابيع أفضل عشرة مع إبراز أول ثلاثة",
+      "evidence": "functions/deda_weekly_monthly_top10_archive_NOT_EXPORTED.js",
+      "limitation": "نموذج مستقل غير موصول بسجل إداري حقيقي"
+    },
+    {
+      "id": "L10",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "بطاقة إدارة الدوري للمدير العام مع صلاحية الدخول",
+      "evidence": "lib/admin_pages.dart",
+      "limitation": "مدخل موجود في المصدر؛ التحكم والدوري المباشر غير مفعلين"
+    },
+    {
+      "id": "L11",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "تشغيل وإيقاف الدوري من المدير العام على الخادم وبصلاحيات موثوقة",
+      "evidence": "lib/deda_admin_league_page.dart",
+      "limitation": "أزرار الإدارة onPressed:null ولا يوجد خادم دوري منشور"
+    },
+    {
+      "id": "T01",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "مهمة اختبار المرور خمس أسئلة في اليوم",
+      "evidence": "lib/traffic_quiz_page.dart",
+      "limitation": "_dailyQuestionCount=5 في المصدر؛ تجربة الهاتف الجديدة مطلوبة"
+    },
+    {
+      "id": "T02",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "100 سؤال مروري ثابتة ومتميزة بدون تكرار صور وأجوبة ملتبسة",
+      "evidence": "lib/traffic_quiz_page.dart",
+      "limitation": "المصدر الحالي 20 سؤالاً أساسياً × 5 تنويعات = 100 مدخل مكرر المعنى"
+    },
+    {
+      "id": "T03",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "ثلاثة اختيارات فقط للسؤال: واحد صحيح واثنان خطأ",
+      "evidence": "lib/traffic_quiz_page.dart",
+      "limitation": "المصدر يشترط أربعة اختيارات لكل سؤال"
+    },
+    {
+      "id": "T04",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "مراجعة توافق كل علامة مرورية مع نص سؤالها والصورة الواضحة من دون أخطاء",
+      "evidence": "lib/traffic_quiz_page.dart",
+      "limitation": "لا توجد شهادة تدقيق بشري مستقل لكل 100 سؤال مختلف"
+    },
+    {
+      "id": "T05",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "المهام اليومية وإعادة الضبط 12 ليلاً وربط النقاط الحقيقية بمصدر الدوري",
+      "evidence": "lib/main.dart",
+      "limitation": "المهام مصدر محلي، الربط الموثوق بين جميع الأقسام لم يكتمل"
+    },
+    {
+      "id": "F01",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "أصول 16 إطاراً ملكياً: 3 مجانية و13 قابلة للشراء بـ1000 ماسة لكل إطار",
+      "evidence": "lib/deda_lab_verified_frame_catalog.dart",
+      "limitation": "وجود ملفات تصميم/كتالوج لا يثبت ملكية آمنة أو ظهور كل 16 في نسخة الهاتف"
+    },
+    {
+      "id": "F02",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "شراء الإطارات مرة واحدة ثم استخدام/مستخدم وحفظ ملكية للحساب لا للجهاز",
+      "evidence": "lib/deda_lab_frame_secure_checkout.dart",
+      "limitation": "الخصم الحقيقي والملكية المتزامنة بين هاتفين غير مثبتة بأدلة إنتاجية"
+    },
+    {
+      "id": "I01",
+      "status": "IMPLEMENTED_IN_SOURCE_ONLY",
+      "requirement": "200 معرّف مميز: 100 للإدارة و100 للمستخدمين بألوان الإدارة الأربعة الدائمة",
+      "evidence": "lib/deda_exclusive_ids_admin_page.dart",
+      "limitation": "ملفات الإدارة موجودة؛ الضمان الكامل للمخزون والمنح والتثبيت يحتاج فحص مستخدم حقيقي"
+    },
+    {
+      "id": "I02",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "بيع آيدي المستخدم بـ10000 ماسة وبطاقات ملف الألوان الأربع بـ5000 ماسة",
+      "evidence": "lib/deda_stage71_free_id_cards.dart",
+      "limitation": "اختبارات الشراء اصطناعية ولا تثبت الربط بالمحفظة الأصلية"
+    },
+    {
+      "id": "I03",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "زر استخدام آيدي المدير ونقل ظهوره فوراً لكل الأقسام دون ومضة آيدي قديم",
+      "evidence": "lib/deda_verified_active_id_store.dart",
+      "limitation": "الآيدي يظهر قديماً في بعض الشاشات والملف العام والمشاركة حسب فحص المالك"
+    },
+    {
+      "id": "I04",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "المعرّف المفعّل متطابق عند المستلم وفي الملف والصديق والبحث والموقع والإعدادات",
+      "evidence": "lib/deda_stage49_verified_share_id_badge.dart",
+      "limitation": "تعارض السطح العام موثق في QA32، وبعض التحسينات جزئية"
+    },
+    {
+      "id": "I05",
+      "status": "PARTIAL_PHONE_EVIDENCE",
+      "requirement": "سرعة ظهور الآيدي المميز عند فتح الملف",
+      "evidence": "lib/deda_verified_active_id_store.dart",
+      "limitation": "الهاتف 100391 أظهر تحسناً؛ ما زال التحقق الأولي والتبدل عابراً"
+    },
+    {
+      "id": "I06",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "إشعار هداياي للآيدي الممنوح يختفي بعد فتحه دون مساس بهدايا الماسات",
+      "evidence": "lib/deda_stage75_unread_gift_badge.dart",
+      "limitation": "فحص مصدر جزئي، يحتاج تأكيد عبر حسابين وهاتفين"
+    },
+    {
+      "id": "P01",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "بطاقة الآيدي داخل ملفي مع زر تعديل ولون وارتفاع مناسبين",
+      "evidence": "lib/deda_stage71_dual_admin_page.dart",
+      "limitation": "تفاصيل تصميم معتمدة لكن ليست مثبتة نهائياً على APK موحد"
+    },
+    {
+      "id": "A01",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "دخول الحساب نفسه على هاتف جديد بلا فقدان XP أو ماسات أو إطارات أو آيدي",
+      "evidence": "tools/app_stability/stage58/private_two_phone_rehearsal.cjs",
+      "limitation": "فحص تحضير/إلغاء آمن بلا نقل فعلي، ولا استرجاع بيانات حقيقية"
+    },
+    {
+      "id": "A02",
+      "status": "QA_MODEL_ONLY",
+      "requirement": "تحقق حساب PIN وربط UID وخادم وApp Check وقطع كتابة النسخة القديمة",
+      "evidence": "tools/app_stability/stage57/functions/index.js",
+      "limitation": "رموز المحاكي غير موقعة، حماية الهاتف الحقيقية والقطع الإنتاجي غير مثبتين"
+    },
+    {
+      "id": "A03",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "سرعة استجابة كل الأقسام وثبات الجلسات وعدم عرض بيانات حساب سابق",
+      "evidence": "lib/deda_auth_session_runtime.dart",
+      "limitation": "اختبارات استقرار موجودة ولكن تجربة المستخدم لم تثبت التحسن المطلوب لكل الأقسام"
+    },
+    {
+      "id": "A04",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "استرجاع مكاني والمحتوى المحفوظ والعلاقات الاجتماعية عند نقل الهاتف",
+      "evidence": "lib/deda_backend.dart",
+      "limitation": "لا توجد تسوية شاملة موثقة لحسابين حقيقيين"
+    },
+    {
+      "id": "G01",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "مليون ماسة شخصي ومليون للإدارة للمدير العام وتجديد المنتصف دون ازدواج أو صرف حقيقي",
+      "evidence": "lib/deda_profile_visible_diamonds.dart",
+      "limitation": "رصيدان مختلفان ومخاطر إثبات الرصيد؛ لم توثق آلية استعادة يومية آمنة"
+    },
+    {
+      "id": "V01",
+      "status": "PARTIAL_PHONE_EVIDENCE",
+      "requirement": "صور رمزية ذكر/أنثى/مشترك وإطارات عرض ومؤشر مستوى",
+      "evidence": "assets/deda_owner_avatars_20261023",
+      "limitation": "نجاحات هاتفية لصور/علامة مستوى، يلزم فحص نهائي ضمن نسخة واحدة"
+    },
+    {
+      "id": "R01",
+      "status": "NOT_YET_VERIFIED_LIVE",
+      "requirement": "فحص تكامل جميع الإضافات على الهاتف والتابلت بإصدار خاص واحد موقّع",
+      "evidence": "lib/main.dart",
+      "limitation": "لا يوجد بناء APK/AAB لهذه المرحلة أو قبول هاتف/تابلت نهائي"
+    },
+    {
+      "id": "R02",
+      "status": "SAFETY_HOLD",
+      "requirement": "عدم نشر Play أو قواعد/Functions الإنتاج قبل موافقة مستقلة، مع حفظ المرجع 100342",
+      "evidence": "firestore.rules",
+      "limitation": "مرحلة 60 مراجعة فقط، ليست موافقة بناء أو نشر"
+    }
+  ]
+}
