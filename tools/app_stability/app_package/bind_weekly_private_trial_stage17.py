@@ -130,10 +130,11 @@ def bind(project):
     footer_anchor = landscape_notice if landscape_notice in p else original_notice
     footer_replacement = """                          : widget.privateTrialXp != null && !previousWeek
                           ? 'فحص نقاط مهامي هذا الأسبوع: '
-                            '@@{widget.privateTrialXp} XP محلياً؛ '
+                            '${widget.privateTrialXp} XP محلياً؛ '
                             'لا ترتيب حقيقياً ولا جوائز.'
                           : 'الترتيب قيد التحقق من الخادم؛ '
-                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',""".replace('@@','
+                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',"""
+    p=one(p,footer_anchor,footer_replacement,'footer private XP notice')
     page.write_text(p)
     shutil.copy2(ROOT/ADDITION,project/ADDITION)
     modifications={rel for rel,old in data['sourceHashes'].items()
