@@ -26,4 +26,8 @@ Review trusted source ownership and original purchase/reward ledgers, design a *
 
 ## Mandatory OWNER gate
 **BEFORE preparing any APK/AAB** hand the owner a short, comprehensive, copyable Arabic report of every approved addition, implemented in actual app vs tested only in isolated QA vs still pending, for review/approval. Preserve known working 100342 and phone/tablet QA. No Play/real Firebase/Rules/Functions deployment without additional explicit consent.
-Status when authored: Stage55 source committed; **do not announce full stage QA success until a final-head GitHub Actions green run**.
+## CI evidence
+- https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40735265275 — Stage55 source/test HEAD `f460721820ffa866d4083dec1335669af13eb519`: **SUCCESS**, real Firestore emulator 18/18 backend migration HOLD tests **PASS**, original full Firestore Rules plus mobile SDK attack test 1/1 **PASS**; total **19/19 tests, 0 failures**, no original file changes.
+- No credits, migration, user balances or account data transferred. Final checkpoint update itself requires its own green CI result before declaring final HEAD complete.
+
+Status: private local QA proven; production migration, App Check, old installed clients and device transfer **NOT complete**.
