@@ -289,14 +289,17 @@ test("forged client scores, premium IDs, app check, or identity cannot issue",as
  for(const data of [{xp:100000},{accountKey:ACCOUNT},{weekId:"made_up"}]){
    await assert.rejects(award({
      db,request:request(A,data),shareId:SHARE,
-     firstOpenMs:FIRST,serverNowMs:NOW
+     firstOpenMs:FIRST,serverNowMs:NOW,
+     backendSecret:PRIVATE_SIGNING_KEY
    }),/auth_appcheck_or_untrusted_client_data/);
  }
  await assert.rejects(award({db,request:{auth:{uid:A},data:{}},
-   shareId:SHARE,firstOpenMs:FIRST,serverNowMs:NOW}),
+   shareId:SHARE,firstOpenMs:FIRST,serverNowMs:NOW,
+   backendSecret:PRIVATE_SIGNING_KEY}),
    /auth_appcheck_or_untrusted_client_data/);
  await assert.rejects(award({db,request:request(RECIPIENT),shareId:SHARE,
-   firstOpenMs:FIRST,serverNowMs:NOW}),/missing_invoker_session/);
+   firstOpenMs:FIRST,serverNowMs:NOW,
+   backendSecret:PRIVATE_SIGNING_KEY}),/missing_invoker_session/);
 });
 
 test("Stage46 independent cutover epoch is REQUIRED beyond Stage42's old fixture fence",async()=>{
