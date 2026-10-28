@@ -1,0 +1,27 @@
+# DEDA Stage63 — snapshot ثابت للدوري 00:00–06:00 بغداد من إيصالات XP الموقعة (PRIVATE QA ONLY)
+
+Date: 2026-10-28. Branch: `deda-weekly-stage63-private-frozen-verified-xp-snapshot-no-deploy-2026-10-28`, from successful Stage62 head `ff5b2092003899ba4294336e53850090e43c7d72`, GitHub https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40747846434 (16/16 Auth/Functions signed-XP network QA + 2/2 original Firestore Rules tests).
+
+## What Stage63 actually implements
+
+The user requested continuing **league and account integration** with the **traffic question bank deferred**. This isolated checkpoint implements the next protection for Stage62's independently signed daily-task XP source: a single account-bound **00:00–06:00 Baghdad frozen result sealed atomically in Firestore Emulator**, with no write to original users, progress, wallets, IDs or diamonds.
+
+- `tools/app_stability/stage63/private_frozen_signed_xp_snapshot.cjs`: Admin SDK emulator-only, requiring exact demo Firebase project, Auth+Functions+Firestore emulator hosts, a private flag and 32-byte HMAC key. It validates the current anonymous Auth UID using the existing Stage62 server-owned QA UID→canonical-account binding **and performs all reads in one real Firestore transaction**.
+- Reads every current weekly receipt under the existing Stage43 league ledger; validates canonical ORIGINAL applied receipt, original XP state, source location share action, reviewed synthetic migration epoch and independent Stage46 server-HMAC-signed task claim. A single missing or tampered source rejects the **entire result**. A test fixture is NOT independent production proof.
+- **Historical signature nuance:** Stage46 permits a five-minute *issuance* window, so seven-day frozen sealing must revalidate each signed original task using its historical confirmed issue time while reading the CURRENT source documents in the same transaction. This verifies consistency of historical QA evidence but must not be described as fresh live authorization or true original account ownership.
+- Calendar strictly uses `windowFor()` (week starts any approved 06:00 Baghdad launch day, scoring ends midnight seven days later), and only seals from that midnight through 05:59:59.999 Baghdad. At exactly 06:00 the new week is open and the old week remains a private sealed record; a late client cannot reseal it by manipulating a phone clock.
+- Deterministic HMAC sealed week ID and source/profiles HMAC fingerprint; `tx.create` stores at most one sealed `deda_weekly_stage63_private_immutable_frozen_xp_snapshots/{HMAC(weekId)}`, preserving row order and top10. Simultaneous two phones and repeated views get the same immutable results. Changed original evidence or tampered saved record fails rather than silently changing the winner. All source+sealed doc checks are within a Firestore transaction, not a loose preview.
+- Result is explicitly `verified:false,productionReady:false,canIssueGift:false,canCreditDiamonds:false,canWriteXp:false`, `state:FROZEN_PRIVATE_HOLD` and zero spendable credits. QA participant IDs, synthetic profile names, ranks and planned prizes only. **No private phone/account/UID/real balances or payment receipts in the response.**
+- `functions/tests/deda_weekly_stage63_atomic_frozen_signed_xp_snapshot.test.js`: existing 16 Stage62 network Auth/Functions/Firestore regression cases + 14 frozen-transaction tests: exact boundary, two accounts, immutable result 00–06, parallel seal, missing signed claim or reviewer, changed applied XP/migration/legacy source, UID binding mismatch, duplicate event, tampered sealed record, no wallets altered, following week isolation.
+- `tests/firestore-rules/stage63_original_rules_private_frozen_signed_xp_denial.test.mjs`: original unchanged Firestore Rules deny real anonymous mobile SDK GET/SET/UPDATE/DELETE of server-only frozen docs and signing/binding fixtures (2 tests).
+- `.github/workflows/qa-deda-weekly-stage63-immutable-signed-xp-freeze-no-deploy.yml`: exact five-file allowlist vs Stage62 green, original source and quiz/asset/Rules/Functions guard, genuine local Auth/Functions/Firestore emulators, full test logs. No APK/AAB/Play, no production deploy.
+
+## What remains before an actual user-facing weekly league
+
+The source of confirmed XP is still only an **emulator-reviewed single cross-account share task**. It is not proof of all eight existing tasks, actual current user XP history, production Firebase Auth/PIN ownership, verified Play Integrity/App Check, independently fenced original APK writer or live backend account binding. Stage63's sealed document is **not production signed** and is never wired as `loadVerifiedStandings` on the actual user app. It must never be used to announce a real winner or award diamonds.
+
+Next integration: production-safe original account/UID recovery and verified task receipt issuer, then real current/previous server ranking reader + profile/friend/frames UI and weekly gifts. Only after all live-account gates, complete owner review and approval may an APK be prepared for phone/tablet QA.
+
+**Quiz bank deferred completely**, per owner directive; no change to `lib/traffic_quiz_page.dart`, task question contents, or signs. Original successful phone APK 100342 untouched.
+
+**CI status at authoring:** not deemed successful until a final exact HEAD run concludes SUCCESS. Stage63 green would mean private transaction QA ONLY, not the finished production league.
