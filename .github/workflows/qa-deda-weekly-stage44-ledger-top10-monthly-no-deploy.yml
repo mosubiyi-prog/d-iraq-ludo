@@ -1,0 +1,99 @@
+name: DEDA Stage44 verified applied XP ledger TOP10 00-06 freeze monthly archive EMULATOR NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage44-verified-ledger-top10-freeze-archive-private-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage44_verified_ledger_top10_archive.test.js'
+      - '.github/workflows/qa-deda-weekly-stage44-ledger-top10-monthly-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE44_LEDGER_TOP10_FROZEN_MONTHLY_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage44-private-verified-ledger-rank
+  cancel-in-progress: true
+jobs:
+  guard-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: No production Flutter Firebase Android old account wallet or signed APK source edits
+        run: |
+          set -euo pipefail
+          git diff --quiet ec93a94c2ca8843b5d0876aca7f3e32a60c5fa07 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            tools/app_stability/progress_archive pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage44_verified_ledger_top10_archive.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          const module=fs.readFileSync('functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js','utf8');
+          if(index.includes('deda_weekly_stage44_'))
+            throw Error('Stage44 must NEVER be deployed or exported');
+          for(const marker of [
+            'private_emulator_only','receiptFor(row.accountKey,row.dayId)',
+            'core.sameEvent','stage43_private_reviewed_cutover_atomic_emulator_only',
+            'source.sourceCreatedAtMs>=week.closeAtMs',
+            'previewFrozenResult','topTen','archiveMonthId',
+            'actuallyCreditedDiamonds:0','coherentSnapshotGuarantee:false',
+            'productionReady:false'
+          ])if(!module.includes(marker))
+            throw Error('Stage44 private rank/cutover invariant missing: '+marker);
+          console.log('No original or live project changes; private read model only');
+          JS
+  real-local-firestore-emulator:
+    needs: guard-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable emulator tools only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: 12 original applied progress fixtures TOP10, 00-06 freeze, GM monthly and winner card then Stage43 regressions
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage44_verified_ledger_top10_archive.test.js && node --test functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - name: Existing original migration and freeze regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-checkpoint:
+    needs: [guard-original, real-local-firestore-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Private-only verified applied XP +20 receipt -> preview TOP TEN, frozen midnight-06 and month archive.'
+          echo 'No real GM dashboard/auth check, no actual gifts, prizes, signed APK, deployed rules, Cloud Functions, or Play.'
+          echo 'User explicitly requires concise all-additions review BEFORE preparation of ANY APK.'
