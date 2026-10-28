@@ -304,6 +304,9 @@ test("untrusted self-share cannot mint server event",async()=>{
  }),/unverified_original_share_shape/);
 });
 test("server ACTION alone still cannot bypass missing reviewer or old APK fence",async()=>{
+ // Prior frozen-window tests refresh the only identity fixture to NEXT WEEK.
+ // Restore the current-day identity so this test reaches the intended fence.
+ await attest(NOW);
  const evidence=(await db.doc(ACTION_ROOT+"/"+eventAt(NOW)).get()).data();
  assert.equal(evidence.serverVerifiedAction,true);
  const oldFence=await db.doc(FENCE_ROOT+"/"+ACCOUNT).get();
