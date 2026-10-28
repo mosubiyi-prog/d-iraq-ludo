@@ -1,0 +1,105 @@
+name: DEDA Stage43 reviewed cutover EPOCH & two phone anti-replay REAL EMULATOR NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage43-reviewed-epoch-two-phone-cutover-emulator-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage43_cutover_epoch_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - '.github/workflows/qa-deda-weekly-stage43-reviewed-cutover-epoch-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE43_REVIEWED_EPOCH_TWO_PHONE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage43-private-account-epoch-qa-no-deploy
+  cancel-in-progress: true
+jobs:
+  protect-original-and-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect all real app signed package and production Firebase files
+        run: |
+          set -euo pipefail
+          git diff --quiet 0651f5d3444b0b8ea6211300fe0bff76b376cb16 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            tools/app_stability/progress_archive pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage43_cutover_epoch_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const idx=fs.readFileSync('functions/index.js','utf8');
+          const cutover=fs.readFileSync('functions/deda_weekly_stage43_reviewed_cutover_epoch_NOT_EXPORTED.js','utf8');
+          const atomic=fs.readFileSync('functions/deda_weekly_stage43_cutover_epoch_atomic_NOT_EXPORTED.js','utf8');
+          if(idx.includes('deda_weekly_stage43_'))
+            throw Error('Stage43 demo must not be exported to production!');
+          for(const part of [
+            'private_admin_reviewed_cutover_fixture_only',
+            'effectiveAtMs>sourceCreatedAtMs',
+            'legacyFenceId!==settlement.legacyFenceId',
+            'previousLocalClaimsReviewedInFixture',
+            'old published DEDA versions',
+            'canAuthorizeProduction!==false',
+            'sourceCreatedAtMs:created'
+          ])if(!(cutover+atomic).includes(part))
+            throw Error('Stage43 private no-live safety invariant missing: '+part);
+          console.log('All live sources protected. Stage43 source and data are emulator-only.');
+          JS
+  test-real-local-firestore:
+    needs: protect-original-and-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install local Firebase simulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Test migration EPOCH old-event fence, two phones and canonical receipts
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - name: Original migration/core and approved calendar regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-review-ready:
+    needs: [protect-original-and-source,test-real-local-firestore]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage43: Reviewed source effective time must precede event and both installations need private enrollment.'
+          echo 'Original +5 task, +20 XP, +10 coins, +0 frozen weekly task ranking; no production awarded.'
+          echo 'CRITICAL: No real old published APK is revoked; no real privileged migration reviewer or AppCheck issuer.'
+          echo 'No Android APK/AAB, no Firebase/Rules/Play deploy. Owner requested pre-APK all-additions report first.'
