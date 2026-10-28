@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // DELIBERATELY EMULATOR-ONLY. Never deploy to deda-25b88.
+    // All seeded account/evidence/proof/receipt docs are Admin-SDK-only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
