@@ -274,7 +274,7 @@ def bind(root):
         end=code.index("\n  }\n\n",start)+len("\n  }\n\n")
         segment=code[start:end]
         if (segment.count("    final accountKey = _accountKey();") != 1
-                or segment.count("await _writeState(prefs, accountKey, state);") != 1
+                or segment.count("state['awards'] = awards;") != 1
                 or segment.count("totalPointsNotifier.value = total;") != 1
                 or not segment.endswith("  }\n\n")
                 or "DedaTaskWriteFence" in segment):
@@ -306,9 +306,9 @@ def bind(root):
 """
         segment=segment.replace("    final accountKey = _accountKey();",
                                 "    final accountKey = _accountKey();\n"+guard,1)
-        segment=segment.replace("await _writeState(prefs, accountKey, state);",
+        segment=segment.replace("state['awards'] = awards;",
                                 """if (!stillOnAccount()) return rejectStale();
-    await _writeState(prefs, accountKey, state);""",1)
+      state['awards'] = awards;""",1)
         segment=segment.replace("    totalPointsNotifier.value = total;",
                                 """    if (!stillOnAccount()) return rejectStale();
     totalPointsNotifier.value = total;""",1)
