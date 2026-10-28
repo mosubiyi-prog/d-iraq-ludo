@@ -17,7 +17,7 @@ test('eight original task keys EXACTLY match the original DEDA source',()=>{
  const definitions=original.split('class DedaTaskIds {')[1]
    .split('class DedaTaskEventResult')[0];
  const entries=new Map([...definitions.matchAll(
-   /static const String (\\w+) = '([^']+)';/g,
+   /static const String (\w+) = '([^']+)';/g,
  )].map(([,name,value])=>[name,value]));
  const body=definitions.split('static const List<String> weekly = <String>[')[1]
    .split('];')[0];
