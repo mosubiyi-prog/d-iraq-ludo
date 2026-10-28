@@ -65,7 +65,7 @@ def bind(project):
     if ('DedaAdminDashboardPage' not in src or
         'DedaAdminCompactCard' not in src or
         "currentAdminProfile(" not in src or
-        "if (DedaBackend.adminHasPermission(profile, 'supportRead'))" not in src):
+        "if (DedaBackend.adminHasPermission(\n                          profile, 'supportRead'))" not in src):
         raise ValueError('Unexpected original administration: refuse patch')
     if ('deda_admin_league_dashboard_tile' in src or
         'deda_admin_league_page.dart' in src):
@@ -76,7 +76,11 @@ def bind(project):
         "import 'deda_admin_task_management_page.dart';\n"
         "import 'deda_admin_league_page.dart';",
         "original admin import")
-    anchor = "                      if (DedaBackend.adminHasPermission(profile, 'supportRead'))"
+    # The SHA-verified ORIGINAL 100380 administration uses a multiline
+    # supportRead gate; Stage26 repository code is formatted differently.
+    # Never replace the full admin page with the repository copy.
+    anchor = ("                      if (DedaBackend.adminHasPermission(\n"
+              "                          profile, 'supportRead'))")
     tile = """                      // Safe original DEDA Stage27 private manager QA.
                       // The page revalidates role; this is NOT a live league.
                       if (DedaBackend.normalizeAdminRole(profile['role']) ==
