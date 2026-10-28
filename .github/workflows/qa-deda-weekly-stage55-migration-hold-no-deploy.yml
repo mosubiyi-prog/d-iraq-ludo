@@ -1,0 +1,130 @@
+name: DEDA Stage55 two-phone server-bound migration HOLD private real emulator NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage55-two-phone-server-bound-migration-hold-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage55/private_two_phone_migration_hold.cjs'
+      - 'functions/tests/deda_weekly_stage55_two_phone_migration_hold.test.js'
+      - 'tests/firestore-rules/stage55_original_rules_private_migration_hold_denial.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage55-migration-hold-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE55_SERVER_BOUND_TWO_PHONE_HOLD_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage55-two-phone-hold-no-deploy
+  cancel-in-progress: true
+jobs:
+  original-files-never-edited:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact five-file allowlist against successful Stage54
+        run: |
+          set -euo pipefail
+          BASE=f8a2a2cb5be034920df73a441d66450f5a7666e7
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-stage55-only.txt
+          cat /tmp/deda-stage55-only.txt
+          while IFS= read -r file; do
+            case "$file" in
+              tools/app_stability/stage55/private_two_phone_migration_hold.cjs|\
+              functions/tests/deda_weekly_stage55_two_phone_migration_hold.test.js|\
+              tests/firestore-rules/stage55_original_rules_private_migration_hold_denial.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage55-migration-hold-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE55_SERVER_BOUND_TWO_PHONE_HOLD_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "FORBIDDEN source change: $file"; exit 1;;
+            esac
+          done < /tmp/deda-stage55-only.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/ tools/app_stability/progress_archive/
+          node --check tools/app_stability/stage55/private_two_phone_migration_hold.cjs
+          node --check functions/tests/deda_weekly_stage55_two_phone_migration_hold.test.js
+          node --check tests/firestore-rules/stage55_original_rules_private_migration_hold_denial.test.mjs
+          node - <<'JS'
+          const fs=require('fs');
+          const app=fs.readFileSync('functions/index.js','utf8');
+          const privateModule=fs.readFileSync('tools/app_stability/stage55/private_two_phone_migration_hold.cjs','utf8');
+          if(app.includes('deda_stage55_private_two_phone_hold_reports')||
+             app.includes('migrationHold('))throw Error('Stage55 MUST NOT be exported into actual DEDA backend');
+          for(const x of ['DEDA_STAGE55_EMULATOR_ONLY',
+            'deda_stage54_private_account_bindings/',
+            'PREVIOUS_IMMUTABLE_REPORT_CHANGED_SOURCE',
+            'HOLD_MANUAL_REVIEW_ONLY','canTransferWallet:false',
+            'canCreditXp:false','tx.create(target,report)'])
+            if(!privateModule.includes(x))throw Error('Missing Stage55 fail-closed hold invariant '+x);
+          console.log('Stage55 original DEDA app, rules, wallets and baseline unchanged');
+          JS
+  actual-original-rules-private-hold-tests:
+    needs: original-files-never-edited
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      GOOGLE_CLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_STAGE55_EMULATOR_ONLY: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable Admin SDK, Firebase client SDK and emulators
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Actual original Firestore rules + private 2-phone migration conflict and client attack tests
+        run: |
+          set -euo pipefail
+          cat > firebase.stage55.ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.stage55.ci.json' EXIT
+          node - <<'JS'
+          const fs=require('fs');
+          const a=JSON.parse(fs.readFileSync('firebase.stage55.ci.json'));
+          const original=JSON.parse(fs.readFileSync('firebase.json'));
+          if(a.firestore.rules!==original.firestore.rules ||
+             a.firestore.rules!=='firestore.rules')
+            throw Error('Stage55 original production rules path must remain unchanged');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.stage55.ci.json \
+            --project demo-deda-stage55-two-phone-hold --only auth,firestore \
+            'node --test functions/tests/deda_weekly_stage55_two_phone_migration_hold.test.js && cd tests/firestore-rules && node --test stage55_original_rules_private_migration_hold_denial.test.mjs'
+      - name: Keep Stage55 strictly private HOLD, not an APK, migration or prize
+        run: |
+          echo 'Stage55 immutable private two-phone HOLD snapshots only in local emulator.'
+          echo 'Original server-unverified XP, frames, IDs, purchases, coins, diamonds and gifts remain UNTRUSTED.'
+          echo 'Stage54 credential binding is emulator-only; original install IDs and sessions remain client writable.'
+          echo 'No wallet/profile/legacy account/rules/reward mutation; no real Firebase, APK, AAB or Play deploy.'
+          echo 'Owner all-additions review before any future APK and separate owner approval for live backend.'
