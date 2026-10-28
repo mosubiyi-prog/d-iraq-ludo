@@ -17,13 +17,19 @@ const {getFirestore,FieldValue}=require('firebase-admin/firestore');
 
 const PROJECT='demo-deda-stage54-pin-binding';
 const SECRET=process.env.STAGE54_EMULATOR_TEST_KEY;
-if(process.env.GCLOUD_PROJECT!==PROJECT ||
-   process.env.STAGE54_EMULATOR_ONLY!=='true' ||
-   !process.env.FIREBASE_AUTH_EMULATOR_HOST ||
-   !process.env.FIRESTORE_EMULATOR_HOST ||
-   !process.env.FIREBASE_FUNCTIONS_EMULATOR_HOST ||
-   typeof SECRET!=='string'||SECRET.length<32) {
-  throw Error('STAGE54_EMULATOR_ONLY_REFUSE_PRODUCTION_START');
+// Firebase CLI discovers callable exports by loading this module before it
+// propagates all emulator process env. Enforcement MUST happen on every
+// invocation before touching Auth or Firestore, not during source discovery.
+function ensureLocalOnly(){
+  if(process.env.GCLOUD_PROJECT!==PROJECT ||
+     process.env.STAGE54_EMULATOR_ONLY!=='true' ||
+     !process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+     !process.env.FIRESTORE_EMULATOR_HOST ||
+     !process.env.FIREBASE_FUNCTIONS_EMULATOR_HOST ||
+     typeof process.env.STAGE54_EMULATOR_TEST_KEY!=='string' ||
+     process.env.STAGE54_EMULATOR_TEST_KEY.length<32)
+    throw new HttpsError('failed-precondition',
+      'STAGE54_EMULATOR_ONLY_REFUSE_PRODUCTION_START');
 }
 initializeApp({projectId:PROJECT});
 const db=getFirestore();
@@ -60,6 +66,7 @@ function noGrants(){
 exports.dedaStage54LegacyPinPreflight=onCall({
   enforceAppCheck:false,timeoutSeconds:30,memory:'256MiB'
 },async request=>{
+  ensureLocalOnly();
   // Never trust UID/account/phone/install supplied in body. UID is obtained
   // from callable Auth context, checked against Auth Emulator account record.
   if(!request.auth?.uid ||
