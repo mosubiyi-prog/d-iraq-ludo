@@ -1,0 +1,53 @@
+name: DEDA original eight-task source contract against actual DEDA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-original-eight-task-proof-gate-no-deploy-2026-10-28
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-eight-original-xp-qa
+  cancel-in-progress: true
+jobs:
+  original-safe-and-proof-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refuse touching current users, original application, bank, production functions and wallets
+        run: |
+          set -euo pipefail
+          BASE=69e5857a6977674c53c27cd857d36c9ad7ba6766
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/deda-8-tasks.txt
+          cat /tmp/deda-8-tasks.txt
+          while IFS= read -r f; do
+            case "$f" in
+              functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js|\
+              functions/tests/deda_weekly_original_eight_task_source_gate.test.js|\
+              .github/workflows/qa-deda-weekly-original-eight-task-proof-no-deploy.yml|\
+              docs/DEDA_WEEKLY_EIGHT_ORIGINAL_TASK_XP_COVERAGE_2026-10-28.md) ;;
+              *) echo "REFUSE: changed original app or user-facing finance: $f"; exit 1 ;;
+            esac
+          done </tmp/deda-8-tasks.txt
+          git diff --quiet "$BASE" -- lib/ android/ assets/ \
+            functions/index.js functions/package.json firestore.rules firebase.json \
+            pubspec.yaml pubspec.lock tools/
+          node --check functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_original_eight_task_source_gate.test.js
+          echo "PASS: unchanged original signed reference, no deployment"
+      - name: Check actual original task IDs and XP grant contract without mock production success
+        run: |
+          set -euo pipefail
+          node --test functions/tests/deda_weekly_original_eight_task_source_gate.test.js
+      - name: Explicitly block production use
+        run: |
+          echo "Only 1 of 8 original tasks has PRIVATE signed proof, still not production."
+          echo "No real accounts, awards, Firestore writes, bank edits, deploy, APK/AAB or Play."
