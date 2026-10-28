@@ -75,6 +75,12 @@ async function reviewMigratedBaseline(){
     evidenceDigest:assessment.evidenceDigest,baselineEventKey,
     legacyFenceId:"legacy_writer_fence_stage37_01",
     pendingPurchases:0,pendingReservations:0});
+  const receipt=originalReceipt();
+  batch.set(db.doc(ROOT+"/classifications/"+core.eventKey(receipt)),{
+    format:1,accountKey:ACCOUNT,migrationId,
+    evidenceDigest:assessment.evidenceDigest,
+    disposition:"after-cutover",receipt
+  });
   batch.set(db.doc(STATE),migrated);
   batch.set(db.doc(STATE+"/events/"+baselineEventKey),{
     format:1,accountKey:ACCOUNT,eventKey:baselineEventKey,receipt:baseline,
@@ -143,6 +149,27 @@ test("changed historic archive is detected, never reset to zero",async()=>{
   await db.doc(path).update({evidenceDigest:assess.evidenceDigest});
   const r=await call();
   assert.equal(r.futureNewLifetimeXp,20);
+});
+test("unclassified task is blocked rather than assumed new after migration",async()=>{
+  const eventKey=core.eventKey(originalReceipt());
+  const path=ROOT+"/classifications/"+eventKey;
+  await db.doc(path).delete();
+  await assert.rejects(call(),/migration_classification_required/);
+  const assess=assessLegacyEvidence(evidence(),ACCOUNT,captureId);
+  await db.doc(path).set({
+    format:1,accountKey:ACCOUNT,migrationId,evidenceDigest:assess.evidenceDigest,
+    disposition:"after-cutover",receipt:originalReceipt()
+  });
+});
+test("task already included in reviewed baseline remains ZERO new XP",async()=>{
+  const path=ROOT+"/classifications/"+core.eventKey(originalReceipt());
+  await db.doc(path).update({disposition:"included-in-baseline"});
+  const r=await call();
+  assert.equal(r.includedInReviewedLegacyBaseline,true);
+  assert.equal(r.futureNewTaskPoints,0);
+  assert.equal(r.futureNewLifetimeXp,0);
+  assert.equal(r.futureLeagueXp,0);
+  await db.doc(path).update({disposition:"after-cutover"});
 });
 test("replaying an already applied event cannot add another 20 XP",async()=>{
   const receipt=originalReceipt(),eventKey=core.eventKey(receipt);
