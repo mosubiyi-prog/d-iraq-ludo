@@ -1,0 +1,161 @@
+name: DEDA Stage49 server-owned UID binding and ACTUAL-LIVE-derived client attacks NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage49-server-owned-uid-binding-atomic-private-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage49_server_uid_binding_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage49_uid_bound_claim_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage49_server_uid_bound_task_atomic.test.js'
+      - 'tools/app_stability/deda_weekly_stage49_live_rules_uid_binding_candidate.py'
+      - 'tests/firestore-rules/stage49_live_derived_authenticated_uid_binding_attacks.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage49-uid-binding-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE49_SERVER_UID_BINDING_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage49-private-uid-binding-qa-no-deploy
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guarantee no real app, original wallet, migration, Rules or backend edits
+        run: |
+          set -euo pipefail
+          git diff --quiet 102243df60df8304a51b37d44c6813287fa3ae71 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage49_server_uid_binding_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage49_uid_bound_claim_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage49_server_uid_bound_task_atomic.test.js
+          node --check tests/firestore-rules/stage49_live_derived_authenticated_uid_binding_attacks.test.mjs
+          python3 -m py_compile tools/app_stability/deda_weekly_stage49_live_rules_uid_binding_candidate.py
+          node - <<'JS'
+          const fs=require('fs');
+          const idx=fs.readFileSync('functions/index.js','utf8');
+          const binding=fs.readFileSync('functions/deda_weekly_stage49_server_uid_binding_NOT_EXPORTED.js','utf8');
+          const atomic=fs.readFileSync('functions/deda_weekly_stage49_uid_bound_claim_atomic_NOT_EXPORTED.js','utf8');
+          if(idx.includes('deda_weekly_stage49_'))throw Error('Stage49 MUST NOT be exported');
+          for(const x of [
+            'private_emulator_only','canAuthorizeProduction:false',
+            'oldApkRevocationVerified:false','deviceHardwareVerified:false',
+            'validateServerUidBindingInTransaction','crypto.timingSafeEqual',
+            'originalLocalClaimAwarded','creditedSocialCoins:10'
+          ]) if(!(binding+atomic).includes(x))throw Error('Missing Stage49 fail-closed boundary '+x);
+          console.log('ORIGINAL_DEDA_SOURCE_AND_REAL_ACCOUNTS_UNTOUCHED');
+          JS
+  signed-uid-binding-atomic-emulator:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install local disposable Firestore emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Stage49 server-owned UID binding, altered phone, two-device same-account once-only XP
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage49_server_uid_bound_task_atomic.test.js'
+      - name: Stage46 previously-approved atomic claim + historical migration regressions on clean emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js'
+  live-rules-client-attack-emulator:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install actual rules READ ONLY client and disposable emulator test deps
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+      - name: Read ACTUAL deployed Firestore Rules only, write to ephemeral runner temp
+        env:
+          FIREBASE_SERVICE_ACCOUNT_DEDA_25B88: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-live-readonly.rules
+        run: |
+          set -euo pipefail
+          python tools/app_stability/deda_weekly_live_rules_emulator_fetch_stage24.py
+          test -s "$DEDA_STAGE24_LIVE_RULES_TMPFILE"
+      - name: Derive Stage41+48+49 private additive-only candidate, no live changes
+        env:
+          DEDA_STAGE49_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-live-readonly.rules
+          DEDA_STAGE49_CANDIDATE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-candidate-only.rules
+        run: |
+          set -euo pipefail
+          python tools/app_stability/deda_weekly_stage49_live_rules_uid_binding_candidate.py
+          test -s "$DEDA_STAGE49_CANDIDATE_RULES_TMPFILE"
+      - name: Attack UID-binding, XP and gifts as 5 client roles + preserve original legitimate shares
+        env:
+          DEDA_STAGE49_CANDIDATE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-candidate-only.rules
+          DEDA_STAGE41_CANDIDATE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-candidate-only.rules
+          DEDA_STAGE24_LIVE_RULES_TMPFILE: ${{ runner.temp }}/deda-stage49-candidate-only.rules
+          DEDA_STAGE33_EXPECT_CURRENT_SELF_SHARE_GAP: '0'
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@14 emulators:exec --only firestore \
+            --project demo-deda-stage49-server-uid-binding \
+            "cd tests/firestore-rules && node --test stage49_live_derived_authenticated_uid_binding_attacks.test.mjs stage41_canonical_progress_cutover_rules.test.mjs stage33_live_original_share_rules.test.mjs"
+      - name: Delete ALL ephemeral live rules source and candidate even on failure
+        if: always()
+        run: |
+          rm -f "${{ runner.temp }}/deda-stage49-live-readonly.rules" \
+            "${{ runner.temp }}/deda-stage49-candidate-only.rules"
+          echo 'No live Rules uploaded, no Firebase deployment or user data mutation.'
+  private-stage49-complete:
+    needs: [protect-original, signed-uid-binding-atomic-emulator, live-rules-client-attack-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage49: ORIGINAL phone install/session remains client writable and UNTRUSTED.'
+          echo 'Server UID+app approval is only synthetic backend/HMAC protected QA; real Firebase Auth/AppCheck/device verification NOT implemented.'
+          echo 'No original wallet, Rules, Cloud Function, Play, APK/AAB or deployment.'
+          echo 'Before any APK owner requires all-additions concise report and review together.'
