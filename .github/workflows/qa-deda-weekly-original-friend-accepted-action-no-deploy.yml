@@ -1,0 +1,80 @@
+name: DEDA actual approved friend-accepted action private canonical XP proof NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-approved-friend-accepted-proof-qa-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-approved-original-friend-action-private-proof
+  cancel-in-progress: true
+jobs:
+  protect-original-and-social-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Strict only private backend action/test/CI/report files
+        run: |
+          set -euo pipefail
+          BASE=a6abcbdfdad6eb999bf1419f06e13fb6a658407c
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/private-only
+          cat /tmp/private-only
+          while IFS= read -r f; do
+            case "$f" in
+              functions/deda_weekly_original_friend_accepted_action_NOT_EXPORTED.js|\
+              functions/tests/deda_weekly_original_friend_accepted_action.test.js|\
+              .github/workflows/qa-deda-weekly-original-friend-accepted-action-no-deploy.yml|\
+              docs/DEDA_WEEKLY_APPROVED_FRIEND_ACCEPTED_ACTION_PROOF_2026-10-29.md) ;;
+              *) echo "REFUSE original/production change $f"; exit 1 ;;
+            esac
+          done </tmp/private-only
+          git diff --quiet "$BASE" -- lib/ android/ assets/ \
+            functions/index.js functions/package.json firestore.rules \
+            firebase.json pubspec.yaml pubspec.lock \
+            tools/app_stability/ tests/firestore-rules/
+          node --check functions/deda_weekly_original_friend_accepted_action_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_original_friend_accepted_action.test.js
+          ! grep -q 'deda_weekly_original_friend_accepted_action_NOT_EXPORTED' functions/index.js
+          echo 'Original app, production XP, PIN, accounts, diamonds and rules unchanged'
+  real-private-firestore-accepted-transition:
+    needs: protect-original-and-social-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install separate local-only Firebase Emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Server-side original accepted friend transition verifies both canonical accounts without awards
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_original_friend_accepted_action.test.js'
+      - name: Explicit stop — no real level or prize credit
+        run: |
+          echo 'Only private action proof for approved friend task. No XP, points, coins or diamonds.'
+          echo 'Old original task key long_trip remains mapped to friendAccepted by approved 100383.'
+          echo 'Production account migration and signed XP settlement remain unimplemented.'
+          echo 'No Firebase deploy, Play, APK/AAB or edits to reference 100342 or traffic bank.'
