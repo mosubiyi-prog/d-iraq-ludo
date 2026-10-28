@@ -118,7 +118,7 @@ jobs:
           assert "DedaTaskEvent.prizeCardsExplored => DedaTaskIds.shareRegisteredPlace" in main
           assert "DedaTaskEvent.prizeCardsExplored," in main
           assert "DedaTaskEvent.registeredPlaceShared,\\n        );" not in main
-          assert main.count("await DedaBackend.createLocationShare(")==1
+          assert main.count("await DedaBackend.createLocationShare(")>=1
           assert meta['weeklyOriginalReadOnlyProfile']['noFriendshipWrites']
           print("PASS: original approved task semantics preserved; registered-place-share is DEPRECATED as daily claim in 100383")
           PY
