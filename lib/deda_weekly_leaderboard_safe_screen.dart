@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'deda_weekly_leaderboard_page.dart';
+import 'deda_weekly_competitor_public_card.dart';
 import 'deda_weekly_snapshot_decode.dart';
 
 /// Guarded UI shell for the fixed owner-approved weekly leaderboard.
@@ -19,11 +20,26 @@ class DedaWeeklyLeaderboardSafeScreen extends StatefulWidget {
     this.refreshSignal,
     this.refreshInterval,
     this.onOpenDailyTasks,
+    this.onOpenExistingPublicProfile,
+    this.onSendExistingFriendRequest,
+    this.friendRelationFor,
+    this.drawOriginalEquippedAvatar,
   });
 
   /// Only passes navigation to DEDA's existing daily tasks screen.
   /// Not an XP, task-claim or wallet operation.
   final VoidCallback? onOpenDailyTasks;
+
+  /// Authenticated ORIGINAL DEDA navigation/social adapters, not direct writes.
+  /// Missing callbacks = safe, noninteractive competitor cards.
+  final Future<void> Function(DedaWeeklyPublicCompetitor)?
+      onOpenExistingPublicProfile;
+  final Future<void> Function(DedaWeeklyPublicCompetitor)?
+      onSendExistingFriendRequest;
+  final DedaWeeklyFriendRelation Function(DedaWeeklyPublicCompetitor)?
+      friendRelationFor;
+  final Widget Function(BuildContext,int,int,double)?
+      drawOriginalEquippedAvatar;
 
   final Future<Object?> Function()? loadVerifiedStandings;
 
@@ -145,6 +161,53 @@ class _DedaWeeklyLeaderboardSafeScreenState
     }
   }
 
+  /// A tap is authorized against the currently displayed, parsed server
+  /// object AND the still-active original account. An old bottom sheet is
+  /// never permission to act after logout or refresh. Opaque participant IDs
+  /// are NOT Firebase UIDs or account keys.
+  bool _isCurrentVerifiedCompetitor(DedaWeeklyPublicCompetitor person) {
+    if (!_stillCurrent || !person.safePublicIdentity) return false;
+    final snapshot = _snapshot;
+    if (snapshot == null) return false;
+    for (final week in [snapshot.current, snapshot.previous]) {
+      if (!week.verified || week.viewerUid == person.participantId) continue;
+      for (final row in week.rows) {
+        if (row.accountUid != person.participantId) continue;
+        final trusted = week.profilesByUid[row.accountUid]?.verifiedCompetitor;
+        if (identical(trusted, person) && trusted!.safePublicIdentity) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  DedaWeeklyFriendRelation _verifiedRelation(
+      DedaWeeklyPublicCompetitor person) {
+    if (!_isCurrentVerifiedCompetitor(person) ||
+        widget.friendRelationFor == null) {
+      return DedaWeeklyFriendRelation.unknown;
+    }
+    try {
+      return widget.friendRelationFor!(person);
+    } catch (_) {
+      return DedaWeeklyFriendRelation.unknown;
+    }
+  }
+
+  Future<void> _openVerifiedProfile(DedaWeeklyPublicCompetitor person) async {
+    if (!_isCurrentVerifiedCompetitor(person)) return;
+    await widget.onOpenExistingPublicProfile?.call(person);
+  }
+
+  Future<void> _requestVerifiedFriend(DedaWeeklyPublicCompetitor person) async {
+    if (!_isCurrentVerifiedCompetitor(person) ||
+        _verifiedRelation(person) != DedaWeeklyFriendRelation.notFriends) {
+      return;
+    }
+    await widget.onSendExistingFriendRequest?.call(person);
+  }
+
   @override
   void dispose() {
     _detach(widget);
@@ -156,7 +219,25 @@ class _DedaWeeklyLeaderboardSafeScreenState
   Widget build(BuildContext context) {
     final safeSnapshot = _stillCurrent ? _snapshot : null;
     return DedaWeeklyLeaderboardPage(
-      onOpenDailyTasks: widget.onOpenDailyTasks,
+      onOpenDailyTasks: _stillCurrent && widget.onOpenDailyTasks != null
+          ? () {
+              if (_stillCurrent) widget.onOpenDailyTasks?.call();
+            }
+          : null,
+      onOpenExistingPublicProfile: widget.onOpenExistingPublicProfile == null
+          ? null : _openVerifiedProfile,
+      onSendExistingFriendRequest: widget.onSendExistingFriendRequest == null
+          ? null : _requestVerifiedFriend,
+      friendRelationFor: _verifiedRelation,
+      drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar == null
+          ? null : (ctx, avatar, frame, size) {
+              if (!_stillCurrent) return const CircleAvatar(
+                child: Icon(Icons.person_outline),
+              );
+              return widget.drawOriginalEquippedAvatar!(
+                ctx, avatar, frame, size,
+              );
+            },
       current: safeSnapshot?.current ??
           const DedaLeaderboardViewData(
             verified: false,
