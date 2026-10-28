@@ -1,0 +1,115 @@
+name: DEDA Stage46 signed ORIGINAL task claim proof +5/+20/+10 LOCAL emulator NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage46-server-signed-task-claim-issuer-qa-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js'
+      - '.github/workflows/qa-deda-weekly-stage46-private-signed-task-claim-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE46_SERVER_SIGNED_TASK_CLAIM_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage46-private-signed-original-claim
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm original APK, production Auth, Firestore Rules, wallet and historical data unchanged
+        run: |
+          set -euo pipefail
+          git diff --quiet 56f36ece5fcb6d8e26e2c93bdc3dbdf66d03ed46 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          const claim=fs.readFileSync('functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js','utf8');
+          const ledger=fs.readFileSync('functions/deda_weekly_stage46_private_signed_claim_atomic_NOT_EXPORTED.js','utf8');
+          if(index.includes('deda_weekly_stage46_'))throw Error('Stage46 private QA MUST NOT be exported!');
+          for(const marker of [
+            'stage46_privileged_legacy_claim_reviewer_TEST_ONLY',
+            'HMAC', 'crypto.timingSafeEqual',
+            'independent_reviewed_task_claim_required',
+            'old.source', 'server_signed_task_claim_missing',
+            'originalLocalCoinsReconciledInFixture',
+            'canAuthorizeProduction:false',
+          ])if(!(claim+ledger).includes(marker))
+            throw Error('Stage46 private safety marker missing: '+marker);
+          if(!ledger.includes('validateSignedTaskClaimInTransaction')||
+             !ledger.includes('sourceCreatedAtMs:created')||
+             !ledger.includes('creditedSocialCoins:10'))
+            throw Error('Stage46 atomic original task +5/+20/+10 integrity broken');
+          console.log('NO actual app/original wallet/Firestore Rules/production server changes');
+          JS
+  signed-original-claim-local-firestore:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable local Firestore emulator tools
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Stage46 independent reviewed signed original task CLAIM and two-phone atomic XP on clean emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js'
+      - name: Stage45 gift, Stage44 frozen TOP10 and Stage43 progress regressions on separately clean emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage45_private_gifts_inbox_atomic.test.js && node --test functions/tests/deda_weekly_stage44_verified_ledger_top10_archive.test.js && node --test functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - name: Original progress reconciliation and previously approved calendar regressions
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js \
+            functions/tests/deda_weekly_monthly_top10_archive.test.js
+  stage46-private-complete:
+    needs: [protect-original, signed-original-claim-local-firestore]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage46 is PRIVATE SOURCE CODE + real local Firestore Emulator, not production.'
+          echo 'Claim proof requires separate admin-reviewed TEST-ONLY reconciliation and backend HMAC.'
+          echo 'Even signed QA proof does not demonstrate real original phone-local award or actual old APK revocation.'
+          echo 'No original balance or real هداياي, no Firebase/Cloud Functions/Rules/Play, no APK/AAB prepared.'
+          echo 'Owner mandated ALL additions and remaining blockers reviewed together before ANY APK preparation.'
