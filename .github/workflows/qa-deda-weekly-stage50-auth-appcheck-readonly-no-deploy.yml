@@ -54,7 +54,7 @@ jobs:
             'canCreditLeagueXp:false',
             'request?.auth?.uid',
             'request?.app?.appId',
-            'real-old-apk-server-write-cutover-not-verified',
+            'old-installed-apk-server-write-cutover-not-verified',
           ])if(!code.includes(m))throw Error('Stage50 fail-closed marker missing '+m);
           console.log('STAGE50_REWARD_GATE_NEVER_EXPORTS_OR_CREDITS_REAL_WALLETS');
           JS
