@@ -54,9 +54,15 @@ def bind(project):
     t=one(t,"import 'deda_weekly_snapshot_decode.dart';",
         "import 'deda_weekly_snapshot_decode.dart';\n"
         "import 'deda_weekly_private_trial_local_xp.dart';",'trial import')
-    t=one(t,"    this.refreshInterval,\n  });",
-        "    this.refreshInterval,\n    this.localTrialAccountKey,\n  });",
-        'optional original screen constructor')
+    # New Stage28 task-route callback sits between refreshInterval and
+    # constructor end. Keep compatibility with the previously immutable
+    # Stage17 source and require exactly one recognized, safe anchor.
+    old_screen_ctor = ("    this.refreshInterval,\\n    this.onOpenDailyTasks,\\n  });"
+                       if "    this.onOpenDailyTasks,\\n  });" in t
+                       else "    this.refreshInterval,\\n  });")
+    new_screen_ctor = old_screen_ctor.replace(
+        "\\n  });", "\\n    this.localTrialAccountKey,\\n  });")
+    t=one(t,old_screen_ctor,new_screen_ctor,'optional original screen constructor')
     t=one(t,"  final Duration? refreshInterval;",
         "  final Duration? refreshInterval;\n"
         "  /// Original account number for LOCAL QA only. Never a winner ID.\n"
@@ -114,15 +120,50 @@ def bind(project):
         "  final bool previewOnly;\n"
         "  /// Non-authoritative own-phone diagnostic only, never global ranking.\n"
         "  final int? privateTrialXp;",'trial amount')
-    p=one(p,"                          : 'الترتيب قيد التحقق من الخادم؛ '\n"
-        "                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',",
-        """                          : widget.privateTrialXp != null && !previousWeek
+    # Stage28 moves the SAME verified status notice to statusPanel(), with
+    # a shorter indent. Both layouts must keep the original local QA result
+    # without ever promoting local XP to real league rankings.
+    original_notice = ("                          : 'الترتيب قيد التحقق من الخادم؛ '\\n"
+                       "                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',")
+    landscape_notice = ("                : 'الترتيب قيد التحقق من الخادم؛ '\\n"
+                        "                    'لن تُعرض نتائج وهمية أو تُصرف جوائز.',")
+    footer_anchor = landscape_notice if landscape_notice in p else original_notice
+    footer_replacement = """                          : widget.privateTrialXp != null && !previousWeek
                           ? 'فحص نقاط مهامي هذا الأسبوع: '
                             '@@{widget.privateTrialXp} XP محلياً؛ '
                             'لا ترتيب حقيقياً ولا جوائز.'
                           : 'الترتيب قيد التحقق من الخادم؛ '
-                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',""".replace('@@','$'),
-        'footer private XP notice')
+                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',""".replace('@@','
+    page.write_text(p)
+    shutil.copy2(ROOT/ADDITION,project/ADDITION)
+    modifications={rel for rel,old in data['sourceHashes'].items()
+                   if sha(project/rel)!=old}
+    expected={'lib/main.dart','lib/deda_weekly_leaderboard_safe_screen.dart',
+              'lib/deda_weekly_leaderboard_page.dart'}
+    if modifications!=expected:raise ValueError('Unexpected changed files '+repr(modifications))
+    data['sourceHashes']={str(p.relative_to(project)):sha(p) for p in
+                          (project/'lib').rglob('*.dart')}
+    data['sourceHashes'].update({
+        p:sha(project/p) for p in ('pubspec.yaml','pubspec.lock')})
+    data['versionCode']=100392
+    data['weeklyStage17']={
+      'privateQa':True,'ownAccountLocalTrialXp':True,
+      'midnightRefreshOnResume':True,'taskAndXpDualReceiptRequired':True,
+      'noForgedGlobalRanks':True,'serverIssuedResults':False,
+      'verifiedProductionWeeklyLeague':False,'realPrizesCredited':False,
+      'originalWalletXpUnchanged':True,
+      'provisionalTrialWeekStart':'Monday 00:00 Iraq',
+    }
+    data['purpose']='ORIGINAL 100392 private TASK midnight trial, NO REAL LEAGUE'
+    manifest.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+    return data['weeklyStage17']
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('project',type=Path)
+    print(json.dumps(bind(parser.parse_args().project),ensure_ascii=False))
+)
+    p=one(p,footer_anchor,footer_replacement,'footer private XP notice')
     page.write_text(p)
     shutil.copy2(ROOT/ADDITION,project/ADDITION)
     modifications={rel for rel,old in data['sourceHashes'].items()
