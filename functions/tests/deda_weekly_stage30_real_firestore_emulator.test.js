@@ -2,7 +2,9 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {initializeApp,deleteApp}=require("firebase-admin/app");
-const {getFirestore}=require("firebase-admin/firestore");
+const {getFirestore,Timestamp}=require("firebase-admin/firestore");
+const {inspectOriginalDedaPersonalLocationShare:inspectShare}=
+  require("../deda_weekly_stage30_original_share_evidence_NOT_EXPORTED.js");
 const {opaqueReceiptId}=
   require("../deda_weekly_owner_receipt_gate_NOT_EXPORTED.js");
 const {simulateAtomicShadowTaskXp,ROOT}=
@@ -83,7 +85,8 @@ async function nextSession(now){
 test.before(async()=>{
   const batch=db.batch();
   for(const [uid,account,install] of UIDS){
-    batch.set(db.doc("users/"+uid),{uid,accountKey:account});
+    batch.set(db.doc("users/"+uid),{uid,accountKey:account,
+      sharePersonalId:account===A?"@DEDA-A12345":"@DEDA-B12345"});
     batch.set(db.doc("deda_sessions/"+uid),{
       uid,accountKey:account,installId:install,
     });
@@ -93,6 +96,12 @@ test.before(async()=>{
   });
   batch.set(db.doc("deda_account_profiles/"+B),{
     accountKey:B,trustedInstallIds:["phone_b"],
+  });
+  batch.set(db.doc("deda_share_ids/@DEDA-A12345"),{
+    active:true,kind:"personal",ownerUid:"user_a_phone1",
+  });
+  batch.set(db.doc("deda_share_ids/@DEDA-B12345"),{
+    active:true,kind:"personal",ownerUid:"user_b",
   });
   batch.set(db.doc("users/user_a_phone1/wallet/original"),ORIGINALS);
   batch.set(db.doc("deda_admin_diamond_wallets/manager"),{
@@ -205,6 +214,57 @@ test("new week immediately resets weekly ranks, not original level or diamonds",
   assert.deepEqual(old.rows.map(x=>x.weeklyXp),[40,20]);
   assert.equal((await db.doc("users/user_a_phone1/wallet/original").get()).get("levelXp"),1250);
 });
+const SHARE_ID="abcdefghijklmnopqrst";
+function realShare(overrides={}){
+  const created=Timestamp.fromMillis(NOW-2500);
+  return {
+    senderUid:"user_a_phone1",
+    senderPublicId:"@DEDA-A12345",
+    recipientPublicId:"@DEDA-B12345",
+    shareType:"current",status:"pending",
+    senderName:"صاحب الحساب",placeId:"",placeName:"",
+    latitude:35.1,longitude:44.2,durationMinutes:15,
+    createdAt:created,updatedAt:created,
+    expiresAt:Timestamp.fromMillis(NOW+14*60*1000),
+    ...overrides,
+  };
+}
+function inspectOriginalShare(){
+  return inspectShare({
+    db,shareId:SHARE_ID,weekConfig:WEEK,serverNowMs:NOW,
+  });
+}
+test("inspect real-shaped original DEDA location share: server identity and ID only, NOT XP",async()=>{
+  await db.doc("deda_location_shares/"+SHARE_ID).set(realShare());
+  const candidate=await inspectOriginalShare();
+  assert.equal(candidate.sourceCollection,"deda_location_shares");
+  assert.equal(candidate.taskId,"share_personal_location");
+  assert.equal(candidate.canonicalAccountKey,A);
+  assert.equal(candidate.privateServerCandidateOnly,true);
+  assert.equal(candidate.originalLevelXpApplied,false);
+  assert.equal(candidate.verifiedTaskXpReceipt,false);
+  assert.equal(candidate.allowedToPay,false);
+  assert.equal((await db.doc(ROOT.proof+"/"+actionRef(A,"share_personal_location")).get())
+    .exists,true);
+  // No new duplicate Stage9 XP is caused by merely observing the source.
+  const score=(await ranks()).rows.find(x=>x.weeklyXp===40);
+  assert.ok(score);
+});
+test("wrong sender, premium alias, forged timestamp or place-share cannot prove original share",async()=>{
+  for(const changes of [
+    {senderUid:"user_b"},{senderPublicId:"@DEDA-IRAQI"},
+    {senderPublicId:"@DEDA-B12345"},
+    {shareType:"place"},{status:"accepted"},
+    {placeId:"owned_place_fake"},{latitude:999},
+    {updatedAt:Timestamp.fromMillis(NOW+300)},
+  ]){
+    await db.doc("deda_location_shares/"+SHARE_ID).set(realShare(changes));
+    await assert.rejects(inspectOriginalShare(),
+      /DEDA_ORIGINAL_SHARE_TASK_BLOCK_/);
+  }
+  await db.doc("deda_location_shares/"+SHARE_ID).set(realShare());
+});
+
 test("Firestore clients cannot directly forge staged action, proof or XP receipt",async()=>{
   const base="http://127.0.0.1:8080/v1/projects/"+
     PROJECT+"/databases/(default)/documents/";
