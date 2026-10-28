@@ -94,7 +94,7 @@ test.before(async()=>{
   batch.set(db.doc("deda_account_profiles/"+B),{
     accountKey:B,trustedInstallIds:["phone_b"],
   });
-  batch.set(db.doc("users/user_a_phone1/original_wallet"),ORIGINALS);
+  batch.set(db.doc("users/user_a_phone1/wallet/original"),ORIGINALS);
   batch.set(db.doc("deda_admin_diamond_wallets/manager"),{
     diamonds:1000000,
   });
@@ -142,7 +142,7 @@ test("server action needs exact canonical owner, week, time and original level X
 });
 test("one trusted event -> proof -> +20 atomic shadow XP -> SAME player and GM preview",async()=>{
   await installTrustedSource(A,"share_personal_location");
-  const original=(await db.doc("users/user_a_phone1/original_wallet").get()).data();
+  const original=(await db.doc("users/user_a_phone1/wallet/original").get()).data();
   const manager=(await db.doc("deda_admin_diamond_wallets/manager").get()).data();
   const before=await db.doc(ROOT.receipt+"/"+actionRef(A,"share_personal_location")).get();
   assert.equal(before.exists,false);
@@ -160,7 +160,7 @@ test("one trusted event -> proof -> +20 atomic shadow XP -> SAME player and GM p
   assert.equal(view.managerPreview.approvalEnabled,false);
   assert.equal(view.payoutEnabled,false);
   assert.equal(view.verifiedRealXp,false);
-  assert.deepEqual((await db.doc("users/user_a_phone1/original_wallet").get()).data(),original);
+  assert.deepEqual((await db.doc("users/user_a_phone1/wallet/original").get()).data(),original);
   assert.deepEqual((await db.doc("deda_admin_diamond_wallets/manager").get()).data(),manager);
 });
 test("two phones same canonical account: concurrent proof and claim cannot double award",async()=>{
@@ -203,7 +203,7 @@ test("new week immediately resets weekly ranks, not original level or diamonds",
   const old=await ranks("user_a_phone1",time,WEEK);
   assert.equal(old.state,"closed");
   assert.deepEqual(old.rows.map(x=>x.weeklyXp),[40,20]);
-  assert.equal((await db.doc("users/user_a_phone1/original_wallet").get()).get("levelXp"),1250);
+  assert.equal((await db.doc("users/user_a_phone1/wallet/original").get()).get("levelXp"),1250);
 });
 test("Firestore clients cannot directly forge staged action, proof or XP receipt",async()=>{
   const base="http://127.0.0.1:8080/v1/projects/"+
@@ -212,7 +212,7 @@ test("Firestore clients cannot directly forge staged action, proof or XP receipt
     ACTION_ROOT+"/external_attack",
     ROOT.proof+"/external_attack",
     ROOT.receipt+"/external_attack",
-    "users/user_a_phone1/original_wallet",
+    "users/user_a_phone1/wallet/original",
   ];
   for(const path of paths){
     const url=base+path;
