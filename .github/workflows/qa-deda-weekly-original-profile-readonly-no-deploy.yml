@@ -1,0 +1,137 @@
+name: DEDA original DEDA public profile readonly league integration NO APK NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-original-profile-readonly-qa-no-deploy-2026-10-28
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-original-profile-readonly-league-ci
+  cancel-in-progress: true
+jobs:
+  guarded-diff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Only original read-only QA new files; original app/quiz/wallet cannot change
+        run: |
+          set -euo pipefail
+          BASE=18d69542de52c6ee2520fac2a8fea994d6bea796
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-profile-list.txt
+          cat /tmp/deda-profile-list.txt
+          while IFS= read -r f; do
+            case "$f" in
+              lib/deda_weekly_original_public_profile_readonly.dart|\
+              tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py|\
+              test/deda_weekly_original_public_profile_readonly_test.dart|\
+              .github/workflows/qa-deda-weekly-original-profile-readonly-no-deploy.yml|\
+              docs/DEDA_WEEKLY_ORIGINAL_PROFILE_READONLY_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "REFUSE unrelated original app path: $f"; exit 1 ;;
+            esac
+          done < /tmp/deda-profile-list.txt
+          git diff --quiet "$BASE" -- \
+            lib/main.dart lib/deda_weekly_leaderboard_safe_screen.dart \
+            lib/deda_social_service.dart lib/deda_backend.dart \
+            lib/traffic_quiz_page.dart lib/deda_pin_auth.dart functions/ \
+            firestore.rules firebase.json pubspec.yaml pubspec.lock \
+            assets/ android/ tools/app_stability/app_package/prepare.py
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py
+          echo "PASS: originals untouched; all new work isolated"
+  restored-original-flutter-source:
+    needs: guarded-diff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Prepare EXACT verified original Flutter app, bind league and both account routes, then readonly public profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-original-profile-readonly"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
+          python3 tools/app_stability/app_package/prepare.py "$TARGET" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$TARGET"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_account_scope_stage61.py "$TARGET"
+          python3 tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py "$TARGET"
+          TARGET="$TARGET" python3 - <<'PY'
+          import os,json
+          from pathlib import Path
+          project=Path(os.environ['TARGET'])
+          data=json.loads((project/'internal-build-inputs.json').read_text())
+          p=data['weeklyOriginalReadOnlyProfile']
+          assert p['originalRoutes']==2
+          assert p['readOnlySocialDirectory']
+          assert p['recheckViewerAfterAsync']
+          assert p['canonicalOriginalIdOnly']
+          assert p['recheckAuthUid']
+          for f in ('noFriendshipWrites',):assert p[f] is True
+          for f in ('realVerifiedLeaderboardConnected','productionPayoutEnabled',
+                    'realXpWriterChanged','quizChanged','apkBuilt'):
+            assert p[f] is False
+          main=(project/'lib/main.dart').read_text()
+          secure=(project/'lib/deda_weekly_leaderboard_safe_screen.dart').read_text()
+          assert main.count('DedaWeeklyAccountViewGate(')==2
+          assert main.count('DedaWeeklyLeaderboardSafeScreen(')==2
+          assert main.count('onOpenExistingPublicProfile: (person)')==2
+          assert main.count('DedaWeeklyOriginalPublicProfileViewer.open(')==2
+          assert 'onSendExistingFriendRequest:' not in main
+          assert '_isCurrentVerifiedCompetitor' in secure
+          assert 'localTrialAccountKey' in secure
+          print('PASS: actual original source rebuilt and two league home routes linked READ-ONLY')
+          PY
+      - name: Verify original Flutter compile, original safe social tests and NEW public profile navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-original-profile-readonly"
+          cp test/deda_weekly_original_public_profile_readonly_test.dart "$TARGET/test/"
+          cp test/deda_weekly_account_view_gate_stage61_test.dart "$TARGET/test/"
+          cp test/deda_weekly_verified_social_bridge_test.dart "$TARGET/test/"
+          cd "$TARGET"
+          flutter pub get --enforce-lockfile
+          dart analyze lib/deda_weekly_original_public_profile_readonly.dart
+          set +e
+          dart analyze --format=machine lib/main.dart lib/deda_weekly_leaderboard_safe_screen.dart \
+            > "$RUNNER_TEMP/deda-original-profile-analysis.txt" 2>&1
+          analyzer_status=$?
+          set -e
+          if grep -q '^ERROR|' "$RUNNER_TEMP/deda-original-profile-analysis.txt"; then
+            cat "$RUNNER_TEMP/deda-original-profile-analysis.txt"
+            exit 1
+          fi
+          if [ "$analyzer_status" -ne 0 ] && \
+             ! grep -Eq '^(WARNING|INFO)[|]' "$RUNNER_TEMP/deda-original-profile-analysis.txt"; then
+            cat "$RUNNER_TEMP/deda-original-profile-analysis.txt"
+            exit 1
+          fi
+          flutter test --no-pub \
+            test/deda_weekly_original_public_profile_readonly_test.dart \
+            test/deda_weekly_account_view_gate_stage61_test.dart \
+            test/deda_weekly_verified_social_bridge_test.dart
+          test -z "$(find "$TARGET" -name '*.apk' -o -name '*.aab' | head -n 1)"
+      - name: Explicit production and real users hold
+        run: |
+          echo "No client-owned XP becomes real score, no social friend writes, no original user data changes"
+          echo "NO production functions or rules, NO actual profile preview until server verified standings"
+          echo "NO APK/AAB or Google Play; traffic bank deferred, 100342 intact"
