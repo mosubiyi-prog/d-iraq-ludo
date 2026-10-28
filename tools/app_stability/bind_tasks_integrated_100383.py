@@ -275,7 +275,14 @@ def bind(root):
                 or segment.count("totalPointsNotifier.value = total;") != 1
                 or not segment.endswith("  }\n\n")
                 or "DedaTaskWriteFence" in segment):
-            raise ValueError("Unexpected original task writer "+signature)
+            raise ValueError("Unexpected original task writer "+signature+
+              " ACTUAL="+repr({
+                "account": segment.count("    final accountKey = _accountKey();"),
+                "write":segment.count("await _writeState(prefs, accountKey, state);"),
+                "notifier":segment.count("totalPointsNotifier.value = total;"),
+                "tail":repr(segment[-55:]),
+                "fence": "DedaTaskWriteFence" in segment,
+              }))
         guard="""    final taskSessionEpoch = DedaTaskWriteFence.generation;
     bool stillOnAccount() => DedaTaskWriteFence.isCurrent(
       generation: taskSessionEpoch,
