@@ -264,7 +264,7 @@ test("Second place receives +100 only, no impact on first or other original acco
 test("Tampered frozen ranks, amount or signature: NO further gifts or credits",async()=>{
  const ref=db.doc(GIFTS.snapshot+"/"+WEEK.weekId);
  const saved=(await ref.get()).data();
- await ref.update({"rows.0.amount":90000});
+ await ref.update({rows:saved.rows.map((r,i)=>i? r :{...r,amount:90000})});
  await assert.rejects(issue(makeArgs()),/changed_sealed_rows|untrusted_final_rank|sealed_week_conflict/);
  await ref.set(saved);
  const secondGift=giftId(SECRET,WEEK.weekId,ACCOUNTS[1]);
