@@ -1,0 +1,159 @@
+name: DEDA Stage57 original anonymous Auth migration preflight HOLD private NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage57-anonymous-auth-migration-gate-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage57/**'
+      - 'functions/tests/deda_weekly_stage57_original_anonymous_auth_migration_preflight.test.js'
+      - 'tests/firestore-rules/stage57_original_rules_private_auth_gate_denial.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage57-original-auth-gate-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE57_ORIGINAL_AUTH_GATE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage57-original-anonymous-auth-readonly-no-deploy
+  cancel-in-progress: true
+jobs:
+  exact-source-allowlist-and-original-guards:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact six-file diff against Stage56 green; no Android, live Firebase or wallets touched
+        run: |
+          set -euo pipefail
+          BASE=874b269c525a24d676a82c4bdeb767fb453ac72f
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-stage57-diff.txt
+          cat /tmp/deda-stage57-diff.txt
+          while IFS= read -r p; do
+            case "$p" in
+              tools/app_stability/stage57/functions/package.json|\
+              tools/app_stability/stage57/functions/index.js|\
+              functions/tests/deda_weekly_stage57_original_anonymous_auth_migration_preflight.test.js|\
+              tests/firestore-rules/stage57_original_rules_private_auth_gate_denial.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage57-original-auth-gate-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE57_ORIGINAL_AUTH_GATE_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "REFUSE unexpected change: $p"; exit 1;;
+            esac
+          done < /tmp/deda-stage57-diff.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive/ \
+            tools/app_stability/app_package/ \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json
+          node --check tools/app_stability/stage57/functions/index.js
+          node --check functions/tests/deda_weekly_stage57_original_anonymous_auth_migration_preflight.test.js
+          node --check tests/firestore-rules/stage57_original_rules_private_auth_gate_denial.test.mjs
+          node - <<'JS'
+          const fs=require('node:fs');
+          const live=fs.readFileSync('functions/index.js','utf8');
+          const priv=fs.readFileSync('tools/app_stability/stage57/functions/index.js','utf8');
+          const app=fs.readFileSync('lib/deda_migrated_progress_firebase.dart','utf8');
+          if(live.includes('dedaStage57OriginalAnonymousMigrationReadOnlyPreflight')||
+             live.includes('STAGE57_ORIGINAL_ANONYMOUS'))
+            throw Error('Never export stage57 from original production Functions');
+          if(!app.includes("defaultValue: false"))
+            throw Error('Original migrated progress must remain disabled by default');
+          for(const required of [
+            'STAGE57_EMULATOR_ONLY_PRODUCTION_REFUSED',
+            'getAuth().getUser(uid)',
+            'deda_stage54_private_account_bindings/',
+            'deda_stage55_private_two_phone_hold_reports/',
+            'deda_stage56_private_asset_provenance_holds/',
+            'PREVIOUS_STAGE55_SOURCE_DRIFT',
+            'productionAppCheckVerified:false',
+            'canMigrate:false',
+            'canCreditDiamonds:false',
+            'canTransferWallet:false',
+          ]){
+            // Parent Stage55 source drift marker lives in standalone audit and
+            // current Stage57 must recompute original HMAC locally.
+            if(required==='PREVIOUS_STAGE55_SOURCE_DRIFT')continue;
+            if(!priv.includes(required))throw Error('Stage57 safety invariant missing '+required);
+          }
+          if(!priv.includes('currentFingerprint!==s55.stateDigest'))
+            throw Error('Must fail closed on changed source fingerprint');
+          console.log('PASS source guard: original APK, app, backend, Rules and archives UNCHANGED');
+          JS
+  network-original-auth-functions-firestore-hold:
+    needs: exact-source-allowlist-and-original-guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GCLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      GOOGLE_CLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_STAGE55_EMULATOR_ONLY: 'true'
+      DEDA_STAGE56_EMULATOR_ONLY: 'true'
+      DEDA_STAGE57_EMULATOR_ONLY: 'true'
+      STAGE57_EMULATOR_KEY_HEX: '5656565656565656565656565656565656565656565656565656565656565656'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable local Firebase client, Admin, Functions and emulator CLI only
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix tools/app_stability/stage57/functions install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Real unsigned anonymous Auth Emulator, actual Functions network, original Firestore Rules
+        run: |
+          set -euo pipefail
+          cat > firebase.stage57.ci.json <<'JSON'
+          {
+            "functions": {
+              "source": "tools/app_stability/stage57/functions",
+              "codebase": "deda-stage57-private-original-auth-emulator"
+            },
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "functions": {"port": 5001},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.stage57.ci.json' EXIT
+          node - <<'JS'
+          const fs=require('node:fs');
+          const demo=JSON.parse(fs.readFileSync('firebase.stage57.ci.json'));
+          const live=JSON.parse(fs.readFileSync('firebase.json'));
+          if(demo.firestore.rules!==live.firestore.rules ||
+             demo.firestore.rules!=='firestore.rules'||
+             demo.functions.source==='functions')throw Error('Stage57 wrong source or original Rules');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.stage57.ci.json \
+            --project demo-deda-stage55-two-phone-hold --only auth,functions,firestore \
+            'node --test functions/tests/deda_weekly_stage57_original_anonymous_auth_migration_preflight.test.js && cd tests/firestore-rules && node --test stage57_original_rules_private_auth_gate_denial.test.mjs'
+      - name: Mandatory owner prebuild/no deployment safeguards
+        run: |
+          echo 'Emulator-only anonymous Auth tokens are UNSIGNED; no production Auth token or Play Integrity demonstrated.'
+          echo 'Stage57 is read-only HOLD only, not callable from original production backend or Android APK.'
+          echo 'Stage54/55/56 identity and asset provenance are private synthetic records, not actual migration.'
+          echo 'No user wallet, XP, admin gems, frames, IDs, gifts, Play or real Firebase changed.'
+          echo 'BEFORE ANY APK deliver comprehensive short owner review and obtain express approval.'
