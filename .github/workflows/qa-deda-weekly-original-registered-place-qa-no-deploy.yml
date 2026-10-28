@@ -1,4 +1,4 @@
-name: DEDA original registered-place completion plus backend action proof NO DEPLOY
+name: DEDA original place-share server action proof and approved-task regression NO DEPLOY
 on:
   push:
     branches:
@@ -42,7 +42,6 @@ jobs:
           git diff --quiet "$BASE" -- lib/ android/ assets/ functions/index.js \
             functions/package.json firestore.rules firebase.json \
             pubspec.yaml pubspec.lock tools/app_stability/progress_archive/
-          python3 -m py_compile tools/app_stability/app_package/bind_weekly_registered_place_completion_private.py
           node --check functions/deda_weekly_original_published_place_action_NOT_EXPORTED.js
           node --check functions/tests/deda_weekly_original_published_place_action.test.js
           ! grep -q 'deda_weekly_original_published_place_action_NOT_EXPORTED' functions/index.js
@@ -74,7 +73,7 @@ jobs:
             --config tools/app_stability/stage30/firebase.json \
             --project demo-deda-weekly-xp-stage9 --only firestore \
             'node --test functions/tests/deda_weekly_original_published_place_action.test.js'
-  original-app-temporary-task-completion:
+  original-app-approved-task-regression:
     needs: guard
     runs-on: ubuntu-24.04
     timeout-minutes: 55
@@ -88,7 +87,7 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: false
-      - name: Restore original verified DEDA QA chain, then apply only successful registered-place completion
+      - name: Restore original verified DEDA QA chain and confirm approved task replacement intact
         shell: bash
         run: |
           set -euo pipefail
@@ -106,22 +105,22 @@ jobs:
           python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$TARGET"
           python3 tools/app_stability/app_package/bind_weekly_account_scope_stage61.py "$TARGET"
           python3 tools/app_stability/app_package/bind_weekly_original_public_profile_readonly.py "$TARGET"
-          python3 tools/app_stability/app_package/bind_weekly_registered_place_completion_private.py "$TARGET"
           TARGET="$TARGET" python3 - <<'PY'
           import os,json
           from pathlib import Path
           p=Path(os.environ['TARGET'])
           meta=json.loads((p/'internal-build-inputs.json').read_text())
-          assert meta['weeklyRegisteredPlaceCompletionFix']['originalPostShareCompletionSignal']
-          assert meta['weeklyRegisteredPlaceCompletionFix']['realXpBalanceWrite'] is False
-          assert meta['weeklyRegisteredPlaceCompletionFix']['quizChanged'] is False
           main=(p/'lib/main.dart').read_text()
           assert main.count("DedaWeeklyAccountViewGate(")==2
           assert main.count("DedaWeeklyLeaderboardSafeScreen(")==2
-          assert main.count("DedaTaskEvent.registeredPlaceShared,\n        );")==1
-          assert main.index("await DedaBackend.createLocationShare(") < main.index("DedaTaskEvent.registeredPlaceShared,\n        );")
           assert main.count("DedaWeeklyOriginalPublicProfileViewer.open(")==2
-          print("PASS: original DEDA approved-place task completes after successful share only, both league routes intact")
+          assert "DedaTaskEvent.registeredPlaceShared => null" in main
+          assert "DedaTaskEvent.prizeCardsExplored => DedaTaskIds.shareRegisteredPlace" in main
+          assert "DedaTaskEvent.prizeCardsExplored," in main
+          assert "DedaTaskEvent.registeredPlaceShared,\\n        );" not in main
+          assert main.count("await DedaBackend.createLocationShare(")==1
+          assert meta['weeklyOriginalReadOnlyProfile']['noFriendshipWrites']
+          print("PASS: original approved task semantics preserved; registered-place-share is DEPRECATED as daily claim in 100383")
           PY
       - name: Static Flutter original app and protected social regression tests
         shell: bash
@@ -153,5 +152,5 @@ jobs:
           test -z "$(find "$TARGET" -name '*.apk' -o -name '*.aab' | head -n 1)"
       - name: No export/release
         run: |
-          echo "Original app and quiz untouched. Temporary candidate only."
+          echo "Original app and quiz untouched; do NOT reinstate retired registered-place task."
           echo "NO user data or wallet mutation, NO Firebase deploy or Play, NO APK"
