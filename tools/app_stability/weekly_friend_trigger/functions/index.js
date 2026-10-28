@@ -15,7 +15,6 @@ function hardStop(){
     process.env.FIREBASE_FUNCTIONS_EMULATOR_HOST!=="127.0.0.1:5001")
     throw Error("DEDA_FRIEND_EVENT_TRIGGER_ONLY_LOCAL_EMULATORS");
 }
-hardStop();
 initializeApp({projectId:PROJECT});
 exports.dedaPrivateOriginalFriendAcceptedOnUpdate=onDocumentUpdated({
  document:"deda_friendships/{relationId}",region:"us-central1",
