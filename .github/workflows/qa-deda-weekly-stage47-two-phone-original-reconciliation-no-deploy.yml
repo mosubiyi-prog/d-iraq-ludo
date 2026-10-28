@@ -1,0 +1,112 @@
+name: DEDA Stage47 real-shaped two-phone ORIGINAL task/XP/coins audit HOLD ONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage47-two-device-legacy-claim-conflict-audit-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage47_two_device_legacy_claim_audit_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage47_two_device_legacy_claim_audit.test.js'
+      - '.github/workflows/qa-deda-weekly-stage47-two-phone-original-reconciliation-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE47_TWO_DEVICE_LEGACY_CLAIM_AUDIT_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage47-untrusted-old-phones-manual-hold
+  cancel-in-progress: true
+jobs:
+  original-protected:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original signed DEDA/production Firebase/purchases/wallets/XP
+        run: |
+          set -euo pipefail
+          git diff --quiet 639ba14fdda66496f72ed8e1de5ab57eec2774d0 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage47_two_device_legacy_claim_audit_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage47_two_device_legacy_claim_audit.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const prod=fs.readFileSync('functions/index.js','utf8');
+          const m=fs.readFileSync('functions/deda_weekly_stage47_two_device_legacy_claim_audit_NOT_EXPORTED.js','utf8');
+          if(prod.includes('deda_weekly_stage47_'))
+            throw Error('Stage47 not allowed in deployed Functions index');
+          for(const required of [
+            'HOLD_FOR_INDEPENDENT_SERVER_REVIEW',
+            'canIssueServerClaim:false',
+            'canApproveMigration:false',
+            'canApplyXp:false',
+            'canCreditDiamonds:false',
+            'original_local_data_never_proves_independent_server_grant',
+            'two_independent_original_installs_required',
+            'private_emulator_only',
+            'prior_report_conflict_preserve_old',
+          ])if(!m.includes(required))
+            throw Error('Missing Stage47 hard no-auto-credit boundary: '+required);
+          console.log('STAGE47_NO_LIVE_ORIGINAL_WALLET_OR_APK_CHANGES');
+          JS
+  private-reconciliation-and-existing-regressions:
+    needs: original-protected
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install local-only Firestore Emulator tools
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Audit TWO actual original-shaped archives on local Firestore and refuse any XP/migration grant
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage47_two_device_legacy_claim_audit.test.js'
+      - name: Stage46 signed-claim and two-phone atomic regression on CLEAN local Firestore
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage46_signed_claim_dual_phone_atomic.test.js'
+      - name: Existing migration/legacy evidence/calendar and original task reconciliation
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/legacy-assessment.test.cjs \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-complete-no-release:
+    needs: [original-protected, private-reconciliation-and-existing-regressions]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage47: original two-phone evidence is UNTRUSTED; no account can auto-approve based on this audit.'
+          echo 'Mismatch/old awarded task or missing history = HOLD for independent backend review.'
+          echo 'No real proof issuer or deployed version cutoff, no credits, no APK, no Firebase/Play.'
+          echo 'Mandatory owner summary and review of ALL agreed additions BEFORE any private APK preparation.'
