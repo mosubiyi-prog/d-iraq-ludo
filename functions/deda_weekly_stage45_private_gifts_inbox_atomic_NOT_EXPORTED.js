@@ -175,6 +175,12 @@ async function simulateIssuePrivateGiftInbox({db,firstOpenMs,weekIndex,
     if(!s.exists)fail("verified_week_not_sealed");
     const snapshot=s.data();
     const rows=checkedSealed(snapshot,week,backendSecret);
+    // For both first issuance and replay, read ALL ten inbox receipts in
+    // the SAME transaction before issuing a success response. A missing,
+    // changed or partially redeemed gift must not be silently accepted.
+    const refs=rows.map(r=>db.doc(ROOT.inbox+"/"+giftId(
+      backendSecret,week.weekId,r.accountKey)));
+    const oldGifts=await Promise.all(refs.map(ref=>tx.get(ref)));
     if(old.exists){
       const x=old.data();
       if(x.issuer!==ISSUER||x.emulatorOnly!==true||
@@ -185,14 +191,24 @@ async function simulateIssuePrivateGiftInbox({db,firstOpenMs,weekIndex,
          x.totalDiamonds!==rows.reduce((n,r)=>n+r.amount,0)||
          x.state!=="pending_gifts_issued")
         fail("settlement_mismatch");
+      rows.forEach((winner,i)=>{
+        if(!oldGifts[i].exists)fail("missing_previously_issued_gift");
+        const g=oldGifts[i].data();
+        if(g.issuer!==ISSUER||g.emulatorOnly!==true||
+           g.canAuthorizeProduction!==false||
+           g.giftId!==refs[i].id||g.weekId!==week.weekId||
+           g.place!==winner.place||
+           g.participantId!==winner.participantId||
+           g.recipientToken!==privateToken(backendSecret,winner.accountKey)||
+           g.amount!==winner.amount||
+           g.snapshotSignature!==snapshot.signature||
+           !["pending","received"].includes(g.status))
+          fail("changed_previously_issued_gift");
+      });
       return Object.freeze({outcome:"already_issued",
         giftCount:0,pendingDiamondsIssued:0,
         actuallyCreditedDiamonds:0,emulatorOnly:true});
     }
-    // Every inbox path is read BEFORE the first write.
-    const refs=rows.map(r=>db.doc(ROOT.inbox+"/"+giftId(
-      backendSecret,week.weekId,r.accountKey)));
-    const oldGifts=await Promise.all(refs.map(ref=>tx.get(ref)));
     if(oldGifts.some(x=>x.exists))fail("partial_existing_gift");
     rows.forEach((r,i)=>{
       tx.create(refs[i],{
