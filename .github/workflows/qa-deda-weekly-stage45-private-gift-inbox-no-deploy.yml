@@ -1,0 +1,103 @@
+name: DEDA Stage45 verified TOP10 -> PENDING هداياي -> once-only SHADOW redemption NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage45-private-top10-gifts-inbox-atomic-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage45_private_gifts_inbox_atomic_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage45_private_gifts_inbox_atomic.test.js'
+      - '.github/workflows/qa-deda-weekly-stage45-private-gift-inbox-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE45_PRIVATE_INBOX_GIFT_SETTLEMENT_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage45-gifts-private-qa
+  cancel-in-progress: true
+jobs:
+  original-sources-untouched:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect approved Android, actual wallets, live Firebase and historical migration
+        run: |
+          set -euo pipefail
+          git diff --quiet 3d1c9285c56e4d81a36ca7869ac6ffdeadf0b6c6 -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/progress_archive \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check functions/deda_weekly_stage45_private_gifts_inbox_atomic_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage45_private_gifts_inbox_atomic.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const code=fs.readFileSync('functions/deda_weekly_stage45_private_gifts_inbox_atomic_NOT_EXPORTED.js','utf8');
+          const live=fs.readFileSync('functions/index.js','utf8');
+          if(live.includes('deda_weekly_stage45_'))
+            throw Error('Stage45 cannot be exported from production index');
+          for(const marker of [
+            'real_firebase_forbidden',
+            'not_released_0600_baghdad',
+            'previewPrivateTopTenFromAppliedXp',
+            'already_issued',
+            'already_received',
+            'canAuthorizeProduction:false',
+            'actuallyCreditedDiamonds:0',
+            'deda_weekly_stage45_private_shadow_earned_diamonds'
+          ])if(!code.includes(marker))
+            throw Error('Stage45 private anti-double-gift invariant missing: '+marker);
+          console.log('PASS: original APK, real DEDA wallet, Firebase/Rules/Play unchanged');
+          JS
+  local-firestore-gift-qa:
+    needs: original-sources-untouched
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install disposable Firestore emulator tools (no production)
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Stage45 actual local Firestore end-to-end seal/inbox/redeem and Stage44 Stage43 regressions
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage45_private_gifts_inbox_atomic.test.js && node --test functions/tests/deda_weekly_stage44_verified_ledger_top10_archive.test.js && node --test functions/tests/deda_weekly_stage43_reviewed_epoch_two_phone_atomic.test.js'
+      - name: Original progress, reviewed migration, calendar and monthly history regression
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js \
+            functions/tests/deda_weekly_monthly_top10_archive.test.js
+  qa-complete-private-only:
+    needs: [original-sources-untouched,local-firestore-gift-qa]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage45 sealed Stage44 private top ten AFTER 06:00; issued only PENDING mock هداياي gifts.'
+          echo 'Concurrent redemption credits only private shadow diamonds once per week/recipient; real DEDA wallets untouched.'
+          echo 'No APK, AAB, Firebase Rules, Functions, user data or Play changes.'
+          echo 'Owner requires short all-additions report/review BEFORE any APK preparation.'
