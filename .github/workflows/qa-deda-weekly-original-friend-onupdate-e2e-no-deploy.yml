@@ -1,0 +1,118 @@
+name: DEDA actual original friend acceptance to automatic private server proof NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-original-friend-firestore-trigger-e2e-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-original-friend-real-trigger-private-ci
+  cancel-in-progress: true
+jobs:
+  original-source-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Block any source, original Rules, finance or Android modifications
+        run: |
+          set -euo pipefail
+          BASE=a102ebb3d0b7122ef00c4611467cbe8f73a71246
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-real-trigger.txt
+          cat /tmp/deda-real-trigger.txt
+          while IFS= read -r p; do
+            case "$p" in
+              tools/app_stability/weekly_friend_trigger/functions/index.js|\
+              tools/app_stability/weekly_friend_trigger/functions/package.json|\
+              tests/firestore-rules/weekly_friend_trigger_end_to_end.test.mjs|\
+              .github/workflows/qa-deda-weekly-original-friend-onupdate-e2e-no-deploy.yml|\
+              docs/DEDA_WEEKLY_ORIGINAL_FRIEND_ACCEPTED_TRIGGER_E2E_CHECKPOINT_2026-10-29.md) ;;
+              *) echo "STOP: unexpected original file $p"; exit 1 ;;
+            esac
+          done < /tmp/deda-real-trigger.txt
+          git diff --quiet "$BASE" -- lib/ android/ assets/ firestore.rules \
+            firebase.json functions/ pubspec.yaml pubspec.lock \
+            tools/app_stability/app_package/ tools/app_stability/stage62/ \
+            tools/app_stability/weekly_social_candidate/
+          node --check tools/app_stability/weekly_friend_trigger/functions/index.js
+          node --check tests/firestore-rules/weekly_friend_trigger_end_to_end.test.mjs
+          ! grep -q 'dedaPrivateOriginalFriendAcceptedOnUpdate' functions/index.js
+          echo 'PASS original no-deploy source lock'
+  real-original-social-client-to-server-trigger:
+    needs: original-source-lock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      GOOGLE_CLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_WEEKLY_FRIEND_TRIGGER_EMULATOR_ONLY: 'true'
+      DEDA_WEEKLY_FRIEND_FIRST_OPEN_MS: '1793070000000'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable private Firebase tooling, separate functions entrypoint
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix tools/app_stability/weekly_friend_trigger/functions install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Reuse exact private successful social rules candidate, never modify production
+        run: |
+          set -euo pipefail
+          node tools/app_stability/weekly_social_candidate/build_candidate_rules.cjs
+          cat > firebase.weekly-friend-event.ci.json <<'JSON'
+          {
+            "functions": {
+              "source":"tools/app_stability/weekly_friend_trigger/functions",
+              "codebase":"deda-private-original-friend-event-e2e"
+            },
+            "firestore":{"rules":"firebase.weekly-social.candidate.rules"},
+            "emulators":{
+              "functions":{"port":5001},
+              "firestore":{"port":8080},
+              "ui":{"enabled":false},
+              "singleProjectMode":true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.weekly-social.candidate.rules firebase.weekly-friend-event.ci.json' EXIT
+          node - <<'JS'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const candidate=fs.readFileSync('firebase.weekly-social.candidate.rules');
+          const original=fs.readFileSync('firestore.rules');
+          const config=JSON.parse(fs.readFileSync('firebase.weekly-friend-event.ci.json'));
+          if(config.firestore.rules==='firestore.rules'||
+             config.functions.source==='functions'||
+             !candidate.toString().endsWith(original.toString().slice(-1000))||
+             !candidate.toString().includes('match /deda_friendships/{relationId}'))
+             throw Error('Refuse original production rules or function deployment');
+          console.log('PRIVATE original social event E2E Firestore+Functions only, original untouched');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.weekly-friend-event.ci.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore,functions \
+            'cd tests/firestore-rules && node --test weekly_friend_trigger_end_to_end.test.mjs'
+      - name: Explicit no user XP or APK
+        run: |
+          echo 'An actual emulator DEDA friend acceptance generated read-only action proof.'
+          echo 'No production identity validation, no old-phone XP reconciliation, no league points.'
+          echo 'No production Firebase deploy, no wallet, purchases, prizes, APK, Play or quiz changes.'
