@@ -1,0 +1,81 @@
+name: DEDA original friend signed private top10 + midnight freeze NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-friend-signed-top10-freeze-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-friend-signed-top10-frozen-qa
+  cancel-in-progress: true
+jobs:
+  guarded-diff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Never edit DEDA reference, original XP, wallet, Firestore or APK
+        run: |
+          set -euo pipefail
+          BASE=809e5a5065c626437ebb37563e62ab9230312f9c
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda_top10_changes.txt
+          cat /tmp/deda_top10_changes.txt
+          while IFS= read -r f; do
+            case "$f" in
+              functions/deda_weekly_friend_signed_top10_freeze_NOT_EXPORTED.js|\
+              functions/tests/deda_weekly_friend_signed_top10_freeze.test.js|\
+              .github/workflows/qa-deda-weekly-friend-signed-top10-freeze-no-deploy.yml|\
+              docs/DEDA_WEEKLY_FRIEND_SIGNED_FROZEN_TOP10_2026-10-29.md) ;;
+              *) echo "STOP: original/protected file modified $f"; exit 1 ;;
+            esac
+          done </tmp/deda_top10_changes.txt
+          git diff --quiet "$BASE" -- lib/ assets/ android/ \
+            functions/index.js functions/package.json firestore.rules \
+            firebase.json pubspec.yaml pubspec.lock tools/ tests/firestore-rules/
+          node --check functions/deda_weekly_friend_signed_top10_freeze_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_friend_signed_top10_freeze.test.js
+          ! grep -q 'deda_weekly_friend_signed_top10_freeze_NOT_EXPORTED' functions/index.js
+          echo "PASS protected original DEDA and money untouched"
+  private-freeze-top10:
+    needs: guarded-diff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_FRIEND_REVIEW_EMULATOR_ONLY: 'true'
+      DEDA_FRIEND_ATOMIC_SHADOW_ONLY: 'true'
+      DEDA_FRIEND_TOP10_EMULATOR_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install isolated Firebase Emulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Original 12 participant signed friend claims to transaction frozen top 10
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_friend_signed_top10_freeze.test.js'
+      - name: No live leaderboard or gifts
+        run: |
+          echo "Private emulator only: planned prize display, no spendable diamond transfer."
+          echo "No real account migration, old APK writer cutoff, real production XP or payouts."
+          echo "No APK/AAB build, Firebase deploy, Play or quiz change."
