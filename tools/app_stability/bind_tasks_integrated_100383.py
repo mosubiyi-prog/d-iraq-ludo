@@ -17,11 +17,14 @@ def bind(root):
     root=Path(root)
     repo=Path(__file__).resolve().parents[2]
     shutil.copy2(repo/'lib/deda_task_signal_bridge.dart',root/'lib/deda_task_signal_bridge.dart')
+    shutil.copy2(repo/'lib/deda_task_write_fence.dart',root/'lib/deda_task_write_fence.dart')
     main=root/'lib/main.dart'
     s=main.read_text()
     s=one(s, "import 'traffic_quiz_page.dart';",
-          "import 'traffic_quiz_page.dart';\nimport 'deda_task_signal_bridge.dart';",
-          'bridge import')
+          "import 'traffic_quiz_page.dart';\n"
+          "import 'deda_task_signal_bridge.dart';\n"
+          "import 'deda_task_write_fence.dart';",
+          'bridge and safe task writer import')
     s=one(s,
           "  trafficQuizCorrectAnswer,\n}",
           """  trafficQuizCorrectAnswer,
@@ -72,12 +75,23 @@ def bind(root):
     );
     _generalManagerBonusActive = false;""",
           'session-scoped confirmed friendship after original account opened')
+    # The same-account task writer must reject old in-flight writes when
+    # a new PIN account or Firebase session starts.
+    s=one(s,
+          """    _loadedAccountKey = accountKey;
+    DedaTaskSignalBridge.bind(""",
+          """    _loadedAccountKey = accountKey;
+    DedaTaskWriteFence.invalidate();
+    DedaTaskSignalBridge.bind(""",
+          'new authenticated account epoch')
+
     # A late server snapshot after logout must not award the new signed-in user.
     s=one(s,
           """  static void clearSessionView() {
     _loadedAccountKey = '';""",
           """  static void clearSessionView() {
     DedaTaskSignalBridge.revoke();
+    DedaTaskWriteFence.invalidate();
     _loadedAccountKey = '';""",
           'revoke pending friendship signals on account logout')
 
@@ -246,6 +260,68 @@ def bind(root):
                   },
                   textDirection: DedaLanguageState.direction,""",
           'count first actual map-search character')
+
+    # Three original local reward mutators share one FIFO lane. This prevents
+    # overlapping claims from erasing each other's read/modify/write result.
+    # Every await that precedes persisted state + the notifier has a session
+    # guard. All legacy task IDs, earned XP/coin values and award keys stay
+    # byte-for-byte identical (no restored account state is rewritten here).
+    def session_safe_method(code, signature, next_signature, task_expr):
+        start=code.index(signature)
+        end=code.index(next_signature,start)
+        segment=code[start:end]
+        if (segment.count("    final accountKey = _accountKey();") != 1
+                or segment.count("await _writeState(prefs, accountKey, state);") != 1
+                or segment.count("totalPointsNotifier.value = total;") != 1
+                or not segment.endswith("  }\n\n")
+                or "DedaTaskWriteFence" in segment):
+            raise ValueError("Unexpected original task writer "+signature)
+        guard="""    final taskSessionEpoch = DedaTaskWriteFence.generation;
+    bool stillOnAccount() => DedaTaskWriteFence.isCurrent(
+      generation: taskSessionEpoch,
+      accountKey: accountKey,
+      currentAccount: _accountKey(),
+      loadedAccount: _loadedAccountKey,
+    );
+    DedaTaskEventResult rejectStale() => DedaTaskEventResult(
+      accepted: false, completedNow: false, pointsAwarded: false,
+      pointsDelta: 0, totalPoints: 0,
+      taskId: """+task_expr+""",
+      cycleId: cycleId ?? currentLocalCycleId(occurredAt),
+    );
+    return DedaTaskWriteFence.serialized<DedaTaskEventResult>(
+      stillCurrent: stillOnAccount,
+      stale: rejectStale,
+      operation: () async {
+"""
+        segment=segment.replace("    final accountKey = _accountKey();",
+                                "    final accountKey = _accountKey();\n"+guard,1)
+        segment=segment.replace("await _writeState(prefs, accountKey, state);",
+                                """if (!stillOnAccount()) return rejectStale();
+    await _writeState(prefs, accountKey, state);""",1)
+        segment=segment.replace("    totalPointsNotifier.value = total;",
+                                """    if (!stillOnAccount()) return rejectStale();
+    totalPointsNotifier.value = total;""",1)
+        segment=segment[:-len("  }\n\n")]+"""      },
+    );
+  }
+
+"""
+        return code[:start]+segment+code[end:]
+
+    s=session_safe_method(s,
+        "  static Future<DedaTaskEventResult> claimTaskReward(",
+        "  static Future<DedaTaskEventResult> recordSuccessfulEvent(",
+        "taskId")
+    s=session_safe_method(s,
+        "  static Future<DedaTaskEventResult> recordSuccessfulEvent(",
+        "  static String currentLocalDayId(",
+        "taskIdForEvent(event)")
+    s=session_safe_method(s,
+        "  static Future<DedaTaskEventResult> claimDailyLoginReward(",
+        "  static Future<List<Map<String, dynamic>>> recentLedger(",
+        "null")
+
     main.write_text(s)
 
     social=root/'lib/deda_social_service.dart'
