@@ -7,8 +7,8 @@ import {doc,setDoc,getDoc,updateDoc,deleteDoc,query,where,collection,getDocs,ser
 const PROJECT="demo-deda-weekly-xp-stage9";
 if(process.env.GCLOUD_PROJECT!==PROJECT || process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080")
   throw Error("WEEKLY_SOCIAL_PRIVATE_RULES_EMULATOR_ONLY");
-const candidate=fs.readFileSync("firebase.weekly-social.candidate.rules","utf8");
-const original=fs.readFileSync("firestore.rules","utf8");
+const candidate=fs.readFileSync("../../firebase.weekly-social.candidate.rules","utf8");
+const original=fs.readFileSync("../../firestore.rules","utf8");
 if(original.includes("match /deda_friendships/{relationId}") ||
    !candidate.includes("weeklySocialPair") ||
    !candidate.endsWith(original.slice(-1000)))
