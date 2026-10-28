@@ -45,7 +45,7 @@ jobs:
             throw Error("Live Cloud Function stage32 export forbidden");
           const content=fs.readFileSync(
             "functions/deda_weekly_stage32_original_share_candidate_NOT_EXPORTED.js","utf8");
-          for(const s of ["FIRESTORE_EMULATOR_HOST","demo-deda-weekly-xp-stage9",
+          for(const s of ["FIRESTORE_EMULATOR_HOST","./deda_weekly_xp_atomic_shadow_issuer_NOT_EXPORTED.js",
             "emulator_only_no_live_deploy","originalLevelXpApplied:false",
             "weeklyXpGranted:false","sourceCreatedAtMs","closeAtMs"]){
             if(!content.includes(s))throw Error("missing stage32 security marker "+s);
