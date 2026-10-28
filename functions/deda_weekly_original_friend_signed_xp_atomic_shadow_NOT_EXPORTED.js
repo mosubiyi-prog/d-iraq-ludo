@@ -105,8 +105,8 @@ async function recordPrivateFriendCandidateWeeklyXp({
        oldMarker.recordedAtMs>serverNowMs||
        !HEX.test(oldMarker.markerSeal||"")||
        oldMarker.markerSeal!==markerSeal(backendSecret,expected)||
-       JSON.stringify({...oldMarker,markerSeal:undefined})!==
-         JSON.stringify({...expected,markerSeal:undefined})||
+       Object.keys(oldMarker).length!==Object.keys(expected).length+1||
+       Object.keys(expected).some(k=>oldMarker[k]!==expected[k])||
        (score>0&&(!oldTally||
         oldTally.eligiblePrivateWeeklyXp<20||
         oldTally.approvedTaskCount<1)))
