@@ -1,0 +1,97 @@
+name: DEDA Stage32 REAL original-share candidate emulator NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage32-original-share-candidate-emulator-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage32_original_share_candidate_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage32_original_share_candidate.test.js'
+      - '.github/workflows/qa-deda-weekly-stage32-real-share-candidate-emulator-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE32_ORIGINAL_SHARE_CANDIDATE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage32-original-share-emulator-no-deploy
+  cancel-in-progress: true
+jobs:
+  protected-original-code:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Original DEDA remains unchanged and Stage32 cannot run in production
+        run: |
+          set -euo pipefail
+          git diff --quiet 6f7cc004421166cda6f6b092efd3ffb611e38cbf -- \
+            functions/index.js functions/package.json \
+            firestore.rules firebase.json storage.rules \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_private_trial_local_xp.dart \
+            tools/app_stability/app_package pubspec.yaml pubspec.lock
+          node --check functions/deda_weekly_stage32_original_share_candidate_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage32_original_share_candidate.test.js
+          node - <<'JS'
+          const fs=require("node:fs");
+          const index=fs.readFileSync("functions/index.js","utf8");
+          if(index.includes("deda_weekly_stage32_original_share_candidate"))
+            throw Error("Live Cloud Function stage32 export forbidden");
+          const content=fs.readFileSync(
+            "functions/deda_weekly_stage32_original_share_candidate_NOT_EXPORTED.js","utf8");
+          for(const s of ["FIRESTORE_EMULATOR_HOST","demo-deda-weekly-xp-stage9",
+            "emulator_only_no_live_deploy","originalLevelXpApplied:false",
+            "weeklyXpGranted:false","sourceCreatedAtMs","closeAtMs"]){
+            if(!content.includes(s))throw Error("missing stage32 security marker "+s);
+          }
+          const rules=fs.readFileSync("tools/app_stability/stage30/firestore.rules","utf8");
+          if(!rules.includes("allow read, write: if false"))
+            throw Error("Stage32 must use deny-all fixture emulator rules");
+          console.log("PASS protected production source unchanged");
+          JS
+      - name: Preserve prior Stage29 and Stage31 unit regressions
+        run: |
+          node --test \
+            functions/tests/deda_weekly_stage29_task_to_rank_emulator.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  emulator-real-source:
+    needs: protected-original-code
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install isolated local Firestore emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Test actual original-share-shaped Firestore data and false-client writes
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage32_original_share_candidate.test.js'
+  private-stage32-complete:
+    needs: [protected-original-code,emulator-real-source]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "Stage32 candidate-only receipt from original Firestore share document passed."
+          echo "Original +20 LEVEL XP backend authority NOT IMPLEMENTED. No league XP granted."
+          echo "No Firebase writes, real users, original wallets, APK/AAB, or Play deployment."
