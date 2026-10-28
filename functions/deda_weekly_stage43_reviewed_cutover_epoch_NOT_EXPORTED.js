@@ -77,7 +77,7 @@ async function validateReviewedCutoverEpochInTransaction({
      settlement.pendingReservations!==0)
     fail("unreviewed_legacy_settlement");
   if(!decision||
-     Object.keys(decision).length!==18||
+     Object.keys(decision).length!==20||
      decision.format!==1||
      decision.issuer!==ISSUER||
      decision.emulatorOnly!==true||
@@ -103,7 +103,7 @@ async function validateReviewedCutoverEpochInTransaction({
      decision.expiresAtMs<=serverNowMs)
     fail("reviewed_server_epoch_required");
   if(!enrollment||
-     Object.keys(enrollment).length!==12||
+     Object.keys(enrollment).length!==13||
      enrollment.format!==1||
      enrollment.issuer!==ISSUER||
      enrollment.emulatorOnly!==true||
