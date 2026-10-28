@@ -1,0 +1,95 @@
+name: DEDA Stage38 atomic migrated task LEVEL XP / league FIRESTORE EMULATOR ONLY
+on:
+  push:
+    branches:
+      - deda-weekly-stage38-atomic-migrated-task-xp-emulator-no-deploy-2026-10-28
+    paths:
+      - 'functions/deda_weekly_stage38_atomic_migrated_task_xp_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage38_atomic_migrated_task_xp.test.js'
+      - '.github/workflows/qa-deda-weekly-stage38-atomic-migration-emulator-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE38_ATOMIC_MIGRATED_XP_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage38-private-atomic-migration
+  cancel-in-progress: true
+jobs:
+  protect-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original DEDA, existing progress, live rules, wallets, Android
+        run: |
+          set -euo pipefail
+          git diff --quiet e2c1f1134d0c531c98e8b5b9137a9a91b19a924e -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules \
+            tools/app_stability/progress_archive pubspec.yaml pubspec.lock
+          node --check functions/deda_weekly_stage38_atomic_migrated_task_xp_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage38_atomic_migrated_task_xp.test.js
+          node - <<'JS'
+          const fs=require('node:fs');
+          const src=fs.readFileSync('functions/deda_weekly_stage38_atomic_migrated_task_xp_NOT_EXPORTED.js','utf8');
+          if(fs.readFileSync('functions/index.js','utf8').includes('deda_weekly_stage38_atomic_migrated_task_xp'))
+            throw Error('Stage38 cannot be exported as a live Cloud Function');
+          for(const marker of [
+            'loadMigratedContext','emulator_only',
+            'canAuthorizeProduction!==false','legacyWritersFencedInFixture',
+            'taskCompletionIndependentlyModelled',
+            'included-in-baseline','core.applyEvent(state,receipt)',
+            'deda_verified_progress/','created<clock.current.closeAtMs',
+            'emulatorOnly:true'
+          ])if(!src.includes(marker))throw Error('stage38 safety invariant missing: '+marker);
+          console.log('Original project and source protected, emulator only');
+          JS
+  atomic-firestore-emulator:
+    needs: protect-original
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install private Firebase simulator only
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase-tools@14
+      - name: Atomic two-phone and frozen XP QA against real local Firestore emulator
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_stage38_atomic_migrated_task_xp.test.js'
+      - name: Existing migration and owner card regressions (offline only)
+        run: |
+          set -euo pipefail
+          env -u GCLOUD_PROJECT -u FIRESTORE_EMULATOR_HOST node --test \
+            tools/app_stability/progress_archive/migration-gate.test.cjs \
+            tools/app_stability/progress_archive/reconcile-core.test.cjs \
+            functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
+            functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
+  private-complete:
+    needs: [protect-original, atomic-firestore-emulator]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'Stage38 validated only ATOMIC SIMULATOR WITH FIXTURE PROOF AND FENCE.'
+          echo 'Original client still credits XP locally. No real server verification/cutover.'
+          echo 'No Firebase/Rules deployment, wallet changes, private APK, AAB or Play.'
