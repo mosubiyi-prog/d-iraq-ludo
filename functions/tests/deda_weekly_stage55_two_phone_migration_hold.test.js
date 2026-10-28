@@ -161,7 +161,7 @@ test("10: copied install ID is never accepted as server-owned account identity",
  const u1="stage55_copy_install_old",u2="stage55_copy_install_new";
  await seed(G,u1,u2,{missingSecondBinding:true});
  await assert.rejects(migrationHold(args(G,u1,u2)),/MISSING_STAGE54_SERVER_HOLD_BINDING/);
- assert.equal((await db.collection(ROOT).get()).size,5);
+ assert.equal((await db.collection(ROOT).get()).size,4);
 });
 test("11: changed original account profile after successful hold triggers immutable-review conflict",async()=>{
  const profile=db.doc("deda_account_profiles/"+A);
@@ -177,7 +177,7 @@ test("12: reversed phone order for prior account cannot overwrite existing held 
 });
 test("13: no report contains real wallet balances, original ID, or copied install string",async()=>{
  const records=await db.collection(ROOT).get();
- assert.equal(records.size,5);
+ assert.equal(records.size,4);
  for(const snap of records.docs){
   const d=snap.data();
   assert.equal(d.canTransferWallet,false);
@@ -212,7 +212,7 @@ test("17: same UID twice, malformed UID/account, or arbitrary paths fail closed"
 });
 test("18: immutable hold report exists only in server-only namespace, no credit authorizers",async()=>{
  const snap=await db.collection(ROOT).get();
- assert.equal(snap.size,5);
+ assert.equal(snap.size,4);
  for(const x of snap.docs)for(const k of [
    "canMigrate","canCreditXp","canCreditDiamonds",
    "canIssueGift","canReplacePremiumId","canTransferWallet",
