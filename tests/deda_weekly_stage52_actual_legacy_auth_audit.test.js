@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {audit}=require('../../tools/app_stability/stage52/actual_legacy_auth_audit');
+const {audit}=require('../tools/app_stability/stage52/actual_legacy_auth_audit');
 
 test('Stage52: original legacy user login must be audited separately from Stage51 email/password emulator',()=>{
  const r=audit();
