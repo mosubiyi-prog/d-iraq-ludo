@@ -79,7 +79,9 @@ jobs:
             'node --test functions/tests/deda_weekly_stage36_original_source_provenance.test.js'
       - name: Re-run existing XP compatibility and unchanged frozen-card tests
         run: |
-          node --test \
+          # emulators:exec has shut down Firestore. Prevent the optional
+          # Stage31 emulator test from connecting to a stopped emulator.
+          env -u FIRESTORE_EMULATOR_HOST -u GCLOUD_PROJECT node --test \
             functions/tests/deda_weekly_stage35_existing_progress_task_bridge.test.js \
             functions/tests/deda_weekly_stage31_frozen_league_winner_card.test.js
   private-success:
