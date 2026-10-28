@@ -23,12 +23,19 @@ class Stage28TasksCtaTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(prefix='deda_stage28_tasks_')
         self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
-        original=(
+        original_screen = (
+            "DedaWeeklyLeaderboardSafeScreen(\n"
+            "        localTrialAccountKey: DedaBackend.accountKeyForPhone(\n"
+            "            DedaPreferences.phone).trim(),\n"
+            "        refreshSignal: DedaSocialProgressWallet.xpNotifier,\n"
+            "      )"
+        )
+        original = (
             "class DedaDailyTasksPage extends StatefulWidget {}\n"
             "Widget a() => DedaLeaderboardHomeCard(onTap: ()=>"
-            "const DedaWeeklyLeaderboardSafeScreen());\n"
+            + original_screen + ");\n"
             "Widget b() => DedaLeaderboardHomeCard(onTap: ()=>"
-            "const DedaWeeklyLeaderboardSafeScreen());\n"
+            + original_screen + ");\n"
         )
         files={
             'lib/main.dart':original,
@@ -65,7 +72,9 @@ class Stage28TasksCtaTests(unittest.TestCase):
         text=(self.root/'lib/main.dart').read_text()
         self.assertEqual(text.count('onOpenDailyTasks:'),2)
         self.assertEqual(text.count('const DedaDailyTasksPage()'),2)
-        self.assertEqual(text.count('const DedaWeeklyLeaderboardSafeScreen()'),0)
+        self.assertEqual(text.count('DedaWeeklyLeaderboardSafeScreen('),2)
+        self.assertEqual(text.count('localTrialAccountKey:'),2)
+        self.assertEqual(text.count('refreshSignal: DedaSocialProgressWallet.xpNotifier,'),2)
         for path,h in self.immutable.items():
             if path!='lib/main.dart':self.assertEqual(sha(self.root/path),h)
         data=json.loads((self.root/'internal-build-inputs.json').read_text())
@@ -75,8 +84,8 @@ class Stage28TasksCtaTests(unittest.TestCase):
     def test_source_drift_blocks_patching(self):
         path=self.root/'lib/main.dart'
         path.write_text(path.read_text().replace(
-            'const DedaWeeklyLeaderboardSafeScreen()',
-            'const MissingLeaderboardScreen()',1))
+            'refreshSignal: DedaSocialProgressWallet.xpNotifier,',
+            'refreshSignal: WrongNotifier.xpNotifier,',1))
         with self.assertRaisesRegex(ValueError,'Prior SHA-verified'):
             load().bind(self.root)
         self.assertNotIn('onOpenDailyTasks:',path.read_text())
