@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // STAGE51 LOCAL FIRESTORE EMULATOR ONLY — NEVER DEPLOY THIS TEST RULES FILE.
+    // Only firebase-admin SDK within emulator can seed synthetic QA documents.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
