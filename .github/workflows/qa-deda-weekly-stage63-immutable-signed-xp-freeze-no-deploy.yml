@@ -1,0 +1,155 @@
+name: DEDA Stage63 atomic frozen signed original XP private account snapshot NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage63-private-frozen-verified-xp-snapshot-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage63/private_frozen_signed_xp_snapshot.cjs'
+      - 'functions/tests/deda_weekly_stage63_atomic_frozen_signed_xp_snapshot.test.js'
+      - 'tests/firestore-rules/stage63_original_rules_private_frozen_signed_xp_denial.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage63-immutable-signed-xp-freeze-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE63_PRIVATE_ATOMIC_FROZEN_SIGNED_XP_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage63-immutable-signed-atomic-freeze-private-no-deploy
+  cancel-in-progress: true
+jobs:
+  protect-original-source-quiz-and-wallet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exactly Stage63 five files against Stage62 18/18 success HEAD
+        run: |
+          set -euo pipefail
+          BASE=ff5b2092003899ba4294336e53850090e43c7d72
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/deda-stage63-allowlist.txt
+          cat /tmp/deda-stage63-allowlist.txt
+          while IFS= read -r p; do
+            case "$p" in
+              tools/app_stability/stage63/private_frozen_signed_xp_snapshot.cjs|\
+              functions/tests/deda_weekly_stage63_atomic_frozen_signed_xp_snapshot.test.js|\
+              tests/firestore-rules/stage63_original_rules_private_frozen_signed_xp_denial.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage63-immutable-signed-xp-freeze-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE63_PRIVATE_ATOMIC_FROZEN_SIGNED_XP_2026-10-28.md) ;;
+              *) echo "REFUSE_CHANGE_OUTSIDE_STAGE63: $p"; exit 1;;
+            esac
+          done </tmp/deda-stage63-allowlist.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ assets/ \
+            functions/index.js functions/package.json \
+            firestore.rules firebase.json pubspec.yaml pubspec.lock \
+            tools/app_stability/app_package/ \
+            tools/app_stability/stage54/ tools/app_stability/stage55/ \
+            tools/app_stability/stage56/ tools/app_stability/stage57/ \
+            tools/app_stability/stage58/ tools/app_stability/stage59/ \
+            tools/app_stability/stage60/ tools/app_stability/stage61/ \
+            tools/app_stability/stage62/ \
+            tools/app_stability/progress_archive/
+          node --check tools/app_stability/stage63/private_frozen_signed_xp_snapshot.cjs
+          node --check functions/tests/deda_weekly_stage63_atomic_frozen_signed_xp_snapshot.test.js
+          node --check tests/firestore-rules/stage63_original_rules_private_frozen_signed_xp_denial.test.mjs
+          node - <<'JS'
+          const fs=require('node:fs');
+          const c=fs.readFileSync('tools/app_stability/stage63/private_frozen_signed_xp_snapshot.cjs','utf8');
+          const prod=fs.readFileSync('functions/index.js','utf8');
+          const quiz=fs.readFileSync('lib/traffic_quiz_page.dart','utf8');
+          if(prod.includes('freezeAccountBoundPrivateWeek')||
+             !quiz.includes('exactly four answers'))
+            throw Error('Stage63 cannot touch production league or deferred quiz');
+          for(const marker of [
+            'DEDA_STAGE63_EMULATOR_ONLY',
+            'STAGE63_ORIGINAL_SIGNED_XP_EMULATOR_ONLY',
+            'validateSignedTaskClaimInTransaction',
+            'tx.get(db.collection(LEAGUE_ROOT)',
+            'tx.create(frozenRef,record)',
+            'ORIGINAL_SOURCE_CHANGED_AFTER_FREEZE_OR_SEAL_TAMPERED',
+            'canCreditDiamonds:false','canIssueGift:false',
+            'productionAppCheckVerified:false',
+            'OUTSIDE_BAGHDAD_MIDNIGHT_TO_0600_FREEZE',
+          ])if(!c.includes(marker))throw Error('Stage63 missing vital guard: '+marker);
+          console.log('No original APK, quiz, wallets, auth or production Firebase changed');
+          JS
+  real-original-rules-signed-task-frozen-transaction-qa:
+    needs: protect-original-source-quiz-and-wallet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      GOOGLE_CLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_STAGE62_EMULATOR_ONLY: 'true'
+      DEDA_STAGE63_EMULATOR_ONLY: 'true'
+      STAGE62_FIRST_OPEN_MS: '1793070000000'
+      STAGE62_NOW_MS: '1793073600000'
+      STAGE62_PRIVATE_KEY_HEX: '6262626262626262626262626262626262626262626262626262626262626262'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable emulator-only original Firebase client and backend tooling
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix tools/app_stability/stage62/functions install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Actual Firestore transaction on original Rules with Auth+Functions real transport
+        run: |
+          set -euo pipefail
+          cat > firebase.stage63.ci.json <<'JSON'
+          {
+            "functions": {
+              "source": "tools/app_stability/stage62/functions",
+              "codebase": "deda-stage63-signed-original-xp-private-qa"
+            },
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "functions": {"port": 5001},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.stage63.ci.json' EXIT
+          node - <<'JS'
+          const fs=require('node:fs');
+          const qa=JSON.parse(fs.readFileSync('firebase.stage63.ci.json'));
+          const original=JSON.parse(fs.readFileSync('firebase.json'));
+          if(qa.firestore.rules!=='firestore.rules'||
+             qa.firestore.rules!==original.firestore.rules||
+             qa.functions.source==='functions')
+            throw Error('Stage63 must use LOCAL original unchanged Firestore Rules');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.stage63.ci.json \
+            --project demo-deda-weekly-xp-stage9 \
+            --only auth,functions,firestore \
+            'node --test functions/tests/deda_weekly_stage63_atomic_frozen_signed_xp_snapshot.test.js && cd tests/firestore-rules && node --test stage63_original_rules_private_frozen_signed_xp_denial.test.mjs'
+      - name: Hard stop any real-world owner, XP, prize or bank deployment
+        run: |
+          echo 'Stage63 SUCCESS means synthetic frozen results tested under a real Firestore emulator transaction ONLY.'
+          echo 'Historical signed fixtures are not proof of real task completion or production App Check / old APK revocation.'
+          echo 'Stage63 does not seal, publish, write XP, award diamonds or change users in production.'
+          echo 'Quiz bank fully deferred per owner. No APK/AAB, Play or Firebase production deploy.'
+          echo 'Pre-APK full additions owner review/approval mandatory before signing any build.'
