@@ -110,7 +110,7 @@ jobs:
           # The original 20k-line main.dart has 122 pre-existing info/warnings.
           # Fail on actual Dart ERRORS; preserve their diagnostics in logs
           # instead of editing unrelated original UI code in this safety phase.
-          dart analyze --no-fatal-infos --no-fatal-warnings \
+          dart analyze --no-fatal-warnings \
             lib/deda_stage39_task_writer_fence.dart lib/main.dart
       - name: Test default unchanged, offline safety and account boundaries
         run: |
