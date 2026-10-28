@@ -100,7 +100,12 @@ async function simulateMigratedTaskAndLeagueAtomic({
   const clock=clockState({firstOpenMs,serverNowMs});
   if(!["active","frozen"].includes(clock.phase)||!clock.current)
     fail("league_not_started");
-  return db.runTransaction(async tx=>{
+  // Real Firestore retry policies should be separately reviewed before
+  // deployment. This PRIVATE emulator prototype retries only the known
+  // transient Firestore emulator "transaction invalid or closed" conflict.
+  // The COMPLETE migration/account/proof and applied-event checks rerun
+  // inside EACH new transaction. Never retry a domain/security denial.
+  const applyOnce=()=>db.runTransaction(async tx=>{
     const share=data(await tx.get(db.doc("deda_location_shares/"+shareId)),
       "original_share");
     const from=share.senderPublicId,to=share.recipientPublicId;
@@ -268,6 +273,15 @@ async function simulateMigratedTaskAndLeagueAtomic({
       creditedLeagueXp:leagueEligible?20:0,
       emulatorOnly:true,realFirebaseDeployment:false});
   });
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await applyOnce();}
+    catch(e){
+      if(attempt===2||e?.code!==3||
+         !/Transaction is invalid or closed/.test(e?.message||""))
+        throw e;
+    }
+  }
+  fail("emulator_transaction_retry_exhausted");
 }
 module.exports=Object.freeze({PROJECT,ISSUER,FENCE_ISSUER,
   ACTION_ROOT,FENCE_ROOT,LEAGUE_ROOT,simulateMigratedTaskAndLeagueAtomic});
