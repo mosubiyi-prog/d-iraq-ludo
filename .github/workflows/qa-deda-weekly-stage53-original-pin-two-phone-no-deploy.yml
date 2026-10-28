@@ -1,0 +1,90 @@
+name: DEDA Stage53 original anonymous PIN two-phone Auth Firestore QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage53-original-pin-auth-firestore-emulator-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage53/**'
+      - 'tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE53_ORIGINAL_PIN_TWO_PHONE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage53-original-pin-auth-two-phone-no-deploy
+  cancel-in-progress: true
+jobs:
+  strictly-private-original-rules-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-stage53-original-pin
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enforce exact Stage53 changed-file allowlist against green Stage52 commit
+        run: |
+          set -euo pipefail
+          BASE=75b38f9289edc13cad579289dbc434e553856ae4
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-stage53-changes.txt
+          cat /tmp/deda-stage53-changes.txt
+          while IFS= read -r file; do
+            case "$file" in
+              tools/app_stability/stage53/firebase.json|\
+              tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE53_ORIGINAL_PIN_TWO_PHONE_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "Stage53 REFUSE original or unexpected source mutation: $file"; exit 1;;
+            esac
+          done < /tmp/deda-stage53-changes.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/ firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock tools/app_stability/progress_archive/ \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/
+          node --check tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('tools/app_stability/stage53/firebase.json')
+          c=json.loads(p.read_text())
+          target=(p.parent / c['firestore']['rules']).resolve()
+          expected=pathlib.Path('firestore.rules').resolve()
+          assert target == expected,(target,expected)
+          assert c['emulators']['auth']['port']==9099
+          assert c['emulators']['firestore']['port']==8080
+          print('Using EXACT unchanged original Firestore rules source:',target.name)
+          PY
+      - name: Install disposable Firebase SDK and Firebase CLI only on CI runner
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Test REAL anonymous Auth Emulator, original Firestore PIN and second-phone path
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage53/firebase.json \
+            --project demo-deda-stage53-original-pin --only auth,firestore \
+            'cd tests/firestore-rules && node --test stage53_original_pin_auth_two_phone_emulator.test.mjs'
+      - name: No mistaken production security or awards claim
+        run: |
+          echo 'Stage53 uses original unmodified Firestore Rules and disposable synthetic PIN/UID/account only.'
+          echo 'Testing anonymous UID + raw PIN/Firestore flow is NOT production crypto authentication.'
+          echo 'Copyable install IDs, absent server-wide brute force defense and 2 UID same account remain migration blockers.'
+          echo 'No production Firebase access, no real phone/UID/balances, no XP, gifts or diamonds change.'
+          echo 'No APK/AAB or Google Play. Owner all-additions report+review required BEFORE build.'
