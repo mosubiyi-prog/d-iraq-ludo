@@ -268,7 +268,10 @@ def bind(root):
     # byte-for-byte identical (no restored account state is rewritten here).
     def session_safe_method(code, signature, next_signature, task_expr):
         start=code.index(signature)
-        end=code.index(next_signature,start)
+        # The pinned original includes extra rewarded-ad methods between
+        # task claim and successful-event. Scope to EXACT method closing,
+        # not to the next independently named public API.
+        end=code.index("\n  }\n\n",start)+len("\n  }\n\n")
         segment=code[start:end]
         if (segment.count("    final accountKey = _accountKey();") != 1
                 or segment.count("await _writeState(prefs, accountKey, state);") != 1
@@ -318,6 +321,10 @@ def bind(root):
 
     s=session_safe_method(s,
         "  static Future<DedaTaskEventResult> claimTaskReward(",
+        "  static Future<DedaTaskEventResult> recordSuccessfulEvent(",
+        "taskId")
+    s=session_safe_method(s,
+        "  static Future<DedaTaskEventResult> claimTaskRewardedAdBonus(",
         "  static Future<DedaTaskEventResult> recordSuccessfulEvent(",
         "taskId")
     s=session_safe_method(s,
