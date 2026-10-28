@@ -1,0 +1,158 @@
+name: DEDA Stage62 original task signed XP Auth-bound private leaderboard preview NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage62-account-bound-signed-xp-preview-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage62/private_account_bound_signed_xp_reader.cjs'
+      - 'tools/app_stability/stage62/functions/index.js'
+      - 'tools/app_stability/stage62/functions/package.json'
+      - 'functions/tests/deda_weekly_stage62_authenticated_signed_xp_preview.test.js'
+      - 'tests/firestore-rules/stage62_original_rules_signed_xp_private_binding_denial.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage62-auth-bound-signed-xp-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE62_AUTH_BOUND_SIGNED_LEVEL_XP_LEAGUE_PREVIEW_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage62-auth-bound-signed-xp-original-emulator-only
+  cancel-in-progress: true
+jobs:
+  preserve-all-real-original-app-and-banks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Strict seven-file allowlist; original quiz, wallet, account, app, Firebase untouched
+        run: |
+          set -euo pipefail
+          BASE=63647e4ec9b69ad6a3b41bc5798885b877e9f317
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD >/tmp/stage62-diff.txt
+          cat /tmp/stage62-diff.txt
+          while IFS= read -r p; do
+            case "$p" in
+              tools/app_stability/stage62/private_account_bound_signed_xp_reader.cjs|\
+              tools/app_stability/stage62/functions/index.js|\
+              tools/app_stability/stage62/functions/package.json|\
+              functions/tests/deda_weekly_stage62_authenticated_signed_xp_preview.test.js|\
+              tests/firestore-rules/stage62_original_rules_signed_xp_private_binding_denial.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage62-auth-bound-signed-xp-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE62_AUTH_BOUND_SIGNED_LEVEL_XP_LEAGUE_PREVIEW_2026-10-28.md) ;;
+              *) echo "REFUSE_STAGE62_UNAPPROVED_PATH $p"; exit 1;;
+            esac
+          done </tmp/stage62-diff.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ assets/ \
+            functions/index.js functions/package.json \
+            firestore.rules firebase.json pubspec.yaml pubspec.lock \
+            tools/app_stability/app_package/ \
+            tools/app_stability/stage54/ \
+            tools/app_stability/stage55/ \
+            tools/app_stability/stage56/ \
+            tools/app_stability/stage57/ \
+            tools/app_stability/stage58/ \
+            tools/app_stability/stage59/ \
+            tools/app_stability/stage60/ \
+            tools/app_stability/stage61/ \
+            tools/app_stability/progress_archive/ \
+            tools/app_stability/100380-baseline.tar.gz
+          node --check tools/app_stability/stage62/private_account_bound_signed_xp_reader.cjs
+          node --check tools/app_stability/stage62/functions/index.js
+          node --check functions/tests/deda_weekly_stage62_authenticated_signed_xp_preview.test.js
+          node --check tests/firestore-rules/stage62_original_rules_signed_xp_private_binding_denial.test.mjs
+          node - <<'JS'
+          const fs=require("node:fs");
+          const app=fs.readFileSync("lib/traffic_quiz_page.dart","utf8");
+          const live=fs.readFileSync("functions/index.js","utf8");
+          const s=fs.readFileSync("tools/app_stability/stage62/private_account_bound_signed_xp_reader.cjs","utf8");
+          if(!app.includes("exactly four answers")||
+             live.includes("dedaStage62PrivateAccountScopedSignedXpPreview"))
+            throw Error("Refuse original traffic quiz or production function drift");
+          for(const marker of ["validateSignedTaskClaimInTransaction",
+            "previewPrivateTopTenFromAppliedXp","verified:false",
+            "canCreditDiamonds:false","canIssueGift:false",
+            "productionAppCheckVerified:false","originalQuizChanged:false",
+            "DEDA_STAGE62_EMULATOR_ONLY"])
+            if(!s.includes(marker))throw Error("Missing Stage62 safety gate "+marker);
+          console.log("PASS original DEDA assets, quiz, production backend and wallets untouched");
+          JS
+  actual-network-auth-signed-xp-original-firestore-rules:
+    needs: preserve-all-real-original-app-and-banks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      GOOGLE_CLOUD_PROJECT: demo-deda-weekly-xp-stage9
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_STAGE62_EMULATOR_ONLY: 'true'
+      STAGE62_FIRST_OPEN_MS: '1793070000000'
+      STAGE62_NOW_MS: '1793073600000'
+      STAGE62_PRIVATE_KEY_HEX: '6262626262626262626262626262626262626262626262626262626262626262'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable Firebase Functions client and emulator tools (not production)
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix tools/app_stability/stage62/functions install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Real Auth+Functions+Firestore emulators, original Rules, signed original +20 XP sources
+        run: |
+          set -euo pipefail
+          cat > firebase.stage62.ci.json <<'JSON'
+          {
+            "functions": {
+              "source": "tools/app_stability/stage62/functions",
+              "codebase": "deda-stage62-private-signed-xp-no-deploy"
+            },
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "functions": {"port": 5001},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.stage62.ci.json' EXIT
+          node - <<'JS'
+          const fs=require("node:fs");
+          const qa=JSON.parse(fs.readFileSync("firebase.stage62.ci.json","utf8"));
+          const live=JSON.parse(fs.readFileSync("firebase.json","utf8"));
+          if(qa.firestore.rules!==live.firestore.rules||
+             qa.firestore.rules!=="firestore.rules"||
+             qa.functions.source==="functions")
+            throw Error("Stage62 must use the original unchanged production Rules in LOCAL emulator only");
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.stage62.ci.json \
+            --project demo-deda-weekly-xp-stage9 \
+            --only auth,functions,firestore \
+            'node --test functions/tests/deda_weekly_stage62_authenticated_signed_xp_preview.test.js && cd tests/firestore-rules && node --test stage62_original_rules_signed_xp_private_binding_denial.test.mjs'
+      - name: Mandatory owner safety gate
+        run: |
+          echo 'This is ONLY private Auth Emulator + signed Stage46 task/progress fixture; NOT verified production league.'
+          echo 'Firebase Auth Emulator JWTs are unsigned fixtures; no true AppCheck, old APK cutover, PIN or device-ownership proof.'
+          echo 'Never pay any diamonds/XP/gifts, move original progress, alter premium IDs or frame ownership.'
+          echo 'Traffic quiz deferred unchanged per latest owner directive.'
+          echo 'No Android APK/AAB, signing, Firebase deploy, Google Play; owner PRE-APK review remains required.'
