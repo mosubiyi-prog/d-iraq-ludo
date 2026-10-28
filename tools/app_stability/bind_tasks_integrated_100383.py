@@ -60,11 +60,27 @@ def bind(root):
     s=one(s,
           "    _loadedAccountKey = accountKey;\n    _generalManagerBonusActive = false;",
           """    _loadedAccountKey = accountKey;
-    DedaTaskSignalBridge.onFriendAccepted = () async {
-      await recordSuccessfulEvent(DedaTaskEvent.friendAccepted);
-    };
+    DedaTaskSignalBridge.bind(
+      accountKey: accountKey,
+      readCurrentAccount: _accountKey,
+      onFriendAccepted: () async {
+        if (_loadedAccountKey != accountKey || _accountKey() != accountKey) {
+          return;
+        }
+        await recordSuccessfulEvent(DedaTaskEvent.friendAccepted);
+      },
+    );
     _generalManagerBonusActive = false;""",
-          'confirmed friend signal when account initialized')
+          'session-scoped confirmed friendship after original account opened')
+    # A late server snapshot after logout must not award the new signed-in user.
+    s=one(s,
+          """  static void clearSessionView() {
+    _loadedAccountKey = '';""",
+          """  static void clearSessionView() {
+    DedaTaskSignalBridge.revoke();
+    _loadedAccountKey = '';""",
+          'revoke pending friendship signals on account logout')
+
     # Null-mapped deprecated actions must never masquerade as traffic answer
     # events, which would otherwise have an empty traffic_answer dedupe ID.
     s=one(s,
@@ -249,7 +265,10 @@ def bind(root):
     finish+=4
     segment=segment[:finish]+"""
     if (accept) {
-      await DedaTaskSignalBridge.friendAccepted();
+      await DedaTaskSignalBridge.friendAccepted(
+        originatingUid: user.uid,
+        readCurrentUid: () => FirebaseAuth.instance.currentUser?.uid,
+      );
     }"""+segment[finish:]
     a=a[:start]+segment+a[end:]
     # When another user ACCEPTS our outgoing request, the confirmed
@@ -265,17 +284,20 @@ def bind(root):
       if (snapshot.metadata.isFromCache || snapshot.metadata.hasPendingWrites) {
         return;
       }
-      final today = DateTime.now().toLocal();
+      final today = DateTime.now().toUtc().add(const Duration(hours: 3));
       final recent = snapshot.docs.any((doc) {
         final d = doc.data();
         final when = d['respondedAt'];
         if (d['status'] != 'accepted' || when is! Timestamp) return false;
-        final day = when.toDate().toLocal();
+        final day = when.toDate().toUtc().add(const Duration(hours: 3));
         return day.year == today.year &&
             day.month == today.month && day.day == today.day;
       });
       if (recent) {
-        unawaited(DedaTaskSignalBridge.friendAccepted());
+        unawaited(DedaTaskSignalBridge.friendAccepted(
+          originatingUid: uid,
+          readCurrentUid: () => FirebaseAuth.instance.currentUser?.uid,
+        ));
       }
     }
 
