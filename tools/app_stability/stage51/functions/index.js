@@ -3,8 +3,8 @@
  * Stage51 private transport-only Firebase Functions emulator entrypoint.
  * NOT in DEDA's production functions/index.js, not an APK, not deployable.
  *
- * Read-only Auth diagnostic validates the Firebase AUTH EMULATOR's genuine
- * locally signed ID-token transport in the Functions Emulator. App Check
+ * Read-only Auth diagnostic validates the Firebase AUTH EMULATOR's real
+ * Auth-EMULATOR-ISSUED (unsigned, test-only) ID-token transport in the Functions Emulator. App Check
  * preflight is the UNMODIFIED Stage50 guard, with enforceAppCheck + replay
  * token consumption options. App Check service does NOT have a comparable
  * full token-attestation emulator: this test must never claim an actual
