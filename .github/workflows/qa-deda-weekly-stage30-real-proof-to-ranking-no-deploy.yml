@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/qa-deda-weekly-stage30-real-proof-to-ranking-no-deploy.yml'
       - 'functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js'
+      - 'functions/deda_weekly_stage30_original_share_evidence_NOT_EXPORTED.js'
       - 'functions/tests/deda_weekly_stage30_real_firestore_emulator.test.js'
       - 'tools/app_stability/stage30/**'
       - 'docs/DEDA_WEEKLY_STAGE30_TRUSTED_ACTION_TO_RANK_CHECKPOINT_2026-10-28.md'
@@ -39,13 +40,15 @@ jobs:
             tools/app_stability/app_package \
             pubspec.yaml pubspec.lock
           node --check functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage30_original_share_evidence_NOT_EXPORTED.js
           node --check functions/tests/deda_weekly_stage30_real_firestore_emulator.test.js
           node - <<'JS'
           const fs=require("node:fs");
           const index=fs.readFileSync("functions/index.js","utf8");
           const src=fs.readFileSync(
             "functions/deda_weekly_stage30_server_action_proof_emulator_NOT_EXPORTED.js","utf8");
-          if(index.includes("deda_weekly_stage30_server_action_proof_emulator"))
+          if(index.includes("deda_weekly_stage30_server_action_proof_emulator") ||
+             index.includes("deda_weekly_stage30_original_share_evidence"))
             throw Error("Live Cloud Function export forbidden");
           for(const token of ["FIRESTORE_EMULATOR_HOST","GCLOUD_PROJECT",
             "emulatorOnly","no_trusted_action_issuer_for_task",
