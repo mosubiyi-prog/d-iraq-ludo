@@ -8,6 +8,8 @@ on:
       - 'tools/app_stability/app_package/bind_weekly_admin_league_stage27.py'
       - 'tools/app_stability/tests/test_weekly_stage27_original_admin_binder.py'
       - 'lib/deda_admin_league_page.dart'
+      - 'lib/deda_weekly_competitor_public_card.dart'
+      - 'lib/deda_weekly_leaderboard_tap_surface.dart'
       - 'test/deda_admin_league_page_stage26_test.dart'
       - 'docs/DEDA_WEEKLY_STAGE27_ORIGINAL_ADMIN_LEAGUE_PRIVATE_100395_2026-10-28.md'
   workflow_dispatch:
@@ -87,7 +89,11 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get --enforce-lockfile
-          dart analyze lib/deda_admin_league_page.dart
+          # Catch missing transitive imports BEFORE the expensive signed APK
+          # build; Stage22 competitor/tap dependencies must be present.
+          test -s lib/deda_weekly_competitor_public_card.dart
+          test -s lib/deda_weekly_leaderboard_tap_surface.dart
+          dart analyze lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart
           cp "$GITHUB_WORKSPACE/test/deda_admin_league_page_stage26_test.dart" test/
           cp "$GITHUB_WORKSPACE/test/deda_weekly_qa_full_trial_test.dart" test/
           flutter test test/deda_admin_league_page_stage26_test.dart --no-pub
