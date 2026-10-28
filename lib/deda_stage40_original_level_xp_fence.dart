@@ -21,7 +21,6 @@ class DedaStage40OriginalTaskXpFence {
 
   static DedaStage40AwardRoute decision({
     required bool pilotEnabled,
-    required bool originalLevelXpAndCoinsWrite,
   }) {
     if (!pilotEnabled) return DedaStage40AwardRoute.originalLocal;
     // Stop BOTH task and social writer, not only the UI-facing +5.
