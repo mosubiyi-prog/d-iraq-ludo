@@ -27,4 +27,8 @@ Plan and test read-only **cross-device source ownership / old-writer cutover / r
 ## Owner's mandatory review before any APK/AAB
 **Before preparing ANY installable build**, provide short comprehensive copyable Arabic report covering ALL agreed additions and modifications and split clearly: truly integrated into original application, independent emulator QA only, or still missing/blocked. Owner reviews/approves first; then safe Android phone/tablet QA. No Play publish and no real Firebase Rules/Functions deploy without separate permission. Do not modify stable 100342.
 
-Status at writing: stage57 source/tests/checkpoint committed, GitHub CI must be SUCCESS **at FINAL HEAD** to call Stage57 QA completed.
+## Verified CI evidence
+- Source/test commit `9a959cb57a2db8ce084c25cd1f4ef5ed150bdfee` — GitHub Actions https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40738865362: **SUCCESS**, **22/22 real network anonymous Auth Emulator -> Functions v2 -> Firestore Stage54/55/56 HOLD tests PASSED**, **2/2 original full Firestore Rules client-denial tests PASSED**, **24/24 total, 0 failed, 0 skipped**. Exact six-file allowlist and unchanged production source checks also PASS.
+- The final documentation checkpoint changes no source or test logic; its resulting HEAD should also have green GitHub CI before reporting the checkpoint as final.
+
+**Scope of completion: local emulator-only read-only security preflight. Genuine production login, device swap, App Check, old APK cutover, assets and league remain not approved.**
