@@ -14,14 +14,14 @@ PRIOR = 100395
 VERSION = 100396
 # Stage17 already injected a local QA account + xp notifier into BOTH
 # launch routes. Never replace that constructor: append only navigation.
-ORIGINAL_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\\n"
+ORIGINAL_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\n"
                   "      )")
-TARGET_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\\n"
-                "        onOpenDailyTasks: () => Navigator.of(context).push(\\n"
-                "          MaterialPageRoute<void>(\\n"
-                "            builder: (_) => const DedaDailyTasksPage(),\\n"
-                "          ),\\n"
-                "        ),\\n"
+TARGET_ROUTE = ("        refreshSignal: DedaSocialProgressWallet.xpNotifier,\n"
+                "        onOpenDailyTasks: () => Navigator.of(context).push(\n"
+                "          MaterialPageRoute<void>(\n"
+                "            builder: (_) => const DedaDailyTasksPage(),\n"
+                "          ),\n"
+                "        ),\n"
                 "      )")
 
 def sha(path):
