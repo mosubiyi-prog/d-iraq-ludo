@@ -52,7 +52,7 @@ jobs:
             'effectiveAtMs>sourceCreatedAtMs',
             'legacyFenceId!==settlement.legacyFenceId',
             'previousLocalClaimsReviewedInFixture',
-            'old published DEDA versions',
+            'Older installed DEDA versions',
             'canAuthorizeProduction!==false',
             'sourceCreatedAtMs:created'
           ])if(!(cutover+atomic).includes(part))
