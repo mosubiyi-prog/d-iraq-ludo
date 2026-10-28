@@ -14,6 +14,7 @@
  */
 const {onCall,HttpsError}=require("firebase-functions/v2/https");
 const {initializeApp}=require("firebase-admin/app");
+const {getAuth}=require("firebase-admin/auth");
 const {getFirestore}=require("firebase-admin/firestore");
 const {
  makeStage50ReadOnlyPreflightCallable
@@ -27,6 +28,21 @@ exports.dedaStage51AuthOnlyProbe=onCall({
   if(!request.auth?.uid||
      request.auth?.token?.firebase?.sign_in_provider==="anonymous")
     throw new HttpsError("unauthenticated","real-firebase-auth-emulator-token-required");
+  // Auth Emulator may accept UNSIGNED crafted JWTs as "VALID" for testing.
+  // Hence the PRIVATE transport probe additionally requires a REAL
+  // existing email/password account in the Auth Emulator and matching
+  // UID/email/provider. This is not a replacement for production token
+  // signature validation, where Firebase platform owns verification.
+  if(request.auth.token?.firebase?.sign_in_provider!=="password"||
+     typeof request.auth.token?.email!=="string")
+    throw new HttpsError("unauthenticated","local-email-password-account-required");
+  let verifiedAuthUser=null;
+  try{
+    verifiedAuthUser=await getAuth().getUser(request.auth.uid);
+  }catch(_){}
+  if(!verifiedAuthUser||verifiedAuthUser.disabled||
+     verifiedAuthUser.email!==request.auth.token.email)
+    throw new HttpsError("unauthenticated","local-auth-account-not-found");
   if(!request.data||typeof request.data!=="object"||
      Array.isArray(request.data)||
      Object.keys(request.data).length!==0)
