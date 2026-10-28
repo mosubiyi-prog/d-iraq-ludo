@@ -28,4 +28,10 @@ Review original app integration of league ranking, gift redemption and admin scr
 ## Mandatory pre-APK/AAB owner checkpoint
 **Before preparing ANY APK or AAB**, hand owner one concise complete copyable Arabic report listing ALL approved additions and classify each as integrated in original app, private QA-only, or pending. Get owner review/explicit approval before build. Preserve the known-good 100342 reference. No Play, Firebase Rules, Functions or real user data deployment without separate explicit authorization.
 
-Status at authoring: CI is NOT assumed passed until a successful GitHub Actions workflow run at the FINAL HEAD.
+## Verified local emulator QA
+- Latest Stage58 source/test commit `579c81dda768776ffde65526eb3b6922f625487c`; workflow https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40740577338 **SUCCESS**.
+- **20/20** private two-phone plan, immutable HOLD, abort-only and no-wallet-write tests passed; **2/2** real original Firestore Rules mobile-client denial tests passed: **22/22 total, 0 failed, 0 skipped**.
+- First attempt exposed a test fixture referencing a nondeterministically selected second account; corrected the test to reference the exact HMAC-keyed account plan and reran. No original files or user data changed.
+- The resulting documentation-only commit should get its own SUCCESS CI before we label the documented HEAD fully green.
+
+**Important: all these tests use SYNTHETIC FIREBASE EMULATOR RECORDS only. An inert plan abort is not real data rollback, real transfer or identity approval.**
