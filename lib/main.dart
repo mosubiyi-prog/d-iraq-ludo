@@ -22,6 +22,7 @@ import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
+import 'deda_stage39_task_writer_fence.dart';
 import 'deda_social_task_preview.dart';
 import 'places_service.dart';
 import 'prize_winner_pages.dart';
@@ -1194,6 +1195,21 @@ class DedaTaskEngine {
     final accountKey = _accountKey();
     final cycle = cycleId ?? currentLocalCycleId(occurredAt);
     if (accountKey.isEmpty) {
+      return DedaTaskEventResult(
+        accepted: false,
+        completedNow: false,
+        pointsAwarded: false,
+        pointsDelta: 0,
+        totalPoints: 0,
+        taskId: taskId,
+        cycleId: cycle,
+      );
+    }
+
+    // Stage39 private cutover pilot: never issue +5 from the old local writer
+    // while a verified server-only task issuer is still being activated.
+    // Off in all existing/default builds. No legacy preferences are cleared.
+    if (!DedaStage39TaskWriterFence.allowOriginalLocalAward) {
       return DedaTaskEventResult(
         accepted: false,
         completedNow: false,
