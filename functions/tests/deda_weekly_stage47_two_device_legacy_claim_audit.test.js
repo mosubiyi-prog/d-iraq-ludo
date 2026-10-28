@@ -30,7 +30,7 @@ const rawOf=(install,captureId,{
   records:{
     taskPoints:JSON.stringify({
       version:1,completions:{},
-      awards:{...(hasPointTask?{"task|"+TASK:{points}}:{}),...otherAwards},
+      awards:{...(hasPointTask?{["task|"+TASK]:{points}}:{}),...otherAwards},
       ledger
     }),
     socialCoinsAndXp:JSON.stringify({
