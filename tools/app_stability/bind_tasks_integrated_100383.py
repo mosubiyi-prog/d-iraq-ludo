@@ -256,6 +256,15 @@ def bind(root):
     start=a.index("static Future<void> respondToRequest(")
     end=a.index("static Future<void> removeRelation(",start)
     segment=a[start:end]
+    # Keep the AUTH UID from the beginning of the asynchronous response.
+    # The restored original social service uses a different local variable
+    # name from the stand-alone source; never rely on that variable.
+    if segment.count("  }) async {") != 1:
+        raise ValueError('original friend response signature changed')
+    segment=segment.replace("  }) async {",
+      "  }) async {\n    final dedaTaskOriginUid = "
+      "FirebaseAuth.instance.currentUser?.uid ?? '';",
+      1)
     # Existing 100382 guard reformats Firestore update across several lines.
     # Extend ONLY the actual accepted-relationship write, after SDK success.
     pos=segment.find("await DedaSectionOperationContext.wait(() => ref.update(")
@@ -266,7 +275,7 @@ def bind(root):
     segment=segment[:finish]+"""
     if (accept) {
       await DedaTaskSignalBridge.friendAccepted(
-        originatingUid: user.uid,
+        originatingUid: dedaTaskOriginUid,
         readCurrentUid: () => FirebaseAuth.instance.currentUser?.uid,
       );
     }"""+segment[finish:]
