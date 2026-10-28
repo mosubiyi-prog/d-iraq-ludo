@@ -118,6 +118,9 @@ async function migrationHold({db,accountKey,originalUid,newPhoneUid,serverKey}){
       {uid:newPhoneUid,accountKey,user:secondUser,wallet:secondWallet,session:secondSession}
     ];
     const flags=compareLegacy(source[0],source[1]);
+    if(dir.createdUid!==originalUid)
+      flags.push("ORIGINAL_UID_DIRECTORY_CREATOR_MISMATCH");
+    flags.sort();
     const stateDigest=digest(serverKey,JSON.stringify(canonical({
       accountKey,uidPair:[originalUid,newPhoneUid],
       source,profile:owner,directory:dir,
