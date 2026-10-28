@@ -7,6 +7,7 @@ on:
       - '.github/workflows/qa-deda-weekly-stage28-tasks-cta-original-100396-private-no-deploy.yml'
       - 'tools/app_stability/app_package/bind_weekly_admin_league_stage27.py'
       - 'tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py'
+      - 'tools/app_stability/app_package/bind_weekly_private_trial_stage17.py'
       - 'tools/app_stability/tests/test_weekly_stage28_tasks_cta_original_route.py'
       - 'lib/deda_weekly_leaderboard_page.dart'
       - 'lib/deda_weekly_leaderboard_safe_screen.dart'
@@ -40,6 +41,7 @@ jobs:
           set -euo pipefail
           git diff --quiet b180af357722a75ead6d2b1ade1bfe9189de58cb -- lib/main.dart lib/admin_pages.dart lib/deda_backend.dart lib/deda_social_service.dart lib/deda_admin_league_page.dart lib/deda_weekly_qa_full_trial.dart functions/index.js firestore.rules firebase.json pubspec.yaml pubspec.lock google-services.json
           python3 -m py_compile tools/app_stability/app_package/bind_weekly_admin_league_stage27.py
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_private_trial_stage17.py
           python3 -m py_compile tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py
           python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_stage28_tasks_cta_original_route.py' -v
           python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_stage27_original_admin_binder.py' -v
