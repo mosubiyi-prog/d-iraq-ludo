@@ -2,11 +2,11 @@
 
 Date: 2026-10-28. Isolated private branch: \`deda-weekly-stage53-original-pin-auth-firestore-emulator-no-deploy-2026-10-28\`.
 Approved successful Stage52 parent: \`75b38f9289edc13cad579289dbc434e553856ae4\`, CI https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/40727575596.
-This branch ONLY adds a disposable emulator config, a client protocol test, a CI workflow, and this checkpoint. It does NOT edit \`lib/\`, original \`firestore.rules\`, production Cloud Functions, app APK or user wallet.
+This branch ONLY adds a client-protocol test, CI workflow, and this checkpoint; the unmodified root `firebase.json` already configures the original rules. The first experimental nested config was removed after Firebase rejected its out-of-project rules path. It does NOT edit \`lib/\`, original \`firestore.rules\`, production Cloud Functions, app APK or user wallet.
 
 ## Important: what this DOES test
 - Firebase Auth Emulator generates **distinct anonymous UIDs** on independent simulated phone clients using the Firebase JavaScript SDK.
-- Firebase Firestore Emulator loads the **unchanged repo's actual \`firestore.rules\`**, not a custom allow-all test copy. CI asserts that the config resolves to the original repository rules file.
+- Firebase Firestore Emulator loads the **unchanged repo's actual \`firestore.rules\`**, not a custom allow-all test copy. CI asserts that the unchanged root `firebase.json` resolves to the original repository rules file.
 - The test reconstructs existing \`DedaPinAuth\` Firestore protocol by reading the actual Dart source: atomic creation of \`deda_credentials/{accountKey}\` and \`deda_account_directory/{accountKey}\`, writes a \`deda_auth_attempts/{uid}\` proof with a six-digit PIN, then \`deda_sessions/{uid}\` and \`deda_account_profiles/{accountKey}\`, and mirrors a \`users/{uid}\` profile.
 - Tests valid and wrong PIN, direct credential reads, second different UID with same account, unauthorized profile read, client-mutability of \`trustedInstallIds\`, borrowed installation-string login **without PIN** under original Rules, and repeated invalid attempts followed by correct PIN (absence of server-wide lockout at this layer). No real credentials are used or logged.
 
@@ -19,7 +19,7 @@ This branch ONLY adds a disposable emulator config, a client protocol test, a CI
 ## Deliverables
 - \`tools/app_stability/stage53/firebase.json\` (Auth 9099 + Firestore 8080, original rules path).
 - \`tests/firestore-rules/stage53_original_pin_auth_two_phone_emulator.test.mjs\` (10 sequential test cases, synthesized account and phones, real client SDK network to local emulators).
-- \`.github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml\` (exact 4-file allowlist; CI installs disposable Firebase tooling; checks source mutation guard).
+- \`.github/workflows/qa-deda-weekly-stage53-original-pin-two-phone-no-deploy.yml\` (exact 3-file allowlist; CI installs disposable Firebase tooling; checks source mutation guard).
 - This checkpoint. **Do not claim completion until final HEAD's CI run is green.**
 
 ## Critical production blockers still open
