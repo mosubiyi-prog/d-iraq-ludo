@@ -1,0 +1,51 @@
+name: DEDA Stage40 original signed source LEVEL XP writer AUDIT NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage40-original-level-xp-writer-audit-fence-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/tests/stage40_inspect_original_level_xp.py'
+      - 'tools/app_stability/app_package/bind_weekly_stage40_original_xp_fence.py'
+      - 'tools/app_stability/tests/test_weekly_stage40_original_xp_fence.py'
+      - 'lib/deda_stage40_original_level_xp_fence.dart'
+      - '.github/workflows/qa-deda-weekly-stage40-original-level-xp-audit-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE40_ORIGINAL_XP_WRITER_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage40-original-xp-private-qa
+  cancel-in-progress: true
+jobs:
+  audit-immutable-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove original DEDA lib/backend/rules/Flutter inputs never changed
+        run: |
+          set -euo pipefail
+          git diff --quiet a02ebbed82f7845df01a744fb1623e7081c5fa7b -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_social_service.dart \
+            lib/deda_stage39_task_writer_fence.dart functions/ firestore.rules \
+            firebase.json pubspec.yaml pubspec.lock android/ \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/restore_deda_stability_baseline.py \
+            tools/app_stability/app_package/prepare.py
+          python3 -m py_compile tools/app_stability/tests/stage40_inspect_original_level_xp.py
+      - name: Inspect exact original signed source and print only writer code contexts
+        run: python3 tools/app_stability/tests/stage40_inspect_original_level_xp.py
+      - name: Bind and test temporary copy of pinned ORIGINAL level XP source if new tests exist
+        run: |
+          set -euo pipefail
+          if test -f tools/app_stability/tests/test_weekly_stage40_original_xp_fence.py; then
+            python3 -m unittest tools.app_stability.tests.test_weekly_stage40_original_xp_fence -v
+          fi
+      - name: State boundaries
+        run: |
+          echo "Stage40 audit / temporary source-only private QA, not APK or Firebase live cutover."
+          echo "No real XP/progress changes; original source immutable; signed device QA pending."
