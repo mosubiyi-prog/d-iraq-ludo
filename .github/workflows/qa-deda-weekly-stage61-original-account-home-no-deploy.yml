@@ -136,7 +136,7 @@ jobs:
             exit 1
           fi
           if [ "$analyzer_status" -ne 0 ] && \
-             ! grep -Eq '^(WARNING|INFO)\\|' "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"; then
+             ! grep -Eq '^(WARNING|INFO)[|]' "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"; then
             cat "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"
             echo 'STOP: analyzer failed without recognized legacy warnings'
             exit 1
