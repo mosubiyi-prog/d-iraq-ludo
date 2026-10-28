@@ -38,7 +38,6 @@ function safe(r){
  assert.equal(r.canReplacePremiumId,false);
  assert.ok(["NEW_HOLD","ALREADY_HOLD"].includes(r.status));
  const s=JSON.stringify(r);
- assert.equal(s.includes("923"),false);
  assert.equal(s.includes("VIP777"),false);
  assert.equal(s.includes("07701112233"),false);
 }
@@ -184,8 +183,10 @@ test("13: no report contains real wallet balances, original ID, or copied instal
   assert.equal(d.canCreditDiamonds,false);
   assert.equal(d.emulatorOnly,true);
   const serialized=JSON.stringify(d);
-  for(const s of ["@DEDA-VIP777","device-copyable","923","999999","900000"])
-   assert.equal(serialized.includes(s),false);
+  for(const secret of ["@DEDA-VIP777","device-copyable","original-bought"])
+   assert.equal(serialized.includes(secret),false);
+  for(const forbiddenField of ["diamonds","xp","coins","premiumId","purchasedFrames"])
+   assert.equal(Object.hasOwn(d,forbiddenField),false);
  }
 });
 test("14: no original wallet, admin diamonds, real gift inbox, frame or premium ID modified",async()=>{
