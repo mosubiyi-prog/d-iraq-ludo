@@ -201,12 +201,13 @@ test("16: missing private Stage54 UID binding cannot create another account rehe
    /IMMUTABLE_PREVIOUS_HOLD_NOT_VALID/);
 });
 test("17: tampered pre-existing plan cannot be aborted or re-authorized",async()=>{
- const report=(await db.collection(ROOT).get()).docs.find(x=>x.data().status==="ABORTED_NO_TRANSFER");
- const original=report.data();
- await report.ref.update({dataMoved:true});
+ const reportId=(await rehearseTwoPhoneHold(all(ACCOUNT,U1,U2,"abort"))).reportId;
+ const report=db.doc(ROOT+"/"+reportId);
+ const original=(await report.get()).data();
+ await report.update({dataMoved:true});
  await assert.rejects(rehearseTwoPhoneHold(all(ACCOUNT,U1,U2,"abort")),
    /ABORT_REFUSED_PLAN_IDENTITY_OR_SHAPE/);
- await report.ref.set(original);
+ await report.set(original);
  safe(await rehearseTwoPhoneHold(all(ACCOUNT,U1,U2,"abort")));
 });
 test("18: arbitrary paths, same UID, invalid account or absent emulator flag fail closed",async()=>{
