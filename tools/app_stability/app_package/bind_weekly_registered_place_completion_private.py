@@ -61,7 +61,14 @@ def bind(project):
         main.count("DedaWeeklyOriginalPublicProfileViewer.open(")!=2 or
         main.count("await DedaBackend.createLocationShare(")!=1 or
         "DedaTaskEvent.registeredPlaceShared,\n        );" in main):
-        raise ValueError("Refuse unexpected original share or league anchors: "+repr({\n            "shareBlock":main.count(OLD),\n            "leagueGate":main.count("DedaWeeklyAccountViewGate("),\n            "leagueRoute":main.count("DedaWeeklyLeaderboardSafeScreen("),\n            "publicRoute":main.count("DedaWeeklyOriginalPublicProfileViewer.open("),\n            "shareCalls":main.count("await DedaBackend.createLocationShare("),\n            "alreadyFixed":"DedaTaskEvent.registeredPlaceShared,\\n        );" in main,\n        }))
+        raise ValueError("Refuse unexpected original share or league anchors: "+repr({
+            "shareBlock":main.count(OLD),
+            "leagueGate":main.count("DedaWeeklyAccountViewGate("),
+            "leagueRoute":main.count("DedaWeeklyLeaderboardSafeScreen("),
+            "publicRoute":main.count("DedaWeeklyOriginalPublicProfileViewer.open("),
+            "shareCalls":main.count("await DedaBackend.createLocationShare("),
+            "alreadyFixed": "DedaTaskEvent.registeredPlaceShared," in main,
+        }))
     main=main.replace(OLD,NEW,1)
     if main.count(NEW)!=1 or main.count("await DedaBackend.createLocationShare(")!=1:
         raise ValueError("Share action must remain one successful write")
