@@ -134,8 +134,27 @@ async function previewReviewedTaskCutover({
       delta:{points:5,coins:0,xp:20,earnedDiamonds:0}
     },accountKey);
     const eventKey=core.eventKey(normalized);
+    // Review must classify historical task claims before considering
+    // the receipt. A cutover flag alone cannot classify a fresh mobile share.
+    const classification=await reader.get(
+      "deda_progress_migrations/"+accountKey+"/classifications/"+eventKey);
+    if(!classification)fail("migration_classification_required");
+    if(classification.format!==1||
+       classification.accountKey!==accountKey||
+       classification.migrationId!==migration.migrationId||
+       classification.evidenceDigest!==migration.evidenceDigest||
+       !["included-in-baseline","after-cutover"].includes(
+         classification.disposition)||
+       !classification.receipt||
+       !core.sameEvent(
+         core.parseReceipt(classification.receipt,accountKey),normalized))
+      fail("migration_classification_conflict");
+    const historicallyIncluded=
+      classification.disposition==="included-in-baseline";
     const applied=await reader.get(
       "deda_verified_progress/"+accountKey+"/events/"+eventKey);
+    if(historicallyIncluded&&applied!==null)
+      fail("historical_classification_replayed");
     // A historical or already-applied task cannot be awarded a second time;
     // ownership of another phone, client UI or alias changes nothing.
     if(applied!==null){
@@ -152,10 +171,11 @@ async function previewReviewedTaskCutover({
       originalTaskId:TASK,dayId,weekId:calendar.current.weekId,
       originalReceiptSource:"task-claim-v1",eventKey,
       alreadyApplied:applied!==null,
+      includedInReviewedLegacyBaseline:historicallyIncluded,
       originalBalancePreserved:true,
-      futureNewTaskPoints:applied!==null?0:5,
-      futureNewLifetimeXp:applied!==null?0:20,
-      futureLeagueXp:applied!==null?0:20,
+      futureNewTaskPoints:(applied!==null||historicallyIncluded)?0:5,
+      futureNewLifetimeXp:(applied!==null||historicallyIncluded)?0:20,
+      futureLeagueXp:(applied!==null||historicallyIncluded)?0:20,
       actualTaskPointsAdded:0,actualLifetimeXpAdded:0,
       actualLeagueXpAdded:0,actualDiamondsAdded:0,
       canWriteProgress:false,canPublishLeague:false,
