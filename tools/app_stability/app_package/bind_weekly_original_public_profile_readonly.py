@@ -132,10 +132,20 @@ def bind(project):
         "screen page social forwarding")
     # Side-effect free profile navigation; friendship remains DISABLED.
     # Both original home routes must carry the SAME session/UID guard.
-    route_tail = """            },
+    route_tail = """              Navigator.of(leagueContext).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DedaDailyTasksPage(),
+                ),
+              );
+            },
           ),
       )"""
-    profile_callbacks = """            },
+    profile_callbacks = """              Navigator.of(leagueContext).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DedaDailyTasksPage(),
+                ),
+              );
+            },
             onOpenExistingPublicProfile: (person) =>
                 DedaWeeklyOriginalPublicProfileViewer.open(
                   context: leagueContext,
