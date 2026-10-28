@@ -70,6 +70,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final size in [
+    const Size(640, 320),
+    const Size(800, 360),
+    const Size(1000, 430),
+    const Size(1200, 675),
+    const Size(1536, 681),
+  ]) {
+    testWidgets('landscape league fills available width and responds at $size',
+        (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      var opened = 0;
+      await tester.pumpWidget(MaterialApp(
+        home: DedaWeeklyLeaderboardSafeScreen(
+          onOpenDailyTasks: () => opened++,
+        ),
+      ));
+      expect(find.byKey(const Key('deda-weekly-landscape-layout')),
+          findsOneWidget);
+      expect(find.byKey(const Key('deda-weekly-portrait-layout')),
+          findsNothing);
+      final stageSize = tester.getSize(
+          find.byKey(const Key('deda-weekly-leaderboard-stage')));
+      expect(stageSize.width, greaterThanOrEqualTo(size.width * .80));
+      expect(stageSize.width, lessThanOrEqualTo(1280));
+      expect(find.byType(Scrollable), findsNothing);
+      expect(find.text('الأسبوع الحالي'), findsOneWidget);
+      expect(find.text('الأسبوع السابق'), findsOneWidget);
+      expect(find.byKey(const Key('deda_weekly_continue_daily_tasks')),
+          findsOneWidget);
+      expect(tester.takeException(), isNull,
+          reason: 'Overflow in landscape viewport $size');
+      await tester.tap(find.text('الأسبوع السابق'));
+      await tester.pump();
+      await tester.tap(
+          find.byKey(const Key('deda_weekly_continue_daily_tasks')));
+      await tester.pump();
+      expect(opened, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('without official route callback, CTA does not mutate or navigate',
       (tester) async {
     await tester.pumpWidget(const MaterialApp(
