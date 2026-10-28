@@ -94,10 +94,40 @@ async function simulateLevelXpAndLeagueReceipt({db,request,firstOpenMs,serverNow
     db.doc(SHADOW.league+"/"+leagueWeek.weekId+"_"+receiptId):null;
 
   return db.runTransaction(async tx=>{
-    const [acSnap,taskSnap,existingSnap,leagueSnap]=await Promise.all([
+    // Re-check canonical ownership, current install and privileged attestation
+    // WITHIN the same transaction that awards fixture XP. An account switch
+    // must not race a prior authorization read outside the transaction.
+    const uid=owner.authenticatedUid;
+    const [acSnap,taskSnap,existingSnap,leagueSnap,
+      userSnap,sessionSnap,profileSnap,attestSnap]=await Promise.all([
       tx.get(ac),tx.get(task),tx.get(receipt),
-      leagueDoc?tx.get(leagueDoc):Promise.resolve(null)
+      leagueDoc?tx.get(leagueDoc):Promise.resolve(null),
+      tx.get(db.doc("users/"+uid)),
+      tx.get(db.doc("deda_sessions/"+uid)),
+      tx.get(db.doc("deda_account_profiles/"+account)),
+      tx.get(db.doc("deda_weekly_identity_attestations/"+uid)),
     ]);
+    const user=get(userSnap,"canonical_owner");
+    const session=get(sessionSnap,"canonical_session");
+    const profile=get(profileSnap,"canonical_profile");
+    const attest=get(attestSnap,"fresh_identity_attestation");
+    if(user.accountKey!==account ||
+       (user.uid!=null&&user.uid!==uid) ||
+       session.uid!==uid||session.accountKey!==account||
+       typeof session.installId!=="string"||
+       !/^[A-Za-z0-9_-]{1,128}$/.test(session.installId)||
+       profile.accountKey!==account||
+       !Array.isArray(profile.trustedInstallIds)||
+       !profile.trustedInstallIds.includes(session.installId)||
+       attest.issuer!=="privileged_identity_verifier_v1"||
+       attest.state!=="verified"||attest.uid!==uid||
+       attest.accountKey!==account||
+       attest.installId!==session.installId||
+       !unsigned(attest.issuedAtMs)||!unsigned(attest.expiresAtMs)||
+       attest.issuedAtMs>serverNowMs||
+       serverNowMs-attest.issuedAtMs>4*3600000||
+       attest.expiresAtMs<=serverNowMs)
+      block("session_or_account_changed_in_transaction");
     const baseline=get(acSnap,"reconciled_level_account");
     strictReconciled(baseline,account);
     if(existingSnap.exists){
