@@ -11,6 +11,7 @@ if(!FILE||!FILE.endsWith('.rules')) {
   throw Error('STAGE33_NEEDS_EPHEMERAL_CURRENT_DEPLOYED_RULES');
 }
 const LIVE_RULES=readFileSync(FILE,'utf8');
+const EXPECT_UNPATCHED_SELF_SHARE_GAP=process.env.DEDA_STAGE33_EXPECT_CURRENT_SELF_SHARE_GAP==='1';
 if(!LIVE_RULES.includes('rules_version')||
    !LIVE_RULES.includes('match /deda_location_shares/{shareId}'))
   throw Error('STAGE33_CANNOT_ESTABLISH_CURRENT_ORIGINAL_SHARE_RULES');
@@ -95,7 +96,8 @@ const disallowed=[
   ['premium alias not linked to original owner',()=>sender,
     {senderPublicId:'@DEDA-PREMI'}],
   ['unknown recipient',()=>sender,{recipientPublicId:'@DEDA-Z99999'}],
-  ['recipient is not personal ID',()=>sender,{recipientPublicId:FROM}],
+  ...(!EXPECT_UNPATCHED_SELF_SHARE_GAP ?
+    [['self-share sender equals recipient',()=>sender,{recipientPublicId:FROM}]] : []),
   ['fabricated place share',()=>sender,{shareType:'place',placeId:'fake_place'}],
   ['latitude outside earth',()=>sender,{latitude:999}],
   ['invalid duration',()=>sender,{durationMinutes:5}],
@@ -112,6 +114,12 @@ for(const [label,who,changes] of disallowed){
     const id='attack_'+label.replace(/[^a-z]/gi,'_');
     await assertFails(setDoc(doc(who(),'deda_location_shares',id),
       source(changes)));
+  });
+}
+if(EXPECT_UNPATCHED_SELF_SHARE_GAP){
+  test('CONFIRMED current live rules gap: self-share is allowed, NOT XP authority',async()=>{
+    await assertSucceeds(setDoc(doc(sender,'deda_location_shares','stage33_known_self_gap'),
+      source({recipientPublicId:FROM})));
   });
 }
 test('raw persisted location share cannot write future private stage32 XP candidate',async()=>{
