@@ -10,9 +10,9 @@
  */
 const crypto=require("node:crypto");
 const {PROJECT,LEAGUE_ROOT,previewPrivateTopTenFromAppliedXp}=
-  require("../../functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js");
+  require("../../../functions/deda_weekly_stage44_verified_ledger_top10_archive_NOT_EXPORTED.js");
 const {validateSignedTaskClaimInTransaction}=
-  require("../../functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js");
+  require("../../../functions/deda_weekly_stage46_private_signed_task_claim_NOT_EXPORTED.js");
 const {windowFor}=require(
   "../../functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js");
 const {ROOT:SOURCE_ROOT}=require(
