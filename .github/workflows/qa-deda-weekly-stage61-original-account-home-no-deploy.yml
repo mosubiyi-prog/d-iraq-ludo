@@ -121,7 +121,27 @@ jobs:
           cp test/deda_weekly_account_view_gate_stage61_test.dart "$TARGET/test/"
           cd "$TARGET"
           flutter pub get --enforce-lockfile
-          dart analyze lib/deda_weekly_account_view_gate.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/main.dart
+          # Old full original main.dart already contains historical deprecation /
+          # unused warnings. Require zero analyzer ERRORS, not zero old warnings.
+          # Strictly lint the NEW isolated account-scoping file first.
+          dart analyze lib/deda_weekly_account_view_gate.dart
+          set +e
+          dart analyze --format=machine lib/main.dart lib/deda_weekly_leaderboard_safe_screen.dart \
+            > "$RUNNER_TEMP/deda-stage61-original-analyzer.txt" 2>&1
+          analyzer_status=$?
+          set -e
+          if grep -q '^ERROR|' "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"; then
+            cat "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"
+            echo 'STOP: genuine analyzer ERROR in restored original app'
+            exit 1
+          fi
+          if [ "$analyzer_status" -ne 0 ] && \
+             ! grep -Eq '^(WARNING|INFO)\\|' "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"; then
+            cat "$RUNNER_TEMP/deda-stage61-original-analyzer.txt"
+            echo 'STOP: analyzer failed without recognized legacy warnings'
+            exit 1
+          fi
+          echo 'PASS: no original-app analyzer ERRORS; prior lint warnings are not rewritten here.'
           flutter test test/deda_weekly_account_view_gate_stage61_test.dart --no-pub
           test -z "$(find "$TARGET" -name '*.apk' -type f -print -quit)"
           echo 'PASS: genuine restored original Flutter source verified, NO APK.'
