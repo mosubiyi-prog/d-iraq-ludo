@@ -1,0 +1,67 @@
+name: DEDA Stage29 — canonical task XP to ranks EMULATOR ONLY, no deploy
+on:
+  push:
+    branches:
+      - deda-weekly-stage29-task-xp-to-ranking-emulator-integration-no-deploy-2026-10-28
+    paths:
+      - '.github/workflows/qa-deda-weekly-stage29-task-xp-to-ranking-emulator-no-deploy.yml'
+      - 'functions/deda_weekly_stage29_task_to_rank_emulator_NOT_EXPORTED.js'
+      - 'functions/tests/deda_weekly_stage29_task_to_rank_emulator.test.js'
+      - 'docs/DEDA_WEEKLY_STAGE29_TASK_TO_RANK_INTEGRATION_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-stage29-task-xp-only
+  cancel-in-progress: true
+jobs:
+  stage29-shadow-integration-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Protect all original DEDA account, wallet, task and release code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 79b2455dd2ab6efb94219b3f4f68276c39ae139d -- \
+            functions/index.js firestore.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart \
+            lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_private_trial_local_xp.dart \
+            tools/app_stability/app_package pubspec.yaml pubspec.lock
+          node - <<'JS'
+          const fs=require("node:fs");
+          const entry=fs.readFileSync("functions/index.js","utf8");
+          for(const forbidden of [
+            "deda_weekly_stage29_task_to_rank_emulator",
+            "deda_weekly_xp_atomic_shadow_issuer",
+          ]) {
+            if(entry.includes(forbidden))throw Error("UNSAFE_EXPORT_"+forbidden);
+          }
+          const src=fs.readFileSync(
+            "functions/deda_weekly_stage29_task_to_rank_emulator_NOT_EXPORTED.js","utf8");
+          for(const marker of ["emulator_only","payoutEnabled:false",
+            "adminAuthorizationVerified:false","verifiedRealXp:false"]) {
+            if(!src.includes(marker))throw Error("STAGE29_GUARD_MISSING_"+marker);
+          }
+          console.log("PASS — no live handlers, client XP, wallet or Firestore Rules changes");
+          JS
+      - name: Validate Stage9 issuer and Stage29 emulator-only ranking integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_weekly_stage29_task_to_rank_emulator_NOT_EXPORTED.js
+          node --check functions/tests/deda_weekly_stage29_task_to_rank_emulator.test.js
+          node --test \
+            functions/tests/deda_weekly_xp_atomic_shadow_issuer.test.js \
+            functions/tests/deda_weekly_stage29_task_to_rank_emulator.test.js \
+            functions/tests/deda_weekly_receipts_to_standings.test.js \
+            functions/tests/deda_weekly_verified_pair_for_app.test.js
+          echo "PASS — private emulator fixture only; no real XP or diamonds"
