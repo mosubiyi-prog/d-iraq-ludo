@@ -43,27 +43,6 @@ jobs:
             lib/traffic_quiz_page.dart functions/index.js firestore.rules \
             android/ assets/ pubspec.yaml pubspec.lock \
             tools/app_stability/app_package/prepare.py
-          python3 - <<'PY'
-          import tarfile
-          from pathlib import Path
-          arc=Path('tools/app_stability/100380-baseline.tar.gz')
-          with tarfile.open(arc,'r:gz') as t:
-            src=t.extractfile('lib/main.dart').read().decode('utf8')
-          for a,b in [
-            ('  static Future<DedaTaskEventResult> claimTaskReward(', '  static Future<DedaTaskEventResult> recordSuccessfulEvent('),
-            ('  static Future<DedaTaskEventResult> recordSuccessfulEvent(', '  static String currentLocalDayId('),
-            ('  static Future<DedaTaskEventResult> claimDailyLoginReward(', '  static Future<List<Map<String, dynamic>>> recentLedger('),
-          ]:
-            x,y=src.find(a),src.find(b)
-            print('RESTORED_TASK_SHAPE',a,x,y,flush=True)
-            if x<0 or y<x:continue
-            z=src[x:y]
-            print('START',z[:2500],flush=True)
-            for word in ('_writeState(', 'setString(', 'totalPointsNotifier.value = total;', 'await DedaTask'):
-              i=z.find(word)
-              if i>=0: print('ANCHOR',word,z[max(0,i-450):i+850],flush=True)
-            print('END',z[-1700:],flush=True)
-          PY
           python3 -m py_compile tools/app_stability/bind_tasks_integrated_100383.py
           # The historical Stage28 hand-built fixture is stale relative to
           # the current approved 100383 task binding. The next job runs the
@@ -116,9 +95,9 @@ jobs:
           assert d['weeklyOriginalReadOnlyProfile']['originalRoutes']==2
           assert main.count('DedaWeeklyAccountViewGate(')==2
           assert 'DedaTaskSignalBridge.bind(' in main
-          assert main.count('DedaTaskWriteFence.serialized<DedaTaskEventResult>(')==3
+          assert main.count('DedaTaskWriteFence.serialized<DedaTaskEventResult>(')==4
           assert main.count('DedaTaskWriteFence.invalidate();')==2
-          assert main.count('if (!stillOnAccount()) return rejectStale();')==6
+          assert main.count('if (!stillOnAccount()) return rejectStale();')==8
           assert 'DedaTaskWriteFence.isCurrent(' in main
           assert (p/'lib/deda_task_write_fence.dart').exists()
           assert 'DedaTaskSignalBridge.revoke();' in main
