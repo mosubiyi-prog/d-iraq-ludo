@@ -1,0 +1,64 @@
+name: DEDA Stage52 REAL original PIN/Auth/AppCheck migration audit NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage52-real-legacy-auth-migration-audit-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage52/**'
+      - 'tests/deda_weekly_stage52_actual_legacy_auth_audit.test.js'
+      - '.github/workflows/qa-deda-weekly-stage52-legacy-auth-audit-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE52_ACTUAL_AUTH_MIGRATION_AUDIT_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage52-legacy-auth-cutover-audit-no-deploy
+  cancel-in-progress: true
+jobs:
+  source-safety-and-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Absolute allowlist for Stage52 changed paths against last successful Stage51
+        run: |
+          set -euo pipefail
+          BASE=e97aa03d34bf738741ba25e7753781f178d26972
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/stage52-changes.txt
+          cat /tmp/stage52-changes.txt
+          while IFS= read -r item; do
+            case "$item" in
+              tools/app_stability/stage52/actual_legacy_auth_audit.js|\
+              tests/deda_weekly_stage52_actual_legacy_auth_audit.test.js|\
+              .github/workflows/qa-deda-weekly-stage52-legacy-auth-audit-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE52_ACTUAL_AUTH_MIGRATION_AUDIT_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "REFUSE changed protected production/original file: $item"; exit 1;;
+            esac
+          done < /tmp/stage52-changes.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/ firebase.json firestore.rules storage.rules \
+            pubspec.yaml pubspec.lock tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/progress_archive/ tools/app_stability/app_package/
+      - name: Run read-only original authentication and App Check source audit
+        run: |
+          set -euo pipefail
+          node --check tools/app_stability/stage52/actual_legacy_auth_audit.js
+          node --check tests/deda_weekly_stage52_actual_legacy_auth_audit.test.js
+          node tools/app_stability/stage52/actual_legacy_auth_audit.js
+          node --test tests/deda_weekly_stage52_actual_legacy_auth_audit.test.js
+      - name: Owner approval and production restrictions
+        run: |
+          echo 'PASS here only verifies real original source identity flow static inventory, not a live sign-in.'
+          echo 'DEDA current ordinary user flow is Firebase anonymous UID + Firestore-rules PIN challenge.'
+          echo 'Stage51 email/password emulator was NOT an end-to-end test of this legacy PIN flow.'
+          echo 'App Check attestation, anti-bruteforce, historic account/progress reconciliation and old APK cutover are NOT verified.'
+          echo 'NO signed APK/AAB, NO Firebase deploy, NO Google Play, NO client source/rules/wallet writes.'
+          echo 'Owner review of the ALL approved additions remains mandatory BEFORE any APK build.'
