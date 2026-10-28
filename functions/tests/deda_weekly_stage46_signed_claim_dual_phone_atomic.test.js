@@ -289,7 +289,8 @@ test("forged client scores, premium IDs, app check, or identity cannot issue",as
    shareId:SHARE,firstOpenMs:FIRST,serverNowMs:NOW}),
    /auth_appcheck_or_untrusted_client_data/);
  await assert.rejects(award({db,request:request(RECIPIENT),shareId:SHARE,
-   firstOpenMs:FIRST,serverNowMs:NOW}),/missing_invoker_session/);
+   firstOpenMs:FIRST,serverNowMs:NOW,backendSecret:PRIVATE_SECRET}),
+   /missing_invoker_session/);
 });
 
 test("Stage43 independent cutover epoch is REQUIRED beyond Stage42's old fixture fence",async()=>{
