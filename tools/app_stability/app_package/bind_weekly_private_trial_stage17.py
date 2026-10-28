@@ -57,11 +57,11 @@ def bind(project):
     # New Stage28 task-route callback sits between refreshInterval and
     # constructor end. Keep compatibility with the previously immutable
     # Stage17 source and require exactly one recognized, safe anchor.
-    old_screen_ctor = ("    this.refreshInterval,\\n    this.onOpenDailyTasks,\\n  });"
-                       if "    this.onOpenDailyTasks,\\n  });" in t
-                       else "    this.refreshInterval,\\n  });")
+    old_screen_ctor = ("    this.refreshInterval,\n    this.onOpenDailyTasks,\n  });"
+                       if "    this.onOpenDailyTasks,\n  });" in t
+                       else "    this.refreshInterval,\n  });")
     new_screen_ctor = old_screen_ctor.replace(
-        "\\n  });", "\\n    this.localTrialAccountKey,\\n  });")
+        "\n  });", "\n    this.localTrialAccountKey,\n  });")
     t=one(t,old_screen_ctor,new_screen_ctor,'optional original screen constructor')
     t=one(t,"  final Duration? refreshInterval;",
         "  final Duration? refreshInterval;\n"
@@ -123,9 +123,9 @@ def bind(project):
     # Stage28 moves the SAME verified status notice to statusPanel(), with
     # a shorter indent. Both layouts must keep the original local QA result
     # without ever promoting local XP to real league rankings.
-    original_notice = ("                          : 'الترتيب قيد التحقق من الخادم؛ '\\n"
+    original_notice = ("                          : 'الترتيب قيد التحقق من الخادم؛ '\n"
                        "                            'لن تُعرض نتائج وهمية أو تُصرف جوائز.',")
-    landscape_notice = ("                : 'الترتيب قيد التحقق من الخادم؛ '\\n"
+    landscape_notice = ("                : 'الترتيب قيد التحقق من الخادم؛ '\n"
                         "                    'لن تُعرض نتائج وهمية أو تُصرف جوائز.',")
     footer_anchor = landscape_notice if landscape_notice in p else original_notice
     footer_replacement = """                          : widget.privateTrialXp != null && !previousWeek
