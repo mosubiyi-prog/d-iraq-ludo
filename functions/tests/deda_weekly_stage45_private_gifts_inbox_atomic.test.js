@@ -277,6 +277,22 @@ test("Tampered frozen ranks, amount or signature: NO further gifts or credits",a
    serverNowMs:TIME,backendSecret:SECRET});
  assert.equal(post.creditedDiamonds,0);
 });
+
+test("Already-settled week detects missing or altered gift; never says safe replay",async()=>{
+ const id=giftId(SECRET,WEEK.weekId,ACCOUNTS[2]);
+ const ref=db.doc(GIFTS.inbox+"/"+id);
+ const original=(await ref.get()).data();
+ assert.equal(original.amount,50);
+ await ref.delete();
+ await assert.rejects(issue(makeArgs()),/missing_previously_issued_gift/);
+ await ref.set({...original,amount:90000});
+ await assert.rejects(issue(makeArgs()),/changed_previously_issued_gift/);
+ await ref.set(original);
+ const replay=await issue(makeArgs());
+ assert.equal(replay.outcome,"already_issued");
+ assert.equal(replay.pendingDiamondsIssued,0);
+ assert.equal((await db.collection(GIFTS.inbox).get()).size,10);
+});
 test("Production Firebase is blocked; no actual earned wallet or App deployment",async()=>{
  const orig=process.env.GCLOUD_PROJECT;
  process.env.GCLOUD_PROJECT="deda-25b88";
