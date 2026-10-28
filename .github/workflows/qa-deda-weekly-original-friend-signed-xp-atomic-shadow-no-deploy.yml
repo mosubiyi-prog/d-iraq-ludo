@@ -72,10 +72,16 @@ jobs:
       - name: Regression previous friend HMAC approval and NEW atomic weekly candidate XP
         run: |
           set -euo pipefail
+          # Both suites intentionally use canonical QA account IDs. An emulator
+          # MUST be torn down between suites so review fixtures cannot collide.
           functions/node_modules/.bin/firebase emulators:exec \
             --config tools/app_stability/stage30/firebase.json \
             --project demo-deda-weekly-xp-stage9 --only firestore \
-            'node --test functions/tests/deda_weekly_original_friend_reviewed_signed_claim.test.js functions/tests/deda_weekly_original_friend_signed_xp_atomic_shadow.test.js'
+            'node --test functions/tests/deda_weekly_original_friend_reviewed_signed_claim.test.js'
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/stage30/firebase.json \
+            --project demo-deda-weekly-xp-stage9 --only firestore \
+            'node --test functions/tests/deda_weekly_original_friend_signed_xp_atomic_shadow.test.js'
       - name: Never authorize APK or live credits
         run: |
           echo 'PRIVATE candidate XP not ORIGINAL level XP or spendable diamonds.'
