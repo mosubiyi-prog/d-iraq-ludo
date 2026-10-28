@@ -1,0 +1,134 @@
+name: DEDA Stage56 asset provenance audit server-only original rules NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-stage56-legacy-asset-provenance-audit-private-no-deploy-2026-10-28
+    paths:
+      - 'tools/app_stability/stage56/private_original_asset_provenance_audit.cjs'
+      - 'functions/tests/deda_weekly_stage56_asset_source_provenance_hold.test.js'
+      - 'tests/firestore-rules/stage56_original_rules_asset_provenance_denial.test.mjs'
+      - '.github/workflows/qa-deda-weekly-stage56-asset-provenance-no-deploy.yml'
+      - 'docs/DEDA_WEEKLY_STAGE56_ORIGINAL_ASSET_PROVENANCE_CHECKPOINT_2026-10-28.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-stage56-original-asset-provenance-no-deploy
+  cancel-in-progress: true
+jobs:
+  preserve-original-app-and-baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact five-file allowlist against Stage55 final successful HEAD
+        run: |
+          set -euo pipefail
+          BASE=44462a9dce7f1083feb29b130ab783ab696a95f1
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-stage56-changes.txt
+          cat /tmp/deda-stage56-changes.txt
+          while IFS= read -r file; do
+            case "$file" in
+              tools/app_stability/stage56/private_original_asset_provenance_audit.cjs|\
+              functions/tests/deda_weekly_stage56_asset_source_provenance_hold.test.js|\
+              tests/firestore-rules/stage56_original_rules_asset_provenance_denial.test.mjs|\
+              .github/workflows/qa-deda-weekly-stage56-asset-provenance-no-deploy.yml|\
+              docs/DEDA_WEEKLY_STAGE56_ORIGINAL_ASSET_PROVENANCE_CHECKPOINT_2026-10-28.md) ;;
+              *) echo "BLOCK change outside Stage56: $file"; exit 1;;
+            esac
+          done < /tmp/deda-stage56-changes.txt
+          git diff --quiet "$BASE" -- \
+            lib/ android/ functions/index.js functions/package.json \
+            firebase.json firestore.rules storage.rules pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/100380-baseline-manifest.json \
+            tools/app_stability/app_package/ tools/app_stability/progress_archive/
+          node --check tools/app_stability/stage56/private_original_asset_provenance_audit.cjs
+          node --check functions/tests/deda_weekly_stage56_asset_source_provenance_hold.test.js
+          node --check tests/firestore-rules/stage56_original_rules_asset_provenance_denial.test.mjs
+          node - <<'JS'
+          const fs=require('node:fs');
+          const prod=fs.readFileSync('functions/index.js','utf8');
+          const privateSource=fs.readFileSync('tools/app_stability/stage56/private_original_asset_provenance_audit.cjs','utf8');
+          if(prod.includes('deda_stage56_private_asset_provenance_holds')||
+             prod.includes('auditAssetProvenance'))throw Error('Stage56 must not be exported to production backend');
+          for(const s of [
+           'DEDA_STAGE56_EMULATOR_ONLY',
+           'PREVIOUS_STAGE55_SOURCE_DRIFT',
+           'PREVIOUS_AUDIT_PROVENANCE_CHANGED',
+           'NO_PAYMENT_PROVIDER_VERIFIED_RECEIPT',
+           'STAGE45_PRIVATE_GIFT_NEVER_AUTHORISES_LIVE_DIAMONDS',
+           'canSettlePurchase:false',
+           'tx.create(existing,result)',
+          ])if(!privateSource.includes(s))throw Error('missing Stage56 no-grant invariant '+s);
+          console.log('ALL ORIGINAL DEDA FILES PROTECTED; new audit is private emulator only');
+          JS
+  original-rules-private-provenance-emulator:
+    needs: preserve-original-app-and-baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      GOOGLE_CLOUD_PROJECT: demo-deda-stage55-two-phone-hold
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_STAGE55_EMULATOR_ONLY: 'true'
+      DEDA_STAGE56_EMULATOR_ONLY: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable Firebase Admin and client dependencies
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: REAL Firestore/Auth emulators with ORIGINAL unchanged DEDA Firestore rules and two-phone Stage55 -> 56 audit
+        run: |
+          set -euo pipefail
+          cat > firebase.stage56.ci.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.stage56.ci.json' EXIT
+          node - <<'JS'
+          const fs=require('node:fs');
+          const original=JSON.parse(fs.readFileSync('firebase.json'));
+          const test=JSON.parse(fs.readFileSync('firebase.stage56.ci.json'));
+          if(original.firestore.rules!==test.firestore.rules ||
+             test.firestore.rules!=='firestore.rules')
+            throw Error('Stage56 must use original source Firestore Rules');
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.stage56.ci.json \
+            --project demo-deda-stage55-two-phone-hold --only auth,firestore \
+            'node --test functions/tests/deda_weekly_stage56_asset_source_provenance_hold.test.js && cd tests/firestore-rules && node --test stage56_original_rules_asset_provenance_denial.test.mjs'
+      - name: Confirm NO migration, no real purchases, gifts, XP or APK
+        run: |
+          echo 'Stage56 examines original legacy source candidates ONLY in isolated emulator.'
+          echo 'Original purchases, premium IDs, bought frames, social coins, XP, diamonds, gifts, accounts and GM wallets never modified.'
+          echo 'Original app, Firestore Rules, Cloud Functions and 100342 phone reference unchanged.'
+          echo 'No production proof, real App Check, APK/AAB, real Firebase deploy or Google Play.'
+          echo 'Mandatory owner all-additions report and approval before any APK.'
