@@ -66,6 +66,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
       auth: FirebaseAuth.instance, firestore: FirebaseFirestore.instance);
     final archive = DedaProgressEvidenceStore(DedaFirebaseProgressEvidenceIo(
       session: session, firestore: FirebaseFirestore.instance));
+    final linkTransport = DedaFirebaseSecondPhoneLinkTransport.forPrivateQa();
     return DedaFirebaseProgressBackupDriver._(session,
       DedaProgressBackupCoordinator(
         reader: DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
@@ -73,8 +74,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
         purchaseReader: DedaLegacyPurchaseReader(DedaSharedPreferencesPurchaseReadStore()),
         purchaseArchive: DedaLegacyPurchaseEvidenceStore(archive)),
       session.dispose,
-      DedaFirebaseSecondPhoneLinkTransport.forPrivateQa() case final transport?
-          DedaSecondPhoneLinkClient(transport) : null);
+      linkTransport == null ? null : DedaSecondPhoneLinkClient(linkTransport));
   }
   final DedaOwnerSessionIo session;
   final Future<void> Function() _dispose;
