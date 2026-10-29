@@ -161,7 +161,25 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
   userMatchesAccount:userDocument.accountKey?.stringValue===ACCOUNT,
   proofExists:!!proof.createdAt,
  }));
- const got=await getDoc(ref(b));
+ let got;
+ try {
+  got=await getDoc(ref(b));
+ } catch (error) {
+  const url='http://127.0.0.1:8080/emulator/v1/projects/'+PROJECT+':ruleCoverage';
+  const response=await fetch(url);
+  console.log('QA rules coverage status',response.status);
+  if(response.ok) {
+   const report=await response.json();
+   console.log('QA rules coverage sections',Object.keys(report));
+   const entries=Object.entries(report.expressionReports??report.expressions??{});
+   const head=entries.filter(([key,value])=>{
+    const pos=JSON.stringify(value?.sourcePosition??value?.source??{});
+    return /"line":(1[0-9]|[2-6][0-9])[,}]/.test(pos);
+   });
+   console.log('QA low-line-rule-expressions',JSON.stringify(head.slice(0,120)).slice(0,16000));
+  }
+  throw error;
+ }
  assert.equal(got.exists(),true);
  assert.equal(got.data().sourceUid,a.uid);
  assert.equal(got.data().records.taskPoints, (await getDoc(ref(a))).data().records.taskPoints);
