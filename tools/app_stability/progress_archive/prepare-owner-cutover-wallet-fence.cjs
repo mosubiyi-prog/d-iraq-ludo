@@ -109,6 +109,10 @@ function prepareCutoverWalletFenceRules(source){
      ["allow update: if signedIn()",
        "dedaCutoverAccountWriterAllowed(resource.data.accountKey)"],
    ]],
+   ["match /deda_share_ids/{publicId}",[
+     ["allow update: if signedIn()",
+       "dedaCutoverWalletWriterAllowed(publicId)"],
+   ]],
  ];
  for(const [marker,scopes] of accountScoped){
    const index=fenced.indexOf(marker);
@@ -120,8 +124,38 @@ function prepareCutoverWalletFenceRules(source){
    for(const [anchor,condition] of scopes){
      chunk=exactlyOnce(chunk,anchor,anchor+"\n        && "+condition);
    }
+   // The original personal share-ID owner must not deactivate its ID after
+   // takeover, even if the original credential/session remains cached.
+   // The new device will need a separate authenticated server-side profile/
+   // alias update route; never let it claim the old Firebase UID directly.
+   if(marker==="match /deda_sessions/{uid}"){
+     chunk=exactlyOnce(chunk,
+       "allow delete: if signedIn() && request.auth.uid == uid;",
+       "allow delete: if signedIn() && request.auth.uid == uid\\n"+
+       "        && dedaCutoverAccountWriterAllowed(resource.data.accountKey);");
+   }
    fenced=fenced.slice(0,index)+chunk+fenced.slice(finish);
  }
- return fenced;
+ // Profile updates include the manager-bypass OR clause. Conjoin the
+ // cutover gate OUTSIDE that OR so no old UID can modify trustedInstallIds.
+ const profileMarker="match /deda_account_profiles/{accountKey}";
+ const profileStart=fenced.indexOf(profileMarker);
+ const profileEnd=fenced.indexOf("\\n    match /",profileStart+profileMarker.length);
+ if(profileStart<0||profileEnd<0||fenced.indexOf(profileMarker,profileStart+1)>=0)
+   throw Error("DEDA_PROFILE_RULE_DRIFT");
+ let profile=fenced.slice(profileStart,profileEnd);
+ for(const operation of ["create","update"]){
+   const needle="allow "+operation+": if isGeneralManager() || (";
+   profile=exactlyOnce(profile,needle,
+     "allow "+operation+": if dedaCutoverAccountWriterAllowed(accountKey)"+
+     " && (isGeneralManager() || (");
+ }
+ // Both OR expressions close with matching ] newline ) ; lines.
+ // Only replace those two precise terminators and preserve existing policy.
+ const blockEnd="        ])\\n      );";
+ const count=profile.split(blockEnd).length-1;
+ if(count!==2)throw Error("DEDA_PROFILE_CLOSING_DRIFT");
+ profile=profile.split(blockEnd).join("        ])\\n      ));");
+ return fenced.slice(0,profileStart)+profile+fenced.slice(profileEnd);
 }
 module.exports={prepareCutoverWalletFenceRules};
