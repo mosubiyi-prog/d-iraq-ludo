@@ -26,6 +26,10 @@ function fixture(){
  const K=core.eventKey(baseline);
  docs.set("deda_account_directory/"+A,{accountKey:A,active:true,createdUid:O});
  docs.set("deda_account_profiles/"+A,{accountKey:A});
+ docs.set("deda_share_ids/@DEDA-ABC123",{
+   publicId:"@DEDA-ABC123",kind:"personal",active:true,ownerUid:O,
+ });
+ docs.set("users/"+O,{accountKey:A,sharePersonalId:"@DEDA-ABC123"});
  for(const uid of [O,N])docs.set("deda_stage54_private_account_bindings/"+uid,{
    uid,accountKey:A,authProvider:"anonymous",state:"LOCAL_VERIFIED_HOLD_ONLY",
    emulatorOnly:true,canMigrate:false,canGrant:false,createdAt:T});
