@@ -10,6 +10,16 @@ if(source.split(anchor).length!==2 ||
    !source.includes("match /deda_sessions/{uid} {") ||
    !block.includes("allow update, delete: if false;"))
   throw Error("DEDA_QA_ARCHIVE_BASELINE_DRIFT_HOLD");
+// Firestore grammar expects helper functions in the root function-declaration
+// section BEFORE child match statements. The existing original rules keep
+// their original order; only the QA helpers are inserted after signedIn().
+const matchStart="    match /deda_progress_evidence/{accountKey}/captures/{captureId} {";
+const signedIn="    function signedIn() { return request.auth != null; }";
+if(block.split(matchStart).length!==2||source.split(signedIn).length!==2)
+ throw Error("QA_RULES_HELPER_SCOPE_DRIFT");
+const [helperDeclarations, archiveMatch]=block.split(matchStart);
+const generated=source.replace(signedIn,signedIn+"\n"+helperDeclarations)
+  .replace(anchor,matchStart+archiveMatch+"\n"+anchor);
 fs.writeFileSync(path.join(root,"deda_account_backup_qa.generated.rules"),
-  source.replace(anchor,block+"\n"+anchor),"utf8");
+  generated,"utf8");
 process.stdout.write("QA candidate generated; original Firestore rules untouched\n");
