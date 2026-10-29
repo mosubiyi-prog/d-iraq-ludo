@@ -80,6 +80,9 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   final Future<void> Function() _dispose;
   final DedaSecondPhoneLinkClient? _linkClient;
   DedaVerifiedReadonlyProgress? _lastVerifiedRecovery;
+  DedaVerifiedReadonlyEntitlements? _lastVerifiedEntitlements;
+  DedaVerifiedReadonlyEntitlements? get verifiedEntitlementsReadOnly =>
+      _lastVerifiedEntitlements;
   /// Server-verified values for QA inspection only. Never a spendable wallet,
   /// task engine state, restored premium ID or weekly league input.
   DedaVerifiedReadonlyProgress? get verifiedRecoveryReadOnly =>
@@ -106,6 +109,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   Future<bool> backup(String accountKey, bool Function() isCurrent) async {
     // A new session must never reuse another account's verified snapshot.
     _lastVerifiedRecovery = null;
+    _lastVerifiedEntitlements = null;
     // ALWAYS consult verified SERVER history BEFORE any archive upload.
     // Fresh phones may already have local zero/default preferences, so
     // hasAnyLocalRecord alone is NOT reliable evidence of an old device.
@@ -132,6 +136,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
             isCurrent: isCurrent);
         if (!isCurrent()) throw const DedaStaleSessionTransition();
         _lastVerifiedRecovery = link.progress;
+        _lastVerifiedEntitlements = link.entitlements;
       }
       // Even if private QA link succeeds, financial restoration is blocked.
       throw StateError('cross-device-historical-data-needs-reconciliation');
@@ -177,6 +182,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   @override
   Future<void> dispose() async {
     _lastVerifiedRecovery = null;
+    _lastVerifiedEntitlements = null;
     await _dispose();
   }
 }
