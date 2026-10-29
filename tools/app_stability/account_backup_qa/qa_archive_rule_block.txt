@@ -1,62 +1,59 @@
-    // PRIVATE QA CANDIDATE. No live deployment. Historical local data
-    // remains UNTRUSTED; this grant does NOT validate XP or spendable gems.
+    // PRIVATE QA ONLY: untrusted historical local records, never spendable.
+    // The original DEDA PIN proof must be fresh. Copying a trusted install
+    // ID cannot satisfy this gate. No production deployment is permitted.
+    function verifiedFreshPinForArchive(accountKey) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt is timestamp
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt <= request.time
+        && request.time < get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt + duration.value(10,'m')
+        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
+        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.pin ==
+          get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
+    }
+    function exactOriginalUntrustedArchive(accountKey,captureId) {
+      return accountKey.matches('^[0-9]{10,16}$')
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'legacy-local-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.installId ==
+          get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.installId
+        && request.resource.data.captureId == captureId
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && (request.resource.data.records.taskPoints == null ||
+          request.resource.data.records.taskPoints is string)
+        && (request.resource.data.records.socialCoinsAndXp == null ||
+          request.resource.data.records.socialCoinsAndXp is string)
+        && (request.resource.data.records.earnedDiamonds == null ||
+          request.resource.data.records.earnedDiamonds is string);
+    }
     match /deda_progress_evidence/{accountKey}/captures/{captureId} {
-      function recentOriginalPin() {
-        return signedIn()
-          && exists(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid))
-          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
-          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt is timestamp
-          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt <= request.time
-          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt > request.time - duration.value(10, 'm')
-          && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
-          && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
-          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin ==
-            get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.pin;
-      }
-      function ownerOfArchive() {
-        return accountKey.matches('^[0-9]{10,16}$')
-          && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
-          && recentOriginalPin()
-          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.uid == request.auth.uid
-          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
-          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
-      }
-      function nullableLegacyString(value) {
-        return value == null || (value is string && value.size() <= 200000);
-      }
-      function exactUntrustedEvidence() {
-        return request.resource.data.keys().hasOnly([
-            'format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'
-          ])
-          && request.resource.data.keys().hasAll([
-            'format','kind','accountKey','sourceUid','installId','captureId','records','createdAt'
-          ])
-          && request.resource.data.format == 1
-          && request.resource.data.kind == 'legacy-local-evidence'
-          && request.resource.data.accountKey == accountKey
-          && request.resource.data.sourceUid == request.auth.uid
-          && request.resource.data.installId ==
-            get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.installId
-          && request.resource.data.captureId == captureId
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.records is map
-          && request.resource.data.records.keys().hasOnly([
-            'taskPoints','socialCoinsAndXp','earnedDiamonds'
-          ])
-          && request.resource.data.records.keys().hasAll([
-            'taskPoints','socialCoinsAndXp','earnedDiamonds'
-          ])
-          && nullableLegacyString(request.resource.data.records.taskPoints)
-          && nullableLegacyString(request.resource.data.records.socialCoinsAndXp)
-          && nullableLegacyString(request.resource.data.records.earnedDiamonds);
-      }
-      allow get: if ownerOfArchive();
-      allow list: if ownerOfArchive()
-        && request.query.limit is int
-        && request.query.limit >= 1
+      allow get: if verifiedFreshPinForArchive(accountKey);
+      allow list: if verifiedFreshPinForArchive(accountKey)
         && request.query.limit <= 20;
-      allow create: if ownerOfArchive() && exactUntrustedEvidence();
+      allow create: if verifiedFreshPinForArchive(accountKey)
+        && exactOriginalUntrustedArchive(accountKey,captureId);
       allow update, delete: if false;
     }
