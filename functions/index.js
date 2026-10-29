@@ -1342,3 +1342,8 @@ exports.dedaLegacyAssetEscrowV1 =
 // Account recovery point 2 pilot: signed reviewed balances, read-only, NO grants.
 exports.dedaReviewedAccountRecoveryViewV1 =
   require("./deda_recovery_verified_view.js").dedaReviewedAccountRecoveryViewV1;
+
+// Point 3 original DEDA leaderboard: independently reviewed server scores ONLY.
+// No league payouts or task XP writes. No Firebase deploy without owner approval.
+exports.dedaWeeklyVerifiedStandingsV1 =
+  require("./deda_weekly_verified_standings_reader.js").dedaWeeklyVerifiedStandingsV1;
