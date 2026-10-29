@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/deda_weekly_leaderboard_page.dart';
-import '../lib/deda_weekly_leaderboard_policy.dart';
-import '../lib/deda_weekly_competitor_public_card.dart';
-import '../lib/deda_weekly_leaderboard_tap_surface.dart';
+import 'package:d_iraq_ludo/deda_weekly_leaderboard_page.dart';
+import 'package:d_iraq_ludo/deda_weekly_leaderboard_policy.dart';
+import 'package:d_iraq_ludo/deda_weekly_competitor_public_card.dart';
 
 const viewer = 'leader-participant-viewer-00000001';
 
