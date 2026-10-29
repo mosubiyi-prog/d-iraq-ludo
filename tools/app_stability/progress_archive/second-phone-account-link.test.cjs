@@ -8,6 +8,7 @@ process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8080";
 const A="07701234567",O="first_verified_device_uid",N="second_verified_device_uid";
 const M="migration_reference_00000001",S="settlement_reference_000001";
 const K="b".repeat(64),T={seconds:100,nanoseconds:0};
+const F="legacy_fence_reference_000001",ORIGINAL="@DEDA-ABC123";
 function fixture(){
  const docs=new Map(),writes=[],reads=[];
  const root="deda_progress_migrations/"+A;
@@ -21,9 +22,16 @@ function fixture(){
  docs.set("deda_verified_progress/"+A,{format:1,accountKey:A,
   version:1,initializedBy:K,balances:{points:5,coins:2,xp:25,earnedDiamonds:400}});
  docs.set(root+"/settlementReviews/"+S,{accountKey:A,migrationId:M,
-  settlementId:S,status:"resolved",pendingPurchases:0,pendingReservations:0});
- docs.set(root+"/settlements/"+S,{accountKey:A,baselineEventKey:K,
+  settlementId:S,status:"resolved",originalId:ORIGINAL,legacyFenceId:F,
   pendingPurchases:0,pendingReservations:0});
+ docs.set(root+"/settlements/"+S,{format:1,accountKey:A,migrationId:M,
+  evidenceDigest:"a".repeat(64),baselineEventKey:K,legacyFenceId:F,
+  pendingPurchases:0,pendingReservations:0});
+ docs.set(root+"/fences/"+F,{format:1,accountKey:A,migrationId:M,
+  evidenceDigest:"a".repeat(64),originalId:ORIGINAL,legacyFenceId:F,
+  protocol:"deda-verified-progress-v1",
+  deploymentRevision:"deployment_revision_000001",
+  enforcementRevision:"c".repeat(64),status:"enforced",createdAt:T});
  docs.set("deda_progress_migrations/_policy/settings/verified-cutover-v1",{
   format:1,enabled:true,revision:"deployment_revision_000001",
   protocol:"deda-verified-progress-v1",enforcementRevision:"c".repeat(64),
@@ -80,6 +88,12 @@ test("unsettled purchase blocks links and never changes wallet",async()=>{
  const f=fixture(),p="deda_progress_migrations/"+A+"/settlementReviews/"+S;
  f.docs.set(p,{...f.docs.get(p),pendingPurchases:1});
  await assert.rejects(link(f.args),/TRUSTED_CUTOVER_UNVERIFIED/);
+ assert.equal(f.writes.length,0);
+});
+test("old installed APK write fence must be proven, not just claimed",async()=>{
+ const f=fixture(),path="deda_progress_migrations/"+A+"/fences/"+F;
+ f.docs.set(path,{...f.docs.get(path),status:"pending"});
+ await assert.rejects(link(f.args),/LEGACY_FINANCIAL_WRITER_NOT_FENCED/);
  assert.equal(f.writes.length,0);
 });
 test("incorrect Firebase session stops before accessing account",async()=>{
