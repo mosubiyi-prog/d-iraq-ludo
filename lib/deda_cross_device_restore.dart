@@ -74,6 +74,13 @@ class DedaCrossDeviceRestore {
     final entries = await archive.list(
       accountKey: accountKey, isCurrent: isCurrent, limit: 20);
     check();
+    // A saturated bounded page might conceal older independent sources.
+    // No device is allowed to infer a complete history from that result.
+    if (entries.length == 20) {
+      return const DedaRecoveryStage(
+          status: DedaRecoveryStageStatus.archiveWindowIncomplete,
+          captureId: null);
+    }
 
     // A brand-new device must not erase/replace a more recent local state.
     // Collect genuine same-account archive records, but never infer
@@ -83,13 +90,6 @@ class DedaCrossDeviceRestore {
          e.installId != owner.installId) &&
         e.capture.accountKey == accountKey).toList(growable: false);
     if (foreign.isEmpty) {
-      // The original bounded query may hide older captures. A full page is
-      // never proof that this device owns the only account history.
-      if (entries.length == 20) {
-        return const DedaRecoveryStage(
-            status: DedaRecoveryStageStatus.archiveWindowIncomplete,
-            captureId: null);
-      }
       if (directory['createdUid'] != owner.user.uid) {
         return const DedaRecoveryStage(
             status: DedaRecoveryStageStatus.priorAccountWithoutArchive,
@@ -110,7 +110,16 @@ class DedaCrossDeviceRestore {
           captureId: null);
     }
 
-    final selected = foreign.first;
+    // Multiple older captures can be perfectly legitimate updates. Without
+    // a server-authored event ledger, do not guess which raw balance is the
+    // authoritative final one. Preserve both as originals on the server,
+    // stop this staging attempt and require reviewed reconciliation.
+    if (foreign.length != 1) {
+      return const DedaRecoveryStage(
+          status: DedaRecoveryStageStatus.historicalCapturesNeedReview,
+          captureId: null);
+    }
+    final selected = foreign.single;
     DedaStoredPurchaseEvidence? linkedPurchase;
     if (purchaseArchive != null) {
       // Read the same PIN/session-protected SERVER archive. A linked sidecar
@@ -196,6 +205,7 @@ enum DedaRecoveryStageStatus {
   priorAccountWithoutArchive,
   archiveWindowIncomplete,
   accountDirectoryUnverified,
+  historicalCapturesNeedReview,
   multipleSourcesRequireReview,
   purchaseEvidenceConflict,
   alreadyStaged,
