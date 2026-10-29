@@ -171,6 +171,8 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
   if(response.ok) {
    const report=await response.json();
    console.log('QA rules coverage sections',Object.keys(report));
+   console.log('QA rules coverage report shape',Object.keys(report.report??{}).slice(0,35));
+   console.log('QA rules coverage report snapshot',JSON.stringify(report.report??{}).slice(0,18000));
    const entries=Object.entries(report.expressionReports??report.expressions??{});
    const head=entries.filter(([key,value])=>{
     const pos=JSON.stringify(value?.sourcePosition??value?.source??{});
