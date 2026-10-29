@@ -51,6 +51,20 @@ test("04 helper is keyed by original public ID and returns denied for mismatched
  assert.match(after,/get\(path\)\.data\.protocol == 'deda-verified-progress-v1'/);
  assert.match(after,/return !exists\(path\) \|\| \(/);
 });
+test("06 stale old UID cannot mutate profile, session or manager personal wallet after cutover",()=>{
+ const rules=prepare(original);
+ const privateAccount=block(rules,"match /deda_migration_account_authority/{accountKey}");
+ assert.match(privateAccount,/allow read, write: if false/);
+ assert.match(rules,/deda_migration_account_authority\/\$\(accountKey\)/);
+ assert.match(rules,/get\(path\)\.data\.activeUid == request\.auth\.uid/);
+ const gm=block(rules,"match /deda_gm_personal_diamond_wallets/{accountKey}");
+ assert.equal((gm.match(/dedaCutoverAccountWriterAllowed\(accountKey\)/g)||[]).length,2);
+ const users=block(rules,"match /users/{uid}");
+ assert.match(users,/dedaCutoverAccountWriterAllowed\(request.resource.data.accountKey\)/);
+ assert.match(users,/dedaCutoverAccountWriterAllowed\(resource.data.accountKey\)/);
+ const sessions=block(rules,"match /deda_sessions/{uid}");
+ assert.match(sessions,/dedaCutoverAccountWriterAllowed\(request.resource.data.accountKey\)/);
+});
 test("05 force reevaluation when root permissions or source anchors change",()=>{
  const edited=original.replace(
    "allow update: if verifiedDiamondsPersonalOwner(publicId)",
