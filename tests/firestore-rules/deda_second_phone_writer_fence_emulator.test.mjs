@@ -212,3 +212,25 @@ test('12 old phone cannot delete its session as an indirect post-cutover write',
  assert.equal((await assertSucceeds(
    getDoc(doc(first,'deda_sessions/'+OLD)))).exists(),true);
 });
+
+test('13 server handover preserves original @DEDA and gives new verified UID exclusive edit',async()=>{
+ await activateServerFences();
+ const idPath='deda_share_ids/'+ORIGINAL;
+ await env.withSecurityRulesDisabled(async ctx=>{
+   await updateDoc(doc(ctx.firestore(),idPath),{
+     ownerUid:NEW,updatedAt:new Date('2026-10-29T09:21:00Z')
+   });
+ });
+ const prior=await assertSucceeds(getDoc(doc(second,idPath)));
+ assert.equal(prior.data().publicId,ORIGINAL);
+ assert.equal(prior.data().ownerUid,NEW);
+ await assertFails(updateDoc(doc(first,idPath),{
+   displayName:'old stolen display',updatedAt:serverTimestamp()
+ }));
+ await assertSucceeds(updateDoc(doc(second,idPath),{
+   displayName:'verified new phone',updatedAt:serverTimestamp()
+ }));
+ const current=await assertSucceeds(getDoc(doc(second,idPath)));
+ assert.equal(current.data().displayName,'verified new phone');
+ assert.equal(current.data().publicId,ORIGINAL);
+});
