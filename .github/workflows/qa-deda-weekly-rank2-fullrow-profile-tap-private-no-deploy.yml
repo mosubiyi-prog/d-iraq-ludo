@@ -1,0 +1,88 @@
+name: DEDA League Rank2 and full row verified profile tap Flutter QA NO APK NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-rank2-fullrow-tap-ui-private-qa-no-deploy-2026-10-29
+    paths:
+      - 'lib/deda_weekly_leaderboard_page.dart'
+      - 'lib/deda_weekly_leaderboard_tap_surface.dart'
+      - 'test/deda_weekly_rank_tap_full_surface_qa_test.dart'
+      - '.github/workflows/qa-deda-weekly-rank2-fullrow-profile-tap-private-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-rank2-tap-actual-flutter-no-deploy
+  cancel-in-progress: true
+jobs:
+  original-source-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify EXACT changes, stable DEDA and original wallet untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=9a55e380731e7d1821c02d4be139f7aa0eaa639d
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-rank2-changed.txt
+          cat /tmp/deda-rank2-changed.txt
+          while IFS= read -r path; do
+            case "$path" in
+              lib/deda_weekly_leaderboard_page.dart|\
+              lib/deda_weekly_leaderboard_tap_surface.dart|\
+              test/deda_weekly_rank_tap_full_surface_qa_test.dart|\
+              .github/workflows/qa-deda-weekly-rank2-fullrow-profile-tap-private-no-deploy.yml) ;;
+              *) echo "REFUSE UNAPPROVED FILE: $path"; exit 1 ;;
+            esac
+          done < /tmp/deda-rank2-changed.txt
+          git diff --quiet "$BASE" -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            lib/deda_weekly_leaderboard_safe_screen.dart \
+            lib/deda_weekly_snapshot_decode.dart \
+            lib/traffic_quiz_page.dart \
+            functions/ tools/app_stability/progress_archive/ \
+            firestore.rules firebase.json android/ assets/ pubspec.yaml
+          echo 'PASS original DEDA wallet, XP, identity, quiz, backend and reference untouched'
+  flutter-phone-tablet-actions:
+    needs: original-source-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Assemble standalone tested original leaderboard UI without building APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-weekly-rank2-fullrow"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
+          cp lib/deda_weekly_leaderboard_page.dart "$TARGET/lib/"
+          cp lib/deda_weekly_leaderboard_policy.dart "$TARGET/lib/"
+          cp lib/deda_weekly_competitor_public_card.dart "$TARGET/lib/"
+          cp lib/deda_weekly_leaderboard_tap_surface.dart "$TARGET/lib/"
+          cp test/deda_weekly_rank_tap_full_surface_qa_test.dart "$TARGET/test/"
+          cp test/deda_weekly_leaderboard_page_test.dart "$TARGET/test/"
+          cd "$TARGET"
+          flutter pub get
+          dart format --output=none --set-exit-if-changed lib/deda_weekly_leaderboard_tap_surface.dart >/dev/null || true
+          dart analyze lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_leaderboard_policy.dart \
+            lib/deda_weekly_competitor_public_card.dart \
+            lib/deda_weekly_leaderboard_tap_surface.dart \
+            test/deda_weekly_rank_tap_full_surface_qa_test.dart
+          flutter test --no-pub test/deda_weekly_rank_tap_full_surface_qa_test.dart \
+            test/deda_weekly_leaderboard_page_test.dart
+          test -z "$(find "$TARGET" -name '*.apk' -o -name '*.aab' | head -n 1)"
+          echo 'PASS Verified rank2, rows4-10, own rank denied, phone/tablet, NO APK or deploy'
