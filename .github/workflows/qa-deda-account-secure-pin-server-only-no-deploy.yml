@@ -1,0 +1,52 @@
+name: DEDA Secure PIN Gate Private QA (No Deploy)
+
+on:
+  push:
+    branches:
+      - deda-account-secure-pin-server-gate-private-no-deploy-2026-10-30
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secure-pin-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Restrict modifications to security gate only
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='563fcd0df12c778e92faa30cf266d43590f54651'
+          git cat-file -e "${base}^{commit}"
+          while IFS= read -r file; do
+            case "$file" in
+              functions/index.js|functions/deda_secure_pin_gate.js|functions/deda_secure_pin_gate_core.js|tools/app_stability/account_security/secure_pin_gate.test.cjs|docs/DEDA_ACCOUNT_SECURE_PIN_GATE_OWNER_CHECKPOINT_2026-10-30.md|.github/workflows/qa-deda-account-secure-pin-server-only-no-deploy.yml)
+                ;;
+              *) echo "Disallowed change: $file"; exit 1;;
+            esac
+          done < <(git diff --name-only "$base" HEAD)
+          git diff --quiet "$base" HEAD -- lib/ firestore.rules firebase.json pubspec.yaml
+          echo "Legacy Android, Flutter, original Rules and Firebase config unchanged"
+      - name: Syntax check
+        run: |
+          node --check functions/deda_secure_pin_gate_core.js
+          node --check functions/deda_secure_pin_gate.js
+          node --check functions/index.js
+          node --check tools/app_stability/account_security/secure_pin_gate.test.cjs
+      - name: Run isolated security regression tests
+        run: node --test tools/app_stability/account_security/secure_pin_gate.test.cjs
+      - name: Assert no deploy commands and App Check enforced
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'enforceAppCheck: true' functions/deda_secure_pin_gate.js
+          grep -q 'secrets: \[pinRateSecret\]' functions/deda_secure_pin_gate.js
+          ! grep -E -q '(firebase deploy|flutter build|gradlew assemble|playStore|google-play)' .github/workflows/qa-deda-account-secure-pin-server-only-no-deploy.yml
