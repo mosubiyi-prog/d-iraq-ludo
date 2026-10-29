@@ -43,11 +43,11 @@
           'taskPoints','socialCoinsAndXp','earnedDiamonds'
         ])
         && (request.resource.data.records.taskPoints == null ||
-          request.resource.data.records.taskPoints is string)
+          (request.resource.data.records.taskPoints is string && request.resource.data.records.taskPoints.size() <= 200000))
         && (request.resource.data.records.socialCoinsAndXp == null ||
-          request.resource.data.records.socialCoinsAndXp is string)
+          (request.resource.data.records.socialCoinsAndXp is string && request.resource.data.records.socialCoinsAndXp.size() <= 200000))
         && (request.resource.data.records.earnedDiamonds == null ||
-          request.resource.data.records.earnedDiamonds is string);
+          (request.resource.data.records.earnedDiamonds is string && request.resource.data.records.earnedDiamonds.size() <= 200000));
     }
     match /deda_progress_evidence/{accountKey}/captures/{captureId} {
       allow get: if verifiedFreshPinForArchive(accountKey);
