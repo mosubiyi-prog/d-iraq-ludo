@@ -38,6 +38,8 @@ function signReview(secret, accountKey, review) {
     review.points, review.xp, review.coins, review.earnedDiamonds,
     review.diamondGiftBalance, review.premiumId, review.frameIds,
     review.legacyWriterFenceId, review.settlementId, review.reviewedAtMs,
+    review.status, review.issuer, review.legacyWriterFenced,
+    review.paymentProviderReviewed, review.idAndFramesReviewed,
   ]);
   return createHmac("sha256", secret).update(canon).digest("hex");
 }
