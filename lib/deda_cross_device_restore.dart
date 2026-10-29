@@ -101,7 +101,7 @@ class DedaCrossDeviceRestore {
     }
     await local.writeOnce(key, encoded);
     check();
-    if (await local.read(key) != encoded) {
+    if ((await local.read(key)) != encoded) {
       throw StateError('cross-device-staging-write-not-persisted');
     }
     check();
