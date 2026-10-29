@@ -106,14 +106,20 @@ async function auditCrossDeviceServerReadiness(options){
  validOptions(options);
  const {reader,accountKey,oldUid,newUid}=options;
  const get=p=>safeGet(reader,p);
- const [directory,profile,oldUser,newUser,migration,progress]=
-   await Promise.all([
+ const [directory,profile,oldUser,newUser,migration,progress,
+   oldBinding,newBinding]=await Promise.all([
     get("deda_account_directory/"+accountKey),
     get("deda_account_profiles/"+accountKey),
     get("users/"+oldUid),
     get("users/"+newUid),
     get("deda_progress_migrations/"+accountKey),
     get("deda_verified_progress/"+accountKey),
+    // These are SERVER-OWNED Stage54 outputs from the authenticated
+    // anonymous-Firebase + correct-PIN, account-wide-throttled emulator
+    // function. Sessions, users and copied install IDs are client-writable
+    // under old rules and are NOT standalone proofs of account ownership.
+    get("deda_stage54_private_account_bindings/"+oldUid),
+    get("deda_stage54_private_account_bindings/"+newUid),
    ]);
  const blockers=[];
  const accountChain=!!directory&&directory.accountKey===accountKey&&
@@ -122,6 +128,21 @@ async function auditCrossDeviceServerReadiness(options){
    !!oldUser&&oldUser.accountKey===accountKey&&
    !!newUser&&newUser.accountKey===accountKey;
  if(!accountChain)blockers.push("ORIGINAL_ACCOUNT_UID_CHAIN_UNVERIFIED");
+ const validBinding=(record,uid)=>!!record&&
+   Object.keys(record).sort().join(",")===
+     ["uid","accountKey","authProvider","state","emulatorOnly",
+      "canMigrate","canGrant","createdAt"].sort().join(",")&&
+   record.uid===uid&&record.accountKey===accountKey&&
+   record.authProvider==="anonymous"&&
+   record.state==="LOCAL_VERIFIED_HOLD_ONLY"&&
+   record.emulatorOnly===true&&
+   record.canMigrate===false&&record.canGrant===false&&
+   stamp(record.createdAt);
+ const serverOwnedDualPinBindingConsistent=
+   validBinding(oldBinding,oldUid)&&validBinding(newBinding,newUid)&&
+   directory?.createdUid===oldUid;
+ if(!serverOwnedDualPinBindingConsistent)
+   blockers.push("SERVER_OWNED_DUAL_PIN_BINDING_UNVERIFIED");
  let verifiedState=null;
  try{verifiedState=core.parseState(progress,accountKey);}
  catch(_){blockers.push("VERIFIED_SERVER_PROGRESS_MISSING_OR_INVALID");}
@@ -219,6 +240,7 @@ async function auditCrossDeviceServerReadiness(options){
  blockers.push("PAYMENT_GIFT_FRAME_AND_PREMIUM_ID_PROOFS_NOT_SETTLED");
  return result({
    originalAccountChainConsistent:accountChain,
+   serverOwnedDualPinBindingConsistent,
    parsedServerProgressState:verifiedState!==null,
    reviewedMigrationPresent:migrationReviewed,
    baselineLedgerConsistent,
