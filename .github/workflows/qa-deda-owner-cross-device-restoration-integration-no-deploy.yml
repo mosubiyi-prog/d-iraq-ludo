@@ -31,10 +31,12 @@ jobs:
           while IFS= read -r p; do
             case "$p" in
               lib/deda_cross_device_restore.dart|\
+              lib/deda_second_phone_link_client.dart|\
               lib/deda_legacy_purchase_evidence.dart|\
               lib/deda_weekly_snapshot_decode.dart|\
               lib/deda_progress_backup_runtime.dart|\
               test/deda_cross_device_restore_test.dart|\
+              test/deda_second_phone_link_client_test.dart|\
               test/deda_weekly_snapshot_decode_test.dart|\
               test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart|\
               tools/app_stability/progress_archive/cross-device-readiness-audit.cjs|\
@@ -45,6 +47,8 @@ jobs:
               tools/app_stability/progress_archive/second-phone-account-link.test.cjs|\
               tools/app_stability/progress_archive/second-phone-link-callable.cjs|\
               tools/app_stability/progress_archive/second-phone-link-callable.test.cjs|\
+              tools/app_stability/progress_archive/qa_second_phone_functions/index.js|\
+              tools/app_stability/progress_archive/qa_second_phone_functions/package.json|\
               tools/restore_deda_stability_baseline.py|\
               .github/workflows/qa-deda-owner-cross-device-restoration-integration-no-deploy.yml|\
               docs/DEDA_OWNER_CROSS_DEVICE_RESTORATION_INTEGRATION_2026-10-29.md) ;;
@@ -69,6 +73,7 @@ jobs:
           node --check tools/app_stability/progress_archive/second-phone-account-link.test.cjs
           node --check tools/app_stability/progress_archive/second-phone-link-callable.cjs
           node --check tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
+          node --check tools/app_stability/progress_archive/qa_second_phone_functions/index.js
           node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs tools/app_stability/progress_archive/second-phone-account-link.test.cjs tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
           echo "Original DEDA account, league, wallets/IDs, Play and quiz bank unchanged"
   prepare-actual-original-flutter-no-apk:
@@ -148,6 +153,7 @@ jobs:
           set -euo pipefail
           TARGET="$RUNNER_TEMP/deda-bundle1-real-flutter-no-apk"
           cp test/deda_cross_device_restore_test.dart "$TARGET/test/"
+          cp test/deda_second_phone_link_client_test.dart "$TARGET/test/"
           cp test/deda_weekly_snapshot_decode_test.dart "$TARGET/test/"
           cp test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart "$TARGET/test/"
           cp test/deda_friend_task_session_fence_test.dart "$TARGET/test/"
@@ -156,7 +162,7 @@ jobs:
           cp test/deda_weekly_original_public_profile_readonly_test.dart "$TARGET/test/"
           cd "$TARGET"
           flutter pub get --enforce-lockfile
-          dart analyze lib/deda_cross_device_restore.dart lib/deda_legacy_purchase_evidence.dart lib/deda_weekly_snapshot_decode.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
+          dart analyze lib/deda_cross_device_restore.dart lib/deda_second_phone_link_client.dart lib/deda_legacy_purchase_evidence.dart lib/deda_weekly_snapshot_decode.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
           set +e
           dart analyze --format=machine lib/main.dart lib/deda_social_service.dart \
             > "$RUNNER_TEMP/owner-bundle1-actual-analyzer.txt" 2>&1
@@ -173,6 +179,7 @@ jobs:
           fi
           flutter test --no-pub \
             test/deda_cross_device_restore_test.dart \
+            test/deda_second_phone_link_client_test.dart \
             test/deda_weekly_snapshot_decode_test.dart \
             test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart \
             test/deda_task_write_fence_test.dart \
