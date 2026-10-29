@@ -70,6 +70,10 @@ test("first valid link is atomic and never credits any balance",async()=>{
  const f=fixture(),before=f.docs.get("deda_verified_progress/"+A);
  const r=await link(f.args);
  assert.equal(r.replayed,false);assert.equal(r.canCreditDiamonds,false);
+ assert.deepEqual(r.verifiedProgress,{
+   format:1,version:1,points:5,coins:2,xp:25,earnedDiamonds:400,
+   spendable:false,entitlementsVerified:false,
+ });
  assert.deepEqual(f.writes,["deda_private_second_phone_links/"+N]);
  assert.deepEqual(f.docs.get("deda_verified_progress/"+A),before);
 });
