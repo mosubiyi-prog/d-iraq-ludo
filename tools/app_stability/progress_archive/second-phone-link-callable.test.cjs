@@ -30,6 +30,7 @@ function fixture(){
    publicId:"@DEDA-ABC123",kind:"personal",active:true,ownerUid:O,
  });
  docs.set("users/"+O,{accountKey:A,sharePersonalId:"@DEDA-ABC123"});
+ docs.set("users/"+N,{accountKey:A,sharePersonalId:"@DEDA-ABC123"});
  for(const uid of [O,N])docs.set("deda_stage54_private_account_bindings/"+uid,{
    uid,accountKey:A,authProvider:"anonymous",state:"LOCAL_VERIFIED_HOLD_ONLY",
    emulatorOnly:true,canMigrate:false,canGrant:false,createdAt:T});
@@ -114,11 +115,12 @@ test("01 calls original canonical link without client account or wallet payload"
  for(const key of ["canRestoreFinancialBalances","canCreditXp","canCreditDiamonds",
    "canRestoreFrames","canRestorePremiumId","canIssueLeagueGift","productionReady"])
    assert.equal(r[key],false,key);
- assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A]);
+ assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A,"deda_share_ids/@DEDA-ABC123"]);
  const record=f.docs.get(linkPath);
  assert.equal(record.accountKey,A);assert.equal(record.oldUid,O);
  assert.equal(record.newUid,N);
  assert.equal(record.canCreditDiamonds,false);
+ assert.equal(f.docs.get("deda_share_ids/@DEDA-ABC123").ownerUid,N);
  assert.equal(JSON.stringify(r).includes(A),false);
  assert.equal(f.options.enforceAppCheck,false);
 });
@@ -126,7 +128,7 @@ test("02 retry is idempotent and no financial changes occur",async()=>{
  const f=fixture(),original=f.docs.get("deda_verified_progress/"+A);
  await f.call();
  const r=await f.call();
- assert.equal(r.replayed,true);assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A]);
+ assert.equal(r.replayed,true);assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A,"deda_share_ids/@DEDA-ABC123"]);
  assert.deepEqual(f.docs.get("deda_verified_progress/"+A),original);
 });
 test("03 request cannot supply identity, balance, old UID or rank",async()=>{
