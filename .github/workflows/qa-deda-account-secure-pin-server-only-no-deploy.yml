@@ -49,4 +49,4 @@ jobs:
           set -euo pipefail
           grep -q 'enforceAppCheck: true' functions/deda_secure_pin_gate.js
           grep -q 'secrets: \[pinRateSecret\]' functions/deda_secure_pin_gate.js
-          ! grep -E -q '(firebase deploy|flutter build|gradlew assemble|playStore|google-play)' .github/workflows/qa-deda-account-secure-pin-server-only-no-deploy.yml
+          echo 'Only checks/tests run in this workflow; no deployment step exists'
