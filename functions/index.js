@@ -1326,3 +1326,7 @@ exports.dedaPremiumResolveAdminGiftRecipient =
     buildResolveGiftRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
 exports.dedaPremiumResolvePublicRecipient =
     buildResolvePublicRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
+
+// Owner-reviewed account-security pilot: protected callable, no client cutover.
+exports.dedaSecurePinPreflightV1 =
+  require("./deda_secure_pin_gate.js").makeCallableSecurePinGate();
