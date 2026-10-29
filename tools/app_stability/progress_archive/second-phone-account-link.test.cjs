@@ -78,13 +78,13 @@ test("first valid link is atomic and never credits any balance",async()=>{
    format:1,version:1,points:5,coins:2,xp:25,earnedDiamonds:400,
    spendable:false,entitlementsVerified:false,
  });
- assert.deepEqual(f.writes,["deda_private_second_phone_links/"+N,"deda_migration_spend_authority/@DEDA-ABC123"]);
+ assert.deepEqual(f.writes,["deda_private_second_phone_links/"+N,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A]);
  assert.deepEqual(f.docs.get("deda_verified_progress/"+A),before);
 });
 test("repeating same link is idempotent and cannot overwrite it",async()=>{
  const f=fixture();await link(f.args);
  assert.equal((await link(f.args)).replayed,true);
- assert.equal(f.writes.length,2);
+ assert.equal(f.writes.length,3);
  await assert.rejects(link({...f.args,linkId:"second_device_account_link_002"}),/EXISTING_LINK_CONFLICT/);
 });
 test("a second device cannot hijack the currently fenced wallet writer",async()=>{
@@ -101,7 +101,7 @@ test("linked account cannot silently continue when writer fence disappears",asyn
  await link(f.args);
  f.docs.delete(path);
  await assert.rejects(link(f.args),/LINK_WITHOUT_WRITER_FENCE/);
- assert.equal(f.writes.length,2);
+ assert.equal(f.writes.length,3);
 });
 test("existing competing account writer fence refuses new canonical link",async()=>{
  const f=fixture(),path="deda_migration_spend_authority/@DEDA-ABC123";
@@ -136,7 +136,7 @@ test("additional XP and task points preserve original canonical link",async()=>{
  assert.equal(r.verifiedProgress.xp,30);
  assert.equal(r.verifiedProgress.earnedDiamonds,400);
  assert.equal(r.verifiedProgress.spendable,false);
- assert.equal(f.writes.length,2);
+ assert.equal(f.writes.length,3);
  assert.equal(f.docs.get(path).balances.xp,30);
 });
 test("missing server PIN proof for either device denies link",async()=>{
