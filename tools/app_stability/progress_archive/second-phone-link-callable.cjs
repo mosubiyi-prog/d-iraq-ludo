@@ -96,6 +96,7 @@ function createSecondPhoneLinkCallable({onCall,HttpsError,db,auth,serverTimestam
        set:(path,doc)=>{
          if(path!=="deda_private_second_phone_links/"+uid&&
             path!=="deda_migration_account_authority/"+accountKey&&
+            path!=="users/"+uid&&
             !(path.startsWith("deda_share_ids/")&&
               /^@DEDA-[A-Z0-9]{6}$/.test(path.slice(
                 "deda_share_ids/".length)))&&
