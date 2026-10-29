@@ -1334,3 +1334,7 @@ exports.dedaSecurePinPreflightV1 =
 // Step 2 pilot: safe profile-only recovery, no asset / wallet migration.
 exports.dedaSafeProfileRestoreV1 =
   require("./deda_safe_profile_restore.js").dedaSafeProfileRestoreV1;
+
+// Step1 recovery private pilot: immutable legacy asset ESCROW, no real transfer.
+exports.dedaLegacyAssetEscrowV1 =
+  require("./deda_recovery_asset_escrow.js").dedaLegacyAssetEscrowV1;
