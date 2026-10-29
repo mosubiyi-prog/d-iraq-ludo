@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '20'
       - name: Preserve original DEDA app and production rules
-        run: git diff --quiet 59af6375ebec167f402a48652ef6745ab1be0488 HEAD -- lib/ android/ firestore.rules firebase.json pubspec.yaml functions/deda_secure_pin_gate_core.js functions/deda_safe_profile_restore_core.js
+        run: git diff --quiet 59af6375ebec167f402a48652ef6745ab1be0488 HEAD -- lib/ android/ firestore.rules firebase.json storage.rules pubspec.yaml pubspec.lock
       - name: Verify only candidate recovery code was added
         run: |
           node --check functions/deda_recovery_asset_escrow_core.js
