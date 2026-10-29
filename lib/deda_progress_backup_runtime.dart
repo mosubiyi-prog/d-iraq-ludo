@@ -106,6 +106,7 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
       final recovery = DedaCrossDeviceRestore(
         archive: coordinator.archive,
         local: DedaRecoverySharedPreferences(),
+        purchaseArchive: coordinator.purchaseArchive,
       );
       await recovery.stage(accountKey: accountKey, isCurrent: isCurrent);
       if (!isCurrent()) throw const DedaStaleSessionTransition();
