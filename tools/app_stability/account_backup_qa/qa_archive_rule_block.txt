@@ -7,7 +7,7 @@
           && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
           && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt is timestamp
           && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt <= request.time
-          && request.time - get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt < duration.value(10, 'm')
+          && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt > request.time - duration.value(10, 'm')
           && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
           && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
           && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin ==
