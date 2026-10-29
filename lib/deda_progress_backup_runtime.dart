@@ -92,26 +92,28 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   }
   @override
   Future<bool> backup(String accountKey, bool Function() isCurrent) async {
-    // REAL second-phone recovery integration: when a fresh device has no
-    // original local state, read account/PIN-verified archives BEFORE any
-    // upload, stage the entire historical snapshot with provenance, and never
-    // treat the old local diamonds or XP as new spendable rewards. In
-    // particular do NOT publish an empty new-phone snapshot over the old one.
-    // The host remains disabled until verified production rules + account
-    // reconciliation are approved for a new (non-APK) source cutover.
+    // ALWAYS consult verified SERVER history BEFORE any archive upload.
+    // Fresh phones may already have local zero/default preferences, so
+    // hasAnyLocalRecord alone is NOT reliable evidence of an old device.
+    // Neither restore financially nor overwrite historical state.
+    // The entire host stays opt-in until stronger auth and backend settlement.
+    final recovery = DedaCrossDeviceRestore(
+      archive: coordinator.archive,
+      local: DedaRecoverySharedPreferences(),
+      purchaseArchive: coordinator.purchaseArchive,
+    );
+    final prior = await recovery.stage(
+        accountKey: accountKey, isCurrent: isCurrent);
+    if (!isCurrent()) throw const DedaStaleSessionTransition();
+    if (prior.status != DedaRecoveryStageStatus.noPreviousDeviceArchive) {
+      // Including "already staged" and unresolved multiple-source history:
+      // never upload new-phone defaults or duplicate pending financial data.
+      throw StateError('cross-device-historical-data-needs-reconciliation');
+    }
     final currentLocal = await coordinator.reader.capture(
         accountKey: accountKey, isCurrent: isCurrent);
     if (!isCurrent()) throw const DedaStaleSessionTransition();
-    if (!currentLocal.hasAnyLocalRecord) {
-      final recovery = DedaCrossDeviceRestore(
-        archive: coordinator.archive,
-        local: DedaRecoverySharedPreferences(),
-        purchaseArchive: coordinator.purchaseArchive,
-      );
-      await recovery.stage(accountKey: accountKey, isCurrent: isCurrent);
-      if (!isCurrent()) throw const DedaStaleSessionTransition();
-      return false;
-    }
+    if (!currentLocal.hasAnyLocalRecord) return false;
 
     // This fast path only suppresses an unchanged capture within this process.
     // A pending journal always wins, including uncertain writes after restart.
