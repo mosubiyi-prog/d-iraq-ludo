@@ -131,7 +131,7 @@ function prepareCutoverWalletFenceRules(source){
    if(marker==="match /deda_sessions/{uid}"){
      chunk=exactlyOnce(chunk,
        "allow delete: if signedIn() && request.auth.uid == uid;",
-       "allow delete: if signedIn() && request.auth.uid == uid\\n"+
+       "allow delete: if signedIn() && request.auth.uid == uid\n"+
        "        && dedaCutoverAccountWriterAllowed(resource.data.accountKey);");
    }
    fenced=fenced.slice(0,index)+chunk+fenced.slice(finish);
@@ -140,7 +140,7 @@ function prepareCutoverWalletFenceRules(source){
  // cutover gate OUTSIDE that OR so no old UID can modify trustedInstallIds.
  const profileMarker="match /deda_account_profiles/{accountKey}";
  const profileStart=fenced.indexOf(profileMarker);
- const profileEnd=fenced.indexOf("\\n    match /",profileStart+profileMarker.length);
+ const profileEnd=fenced.indexOf("\n    match /",profileStart+profileMarker.length);
  if(profileStart<0||profileEnd<0||fenced.indexOf(profileMarker,profileStart+1)>=0)
    throw Error("DEDA_PROFILE_RULE_DRIFT");
  let profile=fenced.slice(profileStart,profileEnd);
@@ -152,10 +152,10 @@ function prepareCutoverWalletFenceRules(source){
  }
  // Both OR expressions close with matching ] newline ) ; lines.
  // Only replace those two precise terminators and preserve existing policy.
- const blockEnd="        ])\\n      );";
+ const blockEnd="        ])\n      );";
  const count=profile.split(blockEnd).length-1;
  if(count!==2)throw Error("DEDA_PROFILE_CLOSING_DRIFT");
- profile=profile.split(blockEnd).join("        ])\\n      ));");
+ profile=profile.split(blockEnd).join("        ])\n      ));");
  return fenced.slice(0,profileStart)+profile+fenced.slice(profileEnd);
 }
 module.exports={prepareCutoverWalletFenceRules};
