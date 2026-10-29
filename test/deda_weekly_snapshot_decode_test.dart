@@ -72,6 +72,41 @@ void main() {
         throwsFormatException);
   });
 
+  test('accepts five-point tasks and twenty-five-point traffic quiz totals',
+      () {
+    final p = packet();
+    final current = p['current'] as Map<String, Object?>;
+    final rows = current['rows'] as List<Map<String, Object?>>;
+    rows[0]['weeklyPoints'] = 25;
+    rows[0]['verifiedTaskCompletions'] = 1;
+    rows[1]['weeklyPoints'] = 5;
+    rows[1]['verifiedTaskCompletions'] = 1;
+    rows[2]['weeklyPoints'] = 10;
+    rows[2]['verifiedTaskCompletions'] = 1;
+    final parsed = DedaWeeklyServerSnapshotPair.parse(p);
+    expect(parsed.current.rows[0].weeklyPoints, 25);
+    expect(parsed.current.rows[1].weeklyPoints, 5);
+    expect(parsed.current.rows[2].weeklyPoints, 10);
+    expect(parsed.current.rows[0].diamondsIfFinalWinner, 150);
+    expect(parsed.current.rows[1].diamondsIfFinalWinner, 100);
+    expect(parsed.current.rows[2].diamondsIfFinalWinner, 50);
+  });
+
+  test('rejects non-five-unit, zero or impossible signed completion counts',
+      () {
+    for (final (points, completions) in [
+      (7, 1), (0, 0), (5, 0), (10, 3), (25, 6),
+    ]) {
+      final p = packet();
+      final current = p['current'] as Map<String, Object?>;
+      final rows = current['rows'] as List<Map<String, Object?>>;
+      rows[0]['weeklyPoints'] = points;
+      rows[0]['verifiedTaskCompletions'] = completions;
+      expect(() => DedaWeeklyServerSnapshotPair.parse(p),
+          throwsFormatException);
+    }
+  });
+
   test('reject anything that is not verified XP from the task-claim ledger', () {
     final invalid = packet();
     final cur = invalid['current'] as Map<String, Object?>;
