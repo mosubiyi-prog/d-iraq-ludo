@@ -127,6 +127,13 @@ class DedaCrossDeviceRestore {
       final purchases = await purchaseArchive!.list(
         accountKey: accountKey, isCurrent: isCurrent, limit: 20);
       check();
+      // A full purchase-history page may hide older claims, gifts or
+      // conflicting ownership documents. No partial inventory inference.
+      if (purchases.length == 20) {
+        return const DedaRecoveryStage(
+            status: DedaRecoveryStageStatus.purchaseArchiveWindowIncomplete,
+            captureId: null);
+      }
       if (purchases.any((p) =>
           (p.sourceUid != owner.user.uid ||
            p.installId != owner.installId) &&
@@ -204,6 +211,7 @@ enum DedaRecoveryStageStatus {
   noPreviousDeviceArchive,
   priorAccountWithoutArchive,
   archiveWindowIncomplete,
+  purchaseArchiveWindowIncomplete,
   accountDirectoryUnverified,
   historicalCapturesNeedReview,
   multipleSourcesRequireReview,
