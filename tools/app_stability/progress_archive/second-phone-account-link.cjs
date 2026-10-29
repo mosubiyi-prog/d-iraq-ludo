@@ -166,6 +166,21 @@ async function linkSecondPhoneToCanonicalAccount({
      entitlements=await readOwnedEntitlements(
        {get:path=>tx.get(path)},accountKey,resolution.originalId);
    }catch(_){fail("ENTITLEMENT_OWNERSHIP_RECONCILIATION_REQUIRED");}
+   const writerFencePath="deda_migration_spend_authority/"+resolution.originalId;
+   const oldWriterFence=await get(writerFencePath);
+   const writerFence={
+     format:1,publicId:resolution.originalId,
+     originalUid:oldUid,activeUid:newUid,status:"new-device-exclusive",
+     protocol:"deda-verified-progress-v1",migrationId:phase.migrationId,
+     deploymentRevision:deployment.revision,
+   };
+   if(oldWriterFence!==null){
+     const {createdAt,...stored}=oldWriterFence;
+     if(!stamp(createdAt)||
+        Object.keys(stored).length!==Object.keys(writerFence).length||
+        !Object.entries(writerFence).every(([key,value])=>stored[key]===value))
+       fail("SECOND_PHONE_CONFLICTING_OLD_WRITER_FENCE");
+   }
    const payload={
       format:1,accountKey,oldUid,newUid,linkId,
       migrationId:phase.migrationId,
@@ -181,6 +196,8 @@ async function linkSecondPhoneToCanonicalAccount({
    };
    const digest=createHash("sha256").update(JSON.stringify(payload)).digest("hex");
    if(prior!==null){
+     if(oldWriterFence===null)
+       fail("SECOND_PHONE_LINK_WITHOUT_WRITER_FENCE");
      const {createdAt,...rest}=prior;
      if(!stamp(createdAt)||rest.digest!==digest||
         Object.keys(rest).length!==Object.keys(payload).length+1||
@@ -188,9 +205,14 @@ async function linkSecondPhoneToCanonicalAccount({
        fail("SECOND_PHONE_EXISTING_LINK_CONFLICT");
      return response(true,progress,entitlements);
    }
-   // Atomic with other account link candidates, fail on competing writers.
-   // Absolutely no users/{uid}, wallet, receipts or league data writes.
+   // The account pointer and exclusive-wallet-writer marker are installed
+   // in ONE atomic emulator-only transaction; an older phone's client writes
+   // are denied only WHEN the separately reviewed Firestore rule candidate is
+   // deployed. Neither marker can mint, debit or grant any item.
+   if(oldWriterFence!==null)
+     fail("SECOND_PHONE_WRITER_FENCE_ALREADY_PREPARED");
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
+   tx.set(writerFencePath,{...writerFence,createdAt:store.serverTimestamp()});
    return response(false,progress,entitlements);
  });
 }
