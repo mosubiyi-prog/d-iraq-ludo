@@ -102,6 +102,10 @@ test("01 calls original canonical link without client account or wallet payload"
  const f=fixture();
  const r=await f.call();
  assert.equal(r.status,"ACCOUNT_LINKED_READONLY_EMULATOR_ONLY");
+ assert.deepEqual(r.verifiedProgress,{
+   format:1,version:1,points:25,coins:10,xp:125,earnedDiamonds:200,
+   spendable:false,entitlementsVerified:false,
+ });
  assert.equal(r.replayed,false);
  for(const key of ["canRestoreFinancialBalances","canCreditXp","canCreditDiamonds",
    "canRestoreFrames","canRestorePremiumId","canIssueLeagueGift","productionReady"])
