@@ -288,8 +288,8 @@ class _DedaWeeklyLeaderboardPageState
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(colors: [
-                        accent.withOpacity(.45),
-                        accent.withOpacity(.10),
+                        accent.withValues(alpha: .45),
+                        accent.withValues(alpha: .10),
                         Colors.transparent,
                       ]),
                     ),
@@ -412,7 +412,7 @@ class _DedaWeeklyLeaderboardPageState
     return Container(
       padding: EdgeInsets.all(8 * scale),
       decoration: panel(navy,
-          outline: gold.withOpacity(.85), radius: 20 * scale),
+          outline: gold.withValues(alpha: .85), radius: 20 * scale),
       child: Column(
         children: [
           SizedBox(
