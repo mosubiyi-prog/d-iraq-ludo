@@ -129,7 +129,9 @@ async function linkSecondPhoneToCanonicalAccount({
    const payload={
       format:1,accountKey,oldUid,newUid,linkId,
       migrationId:phase.migrationId,
-      progressVersion:progress.version,
+      // Link a canonical account, not a frozen balance/version. Real XP can
+      // legitimately change between logins; revisiting the same phone must
+      // not create a new account or duplicate any earned progress.
       progressInitializedBy:progress.initializedBy,
       reviewedDeploymentRevision:deployment.revision,
       mode:"readonly-account-link-v1",
