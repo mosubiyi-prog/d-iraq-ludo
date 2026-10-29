@@ -114,7 +114,7 @@ test("01 calls original canonical link without client account or wallet payload"
  for(const key of ["canRestoreFinancialBalances","canCreditXp","canCreditDiamonds",
    "canRestoreFrames","canRestorePremiumId","canIssueLeagueGift","productionReady"])
    assert.equal(r[key],false,key);
- assert.deepEqual(f.writes,[linkPath]);
+ assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123"]);
  const record=f.docs.get(linkPath);
  assert.equal(record.accountKey,A);assert.equal(record.oldUid,O);
  assert.equal(record.newUid,N);
@@ -126,7 +126,7 @@ test("02 retry is idempotent and no financial changes occur",async()=>{
  const f=fixture(),original=f.docs.get("deda_verified_progress/"+A);
  await f.call();
  const r=await f.call();
- assert.equal(r.replayed,true);assert.deepEqual(f.writes,[linkPath]);
+ assert.equal(r.replayed,true);assert.deepEqual(f.writes,[linkPath,"deda_migration_spend_authority/@DEDA-ABC123"]);
  assert.deepEqual(f.docs.get("deda_verified_progress/"+A),original);
 });
 test("03 request cannot supply identity, balance, old UID or rank",async()=>{
