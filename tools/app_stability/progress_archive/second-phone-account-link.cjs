@@ -10,6 +10,7 @@
  * settlement and owner approval. Legacy PIN+install identity is inadequate.
  */
 const core=require("./reconcile-core.cjs");
+const {replayServerLedger}=require("./cross-device-readiness-audit.cjs");
 const {parseMigration,validateSettlement}=require("./migration-gate.cjs");
 const {parseDeployment,validateFence,deploymentPath}=
  require("./activate-reviewed-baseline.cjs");
@@ -131,6 +132,21 @@ async function linkSecondPhoneToCanonicalAccount({
    const fenceRecord=await get(root+"/fences/"+resolution.legacyFenceId);
    try{validateFence(fenceRecord,phase,resolution,deployment);}
    catch(_){fail("LEGACY_FINANCIAL_WRITER_NOT_FENCED");}
+   // The account pointer must not be issued from an unverified projection.
+   // Replay EVERY signed source event against its independent server receipt
+   // in THIS SAME transaction before creating the canonical second-phone
+   // link. A missing query API, incomplete page or concurrent source drift
+   // holds the link rather than copying phantom XP or diamonds.
+   let fullLedgerVerified=false;
+   if(typeof tx.list==="function"){
+     try{
+       fullLedgerVerified=await replayServerLedger({
+         get:path=>tx.get(path),
+         list:(path,args)=>tx.list(path,args),
+       },accountKey,progress);
+     }catch(_){fullLedgerVerified=false;}
+   }
+   if(!fullLedgerVerified)fail("RECEIPT_CHAIN_NOT_RECONCILED");
    const payload={
       format:1,accountKey,oldUid,newUid,linkId,
       migrationId:phase.migrationId,
