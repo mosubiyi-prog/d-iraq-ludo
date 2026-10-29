@@ -116,7 +116,12 @@ async function securePinPreflight({request, db, auth, secret, nowMs = Date.now()
       if (bindingSnap.exists) {
         const bound = bindingSnap.data() || {};
         if (bound.uid !== uid || bound.accountKey !== accountKey ||
-            bound.status !== "PIN_VERIFIED_HOLD") return "DENIED";
+            bound.status !== "PIN_VERIFIED_HOLD" ||
+            bound.canMigrate !== false ||
+            bound.canRestoreAssets !== false) return "DENIED";
+        // A fresh successful PIN renews the recovery challenge without
+        // recreating identity or resetting the original creation timestamp.
+        tx.set(refs.binding, {...bound, lastVerifiedAtMs: nowMs});
       } else {
         // This is a private backend verification receipt, NOT a DEDA session.
         tx.create(refs.binding, {
@@ -125,6 +130,7 @@ async function securePinPreflight({request, db, auth, secret, nowMs = Date.now()
           canRestoreAssets: false, canMigrate: false,
           canCreditXp: false, canCreditDiamonds: false,
           canIssueGift: false, createdAtMs: nowMs,
+          lastVerifiedAtMs: nowMs,
         });
       }
       tx.set(refs.rate, {
