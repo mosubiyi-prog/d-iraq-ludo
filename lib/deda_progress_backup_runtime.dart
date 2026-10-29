@@ -13,6 +13,7 @@ import 'deda_owner_session_firebase_port.dart';
 import 'deda_progress_backup_coordinator.dart';
 import 'deda_progress_evidence_store.dart';
 import 'deda_session_transition_gate.dart';
+import 'deda_second_phone_link_client.dart';
 
 const dedaProgressBackupPilot = bool.fromEnvironment(
   'DEDA_STABILITY_PROGRESS_BACKUP_PILOT', defaultValue: false);
@@ -54,10 +55,12 @@ abstract class DedaProgressBackupDriver {
 /// No auth mutation is called by this adapter. The shared session IO is used
 /// solely for principal observation/install ID; archive rechecks server proof.
 class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
-  DedaFirebaseProgressBackupDriver._(this.session, this.coordinator, this._dispose);
+  DedaFirebaseProgressBackupDriver._(this.session, this.coordinator,
+      this._dispose, this._linkClient);
   DedaFirebaseProgressBackupDriver.forTesting({required this.session,
-    required this.coordinator, required Future<void> Function() dispose})
-      : _dispose = dispose;
+    required this.coordinator, required Future<void> Function() dispose,
+    DedaSecondPhoneLinkClient? linkClient})
+      : _dispose = dispose, _linkClient = linkClient;
   factory DedaFirebaseProgressBackupDriver.create() {
     final session = DedaFirebaseOwnerSessionIo(
       auth: FirebaseAuth.instance, firestore: FirebaseFirestore.instance);
@@ -68,10 +71,14 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
         reader: DedaLegacyProgressReader(DedaSharedPreferencesProgressReadStore()),
         archive: archive, journal: DedaSharedPreferencesBackupJournal(),
         purchaseReader: DedaLegacyPurchaseReader(DedaSharedPreferencesPurchaseReadStore()),
-        purchaseArchive: DedaLegacyPurchaseEvidenceStore(archive)), session.dispose);
+        purchaseArchive: DedaLegacyPurchaseEvidenceStore(archive)),
+      session.dispose,
+      DedaFirebaseSecondPhoneLinkTransport.forPrivateQa() case final transport?
+          DedaSecondPhoneLinkClient(transport) : null);
   }
   final DedaOwnerSessionIo session;
   final Future<void> Function() _dispose;
+  final DedaSecondPhoneLinkClient? _linkClient;
   final DedaProgressBackupCoordinator coordinator;
   String? _lastAccount, _lastAcknowledged, _lastPurchaseAcknowledged;
   bool _lastPurchaseObserved=false;
@@ -106,8 +113,17 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
         accountKey: accountKey, isCurrent: isCurrent);
     if (!isCurrent()) throw const DedaStaleSessionTransition();
     if (prior.status != DedaRecoveryStageStatus.noPreviousDeviceArchive) {
-      // Including "already staged" and unresolved multiple-source history:
-      // never upload new-phone defaults or duplicate pending financial data.
+      // Explicit QA-emulator handshake, never from client-supplied UID, PIN,
+      // account, XP or purchased items. Linking the canonical account does
+      // not settle historical wallets: do NOT upload zero/default values.
+      if (_linkClient != null &&
+          (prior.status == DedaRecoveryStageStatus.priorAccountWithoutArchive ||
+           prior.status == DedaRecoveryStageStatus.stagedAwaitingServerReconciliation ||
+           prior.status == DedaRecoveryStageStatus.alreadyStaged)) {
+        await _linkClient.link(isCurrent: isCurrent);
+        if (!isCurrent()) throw const DedaStaleSessionTransition();
+      }
+      // Even if private QA link succeeds, financial restoration is blocked.
       throw StateError('cross-device-historical-data-needs-reconciliation');
     }
     final currentLocal = await coordinator.reader.capture(
