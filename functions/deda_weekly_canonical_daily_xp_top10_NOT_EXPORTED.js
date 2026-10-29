@@ -107,7 +107,14 @@ async function validateAccountIdentity(db,key){
  const current=await read(db,"users/"+currentUid);
  const accountAuthority=await read(db,"deda_migration_account_authority/"+key);
  const personalAuthority=await read(db,"deda_migration_spend_authority/"+originalId);
+ const linked=currentUid===oldUid?null:await read(db,
+   "deda_private_second_phone_links/"+currentUid);
  if(current?.accountKey!==key||
+    (currentUid!==oldUid&&(
+      linked?.accountKey!==key||linked.oldUid!==oldUid||
+      linked.newUid!==currentUid||linked.emulatorOnly!==true||
+      linked.mode!=="readonly-account-link-v1"))||
+
     (currentUid!==oldUid&&(
       accountAuthority?.activeUid!==currentUid||
       personalAuthority?.activeUid!==currentUid||
@@ -152,6 +159,11 @@ async function projectCanonicalEarnedXpTopTen({
    // Ignore non-task receipts and original baseline, never use current XP
    // balance as an eligible competitive delta.
    if(e?.receipt?.source!=="task-claim-v1")continue;
+   // The historical canonical ledger is lifetime-scoped. Other weeks'
+   // legitimate earned tasks are preserved but never counted as this
+   // week's score. Still fail closed for malformed CURRENT-week entries.
+   const createdMs=ms(e.createdAt);
+   if(createdMs<week.openedAtMs||createdMs>=week.nextOpenMs)continue;
    const event=validateEvent(e,key,week,serverNowMs);
    if(snap.id!==event.eventKey||seen.has(event.eventKey))
      fail("DUPLICATE_CANONICAL_RECEIPT");
