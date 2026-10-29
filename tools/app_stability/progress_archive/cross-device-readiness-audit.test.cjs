@@ -28,6 +28,13 @@ function fixture(){
  docs.set("deda_account_profiles/"+ACCOUNT,{accountKey:ACCOUNT,name:"Private fixture"});
  docs.set("users/"+OLD,{accountKey:ACCOUNT,xp:2200,diamonds:340});
  docs.set("users/"+NEXT,{accountKey:ACCOUNT,xp:0,diamonds:0});
+ for(const uid of [OLD,NEXT])
+   docs.set("deda_stage54_private_account_bindings/"+uid,{
+     uid,accountKey:ACCOUNT,authProvider:"anonymous",
+     state:"LOCAL_VERIFIED_HOLD_ONLY",
+     emulatorOnly:true,canMigrate:false,canGrant:false,
+     createdAt:stamp,
+   });
  const root="deda_progress_migrations/"+ACCOUNT;
  docs.set(root,{format:1,accountKey:ACCOUNT,
   migrationId:MIGRATION_ID,settlementId:SETTLEMENT_ID,
@@ -132,15 +139,49 @@ test("02: complete synthetic canonical progress, still NO wallet or XP transfer"
  const r=await audit(f.request);
  noCredit(r);
  assert.equal(r.originalAccountChainConsistent,true);
+ assert.equal(r.serverOwnedDualPinBindingConsistent,true);
  assert.equal(r.parsedServerProgressState,true);
  assert.equal(r.reviewedMigrationPresent,true);
  assert.equal(r.baselineLedgerConsistent,true);
  assert.deepEqual([...f.docs],before);
- assert.equal(f.calls.length,17);
+ assert.equal(f.calls.length,19);
  assert.equal(r.cutoverRecordsConsistent,true);
  assert.equal(r.fullLedgerReconciled,true);
  assert.ok(r.blockers.includes("OLD_APK_FINANCIAL_WRITER_NOT_SERVER_FENCED"));
  assert.ok(r.blockers.includes("PAYMENT_GIFT_FRAME_AND_PREMIUM_ID_PROOFS_NOT_SETTLED"));
+});
+test("15: old/new UIDs must both have server-owned PIN binding proof",async()=>{
+ const f=fixture();
+ const old="deda_stage54_private_account_bindings/"+OLD;
+ const next="deda_stage54_private_account_bindings/"+NEXT;
+ const prior=f.docs.get(next);
+ f.docs.delete(next);
+ let r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.originalAccountChainConsistent,true);
+ assert.equal(r.serverOwnedDualPinBindingConsistent,false);
+ assert.ok(r.blockers.includes("SERVER_OWNED_DUAL_PIN_BINDING_UNVERIFIED"));
+ f.docs.set(next,{...prior,accountKey:"07700000000"});
+ assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+ f.docs.set(next,prior);
+ f.docs.set(old,{...f.docs.get(old),uid:NEXT});
+ assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+});
+test("16: copied install/device session or forgery never substitutes server PIN binding",async()=>{
+ const f=fixture();
+ const next="deda_stage54_private_account_bindings/"+NEXT;
+ const original=f.docs.get(next);
+ f.docs.set(next,{...original,canGrant:true});
+ assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+ f.docs.set(next,{...original,canGrant:false,installId:"copied-from-old-phone"});
+ assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+ f.docs.set(next,{...original,authProvider:"google.com"});
+ assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+ f.docs.set(next,original);
+ const r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.serverOwnedDualPinBindingConsistent,true);
+ assert.equal(r.status,"HOLD");
 });
 test("03: changed baseline receipt payload cannot be blessed by existing event key",async()=>{
  const f=fixture();
