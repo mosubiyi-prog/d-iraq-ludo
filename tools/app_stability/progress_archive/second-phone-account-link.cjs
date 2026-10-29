@@ -34,10 +34,19 @@ function binding(b,uid,accountKey){
   b.state==="LOCAL_VERIFIED_HOLD_ONLY"&&b.emulatorOnly===true&&
   b.canMigrate===false&&b.canGrant===false&&stamp(b.createdAt);
 }
-function response(replayed){
+function response(replayed,progress){
+ // Fresh, independently replayed server values; these are DISPLAY-ONLY.
+ // They are never a client-side spend authorization or a migration receipt.
+ const state=core.parseState(progress,progress.accountKey);
  return Object.freeze({
    status:"ACCOUNT_LINKED_READONLY_EMULATOR_ONLY",
    replayed,emulatorOnly:true,
+   verifiedProgress:Object.freeze({
+     format:1,version:state.version,
+     points:state.balances.points,coins:state.balances.coins,
+     xp:state.balances.xp,earnedDiamonds:state.balances.earnedDiamonds,
+     spendable:false,entitlementsVerified:false,
+   }),
    canRestoreFinancialBalances:false,canCreditXp:false,
    canCreditDiamonds:false,canRestoreFrames:false,
    canRestorePremiumId:false,canIssueLeagueGift:false,
@@ -167,12 +176,12 @@ async function linkSecondPhoneToCanonicalAccount({
         Object.keys(rest).length!==Object.keys(payload).length+1||
         !Object.entries(payload).every(([k,v])=>rest[k]===v))
        fail("SECOND_PHONE_EXISTING_LINK_CONFLICT");
-     return response(true);
+     return response(true,progress);
    }
    // Atomic with other account link candidates, fail on competing writers.
    // Absolutely no users/{uid}, wallet, receipts or league data writes.
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
-   return response(false);
+   return response(false,progress);
  });
 }
 module.exports={linkSecondPhoneToCanonicalAccount};
