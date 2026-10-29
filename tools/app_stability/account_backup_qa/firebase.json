@@ -1,7 +1,0 @@
-{
-  "firestore": {"rules": "../../../deda_account_backup_qa.generated.rules"},
-  "emulators": {
-    "firestore": {"host": "127.0.0.1","port":8080},
-    "auth": {"host":"127.0.0.1","port":9099}
-  }
-}
