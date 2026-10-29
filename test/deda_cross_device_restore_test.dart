@@ -317,6 +317,38 @@ void main() {
     expect(f.local.writes, 0);
   });
 
+  test('two historical captures from one original phone require review',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    await f.archive.save(
+        captureId: 'old_phone_earlier_capture_00002',
+        capture: await DedaLegacyProgressReader(_Legacy()).capture(
+            accountKey: _account, isCurrent: () => true),
+        isCurrent: () => true);
+    f.useSecondPhone();
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.historicalCapturesNeedReview);
+    expect(f.local.values, isEmpty);
+  });
+
+  test('full history page with prior captures refuses incomplete restore',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    final capture = await DedaLegacyProgressReader(_Legacy()).capture(
+        accountKey: _account, isCurrent: () => true);
+    for (var n = 1; n < 20; n++) {
+      await f.archive.save(
+          captureId: 'old_phone_history_batch_${n.toString().padLeft(4, '0')}',
+          capture: capture, isCurrent: () => true);
+    }
+    f.useSecondPhone();
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.archiveWindowIncomplete);
+    expect(f.local.values, isEmpty);
+  });
+
   test('old and newer previous device sources trigger manual review, not latest-spendable',
       () async {
     final f = _Fixture();
