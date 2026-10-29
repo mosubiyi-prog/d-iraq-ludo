@@ -9,6 +9,13 @@
  * purchases and premium IDs have authoritative settlement records.
  */
 const core=require("./reconcile-core.cjs");
+const {isDeepStrictEqual}=require("node:util");
+const {parseMigration,validateSettlement}=require("./migration-gate.cjs");
+const {parseDeployment,validateFence,deploymentPath}=
+  require("./activate-reviewed-baseline.cjs");
+const validId=v=>typeof v==="string"&&/^[A-Za-z0-9_-]{20,80}$/.test(v);
+const stamp=v=>v&&Number.isSafeInteger(v.seconds)&&
+  Number.isSafeInteger(v.nanoseconds)&&v.nanoseconds>=0&&v.nanoseconds<1000000000;
 const ACCOUNT=/^[0-9]{10,16}$/;
 const UID=/^[A-Za-z0-9_-]{8,128}$/;
 const HEX=/^[0-9a-f]{64}$/;
@@ -66,12 +73,12 @@ async function auditCrossDeviceServerReadiness(options){
  let verifiedState=null;
  try{verifiedState=core.parseState(progress,accountKey);}
  catch(_){blockers.push("VERIFIED_SERVER_PROGRESS_MISSING_OR_INVALID");}
- const migrationReviewed=!!migration&&migration.accountKey===accountKey&&
-   migration.phase==="cutover-complete"&&
-   typeof migration.migrationId==="string"&&
-   typeof migration.settlementId==="string"&&
-   HEX.test(migration.baselineEventKey||"")&&
-   HEX.test(migration.evidenceDigest||"");
+ let migrationReviewed=false;
+ try {
+   const parsed=parseMigration(migration,accountKey);
+   migrationReviewed=parsed.phase==="cutover-complete"&&
+     HEX.test(parsed.baselineEventKey)&&validId(parsed.settlementId);
+ } catch (_) {migrationReviewed=false;}
  if(!migrationReviewed)blockers.push("REVIEWED_SERVER_MIGRATION_UNVERIFIED");
  let baselineLedgerConsistent=false;
  if(verifiedState&&migrationReviewed&&
