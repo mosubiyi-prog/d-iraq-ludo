@@ -79,6 +79,11 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   final DedaOwnerSessionIo session;
   final Future<void> Function() _dispose;
   final DedaSecondPhoneLinkClient? _linkClient;
+  DedaVerifiedReadonlyProgress? _lastVerifiedRecovery;
+  /// Server-verified values for QA inspection only. Never a spendable wallet,
+  /// task engine state, restored premium ID or weekly league input.
+  DedaVerifiedReadonlyProgress? get verifiedRecoveryReadOnly =>
+      _lastVerifiedRecovery;
   final DedaProgressBackupCoordinator coordinator;
   String? _lastAccount, _lastAcknowledged, _lastPurchaseAcknowledged;
   bool _lastPurchaseObserved=false;
@@ -99,6 +104,8 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   }
   @override
   Future<bool> backup(String accountKey, bool Function() isCurrent) async {
+    // A new session must never reuse another account's verified snapshot.
+    _lastVerifiedRecovery = null;
     // ALWAYS consult verified SERVER history BEFORE any archive upload.
     // Fresh phones may already have local zero/default preferences, so
     // hasAnyLocalRecord alone is NOT reliable evidence of an old device.
@@ -121,8 +128,10 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
           (prior.status == DedaRecoveryStageStatus.priorAccountWithoutArchive ||
            prior.status == DedaRecoveryStageStatus.stagedAwaitingServerReconciliation ||
            prior.status == DedaRecoveryStageStatus.alreadyStaged)) {
-        await linkClient.link(isCurrent: isCurrent);
+        final link = await linkClient.linkAndReadVerifiedProgress(
+            isCurrent: isCurrent);
         if (!isCurrent()) throw const DedaStaleSessionTransition();
+        _lastVerifiedRecovery = link.progress;
       }
       // Even if private QA link succeeds, financial restoration is blocked.
       throw StateError('cross-device-historical-data-needs-reconciliation');
@@ -166,7 +175,10 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
     return true;
   }
   @override
-  Future<void> dispose() => _dispose();
+  Future<void> dispose() async {
+    _lastVerifiedRecovery = null;
+    await _dispose();
+  }
 }
 
 /// One controller/driver for the application root. No retries, queues, timers,
