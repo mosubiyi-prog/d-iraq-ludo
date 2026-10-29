@@ -9,6 +9,10 @@ const assert=require("node:assert/strict");
 const {createHash}=require("node:crypto");
 const {initializeApp,deleteApp}=require("firebase-admin/app");
 const {getFirestore,Timestamp,FieldValue}=require("firebase-admin/firestore");
+const fs=require("node:fs");
+const {initializeTestEnvironment,assertSucceeds,assertFails}=
+ require("@firebase/rules-unit-testing");
+const {doc,updateDoc,getDoc,serverTimestamp}=require("firebase/firestore");
 const core=require("../../tools/app_stability/progress_archive/reconcile-core.cjs");
 const {createSecondPhoneLinkCallable}=
  require("../../tools/app_stability/progress_archive/second-phone-link-callable.cjs");
@@ -66,6 +70,7 @@ before(async()=>{
  ["users/"+OLD,{accountKey:ACCOUNT,sharePersonalId:ORIGINAL,name:"Original owner"}],
  ["users/"+NEW,{accountKey:ACCOUNT,name:"Original owner's name",
     authMethod:"deda_pin_firestore_v1",trustedInstallIds:["qa-device"]}],
+ ["deda_sessions/"+OLD,{uid:OLD,accountKey:ACCOUNT,installId:"qa-original"}],
  ["deda_sessions/"+NEW,{uid:NEW,accountKey:ACCOUNT,installId:"qa-device"}],
  ...[OLD,NEW].map(uid=>["deda_stage54_private_account_bindings/"+uid,
     {uid,accountKey:ACCOUNT,authProvider:"anonymous",
@@ -169,11 +174,38 @@ test("02 third phone, forged UID, fake payload cannot claim original ID or spend
  assert.deepEqual(await read(MONEY),before);
  assert.equal((await read(ID_ROUTE)).ownerUid,route.ownerUid);
 });
-test("03 tampered old ID route blocks retry without undoing good linked state",async()=>{
+test("03 SAME real Admin handover and real client Rules enforce exclusive wallet debit",async()=>{
+ const candidatePath=process.env.DEDA_ADMIN_CANDIDATE_RULES;
+ assert.match(candidatePath||"",/^\/tmp\/deda-second-phone-admin-candidate-[a-z0-9_-]+\.rules$/);
+ const rules=fs.readFileSync(candidatePath,"utf8");
+ assert.match(rules,/DEDA_NEW_PHONE_WALLET_WRITER_CUTOVER_CANDIDATE/);
+ const env=await initializeTestEnvironment({
+   projectId:PROJECT,firestore:{host:"127.0.0.1",port:8080,rules},
+ });
+ try{
+   const oldClient=env.authenticatedContext(OLD).firestore();
+   const newClient=env.authenticatedContext(NEW).firestore();
+   const before=await read(MONEY);
+   await assertFails(updateDoc(doc(oldClient,MONEY),{
+     balance:1,updatedAt:serverTimestamp(),
+   }));
+   await assertSucceeds(updateDoc(doc(newClient,MONEY),{
+     balance:4900,updatedAt:serverTimestamp(),
+   }));
+   assert.equal((await assertSucceeds(getDoc(doc(newClient,MONEY)))).data().balance,4900);
+   assert.equal((await read(LINK)).newUid,NEW);
+   assert.equal((await read(ID_ROUTE)).ownerUid,NEW);
+   assert.equal(before.balance,5000);
+   await assertFails(updateDoc(doc(oldClient,ID_ROUTE),{
+     active:false,updatedAt:serverTimestamp(),
+   }));
+ }finally{await env.cleanup();}
+});
+test("04 tampered old ID route blocks retry without undoing good linked state",async()=>{
  const route=await read(ID_ROUTE);
  await write(ID_ROUTE,{...route,ownerUid:"attacker_disposable_uid_001"});
  await assert.rejects(callable(request()),e=>e.code==="unavailable");
  assert.equal((await read(ID_ROUTE)).ownerUid,"attacker_disposable_uid_001");
  assert.equal((await read(LINK)).newUid,NEW);
- assert.equal((await read(MONEY)).balance,5000);
+ assert.equal((await read(MONEY)).balance,4900);
 });
