@@ -43,6 +43,24 @@ function prepareCutoverWalletFenceRules(source){
       allow read, write: if false;
     }
 
+    // Account-level fence also blocks stale login sessions, profile writes
+    // and the special general-manager PERSONAL 1M testing wallet.
+    function dedaCutoverAccountWriterAllowed(accountKey) {
+      let path = /databases/$(database)/documents/deda_migration_account_authority/$(accountKey);
+      return !exists(path) || (
+        signedIn()
+        && get(path).data.format == 1
+        && get(path).data.accountKey == accountKey
+        && get(path).data.status == 'new-device-exclusive'
+        && get(path).data.protocol == 'deda-verified-progress-v1'
+        && get(path).data.activeUid == request.auth.uid
+        && get(path).data.originalUid != request.auth.uid
+      );
+    }
+    match /deda_migration_account_authority/{accountKey} {
+      allow read, write: if false;
+    }
+
 `;
  s=exactlyOnce(s,
  "    // DEDA 100377 point 01: immutable paid-frame proof. No deployment here.",
@@ -72,6 +90,38 @@ function prepareCutoverWalletFenceRules(source){
  const block=s.slice(j,end);
  const claim="allow update: if resource.data.targetPublicId is string\n        && verifiedDiamondsPersonalOwner(resource.data.targetPublicId)";
  const next=exactlyOnce(block,claim,claim+"\n        && dedaCutoverWalletWriterAllowed(resource.data.targetPublicId)");
- return before+next+after;
+ let fenced=before+next+after;
+ // Exact existing account-scoped rule blocks. Do not patch unrelated rules.
+ const accountScoped=[
+   ["match /deda_gm_personal_diamond_wallets/{accountKey}",[
+     ["allow create: if isGeneralManagerPersonalAccount(accountKey)",
+       "dedaCutoverAccountWriterAllowed(accountKey)"],
+     ["allow update: if isGeneralManagerPersonalAccount(accountKey)",
+       "dedaCutoverAccountWriterAllowed(accountKey)"],
+   ]],
+   ["match /deda_sessions/{uid}",[
+     ["allow create, update: if signedIn()",
+       "dedaCutoverAccountWriterAllowed(request.resource.data.accountKey)"],
+   ]],
+   ["match /users/{uid}",[
+     ["allow create: if signedIn()",
+       "dedaCutoverAccountWriterAllowed(request.resource.data.accountKey)"],
+     ["allow update: if signedIn()",
+       "dedaCutoverAccountWriterAllowed(resource.data.accountKey)"],
+   ]],
+ ];
+ for(const [marker,scopes] of accountScoped){
+   const index=fenced.indexOf(marker);
+   if(index<0||fenced.indexOf(marker,index+marker.length)>=0)
+     throw Error("DEDA_ACCOUNT_PATH_DRIFT:"+marker);
+   const finish=fenced.indexOf("\\n    match /",index+marker.length);
+   if(finish<0)throw Error("DEDA_ACCOUNT_END_DRIFT:"+marker);
+   let chunk=fenced.slice(index,finish);
+   for(const [anchor,condition] of scopes){
+     chunk=exactlyOnce(chunk,anchor,anchor+"\\n        && "+condition);
+   }
+   fenced=fenced.slice(0,index)+chunk+fenced.slice(finish);
+ }
+ return fenced;
 }
 module.exports={prepareCutoverWalletFenceRules};
