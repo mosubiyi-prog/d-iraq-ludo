@@ -28,7 +28,7 @@ jobs:
           git cat-file -e "${base}^{commit}"
           while IFS= read -r file; do
             case "$file" in
-              functions/index.js|functions/deda_secure_pin_gate.js|functions/deda_secure_pin_gate_core.js|tools/app_stability/account_security/secure_pin_gate.test.cjs|docs/DEDA_ACCOUNT_SECURE_PIN_GATE_OWNER_CHECKPOINT_2026-10-30.md|.github/workflows/qa-deda-account-secure-pin-server-only-no-deploy.yml)
+              functions/index.js|functions/deda_secure_pin_gate.js|functions/deda_secure_pin_gate_core.js|functions/tests/deda_secure_pin_gate_emulator.test.js|tools/app_stability/account_security/secure_pin_gate.test.cjs|docs/DEDA_ACCOUNT_SECURE_PIN_GATE_OWNER_CHECKPOINT_2026-10-30.md|.github/workflows/qa-deda-account-secure-pin-server-only-no-deploy.yml)
                 ;;
               *) echo "Disallowed change: $file"; exit 1;;
             esac
@@ -41,6 +41,7 @@ jobs:
           node --check functions/deda_secure_pin_gate.js
           node --check functions/index.js
           node --check tools/app_stability/account_security/secure_pin_gate.test.cjs
+          node --check functions/tests/deda_secure_pin_gate_emulator.test.js
       - name: Run isolated security regression tests
         run: node --test tools/app_stability/account_security/secure_pin_gate.test.cjs
       - name: Assert no deploy commands and App Check enforced
@@ -50,3 +51,61 @@ jobs:
           grep -q 'enforceAppCheck: true' functions/deda_secure_pin_gate.js
           grep -q 'secrets: \[pinRateSecret\]' functions/deda_secure_pin_gate.js
           echo 'Only checks/tests run in this workflow; no deployment step exists'
+
+  real-emulator-private-qa:
+    needs: secure-pin-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-secure-pin-private-qa
+      GOOGLE_CLOUD_PROJECT: demo-deda-secure-pin-private-qa
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_SECURE_PIN_EMULATOR_ONLY: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable emulator dependencies only
+        run: npm --prefix functions install --no-save --no-audit --no-fund firebase@12.3.0 firebase-tools@14
+      - name: Test REAL original Firestore rules, two anonymous Auth UIDs, atomic PIN gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > firebase.account-security.qa.json <<'JSON'
+          {
+            "firestore": {"rules": "firestore.rules"},
+            "emulators": {
+              "auth": {"port": 9099},
+              "firestore": {"port": 8080},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+          trap 'rm -f firebase.account-security.qa.json' EXIT
+          node - <<'JS'
+          const original = require('./firebase.json');
+          const test = require('./firebase.account-security.qa.json');
+          if (original.firestore.rules !== test.firestore.rules) {
+            throw Error('Cannot test substituted Firestore Rules');
+          }
+          JS
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config firebase.account-security.qa.json \
+            --project demo-deda-secure-pin-private-qa \
+            --only auth,firestore \
+            'node --test functions/tests/deda_secure_pin_gate_emulator.test.js'
+      - name: State verification boundaries
+        run: |
+          echo 'Local emulator tests do not validate real App Check tokens or a deployed callable.'
+          echo 'Original DEDA legacy session Rules remain active until separately approved cutover.'
+          echo 'No APK, Play, Firebase Rules deploy, Cloud Functions deploy, wallet mutation or migration.'
