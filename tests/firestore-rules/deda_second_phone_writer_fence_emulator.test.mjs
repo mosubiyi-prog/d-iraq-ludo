@@ -143,7 +143,7 @@ test('05 old phone cannot acquire the 1000-diamond frame in one atomic checkout'
  batch.update(doc(first,giftWallet),{
    balance:4000,updatedAt:serverTimestamp()});
  await assertFails(batch.commit());
- await assertFails(getDoc(doc(first,receipt)));
+ assert.equal((await assertSucceeds(getDoc(doc(second,receipt)))).exists(),false);
  const v=await assertSucceeds(getDoc(doc(second,giftWallet)));
  assert.equal(v.data().balance,5000);
 });
