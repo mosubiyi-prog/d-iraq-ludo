@@ -47,6 +47,7 @@ function fixture(){
  docs.set(root+"/settlementReviews/"+SETTLEMENT_ID,{
   format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
   baselineEventKey:key,settlementId:SETTLEMENT_ID,legacyFenceId:FENCE_ID,
+  originalId:"@DEDA-ABC123",
   policyRevision:POLICY_ID,operationReviewDigest:REVIEW,createdAt:stamp,
   status:"resolved",decision:"preserve-reviewed-balances-and-carried-rights",
   pendingPurchases:0,pendingReservations:0});
@@ -127,6 +128,24 @@ test("04: mismatched applied receipt or replayed version cannot validate ledger"
  f.docs.set(path,{...f.docs.get(path),appliedVersion:1,
    receipt:{...f.receipt,sourceId:"changed-source-do-not-replay"}});
  assert.equal((await audit(f.request)).baselineLedgerConsistent,false);
+});
+test("05: altered settlement, old-client fence or activation stays on HOLD",async()=>{
+ const f=fixture(),root="deda_progress_migrations/"+ACCOUNT;
+ const fence=root+"/fences/"+FENCE_ID;
+ f.docs.set(fence,{...f.docs.get(fence),status:"pending"});
+ let r=await audit(f.request);
+ noCredit(r);assert.equal(r.baselineLedgerConsistent,true);
+ assert.equal(r.cutoverRecordsConsistent,false);
+ f.docs.set(fence,{...f.docs.get(fence),status:"enforced"});
+ const activation=root+"/activations/"+MIGRATION_ID;
+ f.docs.set(activation,{...f.docs.get(activation),enforcementRevision:"forged"});
+ assert.equal((await audit(f.request)).cutoverRecordsConsistent,false);
+ f.docs.set(activation,{...f.docs.get(activation),enforcementRevision:ENFORCE});
+ const settlement=root+"/settlements/"+SETTLEMENT_ID;
+ f.docs.set(settlement,{...f.docs.get(settlement),pendingPurchases:1});
+ assert.equal((await audit(f.request)).cutoverRecordsConsistent,false);
+ f.docs.set(settlement,{...f.docs.get(settlement),pendingPurchases:0});
+ assert.equal((await audit(f.request)).cutoverRecordsConsistent,true);
 });
 test("05: different original account owner or new-user scope rejects identity chain",async()=>{
  const f=fixture();
