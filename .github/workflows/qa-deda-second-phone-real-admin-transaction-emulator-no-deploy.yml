@@ -24,6 +24,7 @@ jobs:
       FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
       FIREBASE_FUNCTIONS_EMULATOR_HOST: 127.0.0.1:5001
       DEDA_RESTORE_AUDIT_EMULATOR_ONLY: 'true'
+      DEDA_ADMIN_CANDIDATE_RULES: /tmp/deda-second-phone-admin-candidate-qa.rules
       DEDA_RESTORE_AUDIT_LINK_KEY_HEX: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       CI: true
     steps:
@@ -64,10 +65,12 @@ jobs:
           node --check tests/firestore-rules/deda_second_phone_link_real_admin_emulator.test.cjs
           node - <<'NODE'
           const fs=require('node:fs');
-          fs.copyFileSync('firestore.rules','/tmp/deda-second-phone-admin-emulator.rules');
+          const {prepareCutoverWalletFenceRules}=require('./tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.cjs');
+          fs.writeFileSync(process.env.DEDA_ADMIN_CANDIDATE_RULES,
+            prepareCutoverWalletFenceRules(fs.readFileSync('firestore.rules','utf8')));
           fs.writeFileSync('/tmp/deda-second-phone-admin-emulator.firebase.json',
             JSON.stringify({
-              firestore:{rules:'/tmp/deda-second-phone-admin-emulator.rules'},
+              firestore:{rules:process.env.DEDA_ADMIN_CANDIDATE_RULES},
               emulators:{firestore:{host:'127.0.0.1',port:8080},ui:{enabled:false}},
             }));
           NODE
@@ -75,4 +78,4 @@ jobs:
             --config /tmp/deda-second-phone-admin-emulator.firebase.json \
             --project demo-deda-restore-readiness --only firestore \
             'node --test tests/firestore-rules/deda_second_phone_link_real_admin_emulator.test.cjs'
-          echo 'PASS: real Firestore Admin transaction against synthetic emulator, NO DEPLOY, NO APK'
+          echo 'PASS: same-emulator Admin UID transfer and client Firestore writer fence, NO DEPLOY, NO APK'
