@@ -16,6 +16,8 @@ const {doc,updateDoc,getDoc,serverTimestamp}=require("firebase/firestore");
 const core=require("../../tools/app_stability/progress_archive/reconcile-core.cjs");
 const {createSecondPhoneLinkCallable}=
  require("../../tools/app_stability/progress_archive/second-phone-link-callable.cjs");
+const {createSecondPhonePinProofCallable}=
+ require("../../tools/app_stability/progress_archive/second-phone-pin-proof-callable.cjs");
 
 const PROJECT="demo-deda-restore-readiness",ACCOUNT="07701234567";
 const OLD="original_emulator_uid_00000001",NEW="second_emulator_uid_00000002";
@@ -30,7 +32,7 @@ const TOKEN="synthetic_emulator_anon_firebase_token_123456789";
 const LINK="deda_private_second_phone_links/"+NEW;
 const ID_ROUTE="deda_share_ids/"+ORIGINAL;
 const MONEY="deda_diamond_gift_balances/"+ORIGINAL;
-let app,db,callable,auth;
+let app,db,callable,pinProof,auth;
 class HttpsError extends Error{
  constructor(code,message){super(message);this.code=code;}
 }
@@ -61,9 +63,15 @@ before(async()=>{
    onCall:(_options,callback)=>callback,HttpsError,db,auth,
    serverTimestamp:()=>FieldValue.serverTimestamp(),
  });
+ pinProof=createSecondPhonePinProofCallable({
+   onCall:(_options,callback)=>callback,HttpsError,db,auth,
+   serverTimestamp:()=>FieldValue.serverTimestamp(),
+ });
  const root="deda_progress_migrations/"+ACCOUNT;
  const docs=[
  ["deda_account_directory/"+ACCOUNT,{accountKey:ACCOUNT,active:true,createdUid:OLD}],
+ ["deda_credentials/"+ACCOUNT,{accountKey:ACCOUNT,active:true,createdUid:OLD,
+   pin:"581742"}],
  ["deda_account_profiles/"+ACCOUNT,{accountKey:ACCOUNT,name:"QA Only"}],
  [ID_ROUTE,{publicId:ORIGINAL,kind:"personal",active:true,
     ownerUid:OLD,displayName:"Original",createdAt:TIME,updatedAt:TIME}],
@@ -72,10 +80,8 @@ before(async()=>{
     authMethod:"deda_pin_firestore_v1",trustedInstallIds:["qa-device"]}],
  ["deda_sessions/"+OLD,{uid:OLD,accountKey:ACCOUNT,installId:"qa-original"}],
  ["deda_sessions/"+NEW,{uid:NEW,accountKey:ACCOUNT,installId:"qa-device"}],
- ...[OLD,NEW].map(uid=>["deda_stage54_private_account_bindings/"+uid,
-    {uid,accountKey:ACCOUNT,authProvider:"anonymous",
-     state:"LOCAL_VERIFIED_HOLD_ONLY",emulatorOnly:true,canMigrate:false,
-     canGrant:false,createdAt:TIME}]),
+ // NO preseeded Stage54 bindings. Real private PIN proof creates them
+ // for both original owner and second phone after actual account validation.
  [root,{format:1,accountKey:ACCOUNT,migrationId:MIG,phase:"cutover-complete",
    evidenceDigest:"a".repeat(64),baselineEventKey:EVENT,settlementId:SETTLE}],
  ["deda_verified_progress/"+ACCOUNT,{
@@ -134,6 +140,19 @@ before(async()=>{
 });
 after(async()=>{if(app)await deleteApp(app);});
 
+test("00 same QA PIN proof prepares original/new bindings without ever writing money",async()=>{
+ const original=await read(MONEY);
+ await assert.rejects(pinProof({...request(),data:{accountKey:ACCOUNT,pin:"000000"}}),
+    e=>e.code==="permission-denied");
+ assert.equal(await read("deda_stage54_private_account_bindings/"+NEW),null);
+ const proof=await pinProof({...request(),data:{accountKey:ACCOUNT,pin:"581742"}});
+ assert.equal(proof.status,"ACCOUNT_PIN_BOUND_HOLD_ONLY");
+ assert.equal(proof.canGrant,false);
+ assert.equal(proof.canMigrate,false);
+ assert.equal((await read("deda_stage54_private_account_bindings/"+OLD)).accountKey,ACCOUNT);
+ assert.equal((await read("deda_stage54_private_account_bindings/"+NEW)).accountKey,ACCOUNT);
+ assert.deepEqual(await read(MONEY),original);
+});
 test("01 real Firestore Admin transaction moves original ID, preserves canonical wallet and receipts",async()=>{
  const originalWallet=await read(MONEY);
  const first=await callable(request());
