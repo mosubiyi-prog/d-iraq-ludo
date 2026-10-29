@@ -7,6 +7,8 @@ on:
       - 'tests/firestore-rules/deda_second_phone_link_real_admin_emulator.test.cjs'
       - 'tools/app_stability/progress_archive/second-phone-account-link.cjs'
       - 'tools/app_stability/progress_archive/second-phone-link-callable.cjs'
+      - 'tools/app_stability/progress_archive/second-phone-pin-proof-callable.cjs'
+      - 'tools/app_stability/progress_archive/qa_second_phone_functions/index.js'
       - '.github/workflows/qa-deda-second-phone-real-admin-transaction-emulator-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -63,6 +65,8 @@ jobs:
         run: |
           set -euo pipefail
           node --check tests/firestore-rules/deda_second_phone_link_real_admin_emulator.test.cjs
+          node --check tools/app_stability/progress_archive/second-phone-pin-proof-callable.cjs
+          node --check tools/app_stability/progress_archive/qa_second_phone_functions/index.js
           node - <<'NODE'
           const fs=require('node:fs');
           const {prepareCutoverWalletFenceRules}=require('./tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.cjs');
