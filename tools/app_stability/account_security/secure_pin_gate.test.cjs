@@ -87,7 +87,22 @@ test("repeating the same verified UID never creates a new identity or credits", 
   await verify(f);
   const first = f.db.read("deda_secure_account_bindings/" + UID_A);
   await verify(f, mockRequest(), 10000001);
-  assert.deepEqual(f.db.read("deda_secure_account_bindings/" + UID_A), first);
+  const renewed = f.db.read("deda_secure_account_bindings/" + UID_A);
+  assert.equal(renewed.createdAtMs, first.createdAtMs);
+  assert.equal(renewed.lastVerifiedAtMs, 10000001);
+  assert.equal(renewed.canCreditDiamonds, false);
+});
+
+test("fresh PIN proof can renew after the original ten-minute window without new identity", async () => {
+  const f = fixture();
+  await verify(f);
+  const created = f.db.read("deda_secure_account_bindings/" + UID_A).createdAtMs;
+  await verify(f, mockRequest(), created + 20 * 60 * 1000);
+  const renewed = f.db.read("deda_secure_account_bindings/" + UID_A);
+  assert.equal(renewed.createdAtMs, created);
+  assert.equal(renewed.lastVerifiedAtMs, created + 20 * 60 * 1000);
+  assert.equal(renewed.accountKey, ACCOUNT);
+  assert.equal(renewed.canRestoreAssets, false);
 });
 
 test("five wrong PINs lock the account centrally across different anonymous UIDs", async () => {
