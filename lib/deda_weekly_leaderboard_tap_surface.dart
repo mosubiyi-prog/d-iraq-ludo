@@ -12,6 +12,7 @@ class DedaWeeklyLeaderboardTapSurface extends StatelessWidget {
     required this.child,
     required this.competitor,
     required this.viewerParticipantId,
+    this.surfaceKey,
     this.friendRelation = DedaWeeklyFriendRelation.unknown,
     this.onOpenExistingPublicProfile,
     this.onSendExistingFriendRequest,
@@ -20,6 +21,9 @@ class DedaWeeklyLeaderboardTapSurface extends StatelessWidget {
   final Widget child;
   final DedaWeeklyPublicCompetitor? competitor;
   final String? viewerParticipantId;
+  /// A stable per-position hit target for ranking QA and accessibility.
+  /// This does not grant permissions or infer any real account owner.
+  final Key? surfaceKey;
   final DedaWeeklyFriendRelation friendRelation;
   final Future<void> Function(DedaWeeklyPublicCompetitor)?
       onOpenExistingPublicProfile;
@@ -98,6 +102,7 @@ class DedaWeeklyLeaderboardTapSurface extends StatelessWidget {
     button:canOpen,
     label:canOpen?'عرض خيارات المتصدر':'متصدر بانتظار التحقق',
     child:InkWell(
+      key:surfaceKey,
       onTap:canOpen?()=>_open(context):null,
       borderRadius:BorderRadius.circular(12),
       child:child,
