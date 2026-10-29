@@ -35,6 +35,7 @@ jobs:
           node --check functions/deda_weekly_verified_standings_reader_core.js
           node --check functions/deda_weekly_verified_standings_reader.js
           node --check functions/tests/deda_weekly_verified_standings_reader.test.cjs
+          node --check functions/tests/deda_weekly_point3_emulator.test.cjs
       - name: Verified weekly standings, no-wallet-grant tests
         run: node --test functions/tests/deda_weekly_verified_standings_reader.test.cjs
       - name: Verify original home integration in both layouts, no local scores
@@ -79,3 +80,31 @@ jobs:
         run: |
           echo 'NO APK/AAB, Play, production Cloud Functions or Firestore Rules deployment.'
           echo 'Signed source-verified publication PRODUCER not yet implemented: live league payouts remain disabled.'
+
+  auth-firestore-actual-rules:
+    needs: league-reader-and-home-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-weekly-point3-qa
+      GOOGLE_CLOUD_PROJECT: demo-deda-weekly-point3-qa
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_WEEKLY_POINT3_EMULATOR_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install disposable local Firebase tooling only
+        run: npm --prefix functions install --no-save --no-audit --no-fund firebase@12.3.0 firebase-tools@14
+      - name: Two-account verified weekly snapshot and original full Rules QA
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('firebase.point3.qa.json',JSON.stringify({firestore:{rules:'firestore.rules'},emulators:{auth:{port:9099},firestore:{port:8080},ui:{enabled:false}}}))"
+          functions/node_modules/.bin/firebase emulators:exec --config firebase.point3.qa.json --project demo-deda-weekly-point3-qa --only auth,firestore 'node --test functions/tests/deda_weekly_point3_emulator.test.cjs'
