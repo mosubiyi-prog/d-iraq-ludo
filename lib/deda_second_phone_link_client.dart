@@ -96,7 +96,7 @@ class DedaSecondPhoneLinkClient {
     check(uid);
     final reply = await transport.linkWithoutClientAccountDetails();
     check(uid);
-    if (reply.length != 9 ||
+    if (reply.length != 10 ||
         reply['status'] != 'ACCOUNT_LINKED_READONLY_EMULATOR_ONLY' ||
         reply['emulatorOnly'] != true ||
         reply['replayed'] is! bool ||
