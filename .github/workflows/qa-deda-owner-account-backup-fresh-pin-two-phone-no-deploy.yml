@@ -1,0 +1,96 @@
+name: DEDA original account historical progress backup two phones FRESH PIN QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-owner-account-backup-fresh-pin-archive-qa-no-deploy-2026-10-29
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-owner-account-backup-fresh-pin-qa
+  cancel-in-progress: true
+jobs:
+  original-protected:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect ORIGINAL app, Firebase rules, PIN logic, wallets and quizzes
+        run: |
+          set -euo pipefail
+          BASE=ff6c6c4e142ea86b441411547c7f50b1bcdf1470
+          git cat-file -e "$BASE^{commit}"
+          git diff --name-only "$BASE" HEAD > /tmp/deda-backup-qa-allowlist.txt
+          cat /tmp/deda-backup-qa-allowlist.txt
+          while IFS= read -r file; do
+            case "$file" in
+              tools/app_stability/account_backup_qa/generate_rules.cjs|\
+              tools/app_stability/account_backup_qa/qa_archive_rule_block.txt|\
+              tools/app_stability/account_backup_qa/firebase.json|\
+              tests/firestore-rules/account_backup_fresh_pin_two_phone_qa.test.mjs|\
+              .github/workflows/qa-deda-owner-account-backup-fresh-pin-two-phone-no-deploy.yml|\
+              docs/DEDA_OWNER_ACCOUNT_BACKUP_FRESH_PIN_QA_2026-10-29.md) ;;
+              *) echo "STOP unexpected original modification $file"; exit 1;;
+            esac
+          done </tmp/deda-backup-qa-allowlist.txt
+          git diff --quiet "$BASE" -- \
+            firestore.rules firebase.json storage.rules lib/ android/ assets/ \
+            functions/ pubspec.yaml pubspec.lock \
+            tools/app_stability/100380-baseline.tar.gz \
+            tools/app_stability/app_package/
+          node --check tools/app_stability/account_backup_qa/generate_rules.cjs
+          node --check tests/firestore-rules/account_backup_fresh_pin_two_phone_qa.test.mjs
+          node tools/app_stability/account_backup_qa/generate_rules.cjs
+          grep -q 'match /deda_progress_evidence/{accountKey}/captures/{captureId}' deda_account_backup_qa.generated.rules
+          ! grep -q 'match /deda_progress_evidence/{accountKey}/captures/{captureId}' firestore.rules
+          git diff --exit-code -- firestore.rules
+          echo 'Original 100342 + original rules + finance and question bank PROTECTED'
+  real-two-phone-auth-and-fs:
+    needs: original-protected
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      GCLOUD_PROJECT: demo-deda-account-backup-qa
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local disposable test SDK and Firebase emulator
+        run: |
+          npm --prefix tests/firestore-rules install --no-audit --no-fund
+          npm --prefix functions install --no-save --no-audit --no-fund firebase-tools@14
+      - name: Generate only private candidate Firestore rules
+        run: |
+          node tools/app_stability/account_backup_qa/generate_rules.cjs
+          test -s deda_account_backup_qa.generated.rules
+          git diff --exit-code -- firestore.rules
+      - name: Test two different anonymous phone UIDs and exact original PIN/backup history
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config tools/app_stability/account_backup_qa/firebase.json \
+            --project demo-deda-account-backup-qa --only auth,firestore \
+            'cd tests/firestore-rules && node --test account_backup_fresh_pin_two_phone_qa.test.mjs'
+      - name: No cross-device wallet restore or production credentials
+        run: |
+          echo 'This QA grants immutable read-only archival evidence ONLY under fresh PIN.'
+          echo 'Original legacy client PIN lacks server-wide rate limits, old install IDs are copyable.'
+          echo 'No verified migration, no balance transfer, no league XP and NO production deploy.'
+          echo 'Original protected 100342 and current production rules are unchanged.'
+          echo 'No APK/AAB, no Play, no bank changes. Owner must review all additions before APK.'
