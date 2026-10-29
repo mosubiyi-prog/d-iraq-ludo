@@ -32,7 +32,7 @@ jobs:
             case "$file" in
               tools/app_stability/account_backup_qa/generate_rules.cjs|\
               tools/app_stability/account_backup_qa/qa_archive_rule_block.txt|\
-              tools/app_stability/account_backup_qa/firebase.json|\
+              firebase.account-backup-qa.json|\
               tests/firestore-rules/account_backup_fresh_pin_two_phone_qa.test.mjs|\
               .github/workflows/qa-deda-owner-account-backup-fresh-pin-two-phone-no-deploy.yml|\
               docs/DEDA_OWNER_ACCOUNT_BACKUP_FRESH_PIN_QA_2026-10-29.md) ;;
@@ -81,7 +81,7 @@ jobs:
           test -s deda_account_backup_qa.generated.rules
           node - <<'NODE'
           const fs=require('fs'),path=require('path');
-          const configPath='tools/app_stability/account_backup_qa/firebase.json';
+          const configPath='firebase.account-backup-qa.json';
           const cfg=JSON.parse(fs.readFileSync(configPath,'utf8'));
           const absolute=path.resolve(path.dirname(configPath),cfg.firestore.rules);
           if(absolute!==path.resolve('deda_account_backup_qa.generated.rules') ||
@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           functions/node_modules/.bin/firebase emulators:exec \
-            --config tools/app_stability/account_backup_qa/firebase.json \
+            --config firebase.account-backup-qa.json \
             --project demo-deda-account-backup-qa --only auth,firestore \
             'cd tests/firestore-rules && node --test account_backup_fresh_pin_two_phone_qa.test.mjs'
       - name: No cross-device wallet restore or production credentials
