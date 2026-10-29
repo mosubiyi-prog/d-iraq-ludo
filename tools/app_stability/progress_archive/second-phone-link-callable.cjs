@@ -106,6 +106,7 @@ function createSecondPhoneLinkCallable({onCall,HttpsError,db,auth,serverTimestam
      });
      return Object.freeze({status:linked.status,replayed:linked.replayed,
        emulatorOnly:true,verifiedProgress:linked.verifiedProgress,
+       verifiedEntitlements:linked.verifiedEntitlements,
        canRestoreFinancialBalances:false,
        canCreditXp:false,canCreditDiamonds:false,
        canRestoreFrames:false,canRestorePremiumId:false,
