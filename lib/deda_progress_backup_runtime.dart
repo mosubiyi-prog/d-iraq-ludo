@@ -116,11 +116,12 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
       // Explicit QA-emulator handshake, never from client-supplied UID, PIN,
       // account, XP or purchased items. Linking the canonical account does
       // not settle historical wallets: do NOT upload zero/default values.
-      if (_linkClient != null &&
+      final linkClient = _linkClient;
+      if (linkClient != null &&
           (prior.status == DedaRecoveryStageStatus.priorAccountWithoutArchive ||
            prior.status == DedaRecoveryStageStatus.stagedAwaitingServerReconciliation ||
            prior.status == DedaRecoveryStageStatus.alreadyStaged)) {
-        await _linkClient.link(isCurrent: isCurrent);
+        await linkClient.link(isCurrent: isCurrent);
         if (!isCurrent()) throw const DedaStaleSessionTransition();
       }
       // Even if private QA link succeeds, financial restoration is blocked.
