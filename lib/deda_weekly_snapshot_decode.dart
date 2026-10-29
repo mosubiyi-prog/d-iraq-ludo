@@ -95,8 +95,14 @@ class DedaWeeklyServerSnapshotPair {
         info['verifiedTaskCompletions'], 'completed tasks');
       final diamonds = _whole(
         info['diamondsIfFinalWinner'], 'prize');
-      if (points == 0 || points % 20 != 0 ||
-          completed != points ~/ 20 ||
+      // Actual approved daily tasks/traffic questions award 5 points each;
+      // a login task may award 10. A completed daily quiz can itself contain
+      // five independently scored questions (25 XP). Therefore a fixed
+      // 20-XP-per-task derivation is incorrect for real DEDA standings.
+      // Completion count and XP MUST originate from the same server-signed
+      // events; this is a consistency floor, not client-side authorization.
+      if (points == 0 || points % 5 != 0 ||
+          completed == 0 || completed > points ~/ 5 ||
           diamonds != DedaWeeklyLeaderboardPolicy
               .diamondsForFinalPlace(position)) {
         throw const FormatException('inconsistent weekly XP or prize');
