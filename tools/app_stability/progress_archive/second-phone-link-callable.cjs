@@ -95,7 +95,9 @@ function createSecondPhoneLinkCallable({onCall,HttpsError,db,auth,serverTimestam
        },
        set:(path,doc)=>{
          if(path!=="deda_private_second_phone_links/"+uid&&
-            !/^deda_migration_spend_authority\\/@DEDA-[A-Z0-9]{6}$/.test(path))
+            !(path.startsWith("deda_migration_spend_authority/")&&
+              /^@DEDA-[A-Z0-9]{6}$/.test(path.slice(
+                "deda_migration_spend_authority/".length))))
            throw Error("REFUSED_PRODUCTION_OR_WALLET_WRITE");
          tx.set(db.doc(path),doc);
        },
