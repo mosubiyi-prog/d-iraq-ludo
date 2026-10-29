@@ -80,29 +80,78 @@ async function auditCrossDeviceServerReadiness(options){
      HEX.test(parsed.baselineEventKey)&&validId(parsed.settlementId);
  } catch (_) {migrationReviewed=false;}
  if(!migrationReviewed)blockers.push("REVIEWED_SERVER_MIGRATION_UNVERIFIED");
- let baselineLedgerConsistent=false;
+ let baselineLedgerConsistent=false,cutoverRecordsConsistent=false;
  if(verifiedState&&migrationReviewed&&
     verifiedState.initializedBy===migration.baselineEventKey){
    const key=migration.baselineEventKey;
-   const [source,applied]=await Promise.all([
-     get("deda_progress_receipts/"+accountKey+"/events/"+key),
-     get("deda_verified_progress/"+accountKey+"/events/"+key),
-   ]);
-   try{
+   // Original activation writes a prefixed receipt document, while the
+   // applied event marker is keyed by eventKey: never interchange them.
+   const receiptId="baseline_"+key,root="deda_progress_migrations/"+accountKey;
+   const [source,applied,settlement,activation,resolution,deployment]=
+     await Promise.all([
+       get("deda_progress_receipts/"+accountKey+"/events/"+receiptId),
+       get("deda_verified_progress/"+accountKey+"/events/"+key),
+       get(root+"/settlements/"+migration.settlementId),
+       get(root+"/activations/"+migration.migrationId),
+       get(root+"/settlementReviews/"+migration.settlementId),
+       get(deploymentPath),
+     ]);
+   try {
      const receipt=core.parseReceipt(source,accountKey);
      const appliedReceipt=core.parseReceipt(applied?.receipt,accountKey);
      baselineLedgerConsistent=receipt.kind==="baseline"&&
        receipt.source==="legacy-baseline-v1"&&
+       receipt.sourceId==="legacy-review|"+migration.migrationId+"|"+migration.evidenceDigest&&
        core.eventKey(receipt)===key&&core.eventKey(appliedReceipt)===key&&
        core.sameEvent(receipt,appliedReceipt)&&
-       applied.accountKey===accountKey&&applied.eventKey===key&&
-       Number.isSafeInteger(applied.appliedVersion)&&
-       applied.appliedVersion>=1&&
-       applied.appliedVersion<=verifiedState.version;
-   }catch(_){baselineLedgerConsistent=false;}
+       applied.format===1&&applied.accountKey===accountKey&&
+       applied.eventKey===key&&applied.receiptId===receiptId&&
+       applied.appliedVersion===1&&stamp(applied.createdAt)&&
+       isDeepStrictEqual(applied.afterBalances,receipt.delta)&&
+       verifiedState.version>=1;
+   } catch (_) {baselineLedgerConsistent=false;}
+   if(baselineLedgerConsistent){
+     try {
+       validateSettlement(settlement,migration);
+       const deploy=parseDeployment(deployment);
+       if(!resolution||resolution.format!==1||
+          resolution.accountKey!==accountKey||
+          resolution.migrationId!==migration.migrationId||
+          resolution.settlementId!==migration.settlementId||
+          resolution.evidenceDigest!==migration.evidenceDigest||
+          resolution.baselineEventKey!==key||
+          resolution.status!=="resolved"||
+          resolution.decision!=="preserve-reviewed-balances-and-carried-rights"||
+          resolution.pendingPurchases!==0||resolution.pendingReservations!==0||
+          !validId(resolution.legacyFenceId)||
+          !validId(resolution.policyRevision)||
+          !HEX.test(resolution.operationReviewDigest||"")||
+          !stamp(resolution.createdAt))
+         throw Error("unreviewed-settlement");
+       const fence=await get(root+"/fences/"+resolution.legacyFenceId);
+       validateFence(fence,migration,resolution,deploy);
+       if(!activation||activation.format!==1||
+          activation.accountKey!==accountKey||
+          activation.migrationId!==migration.migrationId||
+          activation.settlementId!==migration.settlementId||
+          activation.evidenceDigest!==migration.evidenceDigest||
+          activation.baselineEventKey!==key||
+          activation.receiptId!==receiptId||
+          activation.legacyFenceId!==resolution.legacyFenceId||
+          activation.operationReviewDigest!==resolution.operationReviewDigest||
+          activation.deploymentRevision!==deploy.revision||
+          activation.enforcementRevision!==deploy.enforcementRevision||
+          activation.policyRevision!==resolution.policyRevision||
+          !stamp(activation.createdAt))
+         throw Error("activation-chain-incomplete");
+       cutoverRecordsConsistent=true;
+     }catch(_){cutoverRecordsConsistent=false;}
+   }
  }
  if(!baselineLedgerConsistent)
    blockers.push("INDEPENDENT_BASELINE_RECEIPT_CHAIN_UNVERIFIED");
+ if(!cutoverRecordsConsistent)
+   blockers.push("REVIEWED_CUTOVER_DOCUMENT_CHAIN_INCOMPLETE");
  // These must remain mandatory even when every synthetic progress fixture
  // is internally consistent. A server state is not a frame purchase receipt,
  // an old-APK write fence, or proof of physical-device account ownership.
@@ -114,6 +163,7 @@ async function auditCrossDeviceServerReadiness(options){
    parsedServerProgressState:verifiedState!==null,
    reviewedMigrationPresent:migrationReviewed,
    baselineLedgerConsistent,
+   cutoverRecordsConsistent,
  },blockers);
 }
 module.exports={auditCrossDeviceServerReadiness};
