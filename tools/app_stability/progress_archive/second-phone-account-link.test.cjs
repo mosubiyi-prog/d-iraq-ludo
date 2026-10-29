@@ -2,12 +2,16 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {linkSecondPhoneToCanonicalAccount:link}=require("./second-phone-account-link.cjs");
+const core=require("./reconcile-core.cjs");
 process.env.GCLOUD_PROJECT="demo-deda-restore-readiness";
 process.env.DEDA_RESTORE_AUDIT_EMULATOR_ONLY="true";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8080";
 const A="07701234567",O="first_verified_device_uid",N="second_verified_device_uid";
 const M="migration_reference_00000001",S="settlement_reference_000001";
-const K="b".repeat(64),T={seconds:100,nanoseconds:0};
+const baseline={format:1,accountKey:A,source:"legacy-baseline-v1",
+ sourceId:"legacy-review|"+M+"|"+"a".repeat(64),
+ kind:"baseline",delta:{points:5,coins:2,xp:25,earnedDiamonds:400}};
+const K=core.eventKey(baseline),T={seconds:100,nanoseconds:0};
 const F="legacy_fence_reference_000001",ORIGINAL="@DEDA-ABC123";
 function fixture(){
  const docs=new Map(),writes=[],reads=[];
@@ -21,6 +25,12 @@ function fixture(){
   evidenceDigest:"a".repeat(64),baselineEventKey:K,settlementId:S});
  docs.set("deda_verified_progress/"+A,{format:1,accountKey:A,
   version:1,initializedBy:K,balances:{points:5,coins:2,xp:25,earnedDiamonds:400}});
+ docs.set("deda_progress_receipts/"+A+"/events/baseline_"+K,baseline);
+ docs.set("deda_verified_progress/"+A+"/events/"+K,{
+  format:1,accountKey:A,eventKey:K,receiptId:"baseline_"+K,
+  receipt:baseline,appliedVersion:1,afterBalances:{...baseline.delta},
+  createdAt:T,
+ });
  docs.set(root+"/settlementReviews/"+S,{accountKey:A,migrationId:M,
   settlementId:S,status:"resolved",originalId:ORIGINAL,legacyFenceId:F,
   pendingPurchases:0,pendingReservations:0});
@@ -43,6 +53,9 @@ function fixture(){
   const pending=[];
   const result=await action({
    get:async p=>{reads.push(p);return docs.get(p)??null;},
+   list:async(path,{limit})=>[...docs.entries()]
+    .filter(([p])=>p.startsWith(path+"/"))
+    .slice(0,limit).map(([p,data])=>({id:p.slice(path.length+1),data})),
    set:(p,d)=>pending.push([p,d]),
   });
   for(const [p,d] of pending){docs.set(p,d);writes.push(p);}
@@ -101,6 +114,33 @@ test("incorrect Firebase session stops before accessing account",async()=>{
  f.auth.verifyIdToken=async()=>({uid:O,firebase:{sign_in_provider:"anonymous"}});
  await assert.rejects(link(f.args),/UNVERIFIED_AUTH/);
  assert.equal(f.reads.length,0);
+});
+test("modified verified XP balance cannot create canonical second-phone link",async()=>{
+ const f=fixture(),p="deda_verified_progress/"+A;
+ f.docs.set(p,{...f.docs.get(p),balances:{points:5,coins:2,xp:99999,earnedDiamonds:400}});
+ await assert.rejects(link(f.args),/RECEIPT_CHAIN_NOT_RECONCILED/);
+ assert.deepEqual(f.writes,[]);
+});
+test("missing independent server-issued baseline receipt rejects linking",async()=>{
+ const f=fixture();
+ f.docs.delete("deda_progress_receipts/"+A+"/events/baseline_"+K);
+ await assert.rejects(link(f.args),/RECEIPT_CHAIN_NOT_RECONCILED/);
+ assert.deepEqual(f.writes,[]);
+});
+test("a tampered event key and incomplete version chain never link",async()=>{
+ const f=fixture();
+ const ep="deda_verified_progress/"+A+"/events/"+K;
+ f.docs.set(ep,{...f.docs.get(ep),eventKey:"0".repeat(64)});
+ await assert.rejects(link(f.args),/RECEIPT_CHAIN_NOT_RECONCILED/);
+ assert.deepEqual(f.writes,[]);
+});
+test("canonical account link requires full transactional ledger listing",async()=>{
+ const f=fixture(),original=f.store.runTransaction;
+ f.store.runTransaction=action=>original(tx=>action({
+  get:tx.get,set:tx.set,
+ }));
+ await assert.rejects(link(f.args),/RECEIPT_CHAIN_NOT_RECONCILED/);
+ assert.deepEqual(f.writes,[]);
 });
 test("source is unavailable outside isolated emulator",async()=>{
  const f=fixture(),old=process.env.GCLOUD_PROJECT;
