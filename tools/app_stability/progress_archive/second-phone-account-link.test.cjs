@@ -94,6 +94,7 @@ test("a second device cannot hijack the currently fenced wallet writer",async()=
  await assert.rejects(link(f.args),/CONFLICTING_OLD_WRITER_FENCE/);
  assert.deepEqual(f.writes,[
    "deda_private_second_phone_links/"+N,path,
+   "deda_migration_account_authority/"+A,
  ]);
 });
 test("linked account cannot silently continue when writer fence disappears",async()=>{
