@@ -62,11 +62,17 @@ class _Local implements DedaRecoveryLocalStore {
 }
 
 class _Io implements DedaProgressEvidenceIo {
-  _Io() { asUser('old-phone'); }
+  _Io() {
+    docs['deda_account_directory/$_account'] = {
+      'accountKey': _account, 'active': true, 'createdUid': 'old-phone',
+    };
+    asUser('old-phone');
+  }
   final tracker = DedaSessionPrincipalTracker();
   final docs = <String, Map<String, dynamic>>{};
   Completer<void>? listHold;
   int historyReads = 0;
+  bool cachedDirectory = false;
   bool ready = true;
   String install = 'old-phone-install';
   @override
@@ -86,7 +92,9 @@ class _Io implements DedaProgressEvidenceIo {
   }
   @override
   Future<DedaOwnerServerDocument> readServer(String path) async =>
-      DedaOwnerServerDocument(docs[path]);
+      DedaOwnerServerDocument(docs[path],
+          fromCache: cachedDirectory &&
+              path.startsWith('deda_account_directory/'));
   @override
   Future<List<DedaListedProgressEvidence>> listServer(
       String path, {required int limit}) async {
@@ -248,11 +256,55 @@ void main() {
     expect(f.local.values.keys, hasLength(1));
   });
 
-  test('no old archive does not invent a zero balance', () async {
+  test('original device without archives does not invent a zero balance',
+      () async {
+    final f = _Fixture();
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.noPreviousDeviceArchive);
+    expect(f.local.values, isEmpty);
+  });
+
+  test('new phone without old archive holds pre-existing account before backup',
+      () async {
     final f = _Fixture();
     f.useSecondPhone();
     expect((await f.stage()).status,
-        DedaRecoveryStageStatus.noPreviousDeviceArchive);
+        DedaRecoveryStageStatus.priorAccountWithoutArchive);
+    expect(f.local.values, isEmpty);
+  });
+
+  test('missing or mismatched server directory fails closed without local writes',
+      () async {
+    final f = _Fixture();
+    f.io.docs.remove('deda_account_directory/$_account');
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.accountDirectoryUnverified);
+    f.io.docs['deda_account_directory/$_account'] = {
+      'accountKey': '07709999999', 'active': true, 'createdUid': 'old-phone',
+    };
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.accountDirectoryUnverified);
+    f.io.docs['deda_account_directory/$_account'] = {
+      'accountKey': _account, 'active': true, 'createdUid': 'old-phone',
+    };
+    f.io.cachedDirectory = true;
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.accountDirectoryUnverified);
+    expect(f.local.values, isEmpty);
+  });
+
+  test('twenty entries from current phone cannot hide older truncated history',
+      () async {
+    final f = _Fixture();
+    final original = await DedaLegacyProgressReader(_ZeroLegacy()).capture(
+        accountKey: _account, isCurrent: () => true);
+    for (var n = 0; n < 20; n++) {
+      await f.archive.save(
+          captureId: 'new_account_history_capture_${n.toString().padLeft(3, '0')}',
+          capture: original, isCurrent: () => true);
+    }
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.archiveWindowIncomplete);
     expect(f.local.values, isEmpty);
   });
 
