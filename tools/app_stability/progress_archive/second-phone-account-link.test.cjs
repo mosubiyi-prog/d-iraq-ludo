@@ -118,6 +118,41 @@ test("existing competing account writer fence refuses new canonical link",async(
  await assert.rejects(link(f.args),/CONFLICTING_OLD_WRITER_FENCE/);
  assert.deepEqual(f.writes,[]);
 });
+test("original permanent DEDA ID ownership transfers exactly once, not duplicated",async()=>{
+ const f=fixture(),idPath="deda_share_ids/"+ORIGINAL;
+ const before=f.docs.get(idPath);
+ const done=await link(f.args);
+ assert.equal(done.replayed,false);
+ assert.equal(f.docs.get(idPath).publicId,ORIGINAL);
+ assert.equal(f.docs.get(idPath).ownerUid,N);
+ assert.equal(f.docs.get(idPath).kind,before.kind);
+ assert.equal(f.docs.get(idPath).active,before.active);
+ assert.equal(f.docs.get("users/"+O).sharePersonalId,ORIGINAL);
+ assert.equal(f.docs.get("users/"+N).sharePersonalId,ORIGINAL);
+ const repeat=await link(f.args);
+ assert.equal(repeat.replayed,true);
+ assert.equal(f.writes.filter(p=>p===idPath).length,1);
+});
+test("new phone without same verified original personal ID cannot inherit assets",async()=>{
+ const f=fixture(),path="users/"+N;
+ f.docs.set(path,{...f.docs.get(path),sharePersonalId:"@DEDA-WRONG1"});
+ await assert.rejects(link(f.args),/ORIGINAL_ID_NEW_PHONE_PROFILE_NOT_VERIFIED/);
+ assert.deepEqual(f.writes,[]);
+});
+test("third UID already owning original permanent identifier is never overwritten",async()=>{
+ const f=fixture(),path="deda_share_ids/"+ORIGINAL;
+ f.docs.set(path,{...f.docs.get(path),ownerUid:"third_attacker_uid_12345"});
+ await assert.rejects(link(f.args),
+   /ENTITLEMENT_OWNERSHIP_RECONCILIATION_REQUIRED|ORIGINAL_ID_CONCURRENT_OWNER_TAKEOVER/);
+ assert.deepEqual(f.writes,[]);
+});
+test("old UID cannot silently reclaim canonical ID when same-phone link repeats",async()=>{
+ const f=fixture(),path="deda_share_ids/"+ORIGINAL;
+ await link(f.args);
+ f.docs.set(path,{...f.docs.get(path),ownerUid:O});
+ await assert.rejects(link(f.args),/ORIGINAL_ID_CONCURRENT_OWNER_TAKEOVER/);
+ assert.equal(f.writes.length,4);
+});
 test("additional XP and task points preserve original canonical link",async()=>{
  const f=fixture();
  await link(f.args);
