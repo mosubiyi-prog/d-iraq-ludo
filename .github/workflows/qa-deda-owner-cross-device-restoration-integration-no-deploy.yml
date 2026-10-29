@@ -32,8 +32,10 @@ jobs:
             case "$p" in
               lib/deda_cross_device_restore.dart|\
               lib/deda_legacy_purchase_evidence.dart|\
+              lib/deda_weekly_snapshot_decode.dart|\
               lib/deda_progress_backup_runtime.dart|\
               test/deda_cross_device_restore_test.dart|\
+              test/deda_weekly_snapshot_decode_test.dart|\
               tools/app_stability/progress_archive/cross-device-readiness-audit.cjs|\
               tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs|\
               tools/restore_deda_stability_baseline.py|\
@@ -133,13 +135,14 @@ jobs:
           set -euo pipefail
           TARGET="$RUNNER_TEMP/deda-bundle1-real-flutter-no-apk"
           cp test/deda_cross_device_restore_test.dart "$TARGET/test/"
+          cp test/deda_weekly_snapshot_decode_test.dart "$TARGET/test/"
           cp test/deda_friend_task_session_fence_test.dart "$TARGET/test/"
           cp test/deda_task_write_fence_test.dart "$TARGET/test/"
           cp test/deda_weekly_account_view_gate_stage61_test.dart "$TARGET/test/"
           cp test/deda_weekly_original_public_profile_readonly_test.dart "$TARGET/test/"
           cd "$TARGET"
           flutter pub get --enforce-lockfile
-          dart analyze lib/deda_cross_device_restore.dart lib/deda_legacy_purchase_evidence.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
+          dart analyze lib/deda_cross_device_restore.dart lib/deda_legacy_purchase_evidence.dart lib/deda_weekly_snapshot_decode.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
           set +e
           dart analyze --format=machine lib/main.dart lib/deda_social_service.dart \
             > "$RUNNER_TEMP/owner-bundle1-actual-analyzer.txt" 2>&1
@@ -156,6 +159,7 @@ jobs:
           fi
           flutter test --no-pub \
             test/deda_cross_device_restore_test.dart \
+            test/deda_weekly_snapshot_decode_test.dart \
             test/deda_task_write_fence_test.dart \
             test/deda_friend_task_session_fence_test.dart \
             test/deda_weekly_account_view_gate_stage61_test.dart \
