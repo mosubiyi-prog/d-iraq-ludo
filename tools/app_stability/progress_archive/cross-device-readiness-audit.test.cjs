@@ -95,17 +95,32 @@ function fixture(){
   operationReviewDigest:REVIEW,legacyFenceId:FENCE_ID,
   deploymentRevision:REVISION_ID,enforcementRevision:ENFORCE,
   policyRevision:POLICY_ID,createdAt:stamp});
- const reader={get:async path=>{
-   calls.push(path);
-   return docs.has(path)?docs.get(path):null;
- },list:async (path,{limit})=>{
-   calls.push("LIST:"+path);
-   return [...docs.entries()]
-     .filter(([key])=>key.startsWith(path+"/"))
-     .slice(0,limit).map(([key,data])=>({
-       id:key.slice(path.length+1),data
-     }));
- }};
+ const reader={
+   // Strictly emulate the Firestore server's coherent transaction view.
+   // A document modified by a racing writer cannot be mixed with an earlier
+   // version during this read-only audit, even across list/receipt reads.
+   runReadOnlyTransaction:async action=>{
+     calls.push("TRANSACTION:BEGIN");
+     const snapshot=new Map(structuredClone([...docs.entries()]));
+     const view=Object.freeze({
+       get:async path=>{
+         calls.push(path);
+         return snapshot.has(path)?snapshot.get(path):null;
+       },
+       list:async(path,{limit})=>{
+         calls.push("LIST:"+path);
+         return [...snapshot.entries()]
+           .filter(([key])=>key.startsWith(path+"/"))
+           .slice(0,limit).map(([key,data])=>({
+             id:key.slice(path.length+1),data
+           }));
+       },
+     });
+     const result=await action(view);
+     calls.push("TRANSACTION:END");
+     return result;
+   },
+ };
  const auth={
    verifyIdToken:async(token,revocation)=>{
      calls.push("AUTH:verify");
@@ -157,7 +172,7 @@ test("02: complete synthetic canonical progress, still NO wallet or XP transfer"
  assert.equal(r.reviewedMigrationPresent,true);
  assert.equal(r.baselineLedgerConsistent,true);
  assert.deepEqual([...f.docs],before);
- assert.equal(f.calls.length,21);
+ assert.equal(f.calls.length,23);
  assert.equal(r.cutoverRecordsConsistent,true);
  assert.equal(r.fullLedgerReconciled,true);
  assert.ok(r.blockers.includes("OLD_APK_FINANCIAL_WRITER_NOT_SERVER_FENCED"));
@@ -354,8 +369,40 @@ test("07: production environment / account spoof is rejected BEFORE any server r
  await assert.rejects(audit({...f.request,clientApproved:true}),/EMULATOR_ONLY/);
  assert.equal(f.calls.length,0);
 });
+test("19: all audit reads use one immutable transactional view",async()=>{
+ const f=fixture();
+ const initial=f.docs.get("deda_verified_progress/"+ACCOUNT);
+ const original=f.reader.runReadOnlyTransaction;
+ f.reader.runReadOnlyTransaction=async callback=>{
+   const promise=original(async view=>{
+     const first=await view.get("deda_verified_progress/"+ACCOUNT);
+     assert.deepEqual(first,initial);
+     // A writer commits to the real map after this snapshot was captured.
+     f.docs.set("deda_verified_progress/"+ACCOUNT,{
+       ...initial,balances:{...initial.balances,earnedDiamonds:999999}});
+     const second=await view.get("deda_verified_progress/"+ACCOUNT);
+     assert.deepEqual(second,initial);
+     return callback(view);
+   });
+   return promise;
+ };
+ const r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.fullLedgerReconciled,true);
+ assert.equal(f.docs.get("deda_verified_progress/"+ACCOUNT).balances.earnedDiamonds,999999);
+ assert.equal(f.calls.filter(s=>s==="TRANSACTION:BEGIN").length,1);
+ // This is a PRIVATE read-only audit, never a transferable financial decision:
+ // the newer mutation is not authorized to mint or settle anything.
+ assert.equal(r.canRestoreDiamonds,false);
+});
+test("20: missing read-only transaction API fails before any account reads",async()=>{
+ const f=fixture();
+ delete f.reader.runReadOnlyTransaction;
+ await assert.rejects(audit(f.request),/EMULATOR_ONLY/);
+ assert.equal(f.calls.some(x=>x.startsWith("deda_")),false);
+});
 test("08: source network failure rejects instead of returning success",async()=>{
  const f=fixture();
- f.reader.get=async()=>{throw Error("SERVER_UNAVAILABLE");};
+ f.reader.runReadOnlyTransaction=async()=>{throw Error("SERVER_UNAVAILABLE");};
  await assert.rejects(audit(f.request),/SERVER_UNAVAILABLE/);
 });
