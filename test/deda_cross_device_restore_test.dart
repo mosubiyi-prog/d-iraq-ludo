@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_cross_device_restore.dart';
 import 'package:d_iraq_ludo/deda_legacy_progress_capture.dart';
+import 'package:d_iraq_ludo/deda_legacy_purchase_evidence.dart';
 import 'package:d_iraq_ludo/deda_owner_session_firebase_port.dart';
 import 'package:d_iraq_ludo/deda_progress_evidence_store.dart';
 import 'package:d_iraq_ludo/deda_session_flow_prototype.dart';
@@ -13,6 +14,8 @@ import 'package:d_iraq_ludo/deda_session_transition_gate.dart';
 
 const _account = '07700000000';
 const _captureId = 'legacy_progress_original_000001';
+const _purchaseId = 'legacy_purchase_original_000001';
+const _originalPersonalId = '@DEDA-ABC123';
 const _path = 'deda_progress_evidence/$_account/captures/$_captureId';
 
 class _Legacy implements DedaLegacyProgressReadStore {
@@ -21,6 +24,16 @@ class _Legacy implements DedaLegacyProgressReadStore {
     keys[0]: '{"awards":{"earned":{"points":85}}}',
     keys[1]: '{"coins":10,"xp":85}',
     keys[2]: '{"diamonds":110,"spendIds":["purchase-1"]}',
+  };
+}
+
+class _LegacyPurchases implements DedaLegacyPurchaseReadStore {
+  @override
+  Future<Map<String, Object?>> readValues(List<String> keys) async => {
+    for (final key in keys)
+      key: key.startsWith('deda_style_inventory_')
+          ? '{"owned":["FRAME_03"],"receipt":"unverified-local"}'
+          : key.endsWith('_FRAME_03') ? 'pending-original-payment' : null,
   };
 }
 
@@ -54,7 +67,9 @@ class _Io implements DedaProgressEvidenceIo {
     docs['deda_sessions/$uid'] = {
       'uid': uid, 'accountKey': account, 'installId': install,
     };
-    docs['users/$uid'] = {'accountKey': account};
+    docs['users/$uid'] = {
+      'accountKey': account, 'sharePersonalId': _originalPersonalId,
+    };
   }
   @override
   Future<String> installId(void Function() check) async {
@@ -92,12 +107,22 @@ class _Fixture {
   final local = _Local();
   bool live = true;
   late final archive = DedaProgressEvidenceStore(io);
-  late final recovery = DedaCrossDeviceRestore(archive: archive, local: local);
-  Future<void> seed() async {
+  late final purchases = DedaLegacyPurchaseEvidenceStore(archive);
+  late final recovery = DedaCrossDeviceRestore(
+      archive: archive, local: local, purchaseArchive: purchases);
+  Future<void> seed({bool withPurchases = true}) async {
     final capture = await DedaLegacyProgressReader(_Legacy()).capture(
         accountKey: _account, isCurrent: () => true);
     await archive.save(
         captureId: _captureId, capture: capture, isCurrent: () => true);
+    if (withPurchases) {
+      await purchases.save(
+          captureId: _purchaseId, progressCaptureId: _captureId,
+          capture: await DedaLegacyPurchaseReader(_LegacyPurchases()).capture(
+              accountKey: _account, originalId: _originalPersonalId,
+              isCurrent: () => true),
+          isCurrent: () => true);
+    }
   }
   void useSecondPhone() {
     io.install = 'replacement-install';
@@ -122,12 +147,52 @@ void main() {
     expect(data['accountKey'], _account);
     expect(data['sourceUid'], 'old-phone');
     expect(data['financiallySettled'], false);
+    expect(data['purchasesSettled'], false);
+    expect(data['purchaseEvidenceLinked'], true);
+    final purchase = data['purchaseEvidence'] as Map;
+    expect(purchase['captureId'], _purchaseId);
+    expect(purchase['originalId'], _originalPersonalId);
+    expect((purchase['localSnapshot'] as String), contains('FRAME_03'));
+    // Only the untrusted staging key was written: zero frame/ID grants.
+
     expect((data['records'] as Map)['earnedDiamonds'],
         '{"diamonds":110,"spendIds":["purchase-1"]}');
     expect((data['records'] as Map)['taskPoints'],
         '{"awards":{"earned":{"points":85}}}');
     expect(f.local.values.keys, hasLength(1));
     expect(f.local.values.keys.single, contains('untrusted_recovery'));
+  });
+
+  test('no purchase sidecar preserves unknown ownership instead of zeroing frames',
+      () async {
+    final f = _Fixture();
+    await f.seed(withPurchases: false);
+    f.useSecondPhone();
+    final result = await f.stage();
+    expect(result.status,
+        DedaRecoveryStageStatus.stagedAwaitingServerReconciliation);
+    final data = jsonDecode(
+        f.local.values[DedaCrossDeviceRestore.pendingKey(_account)]!) as Map;
+    expect(data['purchaseEvidenceLinked'], false);
+    expect(data['purchaseEvidence'], isNull);
+    expect(data['purchasesSettled'], false);
+  });
+
+  test('two purchase claims for same archive are held, never silently selected',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    final original = await DedaLegacyPurchaseReader(_LegacyPurchases()).capture(
+        accountKey: _account, originalId: _originalPersonalId,
+        isCurrent: () => true);
+    await f.purchases.save(
+        captureId: 'legacy_purchase_original_000002',
+        progressCaptureId: _captureId, capture: original,
+        isCurrent: () => true);
+    f.useSecondPhone();
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.purchaseEvidenceConflict);
+    expect(f.local.values, isEmpty);
   });
 
   test('second phone repeated read is idempotent, never duplicates records',
