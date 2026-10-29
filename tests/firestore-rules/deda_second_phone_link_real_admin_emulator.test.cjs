@@ -176,6 +176,8 @@ test("01 real Firestore Admin transaction moves original ID, preserves canonical
  assert.equal((await read("users/"+OLD)).sharePersonalId,ORIGINAL);
  assert.equal((await read("deda_migration_spend_authority/"+ORIGINAL)).activeUid,NEW);
  assert.equal((await read("deda_migration_account_authority/"+ACCOUNT)).activeUid,NEW);
+ const again=await pinProof({...request(),data:{accountKey:ACCOUNT,pin:"581742"}});
+ assert.equal(again.status,"ACCOUNT_PIN_BOUND_HOLD_ONLY");
  const retry=await callable(request());
  assert.equal(retry.replayed,true);
  assert.equal((await read(LINK)).digest,canonical.digest);
