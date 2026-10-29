@@ -110,8 +110,10 @@ async function recoverSafeProfile({request, db, auth, nowMs = Date.now()}) {
           binding.status !== "PIN_VERIFIED_HOLD" ||
           binding.canMigrate !== false || binding.canRestoreAssets !== false ||
           !Number.isSafeInteger(binding.createdAtMs) ||
-          nowMs < binding.createdAtMs ||
-          nowMs - binding.createdAtMs > TTL_MS ||
+          !Number.isSafeInteger(binding.lastVerifiedAtMs ?? binding.createdAtMs) ||
+          (binding.lastVerifiedAtMs ?? binding.createdAtMs) < binding.createdAtMs ||
+          nowMs < (binding.lastVerifiedAtMs ?? binding.createdAtMs) ||
+          nowMs - (binding.lastVerifiedAtMs ?? binding.createdAtMs) > TTL_MS ||
           !directory || directory.active !== true ||
           directory.accountKey !== accountKey ||
           typeof directory.createdUid !== "string" ||
