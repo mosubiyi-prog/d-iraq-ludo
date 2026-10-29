@@ -39,6 +39,8 @@ jobs:
               test/deda_weekly_leaderboard_verified_rank_tap_stage22_test.dart|\
               tools/app_stability/progress_archive/cross-device-readiness-audit.cjs|\
               tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs|\
+              tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.cjs|\
+              tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs|\
               tools/restore_deda_stability_baseline.py|\
               .github/workflows/qa-deda-owner-cross-device-restoration-integration-no-deploy.yml|\
               docs/DEDA_OWNER_CROSS_DEVICE_RESTORATION_INTEGRATION_2026-10-29.md) ;;
@@ -57,7 +59,9 @@ jobs:
           python3 -m py_compile tools/restore_deda_stability_baseline.py
           node --check tools/app_stability/progress_archive/cross-device-readiness-audit.cjs
           node --check tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs
-          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs
+          node --check tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.cjs
+          node --check tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs
+          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs
           echo "Original DEDA account, league, wallets/IDs, Play and quiz bank unchanged"
   prepare-actual-original-flutter-no-apk:
     needs: protected-original
