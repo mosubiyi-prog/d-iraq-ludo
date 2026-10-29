@@ -22,7 +22,10 @@ function fixture(){
    publicId:ORIGINAL,kind:"personal",active:true,ownerUid:O,
  });
  docs.set("users/"+O,{accountKey:A,sharePersonalId:ORIGINAL});
- docs.set("users/"+N,{accountKey:A,sharePersonalId:"@DEDA-ABC123"});
+ // The REAL PIN sign-in creates users/newUid without sharePersonalId.
+ docs.set("users/"+N,{accountKey:A,name:"existing PIN login name",
+  authMethod:"deda_pin_firestore_v1"});
+ docs.set("deda_sessions/"+N,{uid:N,accountKey:A,installId:"new_phone_install_0001"});
  for(const uid of [O,N])docs.set("deda_stage54_private_account_bindings/"+uid,{
   uid,accountKey:A,authProvider:"anonymous",state:"LOCAL_VERIFIED_HOLD_ONLY",
   emulatorOnly:true,canMigrate:false,canGrant:false,createdAt:T});
@@ -79,7 +82,7 @@ test("first valid link is atomic and never credits any balance",async()=>{
    format:1,version:1,points:5,coins:2,xp:25,earnedDiamonds:400,
    spendable:false,entitlementsVerified:false,
  });
- assert.deepEqual(f.writes,["deda_private_second_phone_links/"+N,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A,"deda_share_ids/@DEDA-ABC123"]);
+ assert.deepEqual(f.writes,["deda_private_second_phone_links/"+N,"deda_migration_spend_authority/@DEDA-ABC123","deda_migration_account_authority/"+A,"users/"+N,"deda_share_ids/@DEDA-ABC123"]);
  assert.deepEqual(f.docs.get("deda_verified_progress/"+A),before);
  assert.equal(f.docs.get("deda_share_ids/"+ORIGINAL).ownerUid,N);
  assert.equal(f.docs.get("users/"+O).sharePersonalId,ORIGINAL);
@@ -87,7 +90,7 @@ test("first valid link is atomic and never credits any balance",async()=>{
 test("repeating same link is idempotent and cannot overwrite it",async()=>{
  const f=fixture();await link(f.args);
  assert.equal((await link(f.args)).replayed,true);
- assert.equal(f.writes.length,4);
+ assert.equal(f.writes.length,5);
  await assert.rejects(link({...f.args,linkId:"second_device_account_link_002"}),/EXISTING_LINK_CONFLICT/);
 });
 test("a second device cannot hijack the currently fenced wallet writer",async()=>{
@@ -98,7 +101,7 @@ test("a second device cannot hijack the currently fenced wallet writer",async()=
  assert.deepEqual(f.writes,[
    "deda_private_second_phone_links/"+N,path,
    "deda_migration_account_authority/"+A,
-   "deda_share_ids/@DEDA-ABC123",
+   "users/"+N,"deda_share_ids/@DEDA-ABC123",
  ]);
 });
 test("linked account cannot silently continue when writer fence disappears",async()=>{
@@ -106,7 +109,7 @@ test("linked account cannot silently continue when writer fence disappears",asyn
  await link(f.args);
  f.docs.delete(path);
  await assert.rejects(link(f.args),/LINK_WITHOUT_WRITER_FENCE/);
- assert.equal(f.writes.length,4);
+ assert.equal(f.writes.length,5);
 });
 test("existing competing account writer fence refuses new canonical link",async()=>{
  const f=fixture(),path="deda_migration_spend_authority/@DEDA-ABC123";
@@ -129,6 +132,7 @@ test("original permanent DEDA ID ownership transfers exactly once, not duplicate
  assert.equal(f.docs.get(idPath).active,before.active);
  assert.equal(f.docs.get("users/"+O).sharePersonalId,ORIGINAL);
  assert.equal(f.docs.get("users/"+N).sharePersonalId,ORIGINAL);
+ assert.equal(f.docs.get("users/"+N).name,"existing PIN login name");
  const repeat=await link(f.args);
  assert.equal(repeat.replayed,true);
  assert.equal(f.writes.filter(p=>p===idPath).length,1);
@@ -151,7 +155,7 @@ test("old UID cannot silently reclaim canonical ID when same-phone link repeats"
  await link(f.args);
  f.docs.set(path,{...f.docs.get(path),ownerUid:O});
  await assert.rejects(link(f.args),/ORIGINAL_ID_CONCURRENT_OWNER_TAKEOVER/);
- assert.equal(f.writes.length,4);
+ assert.equal(f.writes.length,5);
 });
 test("additional XP and task points preserve original canonical link",async()=>{
  const f=fixture();
@@ -176,7 +180,7 @@ test("additional XP and task points preserve original canonical link",async()=>{
  assert.equal(r.verifiedProgress.xp,30);
  assert.equal(r.verifiedProgress.earnedDiamonds,400);
  assert.equal(r.verifiedProgress.spendable,false);
- assert.equal(f.writes.length,4);
+ assert.equal(f.writes.length,5);
  assert.equal(f.docs.get(path).balances.xp,30);
 });
 test("missing server PIN proof for either device denies link",async()=>{
