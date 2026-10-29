@@ -16,7 +16,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'admin_pages.dart';
@@ -29,9 +28,6 @@ import 'places_service.dart';
 import 'prize_winner_pages.dart';
 import 'deda_team_page.dart';
 import 'traffic_quiz_page.dart';
-import 'deda_weekly_account_view_gate.dart';
-import 'deda_weekly_leaderboard_safe_screen.dart';
-import 'deda_weekly_verified_standings_bridge.dart';
 
 enum DedaMapStyle {
   normal,
@@ -1503,8 +1499,6 @@ String dedaCategoryLabel(String ar) {
       return 'Restaurant';
     case 'مطاعم':
       return 'Restaurants';
-    case 'المتصدرون':
-      return 'Leaderboard';
     case 'فندق':
       return 'Hotel';
     case 'فنادق':
@@ -6566,7 +6560,7 @@ class _HomePageState extends State<HomePage> {
   bool _shareIdentityReady = false;
 
   final List<DedaCategoryData> _baseCategories = const [
-    DedaCategoryData(Icons.emoji_events_outlined, 'المتصدرون'),
+    DedaCategoryData(Icons.restaurant, 'مطاعم'),
     DedaCategoryData(Icons.hotel, 'فنادق'),
     DedaCategoryData(Icons.local_mall, 'مولات'),
     DedaCategoryData(Icons.local_gas_station, 'محطات وقود'),
@@ -6595,47 +6589,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void openCategory(DedaCategoryData category) {
-    if (category.title == 'المتصدرون') {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => DedaWeeklyAccountViewGate(
-            readCanonicalAccount: () => DedaPreferences.isLoggedIn
-                ? DedaBackend.accountKeyForPhone(DedaPreferences.phone).trim()
-                : '',
-            readSessionUid: () => FirebaseAuth.instance.currentUser?.uid,
-            authEvents: FirebaseAuth.instance.authStateChanges(),
-            refreshSignal: DedaTaskEngine.revisionNotifier,
-            builder: (leagueContext, capturedAccountKey, stillSameViewer) {
-              return Scaffold(
-                appBar: AppBar(
-                  title: Text(dedaText('المتصدرون', 'Leaderboard')),
-                  centerTitle: true,
-                ),
-                body: DedaWeeklyLeaderboardSafeScreen(
-                  currentAccountStillAuthorized: stillSameViewer,
-                  loadVerifiedStandings: () =>
-                      DedaWeeklyVerifiedStandingsBridge.load(
-                    accountKey: capturedAccountKey,
-                    currentAccountStillAuthorized: stillSameViewer,
-                  ),
-                  refreshSignal: DedaTaskEngine.revisionNotifier,
-                  onOpenDailyTasks: () {
-                    if (!stillSameViewer()) return;
-                    Navigator.of(leagueContext).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const DedaDailyTasksPage(),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-      );
-      return;
-    }
     if (category.title == 'أماكني الشخصية') {
       Navigator.push(
         context,
@@ -7212,7 +7165,7 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final leaderboard = category('المتصدرون');
+    final restaurant = category('مطاعم');
     final hotel = category('فنادق');
     final mall = category('مولات');
     final fuel = category('محطات وقود');
@@ -7537,7 +7490,7 @@ class _HomePageState extends State<HomePage> {
                               textDirection: TextDirection.ltr,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: categoryCard(leaderboard)),
+                                Expanded(child: categoryCard(restaurant)),
                                 const SizedBox(width: 8),
                                 Expanded(child: categoryCard(fuel)),
                                 const SizedBox(width: 8),
@@ -7757,7 +7710,7 @@ class _HomePageState extends State<HomePage> {
                                           ),
                                           const SizedBox(height: 8),
                                           Expanded(
-                                            child: categoryCard(leaderboard),
+                                            child: categoryCard(restaurant),
                                           ),
                                         ],
                                       ),
