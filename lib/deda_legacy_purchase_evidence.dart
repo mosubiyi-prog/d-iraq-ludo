@@ -195,6 +195,27 @@ class DedaLegacyPurchaseEvidenceStore {
     if (!_same(saved, fields)) throw const DedaProgressEvidenceConflict();
     return _decode(capture.accountKey, captureId, saved);
   }
+  /// Read historical purchase snapshots for a PIN-verified second device.
+  /// These are immutable, UNTRUSTED evidence only: never grant frames,
+  /// premium IDs, diamonds, purchases or ownership from these records.
+  Future<List<DedaStoredPurchaseEvidence>> list({
+      required String accountKey, required bool Function() isCurrent,
+      int limit = 20}) async {
+    if (limit < 1 || limit > 50) {
+      throw ArgumentError('invalid-purchase-evidence-list-limit');
+    }
+    final owner = await progress.verifyCurrentOwner(
+        accountKey: accountKey, isCurrent: isCurrent);
+    _check(owner.user, isCurrent);
+    final rows = await io.listServer(
+        'deda_purchase_evidence/$accountKey/captures', limit: limit);
+    _check(owner.user, isCurrent);
+    return List.unmodifiable(rows.map((row) {
+      _id(row.id);
+      return _decode(accountKey, row.id, _server(row.document));
+    }));
+  }
+
   Future<DedaStoredPurchaseEvidence> read({required String accountKey,
       required String captureId, required bool Function() isCurrent}) async {
     _id(captureId);
