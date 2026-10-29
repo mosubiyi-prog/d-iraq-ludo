@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 
+import 'deda_cross_device_restore.dart';
 import 'deda_legacy_progress_capture.dart';
 import 'deda_legacy_purchase_evidence.dart';
 import 'deda_owner_session_firebase_port.dart';
@@ -91,6 +92,26 @@ class DedaFirebaseProgressBackupDriver implements DedaProgressBackupDriver {
   }
   @override
   Future<bool> backup(String accountKey, bool Function() isCurrent) async {
+    // REAL second-phone recovery integration: when a fresh device has no
+    // original local state, read account/PIN-verified archives BEFORE any
+    // upload, stage the entire historical snapshot with provenance, and never
+    // treat the old local diamonds or XP as new spendable rewards. In
+    // particular do NOT publish an empty new-phone snapshot over the old one.
+    // The host remains disabled until verified production rules + account
+    // reconciliation are approved for a new (non-APK) source cutover.
+    final currentLocal = await coordinator.reader.capture(
+        accountKey: accountKey, isCurrent: isCurrent);
+    if (!isCurrent()) throw const DedaStaleSessionTransition();
+    if (!currentLocal.hasAnyLocalRecord) {
+      final recovery = DedaCrossDeviceRestore(
+        archive: coordinator.archive,
+        local: DedaRecoverySharedPreferences(),
+      );
+      await recovery.stage(accountKey: accountKey, isCurrent: isCurrent);
+      if (!isCurrent()) throw const DedaStaleSessionTransition();
+      return false;
+    }
+
     // This fast path only suppresses an unchanged capture within this process.
     // A pending journal always wins, including uncertain writes after restart.
     // No server ordering or financial authority is inferred from this cache.
