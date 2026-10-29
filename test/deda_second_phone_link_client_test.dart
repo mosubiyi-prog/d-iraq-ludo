@@ -30,7 +30,8 @@ class _Transport implements DedaSecondPhoneLinkTransport {
   @override
   Future<Map<String, dynamic>> linkWithoutClientAccountDetails() async {
     calls++;
-    return pending == null ? reply : pending!.future;
+    if (pending != null) return await pending!.future;
+    return reply;
   }
 }
 
