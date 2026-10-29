@@ -126,9 +126,29 @@ function createSecondPhonePinProofCallable({
     const originalId=oldUser?.sharePersonalId;
     const route=ORIGINAL.test(originalId||"")?
        await get("deda_share_ids/"+originalId):null;
+    // After a successful cutover, the original public ID belongs to the
+    // linked NEW UID. Its PIN proof must remain idempotent across logins,
+    // but only when both immutable account-link and writer-fence records
+    // independently agree on the same UID. An unrelated third phone fails.
+    let linkedOwner=false;
+    if(route?.ownerUid===uid){
+      const [link,idFence,accountFence]=await Promise.all([
+        get("deda_private_second_phone_links/"+uid),
+        get("deda_migration_spend_authority/"+originalId),
+        get("deda_migration_account_authority/"+key),
+      ]);
+      linkedOwner=!!link&&link.accountKey===key&&link.oldUid===oldUid&&
+        link.newUid===uid&&link.emulatorOnly===true&&
+        idFence?.publicId===originalId&&idFence.activeUid===uid&&
+        idFence.originalUid===oldUid&&
+        idFence.status==="new-device-exclusive"&&
+        accountFence?.accountKey===key&&accountFence.activeUid===uid&&
+        accountFence.originalUid===oldUid&&
+        accountFence.status==="new-device-exclusive";
+    }
     if(oldUser?.accountKey!==key||route?.publicId!==originalId||
        route.kind!=="personal"||route.active!==true||
-       route.ownerUid!==oldUid||
+       !(route.ownerUid===oldUid||linkedOwner)||
        (newUser?.sharePersonalId!=null&&
          newUser.sharePersonalId!==originalId)||
        (oldBinding!==null&&!shape(oldBinding,oldUid,key))||
