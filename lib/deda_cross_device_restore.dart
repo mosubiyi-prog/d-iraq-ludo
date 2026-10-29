@@ -49,6 +49,28 @@ class DedaCrossDeviceRestore {
     final owner = await archive.verifyCurrentOwner(
       accountKey: accountKey, isCurrent: isCurrent);
     check();
+    // Directory provenance is read from the server, never from copied
+    // preferences or the new phone's locally generated default balances.
+    // A different creation UID is evidence of a pre-existing account,
+    // even if the older phone never uploaded an archive.
+    final directoryDocument = await archive.io.readServer(
+        'deda_account_directory/$accountKey');
+    check();
+    if (directoryDocument.fromCache || directoryDocument.pendingWrites ||
+        directoryDocument.data == null) {
+      return const DedaRecoveryStage(
+          status: DedaRecoveryStageStatus.accountDirectoryUnverified,
+          captureId: null);
+    }
+    final directory = directoryDocument.data!;
+    if (directory['accountKey'] != accountKey ||
+        directory['active'] != true ||
+        directory['createdUid'] is! String ||
+        (directory['createdUid'] as String).isEmpty) {
+      return const DedaRecoveryStage(
+          status: DedaRecoveryStageStatus.accountDirectoryUnverified,
+          captureId: null);
+    }
     final entries = await archive.list(
       accountKey: accountKey, isCurrent: isCurrent, limit: 20);
     check();
@@ -61,6 +83,18 @@ class DedaCrossDeviceRestore {
          e.installId != owner.installId) &&
         e.capture.accountKey == accountKey).toList(growable: false);
     if (foreign.isEmpty) {
+      // The original bounded query may hide older captures. A full page is
+      // never proof that this device owns the only account history.
+      if (entries.length == 20) {
+        return const DedaRecoveryStage(
+            status: DedaRecoveryStageStatus.archiveWindowIncomplete,
+            captureId: null);
+      }
+      if (directory['createdUid'] != owner.user.uid) {
+        return const DedaRecoveryStage(
+            status: DedaRecoveryStageStatus.priorAccountWithoutArchive,
+            captureId: null);
+      }
       return const DedaRecoveryStage(
           status: DedaRecoveryStageStatus.noPreviousDeviceArchive,
           captureId: null);
@@ -159,6 +193,9 @@ class DedaCrossDeviceRestore {
 
 enum DedaRecoveryStageStatus {
   noPreviousDeviceArchive,
+  priorAccountWithoutArchive,
+  archiveWindowIncomplete,
+  accountDirectoryUnverified,
   multipleSourcesRequireReview,
   purchaseEvidenceConflict,
   alreadyStaged,
