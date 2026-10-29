@@ -88,7 +88,7 @@ async function readOwnedEntitlements(tx,accountKey,originalId){
       !ids.includes(ledger.activeId))
      fail("PREMIUM_ID_ACCOUNT_LEDGER_CONFLICT");
    verifiedPremiumIds=ids.slice(1);
-   activeId=ledger.activeId;
+   activeId=ledger.activeId===originalId?null:ledger.activeId;
    for(const id of verifiedPremiumIds){
      const reg=await tx.get("deda_owned_identifier_registry/"+id);
      const alias=await tx.get("deda_owned_identifier_aliases/"+id);
