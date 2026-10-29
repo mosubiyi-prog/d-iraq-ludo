@@ -10,7 +10,7 @@
  * settlement and owner approval. Legacy PIN+install identity is inadequate.
  */
 const core=require("./reconcile-core.cjs");
-const {parseMigration}=require("./migration-gate.cjs");
+const {parseMigration,validateSettlement}=require("./migration-gate.cjs");
 const {parseDeployment,validateFence,deploymentPath}=
  require("./activate-reviewed-baseline.cjs");
 const {createHash}=require("node:crypto");
@@ -98,7 +98,7 @@ async function linkSecondPhoneToCanonicalAccount({
       phase.settlementId===null||
       progress.initializedBy!==phase.baselineEventKey)
      fail("REVIEWED_PROGRESS_NOT_READY");
-   const [resolution,fence,deploy,activation]=await Promise.all([
+   const [resolution,settlement,deploy,activation]=await Promise.all([
      get(root+"/settlementReviews/"+phase.settlementId),
      get(root+"/settlements/"+phase.settlementId),
      get(deploymentPath),
@@ -122,10 +122,15 @@ async function linkSecondPhoneToCanonicalAccount({
       activation.baselineEventKey!==phase.baselineEventKey||
       activation.deploymentRevision!==deployment.revision||
       activation.enforcementRevision!==deployment.enforcementRevision||
-      !fence||fence.accountKey!==accountKey||
-      fence.baselineEventKey!==phase.baselineEventKey||
-      fence.pendingPurchases!==0||fence.pendingReservations!==0)
+      !settlement)
      fail("TRUSTED_CUTOVER_UNVERIFIED");
+   try{validateSettlement(settlement,phase);}
+   catch(_){fail("TRUSTED_CUTOVER_UNVERIFIED");}
+   // An approval document with zero pending purchases is not proof that
+   // original installed clients have actually lost write authority.
+   const fenceRecord=await get(root+"/fences/"+resolution.legacyFenceId);
+   try{validateFence(fenceRecord,phase,resolution,deployment);}
+   catch(_){fail("LEGACY_FINANCIAL_WRITER_NOT_FENCED");}
    const payload={
       format:1,accountKey,oldUid,newUid,linkId,
       migrationId:phase.migrationId,
