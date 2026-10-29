@@ -43,6 +43,8 @@ jobs:
               tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs|\
               tools/app_stability/progress_archive/second-phone-account-link.cjs|\
               tools/app_stability/progress_archive/second-phone-account-link.test.cjs|\
+              tools/app_stability/progress_archive/second-phone-link-callable.cjs|\
+              tools/app_stability/progress_archive/second-phone-link-callable.test.cjs|\
               tools/restore_deda_stability_baseline.py|\
               .github/workflows/qa-deda-owner-cross-device-restoration-integration-no-deploy.yml|\
               docs/DEDA_OWNER_CROSS_DEVICE_RESTORATION_INTEGRATION_2026-10-29.md) ;;
@@ -65,7 +67,9 @@ jobs:
           node --check tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs
           node --check tools/app_stability/progress_archive/second-phone-account-link.cjs
           node --check tools/app_stability/progress_archive/second-phone-account-link.test.cjs
-          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs tools/app_stability/progress_archive/second-phone-account-link.test.cjs
+          node --check tools/app_stability/progress_archive/second-phone-link-callable.cjs
+          node --check tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
+          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs tools/app_stability/progress_archive/second-phone-account-link.test.cjs tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
           echo "Original DEDA account, league, wallets/IDs, Play and quiz bank unchanged"
   prepare-actual-original-flutter-no-apk:
     needs: protected-original
