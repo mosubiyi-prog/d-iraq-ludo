@@ -23,11 +23,14 @@ const fail=code=>{throw new Error("DEDA_READONLY_RESTORE_AUDIT_"+code);};
 const safeGet=(reader,path)=>reader.get(path);
 function validOptions(options){
  if(!options||Object.keys(options).sort().join(",")!==
-    ["accountKey","newUid","oldUid","reader"].sort().join(",")||
+    ["accountKey","newUid","oldUid","reader","auth","idToken"].sort().join(",")||
     process.env.GCLOUD_PROJECT!=="demo-deda-restore-readiness"||
     process.env.DEDA_RESTORE_AUDIT_EMULATOR_ONLY!=="true"||
     process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080"||
-    !options.reader||typeof options.reader.get!=="function")
+    !options.reader||typeof options.reader.get!=="function"||
+    !options.auth||typeof options.auth.verifyIdToken!=="function"||
+    typeof options.auth.getUser!=="function"||
+    typeof options.idToken!=="string"||options.idToken.length<16)
    fail("EMULATOR_ONLY");
  const {accountKey,oldUid,newUid}=options;
  if(!ACCOUNT.test(accountKey||"")||!UID.test(oldUid||"")||
@@ -104,7 +107,22 @@ async function replayServerLedger(reader,accountKey,expected){
 
 async function auditCrossDeviceServerReadiness(options){
  validOptions(options);
- const {reader,accountKey,oldUid,newUid}=options;
+ const {reader,accountKey,oldUid,newUid,auth,idToken}=options;
+ // Verify the CURRENT authenticated second-device UID with the Admin SDK,
+ // rather than trusting a number, anonymous UID or install ID claimed by the
+ // new phone. A revoked/disabled or non-anonymous Firebase token is denied
+ // BEFORE reading Firestore account records. App Check remains NOT PROVEN.
+ let caller,record;
+ try{
+   caller=await auth.verifyIdToken(idToken,true);
+   if(caller?.uid!==newUid||
+      caller?.firebase?.sign_in_provider!=="anonymous")
+     fail("UNVERIFIED_NEW_DEVICE_AUTH");
+   record=await auth.getUser(newUid);
+   if(record?.uid!==newUid||record.disabled===true||
+      !!record.email||record.providerData?.length>0)
+     fail("UNVERIFIED_NEW_DEVICE_AUTH");
+ }catch(_){fail("UNVERIFIED_NEW_DEVICE_AUTH");}
  const get=p=>safeGet(reader,p);
  const [directory,profile,oldUser,newUser,migration,progress,
    oldBinding,newBinding]=await Promise.all([
