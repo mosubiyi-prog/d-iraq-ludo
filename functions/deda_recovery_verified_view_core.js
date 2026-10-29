@@ -149,6 +149,10 @@ async function readReviewedRecovery({request, db, auth, secret, nowMs = Date.now
           !HASH.test(raw.signature || "")) hold();
 
       const review = canonicalReview(raw);
+      // A previously correct review is not authority forever: if source
+      // ledgers/writer fences can drift, a stale review must fail closed.
+      if (nowMs < review.reviewedAtMs ||
+          nowMs - review.reviewedAtMs > 24 * 60 * 60 * 1000) hold();
       if (review.migrationId !== migration.migrationId ||
           review.settlementId !== migration.settlementId ||
           review.progressVersion !== progress.version ||
