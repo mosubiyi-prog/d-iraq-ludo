@@ -106,8 +106,21 @@ function fixture(){
        id:key.slice(path.length+1),data
      }));
  }};
- return {docs,calls,reader,key,receipt,request:{
-   accountKey:ACCOUNT,oldUid:OLD,newUid:NEXT,reader,
+ const auth={
+   verifyIdToken:async(token,revocation)=>{
+     calls.push("AUTH:verify");
+     assert.equal(revocation,true);
+     if(token!=="emulator_test_id_token_0123456789")throw Error("INVALID_ID_TOKEN");
+     return {uid:NEXT,firebase:{sign_in_provider:"anonymous"}};
+   },
+   getUser:async uid=>{
+     calls.push("AUTH:getUser");
+     return {uid,disabled:false,email:null,providerData:[]};
+   },
+ };
+ return {docs,calls,reader,auth,key,receipt,request:{
+   accountKey:ACCOUNT,oldUid:OLD,newUid:NEXT,reader,auth,
+   idToken:"emulator_test_id_token_0123456789",
  }};
 }
 const noCredit=r=>{
@@ -144,7 +157,7 @@ test("02: complete synthetic canonical progress, still NO wallet or XP transfer"
  assert.equal(r.reviewedMigrationPresent,true);
  assert.equal(r.baselineLedgerConsistent,true);
  assert.deepEqual([...f.docs],before);
- assert.equal(f.calls.length,19);
+ assert.equal(f.calls.length,21);
  assert.equal(r.cutoverRecordsConsistent,true);
  assert.equal(r.fullLedgerReconciled,true);
  assert.ok(r.blockers.includes("OLD_APK_FINANCIAL_WRITER_NOT_SERVER_FENCED"));
@@ -166,6 +179,35 @@ test("15: old/new UIDs must both have server-owned PIN binding proof",async()=>{
  f.docs.set(next,prior);
  f.docs.set(old,{...f.docs.get(old),uid:NEXT});
  assert.equal((await audit(f.request)).serverOwnedDualPinBindingConsistent,false);
+});
+test("17: second-phone Auth UID cannot be asserted by caller or stolen token",async()=>{
+ const f=fixture();
+ const wrongToken={...f.request,idToken:"wrong_id_token_abcdefghijkl"};
+ await assert.rejects(audit(wrongToken),/UNVERIFIED_NEW_DEVICE_AUTH/);
+ assert.equal(f.calls.filter(x=>x.startsWith("deda_")).length,0);
+ const original=f.auth.verifyIdToken;
+ f.auth.verifyIdToken=async()=>({uid:OLD,firebase:{
+   sign_in_provider:"anonymous",
+ }});
+ await assert.rejects(audit(f.request),/UNVERIFIED_NEW_DEVICE_AUTH/);
+ f.auth.verifyIdToken=original;
+ assert.equal(f.calls.some(x=>x.startsWith("deda_")),false);
+});
+test("18: disabled/non-anonymous Firebase Auth accounts cannot read restore proofs",async()=>{
+ const f=fixture(),auth=f.auth;
+ auth.verifyIdToken=async()=>({uid:NEXT,firebase:{
+   sign_in_provider:"password",
+ }});
+ await assert.rejects(audit(f.request),/UNVERIFIED_NEW_DEVICE_AUTH/);
+ auth.verifyIdToken=async()=>({uid:NEXT,firebase:{
+   sign_in_provider:"anonymous",
+ }});
+ auth.getUser=async uid=>({uid,disabled:true,email:null,providerData:[]});
+ await assert.rejects(audit(f.request),/UNVERIFIED_NEW_DEVICE_AUTH/);
+ auth.getUser=async uid=>({uid,disabled:false,
+   email:"lookalike@example.invalid",providerData:[]});
+ await assert.rejects(audit(f.request),/UNVERIFIED_NEW_DEVICE_AUTH/);
+ assert.equal(f.calls.some(x=>x.startsWith("deda_")),false);
 });
 test("16: copied install/device session or forgery never substitutes server PIN binding",async()=>{
  const f=fixture();
