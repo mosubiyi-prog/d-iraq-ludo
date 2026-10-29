@@ -11,6 +11,7 @@
  */
 const core=require("./reconcile-core.cjs");
 const {replayServerLedger}=require("./cross-device-readiness-audit.cjs");
+const {readOwnedEntitlements}=require("./second-phone-entitlements-readonly.cjs");
 const {parseMigration,validateSettlement}=require("./migration-gate.cjs");
 const {parseDeployment,validateFence,deploymentPath}=
  require("./activate-reviewed-baseline.cjs");
@@ -34,13 +35,14 @@ function binding(b,uid,accountKey){
   b.state==="LOCAL_VERIFIED_HOLD_ONLY"&&b.emulatorOnly===true&&
   b.canMigrate===false&&b.canGrant===false&&stamp(b.createdAt);
 }
-function response(replayed,progress){
+function response(replayed,progress,entitlements){
  // Fresh, independently replayed server values; these are DISPLAY-ONLY.
  // They are never a client-side spend authorization or a migration receipt.
  const state=core.parseState(progress,progress.accountKey);
  return Object.freeze({
    status:"ACCOUNT_LINKED_READONLY_EMULATOR_ONLY",
    replayed,emulatorOnly:true,
+   verifiedEntitlements:entitlements,
    verifiedProgress:Object.freeze({
      format:1,version:state.version,
      points:state.balances.points,coins:state.balances.coins,
@@ -156,6 +158,14 @@ async function linkSecondPhoneToCanonicalAccount({
      }catch(_){fullLedgerVerified=false;}
    }
    if(!fullLedgerVerified)fail("RECEIPT_CHAIN_NOT_RECONCILED");
+   // All known receipt-backed inventory and premium-ID registry proofs are
+   // read in the same account-link transaction. Native frame purchases are
+   // preserved as UNREVIEWED, not fabricated into owned inventory.
+   let entitlements;
+   try{
+     entitlements=await readOwnedEntitlements(
+       {get:path=>tx.get(path)},accountKey,resolution.originalId);
+   }catch(_){fail("ENTITLEMENT_OWNERSHIP_RECONCILIATION_REQUIRED");}
    const payload={
       format:1,accountKey,oldUid,newUid,linkId,
       migrationId:phase.migrationId,
@@ -176,12 +186,12 @@ async function linkSecondPhoneToCanonicalAccount({
         Object.keys(rest).length!==Object.keys(payload).length+1||
         !Object.entries(payload).every(([k,v])=>rest[k]===v))
        fail("SECOND_PHONE_EXISTING_LINK_CONFLICT");
-     return response(true,progress);
+     return response(true,progress,entitlements);
    }
    // Atomic with other account link candidates, fail on competing writers.
    // Absolutely no users/{uid}, wallet, receipts or league data writes.
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
-   return response(false,progress);
+   return response(false,progress,entitlements);
  });
 }
 module.exports={linkSecondPhoneToCanonicalAccount};
