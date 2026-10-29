@@ -1326,3 +1326,12 @@ exports.dedaPremiumResolveAdminGiftRecipient =
     buildResolveGiftRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
 exports.dedaPremiumResolvePublicRecipient =
     buildResolvePublicRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
+
+// Owner-approved DEDA account restoration: LIVE Firebase verification
+// preflight ONLY. No balances, entitlement, PIN or account mutations.
+// Financial transfer remains blocked until separately reviewed settlement.
+const {createRecoveryPhonePreflight} =
+  require("./deda_recovery_live_phone_preflight.js");
+exports.dedaRecoveryLivePhonePreflight = createRecoveryPhonePreflight({
+  onCall, HttpsError, auth:getAuth(), db:getFirestore(),
+});
