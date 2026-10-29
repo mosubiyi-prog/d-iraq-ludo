@@ -137,71 +137,7 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
   lastSeenAt:serverTimestamp(),
  },{merge:true});
  await userRow(b,ACCOUNT,INSTALL_B);
- // TEST DIAGNOSTIC: disposable emulator-only identities; never real user data.
- const base='http://127.0.0.1:8080/v1/projects/'+PROJECT+'/databases/(default)/documents/';
- const inspect=async path=>{
-  const response=await fetch(base+path,{headers:{Authorization:'Bearer owner'}});
-  if(!response.ok)throw Error('QA_EMULATOR_PROOF_NOT_READABLE_'+path);
-  const data=await response.json();
-  return data.fields||{};
- };
- const proof=(await inspect('deda_auth_attempts/'+b.uid));
- const credential=(await inspect('deda_credentials/'+ACCOUNT));
- const sessionDocument=(await inspect('deda_sessions/'+b.uid));
- const userDocument=(await inspect('users/'+b.uid));
- const created=Date.parse(proof.createdAt?.timestampValue??'');
- console.log('QA diagnostic second-phone proof checks',JSON.stringify({
-  sourceUidDifferent:a.uid!==b.uid,
-  pinProofAccountMatches:proof.accountKey?.stringValue===ACCOUNT,
-  pinProofMatchesCredential:proof.pin?.stringValue===credential.pin?.stringValue,
-  proofAgeSeconds:(Date.now()-created)/1000,
-  credentialActive:credential.active?.booleanValue===true,
-  sessionMatchesAccount:sessionDocument.accountKey?.stringValue===ACCOUNT,
-  sessionMatchesUid:sessionDocument.uid?.stringValue===b.uid,
-  userMatchesAccount:userDocument.accountKey?.stringValue===ACCOUNT,
-  proofExists:!!proof.createdAt,
- }));
- let got;
- try {
-  got=await getDoc(ref(b));
- } catch (error) {
-  const url='http://127.0.0.1:8080/emulator/v1/projects/'+PROJECT+':ruleCoverage';
-  const response=await fetch(url);
-  console.log('QA rules coverage status',response.status);
-  if(response.ok) {
-   const report=await response.json();
-   console.log('QA rules coverage sections',Object.keys(report));
-   console.log('QA rules coverage report shape',Object.keys(report.report??{}).slice(0,35));
-   const summaries=[];
-   const visit=(node)=>{
-    const p=node?.sourcePosition;
-    if(p && p.line<=70 && p.line>=5 && summaries.length<220) {
-     const values=(node.values??[]).map(({value,count})=>({
-      kind:value?.boolValue!==undefined?'bool':
-        value?.errorValue!==undefined?'error':
-        value?.undefined!==undefined?'undefined':
-        value?.nullValue!==undefined?'null':
-        Object.keys(value??{})[0]??'unknown',
-      bool:value?.boolValue,
-      count,
-     }));
-     if(values.some(x=>x.kind==='bool'||x.kind==='error'||x.kind==='undefined')) {
-      summaries.push({line:p.line,column:p.column,values});
-     }
-    }
-    for(const c of node.children??[])visit(c);
-   };
-   for(const node of Array.isArray(report.report)?report.report:[]) visit(node);
-   console.log('QA sanitized rule predicate evaluations',JSON.stringify(summaries).slice(0,18000));
-   const entries=Object.entries(report.expressionReports??report.expressions??{});
-   const head=entries.filter(([key,value])=>{
-    const pos=JSON.stringify(value?.sourcePosition??value?.source??{});
-    return /"line":(1[0-9]|[2-6][0-9])[,}]/.test(pos);
-   });
-   console.log('QA low-line-rule-expressions',JSON.stringify(head.slice(0,120)).slice(0,16000));
-  }
-  throw error;
- }
+ const got=await getDoc(ref(b));
  assert.equal(got.exists(),true);
  assert.equal(got.data().sourceUid,a.uid);
  assert.equal(got.data().records.taskPoints, (await getDoc(ref(a))).data().records.taskPoints);
@@ -268,4 +204,21 @@ test('10. Evidence cannot fabricate original XP, ranks, gifts or diamonds',async
  assert.equal((await getDoc(ref(b))).data().kind,'legacy-local-evidence');
  await denied(()=>setDoc(doc(a.db,'deda_weekly_private_friend_signed_frozen_top10','fake'),
   {weeklyXp:999999,diamonds:999999}));
+});
+
+test('11. Archived progress access expires after ten minutes of PIN proof and fresh PIN restores read',async()=>{
+ const backdated=new Date(Date.now()-11*60*1000).toISOString();
+ const rest='http://127.0.0.1:8080/v1/projects/'+PROJECT+
+  '/databases/(default)/documents/deda_auth_attempts/'+b.uid+
+  '?updateMask.fieldPaths=createdAt';
+ const patched=await fetch(rest,{
+  method:'PATCH',
+  headers:{Authorization:'Bearer owner','Content-Type':'application/json'},
+  body:JSON.stringify({fields:{createdAt:{timestampValue:backdated}}}),
+ });
+ assert.equal(patched.ok,true,'emulator-admin should backdate synthetic proof');
+ await denied(()=>getDoc(ref(b)));
+ await pinProof(b,PIN);
+ const fresh=await getDoc(ref(b));
+ assert.equal(fresh.exists(),true);
 });
