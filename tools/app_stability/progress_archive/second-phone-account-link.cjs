@@ -168,12 +168,26 @@ async function linkSecondPhoneToCanonicalAccount({
    }catch(_){fail("ENTITLEMENT_OWNERSHIP_RECONCILIATION_REQUIRED");}
    const writerFencePath="deda_migration_spend_authority/"+resolution.originalId;
    const oldWriterFence=await get(writerFencePath);
+   const accountFencePath="deda_migration_account_authority/"+accountKey;
+   const oldAccountFence=await get(accountFencePath);
    const writerFence={
      format:1,publicId:resolution.originalId,
      originalUid:oldUid,activeUid:newUid,status:"new-device-exclusive",
      protocol:"deda-verified-progress-v1",migrationId:phase.migrationId,
      deploymentRevision:deployment.revision,
    };
+   const accountFence={
+     format:1,accountKey,originalUid:oldUid,activeUid:newUid,
+     status:"new-device-exclusive",protocol:"deda-verified-progress-v1",
+     migrationId:phase.migrationId,deploymentRevision:deployment.revision,
+   };
+   if(oldAccountFence!==null){
+     const {createdAt,...stored}=oldAccountFence;
+     if(!stamp(createdAt)||
+       Object.keys(stored).length!==Object.keys(accountFence).length||
+       !Object.entries(accountFence).every(([key,value])=>stored[key]===value))
+       fail("SECOND_PHONE_CONFLICTING_ACCOUNT_WRITER_FENCE");
+   }
    if(oldWriterFence!==null){
      const {createdAt,...stored}=oldWriterFence;
      if(!stamp(createdAt)||
@@ -196,7 +210,7 @@ async function linkSecondPhoneToCanonicalAccount({
    };
    const digest=createHash("sha256").update(JSON.stringify(payload)).digest("hex");
    if(prior!==null){
-     if(oldWriterFence===null)
+     if(oldWriterFence===null || oldAccountFence===null)
        fail("SECOND_PHONE_LINK_WITHOUT_WRITER_FENCE");
      const {createdAt,...rest}=prior;
      if(!stamp(createdAt)||rest.digest!==digest||
@@ -209,10 +223,11 @@ async function linkSecondPhoneToCanonicalAccount({
    // in ONE atomic emulator-only transaction; an older phone's client writes
    // are denied only WHEN the separately reviewed Firestore rule candidate is
    // deployed. Neither marker can mint, debit or grant any item.
-   if(oldWriterFence!==null)
+   if(oldWriterFence!==null||oldAccountFence!==null)
      fail("SECOND_PHONE_WRITER_FENCE_ALREADY_PREPARED");
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
    tx.set(writerFencePath,{...writerFence,createdAt:store.serverTimestamp()});
+   tx.set(accountFencePath,{...accountFence,createdAt:store.serverTimestamp()});
    return response(false,progress,entitlements);
  });
 }
