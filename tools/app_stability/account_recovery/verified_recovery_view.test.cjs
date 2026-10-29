@@ -191,6 +191,14 @@ test("14: previously unverified account wallet cannot masquerade as ledger", asy
   f.db.seed("users/" + OLD + "/wallet/original", {diamonds: 999999});
   await reject(read(f));
 });
+test("16: a correctly signed but more than 24h old review requires re-verification", async () => {
+  const f = fixture();
+  const r = f.db.read("deda_recovery_authoritative_reviews/" + KEY);
+  const historical = {...r, reviewedAtMs: NOW - (24 * 60 * 60 * 1000) - 10};
+  historical.signature = signReview(SECRET, KEY, historical);
+  f.db.seed("deda_recovery_authoritative_reviews/" + KEY, historical);
+  await reject(read(f));
+});
 test("15: database failure cannot be represented as successful restoration", async () => {
   const f = fixture();
   f.db.runTransaction = async () => {throw Error("internal");};
