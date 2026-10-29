@@ -131,6 +131,15 @@ test("6: expired, missing or malformed server PIN binding denied", async () => {
   });
   await rejected(run(f));
 });
+test("13: a fresh server PIN recheck renews an old binding for profile restore", async () => {
+  const f = fixture();
+  const binding = f.db.read("deda_secure_account_bindings/" + NEW);
+  binding.lastVerifiedAtMs = NOW + TTL_MS + 1000;
+  const afterOriginalExpiry = NOW + TTL_MS + 2000;
+  const response = await run(f, req(), afterOriginalExpiry);
+  assert.equal(response.status, "PROFILE_RESTORED");
+  assert.equal(response.diamondsRestored, false);
+});
 test("7: copied installation ID cannot confer new recovery entitlement", async () => {
   const f = fixture();
   f.db.docs.delete("deda_secure_account_bindings/" + NEW);
