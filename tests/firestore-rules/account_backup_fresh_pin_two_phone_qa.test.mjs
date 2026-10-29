@@ -172,7 +172,27 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
    const report=await response.json();
    console.log('QA rules coverage sections',Object.keys(report));
    console.log('QA rules coverage report shape',Object.keys(report.report??{}).slice(0,35));
-   console.log('QA rules coverage report snapshot',JSON.stringify(report.report??{}).slice(0,18000));
+   const summaries=[];
+   const visit=(node)=>{
+    const p=node?.sourcePosition;
+    if(p && p.line<=70 && p.line>=5 && summaries.length<220) {
+     const values=(node.values??[]).map(({value,count})=>({
+      kind:value?.boolValue!==undefined?'bool':
+        value?.errorValue!==undefined?'error':
+        value?.undefined!==undefined?'undefined':
+        value?.nullValue!==undefined?'null':
+        Object.keys(value??{})[0]??'unknown',
+      bool:value?.boolValue,
+      count,
+     }));
+     if(values.some(x=>x.kind==='bool'||x.kind==='error'||x.kind==='undefined')) {
+      summaries.push({line:p.line,column:p.column,values});
+     }
+    }
+    for(const c of node.children??[])visit(c);
+   };
+   for(const node of Array.isArray(report.report)?report.report:[]) visit(node);
+   console.log('QA sanitized rule predicate evaluations',JSON.stringify(summaries).slice(0,18000));
    const entries=Object.entries(report.expressionReports??report.expressions??{});
    const head=entries.filter(([key,value])=>{
     const pos=JSON.stringify(value?.sourcePosition??value?.source??{});
