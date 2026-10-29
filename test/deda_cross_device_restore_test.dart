@@ -206,6 +206,39 @@ void main() {
     expect(f.local.writes, 1);
   });
 
+  test('same Firebase UID on another installation is still a prior-device archive',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    f.io.install = 'second-installation-same-uid';
+    f.io.asUser('old-phone');
+    final result = await f.stage();
+    expect(result.status,
+        DedaRecoveryStageStatus.stagedAwaitingServerReconciliation);
+    final data = jsonDecode(
+        f.local.values[DedaCrossDeviceRestore.pendingKey(_account)]!) as Map;
+    expect(data['sourceUid'], 'old-phone');
+    expect(data['installId'], 'old-phone-install');
+    expect(data['purchaseEvidenceLinked'], true);
+    expect(data['financiallySettled'], false);
+  });
+
+  test('locally initialized replacement device defaults cannot hide old history',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    f.useSecondPhone();
+    // The application might already have written 0-valued local keys.
+    // A server preflight must still detect an old device before upload.
+    final localDefaults = await DedaLegacyProgressReader(_Legacy()).capture(
+        accountKey: _account, isCurrent: () => true);
+    expect(localDefaults.hasAnyLocalRecord, true);
+    final stage = await f.stage();
+    expect(stage.status,
+        DedaRecoveryStageStatus.stagedAwaitingServerReconciliation);
+    expect(f.local.values.keys, hasLength(1));
+  });
+
   test('no old archive does not invent a zero balance', () async {
     final f = _Fixture();
     f.useSecondPhone();
