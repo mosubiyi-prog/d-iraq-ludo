@@ -1,0 +1,70 @@
+name: DEDA ORIGINAL daily XP to canonical account Top10 REAL Firestore QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-weekly-canonical-daily-xp-receipt-to-top10-integration-no-deploy-2026-10-29
+    paths:
+      - 'functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js'
+      - 'tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs'
+      - '.github/workflows/qa-deda-weekly-canonical-daily-task-xp-two-phone-emulator-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-canonical-daily-xp-two-phone-no-deploy
+  cancel-in-progress: true
+jobs:
+  canonical-receipt-to-top10:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-deda-restore-readiness
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_CANONICAL_LEAGUE_EMULATOR_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect original app Firebase Rules wallets PIN recovery and existing league
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet b37183c2a6d8f2048ef3ef383eecd116a968a44d -- \
+            lib/ android/ assets/ pubspec.yaml firestore.rules firebase.json \
+            functions/index.js functions/package.json \
+            functions/deda_weekly_friend_signed_top10_freeze_NOT_EXPORTED.js
+          test ! -d build/app/outputs/flutter-apk
+          node --check functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js
+          node --check tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs
+          echo 'PASS: original DEDA, source league, wallets, recovery and rules unchanged'
+      - name: Install disposable Firestore Admin emulator dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix tests/firestore-rules --no-save --no-audit --no-fund \
+            firebase-admin@13 firebase-tools@14
+      - name: Run real Firestore task receipt top10 and UID handover tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          fs.copyFileSync('firestore.rules','/tmp/deda-canonical-weekly-original.rules');
+          fs.writeFileSync('/tmp/deda-canonical-weekly.firebase.json',JSON.stringify({
+            firestore:{rules:'/tmp/deda-canonical-weekly-original.rules'},
+            emulators:{firestore:{host:'127.0.0.1',port:8080},ui:{enabled:false}},
+          }));
+          NODE
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --config /tmp/deda-canonical-weekly.firebase.json \
+            --project demo-deda-restore-readiness --only firestore \
+            'node --test tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs'
+          echo 'PASS: server applied XP -> canonical UID-invariant Top10, no grant/deploy/APK'
