@@ -2,21 +2,21 @@
     // The original DEDA PIN proof must be fresh. Copying a trusted install
     // ID cannot satisfy this gate. No production deployment is permitted.
     function verifiedFreshPinForArchive(accountKey) {
+      let pinProof = get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data;
+      let credentials = get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data;
+      let session = get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data;
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return signedIn()
-        && exists(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid))
-        && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt is timestamp
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt <= request.time
-        && request.time < get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt + duration.value(10,'m')
-        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
-        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.pin ==
-          get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin
-        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.uid == request.auth.uid
-        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey;
+        && accountKey.matches('^[0-9]{10,16}$')
+        && pinProof.accountKey == accountKey
+        && pinProof.createdAt is timestamp
+        && pinProof.createdAt <= request.time
+        && request.time < pinProof.createdAt + duration.value(10,'m')
+        && credentials.active == true
+        && pinProof.pin == credentials.pin
+        && session.uid == request.auth.uid
+        && session.accountKey == accountKey
+        && profile.accountKey == accountKey;
     }
     function exactOriginalUntrustedArchive(accountKey,captureId) {
       return accountKey.matches('^[0-9]{10,16}$')
