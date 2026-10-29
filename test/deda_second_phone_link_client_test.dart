@@ -8,6 +8,11 @@ Map<String, dynamic> safeReply({bool replayed = false}) => {
   'status': 'ACCOUNT_LINKED_READONLY_EMULATOR_ONLY',
   'replayed': replayed,
   'emulatorOnly': true,
+  'verifiedProgress': {
+    'format': 1, 'version': 3, 'points': 25, 'coins': 10,
+    'xp': 125, 'earnedDiamonds': 200,
+    'spendable': false, 'entitlementsVerified': false,
+  },
   'canRestoreFinancialBalances': false,
   'canCreditXp': false,
   'canCreditDiamonds': false,
@@ -45,6 +50,38 @@ void main() {
     expect(await client.link(isCurrent: () => true),
         DedaSecondPhoneLinkStatus.alreadyLinkedAwaitingSettlement);
     expect(t.calls, 2);
+  });
+
+  test('new phone reads server-reconciled XP and diamonds only as a nonspendable snapshot', () async {
+    final t = _Transport(), client = DedaSecondPhoneLinkClient(t);
+    final result = await client.linkAndReadVerifiedProgress(isCurrent: () => true);
+    expect(result.status, DedaSecondPhoneLinkStatus.linkedAwaitingSettlement);
+    expect(result.progress.version, 3);
+    expect(result.progress.xp, 125);
+    expect(result.progress.earnedDiamonds, 200);
+    expect(result.progress.points, 25);
+    expect(result.progress.coins, 10);
+    expect(t.calls, 1);
+  });
+
+  test('replay never accepts forged, zeroed, spendable or oversized server balances', () async {
+    final t = _Transport(), client = DedaSecondPhoneLinkClient(t);
+    for (final bad in [
+      {'earnedDiamonds': -1},
+      {'xp': -25},
+      {'xp': '9999'},
+      {'points': null},
+      {'version': 0},
+      {'earnedDiamonds': 9007199254740992},
+      {'spendable': true},
+      {'entitlementsVerified': true},
+      {'bonusFreeDiamonds': 30000},
+    ]) {
+      t.reply = {...safeReply(),
+        'verifiedProgress': {...safeReply()['verifiedProgress'] as Map, ...bad}};
+      await expectLater(client.linkAndReadVerifiedProgress(isCurrent: () => true),
+          throwsFormatException);
+    }
   });
 
   test('default pilot remains off for real users', () {
