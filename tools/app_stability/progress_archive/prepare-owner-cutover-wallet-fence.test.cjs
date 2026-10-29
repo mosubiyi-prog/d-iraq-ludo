@@ -73,3 +73,13 @@ test("05 force reevaluation when root permissions or source anchors change",()=>
  assert.throws(()=>prepare("rules_version = '2';"),/BASELINE_REFUSED/);
  assert.throws(()=>prepare(prepare(original)),/BASELINE_REFUSED/);
 });
+test("07 old-phone original ID, account profile and session deletion paths are fenced",()=>{
+ const candidate=prepare(original);
+ const share=block(candidate,"match /deda_share_ids/{publicId}");
+ assert.equal((share.match(/dedaCutoverWalletWriterAllowed\(publicId\)/g)||[]).length,1);
+ const profile=block(candidate,"match /deda_account_profiles/{accountKey}");
+ assert.equal((profile.match(/dedaCutoverAccountWriterAllowed\(accountKey\)/g)||[]).length,2);
+ assert.match(profile,/allow update: if dedaCutoverAccountWriterAllowed\(accountKey\)/);
+ const session=block(candidate,"match /deda_sessions/{uid}");
+ assert.match(session,/allow delete: if signedIn\(\) && request\.auth\.uid == uid\s+&& dedaCutoverAccountWriterAllowed\(resource\.data\.accountKey\)/);
+});
