@@ -18,8 +18,24 @@ const signedIn="    function signedIn() { return request.auth != null; }";
 if(block.split(matchStart).length!==2||source.split(signedIn).length!==2)
  throw Error("QA_RULES_HELPER_SCOPE_DRIFT");
 const [helperDeclarations, archiveMatch]=block.split(matchStart);
-const generated=source.replace(signedIn,signedIn+"\n"+helperDeclarations)
-  .replace(anchor,matchStart+archiveMatch+"\n"+anchor);
+// NEVER use string replacement values: Firestore regex ends with "
+fs.writeFileSync(path.join(root,"deda_account_backup_qa.generated.rules"),
+  generated,"utf8");
+process.stdout.write("QA candidate generated; original Firestore rules untouched\n");
+" which
+// JavaScript String.replace() interprets as "append unmatched source suffix".
+// In the prior candidate this silently TRIPLED the original rules.
+const generated=source.replace(signedIn,()=>signedIn+"\n"+helperDeclarations)
+  .replace(anchor,()=>matchStart+archiveMatch+"\n"+anchor);
+const expectedLength=source.length+helperDeclarations.length+matchStart.length+archiveMatch.length+2;
+if(generated.length!==expectedLength ||
+   generated.split(anchor).length!==2 ||
+   generated.split(matchStart).length!==2 ||
+   generated.split('rules_version = ').length!==2 ||
+   generated.split("    function signedIn() { return request.auth != null; }").length!==2 ||
+   !generated.endsWith(source.slice(-48))) {
+  throw Error("QA_ARCHIVE_RULES_DUPLICATION_OR_TRUNCATION_HOLD");
+}
 fs.writeFileSync(path.join(root,"deda_account_backup_qa.generated.rules"),
   generated,"utf8");
 process.stdout.write("QA candidate generated; original Firestore rules untouched\n");
