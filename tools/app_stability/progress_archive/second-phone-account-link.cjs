@@ -171,14 +171,18 @@ async function linkSecondPhoneToCanonicalAccount({
    // have a verified profile and original ID; this is never inferred from
    // caller-supplied identity, balance, installId or premium ID.
    const personalIdPath="deda_share_ids/"+resolution.originalId;
-   const [personalIdRoute,newUser]=await Promise.all([
-     get(personalIdPath),get("users/"+newUid),
+   const newUserPath="users/"+newUid;
+   const [personalIdRoute,newUser,newSession]=await Promise.all([
+     get(personalIdPath),get(newUserPath),get("deda_sessions/"+newUid),
    ]);
    if(personalIdRoute?.publicId!==resolution.originalId||
       personalIdRoute?.kind!=="personal"||personalIdRoute.active!==true||
       newUser?.accountKey!==accountKey||
-      newUser?.sharePersonalId!==resolution.originalId||
-      !["string"].includes(typeof personalIdRoute.ownerUid))
+      newSession?.uid!==newUid||
+      newSession?.accountKey!==accountKey||
+      (newUser?.sharePersonalId!=null&&
+        newUser.sharePersonalId!==resolution.originalId)||
+      typeof personalIdRoute.ownerUid!=="string")
      fail("ORIGINAL_ID_NEW_PHONE_PROFILE_NOT_VERIFIED");
    // First takeover must still belong to original UID. Repeated same-phone
    // links must be owned by the linked UID; never override another device.
@@ -228,6 +232,10 @@ async function linkSecondPhoneToCanonicalAccount({
    };
    const digest=createHash("sha256").update(JSON.stringify(payload)).digest("hex");
    if(prior!==null){
+     // On replay the new-phone user profile must already carry the original
+     // ID. Do not silently bless an incomplete or externally changed move.
+     if(newUser.sharePersonalId!==resolution.originalId)
+       fail("SECOND_PHONE_PROFILE_HANDOVER_INCOMPLETE");
      if(oldWriterFence===null || oldAccountFence===null)
        fail("SECOND_PHONE_LINK_WITHOUT_WRITER_FENCE");
      const {createdAt,...rest}=prior;
@@ -246,6 +254,12 @@ async function linkSecondPhoneToCanonicalAccount({
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
    tx.set(writerFencePath,{...writerFence,createdAt:store.serverTimestamp()});
    tx.set(accountFencePath,{...accountFence,createdAt:store.serverTimestamp()});
+   // DEDA's PIN login creates users/{newUid} with the right accountKey
+   // but normally NO sharePersonalId. Set the unchanged ORIGINAL ID here,
+   // only after authenticated account, session and receipt proofs. Preserve
+   // the user's name, friends and existing nonfinancial profile fields.
+   tx.set(newUserPath,{...newUser,sharePersonalId:resolution.originalId,
+     updatedAt:store.serverTimestamp()});
    // Server-authoritative owner handover; original @DEDA identifier is
    // preserved, never replaced by a second profile or duplicated.
    // This is not an entitlement grant and is emulator-guarded.
