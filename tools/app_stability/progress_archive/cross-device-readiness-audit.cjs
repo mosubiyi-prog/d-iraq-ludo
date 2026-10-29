@@ -20,14 +20,13 @@ const ACCOUNT=/^[0-9]{10,16}$/;
 const UID=/^[A-Za-z0-9_-]{8,128}$/;
 const HEX=/^[0-9a-f]{64}$/;
 const fail=code=>{throw new Error("DEDA_READONLY_RESTORE_AUDIT_"+code);};
-const safeGet=(reader,path)=>reader.get(path);
 function validOptions(options){
  if(!options||Object.keys(options).sort().join(",")!==
     ["accountKey","newUid","oldUid","reader","auth","idToken"].sort().join(",")||
     process.env.GCLOUD_PROJECT!=="demo-deda-restore-readiness"||
     process.env.DEDA_RESTORE_AUDIT_EMULATOR_ONLY!=="true"||
     process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080"||
-    !options.reader||typeof options.reader.get!=="function"||
+    !options.reader||typeof options.reader.runReadOnlyTransaction!=="function"||
     !options.auth||typeof options.auth.verifyIdToken!=="function"||
     typeof options.auth.getUser!=="function"||
     typeof options.idToken!=="string"||options.idToken.length<16)
@@ -123,7 +122,12 @@ async function auditCrossDeviceServerReadiness(options){
       !!record.email||record.providerData?.length>0)
      fail("UNVERIFIED_NEW_DEVICE_AUTH");
  }catch(_){fail("UNVERIFIED_NEW_DEVICE_AUTH");}
- const get=p=>safeGet(reader,p);
+ // All account, settlement, receipts and final projection MUST be from a
+ // single Firestore read-only snapshot. Independent get/list calls can mix
+ // pre- and post-spend values and misleadingly validate a fabricated state.
+ // This read-only transaction has no exposed write method and NEVER grants.
+ return reader.runReadOnlyTransaction(async view=>{
+ const get=p=>view.get(p);
  const [directory,profile,oldUser,newUser,migration,progress,
    oldBinding,newBinding]=await Promise.all([
     get("deda_account_directory/"+accountKey),
@@ -245,7 +249,7 @@ async function auditCrossDeviceServerReadiness(options){
    blockers.push("REVIEWED_CUTOVER_DOCUMENT_CHAIN_INCOMPLETE");
  let fullLedgerReconciled=false;
  if(verifiedState&&baselineLedgerConsistent&&cutoverRecordsConsistent){
-   try{fullLedgerReconciled=await replayServerLedger(reader,accountKey,verifiedState);}
+   try{fullLedgerReconciled=await replayServerLedger(view,accountKey,verifiedState);}
    catch(_){fullLedgerReconciled=false;}
  }
  if(!fullLedgerReconciled)
@@ -265,5 +269,6 @@ async function auditCrossDeviceServerReadiness(options){
    cutoverRecordsConsistent,
    fullLedgerReconciled,
  },blockers);
+ });
 }
 module.exports={auditCrossDeviceServerReadiness};
