@@ -33,13 +33,35 @@ function fixture(){
   migrationId:MIGRATION_ID,settlementId:SETTLEMENT_ID,
   phase:"cutover-complete",evidenceDigest:DIGEST,baselineEventKey:key});
  docs.set("deda_verified_progress/"+ACCOUNT,{format:1,accountKey:ACCOUNT,
-  version:2,initializedBy:key,
-  balances:{points:70,coins:6,xp:2210,earnedDiamonds:330}});
+  version:3,initializedBy:key,
+  balances:{points:57,coins:6,xp:2205,earnedDiamonds:330}});
  const receiptId="baseline_"+key;
  docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+receiptId,receipt);
  docs.set("deda_verified_progress/"+ACCOUNT+"/events/"+key,{
   format:1,accountKey:ACCOUNT,eventKey:key,receiptId,receipt,
   appliedVersion:1,afterBalances:{...receipt.delta},createdAt:stamp});
+ // A signed-ledger candidate must include EVERY subsequent applied receipt,
+ // not just the reviewed baseline. These fixture rows are NOT live proof.
+ const earned={format:1,accountKey:ACCOUNT,source:"task-claim-v1",
+  sourceId:"original-task-verified-claim-2026-10-29",
+  kind:"award",delta:{points:5,coins:1,xp:5,earnedDiamonds:0}};
+ const used={format:1,accountKey:ACCOUNT,source:"cosmetic-debit-v1",
+  sourceId:"original-frame-debit-fixture-00001",
+  kind:"spend",delta:{points:0,coins:0,xp:0,earnedDiamonds:-10}};
+ const keyEarned=core.eventKey(earned),keyUsed=core.eventKey(used);
+ const receiptEarned="receipt_task_000000000001",receiptUsed="receipt_spend_00000000001";
+ docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+receiptEarned,earned);
+ docs.set("deda_verified_progress/"+ACCOUNT+"/events/"+keyEarned,{
+  format:1,accountKey:ACCOUNT,eventKey:keyEarned,
+  receipt:earned,receiptId:receiptEarned,appliedVersion:2,
+  afterBalances:{points:57,coins:6,xp:2205,earnedDiamonds:340},
+  createdAt:stamp});
+ docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+receiptUsed,used);
+ docs.set("deda_verified_progress/"+ACCOUNT+"/events/"+keyUsed,{
+  format:1,accountKey:ACCOUNT,eventKey:keyUsed,
+  receipt:used,receiptId:receiptUsed,appliedVersion:3,
+  afterBalances:{points:57,coins:6,xp:2205,earnedDiamonds:330},
+  createdAt:stamp});
  docs.set(root+"/settlements/"+SETTLEMENT_ID,{
   format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
   baselineEventKey:key,legacyFenceId:FENCE_ID,
@@ -69,6 +91,13 @@ function fixture(){
  const reader={get:async path=>{
    calls.push(path);
    return docs.has(path)?docs.get(path):null;
+ },list:async (path,{limit})=>{
+   calls.push("LIST:"+path);
+   return [...docs.entries()]
+     .filter(([key])=>key.startsWith(path+"/"))
+     .slice(0,limit).map(([key,data])=>({
+       id:key.slice(path.length+1),data
+     }));
  }};
  return {docs,calls,reader,key,receipt,request:{
    accountKey:ACCOUNT,oldUid:OLD,newUid:NEXT,reader,
@@ -107,8 +136,9 @@ test("02: complete synthetic canonical progress, still NO wallet or XP transfer"
  assert.equal(r.reviewedMigrationPresent,true);
  assert.equal(r.baselineLedgerConsistent,true);
  assert.deepEqual([...f.docs],before);
- assert.equal(f.calls.length,13);
+ assert.equal(f.calls.length,17);
  assert.equal(r.cutoverRecordsConsistent,true);
+ assert.equal(r.fullLedgerReconciled,true);
  assert.ok(r.blockers.includes("OLD_APK_FINANCIAL_WRITER_NOT_SERVER_FENCED"));
  assert.ok(r.blockers.includes("PAYMENT_GIFT_FRAME_AND_PREMIUM_ID_PROOFS_NOT_SETTLED"));
 });
@@ -128,6 +158,70 @@ test("04: mismatched applied receipt or replayed version cannot validate ledger"
  f.docs.set(path,{...f.docs.get(path),appliedVersion:1,
    receipt:{...f.receipt,sourceId:"changed-source-do-not-replay"}});
  assert.equal((await audit(f.request)).baselineLedgerConsistent,false);
+});
+test("10: forged current wallet after valid receipts is never accepted",async()=>{
+ const f=fixture(),path="deda_verified_progress/"+ACCOUNT;
+ const before=structuredClone([...f.docs]);
+ f.docs.set(path,{...f.docs.get(path),balances:{
+   ...f.docs.get(path).balances,earnedDiamonds:99999
+ }});
+ const r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.baselineLedgerConsistent,true);
+ assert.equal(r.cutoverRecordsConsistent,true);
+ assert.equal(r.fullLedgerReconciled,false);
+ assert.ok(r.blockers.includes("FULL_SERVER_RECEIPT_REPLAY_UNVERIFIED"));
+ assert.deepEqual([...before].filter(([k])=>k!==path),
+   [...f.docs].filter(([k])=>k!==path));
+});
+test("11: missing applied receipt or version gap cannot restore XP",async()=>{
+ const f=fixture(),prefix="deda_verified_progress/"+ACCOUNT+"/events/";
+ const earnedId=core.eventKey({
+   format:1,accountKey:ACCOUNT,source:"task-claim-v1",
+   sourceId:"original-task-verified-claim-2026-10-29",kind:"award",
+   delta:{points:5,coins:1,xp:5,earnedDiamonds:0}
+ });
+ const p=prefix+earnedId,doc=f.docs.get(p);
+ f.docs.delete(p);
+ assert.equal((await audit(f.request)).fullLedgerReconciled,false);
+ f.docs.set(p,{...doc,appliedVersion:4});
+ assert.equal((await audit(f.request)).fullLedgerReconciled,false);
+ f.docs.set(p,doc);
+ assert.equal((await audit(f.request)).fullLedgerReconciled,true);
+});
+test("12: tampered independent receipt and event afterBalance fail closed",async()=>{
+ const f=fixture(),key=core.eventKey({
+   format:1,accountKey:ACCOUNT,source:"task-claim-v1",
+   sourceId:"original-task-verified-claim-2026-10-29",kind:"award",
+   delta:{points:5,coins:1,xp:5,earnedDiamonds:0}
+ });
+ const ep="deda_verified_progress/"+ACCOUNT+"/events/"+key,
+       rp="deda_progress_receipts/"+ACCOUNT+"/events/receipt_task_000000000001";
+ const original=f.docs.get(rp);
+ f.docs.set(rp,{...original,sourceId:"tampered"});
+ assert.equal((await audit(f.request)).fullLedgerReconciled,false);
+ f.docs.set(rp,original);
+ f.docs.set(ep,{...f.docs.get(ep),afterBalances:{
+   points:57,coins:6,xp:9999,earnedDiamonds:340}});
+ assert.equal((await audit(f.request)).fullLedgerReconciled,false);
+});
+test("13: no complete enumeration API is never treated as financial proof",async()=>{
+ const f=fixture();
+ delete f.reader.list;
+ const r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.fullLedgerReconciled,false);
+});
+test("14: downstream receipt read outage cannot yield a passed ledger",async()=>{
+ const f=fixture(),previous=f.reader.get;
+ f.reader.get=async path=>{
+   if(path.endsWith("/receipt_spend_00000000001"))
+     throw Error("SERVER_PARTITION");
+   return previous(path);
+ };
+ const r=await audit(f.request);
+ noCredit(r);
+ assert.equal(r.fullLedgerReconciled,false);
 });
 test("05: altered settlement, old-client fence or activation stays on HOLD",async()=>{
  const f=fixture(),root="deda_progress_migrations/"+ACCOUNT;
