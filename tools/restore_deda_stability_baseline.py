@@ -34,6 +34,7 @@ PROGRESS_EVIDENCE_MODULE = 'lib/deda_progress_evidence_store.dart'
 PROGRESS_BACKUP_MODULE = 'lib/deda_progress_backup_coordinator.dart'
 PROGRESS_RUNTIME_MODULE = 'lib/deda_progress_backup_runtime.dart'
 PROGRESS_RESTORE_MODULE = 'lib/deda_cross_device_restore.dart'
+SECOND_PHONE_LINK_MODULE = 'lib/deda_second_phone_link_client.dart'
 LEGACY_PROGRESS_MODULE = 'lib/deda_legacy_progress_capture.dart'
 PURCHASE_EVIDENCE_MODULE = 'lib/deda_legacy_purchase_evidence.dart'
 ADMIN_ADAPTER_MODULE = 'lib/deda_admin_session_firebase_adapter.dart'
@@ -199,6 +200,7 @@ def restore(output, pilot=False, startup_metrics=False, session_gate=False, sess
         shutil.copy2(REPO / PROGRESS_BACKUP_MODULE, output / PROGRESS_BACKUP_MODULE)
     if progress_backup_runtime:
         shutil.copy2(REPO / PROGRESS_RESTORE_MODULE, output / PROGRESS_RESTORE_MODULE)
+        shutil.copy2(REPO / SECOND_PHONE_LINK_MODULE, output / SECOND_PHONE_LINK_MODULE)
         shutil.copy2(REPO / PROGRESS_RUNTIME_MODULE, output / PROGRESS_RUNTIME_MODULE)
         main_path = output / 'lib/main.dart'
         main_path.write_text(bind_progress_backup(main_path.read_text(),
