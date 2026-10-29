@@ -140,7 +140,7 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
  // TEST DIAGNOSTIC: disposable emulator-only identities; never real user data.
  const base='http://127.0.0.1:8080/v1/projects/'+PROJECT+'/databases/(default)/documents/';
  const inspect=async path=>{
-  const response=await fetch(base+path);
+  const response=await fetch(base+path,{headers:{Authorization:'Bearer owner'}});
   if(!response.ok)throw Error('QA_EMULATOR_PROOF_NOT_READABLE_'+path);
   const data=await response.json();
   return data.fields||{};
