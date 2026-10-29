@@ -70,6 +70,45 @@ enum DedaSecondPhoneLinkStatus {
   alreadyLinkedAwaitingSettlement,
 }
 
+/// A verified server projection, never a local spendable wallet, rank award,
+/// purchase receipt or authority to overwrite DEDA's original preferences.
+class DedaVerifiedReadonlyProgress {
+  const DedaVerifiedReadonlyProgress({
+    required this.version, required this.points, required this.coins,
+    required this.xp, required this.earnedDiamonds,
+  });
+  final int version, points, coins, xp, earnedDiamonds;
+  static DedaVerifiedReadonlyProgress parse(Object? source) {
+    if (source is! Map || source.length != 8 ||
+        source['format'] != 1 ||
+        source['spendable'] != false ||
+        source['entitlementsVerified'] != false) {
+      throw const FormatException('unsafe-verified-progress');
+    }
+    int requireAmount(String key, {bool positive = false}) {
+      final value = source[key];
+      if (value is! int || value < (positive ? 1 : 0) ||
+          value > 9007199254740991) {
+        throw const FormatException('unsafe-verified-progress-amount');
+      }
+      return value;
+    }
+    return DedaVerifiedReadonlyProgress(
+      version: requireAmount('version', positive: true),
+      points: requireAmount('points'),
+      coins: requireAmount('coins'),
+      xp: requireAmount('xp'),
+      earnedDiamonds: requireAmount('earnedDiamonds'),
+    );
+  }
+}
+
+class DedaSecondPhoneVerifiedLink {
+  const DedaSecondPhoneVerifiedLink(this.status, this.progress);
+  final DedaSecondPhoneLinkStatus status;
+  final DedaVerifiedReadonlyProgress progress;
+}
+
 class DedaSecondPhoneLinkClient {
   const DedaSecondPhoneLinkClient(this.transport);
   final DedaSecondPhoneLinkTransport transport;
@@ -77,6 +116,10 @@ class DedaSecondPhoneLinkClient {
   /// No account, original UID, PIN, installId, balances or league XP is
   /// transmitted. Firebase Auth adds the authenticated UID automatically.
   Future<DedaSecondPhoneLinkStatus> link({
+    required bool Function() isCurrent,
+  }) async => (await linkAndReadVerifiedProgress(isCurrent: isCurrent)).status;
+
+  Future<DedaSecondPhoneVerifiedLink> linkAndReadVerifiedProgress({
     required bool Function() isCurrent,
   }) async {
     if (!transport.emulatorConfigured) {
@@ -96,7 +139,7 @@ class DedaSecondPhoneLinkClient {
     check(uid);
     final reply = await transport.linkWithoutClientAccountDetails();
     check(uid);
-    if (reply.length != 10 ||
+    if (reply.length != 11 ||
         reply['status'] != 'ACCOUNT_LINKED_READONLY_EMULATOR_ONLY' ||
         reply['emulatorOnly'] != true ||
         reply['replayed'] is! bool ||
@@ -109,8 +152,14 @@ class DedaSecondPhoneLinkClient {
         reply['productionReady'] != false) {
       throw const FormatException('unsafe-private-link-reply');
     }
-    return reply['replayed'] == true
-        ? DedaSecondPhoneLinkStatus.alreadyLinkedAwaitingSettlement
-        : DedaSecondPhoneLinkStatus.linkedAwaitingSettlement;
+    final progress = DedaVerifiedReadonlyProgress.parse(
+        reply['verifiedProgress']);
+    check(uid);
+    return DedaSecondPhoneVerifiedLink(
+      reply['replayed'] == true
+          ? DedaSecondPhoneLinkStatus.alreadyLinkedAwaitingSettlement
+          : DedaSecondPhoneLinkStatus.linkedAwaitingSettlement,
+      progress,
+    );
   }
 }
