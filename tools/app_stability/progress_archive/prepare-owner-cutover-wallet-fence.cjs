@@ -114,11 +114,11 @@ function prepareCutoverWalletFenceRules(source){
    const index=fenced.indexOf(marker);
    if(index<0||fenced.indexOf(marker,index+marker.length)>=0)
      throw Error("DEDA_ACCOUNT_PATH_DRIFT:"+marker);
-   const finish=fenced.indexOf("\\n    match /",index+marker.length);
+   const finish=fenced.indexOf("\n    match /",index+marker.length);
    if(finish<0)throw Error("DEDA_ACCOUNT_END_DRIFT:"+marker);
    let chunk=fenced.slice(index,finish);
    for(const [anchor,condition] of scopes){
-     chunk=exactlyOnce(chunk,anchor,anchor+"\\n        && "+condition);
+     chunk=exactlyOnce(chunk,anchor,anchor+"\n        && "+condition);
    }
    fenced=fenced.slice(0,index)+chunk+fenced.slice(finish);
  }
