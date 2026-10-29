@@ -57,7 +57,8 @@ class DedaCrossDeviceRestore {
     // Collect genuine same-account archive records, but never infer
     // authoritative balances from their arrival order.
     final foreign = entries.where((e) =>
-        e.sourceUid != owner.user.uid &&
+        (e.sourceUid != owner.user.uid ||
+         e.installId != owner.installId) &&
         e.capture.accountKey == accountKey).toList(growable: false);
     if (foreign.isEmpty) {
       return const DedaRecoveryStage(
@@ -65,7 +66,10 @@ class DedaCrossDeviceRestore {
           captureId: null);
     }
 
-    final distinctSources = foreign.map((e) => e.sourceUid).toSet();
+    // One Firebase UID may be reused on a replacement installation; its
+    // install identity is part of source provenance, not an auth credential.
+    final distinctSources = foreign
+        .map((e) => '${e.sourceUid}/${e.installId}').toSet();
     if (distinctSources.length != 1) {
       return const DedaRecoveryStage(
           status: DedaRecoveryStageStatus.multipleSourcesRequireReview,
@@ -81,14 +85,17 @@ class DedaCrossDeviceRestore {
         accountKey: accountKey, isCurrent: isCurrent, limit: 20);
       check();
       if (purchases.any((p) =>
-          p.sourceUid != owner.user.uid &&
-          p.sourceUid != selected.sourceUid)) {
+          (p.sourceUid != owner.user.uid ||
+           p.installId != owner.installId) &&
+          (p.sourceUid != selected.sourceUid ||
+           p.installId != selected.installId))) {
         return const DedaRecoveryStage(
             status: DedaRecoveryStageStatus.multipleSourcesRequireReview,
             captureId: null);
       }
       final linked = purchases.where((p) =>
         p.sourceUid == selected.sourceUid &&
+        p.installId == selected.installId &&
         p.progressCaptureId == selected.captureId).toList(growable: false);
       // Never pick one of multiple purported purchase states silently.
       if (linked.length > 1) {
