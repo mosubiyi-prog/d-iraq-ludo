@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {initializeTestEnvironment, assertFails, assertSucceeds}
   from '@firebase/rules-unit-testing';
-import {doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp}
+import {doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp}
   from 'firebase/firestore';
 
 /**
@@ -185,4 +185,30 @@ test('09 original personal GM wallet cannot be debited by old UID after cutover'
  await activateServerFences();
  await assertFails(updateDoc(doc(first,gmWallet),{
    balance:999000,updatedAt:serverTimestamp()}));
+});
+
+test('10 old phone cannot edit trusted install IDs or profile while new phone can',async()=>{
+ await activateServerFences();
+ const path='deda_account_profiles/'+ACCOUNT;
+ await assertFails(updateDoc(doc(first,path),{
+   trustedInstallIds:[oldInstall,'stolen-copied-install'],
+   updatedAt:serverTimestamp()}));
+ await assertSucceeds(updateDoc(doc(second,path),{
+   name:'verified new phone',updatedAt:serverTimestamp()}));
+ assert.equal((await assertSucceeds(getDoc(doc(second,path)))).data().name,
+   'verified new phone');
+});
+test('11 old phone cannot disable original permanent personal identifier after cutover',async()=>{
+ await activateServerFences();
+ const path='deda_share_ids/'+ORIGINAL;
+ await assertFails(updateDoc(doc(first,path),{
+   active:false,updatedAt:serverTimestamp()}));
+ const id=await assertSucceeds(getDoc(doc(second,path)));
+ assert.equal(id.data().active,true);
+});
+test('12 old phone cannot delete its session as an indirect post-cutover write',async()=>{
+ await activateServerFences();
+ await assertFails(deleteDoc(doc(first,'deda_sessions/'+OLD)));
+ assert.equal((await assertSucceeds(
+   getDoc(doc(first,'deda_sessions/'+OLD)))).exists(),true);
 });
