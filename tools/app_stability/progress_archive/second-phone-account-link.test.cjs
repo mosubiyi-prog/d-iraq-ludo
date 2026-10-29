@@ -87,6 +87,32 @@ test("repeating same link is idempotent and cannot overwrite it",async()=>{
  assert.equal(f.writes.length,2);
  await assert.rejects(link({...f.args,linkId:"second_device_account_link_002"}),/EXISTING_LINK_CONFLICT/);
 });
+test("a second device cannot hijack the currently fenced wallet writer",async()=>{
+ const f=fixture(),path="deda_migration_spend_authority/@DEDA-ABC123";
+ await link(f.args);
+ f.docs.set(path,{...f.docs.get(path),activeUid:O});
+ await assert.rejects(link(f.args),/CONFLICTING_OLD_WRITER_FENCE/);
+ assert.deepEqual(f.writes,[
+   "deda_private_second_phone_links/"+N,path,
+ ]);
+});
+test("linked account cannot silently continue when writer fence disappears",async()=>{
+ const f=fixture(),path="deda_migration_spend_authority/@DEDA-ABC123";
+ await link(f.args);
+ f.docs.delete(path);
+ await assert.rejects(link(f.args),/LINK_WITHOUT_WRITER_FENCE/);
+ assert.equal(f.writes.length,2);
+});
+test("existing competing account writer fence refuses new canonical link",async()=>{
+ const f=fixture(),path="deda_migration_spend_authority/@DEDA-ABC123";
+ f.docs.set(path,{
+   format:1,publicId:"@DEDA-ABC123",originalUid:O,activeUid:"different_new_phone_uid",
+   status:"new-device-exclusive",protocol:"deda-verified-progress-v1",
+   migrationId:M,deploymentRevision:"deployment_revision_000001",createdAt:T,
+ });
+ await assert.rejects(link(f.args),/CONFLICTING_OLD_WRITER_FENCE/);
+ assert.deepEqual(f.writes,[]);
+});
 test("additional XP and task points preserve original canonical link",async()=>{
  const f=fixture();
  await link(f.args);
