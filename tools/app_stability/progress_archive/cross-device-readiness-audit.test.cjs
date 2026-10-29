@@ -10,7 +10,13 @@ process.env.DEDA_RESTORE_AUDIT_EMULATOR_ONLY="true";
 process.env.FIRESTORE_EMULATOR_HOST="127.0.0.1:8080";
 
 const ACCOUNT="07701234567",OLD="verified_old_phone_uid_0001",NEXT="verified_second_phone_uid_0002";
-const DIGEST="a".repeat(64);
+const DIGEST="a".repeat(64),ENFORCE="b".repeat(64),REVIEW="c".repeat(64);
+const MIGRATION_ID="migration_reference_000001";
+const SETTLEMENT_ID="settlement_reference_000001";
+const FENCE_ID="original_legacy_fence_000001";
+const POLICY_ID="owner_policy_revision_000001";
+const REVISION_ID="deployment_revision_000001";
+const stamp={seconds:100,nanoseconds:0};
 function fixture(){
  const docs=new Map(),calls=[];
  const receipt={format:1,accountKey:ACCOUNT,source:"legacy-baseline-v1",
@@ -22,15 +28,43 @@ function fixture(){
  docs.set("deda_account_profiles/"+ACCOUNT,{accountKey:ACCOUNT,name:"Private fixture"});
  docs.set("users/"+OLD,{accountKey:ACCOUNT,xp:2200,diamonds:340});
  docs.set("users/"+NEXT,{accountKey:ACCOUNT,xp:0,diamonds:0});
- docs.set("deda_progress_migrations/"+ACCOUNT,{accountKey:ACCOUNT,
-  migrationId:"migration_reference_000001",settlementId:"settlement_reference_000001",
+ const root="deda_progress_migrations/"+ACCOUNT;
+ docs.set(root,{format:1,accountKey:ACCOUNT,
+  migrationId:MIGRATION_ID,settlementId:SETTLEMENT_ID,
   phase:"cutover-complete",evidenceDigest:DIGEST,baselineEventKey:key});
  docs.set("deda_verified_progress/"+ACCOUNT,{format:1,accountKey:ACCOUNT,
   version:2,initializedBy:key,
   balances:{points:70,coins:6,xp:2210,earnedDiamonds:330}});
- docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+key,receipt);
+ const receiptId="baseline_"+key;
+ docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+receiptId,receipt);
  docs.set("deda_verified_progress/"+ACCOUNT+"/events/"+key,{
-  format:1,accountKey:ACCOUNT,eventKey:key,receipt,appliedVersion:1});
+  format:1,accountKey:ACCOUNT,eventKey:key,receiptId,receipt,
+  appliedVersion:1,afterBalances:{...receipt.delta},createdAt:stamp});
+ docs.set(root+"/settlements/"+SETTLEMENT_ID,{
+  format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
+  baselineEventKey:key,legacyFenceId:FENCE_ID,
+  pendingPurchases:0,pendingReservations:0});
+ docs.set(root+"/settlementReviews/"+SETTLEMENT_ID,{
+  format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
+  baselineEventKey:key,settlementId:SETTLEMENT_ID,legacyFenceId:FENCE_ID,
+  policyRevision:POLICY_ID,operationReviewDigest:REVIEW,createdAt:stamp,
+  status:"resolved",decision:"preserve-reviewed-balances-and-carried-rights",
+  pendingPurchases:0,pendingReservations:0});
+ docs.set("deda_progress_migrations/_policy/settings/verified-cutover-v1",{
+  format:1,enabled:true,revision:REVISION_ID,
+  protocol:"deda-verified-progress-v1",enforcementRevision:ENFORCE,
+  clientBound:true,providersReady:true,atomicPurchasesReady:true});
+ docs.set(root+"/fences/"+FENCE_ID,{
+  format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
+  originalId:"@DEDA-ABC123",legacyFenceId:FENCE_ID,
+  protocol:"deda-verified-progress-v1",deploymentRevision:REVISION_ID,
+  enforcementRevision:ENFORCE,status:"enforced",createdAt:stamp});
+ docs.set(root+"/activations/"+MIGRATION_ID,{
+  format:1,accountKey:ACCOUNT,migrationId:MIGRATION_ID,evidenceDigest:DIGEST,
+  baselineEventKey:key,settlementId:SETTLEMENT_ID,receiptId,
+  operationReviewDigest:REVIEW,legacyFenceId:FENCE_ID,
+  deploymentRevision:REVISION_ID,enforcementRevision:ENFORCE,
+  policyRevision:POLICY_ID,createdAt:stamp});
  const reader={get:async path=>{
    calls.push(path);
    return docs.has(path)?docs.get(path):null;
@@ -72,13 +106,14 @@ test("02: complete synthetic canonical progress, still NO wallet or XP transfer"
  assert.equal(r.reviewedMigrationPresent,true);
  assert.equal(r.baselineLedgerConsistent,true);
  assert.deepEqual([...f.docs],before);
- assert.equal(f.calls.length,8);
+ assert.equal(f.calls.length,13);
+ assert.equal(r.cutoverRecordsConsistent,true);
  assert.ok(r.blockers.includes("OLD_APK_FINANCIAL_WRITER_NOT_SERVER_FENCED"));
  assert.ok(r.blockers.includes("PAYMENT_GIFT_FRAME_AND_PREMIUM_ID_PROOFS_NOT_SETTLED"));
 });
 test("03: changed baseline receipt payload cannot be blessed by existing event key",async()=>{
  const f=fixture();
- f.docs.set("deda_progress_receipts/"+ACCOUNT+"/events/"+f.key,{
+ f.docs.set("deda_progress_receipts/"+ACCOUNT+"/events/baseline_"+f.key,{
   ...f.receipt,delta:{...f.receipt.delta,earnedDiamonds:999999}});
  const r=await audit(f.request);
  noCredit(r);assert.equal(r.baselineLedgerConsistent,false);
