@@ -46,6 +46,7 @@ jobs:
               tools/app_stability/progress_archive/second-phone-account-link.cjs|\
               tools/app_stability/progress_archive/second-phone-account-link.test.cjs|\
               tools/app_stability/progress_archive/second-phone-link-callable.cjs|\
+              tools/app_stability/progress_archive/second-phone-pin-proof-callable.cjs|\
               tools/app_stability/progress_archive/second-phone-link-callable.test.cjs|\
               tools/app_stability/progress_archive/second-phone-entitlements-readonly.cjs|\
               tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs|\
@@ -80,6 +81,7 @@ jobs:
           node --check tools/app_stability/progress_archive/second-phone-account-link.cjs
           node --check tools/app_stability/progress_archive/second-phone-account-link.test.cjs
           node --check tools/app_stability/progress_archive/second-phone-link-callable.cjs
+          node --check tools/app_stability/progress_archive/second-phone-pin-proof-callable.cjs
           node --check tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
           node --check tools/app_stability/progress_archive/second-phone-entitlements-readonly.cjs
           node --check tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs
