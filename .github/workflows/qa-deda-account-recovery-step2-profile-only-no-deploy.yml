@@ -1,0 +1,17 @@
+name: DEDA Step2 Profile Restore Private QA
+on:
+  push:
+    branches: [deda-account-recovery-stage2-profile-safe-restore-no-deploy-2026-10-30]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --check functions/deda_safe_profile_restore_core.js
+      - run: node --test tools/app_stability/account_recovery/step2_safe_profile_restore.test.cjs
