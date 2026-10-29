@@ -1330,3 +1330,7 @@ exports.dedaPremiumResolvePublicRecipient =
 // Owner-reviewed account-security pilot: protected callable, no client cutover.
 exports.dedaSecurePinPreflightV1 =
   require("./deda_secure_pin_gate.js").makeCallableSecurePinGate();
+
+// Step 2 pilot: safe profile-only recovery, no asset / wallet migration.
+exports.dedaSafeProfileRestoreV1 =
+  require("./deda_safe_profile_restore.js").dedaSafeProfileRestoreV1;
