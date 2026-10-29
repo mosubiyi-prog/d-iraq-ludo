@@ -304,19 +304,23 @@ test("12: tampered independent receipt and event afterBalance fail closed",async
  assert.equal((await audit(f.request)).fullLedgerReconciled,false);
 });
 test("13: no complete enumeration API is never treated as financial proof",async()=>{
- const f=fixture();
- delete f.reader.list;
+ const f=fixture(),original=f.reader.runReadOnlyTransaction;
+ f.reader.runReadOnlyTransaction=action=>original(view=>
+   action(Object.freeze({get:view.get})));
  const r=await audit(f.request);
  noCredit(r);
  assert.equal(r.fullLedgerReconciled,false);
 });
 test("14: downstream receipt read outage cannot yield a passed ledger",async()=>{
- const f=fixture(),previous=f.reader.get;
- f.reader.get=async path=>{
-   if(path.endsWith("/receipt_spend_00000000001"))
-     throw Error("SERVER_PARTITION");
-   return previous(path);
- };
+ const f=fixture(),original=f.reader.runReadOnlyTransaction;
+ f.reader.runReadOnlyTransaction=action=>original(view=>action(Object.freeze({
+   list:view.list,
+   get:async path=>{
+     if(path.endsWith("/receipt_spend_00000000001"))
+       throw Error("SERVER_PARTITION");
+     return view.get(path);
+   },
+ })));
  const r=await audit(f.request);
  noCredit(r);
  assert.equal(r.fullLedgerReconciled,false);
