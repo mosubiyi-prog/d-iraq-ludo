@@ -56,7 +56,9 @@ function fixture(){
    accountKey:A,migrationId:M,settlementId:S,baselineEventKey:K,
    deploymentRevision:"deployment_revision_000001",
    enforcementRevision:"c".repeat(64)});
- const ref=path=>({path});
+ const ref=path=>({path,get:async()=>({
+   exists:docs.has(path),data:()=>docs.get(path),
+ })});
  const db={
    doc:ref,
    collection:path=>({orderBy:(k,order)=>{
