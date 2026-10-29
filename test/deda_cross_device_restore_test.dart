@@ -27,6 +27,15 @@ class _Legacy implements DedaLegacyProgressReadStore {
   };
 }
 
+class _ZeroLegacy implements DedaLegacyProgressReadStore {
+  @override
+  Future<Map<String, String?>> readStrings(List<String> keys) async => {
+    keys[0]: '{"points":0}',
+    keys[1]: '{"coins":0,"xp":0}',
+    keys[2]: '{"diamonds":0}',
+  };
+}
+
 class _LegacyPurchases implements DedaLegacyPurchaseReadStore {
   @override
   Future<Map<String, Object?>> readValues(List<String> keys) async => {
@@ -230,7 +239,7 @@ void main() {
     f.useSecondPhone();
     // The application might already have written 0-valued local keys.
     // A server preflight must still detect an old device before upload.
-    final localDefaults = await DedaLegacyProgressReader(_Legacy()).capture(
+    final localDefaults = await DedaLegacyProgressReader(_ZeroLegacy()).capture(
         accountKey: _account, isCurrent: () => true);
     expect(localDefaults.hasAnyLocalRecord, true);
     final stage = await f.stage();
