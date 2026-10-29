@@ -137,6 +137,30 @@ test('4. Correct original DEDA PIN authorizes second Firebase UID to read same i
   lastSeenAt:serverTimestamp(),
  },{merge:true});
  await userRow(b,ACCOUNT,INSTALL_B);
+ // TEST DIAGNOSTIC: disposable emulator-only identities; never real user data.
+ const base='http://127.0.0.1:8080/v1/projects/'+PROJECT+'/databases/(default)/documents/';
+ const inspect=async path=>{
+  const response=await fetch(base+path);
+  if(!response.ok)throw Error('QA_EMULATOR_PROOF_NOT_READABLE_'+path);
+  const data=await response.json();
+  return data.fields||{};
+ };
+ const proof=(await inspect('deda_auth_attempts/'+b.uid));
+ const credential=(await inspect('deda_credentials/'+ACCOUNT));
+ const sessionDocument=(await inspect('deda_sessions/'+b.uid));
+ const userDocument=(await inspect('users/'+b.uid));
+ const created=Date.parse(proof.createdAt?.timestampValue??'');
+ console.log('QA diagnostic second-phone proof checks',JSON.stringify({
+  sourceUidDifferent:a.uid!==b.uid,
+  pinProofAccountMatches:proof.accountKey?.stringValue===ACCOUNT,
+  pinProofMatchesCredential:proof.pin?.stringValue===credential.pin?.stringValue,
+  proofAgeSeconds:(Date.now()-created)/1000,
+  credentialActive:credential.active?.booleanValue===true,
+  sessionMatchesAccount:sessionDocument.accountKey?.stringValue===ACCOUNT,
+  sessionMatchesUid:sessionDocument.uid?.stringValue===b.uid,
+  userMatchesAccount:userDocument.accountKey?.stringValue===ACCOUNT,
+  proofExists:!!proof.createdAt,
+ }));
  const got=await getDoc(ref(b));
  assert.equal(got.exists(),true);
  assert.equal(got.data().sourceUid,a.uid);
