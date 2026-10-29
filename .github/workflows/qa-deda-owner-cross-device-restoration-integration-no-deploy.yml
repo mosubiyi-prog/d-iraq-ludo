@@ -31,6 +31,7 @@ jobs:
           while IFS= read -r p; do
             case "$p" in
               lib/deda_cross_device_restore.dart|\
+              lib/deda_legacy_purchase_evidence.dart|\
               lib/deda_progress_backup_runtime.dart|\
               test/deda_cross_device_restore_test.dart|\
               tools/restore_deda_stability_baseline.py|\
@@ -133,7 +134,7 @@ jobs:
           cp test/deda_weekly_original_public_profile_readonly_test.dart "$TARGET/test/"
           cd "$TARGET"
           flutter pub get --enforce-lockfile
-          dart analyze lib/deda_cross_device_restore.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
+          dart analyze lib/deda_cross_device_restore.dart lib/deda_legacy_purchase_evidence.dart lib/deda_progress_backup_runtime.dart lib/deda_task_signal_bridge.dart lib/deda_task_write_fence.dart
           set +e
           dart analyze --format=machine lib/main.dart lib/deda_social_service.dart \
             > "$RUNNER_TEMP/owner-bundle1-actual-analyzer.txt" 2>&1
