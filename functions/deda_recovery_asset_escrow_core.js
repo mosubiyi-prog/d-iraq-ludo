@@ -127,7 +127,10 @@ async function captureLegacyAccountEscrow({request, db, auth, secret, nowMs = Da
           b.status !== "PIN_VERIFIED_HOLD" ||
           b.canMigrate !== false || b.canRestoreAssets !== false ||
           !Number.isSafeInteger(b.createdAtMs) ||
-          nowMs < b.createdAtMs || nowMs - b.createdAtMs > FRESH_MS ||
+          !Number.isSafeInteger(b.lastVerifiedAtMs ?? b.createdAtMs) ||
+          (b.lastVerifiedAtMs ?? b.createdAtMs) < b.createdAtMs ||
+          nowMs < (b.lastVerifiedAtMs ?? b.createdAtMs) ||
+          nowMs - (b.lastVerifiedAtMs ?? b.createdAtMs) > FRESH_MS ||
           !d || d.active !== true || d.accountKey !== key ||
           typeof d.createdUid !== "string" || !UID.test(d.createdUid) ||
           !p || p.accountKey !== key) fail("UNVERIFIED_OWNER");
