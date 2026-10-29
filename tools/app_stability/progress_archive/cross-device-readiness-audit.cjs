@@ -271,4 +271,4 @@ async function auditCrossDeviceServerReadiness(options){
  },blockers);
  });
 }
-module.exports={auditCrossDeviceServerReadiness};
+module.exports={auditCrossDeviceServerReadiness,replayServerLedger};
