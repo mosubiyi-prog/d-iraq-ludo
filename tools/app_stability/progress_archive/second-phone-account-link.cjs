@@ -166,6 +166,24 @@ async function linkSecondPhoneToCanonicalAccount({
      entitlements=await readOwnedEntitlements(
        {get:path=>tx.get(path)},accountKey,resolution.originalId);
    }catch(_){fail("ENTITLEMENT_OWNERSHIP_RECONCILIATION_REQUIRED");}
+   // The personal DEDA identifier is permanently tied to the ACCOUNT, not
+   // the old anonymous Firebase installation. The second phone must already
+   // have a verified profile and original ID; this is never inferred from
+   // caller-supplied identity, balance, installId or premium ID.
+   const personalIdPath="deda_share_ids/"+resolution.originalId;
+   const [personalIdRoute,newUser]=await Promise.all([
+     get(personalIdPath),get("users/"+newUid),
+   ]);
+   if(personalIdRoute?.publicId!==resolution.originalId||
+      personalIdRoute?.kind!=="personal"||personalIdRoute.active!==true||
+      newUser?.accountKey!==accountKey||
+      newUser?.sharePersonalId!==resolution.originalId||
+      !["string"].includes(typeof personalIdRoute.ownerUid))
+     fail("ORIGINAL_ID_NEW_PHONE_PROFILE_NOT_VERIFIED");
+   // First takeover must still belong to original UID. Repeated same-phone
+   // links must be owned by the linked UID; never override another device.
+   if(personalIdRoute.ownerUid!==(prior===null?oldUid:newUid))
+     fail("ORIGINAL_ID_CONCURRENT_OWNER_TAKEOVER");
    const writerFencePath="deda_migration_spend_authority/"+resolution.originalId;
    const oldWriterFence=await get(writerFencePath);
    const accountFencePath="deda_migration_account_authority/"+accountKey;
@@ -228,6 +246,11 @@ async function linkSecondPhoneToCanonicalAccount({
    tx.set(linkPath,{...payload,digest,createdAt:store.serverTimestamp()});
    tx.set(writerFencePath,{...writerFence,createdAt:store.serverTimestamp()});
    tx.set(accountFencePath,{...accountFence,createdAt:store.serverTimestamp()});
+   // Server-authoritative owner handover; original @DEDA identifier is
+   // preserved, never replaced by a second profile or duplicated.
+   // This is not an entitlement grant and is emulator-guarded.
+   tx.set(personalIdPath,{...personalIdRoute,ownerUid:newUid,
+     updatedAt:store.serverTimestamp()});
    return response(false,progress,entitlements);
  });
 }
