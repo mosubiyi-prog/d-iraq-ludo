@@ -49,6 +49,8 @@ jobs:
               tools/app_stability/progress_archive/second-phone-link-callable.test.cjs|\
               tools/app_stability/progress_archive/second-phone-entitlements-readonly.cjs|\
               tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs|\
+              tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.cjs|\
+              tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.test.cjs|\
               tools/app_stability/progress_archive/qa_second_phone_functions/index.js|\
               tools/app_stability/progress_archive/qa_second_phone_functions/package.json|\
               tools/restore_deda_stability_baseline.py|\
@@ -77,8 +79,10 @@ jobs:
           node --check tools/app_stability/progress_archive/second-phone-link-callable.test.cjs
           node --check tools/app_stability/progress_archive/second-phone-entitlements-readonly.cjs
           node --check tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs
+          node --check tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.cjs
+          node --check tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.test.cjs
           node --check tools/app_stability/progress_archive/qa_second_phone_functions/index.js
-          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs tools/app_stability/progress_archive/second-phone-account-link.test.cjs tools/app_stability/progress_archive/second-phone-link-callable.test.cjs tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs
+          node --test tools/app_stability/progress_archive/cross-device-readiness-audit.test.cjs tools/app_stability/progress_archive/cross-device-readonly-firestore-reader.test.cjs tools/app_stability/progress_archive/second-phone-account-link.test.cjs tools/app_stability/progress_archive/second-phone-link-callable.test.cjs tools/app_stability/progress_archive/second-phone-entitlements-readonly.test.cjs tools/app_stability/progress_archive/prepare-owner-cutover-wallet-fence.test.cjs
           echo "Original DEDA account, league, wallets/IDs, Play and quiz bank unchanged"
   prepare-actual-original-flutter-no-apk:
     needs: protected-original
