@@ -521,8 +521,11 @@ class _DedaWeeklyLeaderboardPageState
                 ],
               )),
           Expanded(flex: 4,
+              // This is the signed-in player's OWN status, never a social
+              // action or a duplicate rank hit target.
               child: identity(viewer,
-                  avatarSize: 35 * scale, compact: false)),
+                  avatarSize: 35 * scale, compact: false,
+                  interactive: false)),
           SizedBox(width: 6 * scale),
           Expanded(flex: 2,
               child: Column(
