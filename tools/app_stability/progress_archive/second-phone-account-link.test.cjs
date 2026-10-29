@@ -102,6 +102,10 @@ test("additional XP and task points preserve original canonical link",async()=>{
  });
  const r=await link(f.args);
  assert.equal(r.replayed,true);
+ assert.equal(r.verifiedProgress.version,2);
+ assert.equal(r.verifiedProgress.xp,30);
+ assert.equal(r.verifiedProgress.earnedDiamonds,400);
+ assert.equal(r.verifiedProgress.spendable,false);
  assert.equal(f.writes.length,1);
  assert.equal(f.docs.get(path).balances.xp,30);
 });
