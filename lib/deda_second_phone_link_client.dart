@@ -103,6 +103,127 @@ class DedaVerifiedReadonlyProgress {
   }
 }
 
+class DedaVerifiedReadonlyEntitlements {
+  const DedaVerifiedReadonlyEntitlements({
+    required this.ownedFrames,required this.ownedCards,
+    required this.ownedPremiumIds,required this.activePremiumId,
+    required this.premiumLedgerStatus,required this.unreviewedNativeFrames,
+    required this.pendingNativeFrames,
+  });
+  final List<String> ownedFrames,ownedCards,ownedPremiumIds;
+  final String? activePremiumId;
+  final String premiumLedgerStatus;
+  final List<String> unreviewedNativeFrames,pendingNativeFrames;
+
+  static const frames=<String>{
+    'FRAME_03','FRAME_05','FRAME_06','FRAME_07','FRAME_08',
+    'FRAME_09','FRAME_10','FRAME_11','FRAME_12','FRAME_13',
+    'FRAME_14','FRAME_15','FRAME_16',
+  };
+  static const cards=<String>{'gold','diamond','royal','pink'};
+  static final premiumId=RegExp(r'^@DEDA-[A-Z0-9]{4,12}
+  const DedaSecondPhoneVerifiedLink(this.status, this.progress, this.entitlements);
+  final DedaSecondPhoneLinkStatus status;
+  final DedaVerifiedReadonlyProgress progress;
+  final DedaVerifiedReadonlyEntitlements entitlements;
+}
+
+class DedaSecondPhoneLinkClient {
+  const DedaSecondPhoneLinkClient(this.transport);
+  final DedaSecondPhoneLinkTransport transport;
+
+  /// No account, original UID, PIN, installId, balances or league XP is
+  /// transmitted. Firebase Auth adds the authenticated UID automatically.
+  Future<DedaSecondPhoneLinkStatus> link({
+    required bool Function() isCurrent,
+  }) async => (await linkAndReadVerifiedProgress(isCurrent: isCurrent)).status;
+
+  Future<DedaSecondPhoneVerifiedLink> linkAndReadVerifiedProgress({
+    required bool Function() isCurrent,
+  }) async {
+    if (!transport.emulatorConfigured) {
+      throw StateError('private-second-phone-emulator-required');
+    }
+    void check(String uid) {
+      if (!isCurrent() ||
+          !transport.isAnonymous ||
+          transport.currentUid != uid) {
+        throw const DedaStaleSessionTransition();
+      }
+    }
+    final uid = transport.currentUid;
+    if (uid == null || uid.isEmpty || !transport.isAnonymous) {
+      throw const DedaStaleSessionTransition();
+    }
+    check(uid);
+    final reply = await transport.linkWithoutClientAccountDetails();
+    check(uid);
+    if (reply.length != 12 ||
+        reply['status'] != 'ACCOUNT_LINKED_READONLY_EMULATOR_ONLY' ||
+        reply['emulatorOnly'] != true ||
+        reply['replayed'] is! bool ||
+        reply['canRestoreFinancialBalances'] != false ||
+        reply['canCreditXp'] != false ||
+        reply['canCreditDiamonds'] != false ||
+        reply['canRestoreFrames'] != false ||
+        reply['canRestorePremiumId'] != false ||
+        reply['canIssueLeagueGift'] != false ||
+        reply['productionReady'] != false) {
+      throw const FormatException('unsafe-private-link-reply');
+    }
+    final progress = DedaVerifiedReadonlyProgress.parse(
+        reply['verifiedProgress']);
+    final entitlements = DedaVerifiedReadonlyEntitlements.parse(reply['verifiedEntitlements']);
+    check(uid);
+    return DedaSecondPhoneVerifiedLink(
+      reply['replayed'] == true
+          ? DedaSecondPhoneLinkStatus.alreadyLinkedAwaitingSettlement
+          : DedaSecondPhoneLinkStatus.linkedAwaitingSettlement,
+      progress,
+      entitlements,
+    );
+  }
+}
+);
+
+  static DedaVerifiedReadonlyEntitlements parse(Object? raw) {
+    if(raw is! Map||raw.length!=12||raw['format']!=1||
+        raw['readOnly']!=true||raw['spendable']!=false||
+        raw['grantAuthority']!=false||raw['fullySettled']!=false||
+        !{'registry-confirmed','missing-needs-review'}
+          .contains(raw['premiumLedgerStatus'])) {
+      throw const FormatException('unsafe-entitlement-payload');
+    }
+    List<String> list(String key,bool Function(String) accept,int max) {
+      final value=raw[key];
+      if(value is! List||value.length>max||
+          value.any((v)=>v is! String||!accept(v))||
+          value.toSet().length!=value.length) {
+        throw const FormatException('unsafe-entitlement-list');
+      }
+      return List<String>.unmodifiable(value.cast<String>());
+    }
+    final ownedFrames=list('ownedFrames',frames.contains,13);
+    final ownedCards=list('ownedCards',cards.contains,4);
+    final ownedIds=list('ownedPremiumIds',premiumId.hasMatch,249);
+    final unreviewed=list('unreviewedNativeFrames',frames.contains,13);
+    final pending=list('pendingNativeFrames',frames.contains,13);
+    final active=raw['activePremiumId'];
+    final status=raw['premiumLedgerStatus'] as String;
+    if((active!=null&&(active is! String||!premiumId.hasMatch(active)))||
+       (active!=null&&!ownedIds.contains(active))||
+       (status=='missing-needs-review'&&(ownedIds.isNotEmpty||active!=null))||
+       unreviewed.any(ownedFrames.contains)) {
+      throw const FormatException('entitlement-proof-contradiction');
+    }
+    return DedaVerifiedReadonlyEntitlements(
+      ownedFrames:ownedFrames,ownedCards:ownedCards,ownedPremiumIds:ownedIds,
+      activePremiumId:active as String?,premiumLedgerStatus:status,
+      unreviewedNativeFrames:unreviewed,pendingNativeFrames:pending,
+    );
+  }
+}
+
 class DedaSecondPhoneVerifiedLink {
   const DedaSecondPhoneVerifiedLink(this.status, this.progress);
   final DedaSecondPhoneLinkStatus status;
