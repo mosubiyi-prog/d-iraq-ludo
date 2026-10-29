@@ -58,6 +58,17 @@ test("repeating same link is idempotent and cannot overwrite it",async()=>{
  assert.equal(f.writes.length,1);
  await assert.rejects(link({...f.args,linkId:"second_device_account_link_002"}),/EXISTING_LINK_CONFLICT/);
 });
+test("additional XP and task points preserve original canonical link",async()=>{
+ const f=fixture();
+ await link(f.args);
+ const path="deda_verified_progress/"+A;
+ f.docs.set(path,{...f.docs.get(path),version:2,balances:{
+   points:10,coins:2,xp:30,earnedDiamonds:400}});
+ const r=await link(f.args);
+ assert.equal(r.replayed,true);
+ assert.equal(f.writes.length,1);
+ assert.equal(f.docs.get(path).balances.xp,30);
+});
 test("missing server PIN proof for either device denies link",async()=>{
  for(const uid of [O,N]){
   const f=fixture();f.docs.delete("deda_stage54_private_account_bindings/"+uid);
