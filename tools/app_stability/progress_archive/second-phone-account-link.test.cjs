@@ -18,6 +18,10 @@ function fixture(){
  const root="deda_progress_migrations/"+A;
  docs.set("deda_account_directory/"+A,{accountKey:A,active:true,createdUid:O});
  docs.set("deda_account_profiles/"+A,{accountKey:A});
+ docs.set("deda_share_ids/"+ORIGINAL,{
+   publicId:ORIGINAL,kind:"personal",active:true,ownerUid:O,
+ });
+ docs.set("users/"+O,{accountKey:A,sharePersonalId:ORIGINAL});
  for(const uid of [O,N])docs.set("deda_stage54_private_account_bindings/"+uid,{
   uid,accountKey:A,authProvider:"anonymous",state:"LOCAL_VERIFIED_HOLD_ONLY",
   emulatorOnly:true,canMigrate:false,canGrant:false,createdAt:T});
