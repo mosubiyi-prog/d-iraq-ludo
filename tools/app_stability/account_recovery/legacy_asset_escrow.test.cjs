@@ -149,6 +149,14 @@ test("5: expired proof, wrong account and forged UID never authorize snapshots",
   await denied(call(f, mismatched));
   assert.equal(f.db.writes.length, 0);
 });
+test("16: renewed server PIN proof permits later escrow after original window expiry", async () => {
+  const f = fixture();
+  const binding = f.db.read("deda_secure_account_bindings/" + NEW);
+  binding.lastVerifiedAtMs = NOW + FRESH_MS + 1000;
+  const out = await call(f, request(), NOW + FRESH_MS + 1500);
+  assert.equal(out.status, "LEGACY_SNAPSHOT_ESCROWED_NO_TRANSFER");
+  assert.equal(out.fullRecoveryComplete, false);
+});
 test("6: target UID bound to another account cannot receive an escrow", async () => {
   const f = fixture();
   f.db.seed("users/" + NEW, {accountKey: "07777777777"});
