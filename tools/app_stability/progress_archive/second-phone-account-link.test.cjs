@@ -85,6 +85,17 @@ test("additional XP and task points preserve original canonical link",async()=>{
  const path="deda_verified_progress/"+A;
  f.docs.set(path,{...f.docs.get(path),version:2,balances:{
    points:10,coins:2,xp:30,earnedDiamonds:400}});
+ const earned={format:1,accountKey:A,source:"task-claim-v1",
+  sourceId:"verified_second_task_claim_0001",kind:"award",
+  delta:{points:5,coins:0,xp:5,earnedDiamonds:0}};
+ const nextKey=core.eventKey(earned),receiptId="verified_task_receipt_000001";
+ f.docs.set("deda_progress_receipts/"+A+"/events/"+receiptId,earned);
+ f.docs.set("deda_verified_progress/"+A+"/events/"+nextKey,{
+   format:1,accountKey:A,eventKey:nextKey,receiptId,
+   receipt:earned,appliedVersion:2,afterBalances:{
+     points:10,coins:2,xp:30,earnedDiamonds:400,
+   },createdAt:T,
+ });
  const r=await link(f.args);
  assert.equal(r.replayed,true);
  assert.equal(f.writes.length,1);
