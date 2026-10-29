@@ -115,6 +115,9 @@ test("02 change phone UID but preserve account => same score, position and parti
  await put("deda_migration_account_authority/"+a.key,{
    accountKey:a.key,originalUid:a.uid,activeUid:newUid,
    status:"new-device-exclusive"});
+ await put("deda_private_second_phone_links/"+newUid,{
+   accountKey:a.key,oldUid:a.uid,newUid,emulatorOnly:true,
+   mode:"readonly-account-link-v1"});
  await put("deda_migration_spend_authority/"+a.oid,{
    publicId:a.oid,originalUid:a.uid,activeUid:newUid,
    status:"new-device-exclusive"});
@@ -169,4 +172,33 @@ test("06 cannot convert old local task booleans, manager bonus or raw XP into le
  await assert.rejects(project({db,backendSecret:SECRET,
   firstOpenMs:FIRST,weekIndex:0,serverNowMs:FROZEN,
   clientXp:1000000}),/CLIENT_SCORE_OR_PHONE_OVERRIDE/);
+});
+
+test("07 earlier week's real XP remains in original account but cannot be re-awarded in current ranking",async()=>{
+ const oldWeekTaskTime=FIRST-24*60*60*1000;
+ const a=await enroll(++seedCount,{tasks:["open_map"],when:oldWeekTaskTime});
+ await roster([a.key]);
+ const oldView=await projection();
+ assert.equal(oldView.rows.length,0);
+ assert.equal((await get("deda_verified_progress/"+a.key)).balances.xp,20);
+});
+test("08 altered canonical second-phone pointer blocks score even with both matching fences",async()=>{
+ const a=await enroll(++seedCount,{tasks:["open_map"]});
+ await roster([a.key]);
+ const otherUid="second_qa_user_link_"+seedCount;
+ await put("users/"+otherUid,{accountKey:a.key,sharePersonalId:a.oid});
+ await put("deda_share_ids/"+a.oid,{kind:"personal",publicId:a.oid,
+  active:true,ownerUid:otherUid});
+ await put("deda_migration_account_authority/"+a.key,{
+   accountKey:a.key,originalUid:a.uid,activeUid:otherUid,
+   status:"new-device-exclusive"});
+ await put("deda_migration_spend_authority/"+a.oid,{
+   publicId:a.oid,originalUid:a.uid,activeUid:otherUid,
+   status:"new-device-exclusive"});
+ await assert.rejects(projection(),/UNAUTHORIZED_PHONE_HANDOVER/);
+ await put("deda_private_second_phone_links/"+otherUid,{
+   accountKey:a.key,oldUid:a.uid,newUid:otherUid,
+   mode:"readonly-account-link-v1",emulatorOnly:true});
+ const good=await projection();
+ assert.equal(good.rows[0].weeklyPoints,20);
 });
