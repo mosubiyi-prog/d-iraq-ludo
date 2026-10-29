@@ -1,0 +1,82 @@
+name: DEDA 100396 Point1 ORIGINAL Task XP to League QA - NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100396-point1-original-task-xp-canonical-league-no-deploy-2026-10-30
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100396-point1-real-task-xp-qa-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  original-task-source-and-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GCLOUD_PROJECT: demo-deda-restore-readiness
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      DEDA_CANONICAL_LEAGUE_EMULATOR_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Strictly protect exact 100396 UI task logic wallets Firebase rules and APK builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=79b2455dd2ab6efb94219b3f4f68276c39ae139d
+          git cat-file -e "$BASE^{commit}"
+          git diff --quiet "$BASE" HEAD -- lib/ android/ assets/ pubspec.yaml pubspec.lock firebase.json firestore.rules storage.rules functions/index.js functions/package.json tools/app_stability/app_package/
+          git diff --name-only "$BASE" HEAD > /tmp/deda-point1-changed-paths.txt
+          while IFS= read -r path; do
+            case "$path" in
+              functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js|functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js|functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js|tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs|tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs|.github/workflows/qa-deda-100396-point1-original-task-xp-no-deploy.yml|docs/DEDA_100396_POINT1_ORIGINAL_TASK_XP_LEAGUE_QA_2026-10-30.md) ;;
+              *) echo "UNEXPECTED CHANGE: $path"; exit 1;;
+            esac
+          done < /tmp/deda-point1-changed-paths.txt
+          echo 'Original owner-approved 100396 app remains unchanged'
+      - name: Parse original-source scoreboard modules and test
+        run: |
+          node --check functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js
+          node --check functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js
+          node --check functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js
+          node --check tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs
+          node --check tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs
+      - name: Exact signed 100396 source contract, eight tasks, no XP or wallet edits
+        run: node --test tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs
+      - name: Install disposable local Firestore emulator
+        run: npm install --prefix tests/firestore-rules --no-save --no-audit --no-fund firebase-admin@13 firebase-tools@14
+      - name: Real local Firestore canonical XP receipts to weekly ranking
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          fs.copyFileSync('firestore.rules','/tmp/deda-100396-point1-original.rules');
+          fs.writeFileSync('/tmp/deda-100396-point1.firebase.json',JSON.stringify({
+            firestore:{rules:'/tmp/deda-100396-point1-original.rules'},
+            emulators:{firestore:{host:'127.0.0.1',port:8080},ui:{enabled:false}}
+          }));
+          NODE
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --config /tmp/deda-100396-point1.firebase.json \
+            --project demo-deda-restore-readiness --only firestore \
+            'node --test tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs'
+      - name: Safety scope reminder
+        run: |
+          echo 'ONLY score PROJECTION from already applied server receipts with separate proofs.'
+          echo 'No production task-proof issuers; no real published league standings or prize grants.'
+          echo 'No original app source changes; NO APK/AAB, Cloud Functions, Firebase Rules or Play deployment.'
