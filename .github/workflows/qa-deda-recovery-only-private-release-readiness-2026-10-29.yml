@@ -1,0 +1,89 @@
+name: DEDA recovery-only private APK PRE-FLIGHT NO APK NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-restoration-private-build-first-separate-from-weekly-no-play-2026-10-29
+    paths:
+      - '.github/workflows/qa-deda-recovery-only-private-release-readiness-2026-10-29.yml'
+      - 'docs/DEDA_RESTORATION_PRIVATE_APK_FIRST_RELEASE_GATE_2026-10-29.md'
+      - 'lib/deda_cross_device_restore.dart'
+      - 'lib/deda_progress_backup_runtime.dart'
+      - 'lib/deda_second_phone_link_client.dart'
+      - 'tools/app_stability/app_package/prepare.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-recovery-only-preflight-no-apk
+  cancel-in-progress: true
+jobs:
+  safe-recovery-only-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Protect live Firestore, original production app and signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 37b6cf6080afd8eea442cd0b8f1b561420b3bd89 -- \
+            functions/index.js firestore.rules firebase.json \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            android/ assets/ pubspec.yaml
+          echo 'PASS stable source and production Firebase unchanged'
+      - name: Reconstruct ORIGINAL recovery-only candidate without league overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-owner-recovery-only-no-apk"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$TARGET"
+          python3 tools/app_stability/app_package/prepare.py "$TARGET" --variant candidate
+          TARGET="$TARGET" python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ['TARGET'])
+          settings=json.loads((root/'internal-build-inputs.json').read_text())
+          assert settings['completeOwnerDelivery'] is False
+          assert settings['financialRestoreEnabled'] is False
+          assert settings['productionExecutionPerformed'] is False
+          for filename in ('deda_cross_device_restore.dart',
+                           'deda_progress_backup_runtime.dart',
+                           'deda_second_phone_link_client.dart'):
+              assert (root/'lib'/filename).is_file(),filename
+          main=(root/'lib/main.dart').read_text()
+          assert 'DedaProgressBackupHost' in main
+          assert 'DEDA_STABILITY_PROGRESS_BACKUP_PILOT' in (root/'lib/deda_progress_backup_runtime.dart').read_text()
+          assert 'DEDA_PRIVATE_SECOND_PHONE_LINK_EMULATOR_PILOT' in (root/'lib/deda_second_phone_link_client.dart').read_text()
+          # The weekly stage 13-61 app overlay is deliberately NOT applied.
+          assert not (root/'internal-build-inputs.json').read_text().count('"weeklyStage61"')
+          print('PASS separate recovery-only application source, not a complete release')
+          PY
+      - name: Flutter recovery unit and source compatibility, never produce APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="$RUNNER_TEMP/deda-owner-recovery-only-no-apk"
+          cp test/deda_cross_device_restore_test.dart "$TARGET/test/"
+          cp test/deda_second_phone_link_client_test.dart "$TARGET/test/"
+          cd "$TARGET"
+          flutter pub get --enforce-lockfile
+          dart analyze lib/deda_cross_device_restore.dart lib/deda_second_phone_link_client.dart lib/deda_progress_backup_runtime.dart
+          flutter test --no-pub test/deda_cross_device_restore_test.dart test/deda_second_phone_link_client_test.dart
+          test -z "$(find "$TARGET" -type f \( -name '*.apk' -o -name '*.aab' \) -print -quit)"
+          echo 'PASS no league overlay, no APK, no Firebase deploy. Financial restore explicitly DISABLED.'
+      - name: Explicit COMPLETE-RESTORATION release hold
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'NO-GO for representing any output as a COMPLETE recovery APK' \
+            docs/DEDA_RESTORATION_PRIVATE_APK_FIRST_RELEASE_GATE_2026-10-29.md
+          echo 'This source-only check does NOT certify production account ownership.'
+          echo 'Need approved production backend, AppCheck, legacy writer fence, receipts and 2 real phones before COMPLETE recovery APK.'
