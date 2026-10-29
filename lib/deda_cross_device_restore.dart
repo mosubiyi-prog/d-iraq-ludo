@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_legacy_progress_capture.dart';
+import 'deda_legacy_purchase_evidence.dart';
 import 'deda_progress_evidence_store.dart';
 import 'deda_session_transition_gate.dart';
 
@@ -18,10 +19,12 @@ class DedaCrossDeviceRestore {
   DedaCrossDeviceRestore({
     required this.archive,
     required this.local,
+    this.purchaseArchive,
   });
 
   final DedaProgressEvidenceStore archive;
   final DedaRecoveryLocalStore local;
+  final DedaLegacyPurchaseEvidenceStore? purchaseArchive;
 
   static String pendingKey(String account) {
     if (!RegExp(r'^[0-9]{10,16}$').hasMatch(account)) {
@@ -70,6 +73,31 @@ class DedaCrossDeviceRestore {
     }
 
     final selected = foreign.first;
+    DedaStoredPurchaseEvidence? linkedPurchase;
+    if (purchaseArchive != null) {
+      // Read the same PIN/session-protected SERVER archive. A linked sidecar
+      // is historical evidence, never a grant of purchased inventory or ID.
+      final purchases = await purchaseArchive!.list(
+        accountKey: accountKey, isCurrent: isCurrent, limit: 50);
+      check();
+      if (purchases.any((p) =>
+          p.sourceUid != owner.user.uid &&
+          p.sourceUid != selected.sourceUid)) {
+        return const DedaRecoveryStage(
+            status: DedaRecoveryStageStatus.multipleSourcesRequireReview,
+            captureId: null);
+      }
+      final linked = purchases.where((p) =>
+        p.sourceUid == selected.sourceUid &&
+        p.progressCaptureId == selected.captureId).toList(growable: false);
+      // Never pick one of multiple purported purchase states silently.
+      if (linked.length > 1) {
+        return const DedaRecoveryStage(
+            status: DedaRecoveryStageStatus.purchaseEvidenceConflict,
+            captureId: null);
+      }
+      if (linked.isNotEmpty) linkedPurchase = linked.single;
+    }
     final encoded = jsonEncode(<String, Object?>{
       'format': 1,
       'accountKey': accountKey,
@@ -81,7 +109,18 @@ class DedaCrossDeviceRestore {
         for (final p in DedaLegacyProgressPart.values)
           p.name: selected.capture.raw[p],
       },
+      // A missing sidecar does not mean zero owned items. The archive window
+      // may not cover older records, and no purchase receipts were verified.
+      'purchaseEvidence': linkedPurchase == null ? null : <String, Object?>{
+        'captureId': linkedPurchase.captureId,
+        'progressCaptureId': linkedPurchase.progressCaptureId,
+        'sourceUid': linkedPurchase.sourceUid,
+        'originalId': linkedPurchase.capture.originalId,
+        'localSnapshot': linkedPurchase.capture.encode(),
+      },
+      'purchaseEvidenceLinked': linkedPurchase != null,
       'financiallySettled': false,
+      'purchasesSettled': false,
     });
     check();
 
@@ -114,6 +153,7 @@ class DedaCrossDeviceRestore {
 enum DedaRecoveryStageStatus {
   noPreviousDeviceArchive,
   multipleSourcesRequireReview,
+  purchaseEvidenceConflict,
   alreadyStaged,
   existingRecoveryConflict,
   stagedAwaitingServerReconciliation,
