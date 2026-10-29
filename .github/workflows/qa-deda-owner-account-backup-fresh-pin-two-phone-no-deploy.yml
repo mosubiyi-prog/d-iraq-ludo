@@ -79,6 +79,19 @@ jobs:
         run: |
           node tools/app_stability/account_backup_qa/generate_rules.cjs
           test -s deda_account_backup_qa.generated.rules
+          node - <<'NODE'
+          const fs=require('fs'),path=require('path');
+          const configPath='tools/app_stability/account_backup_qa/firebase.json';
+          const cfg=JSON.parse(fs.readFileSync(configPath,'utf8'));
+          const absolute=path.resolve(path.dirname(configPath),cfg.firestore.rules);
+          if(absolute!==path.resolve('deda_account_backup_qa.generated.rules') ||
+             !fs.existsSync(absolute) ||
+             !fs.readFileSync(absolute,'utf8').includes(
+              'match /deda_progress_evidence/{accountKey}/captures/{captureId}')) {
+            throw Error('CRITICAL_OPEN_RULES_EMULATOR_DEFAULT_HOLD');
+          }
+          console.log('Fail-closed: emulator points at generated QA rules, not allow-all');
+          NODE
           git diff --exit-code -- firestore.rules
       - name: Test two different anonymous phone UIDs and exact original PIN/backup history
         run: |
