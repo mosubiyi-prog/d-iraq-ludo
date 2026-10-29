@@ -82,6 +82,37 @@ void main() {
     expect(invite,1);expect(open,0);
   });
 
+  testWidgets('second-place competitor responds to profile and existing friend actions',
+      (tester) async {
+    phone(tester);
+    var opened=0,invited=0;
+    await tester.pumpWidget(MaterialApp(home:DedaWeeklyLeaderboardPage(
+      current:scoreboard(place:2),
+      friendRelationFor:(_)=>DedaWeeklyFriendRelation.notFriends,
+      onOpenExistingPublicProfile:(person)async{
+        expect(person.participantId,firstToken);
+        opened++;
+      },
+      onSendExistingFriendRequest:(person)async{
+        expect(person.participantId,firstToken);
+        invited++;
+      },
+    )));
+    expect(find.byType(Scrollable),findsNothing);
+    await tester.tap(find.text('متصدر أصيل'));
+    await tester.pumpAndSettle();
+    expect(find.text('مشاهدة الملف الشخصي'),findsOneWidget);
+    await tester.tap(find.text('مشاهدة الملف الشخصي'));
+    await tester.pumpAndSettle();
+    expect(opened,1);
+    expect(invited,0);
+    await tester.tap(find.text('متصدر أصيل'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إرسال طلب صداقة'));
+    await tester.pumpAndSettle();
+    expect(invited,1);
+  });
+
   testWidgets('real rank 4 identity is tappable; old pending friendship cannot send second request',
       (tester)async{
     phone(tester);
