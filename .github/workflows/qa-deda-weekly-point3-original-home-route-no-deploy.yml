@@ -1,0 +1,81 @@
+name: DEDA Point3 Original Home Verified Weekly Link Private QA No Deploy
+
+on:
+  push:
+    branches:
+      - deda-weekly-point3-original-home-safe-route-private-no-deploy-2026-10-30
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  league-reader-and-home-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ensure original wallets, PIN, Firestore rules and quiz remain unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=7315c2f27d245366f2ab28f8c57428201b45ca93
+          git cat-file -e "$BASE^{commit}"
+          git diff --quiet "$BASE" HEAD --             android/ assets/ firestore.rules firebase.json pubspec.yaml             lib/deda_pin_auth.dart lib/traffic_quiz_page.dart             lib/deda_weekly_leaderboard_page.dart             lib/deda_weekly_leaderboard_safe_screen.dart             functions/deda_secure_pin_gate_core.js             functions/deda_recovery_verified_view_core.js
+          echo 'Original reference, purchases, points and PIN recovery source preserved'
+      - name: Syntax checks
+        run: |
+          node --check functions/index.js
+          node --check functions/deda_weekly_verified_standings_reader_core.js
+          node --check functions/deda_weekly_verified_standings_reader.js
+          node --check functions/tests/deda_weekly_verified_standings_reader.test.cjs
+      - name: Verified weekly standings, no-wallet-grant tests
+        run: node --test functions/tests/deda_weekly_verified_standings_reader.test.cjs
+      - name: Verify original home integration in both layouts, no local scores
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const main=fs.readFileSync('lib/main.dart','utf8');
+          const reader=fs.readFileSync('lib/deda_weekly_verified_standings_bridge.dart','utf8');
+          const wrapped=fs.readFileSync('functions/deda_weekly_verified_standings_reader.js','utf8');
+          function ok(x,msg){if(!x)throw Error(msg);}
+          ok(main.includes("DedaCategoryData(Icons.emoji_events_outlined, 'المتصدرون')"),
+            'original home category missing');
+          ok(main.includes("DedaWeeklyAccountViewGate("),'auth viewer gate missing');
+          ok(main.includes("DedaWeeklyLeaderboardSafeScreen("),'safe screen not routed');
+          ok(main.includes("DedaWeeklyVerifiedStandingsBridge.load("),'server reader missing');
+          ok((main.match(/categoryCard\(leaderboard\)/g)||[]).length===2,
+            'both phone/tablet card references are required');
+          ok(!main.includes("categoryCard(restaurant)"),'obsolete restaurant card');
+          ok(!reader.includes('SharedPreferences'),'must not consume local task score');
+          ok(reader.includes('FirebaseFunctions.instance.httpsCallable('),'actual cloud bridge missing');
+          ok(wrapped.includes('enforceAppCheck: true'),'App Check must be enforced');
+          console.log('PASS actual home routing, both layouts, signed-in scope, task navigation');
+          NODE
+
+  flutter-analyzer-private:
+    needs: league-reader-and-home-guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve original Flutter dependencies
+        run: flutter pub get
+      - name: Validate original home and integrated guarded league route
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_weekly_verified_standings_bridge.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_leaderboard_safe_screen.dart
+      - name: Final QA limitations
+        run: |
+          echo 'NO APK/AAB, Play, production Cloud Functions or Firestore Rules deployment.'
+          echo 'Signed source-verified publication PRODUCER not yet implemented: live league payouts remain disabled.'
