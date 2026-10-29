@@ -76,8 +76,10 @@ function validateWeek(raw, expectedStatus) {
         owned(row, "accountKey") || owned(row, "authUid") ||
         owned(row, "phone") || owned(row, "diamondBalance") ||
         owned(row, "publicAppearance") ||
-        !seen.add(row.participantId) ||
-        !publicIds.add(row.activePublicId)) block();
+        seen.has(row.participantId) ||
+        publicIds.has(row.activePublicId)) block();
+    seen.add(row.participantId);
+    publicIds.add(row.activePublicId);
     rows.push({
       place: row.place, participantId: row.participantId,
       displayName: row.displayName, activePublicId: row.activePublicId,
