@@ -55,6 +55,8 @@ jobs:
               tools/app_stability/progress_archive/qa_second_phone_functions/package.json|\
               tools/restore_deda_stability_baseline.py|\
               .github/workflows/qa-deda-owner-cross-device-restoration-integration-no-deploy.yml|\
+              .github/workflows/qa-deda-second-phone-cutover-wallet-real-firestore-emulator-no-deploy.yml|\
+              tests/firestore-rules/deda_second_phone_writer_fence_emulator.test.mjs|\
               docs/DEDA_OWNER_CROSS_DEVICE_RESTORATION_INTEGRATION_2026-10-29.md) ;;
               *) echo "REFUSE unexpected change $p"; exit 1 ;;
             esac
