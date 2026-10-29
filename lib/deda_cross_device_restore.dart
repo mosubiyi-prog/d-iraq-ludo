@@ -78,7 +78,7 @@ class DedaCrossDeviceRestore {
       // Read the same PIN/session-protected SERVER archive. A linked sidecar
       // is historical evidence, never a grant of purchased inventory or ID.
       final purchases = await purchaseArchive!.list(
-        accountKey: accountKey, isCurrent: isCurrent, limit: 50);
+        accountKey: accountKey, isCurrent: isCurrent, limit: 20);
       check();
       if (purchases.any((p) =>
           p.sourceUid != owner.user.uid &&
