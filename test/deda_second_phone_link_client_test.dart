@@ -13,6 +13,17 @@ Map<String, dynamic> safeReply({bool replayed = false}) => {
     'xp': 125, 'earnedDiamonds': 200,
     'spendable': false, 'entitlementsVerified': false,
   },
+  'verifiedEntitlements': {
+    'format': 1, 'readOnly': true, 'spendable': false,
+    'grantAuthority': false, 'fullySettled': false,
+    'ownedFrames': ['FRAME_03'],
+    'ownedCards': ['gold'],
+    'ownedPremiumIds': ['@DEDA-ABCD12'],
+    'activePremiumId': '@DEDA-ABCD12',
+    'premiumLedgerStatus': 'registry-confirmed',
+    'unreviewedNativeFrames': ['FRAME_05'],
+    'pendingNativeFrames': ['FRAME_06'],
+  },
   'canRestoreFinancialBalances': false,
   'canCreditXp': false,
   'canCreditDiamonds': false,
@@ -80,6 +91,42 @@ void main() {
       t.reply = {...safeReply(),
         'verifiedProgress': {...safeReply()['verifiedProgress'] as Map, ...bad}};
       await expectLater(client.linkAndReadVerifiedProgress(isCurrent: () => true),
+          throwsFormatException);
+    }
+  });
+
+  test('server-owned frames, cards and premium ID remain read-only', () async {
+    final t=_Transport();
+    final result=await DedaSecondPhoneLinkClient(t)
+        .linkAndReadVerifiedProgress(isCurrent:()=>true);
+    expect(result.entitlements.ownedFrames,['FRAME_03']);
+    expect(result.entitlements.ownedCards,['gold']);
+    expect(result.entitlements.ownedPremiumIds,['@DEDA-ABCD12']);
+    expect(result.entitlements.activePremiumId,'@DEDA-ABCD12');
+    expect(result.entitlements.unreviewedNativeFrames,['FRAME_05']);
+    expect(result.entitlements.pendingNativeFrames,['FRAME_06']);
+  });
+
+  test('unreviewed native and tampered receipt-owned fields never grant asset', () async {
+    final t=_Transport(),client=DedaSecondPhoneLinkClient(t);
+    final verified=safeReply()['verifiedEntitlements'] as Map;
+    for (final change in [
+      {'grantAuthority':true},
+      {'spendable':true},
+      {'fullySettled':true},
+      {'ownedFrames':['FRAME_99']},
+      {'ownedFrames':['FRAME_03','FRAME_03']},
+      {'ownedCards':['silver']},
+      {'ownedPremiumIds':['@DEDA-WRONG1']},
+      {'activePremiumId':'@DEDA-WRONG1'},
+      {'premiumLedgerStatus':'missing-needs-review'},
+      {'unreviewedNativeFrames':['FRAME_03']},
+      {'pendingNativeFrames':['FRAME_999']},
+      {'receiptId':'fake-credit'},
+    ]) {
+      t.reply={...safeReply(),
+        'verifiedEntitlements':{...verified,...change}};
+      await expectLater(client.linkAndReadVerifiedProgress(isCurrent:()=>true),
           throwsFormatException);
     }
   });
