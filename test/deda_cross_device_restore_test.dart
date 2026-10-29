@@ -195,6 +195,25 @@ void main() {
     expect(data['purchasesSettled'], false);
   });
 
+  test('saturated purchase archive never hides older ownership claims',
+      () async {
+    final f = _Fixture();
+    await f.seed();
+    final purchase = await DedaLegacyPurchaseReader(_LegacyPurchases()).capture(
+        accountKey: _account, originalId: _originalPersonalId,
+        isCurrent: () => true);
+    for (var n = 1; n < 20; n++) {
+      await f.purchases.save(
+          captureId: 'legacy_purchase_history_${n.toString().padLeft(4, '0')}',
+          progressCaptureId: _captureId,
+          capture: purchase, isCurrent: () => true);
+    }
+    f.useSecondPhone();
+    expect((await f.stage()).status,
+        DedaRecoveryStageStatus.purchaseArchiveWindowIncomplete);
+    expect(f.local.values, isEmpty);
+  });
+
   test('two purchase claims for same archive are held, never silently selected',
       () async {
     final f = _Fixture();
