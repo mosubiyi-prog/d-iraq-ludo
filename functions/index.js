@@ -1338,3 +1338,7 @@ exports.dedaSafeProfileRestoreV1 =
 // Step1 recovery private pilot: immutable legacy asset ESCROW, no real transfer.
 exports.dedaLegacyAssetEscrowV1 =
   require("./deda_recovery_asset_escrow.js").dedaLegacyAssetEscrowV1;
+
+// Account recovery point 2 pilot: signed reviewed balances, read-only, NO grants.
+exports.dedaReviewedAccountRecoveryViewV1 =
+  require("./deda_recovery_verified_view.js").dedaReviewedAccountRecoveryViewV1;
