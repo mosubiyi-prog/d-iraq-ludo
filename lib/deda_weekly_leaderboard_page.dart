@@ -152,7 +152,8 @@ class _DedaWeeklyLeaderboardPageState
   }
 
   Widget identity(DedaWeeklyLeaderboardRow? row,
-      {double avatarSize = 33, bool compact = false}) {
+      {double avatarSize = 33, bool compact = false,
+       bool interactive = true}) {
     final details = profile(row);
     final player = details?.verifiedCompetitor;
     final original = Row(
@@ -206,7 +207,19 @@ class _DedaWeeklyLeaderboardPageState
         ),
       ],
     );
+    if (!interactive) return original;
+    return rankTapSurface(row?.place, original);
+  }
+
+  /// ONE consistent hit target for a rank: the entire podium or row.
+  /// Missing verified identity and authenticated actions stay non-clickable.
+  /// Never infer a Firebase UID from an opaque participant identifier.
+  Widget rankTapSurface(int? place, Widget child) {
+    final score = place == null ? null : rowAt(place);
+    final player = profile(score)?.verifiedCompetitor;
     return DedaWeeklyLeaderboardTapSurface(
+      surfaceKey: place == null ? null :
+          ValueKey<String>('deda_weekly_rank_${place}_tap'),
       competitor: player,
       viewerParticipantId: view.viewerUid,
       friendRelation: player == null
@@ -215,7 +228,7 @@ class _DedaWeeklyLeaderboardPageState
               DedaWeeklyFriendRelation.unknown,
       onOpenExistingPublicProfile: widget.onOpenExistingPublicProfile,
       onSendExistingFriendRequest: widget.onSendExistingFriendRequest,
-      child: original,
+      child: child,
     );
   }
 
@@ -255,16 +268,7 @@ class _DedaWeeklyLeaderboardPageState
     final name = profile(row)?.displayName ?? '—';
     final player = profile(row)?.verifiedCompetitor;
     return Expanded(
-      child: DedaWeeklyLeaderboardTapSurface(
-        competitor: player,
-        viewerParticipantId: view.viewerUid,
-        friendRelation: player == null
-            ? DedaWeeklyFriendRelation.unknown
-            : widget.friendRelationFor?.call(player) ??
-                DedaWeeklyFriendRelation.unknown,
-        onOpenExistingPublicProfile: widget.onOpenExistingPublicProfile,
-        onSendExistingFriendRequest: widget.onSendExistingFriendRequest,
-        child: Padding(
+      child: rankTapSurface(place, Padding(
         padding: EdgeInsets.only(
           left: 3 * scale,
           right: 3 * scale,
@@ -440,7 +444,7 @@ class _DedaWeeklyLeaderboardPageState
                       end: const Color(0xFF0A2749),
                       radius: 10 * scale,
                       outline: const Color(0x44366B98)),
-                  child: Row(
+                  child: rankTapSurface(rank, Row(
                     textDirection: TextDirection.rtl,
                     children: [
                       SizedBox(width: 24 * scale,
@@ -448,7 +452,7 @@ class _DedaWeeklyLeaderboardPageState
                       Expanded(flex: 5,
                           child: identity(score,
                               avatarSize: 30 * scale,
-                              compact: false)),
+                              compact: false, interactive: false)),
                       Expanded(flex: 2,
                           child: fitted(score == null ? '—' :
                               '${score.weeklyPoints}',
@@ -457,7 +461,7 @@ class _DedaWeeklyLeaderboardPageState
                           child: fitted('💎 10 ماسات',
                               size: 11 * scale, color: silver)),
                     ],
-                  ),
+                  )),
                 ),
               ),
             );
