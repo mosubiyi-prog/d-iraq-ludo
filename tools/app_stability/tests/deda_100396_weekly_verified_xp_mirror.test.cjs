@@ -2,6 +2,9 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {createHash}=require("node:crypto");
+const {readVerifiedLeagueTopTen}=
+ require("../../../functions/deda_weekly_xp_top10_from_mirror_NOT_EXPORTED.js");
+
 const progress=require("../../../tools/app_stability/progress_archive/reconcile-core.cjs");
 const {
  mirrorVerifiedTaskXp,seal,TaskXpHold,
@@ -20,6 +23,12 @@ function baghdad(t){
 class Db {
  constructor(){this.docs=new Map();this.writePaths=[];}
  doc(path){return {path};}
+ collection(path){return {get:async()=>{
+   const docs=[...this.docs.entries()].filter(([k])=>
+     k.startsWith(path+"/") && !k.slice(path.length+1).includes("/"))
+     .map(([k,v])=>({id:k.slice(path.length+1),data:()=>v}));
+   return {size:docs.length,docs};
+ }};}
  seed(path,value){this.docs.set(path,value);}
  get(path){return this.docs.get(path);}
  async runTransaction(fn){
@@ -180,4 +189,33 @@ test("12 duplicate user data from old phone cannot overwrite points from canonic
  assert.notEqual(scores[0][0],scores[1][0]);
  assert.equal(scores[0][0].includes(ACCOUNT),false);
  assert.equal(scores[1][0].includes(OTHER),false);
+});
+
+test("13 verified account weekly scores produce one stable top ten, without client wallet",async()=>{
+ const db=fixture();
+ const a=record(db,{account:ACCOUNT,taskId:"open_map",time:MID});
+ const b=record(db,{account:ACCOUNT,taskId:"open_saved_place",time:MID+30000});
+ const c=record(db,{account:OTHER,taskId:"open_map",time:MID+1000});
+ await call(db,a,{time:MID+1000});
+ await call(db,b,{time:MID+31000});
+ await call(db,c,{accountKey:OTHER,time:MID+32000});
+ const view=await readVerifiedLeagueTopTen({db,firstOpenMs:FIRST,nowMs:MID+35000});
+ assert.equal(view.status,"active");
+ assert.deepEqual(view.privateRows.map(x=>x.weeklyPoints),[40,20]);
+ assert.deepEqual(view.privateRows.map(x=>x.place),[1,2]);
+ assert.equal(view.rewardsCredited,false);
+ assert.equal(view.originalLevelXpUnchanged,true);
+ assert.equal(view.privateRows.some(x=>"accountKey" in x),false);
+});
+test("14 weekly freeze keeps leaderboard static and new week starts empty",async()=>{
+ const db=fixture(),key=record(db);
+ await call(db,key);
+ const close=FIRST+7*86400000-6*3600000;
+ const frozen=await readVerifiedLeagueTopTen({db,firstOpenMs:FIRST,nowMs:close+1000});
+ assert.equal(frozen.status,"frozen");
+ assert.deepEqual(frozen.privateRows.map(x=>x.weeklyPoints),[20]);
+ const newWeek=await readVerifiedLeagueTopTen({db,firstOpenMs:FIRST,nowMs:FIRST+7*86400000+1000});
+ assert.equal(newWeek.status,"active");
+ assert.equal(newWeek.privateRows.length,0);
+ assert.equal(db.writePaths.length,3);
 });
