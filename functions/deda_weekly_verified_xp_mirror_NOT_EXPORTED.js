@@ -154,7 +154,7 @@ async function mirrorVerifiedTaskXp({
     accountDigest:digest,weekId:current.weekId,
     weeklyPoints:currentPoints+20,
     verifiedTaskCompletions:taskCount+1,
-    lastEarnedAtMs:detail.awardedAtMs,
+    lastEarnedAtMs:Math.max(original?.lastEarnedAtMs??0,detail.awardedAtMs),
     rewardsCredited:false,levelXpChanged:false,
    };
    if(!Number.isSafeInteger(next.weeklyPoints)||
