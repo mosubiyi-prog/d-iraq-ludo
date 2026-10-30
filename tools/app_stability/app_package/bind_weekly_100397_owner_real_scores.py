@@ -46,8 +46,8 @@ NEW="""DedaWeeklyAccountViewGate(
       )"""
 # Formatting-safe matching ONLY for the two expected, SHA-verified original
 # leaderboard routes. Text and widget tokens must remain exactly the same.
-ROUTE=re.compile("".join(r"\\s+" if chunk.isspace() else re.escape(chunk)
-    for chunk in re.split(r"(\\s+)",OLD) if chunk))
+ROUTE=re.compile("".join(r"\s+" if chunk.isspace() else re.escape(chunk)
+    for chunk in re.split(r"(\s+)",OLD) if chunk))
 CLAIM="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
     if (!mounted) return;"""
 CLAIM_NEW="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
