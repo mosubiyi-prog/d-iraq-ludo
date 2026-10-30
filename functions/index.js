@@ -1340,3 +1340,7 @@ exports.dedaWeeklyVerifiedStandingsV1 =
 // Disabled without explicit owner config and account allowlist.
 exports.dedaWeeklyObserveTaskClaimQaV1 =
   require("./deda_weekly_100396_observation.js").dedaWeeklyObserveTaskClaimQaV1;
+
+// Owner QA: own observed XP only; NOT verified league score or prize.
+exports.dedaWeeklyReadOwnObservationQaV1 =
+  require("./deda_weekly_100396_observation.js").dedaWeeklyReadOwnObservationQaV1;
