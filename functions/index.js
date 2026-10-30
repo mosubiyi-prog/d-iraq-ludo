@@ -1335,3 +1335,8 @@ exports.dedaWeeklyAppliedXpBridgeV1 =
 
 exports.dedaWeeklyVerifiedStandingsV1 =
   require("./deda_weekly_100396_standings_reader.js").dedaWeeklyVerifiedStandingsV1;
+
+// QA monitoring only: client task claim != independent task proof.
+// Disabled without explicit owner config and account allowlist.
+exports.dedaWeeklyObserveTaskClaimQaV1 =
+  require("./deda_weekly_100396_observation.js").dedaWeeklyObserveTaskClaimQaV1;
