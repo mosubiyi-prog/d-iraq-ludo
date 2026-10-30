@@ -5,6 +5,7 @@ on:
       - deda-weekly-100398-level-xp-first-no-deploy-2026-10-31
     paths:
       - ".github/workflows/qa-deda-100398-original-app-xp-integration-no-deploy.yml"
+      - "tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py"
   workflow_dispatch:
 permissions:
   contents: read
