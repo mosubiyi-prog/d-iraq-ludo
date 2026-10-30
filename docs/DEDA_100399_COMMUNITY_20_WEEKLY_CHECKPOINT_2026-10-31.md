@@ -13,6 +13,8 @@
 - ربط Flutter المؤقت: tools/app_stability/app_package/bind_weekly_100399_community_bridge.py بعد 100398، دون تغيير أصل 100396.
 - فحوص مصدر 20 حساباً افتراضياً (وليس حسابات المستخدمين الحقيقية) ومنع التكرار والأسبوع التالي والماسات: GitHub Actions 41145402096 نجح.
 
+- فحص الدمج داخل مصدر DEDA الأصلي وتحليل Flutter: GitHub Actions 41145463666 نجح (لا بناء APK ولا نشر).
+
 ## نتيجة فحص الخدمات الحقيقية ــ GitHub Actions 41145111158
 - Firebase project deda-25b88: Firestore وCloud Functions API مفعّلتان.
 - Cloud Build وArtifact Registry وCloud Run معطّلة في المشروع.
