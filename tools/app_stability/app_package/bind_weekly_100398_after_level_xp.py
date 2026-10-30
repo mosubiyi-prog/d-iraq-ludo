@@ -65,7 +65,10 @@ def rewrite(code):
             "hook=" + str(view.count(LEVEL_AWARD)) +
             ", guard=" + str("if (result.pointsAwarded)" in view) +
             ", claim=" + str("final result = await DedaTaskEngine.claimTaskReward(taskId);" in view) +
-            ", priorpilot=" + str("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward" in view))
+            ", priorpilot=" + str("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward" in view) +
+            ", lines=" + repr([line.strip()[:120] for line in view.splitlines()
+                if "claimTaskReward" in line or "awardTaskClaim" in line or "xpNotifier" in line
+                or "result.pointsAwarded" in line][:12]))
     # Exact original award remains, with only an AFTER-SUCCESS notification.
     view = view.replace(LEVEL_AWARD, LEVEL_AND_NOTIFY, 1)
 
