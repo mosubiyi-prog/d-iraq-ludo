@@ -61,7 +61,11 @@ def rewrite(code):
             or "if (result.pointsAwarded)" not in view
             or "final result = await DedaTaskEngine.claimTaskReward(taskId);" not in view
             or "DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward" in view):
-        raise ValueError("Original +20 XP award flow not verified")
+        raise ValueError("Original +20 XP award flow not verified; " +
+            "hook=" + str(view.count(LEVEL_AWARD)) +
+            ", guard=" + str("if (result.pointsAwarded)" in view) +
+            ", claim=" + str("final result = await DedaTaskEngine.claimTaskReward(taskId);" in view) +
+            ", priorpilot=" + str("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward" in view))
     # Exact original award remains, with only an AFTER-SUCCESS notification.
     view = view.replace(LEVEL_AWARD, LEVEL_AND_NOTIFY, 1)
 
