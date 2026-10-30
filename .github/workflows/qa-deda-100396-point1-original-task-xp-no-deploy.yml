@@ -43,7 +43,7 @@ jobs:
           git diff --name-only "$BASE" HEAD > /tmp/deda-point1-changed-paths.txt
           while IFS= read -r path; do
             case "$path" in
-              functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js|functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js|functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js|tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs|tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs|.github/workflows/qa-deda-100396-point1-original-task-xp-no-deploy.yml|docs/DEDA_100396_POINT1_ORIGINAL_TASK_XP_LEAGUE_QA_2026-10-30.md) ;;
+              functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js|functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js|functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js|functions/deda_weekly_verified_xp_mirror_NOT_EXPORTED.js|tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs|tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs|tools/app_stability/tests/deda_100396_weekly_verified_xp_mirror.test.cjs|.github/workflows/qa-deda-100396-point1-original-task-xp-no-deploy.yml|docs/DEDA_100396_POINT1_ORIGINAL_TASK_XP_LEAGUE_QA_2026-10-30.md) ;;
               *) echo "UNEXPECTED CHANGE: $path"; exit 1;;
             esac
           done < /tmp/deda-point1-changed-paths.txt
@@ -53,10 +53,14 @@ jobs:
           node --check functions/deda_weekly_original_eight_task_source_gate_NOT_EXPORTED.js
           node --check functions/deda_weekly_stage31_frozen_league_winner_card_NOT_EXPORTED.js
           node --check functions/deda_weekly_canonical_daily_xp_top10_NOT_EXPORTED.js
+          node --check functions/deda_weekly_verified_xp_mirror_NOT_EXPORTED.js
+          node --check tools/app_stability/tests/deda_100396_weekly_verified_xp_mirror.test.cjs
           node --check tests/firestore-rules/deda_weekly_canonical_daily_xp_top10_emulator.test.cjs
           node --check tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs
       - name: Exact signed 100396 source contract, eight tasks, no XP or wallet edits
-        run: node --test tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs
+        run: |
+          node --test tools/app_stability/tests/deda_100396_task_xp_to_league_source_contract.test.cjs
+          node --test tools/app_stability/tests/deda_100396_weekly_verified_xp_mirror.test.cjs
       - name: Install disposable local Firestore emulator
         run: npm install --prefix tests/firestore-rules --no-save --no-audit --no-fund firebase-admin@13 firebase-tools@14
       - name: Real local Firestore canonical XP receipts to weekly ranking
