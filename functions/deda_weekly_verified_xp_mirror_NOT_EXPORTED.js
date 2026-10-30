@@ -134,6 +134,7 @@ async function mirrorVerifiedTaskXp({
    const original=scoreS.exists?scoreS.data():null;
    if(original&&(
       original.accountDigest!==digest||
+      original.accountKey!==accountKey||
       original.weekId!==current.weekId||
       !Number.isSafeInteger(original.weeklyPoints)||
       !Number.isSafeInteger(original.verifiedTaskCompletions)))
@@ -151,7 +152,10 @@ async function mirrorVerifiedTaskXp({
    tx.create(receiptRef,{accountDigest:digest,eventKey,dayId:detail.dayId,
      taskId:detail.taskId,weeklyPoints:20,source:"already-applied-level-xp"});
    const next={
-    accountDigest:digest,weekId:current.weekId,
+    // PRIVATE Admin SDK only: canonical key is needed to resolve names and
+    // public IDs securely when serving the global leaderboard. Never return
+    // this field or expose this collection through client Firestore Rules.
+    accountDigest:digest,accountKey,weekId:current.weekId,
     weeklyPoints:currentPoints+20,
     verifiedTaskCompletions:taskCount+1,
     lastEarnedAtMs:Math.max(original?.lastEarnedAtMs??0,detail.awardedAtMs),
