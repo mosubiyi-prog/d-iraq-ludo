@@ -22,6 +22,13 @@ class MonitorHold extends Error{
 }
 const hold=(code)=>{throw new MonitorHold(code);};
 const get=s=>s.exists?s.data():null;
+const publicSession=async(auth,uid)=>{
+  const user=await auth.getUser(uid).catch(()=>null);
+  if(!user||user.uid!==uid||user.disabled||user.email||
+    (Array.isArray(user.providerData)&&user.providerData.length))
+    hold("AUTH");
+};
+
 function dayInBaghdad(ms){
   const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Baghdad",
     year:"numeric",month:"2-digit",day:"2-digit"})
@@ -45,10 +52,7 @@ function validSession(request){
 async function recordMonitoredTask({db,auth,request,nowMs=Date.now()}){
   const {uid,key,taskId}=validSession(request);
   if(!Number.isSafeInteger(nowMs)||nowMs<=0)hold("TIME");
-  const authUser=await auth.getUser(uid).catch(()=>null);
-  if(!authUser||authUser.uid!==uid||authUser.disabled||authUser.email||
-     (Array.isArray(authUser.providerData)&&authUser.providerData.length))
-    hold("AUTH");
+  await publicSession(auth,uid);
   const configRef=db.doc("deda_weekly_observation_config/active");
   const dirRef=db.doc("deda_account_directory/"+key);
   const bindRef=db.doc("deda_secure_account_bindings/"+uid);
@@ -110,4 +114,61 @@ async function recordMonitoredTask({db,auth,request,nowMs=Date.now()}){
       observedWeeklyXp:(old?.observedXp||0)+20};
   },{maxAttempts:5});
 }
-module.exports={recordMonitoredTask,MonitorHold,dayInBaghdad};
+
+/**
+ * Fetch own QA observation only. No claimed scores are presented as approved
+ * competitors, and no public ranking/prize payment is possible here.
+ */
+async function readMonitoredXp({db,auth,request,nowMs=Date.now()}){
+  const uid=request?.auth?.uid,key=request?.data?.accountKey;
+  if(!UID.test(uid||"")||!ACCOUNT.test(key||"")||
+     request.auth?.token?.firebase?.sign_in_provider!=="anonymous"||
+     typeof request.app?.appId!=="string"||!request.app.appId||
+     !request.data||Array.isArray(request.data)||
+     Object.keys(request.data).length!==1)
+    hold("AUTH_OR_INPUT");
+  await publicSession(auth,uid);
+  const hash=createHash("sha256").update(key).digest("hex");
+  const [configS,dirS,bindingS]=await Promise.all([
+    db.doc("deda_weekly_observation_config/active").get(),
+    db.doc("deda_account_directory/"+key).get(),
+    db.doc("deda_secure_account_bindings/"+uid).get(),
+  ]);
+  const cfg=get(configS),dir=get(dirS),binding=get(bindingS);
+  if(cfg?.qaEnabled!==true||cfg?.payoutsDisabled!==true||
+     cfg?.productionRankEnabled!==false||
+     !Array.isArray(cfg.allowlistedAccountHashes)||
+     !cfg.allowlistedAccountHashes.includes(hash)||
+     !Number.isSafeInteger(cfg.firstOpenMs)||
+     dir?.active!==true||dir.accountKey!==key||
+     !UID.test(dir.createdUid||"")||
+     (dir.createdUid!==uid&&!(binding?.accountKey===key&&
+       binding.uid===uid&&binding.status==="PIN_VERIFIED_HOLD"&&
+       binding.canMigrate===false&&binding.canRestoreAssets===false)))
+    hold("OBSERVATION_NOT_READY");
+  const index=Math.floor((nowMs-cfg.firstOpenMs)/WEEK_MS);
+  if(index<0||index>5000)hold("WEEK_NOT_OPEN");
+  const week=windowFor(cfg.firstOpenMs,index);
+  const score=await db.doc("deda_weekly_observation_only/"+
+    week.weekId+"/scores/"+hash).get();
+  const data=get(score);
+  if(data&&(data.weekId!==week.weekId||
+    data.accountDigest!==hash||
+    !Number.isSafeInteger(data.observedXp)||
+    data.observedXp<0||data.observedXp>1120||
+    data.observedXp%20!==0||
+    data.observedXp!==data.observedTaskCount*20||
+    data.independentlyVerified!==false||
+    data.payoutEligible!==false))
+    hold("CORRUPT_OBSERVATION");
+  return Object.freeze({
+    status:"QA_OBSERVATION_ONLY_NOT_APPROVED",
+    weekId:week.weekId,
+    observedXp:data?.observedXp||0,
+    taskCount:data?.observedTaskCount||0,
+    readOnly:true,independentlyVerified:false,
+    publicRankingAllowed:false,payoutEligible:false,
+  });
+}
+
+module.exports={recordMonitoredTask,readMonitoredXp,MonitorHold,dayInBaghdad};
