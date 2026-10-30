@@ -1,0 +1,34 @@
+name: DEDA 100400 Same-Day XP Retry Server Guard (NO DEPLOY)
+on:
+  push:
+    branches: [deda-weekly-100400-safe-same-day-score-retry-no-deploy-2026-10-31]
+    paths:
+      - '.github/workflows/qa-deda-100400-server-task-day-replay-no-deploy.yml'
+      - 'functions/deda_weekly_community_scores_core.js'
+      - 'functions/tests/deda_weekly_community_scores_core.test.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-new-xp-or-diamond-writes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check task-day replay guards in 20-account model only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 5fe0e74d4e51513850b220a3ef48890cf6029044 HEAD -- \
+            lib/main.dart firestore.rules firebase.json google-services.json \
+            functions/deda_weekly_owner_live_pilot_core.js
+          node --check functions/deda_weekly_community_scores_core.js
+          node --test functions/tests/deda_weekly_community_scores_core.test.cjs
+          node --test functions/tests/deda_weekly_owner_live_pilot_core.test.cjs
+          echo 'NO DEPLOY; NO XP OR DIAMOND WRITE; ZERO LIVE USERS MODIFIED'
