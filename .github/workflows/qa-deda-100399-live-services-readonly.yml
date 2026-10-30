@@ -1,0 +1,52 @@
+name: DEDA 100399 Community League Firebase Services READ ONLY
+on:
+  push:
+    branches: [deda-weekly-100399-community-20-linked-scores-no-deploy-2026-10-31]
+    paths: ['.github/workflows/qa-deda-100399-live-services-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-write-service-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check only service enablement and billing visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'
+          raw=os.environ.get('PRIMARY') or os.environ.get('FALLBACK')
+          try:
+            info=json.loads(raw or '')
+            assert info.get('type')=='service_account' and info.get('project_id')==p
+            credentials=service_account.Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            session=AuthorizedSession(credentials)
+          except Exception:
+            print('PROJECT_CREDENTIAL=UNKNOWN_OR_NOT_CONFIGURED')
+            raise SystemExit(0)
+          print('PROJECT_CREDENTIAL=MATCHED')
+          for service in ('cloudfunctions.googleapis.com','cloudbuild.googleapis.com','artifactregistry.googleapis.com','run.googleapis.com','serviceusage.googleapis.com','firestore.googleapis.com'):
+            try:
+              response=session.get(f'https://serviceusage.googleapis.com/v1/projects/{p}/services/{service}',timeout=15)
+              state=response.json().get('state','UNKNOWN') if response.status_code==200 else f'UNKNOWN_HTTP_{response.status_code}'
+              print('SERVICE '+service+'='+str(state if state in ('ENABLED','DISABLED') else state))
+            except Exception as ex:
+              print('SERVICE '+service+'=UNKNOWN_'+type(ex).__name__)
+          try:
+            r=session.get(f'https://cloudbilling.googleapis.com/v1/projects/{p}/billingInfo',timeout=15)
+            status=('ENABLED' if r.json().get('billingEnabled') is True else 'DISABLED') if r.status_code==200 else 'UNKNOWN_HTTP_'+str(r.status_code)
+            print('BILLING='+status)
+          except Exception as ex:
+            print('BILLING=UNKNOWN_'+type(ex).__name__)
+          print('READ_ONLY_NO_DEPLOY_NO_RULE_CHANGES_NO_USER_DATA_NO_BILLING_WRITE')
+          PY
