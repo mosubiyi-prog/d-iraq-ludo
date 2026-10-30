@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test"),assert=require("node:assert/strict");
 const {createHash}=require("node:crypto");
-const {claim,standings,weekAt}=require("../deda_weekly_community_scores_core");
+const {claim,standings,weekAt,iraqDay}=require("../deda_weekly_community_scores_core");
 const START=Date.UTC(2026,9,31,3); // Saturday, Baghdad 06:00
 const NOW=START+60000;
 const key=i=>"0770"+String(i).padStart(7,"0");
@@ -48,16 +48,16 @@ function fixture(n=20){
   }
   return {db,auth:{getUser:async u=>users.get(u)||null},users};
 }
-function req(i=1,taskId="open_map",u=uid(i)){
+function req(i=1,taskId="open_map",u=uid(i),day=iraqDay(NOW)){
   return {auth:{uid:u,token:{firebase:{sign_in_provider:"anonymous"}}},
     app:{appId:"android-deda-approved-app-check"},
-    data:{accountKey:key(i),taskId}};
+    data:{accountKey:key(i),taskId,claimDay:day}};
 }
 function readReq(i=1){
   const r=req(i);r.data={accountKey:key(i)};return r;
 }
 function award(f,i=1,taskId="open_map",nowMs=NOW){
-  return claim({...f,request:req(i,taskId),nowMs});
+  return claim({...f,request:req(i,taskId,uid(i),iraqDay(nowMs)),nowMs});
 }
 function read(f,i=1,nowMs=NOW){
   return standings({...f,request:readReq(i),nowMs});
@@ -163,5 +163,24 @@ test("server settings must forbid diamonds and client XP amounts",async()=>{
     communityEnabled:true,grantDiamonds:true,
     allowClientTaskReports:true,startAtMs:START});
   await assert.rejects(award(f),/LEAGUE_DISABLED/);
+  assert.equal(f.db.writes.length,0);
+});
+
+test("a delayed claim may not be attributed to a different Baghdad day",async()=>{
+  const f=fixture(1);
+  const tomorrow=Date.UTC(2026,9,31,21,1); // Nov 1 00:01 Baghdad
+  const oldRequest=req(1,"open_map",uid(1),iraqDay(NOW));
+  await assert.rejects(claim({...f,request:oldRequest,nowMs:tomorrow}),
+    /COMMUNITY_WEEKLY_DAY_MISMATCH/);
+  assert.equal(f.db.writes.length,0);
+});
+test("a caller cannot submit a future-day or malformed task date",async()=>{
+  const f=fixture(1);
+  for(const claimDay of ["2026-11-01","2026-10-00","tomorrow",20261031]){
+    const r=req();
+    r.data.claimDay=claimDay;
+    await assert.rejects(claim({...f,request:r,nowMs:NOW}),
+      /COMMUNITY_WEEKLY_DAY_MISMATCH/);
+  }
   assert.equal(f.db.writes.length,0);
 });
