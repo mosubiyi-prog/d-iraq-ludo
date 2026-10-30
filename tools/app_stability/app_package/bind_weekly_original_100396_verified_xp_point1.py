@@ -14,6 +14,7 @@ BASE=100396
 INPUTS=(
     "lib/deda_weekly_account_view_gate.dart",
     "lib/deda_weekly_standings_bridge.dart",
+    "lib/deda_weekly_qa_observation_bridge.dart",
 )
 OLD=("""DedaWeeklyLeaderboardSafeScreen(
         localTrialAccountKey: DedaBackend.accountKeyForPhone(
@@ -87,12 +88,31 @@ def bind(project):
         code=code.replace(before,before+"\n"
            "import 'package:firebase_auth/firebase_auth.dart';",1)
     bridge_imports=("import 'deda_weekly_account_view_gate.dart';\n"
-                    "import 'deda_weekly_standings_bridge.dart';\n")
+                    "import 'deda_weekly_standings_bridge.dart';\n"
+                    "import 'deda_weekly_qa_observation_bridge.dart';\n")
     if any(x in code for x in bridge_imports.splitlines()):
         raise ValueError("Duplicate protected league imports")
     code=code.replace("import 'deda_weekly_leaderboard_safe_screen.dart';",
         "import 'deda_weekly_leaderboard_safe_screen.dart';\n"+bridge_imports.rstrip(),1)
     code=code.replace(OLD,NEW)
+    # This adds only a QA report AFTER the original task award succeeds.
+    # No original level XP, daily task engine or wallet method is modified.
+    task_anchor=("    final result = await DedaTaskEngine.claimTaskReward(taskId);\n"
+                 "    if (!mounted) return;")
+    task_after=("    final result = await DedaTaskEngine.claimTaskReward(taskId);\n"
+                "    if (result.accepted && result.pointsAwarded) {\n"
+                "      unawaited(DedaWeeklyQaObservationBridge.noteClaim(\n"
+                "        accountKey: DedaBackend.accountKeyForPhone(\n"
+                "            DedaPreferences.phone).trim(),\n"
+                "        taskId: taskId,\n"
+                "      ));\n"
+                "    }\n"
+                "    if (!mounted) return;")
+    if code.count(task_anchor)!=1:
+        raise ValueError("Original reward claim changed; stop")
+    code=code.replace(task_anchor,task_after,1)
+    if code.count("DedaWeeklyQaObservationBridge.noteClaim(")!=1:
+        raise ValueError("Unexpected monitored task claim count")
     if code.count(NEW)!=2 or code.count(OLD)!=0 or (
         code.count("DedaWeeklyAccountViewGate(")!=2):
         raise ValueError("Unexpected number of modified official routes")
@@ -125,6 +145,9 @@ def bind(project):
         "noWalletChanges":True,
         "noPrizeGrant":True,
         "productionDeployed":False,
+        "observationalOnly":True,
+        "independentProofIssuerActive":False,
+        "liveDiamondPayoutsDisabled":True,
     }
     data["purpose"]="100396 isolated QA source input; NO APK or live league"
     manifest.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n")
