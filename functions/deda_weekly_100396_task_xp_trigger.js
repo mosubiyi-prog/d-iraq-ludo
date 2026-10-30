@@ -8,38 +8,12 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const {getFirestore} = require("firebase-admin/firestore");
-const {mirrorVerifiedTaskXp, TaskXpHold} =
+const {TaskXpHold} =
   require("./deda_weekly_verified_xp_mirror_NOT_EXPORTED.js");
-
+const {processProof} =
+  require("./deda_weekly_100396_task_xp_trigger_core.js");
 const ACTION_KEY=defineSecret("DEDA_WEEKLY_ACTION_PROOF_HMAC_KEY");
-const ACCOUNT=/^[0-9]{10,16}$/;
-const EVENT=/^[0-9a-f]{64}$/;
 
-async function processProof({
- db, proof, eventKey, secret, nowMs=Date.now(),
-}){
- if(!proof || proof.productionApproved!==true ||
-    proof.issuer!=="deda_server_verified_original_action_v1")
-  return {status:"UNAPPROVED_PROOF_IGNORED", counted:false};
- if(!ACCOUNT.test(proof.accountKey||"") ||
-    !EVENT.test(eventKey||"") ||
-    proof.eventKey!==eventKey)
-  throw new TaskXpHold("INVALID_PROOF_DOCUMENT");
- // Only a separately reviewed owner-enabled, server-only calendar
- // authorizes competition scoring. This MUST NOT be writable by clients.
- const configSnap=await db.doc("deda_weekly_verified_calendar/active").get();
- const config=configSnap.exists?configSnap.data():null;
- if(config?.enabled!==true || config?.publisherApproved!==true ||
-    config?.allowLocalTaskBooleanProofs!==false ||
-    config?.allowClientMintedXp!==false ||
-    !Number.isSafeInteger(config.firstOpenMs) ||
-    config.firstOpenMs<=0)
-  return {status:"OWNER_CALENDAR_NOT_ENABLED", counted:false};
- return mirrorVerifiedTaskXp({
-  db, accountKey:proof.accountKey,eventKey,secret,
-  firstOpenMs:config.firstOpenMs,nowMs,
- });
-}
 function makeTrigger(){
  return onDocumentCreated({
   document:"deda_weekly_server_action_proofs/{eventKey}",
