@@ -98,6 +98,44 @@ jobs:
           with open(os.path.join(os.environ['RUNNER_TEMP'],'deda-100397-cloud-activation-preflight.json'),'w') as out:
             json.dump(result,out,sort_keys=True)
           PY
+      - name: Evaluate BOTH existing GitHub Firebase service accounts independently for safe deployment eligibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          project='deda-25b88'
+          perms=['cloudfunctions.functions.create','cloudfunctions.functions.update',
+                 'cloudfunctions.functions.list','iam.serviceAccounts.actAs']
+          for label,environment in [('primary','DEDA_FIREBASE_CREDENTIAL'),
+                                    ('fallback','DEDA_FIREBASE_FALLBACK')]:
+            raw=os.getenv(environment,'')
+            if not raw:
+              print('FIREBASE_CREDENTIAL_'+label.upper()+'=missing')
+              continue
+            try:
+              info=json.loads(raw)
+              if info.get('type')!='service_account' or info.get('project_id')!=project:
+                print('FIREBASE_CREDENTIAL_'+label.upper()+'=wrong_project')
+                continue
+              auth=service_account.Credentials.from_service_account_info(
+                info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+              session=AuthorizedSession(auth)
+              response=session.post(
+                f'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:testIamPermissions',
+                json={'permissions':perms},timeout=20)
+              granted=set(response.json().get('permissions',[])) if response.status_code==200 else set()
+              outcome={'status':'iam_http_'+str(response.status_code),
+                 'canCreate':perms[0] in granted,
+                 'canUpdate':perms[1] in granted,
+                 'canList':perms[2] in granted,
+                 'canActAs':perms[3] in granted}
+              print('FIREBASE_CREDENTIAL_'+label.upper()+'_RIGHTS='+json.dumps(outcome,sort_keys=True))
+            except Exception:
+              print('FIREBASE_CREDENTIAL_'+label.upper()+'=transport_or_auth_unavailable')
+          PY
       - name: Optional existing Firebase CLI token functions LIST only, never deploy
         shell: bash
         run: |
