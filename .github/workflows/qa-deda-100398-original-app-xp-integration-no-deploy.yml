@@ -56,7 +56,7 @@ jobs:
           engine=main.split("  static Future<DedaTaskEventResult> claimTaskReward(",1)[1].split("  static Future<",1)[0]
           assert "DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(" not in engine
           view=main.split("  Future<void> _claimTaskReward(String taskId)",1)[1].split("  Future<void> _openTask(",1)[0]
-          assert view.index("await DedaSocialProgressWallet.awardTaskClaim(taskId);") < view.index("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(")
+          assert view.index("await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));") < view.index("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(")
           assert "leagueLevelXpDelta ==" in view
           print("ACTUAL ORIGINAL 100396 +20 LEVEL XP SIGNAL ORDER VERIFIED")
           print("No APK, no Firebase deploy, no Play, no account balance changes")
