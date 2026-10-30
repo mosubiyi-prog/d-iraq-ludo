@@ -100,7 +100,7 @@ async function readWeeklyStandings({
  const uid=request?.auth?.uid,key=request?.data?.accountKey;
  if(!db||!auth||!UID.test(uid||"")||!ACCOUNT.test(key||"")||
     request.auth.token?.firebase?.sign_in_provider!=="anonymous"||
-    !request.app?.appId||!request.data||
+    typeof request.app?.appId!=="string"||!request.app.appId||!request.data||
     Object.keys(request.data).length!==1||
     !Number.isSafeInteger(nowMs))hold("BAD_SESSION");
  let user;
@@ -124,11 +124,13 @@ async function readWeeklyStandings({
       bind.canMigrate===false&&bind.canRestoreAssets===false)))
   hold("ACCOUNT_OR_CALENDAR_UNVERIFIED");
  const index=Math.floor((nowMs-config.firstOpenMs)/(7*86400000));
- if(index<1||index>5000)hold("WEEK_NOT_READY");
+ if(index<0||index>5000)hold("WEEK_NOT_READY");
  const currentWin=windowFor(config.firstOpenMs,index);
  const [cur,prev]=await Promise.all([
   readWeek(db,config.firstOpenMs,index,nowMs,secret),
-  readWeek(db,config.firstOpenMs,index-1,nowMs,secret),
+  index===0
+   ? Promise.resolve({weekId:"deda-first-week-no-predecessor",rows:[]})
+   : readWeek(db,config.firstOpenMs,index-1,nowMs,secret),
  ]);
  const viewer=participant(key,secret);
  const decorate=(week,status,remainingMs)=>{
