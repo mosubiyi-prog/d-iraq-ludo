@@ -1,0 +1,35 @@
+name: DEDA 100398 Level-XP to League Source Gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-weekly-100398-level-xp-first-no-deploy-2026-10-31
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  league-original-xp-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Guard exact approved 100397 sources and test independent +20 XP signal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 761a6cb07a00a88e8550541548e165ac83ebfb35 HEAD -- \
+            lib/main.dart lib/admin_pages.dart lib/deda_weekly_leaderboard_page.dart \
+            lib/deda_weekly_owner_pilot_bridge.dart \
+            functions/index.js functions/deda_weekly_owner_live_pilot_core.js \
+            firestore.rules firebase.json google-services.json
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_100398_level_xp_signal.py' -v
+          node --test functions/tests/deda_weekly_owner_live_pilot_core.test.cjs
+          echo 'Source gate only. NO APK, NO Cloud deploy, NO wallet, NO score write.'
