@@ -1332,3 +1332,6 @@ exports.dedaPremiumResolvePublicRecipient =
 // This QA branch is NOT deployed. Activation requires owner approval.
 exports.dedaWeeklyAppliedXpBridgeV1 =
   require("./deda_weekly_100396_task_xp_trigger.js").makeTrigger();
+
+exports.dedaWeeklyVerifiedStandingsV1 =
+  require("./deda_weekly_100396_standings_reader.js").dedaWeeklyVerifiedStandingsV1;
