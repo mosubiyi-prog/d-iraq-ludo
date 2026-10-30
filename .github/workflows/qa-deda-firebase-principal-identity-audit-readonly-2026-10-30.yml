@@ -1,0 +1,67 @@
+name: DEDA Firebase service principal identity and permissions audit (READ ONLY)
+on:
+  push:
+    branches:
+      - deda-firebase-readonly-identity-audit-2026-10-30
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Identify deployment account and verify project-only IAM capabilities without changing anything
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os,re,sys
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          project='deda-25b88'
+          permissions=[
+              'cloudfunctions.functions.list',
+              'cloudfunctions.functions.create',
+              'cloudfunctions.functions.update',
+              'iam.serviceAccounts.actAs',
+              'serviceusage.services.enable',
+          ]
+          result={}
+          for label,key in [('primary','PRIMARY_SA'),('fallback','FALLBACK_SA')]:
+              raw=os.environ.get(key,'')
+              if not raw:
+                  print(f'{label.upper()}_ACCOUNT=NOT_CONFIGURED')
+                  result[label]=False
+                  continue
+              try:
+                  info=json.loads(raw)
+                  assert info.get('type')=='service_account'
+                  assert info.get('project_id')==project
+                  email=info['client_email']
+                  assert re.fullmatch(r'[A-Za-z0-9._-]+@deda-25b88\.iam\.gserviceaccount\.com',email)
+                  print(f'{label.upper()}_ACCOUNT_EMAIL={email}')
+                  auth=service_account.Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+                  session=AuthorizedSession(auth)
+                  response=session.post(f'https://cloudresourcemanager.googleapis.com/v1/projects/{project}:testIamPermissions',
+                      json={'permissions':permissions},timeout=20)
+                  print(f'{label.upper()}_IAM_HTTP={response.status_code}')
+                  granted=set(response.json().get('permissions',[])) if response.status_code==200 else set()
+                  for p in permissions:
+                      print(f'{label.upper()}_ALLOW_{p}={p in granted}')
+                  result[label]=response.status_code==200 and all(p in granted for p in permissions)
+              except Exception as exc:
+                  print(f'{label.upper()}_ACCOUNT=INVALID_OR_UNAVAILABLE ({type(exc).__name__})')
+                  result[label]=False
+          print('DEPLOY_PERMISSIONS_CONFIRMED='+str(any(result.values())))
+          print('READ_ONLY: NO_FIREBASE_DEPLOY, NO_BILLING_CHANGE, NO_IAM_WRITE, NO_USER_DATA, NO_APK')
+          if not any(result.values()):
+              sys.exit('BLOCKED: service account has no validated deploy path')
+          PY
