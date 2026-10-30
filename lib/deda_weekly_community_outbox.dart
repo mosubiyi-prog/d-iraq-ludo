@@ -122,7 +122,7 @@ class DedaWeeklyCommunityOutbox {
         key: _key(accountKey, uid),
         today: baghdadDay(now),
         send: send,
-        limit: limit.clamp(0, 8),
+        limit: limit.clamp(0, 8).toInt(),
       );
       return delivered.length;
     });
