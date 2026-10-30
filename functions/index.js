@@ -1333,3 +1333,11 @@ exports.dedaPremiumResolvePublicRecipient =
 const dedaOwnerWeeklyPilot = require("./deda_weekly_owner_live_pilot.js");
 exports.dedaWeeklyOwnerPilotClaimV1 = dedaOwnerWeeklyPilot.dedaWeeklyOwnerPilotClaimV1;
 exports.dedaWeeklyOwnerPilotStandingsV1 = dedaOwnerWeeklyPilot.dedaWeeklyOwnerPilotStandingsV1;
+
+// DEDA 100399 community (20-user) server-owned weekly XP score routes.
+// SOURCE ONLY: do not deploy until owner explicitly approves Cloud services.
+// Disabled by default: deda_weekly_community_config/active is absent.
+// This does not grant level XP, wallet diamonds, or other prizes.
+const dedaCommunityWeekly = require("./deda_weekly_community_scores_callable.js");
+exports.dedaWeeklyCommunityClaimV1 = dedaCommunityWeekly.dedaWeeklyCommunityClaimV1;
+exports.dedaWeeklyCommunityStandingsV1 = dedaCommunityWeekly.dedaWeeklyCommunityStandingsV1;
