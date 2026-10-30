@@ -79,6 +79,23 @@ class Original100396PatchTests(unittest.TestCase):
                 binder.bind(root)
             self.assertEqual(sha(main),before)
 
+    def test_preexisting_100396_restored_source_without_auth_import(self):
+        with tempfile.TemporaryDirectory(prefix="deda-stage29-") as d:
+            root,_=self.make(d)
+            main=root/"lib/main.dart"
+            main.write_text(main.read_text().replace(
+                "import 'package:firebase_auth/firebase_auth.dart';",
+                "import 'package:cloud_firestore/cloud_firestore.dart';"))
+            manifest=root/"internal-build-inputs.json"
+            data=json.loads(manifest.read_text())
+            data["sourceHashes"]["lib/main.dart"]=sha(main)
+            manifest.write_text(json.dumps(data))
+            binder.bind(root)
+            bound=main.read_text()
+            self.assertEqual(bound.count(
+                "import 'package:firebase_auth/firebase_auth.dart';"),1)
+            self.assertEqual(bound.count("DedaWeeklyAccountViewGate("),2)
+
     def test_preexisting_bridge_refuses_to_overwrite(self):
         with tempfile.TemporaryDirectory(prefix="deda-stage29-") as d:
             root,original=self.make(d)
