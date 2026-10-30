@@ -91,9 +91,14 @@ def bind(project):
     card_count=code.count("DedaLeaderboardHomeCard(")
     raw_route_count=code.count("DedaWeeklyLeaderboardSafeScreen(")
     if route_count!=2 or claim_count!=1 or card_count!=2 or raw_route_count!=2:
+        # Safe source-only diagnostics: never print account or user data.
+        claim_sites=[(n,line.strip()[:130])
+            for n,line in enumerate(code.splitlines(),1)
+            if "claim" in line.lower() or "DedaTaskEngine." in line]
         raise ValueError("Actual 100396 leaderboard/task claim layout mismatch "
             f"(safe_routes={raw_route_count}, matched_routes={route_count}, "
-            f"claim={claim_count}, home_cards={card_count})")
+            f"claim={claim_count}, home_cards={card_count}, "
+            f"claim_site_lines={claim_sites[:45]!r})")
     before="import 'deda_weekly_leaderboard_safe_screen.dart';"
     if code.count(before)!=1:raise ValueError("safe screen import mismatch")
     addition=("import 'deda_weekly_account_view_gate.dart';\n"
