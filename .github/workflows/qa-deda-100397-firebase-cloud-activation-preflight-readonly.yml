@@ -1,0 +1,123 @@
+name: DEDA 100397 Firebase Owner League Activation Gate (READ ONLY)
+on:
+  push:
+    branches: [deda-100396-real-weekly-scores-owner-apk-private-qa-2026-10-30]
+    paths: ['.github/workflows/qa-deda-100397-firebase-cloud-activation-preflight-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-firebase-activation-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_FIREBASE_CREDENTIAL: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FIREBASE_FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify project billing, Cloud Functions deployment IAM, live callables and owner config without any writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'
+          result={'project':p,'audit':'READ_ONLY_NO_DEPLOY_NO_USER_MUTATION',
+                  'serviceCredential':'missing','cloudBilling':'unknown',
+                  'cloudFunctionsDeployRights':'unknown','cloudFunctionsUsCentral1':'unknown',
+                  'ownerCallablesPresent':'unknown','ownerPilotConfig':'unknown',
+                  'ownerPilotSecret':'unknown'}
+          raw=os.getenv('DEDA_FIREBASE_CREDENTIAL') or os.getenv('DEDA_FIREBASE_FALLBACK')
+          try:
+            info=json.loads(raw or '{}')
+            assert info.get('type')=='service_account' and info.get('project_id')==p
+            auth=service_account.Credentials.from_service_account_info(
+              info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            session=AuthorizedSession(auth)
+            result['serviceCredential']='validated_project_account'
+          except Exception:
+            session=None
+            result['serviceCredential']='missing_or_wrong_project'
+          def ask(method,url,data=None):
+            if session is None:return None,{}
+            try:
+              response=session.request(method,url,json=data,timeout=16)
+              try:body=response.json()
+              except Exception:body={}
+              return response.status_code,body if isinstance(body,dict) else {}
+            except Exception:return 'transport_error',{}
+          if session is not None:
+            st,b=ask('GET',f'https://cloudbilling.googleapis.com/v1/projects/{p}/billingInfo')
+            result['cloudBilling']=('enabled' if b.get('billingEnabled') is True else
+                    'not_enabled' if st==200 else f'visibility_http_{st}')
+            permissions=['cloudfunctions.functions.list','cloudfunctions.functions.get',
+              'cloudfunctions.functions.create','cloudfunctions.functions.update',
+              'iam.serviceAccounts.actAs','serviceusage.services.enable']
+            st,b=ask('POST',f'https://cloudresourcemanager.googleapis.com/v1/projects/{p}:testIamPermissions',
+                 {'permissions':permissions})
+            if st==200:
+              allowed=set(b.get('permissions',[]))
+              result['cloudFunctionsDeployRights']={
+                perm:perm in allowed for perm in permissions
+              }
+            else:result['cloudFunctionsDeployRights']=f'visibility_http_{st}'
+            seen=set()
+            readable=False
+            for v in ['v2','v1']:
+              st,b=ask('GET',f'https://cloudfunctions.googleapis.com/{v}/projects/{p}/locations/us-central1/functions?pageSize=100')
+              if st==200:
+                readable=True
+                seen.update(f.get('name','').split('/')[-1] for f in b.get('functions',[]) if isinstance(f,dict))
+              result['cloudFunctions_'+v+'_http']=st
+            targets=['dedaWeeklyOwnerPilotClaimV1','dedaWeeklyOwnerPilotStandingsV1']
+            result['ownerCallablesPresent']={t:t in seen for t in targets} if readable else 'not_verifiable'
+            result['cloudFunctionsUsCentral1']='visible' if readable else 'not_visible'
+            st,b=ask('GET',f'https://firestore.googleapis.com/v1/projects/{p}/databases/(default)/documents/deda_weekly_owner_pilot_config/active')
+            if st==200:
+              fields=b.get('fields',{})
+              owner=fields.get('ownerQaEnabled',{}).get('booleanValue') is True
+              noPrizes=fields.get('grantDiamonds',{}).get('booleanValue') is False
+              allowClient=fields.get('allowClientTaskReports',{}).get('booleanValue') is True
+              permitted=fields.get('allowedAccounts',{}).get('arrayValue',{}).get('values',[])
+              result['ownerPilotConfig']={'exists':True,'ownerQaEnabled':owner,
+                 'grantDiamondsDisabled':noPrizes,'clientTaskReportsAllowed':allowClient,
+                 'hasAllowlistedAccounts':len(permitted)>0}
+            else:result['ownerPilotConfig']=f'visibility_http_{st}'
+            st,b=ask('GET',f'https://secretmanager.googleapis.com/v1/projects/{p}/secrets/DEDA_WEEKLY_OWNER_PILOT_READ_KEY')
+            result['ownerPilotSecret']='exists' if st==200 else f'visibility_http_{st}'
+          print(json.dumps(result,ensure_ascii=False,sort_keys=True))
+          with open(os.path.join(os.environ['RUNNER_TEMP'],'deda-100397-cloud-activation-preflight.json'),'w') as out:
+            json.dump(result,out,sort_keys=True)
+          PY
+      - name: Optional existing Firebase CLI token functions LIST only, never deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${FIREBASE_TOKEN:-}" ]; then
+            echo 'FIREBASE_TOKEN_CONFIGURED=false'
+          elif timeout 130 npx --yes firebase-tools@13.35.1 functions:list --project deda-25b88 --token "$FIREBASE_TOKEN" --non-interactive > "$RUNNER_TEMP/readonly-functions-list.txt" 2> "$RUNNER_TEMP/readonly-functions-error.txt"; then
+            echo 'FIREBASE_TOKEN_FUNCTIONS_LIST=success'
+            python3 - <<'PY'
+          from pathlib import Path
+          s=Path(__import__('os').environ['RUNNER_TEMP']+'/readonly-functions-list.txt').read_text()
+          print('OWNER_CLAIM_LISTED=', 'dedaWeeklyOwnerPilotClaimV1' in s)
+          print('OWNER_STANDINGS_LISTED=', 'dedaWeeklyOwnerPilotStandingsV1' in s)
+          PY
+          else
+            echo 'FIREBASE_TOKEN_FUNCTIONS_LIST=unavailable'
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100397-FIREBASE-ACTIVATION-READONLY-PREFLIGHT
+          path: ${{ runner.temp }}/deda-100397-cloud-activation-preflight.json
+          if-no-files-found: error
+          retention-days: 14
