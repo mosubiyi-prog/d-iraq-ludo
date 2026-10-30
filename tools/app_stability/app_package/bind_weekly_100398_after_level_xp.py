@@ -22,9 +22,9 @@ OLD_NOTIFY = """    if (!alreadyAwarded && taskId != null) {
       ));
     }
 """
-LEVEL_AWARD = "await DedaSocialProgressWallet.awardTaskClaim(taskId);"
+LEVEL_AWARD = "await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));"
 LEVEL_AND_NOTIFY = """final leagueLevelXpBefore = DedaSocialProgressWallet.xpNotifier.value;
-          await DedaSocialProgressWallet.awardTaskClaim(taskId);
+          await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));
           // Count in the league ONLY when original level XP was actually saved.
           // Repeated task claims, failed XP writes, and quiz-answer points
           // must never create a second league score.
@@ -59,7 +59,7 @@ def rewrite(code):
     view = code[view_start:view_end]
     if (view.count(LEVEL_AWARD) != 1
             or "if (result.pointsAwarded)" not in view
-            or "final result = await DedaTaskEngine.claimTaskReward(taskId);" not in view
+            or "final result = await DedaSectionOperationContext.wait(() => DedaTaskEngine.claimTaskReward(taskId));" not in view
             or "DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward" in view):
         raise ValueError("Original +20 XP award flow not verified; " +
             "hook=" + str(view.count(LEVEL_AWARD)) +
