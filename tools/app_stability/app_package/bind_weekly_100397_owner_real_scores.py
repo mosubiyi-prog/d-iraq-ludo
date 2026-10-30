@@ -48,18 +48,23 @@ NEW="""DedaWeeklyAccountViewGate(
 # leaderboard routes. Text and widget tokens must remain exactly the same.
 ROUTE=re.compile("".join(r"\s+" if chunk.isspace() else re.escape(chunk)
     for chunk in re.split(r"(\s+)",OLD) if chunk))
-CLAIM="""    final result = await DedaTaskEngine.claimTaskReward(taskId);"""
-CLAIM_NEW="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
-    if (result.accepted && result.pointsAwarded) {
-      // Genuine +5 original task level points remain untouched.
-      // The server computes its own +20 league XP on this same success.
+CLAIM="""    return DedaTaskEventResult(
+      accepted: true,
+      completedNow: false,
+      pointsAwarded: !alreadyAwarded,"""
+CLAIM_NEW="""    if (!alreadyAwarded && taskId != null) {
+      // Notify the server only AFTER the original successful +5 task award.
+      // This private QA reporter never edits original levels or diamonds.
       unawaited(DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(
-        accountKey: DedaBackend.accountKeyForPhone(
-            DedaPreferences.phone).trim(),
+        accountKey: accountKey,
         taskId: taskId,
       ));
     }
-"""
+    return DedaTaskEventResult(
+      accepted: true,
+      completedNow: false,
+      pointsAwarded: !alreadyAwarded,"""
+
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def bind(project):
     project=Path(project).resolve()
@@ -87,7 +92,12 @@ def bind(project):
     main=project/"lib/main.dart"
     code=main.read_text()
     route_count=len(ROUTE.findall(code))
-    claim_count=code.count(CLAIM)
+    # Must be the actual original task award method, never a UI tap or
+    # an unrelated rewards path.
+    method_start=code.find("  static Future<DedaTaskEventResult> claimTaskReward(")
+    method_end=code.find("  static Future<", method_start+20) if method_start>=0 else -1
+    method=code[method_start:method_end if method_end>=0 else len(code)] if method_start>=0 else ""
+    claim_count=method.count(CLAIM)
     card_count=code.count("DedaLeaderboardHomeCard(")
     raw_route_count=code.count("DedaWeeklyLeaderboardSafeScreen(")
     if route_count!=2 or claim_count!=1 or card_count!=2 or raw_route_count!=2:
