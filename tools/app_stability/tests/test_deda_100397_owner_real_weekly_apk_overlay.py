@@ -32,7 +32,7 @@ class OriginalOwnerAPKOverlayTests(unittest.TestCase):
             "DedaLeaderboardHomeCard(\n"
             "  placeholder: true,\n"
             ")\n"+
-            "void originalClaim() async {\n"+
+            "  static Future<DedaTaskEventResult> claimTaskReward(String taskId) async {\n"+
             binder.CLAIM+"\n}\n"
         )
         (root/"lib/main.dart").write_text(original)
