@@ -78,9 +78,14 @@ def bind(project):
     code=main.read_text()
     if code.count(OLD)!=2 or code.count("DedaWeeklyLeaderboardSafeScreen(")!=2:
         raise ValueError("Original TWO home leaderboard routes changed")
-    if ("import 'package:firebase_auth/firebase_auth.dart';" not in code or
-        "import 'deda_weekly_leaderboard_safe_screen.dart';" not in code):
-        raise ValueError("Original DEDA auth and existing page imports not found")
+    if "import 'deda_weekly_leaderboard_safe_screen.dart';" not in code:
+        raise ValueError("Original DEDA verified leaderboard import missing")
+    if "import 'package:firebase_auth/firebase_auth.dart';" not in code:
+        before="import 'package:cloud_firestore/cloud_firestore.dart';"
+        if code.count(before)!=1:
+            raise ValueError("Cannot safely attach original auth session")
+        code=code.replace(before,before+"\n"
+           "import 'package:firebase_auth/firebase_auth.dart';",1)
     bridge_imports=("import 'deda_weekly_account_view_gate.dart';\n"
                     "import 'deda_weekly_standings_bridge.dart';\n")
     if any(x in code for x in bridge_imports.splitlines()):
