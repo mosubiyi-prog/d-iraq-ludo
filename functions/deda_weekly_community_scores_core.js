@@ -54,7 +54,7 @@ async function identify({db,auth,request,readOnly=false}){
     request.auth?.token?.firebase?.sign_in_provider!=="anonymous"||
     typeof request.app?.appId!=="string"||!request.app.appId||
     !input||typeof input!=="object"||Array.isArray(input)||
-    Object.keys(input).length!==(readOnly?1:2))
+    Object.keys(input).length!==(readOnly?1:3))
     fail("AUTH_REQUIRED");
   const user=await auth.getUser(uid).catch(()=>null);
   if(!user||user.disabled||user.uid!==uid||user.email||
@@ -88,6 +88,10 @@ async function claim({db,auth,request,nowMs=Date.now(),newId=randomUUID}){
   const cfg=await activeConfig(db);
   const taskId=request.data.taskId;
   if(!TASKS.has(taskId))fail("BAD_TASK");
+  // A queued successful task from yesterday must never earn today\'s XP.
+  const claimedDay=request.data.claimDay;
+  if(typeof claimedDay!=="string"||!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(claimedDay)||
+     claimedDay!==iraqDay(nowMs))fail("DAY_MISMATCH");
   const w=weekAt(cfg.startAtMs,nowMs);
   if(nowMs>=w.closeAtMs)return {
     status:"WEEK_FROZEN",counted:false,weeklyXp:0,weekId:w.id};
