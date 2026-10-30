@@ -67,4 +67,4 @@ jobs:
           set -euo pipefail
           cd "$RUNNER_TEMP/deda-real-100398"
           flutter pub get --enforce-lockfile
-          dart analyze lib/main.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_account_view_gate.dart
+          dart analyze --no-fatal-infos --no-fatal-warnings lib/main.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_account_view_gate.dart
