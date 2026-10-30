@@ -1326,3 +1326,10 @@ exports.dedaPremiumResolveAdminGiftRecipient =
     buildResolveGiftRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
 exports.dedaPremiumResolvePublicRecipient =
     buildResolvePublicRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
+
+// Owner-only DEDA 100396-derived weekly task score field trial.
+// Disabled until server-side account allowlist is explicitly configured.
+// No diamond grants or level XP writes.
+const dedaOwnerWeeklyPilot = require("./deda_weekly_owner_live_pilot.js");
+exports.dedaWeeklyOwnerPilotClaimV1 = dedaOwnerWeeklyPilot.dedaWeeklyOwnerPilotClaimV1;
+exports.dedaWeeklyOwnerPilotStandingsV1 = dedaOwnerWeeklyPilot.dedaWeeklyOwnerPilotStandingsV1;
