@@ -24,10 +24,13 @@ def rewrite(source):
         raise ValueError("Missing canonical 100399 bridge method boundaries")
     section=source[source.index(before):source.index(after)]
     for anchor in ("'dedaWeeklyCommunityClaimV1'",
-                   "'COUNTED_COMMUNITY'","'ALREADY_RECORDED'",
-                   "FirebaseAuth.instance.currentUser"):
+                   "'COUNTED_COMMUNITY'","'ALREADY_RECORDED'"):
         if section.count(anchor)!=1:
             raise ValueError("Unverified original 100399 community callable: "+anchor)
+    # Original bridge intentionally checks Firebase session before AND after
+    # its callable; preserve both checks instead of requiring a single mention.
+    if section.count("FirebaseAuth.instance.currentUser")!=2:
+        raise ValueError("Original 100399 authentication guards changed")
     replacement="""  static Future<bool> claimAfterOriginalReward({
     required String accountKey,
     required String taskId,
