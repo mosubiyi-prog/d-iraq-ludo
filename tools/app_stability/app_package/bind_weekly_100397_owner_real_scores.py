@@ -48,8 +48,7 @@ NEW="""DedaWeeklyAccountViewGate(
 # leaderboard routes. Text and widget tokens must remain exactly the same.
 ROUTE=re.compile("".join(r"\s+" if chunk.isspace() else re.escape(chunk)
     for chunk in re.split(r"(\s+)",OLD) if chunk))
-CLAIM="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
-    if (!mounted) return;"""
+CLAIM="""    final result = await DedaTaskEngine.claimTaskReward(taskId);"""
 CLAIM_NEW="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
     if (result.accepted && result.pointsAwarded) {
       // Genuine +5 original task level points remain untouched.
@@ -60,7 +59,7 @@ CLAIM_NEW="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
         taskId: taskId,
       ));
     }
-    if (!mounted) return;"""
+"""
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def bind(project):
     project=Path(project).resolve()
