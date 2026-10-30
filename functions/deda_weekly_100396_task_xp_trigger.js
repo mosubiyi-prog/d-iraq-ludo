@@ -18,7 +18,7 @@ function makeTrigger(){
  return onDocumentCreated({
   document:"deda_weekly_server_action_proofs/{eventKey}",
   secrets:[ACTION_KEY],
-  retry:false,
+  retry:true,
  },async event=>{
   const proof=event.data?.data();
   if(!proof)return;
@@ -32,6 +32,9 @@ function makeTrigger(){
    // Admin can inspect event status; never leak accountKey or phone.
    console.error("DEDA_WEEKLY_APPLIED_XP_MIRROR_HELD",
       e instanceof TaskXpHold ? e.name : "backend-unavailable");
+   // Permanent identity/proof denials should not enter a retry loop.
+   // Transient Firestore failures retry safely via event/score locks.
+   if(e instanceof TaskXpHold)return;
    throw e;
   }
  });
