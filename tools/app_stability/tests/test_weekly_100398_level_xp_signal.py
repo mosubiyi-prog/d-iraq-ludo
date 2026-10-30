@@ -19,10 +19,10 @@ CODE = (
     "  }\n"
     "  static Future<DedaTaskEventResult> nextMethod() async {}\n"
     "  Future<void> _claimTaskReward(String taskId) async {\n"
-    "    final result = await DedaTaskEngine.claimTaskReward(taskId);\n"
+    "    final result = await DedaSectionOperationContext.wait(() => DedaTaskEngine.claimTaskReward(taskId));\n"
     "    if (result.pointsAwarded) {\n"
     "      try {\n"
-    "          await DedaSocialProgressWallet.awardTaskClaim(taskId);\n"
+    "          await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));\n"
     "      } catch (_) {}\n"
     "    }\n"
     "  }\n"
@@ -37,10 +37,10 @@ class TestLeagueLevelXpSignal(unittest.TestCase):
         self.assertEqual(
             fixed.count("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward("), 1)
         self.assertEqual(
-            fixed.count("await DedaSocialProgressWallet.awardTaskClaim(taskId);"),
+            fixed.count("await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));"),
             1)
         self.assertLess(
-            fixed.index("await DedaSocialProgressWallet.awardTaskClaim(taskId);"),
+            fixed.index("await DedaSectionOperationContext.wait(() => DedaSocialProgressWallet.awardTaskClaim(taskId));"),
             fixed.index("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward("))
         self.assertIn("leagueLevelXpDelta ==", fixed)
         self.assertIn("result.pointsAwarded &&", fixed)
