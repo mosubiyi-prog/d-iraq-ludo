@@ -1,0 +1,49 @@
+name: DEDA 100399 Community 20-User Real XP Standings (SOURCE ONLY)
+on:
+  push:
+    branches:
+      - deda-weekly-100399-community-20-linked-scores-no-deploy-2026-10-31
+    paths:
+      - 'functions/deda_weekly_community_scores_core.js'
+      - 'functions/deda_weekly_community_scores_callable.js'
+      - 'functions/index.js'
+      - 'functions/tests/deda_weekly_community_scores_core.test.cjs'
+      - 'tools/app_stability/app_package/bind_weekly_100399_community_bridge.py'
+      - 'tools/app_stability/tests/test_weekly_100399_community_bridge.py'
+      - '.github/workflows/qa-deda-100399-community-20-source-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  community-account-scores-safe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure unchanged rules, local XP, user funds and app original
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 3013d4d97961433a76732cb2fbde82f28dd21ddd HEAD -- \
+            firestore.rules firebase.json google-services.json \
+            lib/main.dart lib/deda_weekly_owner_pilot_bridge.dart \
+            functions/deda_weekly_owner_live_pilot_core.js \
+            functions/deda_weekly_owner_live_pilot.js
+          node --check functions/deda_weekly_community_scores_core.js
+          node --check functions/deda_weekly_community_scores_callable.js
+          node --check functions/index.js
+          node --test functions/tests/deda_weekly_community_scores_core.test.cjs
+          node --test functions/tests/deda_weekly_owner_live_pilot_core.test.cjs
+          python3 -m py_compile tools/app_stability/app_package/bind_weekly_100399_community_bridge.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_weekly_100399_community_bridge.py' -v
+          echo 'PASS only if real DEDA task points unchanged and 20-user backend models agree'
+          echo 'NO Firebase deploy, NO rules changes, NO wallet/diamonds, NO APK, NO Play'
