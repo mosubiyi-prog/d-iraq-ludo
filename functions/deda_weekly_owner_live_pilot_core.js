@@ -174,7 +174,8 @@ async function standings({db,auth,request,nowMs=Date.now(),secret}){
   // is not independently proven and MUST NOT trigger prize payouts.
   source:"future_server_issued_only",readOnly:true,
   current:make(w,currentRows,"live",Math.max(0,w.closeAtMs-nowMs)),
-  previous:make(p,previousRows,"closed",0),
+  previous:make(w.id===p.id?{id:"weekly-before-competition"}:p,
+   previousRows,"closed",0),
  };
 }
 module.exports={claim,standings,authorize,weekAt,baghdadDay};
