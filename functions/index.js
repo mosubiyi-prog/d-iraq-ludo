@@ -1326,3 +1326,9 @@ exports.dedaPremiumResolveAdminGiftRecipient =
     buildResolveGiftRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
 exports.dedaPremiumResolvePublicRecipient =
     buildResolvePublicRecipientCallable({onCall, HttpsError, db: dedaQa32Db});
+
+// DEDA 100396 point 1: server-issued and already-applied task XP only.
+// Owner-gated calendar; no local-score trust, wallet write or reward payout.
+// This QA branch is NOT deployed. Activation requires owner approval.
+exports.dedaWeeklyAppliedXpBridgeV1 =
+  require("./deda_weekly_100396_task_xp_trigger.js").makeTrigger();
