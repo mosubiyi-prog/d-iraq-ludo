@@ -38,6 +38,7 @@ jobs:
           node --check functions/deda_weekly_owner_live_pilot.js
           node --test functions/tests/deda_weekly_owner_live_pilot_core.test.cjs
           python3 -m py_compile tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py
+          python3 -m unittest discover -s tools/app_stability/tests -p 'test_deda_100397_owner_real_weekly_apk_overlay.py' -v
           echo "Original verified 100396 and all wallet/task/UI files untouched"
   owner-real-100397-signed-private-apk:
     needs: original-100396-backend-and-integrity-qa
@@ -172,7 +173,7 @@ jobs:
           python3 tools/app_stability/app_package/verify.py             "$RUNNER_TEMP/deda-original-100396"             "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk"             --output "$RUNNER_TEMP/deda-stage29-100397-artifact/verification.json"
           cp "$RUNNER_TEMP/deda-original-100396/build/app/outputs/flutter-apk/app-release.apk"             "$RUNNER_TEMP/deda-stage29-100397-artifact/DEDA-100397-REAL-WEEKLY-SCORES-OWNER-PRIVATE-QA.apk"
           sha256sum "$RUNNER_TEMP/deda-stage29-100397-artifact/DEDA-100397-REAL-WEEKLY-SCORES-OWNER-PRIVATE-QA.apk"             > "$RUNNER_TEMP/deda-stage29-100397-artifact/SHA256.txt"
-          printf '%s\n'             'DEDA original signed 100396 PRIVATE phone and tablet QA: weekly Continue Daily Tasks now opens original task page.'             'Retains original approved 100396 manager tile, rank visuals, both home layouts, and original task rewards.'             'Admin page rechecks original backend identity; all league control toggles disabled.'             'Fixes navigation for both home layouts, current/previous tabs. Real shared score requires separate owner-approved Firebase pilot Functions deployment and account allowlist. No real payouts.'             'No Firebase/rules/Play deployment by this workflow; no XP, wallet, user profile or prize writes.'             'Test on device and preserve rollback; never bypass Play Protect warnings.'             > "$RUNNER_TEMP/deda-stage29-100397-artifact/READ-ME.txt"
+          printf '%s\n'             'DEDA signed 100397 owner-private QA from exact approved 100396; existing daily task button retained.'             'Retains original approved 100396 manager tile, rank visuals, both home layouts, and original task rewards.'             'Admin page rechecks original backend identity; all league control toggles disabled.'             'Score claims are server-shared only AFTER both Firebase pilot callables are deployed and owner account is allowlisted. No real payouts; task claims are client-reported and NOT independent anti-fraud proof.'             'No Firebase/rules/Play deployment by this workflow; no XP, wallet, user profile or prize writes.'             'Test on device and preserve rollback; never bypass Play Protect warnings.'             > "$RUNNER_TEMP/deda-stage29-100397-artifact/READ-ME.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: DEDA-100397-REAL-WEEKLY-SCORES-OWNER-PRIVATE-QA
