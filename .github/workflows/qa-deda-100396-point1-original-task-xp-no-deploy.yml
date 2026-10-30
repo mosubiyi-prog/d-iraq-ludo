@@ -118,7 +118,7 @@ jobs:
           ast.parse(f.read_text())
           c=f.read_text()
           assert 'if code.count(OLD)!=2' in c
-          assert "changed!={'lib/main.dart'}" in c
+          assert 'if changed!={"lib/main.dart"}:' in c
           assert 'project==ROOT or ROOT in project.parents' in c
           print('Validated SHA-locked, isolated 100396 workspace binder')
           PY
