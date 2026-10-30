@@ -119,11 +119,14 @@ jobs:
           assert data['weeklyStage27']['actualPrizePayoutEnabled'] is False
           assert data['weeklyStage27']['writesRealXP'] is False
           assert data['weeklyStage27']['writesRealDiamonds'] is False
-          assert data['weeklyStage29']['bothOfficialHomeLayouts'] is True
-          assert data['weeklyStage29']['originalDailyTasksNavigation'] is True
-          assert data['weeklyStage29']['taskClaimChanged'] is False
-          assert data['weeklyStage29']['userXPChanged'] is False
-          assert data['weeklyStage29']['walletChanged'] is False
+          assert data['weeklyStage28']['bothOfficialHomeLayouts'] is True
+          assert data['weeklyStage28']['originalDailyTasksNavigation'] is True
+          assert data['weeklyStage28']['taskClaimChanged'] is False
+          assert data['weeklyStage28']['userXPChanged'] is False
+          assert data['weeklyStage28']['walletChanged'] is False
+          assert data['weekly100397OwnerRealScoresQA']['ownerOnlyQA'] is True
+          assert data['weekly100397OwnerRealScoresQA']['sameWalletAndDiamonds'] is True
+          assert data['weekly100397OwnerRealScoresQA']['sharedFirebaseScoringRequiresBackendDeployment'] is True
           assert data['weekly100397OwnerRealScoresQA']['source100396ShaVerified'] is True
           assert data['weekly100397OwnerRealScoresQA']['twoOriginalLeaderboardRoutes']==2
           assert data['weekly100397OwnerRealScoresQA']['sameWalletAndDiamonds'] is True
@@ -156,7 +159,7 @@ jobs:
           assert data['completeOwnerDelivery'] is False
           assert data['financialRestoreEnabled'] is False
           assert data['weeklyStage27']['privateQaOnly'] is True
-          assert data['weeklyStage29']['privateQaOnly'] is True
+          assert data['weeklyStage28']['privateQaOnly'] is True
           command=['flutter','build','apk','--release','--build-number=100397','--no-pub']
           command += ['--dart-define='+k+'='+str(v).lower() for k,v in data['flags'].items()]
           subprocess.run(command,check=True)
