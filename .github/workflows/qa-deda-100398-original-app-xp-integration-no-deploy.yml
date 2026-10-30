@@ -1,0 +1,69 @@
+name: DEDA 100398 Real 100396 Task XP Integration QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-weekly-100398-level-xp-first-no-deploy-2026-10-31
+    paths:
+      - ".github/workflows/qa-deda-100398-original-app-xp-integration-no-deploy.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-original-100396-task-xp-signal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: false
+      - name: Reconstruct approved real task / league sources in isolated workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/deda-real-100398"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$WORK"
+          python3 tools/app_stability/app_package/prepare.py "$WORK" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$WORK"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$WORK"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$WORK"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$WORK"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$WORK"
+          export DEDA_QA_WORK="$WORK"
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,os
+          p=Path(os.environ["DEDA_QA_WORK"])
+          manifest=json.loads((p/"internal-build-inputs.json").read_text())
+          main=(p/"lib/main.dart").read_text()
+          assert manifest["versionCode"]==100398
+          assert manifest["weekly100398SourceOfLevelXp"]["serverReportAfterActualLevelXp"]
+          assert main.count("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(")==1
+          engine=main.split("  static Future<DedaTaskEventResult> claimTaskReward(",1)[1].split("  static Future<",1)[0]
+          assert "DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(" not in engine
+          view=main.split("  Future<void> _claimTaskReward(String taskId)",1)[1].split("  Future<void> _openTask(",1)[0]
+          assert view.index("await DedaSocialProgressWallet.awardTaskClaim(taskId);") < view.index("DedaWeeklyOwnerPilotBridge.claimAfterOriginalReward(")
+          assert "leagueLevelXpDelta ==" in view
+          print("ACTUAL ORIGINAL 100396 +20 LEVEL XP SIGNAL ORDER VERIFIED")
+          print("No APK, no Firebase deploy, no Play, no account balance changes")
+          PY
+      - name: Verify Flutter source compiles without touching production
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/deda-real-100398"
+          flutter pub get --enforce-lockfile
+          dart analyze lib/main.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_account_view_gate.dart
