@@ -4,7 +4,7 @@ Changes only two original leaderboard ROUTES and one original daily-task
 successful-award notification, never task-engine math, XP, diamonds or UI.
 """
 from pathlib import Path
-import argparse,hashlib,json,shutil
+import argparse,hashlib,json,re,shutil
 
 ROOT=Path(__file__).resolve().parents[3]
 EXPECTED_VERSION=100396
@@ -44,6 +44,10 @@ NEW="""DedaWeeklyAccountViewGate(
           ),
         ),
       )"""
+# Formatting-safe matching ONLY for the two expected, SHA-verified original
+# leaderboard routes. Text and widget tokens must remain exactly the same.
+ROUTE=re.compile("".join(r"\\s+" if chunk.isspace() else re.escape(chunk)
+    for chunk in re.split(r"(\\s+)",OLD) if chunk))
 CLAIM="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
     if (!mounted) return;"""
 CLAIM_NEW="""    final result = await DedaTaskEngine.claimTaskReward(taskId);
@@ -83,9 +87,14 @@ def bind(project):
         raise ValueError("Would overwrite original source")
     main=project/"lib/main.dart"
     code=main.read_text()
-    if code.count(OLD)!=2 or code.count(CLAIM)!=1 or (
-        code.count("DedaLeaderboardHomeCard(")!=2):
-        raise ValueError("Actual 100396 leaderboard/task claim layout mismatch")
+    route_count=len(ROUTE.findall(code))
+    claim_count=code.count(CLAIM)
+    card_count=code.count("DedaLeaderboardHomeCard(")
+    raw_route_count=code.count("DedaWeeklyLeaderboardSafeScreen(")
+    if route_count!=2 or claim_count!=1 or card_count!=2 or raw_route_count!=2:
+        raise ValueError("Actual 100396 leaderboard/task claim layout mismatch "
+            f"(safe_routes={raw_route_count}, matched_routes={route_count}, "
+            f"claim={claim_count}, home_cards={card_count})")
     before="import 'deda_weekly_leaderboard_safe_screen.dart';"
     if code.count(before)!=1:raise ValueError("safe screen import mismatch")
     addition=("import 'deda_weekly_account_view_gate.dart';\n"
@@ -96,7 +105,7 @@ def bind(project):
         if code.count(anchor)!=1:raise ValueError("missing cloud import")
         code=code.replace(anchor,anchor+"\n"+
           "import 'package:firebase_auth/firebase_auth.dart';",1)
-    code=code.replace(OLD,NEW).replace(CLAIM,CLAIM_NEW,1)
+    code=ROUTE.sub(lambda _: NEW,code).replace(CLAIM,CLAIM_NEW,1)
     if (code.count(NEW)!=2 or code.count(CLAIM_NEW)!=1 or
         code.count("DedaWeeklyLeaderboardSafeScreen(")!=2 or
         code.count("const DedaDailyTasksPage()")!=
