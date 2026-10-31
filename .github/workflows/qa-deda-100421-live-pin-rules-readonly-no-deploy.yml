@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Test source-only boolean audit contract (no credentials)
-        run: python3 -m unittest test/test_deda_100421_live_pin_policy_readonly.py -v
+        run: python3 -m unittest discover -s test -p 'test_deda_100421_live_pin_policy_readonly.py' -v
       - name: Google credentials for GET-only published Firebase Rules API
         run: python3 -m pip install --disable-pip-version-check google-auth requests
       - name: Inspect ONLY the published ruleset, not Firestore documents
