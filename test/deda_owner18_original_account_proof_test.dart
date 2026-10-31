@@ -59,4 +59,49 @@ void main() {
             route: route),
         isFalse);
   });
+  test('replacement UID requires explicit canonical original ID, not only matching accountKey', () {
+    final missingOriginal = <String, dynamic>{'accountKey': 'same-account'};
+    expect(DedaOwner18OriginalAccountProof.scopeMatches(
+      original: id,
+      uid: 'new-device',
+      account: missingOriginal,
+      session: session,
+      route: route,
+    ), isFalse);
+    expect(DedaOwner18OriginalAccountProof.scopeMatches(
+      original: id,
+      uid: 'new-device',
+      account: {...missingOriginal, 'sharePersonalId': ''},
+      session: session,
+      route: route,
+    ), isFalse);
+  });
+
+  test('original route owner retains legacy compatibility pending verified ID projection', () {
+    final legacyAccount = <String, dynamic>{'accountKey': 'same-account'};
+    expect(DedaOwner18OriginalAccountProof.scopeMatches(
+      original: id,
+      uid: 'old-device',
+      account: legacyAccount,
+      session: session,
+      route: route,
+    ), isTrue);
+  });
+
+  test('replacement UID cannot pass another account session or changed original route', () {
+    expect(DedaOwner18OriginalAccountProof.scopeMatches(
+      original: id,
+      uid: 'new-device',
+      account: account,
+      session: <String, dynamic>{'accountKey': 'different-account'},
+      route: route,
+    ), isFalse);
+    expect(DedaOwner18OriginalAccountProof.scopeMatches(
+      original: id,
+      uid: 'new-device',
+      account: account,
+      session: session,
+      route: {...route, 'ownerUid': ''},
+    ), isFalse);
+  });
 }
