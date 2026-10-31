@@ -104,6 +104,11 @@ def bind(workspace):
         "import 'deda_qa32_spark_public_identifier_directory.dart';\n"
         "import 'deda_active_id_public_sync_100409.dart';",
         "stage71 nonblocking projection module")
+    snippet_index=stage.find("static Future<void> use(")
+    if snippet_index >= 0:
+        print("STAGE71_USE_100409_AUDIT_BEGIN")
+        print(stage[snippet_index:snippet_index+5400])
+        print("STAGE71_USE_100409_AUDIT_END")
     stage=one(stage,
         """    final db=FirebaseFirestore.instance;
     if (identifier!=originalId) {
