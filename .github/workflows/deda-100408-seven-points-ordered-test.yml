@@ -79,6 +79,10 @@ jobs:
                 'DedaDiamondsWallet','friendCount','friendsCount')
           match=[i for i,s in enumerate(main) if any(w in s for w in tags)]
           print('PROFILE_MATCH_LOCATIONS',[(i+1,main[i][:150]) for i in match[:60]])
+          for a,b in ((31195,31325),(32090,32170),(12775,12880)):
+              print(f'PROFILE_SCOPE_{a}_{b}')
+              for j in range(a-1,min(len(main),b)):
+                  print(f'{j+1}: {main[j][:220]}')
           PY
           python3 tools/app_stability/app_package/bind_weekly_100408_point1_verified_id_speed.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100408_point2_pause_notice.py "$RUNNER_TEMP/deda-original-100396"
