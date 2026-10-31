@@ -1,0 +1,64 @@
+name: DEDA 100402 Actual Published Firestore Rules Merge Readonly
+on:
+  push:
+    branches: [deda-100402-firestore-direct-league-first-apk-2026-10-31]
+    paths: ['.github/workflows/qa-deda-100402-live-policy-merge-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  published-rules-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Read only live Firestore rules and test whether additive patch preserves original
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth requests
+          python - <<'PY'
+          import json,os,hashlib,subprocess
+          from pathlib import Path
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'
+          info=json.loads(os.environ.get('PRIMARY') or os.environ.get('FALLBACK') or '{}')
+          assert info['project_id']==p
+          client=AuthorizedSession(service_account.Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform']))
+          base='https://firebaserules.googleapis.com/v1/'
+          release=client.get(base+f'projects/{p}/releases/cloud.firestore',timeout=20)
+          assert release.status_code==200, 'LIVE_RELEASE_NOT_READABLE'
+          name=release.json()['rulesetName']
+          assert name.startswith(f'projects/{p}/rulesets/')
+          got=client.get(base+name,timeout=20)
+          assert got.status_code==200
+          files=got.json()['source']['files']
+          assert len(files)==1 and isinstance(files[0].get('content'),str)
+          live=files[0]['content']
+          old=subprocess.check_output(['git','show','5c710e5b227e70726d15a9853b41a00aa69cee27:firestore.rules'],text=True)
+          current=Path('firestore.rules').read_text()
+          start='    // DEDA 100402: a small weekly community league'
+          end='    match /system_counters/{counterId} {'
+          assert current.count(start)==1 and old.count(end)==1
+          block=current[current.index(start):current.index(end)]
+          assert len(block)>2000 and 'allow create:' in block
+          assert 'function sameAccount(accountKey)' in live
+          assert 'function hasDedaSession(accountKey)' in live
+          print('PUBLISHED_SOURCE_EQUALS_OLD_REPO='+str(live==old))
+          print('PUBLISHED_SOURCE_SHA256_PREFIX='+hashlib.sha256(live.encode()).hexdigest()[:16])
+          print('PUBLISHED_MATCH_INSERT_ANCHOR='+str(live.count(end)))
+          print('PUBLISHED_ALREADY_HAS_DIRECT='+str('deda_weekly_direct_weeks' in live))
+          if live.count(end)==1 and 'deda_weekly_direct_weeks' not in live:
+            merged=live.replace(end,lambda_unused) if False else live[:live.index(end)]+block+live[live.index(end):]
+            assert merged.replace(block,'',1)==live
+            print('ADDITIVE_MERGE_PRESERVES_PUBLISHED_BYTES=true')
+          else: print('ADDITIVE_MERGE_PRESERVES_PUBLISHED_BYTES=false')
+          print('NO_PUBLISHED_RULES_CHANGED_NO_USERS_CHANGED')
+          PY
