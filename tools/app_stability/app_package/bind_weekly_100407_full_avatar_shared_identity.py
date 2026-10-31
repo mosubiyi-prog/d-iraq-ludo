@@ -117,7 +117,7 @@ enum DedaMapStyle {""",
     wrapper=(project/WRAPPER).read_text()
     wrapper=once(wrapper,
         "import 'deda_weekly_firestore_direct_bridge.dart';",
-        "import 'package:flutter/foundation.dart';\\n"
+        "import 'package:flutter/foundation.dart';\n"
         "import 'deda_weekly_firestore_direct_bridge.dart';",
         "reactive score notifier import")
     wrapper=once(wrapper,
