@@ -19,11 +19,17 @@ Baseline: successful signed 100407 (05fa763398d717cf81eb5c68b02e276d993be2d1). D
 
 ## Execution log
 - [x] Protected 100408 branch created from successful 100407.
-- [ ] Point 1 implementation and tests.
-- [ ] Point 2 implementation and tests.
-- [ ] Point 3 implementation and tests.
+- [x] Point 1 isolated source implementation (fast verified ID + color; skip blocking UI alias repair). QA compile/tests still pending; do not claim phone latency pass.
+- [x] Point 2 isolated source implementation (live current-week pause notice in fixed footer). QA compile/tests still pending.
+- [ ] Point 3: identified real original profile wallet/friend notifier call sites (approx 31263, 31282); exact account-bound hydration still under inspection before any mutation.
 - [ ] Point 4 implementation and tests.
 - [ ] Point 5 implementation and tests.
 - [ ] Point 6 implementation and tests.
 - [ ] Point 7 implementation and tests.
 - [ ] Integrated signed APK and phone/tablet QA.
+
+## Evidence and run status (not release proof)
+- Current source branch: deda-100408-seven-owner-points-ordered-no-play-2026-10-31.
+- Dedicated isolated QA workflow: .github/workflows/deda-100408-seven-points-ordered-test.yml.
+- Protect live 100407, no Android APK or Play release from this workflow.
+- CI failures while matching generated baseline are pre-build binding checks; source corrections are scoped to the new branch. Never describe these failures as a passing test.
