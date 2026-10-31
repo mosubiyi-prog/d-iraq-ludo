@@ -64,7 +64,14 @@ class DedaWeeklyFirestoreDirectBridge {
     final person = await identity(accountKey);
     if (person == null || person.uid != uid) return false;
     final owner = db.collection('deda_weekly_direct_accounts').doc(person.id);
-    if (!(await owner.get()).exists) {
+    var alreadyBound = false;
+    try {
+      alreadyBound = (await owner.get()).exists;
+    } catch (_) {
+      // A missing private binding is intentionally not publicly readable.
+      // Creation is checked against the logged-in DEDA session by rules.
+    }
+    if (!alreadyBound) {
       try {
         await owner.set({
           'accountKey': accountKey,
