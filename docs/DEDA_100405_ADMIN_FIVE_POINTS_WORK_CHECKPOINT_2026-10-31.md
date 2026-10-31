@@ -16,7 +16,7 @@ Source of truth: owner-accepted signed DEDA 100404 remains untouched. Working re
 - Flutter integration QA from exact DEDA 100404 workspace: Actions
   - 41161958645 succeeded: live Firebase reader, top-three, per-week archive, pure projection tests, owner-approved original GUI.
   - 41162153967 succeeded: admin pause/freeze source Flutter compilation and original DEDA admin tests.
-  - Later 100405 owner-notice overlay in progress, **not yet fully accepted**.
+  - 41162433560 succeeded: exact rebuilt DEDA Flutter app, same original XP/level/user UI, admin live feeds and moderation notice overlay compiled and passed widget checks. No APK generated.
 - Read-only source: `lib/deda_admin_league_live_data.dart`, `lib/deda_admin_league_live_widgets.dart` with actual current `deda_weekly_direct_weeks/{weekId}/scores` collection. No duplicate XP ledger. Archive currently last 12 completed weeks, not yet a full indefinite month selector.
 - Draft manager commands and UI: `lib/deda_admin_league_controls.dart`, `lib/deda_admin_league_control_widgets.dart`; require original Firebase admin signed-in non-anonymous and fresh general_manager active role. Actions save paired immutable audit. Stage not enabled in live Firebase.
 - Additive Firestore Rules in branch only: manager-accurate role/status gate, global pause, per-participant score hold, private review notice, append-only event log. Local emulator protection tests 41162095333 **SUCCESS**, including rejecting agent/user/anonymous writes and score hold/unhold. **NOT DEPLOYED** on real project.
