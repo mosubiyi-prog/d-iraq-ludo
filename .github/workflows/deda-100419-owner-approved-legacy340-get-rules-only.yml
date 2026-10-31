@@ -1,0 +1,89 @@
+name: DEDA 100419 OWNER APPROVED Legacy 340 Public Active ID GET ONLY (NO APK NO PLAY)
+on:
+  push:
+    branches: [deda-100419-owner-approved-legacy340-id-read-rules-only-no-apk-2026-11-01]
+    paths:
+      - '.github/workflows/deda-100419-owner-approved-legacy340-get-rules-only.yml'
+permissions:
+  contents: read
+concurrency:
+  group: deda-100419-stage71-owner-approved-get-rules-only
+  cancel-in-progress: false
+jobs:
+  stage71-public-active-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_100419_OWNER_APPROVED_PUBLIC_READ_ONLY: 'YES'
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Owner authorization and only exact reviewed production read permission
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DEDA_100419_OWNER_APPROVED_PUBLIC_READ_ONLY" = YES
+          python3 -m py_compile \
+            tools/deda_100418_legacy340_public_active_read_candidate_no_deploy.py \
+            tools/deda_100419_owner_approved_public_active_get_rules_only.py
+          grep -q "^EXPECTED_LIVE_SHA='ca282cfbb31dae3e934bfb833c4cdc8b5b1714fc27686ffaf2d7296f7436814f'" \
+            tools/deda_100419_owner_approved_public_active_get_rules_only.py
+          test -f test/deda_100418_legacy340_active_public_rule.test.cjs
+          echo 'OWNER_APPROVED_100419_FIREBASE_PUBLIC_ACTIVE_ID_GET_ONLY'
+      - name: Read ACTUAL production Firestore rules and stage local-only exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_100418_legacy340_public_active_read_candidate_no_deploy.py
+          python3 - <<'PY'
+          import importlib.util,pathlib
+          p=pathlib.Path('tools/deda_100419_owner_approved_public_active_get_rules_only.py')
+          spec=importlib.util.spec_from_file_location('pub',p)
+          mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+          name,live=mod.read_live(mod.session())
+          if name!=mod.EXPECTED_RULESET:raise SystemExit('SAFE_STOP_LIVE_FIREBASE_RULESET_CHANGED')
+          candidate=mod.CANDIDATE.read_text()
+          mod.validate_diff(live,candidate)
+          print('PASS_100419_EXACT_LIVE_BASELINE_AND_ONLY_GET_CANDIDATE')
+          PY
+      - name: Security gate with current production rules + one exact GET additive candidate on emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-100418-legacy340 \
+            --config /tmp/deda100418-emulator-config.json \
+            --only firestore --non-interactive \
+            'node --test test/deda_100418_legacy340_active_public_rule.test.cjs'
+          echo 'PASS_100419_REQUIRED_SECURITY_EMULATOR_BEFORE_LIVE_CHANGE'
+      - name: Deploy ONLY approved Stage71 authenticated public active GET; auto rollback on mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100419_owner_approved_public_active_get_rules_only.py deploy
+      - name: Independently reread LIVE Firestore rules and verify exact release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100419_owner_approved_public_active_get_rules_only.py verify
+      - name: Preserve rollback original ruleset ID and deployed SHA; NO personal data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100419-OWNER-APPROVED-ACTIVE-GET-ROLLBACK-RULESET-METADATA
+          path: |
+            /tmp/deda100419-owner-approved-original-ruleset-backup.json
+            /tmp/deda100419-publish-report.json
+          if-no-files-found: ignore
+          retention-days: 30
