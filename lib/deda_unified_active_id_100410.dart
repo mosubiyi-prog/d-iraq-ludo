@@ -112,7 +112,7 @@ class DedaUnifiedActiveId100410 {
         !DedaStage71OwnedIdentifierService.enabled) return;
     final key=(current,original);
     final pending=_ownerReads[key];
-    if(pending!=null) return pending;
+    if(pending!=null) { await pending; return; }
     final task=_verifyOwner(current,original);
     _ownerReads[key]=task;
     try { await task; }
@@ -211,4 +211,59 @@ class _DedaUnifiedActiveIdLabel100410State
       style:widget.style??const TextStyle(fontSize:11),
     );
   }
+}
+
+
+/// Lets existing ID cards use the same shared authority without ever making
+/// a loading placeholder copyable as though it were a real identifier.
+class DedaUnifiedActiveIdBuilder100410 extends StatefulWidget {
+  const DedaUnifiedActiveIdBuilder100410({
+    super.key,required this.originalId,required this.builder,
+  });
+  final String originalId;
+  final Widget Function(BuildContext context,String? active) builder;
+  @override
+  State<DedaUnifiedActiveIdBuilder100410> createState() =>
+      _DedaUnifiedActiveIdBuilder100410State();
+}
+class _DedaUnifiedActiveIdBuilder100410State
+    extends State<DedaUnifiedActiveIdBuilder100410> {
+  void Function()? _release;
+  StreamSubscription<User?>? _auth;
+  void _repaint() {if(mounted) setState(() {});}
+  void _start() {
+    _release?.call();
+    _release=DedaUnifiedActiveId100410.watch(widget.originalId);
+    if(DedaUnifiedActiveId100410.uid!=null) {
+      unawaited(DedaUnifiedActiveId100410
+          .ensureOwner(widget.originalId).catchError((Object _) {}));
+    }
+  }
+  @override
+  void initState() {
+    super.initState();
+    DedaUnifiedActiveId100410.revision.addListener(_repaint);
+    DedaVerifiedActiveIdStore.revision.addListener(_repaint);
+    _start();
+    if(DedaUnifiedActiveId100410.ready) {
+      _auth=FirebaseAuth.instance.authStateChanges().listen((_) {
+        if(mounted) {_start();_repaint();}
+      });
+    }
+  }
+  @override
+  void didUpdateWidget(covariant DedaUnifiedActiveIdBuilder100410 old) {
+    super.didUpdateWidget(old);
+    if(old.originalId!=widget.originalId) _start();
+  }
+  @override
+  void dispose() {
+    _release?.call();_auth?.cancel();
+    DedaUnifiedActiveId100410.revision.removeListener(_repaint);
+    DedaVerifiedActiveIdStore.revision.removeListener(_repaint);
+    super.dispose();
+  }
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context,DedaUnifiedActiveId100410.display(widget.originalId));
 }
