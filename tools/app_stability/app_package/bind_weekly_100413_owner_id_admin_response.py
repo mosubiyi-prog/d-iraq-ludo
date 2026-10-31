@@ -95,6 +95,9 @@ def bind(workspace):
       'single-flight admin tap guard')
     main=main[:settings]+block+main[settingsEnd:]
 
+    print('100413_REAL_SETTINGS_OPEN',repr(main[settings:settings+5200]),flush=True)
+    for kw in ('currentDedaAccountCanSeeAdminEntry','currentUserIsAdmin','onPressed: () async','دخول الإدارة'):
+        print('100413_SETTINGS_ANCHOR',kw,main.find(kw,settings),flush=True)
     begin=main.index('                                final gateAllowed = await DedaBackend',settings)
     end=main.index('                              icon: const Icon(',begin)
     old=main[begin:end]
