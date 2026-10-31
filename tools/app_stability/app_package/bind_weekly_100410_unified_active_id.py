@@ -377,6 +377,9 @@ def bind(dest):
                                share[send:]))
     if len(gps_calls)!=1:
         positions=[m.start() for m in re.finditer(r"_currentPosition",share[send:])]
+        for pos in positions[:3]:
+            print("100410_ACTUAL_ASSEMBLED_SEND_GPS",
+                  repr(share[send+max(0,pos-330):send+pos+450]))
         raise ValueError("100410 GPS send anchor count="+str(len(gps_calls))+
                          " occurrences="+str(positions))
     after_gps=send+gps_calls[0].end()
