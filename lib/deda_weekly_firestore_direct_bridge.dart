@@ -145,6 +145,21 @@ class DedaWeeklyFirestoreDirectBridge {
         week(w.start.subtract(const Duration(milliseconds: 1)));
     final current = await _read(w.id, me.id, 'live',
         w.close.difference(DateTime.now().toUtc()).inMilliseconds);
+    // DEDA 100405: own-account private admin-review message.
+    // This is NOT a public accusation and never modifies original level XP.
+    try {
+      final noticeDoc = await db.collection('deda_weekly_direct_reviews')
+          .doc(w.id).collection('users').doc(me.id).get();
+      final review = noticeDoc.data();
+      if (review != null && review['publicId'] == me.id &&
+          review['notice'] is String &&
+          (review['notice'] as String).length <= 240 &&
+          (review['notice'] as String).length >= 12) {
+        current['reviewNotice'] = review['notice'];
+      }
+    } catch (_) {
+      // Unavailable review notice never hides genuine leaderboard results.
+    }
     final previous = prev == null ? <String, dynamic>{
       'verified': true, 'status': 'closed', 'rewardsCredited': false,
       'weekId': 'before-first-week', 'remainingMs': 0,
