@@ -127,40 +127,84 @@ class DedaAdminLeagueFreezePanel extends StatefulWidget {
 
 class _DedaAdminLeagueFreezePanelState
     extends State<DedaAdminLeagueFreezePanel> {
-  late final Stream<List<DedaAdminLeagueRow>> _scores =
-      DedaAdminLeagueLiveData().currentWeek(DateTime.now().toUtc());
+  String? _selectedWeek;
+  Stream<List<DedaAdminLeagueRow>>? _scores;
+
+  List<String> _weekChoices(DateTime now) {
+    final clock = DedaWeeklyLeagueClock.at(now);
+    if (clock.phase == DedaWeeklyPhase.beforeFirstWeek) return const [];
+    final ids = <String>[];
+    for (var n = 0; n <= 12; n++) {
+      final start = clock.weekStart.subtract(Duration(days: 7 * n));
+      if (start.isBefore(DedaWeeklyLeagueClock.origin)) break;
+      ids.add(DedaAdminLeagueLiveData.weekId(start));
+    }
+    return ids;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final weeks = _weekChoices(DateTime.now().toUtc());
+    if (weeks.isNotEmpty) _choose(weeks.first);
+  }
+
+  void _choose(String weekId) {
+    _selectedWeek = weekId;
+    _scores = DedaAdminLeagueLiveData().scoresForWeek(weekId);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final w = DedaWeeklyLeagueClock.at(DateTime.now().toUtc());
-    if (w.phase == DedaWeeklyPhase.beforeFirstWeek) {
+    final options = _weekChoices(DateTime.now().toUtc());
+    if (options.isEmpty) {
       return const Text('لا يوجد مشاركون بعد؛ يبدأ الدوري الساعة 6 صباحاً.');
     }
-    final weekId = DedaAdminLeagueLiveData.weekId(w.weekStart);
+    final weekId = options.contains(_selectedWeek)
+        ? _selectedWeek! : options.first;
+    if (_selectedWeek != weekId) _choose(weekId);
     final manager = DedaAdminLeagueControls();
-    return StreamBuilder<List<DedaAdminLeagueRow>>(
-      stream: _scores,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const Text('تعذر قراءة حسابات الدوري للمراجعة.');
-        }
-        if (!snapshot.hasData) return const LinearProgressIndicator();
-        if (snapshot.data!.isEmpty) {
-          return const Text('لا يوجد مشاركون سجلوا نقاطاً هذا الأسبوع.');
-        }
-        return Column(
-          children: [
-            const Text('التجميد يمنع الزيادة بالدوري فقط، '
-                'ولا يحذف الرصيد ولا يمس المستوى أو الماسات.'),
+    return Column(children: [
+      Row(children: [
+        const Text('الأسبوع للمراجعة'),
+        const SizedBox(width: 12),
+        Expanded(child: DropdownButton<String>(
+          key: const Key('deda_gm_freeze_selected_week'),
+          isExpanded: true,
+          value: weekId,
+          items: [
+            for (final id in options)
+              DropdownMenuItem(value: id, child: Text(id)),
+          ],
+          onChanged: (id) {
+            if (id == null || id == _selectedWeek) return;
+            setState(() => _choose(id));
+          },
+        )),
+      ]),
+      const SizedBox(height: 8),
+      const Text('التجميد يمنع زيادة نقاط الدوري للمستخدم، '
+          'ويؤجل جائزته. نقاط المستوى والماسات الأصلية لا تتغير.'),
+      StreamBuilder<List<DedaAdminLeagueRow>>(
+        stream: _scores,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('تعذر قراءة حسابات الدوري للمراجعة.');
+          }
+          if (!snapshot.hasData) return const LinearProgressIndicator();
+          if (snapshot.data!.isEmpty) {
+            return const Text('لا يوجد مشاركون لهذا الأسبوع.');
+          }
+          return Column(children: [
             for (final row in snapshot.data!)
               _DedaAdminFrozenPlayerRow(
-                key: ValueKey(row.publicId),
+                key: ValueKey('$weekId:${row.publicId}'),
                 weekId: weekId, row: row, service: manager,
               ),
-          ],
-        );
-      },
-    );
+          ]);
+        },
+      ),
+    ]);
   }
 }
 
