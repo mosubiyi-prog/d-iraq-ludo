@@ -2595,8 +2595,9 @@ service cloud.firestore {
     // The manager-only reason lives separately in deda_weekly_direct_reviews.
     match /deda_weekly_direct_notices/{weekId}/users/{publicId} {
       function participant() {
-        return exists(/databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId))
-          && sameAccount(get(/databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId)).data.accountKey);
+        // Display notice follows the original authenticated personal ID only.
+        // Does not expose the manager's private reason or require a premium ID.
+        return signedIn() && currentUserHasShareId(publicId);
       }
       allow get: if exactWeeklyLeagueGeneralManager() || participant();
       allow list: if exactWeeklyLeagueGeneralManager();
