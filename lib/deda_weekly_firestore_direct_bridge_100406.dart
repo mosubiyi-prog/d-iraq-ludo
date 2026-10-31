@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'deda_verified_active_id_store.dart';
 import 'deda_weekly_community_outbox.dart';
 import 'deda_weekly_league_clock.dart';
 import 'deda_qa32_spark_public_identifier_directory.dart';
@@ -206,38 +207,43 @@ class DedaWeeklyFirestoreDirectBridge {
     final place = all.indexWhere((r) => r['id'] == viewer);
     final selected = all.take(10).toList();
     if (place >= 10) selected.add(all[place]);
-    final rows = <Map<String, dynamic>>[];
-    for (final r in selected) {
-      final rank = all.indexOf(r) + 1;
-      final pid = r['id'] as String;
-      // DEDA 100406: score documents always use the canonical original
-      // account key. Never migrate/rekey XP when the display alias changes.
-      // The owner's active premium ID comes ONLY from the verified shared
-      // projection, not a previous device's cache or a guessed string.
-      var displayedId = pid;
-      try {
-        final aliasDoc = await db.collection('deda_public_active_aliases')
-            .doc(pid).get(const GetOptions(source: Source.server));
+    // The owner has ONE verified display-ID store shared with the profile.
+    // Only reuse server-confirmed same-Firebase-UID UI data; never rekey XP,
+    // prove authorization from the cache, or borrow another user's ID.
+    final authUid = FirebaseAuth.instance.currentUser?.uid;
+    final rows = await Future.wait<Map<String, dynamic>>(
+      selected.map((r) async {
+        final rank = all.indexOf(r) + 1;
+        final pid = r['id'] as String;
+        final known = pid == viewer && authUid != null
+            ? DedaVerifiedActiveIdStore.read(authUid, pid)
+            : null;
+        var displayedId = known?.displayId ?? pid;
+
+        // Firestore alias + equipment for every competitor are independent.
+        // Never serialize these reads across the whole Top 10. All results
+        // remain scoped to the verified original score ID.
+        final fetched = await Future.wait<Map<String, dynamic>?>([
+          db.collection('deda_public_active_aliases').doc(pid)
+              .get(const GetOptions(source: Source.server))
+              .then((doc) => doc.data()).catchError((_) => null),
+          db.collection('deda_social_profiles').doc(pid)
+              .get(const GetOptions(source: Source.server))
+              .then((doc) => doc.data()).catchError((_) => null),
+        ]);
         final proof =
             DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
-                pid, aliasDoc.data());
+                pid, fetched[0]);
         if (proof?['displayId'] is String) {
           displayedId = proof!['displayId'] as String;
         }
-      } catch (_) {
-        // Keep scoring independent of the public appearance read. A
-        // failed alias request must not alter account ownership or XP.
-      }
-
-      // Fetch the real shared public profile, not the current phone's
-      // local avatar/frame, so competitors see THEIR own equipped styles.
-      Map<String, dynamic>? publicAppearance;
-      try {
-        final profileDoc = await db.collection('deda_social_profiles')
-            .doc(pid).get(const GetOptions(source: Source.server));
-        final p = profileDoc.data();
+        // If the public alias query transiently failed, a same-account
+        // previously Stage71-confirmed ID may still render as UI only.
+        // The original ID remains the hidden stable score document key.
+        final p = fetched[1];
         final avatar = p?['avatarStyle'];
         final frame = p?['frameStyle'];
+        Map<String, dynamic>? publicAppearance;
         if (p?['publicId'] == pid &&
             p?['ownerUid'] is String &&
             (p!['ownerUid'] as String).isNotEmpty &&
@@ -253,18 +259,16 @@ class DedaWeeklyFirestoreDirectBridge {
             'equippedAppearanceVerified': true,
           };
         }
-      } catch (_) {
-        // A missing public portrait must never hide a valid standing.
-      }
-      rows.add({
-        'place': rank, 'participantId': 'weekly-user-${pid.substring(1)}',
-        'displayName': r['name'], 'activePublicId': displayedId,
-        if (publicAppearance != null) 'publicAppearance': publicAppearance,
-        'weeklyPoints': r['xp'], 'verifiedTaskCompletions': r['tasks'],
-        'diamondsIfFinalWinner': rank == 1 ? 150 : rank == 2 ? 100 :
-          rank == 3 ? 50 : rank <= 10 ? 10 : 0,
-      });
-    }
+        return {
+          'place': rank, 'participantId': 'weekly-user-${pid.substring(1)}',
+          'displayName': r['name'], 'activePublicId': displayedId,
+          if (publicAppearance != null) 'publicAppearance': publicAppearance,
+          'weeklyPoints': r['xp'], 'verifiedTaskCompletions': r['tasks'],
+          'diamondsIfFinalWinner': rank == 1 ? 150 : rank == 2 ? 100 :
+            rank == 3 ? 50 : rank <= 10 ? 10 : 0,
+        };
+      }),
+    );
     return {
       'verified': true, 'status': status, 'rewardsCredited': false,
       'weekId': id, 'remainingMs': left.clamp(0, const Duration(days: 7).inMilliseconds),
