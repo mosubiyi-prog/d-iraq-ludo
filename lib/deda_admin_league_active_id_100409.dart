@@ -117,6 +117,14 @@ class _DedaAdminLeagueActiveIdState extends State<DedaAdminLeagueActiveId> {
               if (proof?['displayId'] is String) {
                 return _label(proof!['displayId'] as String);
               }
+              if (data != null && data.length == 4 &&
+                  data['originalId'] == widget.originalId &&
+                  data['activeId'] == widget.originalId &&
+                  data['baseColor'] == null) {
+                // Explicitly verified normal ID after returning from a
+                // purchased ID: do not leave the old premium display here.
+                return _label(widget.originalId);
+              }
               // If the owner has never published an alias, we cannot safely
               // assume the immutable account key is the current display ID.
               // Never display a potentially retired premium identifier.
