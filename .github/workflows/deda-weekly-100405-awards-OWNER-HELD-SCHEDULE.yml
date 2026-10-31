@@ -1,0 +1,57 @@
+name: DEDA 100405 Weekly Hadaya Awards Owner-Held Scheduled Service (NO PLAY)
+on:
+  schedule:
+    # Baghdad Saturday 06:00, 06:15, 06:30, 06:45 (UTC+03).
+    # GitHub cron is best-effort and MAY run late.
+    - cron: '0,15,30,45 3 * * 6'
+    # One Sunday fallback after outages; writer is idempotent.
+    - cron: '30 3 * * 0'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-100405-real-hadaya-gifts
+  cancel-in-progress: false
+jobs:
+  award-only-after-owner-approval:
+    if: >
+      vars.DEDA_100405_WEEKLY_SETTLEMENT_OWNER_APPROVED == 'true' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_LEAGUE_ACTUALLY_PAY: APPROVED_BY_OWNER
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify owner approval flag and Firebase project
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "${DEDA_LEAGUE_ACTUALLY_PAY}" = "APPROVED_BY_OWNER" ]
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const raw=process.env.PRIMARY||process.env.FALLBACK;
+          if(!raw)throw Error('FIREBASE_CREDENTIAL_MISSING');
+          const parsed=JSON.parse(raw);
+          if(parsed.project_id!=='deda-25b88')throw Error('INCORRECT_FIREBASE_PROJECT');
+          const file=process.env.RUNNER_TEMP+'/deda-weekly-approved-sa.json';
+          fs.writeFileSync(file,raw,{mode:0o600});
+          NODE
+      - name: Create original Hadaya pending gift once per qualified winner
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/deda-weekly-approved-sa.json
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-audit --no-fund
+          node functions/deda_weekly_direct_prize_worker.cjs
+          echo 'DEDA_WEEKLY_HADAYA_SETTLEMENT_FINISHED'
+      - name: Destroy temporary service identity
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/deda-weekly-approved-sa.json"
