@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import 'deda_active_id_public_sync_100409.dart';
 import 'deda_qa32_spark_public_identifier_directory.dart';
@@ -50,6 +51,13 @@ class DedaOwnerLegacyPublicProof100414 {
 
   /// Called asynchronously ONLY after Stage71 confirmed exact server owner,
   /// actual active ID and any premium receipt/color; UI does not await it.
+  /// Two server-authorized transactions, not one. LIVE Stage71 Firestore
+  /// rules require users.sharePersonalId already committed BEFORE an owner
+  /// may even READ the active-selection document. A 100414 transaction that
+  /// reads activeRef before setting the missing share ID is denied.
+  ///
+  /// No rules change, owner migration or guessing is necessary for a
+  /// legitimately authenticated original account with a matching route.
   static Future<void> ensureAndPublish({
     required String uid,
     required String originalId,
@@ -72,8 +80,30 @@ class DedaOwnerLegacyPublicProof100414 {
       final routeRef = db.collection('deda_share_ids').doc(originalId);
       final activeRef = db.collection('deda_stage71_active_identifier')
           .doc(originalId);
+
+      // PHASE ONE. Only read public owner proof/user/session/route. Never
+      // attempt a Stage71 read until this missing field is server-committed.
+      // A separate authenticated session's UID cannot fill this owner's ID.
       await db.runTransaction((tx) async {
-        // All reads happen before any write.
+        final user = (await tx.get(userRef)).data() ?? <String,dynamic>{};
+        final session = (await tx.get(sessionRef)).data() ?? <String,dynamic>{};
+        final route = (await tx.get(routeRef)).data() ?? <String,dynamic>{};
+        if (FirebaseAuth.instance.currentUser?.uid != uid ||
+            !sameAuthenticatedOwner(
+              expectedUid: uid, originalId: originalId,
+              user: user, session: session, route: route)) {
+          throw StateError('legacy-public-proof-not-authorized');
+        }
+        if (user['sharePersonalId'] != originalId) {
+          tx.update(userRef, {'sharePersonalId': originalId});
+        }
+      }).timeout(const Duration(seconds: 12));
+      if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+
+      // PHASE TWO. Now Stage71 rules permit reading the verified selection.
+      // Recheck ownership after phase one and NEVER overwrite an existing
+      // normal/premium selection, including one changed on another device.
+      await db.runTransaction((tx) async {
         final user = (await tx.get(userRef)).data() ?? <String,dynamic>{};
         final session = (await tx.get(sessionRef)).data() ?? <String,dynamic>{};
         final route = (await tx.get(routeRef)).data() ?? <String,dynamic>{};
@@ -85,13 +115,10 @@ class DedaOwnerLegacyPublicProof100414 {
             !activeSelectionSafe(
               originalId: originalId, expectedActiveId: activeId,
               selection: active)) {
-          throw StateError('legacy-public-proof-not-authorized');
-        }
-        if (user['sharePersonalId'] != originalId) {
-          tx.update(userRef, {'sharePersonalId': originalId});
+          throw StateError('legacy-active-selection-changed');
         }
         if (active == null) {
-          // Never create a normal row while an unconfirmed premium is active.
+          // No missing normal row is created if any premium is selected.
           if (activeId != originalId) {
             throw StateError('premium-active-source-missing');
           }
@@ -103,14 +130,32 @@ class DedaOwnerLegacyPublicProof100414 {
         }
       }).timeout(const Duration(seconds: 12));
       if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+
+      // The 100409 publisher intentionally swallows network errors. Do not
+      // treat its Future returning as proof that Firebase accepted the write.
       await DedaActiveIdPublicSync100409.publishAfterVerifiedRead(
         uid: uid, originalId: originalId, activeId: activeId,
         fixedColor: fixedColor,
       );
+      if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+      final published = await db.collection('deda_public_active_aliases')
+          .doc(originalId).get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 12));
+      final projection = published.data();
+      if (!published.exists || projection == null ||
+          projection.length != 4 ||
+          projection['originalId'] != originalId ||
+          projection['activeId'] != activeId ||
+          projection['baseColor'] != fixedColor ||
+          projection['updatedAt'] == null) {
+        throw StateError('public-id-projection-not-confirmed');
+      }
       if (FirebaseAuth.instance.currentUser?.uid == uid) _completed.add(key);
-    } catch (_) {
-      // Do not fabricate normal status if security rules or server deny repair.
-      // The next owner-authenticated session may retry.
+    } on FirebaseException catch (error) {
+      // Operational telemetry only: neither ID, phone nor account key logged.
+      debugPrint('DEDA legacy active ID proof deferred: ${error.code}');
+    } catch (error) {
+      debugPrint('DEDA legacy active ID proof deferred: ${error.runtimeType}');
     } finally {
       _inFlight.remove(key);
     }
