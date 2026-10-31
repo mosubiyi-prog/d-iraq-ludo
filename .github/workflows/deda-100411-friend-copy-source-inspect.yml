@@ -1,9 +1,12 @@
-name: DEDA 100411 READ ONLY Assembled Friend ID and Location Input Audit (NO DEPLOY)
+name: DEDA 100411 Friend Clipboard and Canonical Share Routing SOURCE QA (NO DEPLOY)
 on:
   push:
     branches: [deda-100411-friends-normal-id-copy-share-safe-qa-no-play-2026-10-31]
     paths:
       - '.github/workflows/deda-100411-friend-copy-source-inspect.yml'
+      - 'tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py'
+      - 'lib/deda_friend_id_copy_100411.dart'
+      - 'test/deda_100411_friend_copy_test.dart'
   workflow_dispatch:
 permissions:
   contents: read
@@ -65,28 +68,19 @@ jobs:
           python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100410_unified_active_id.py "$RUNNER_TEMP/deda-original-100396"
-      - name: Inspect exact assembled friends and location share source read only
+      - name: Bind 100411 in ephemeral app and test copy + share compile (NO APK)
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import os
-          root=Path(os.environ['RUNNER_TEMP'])/'deda-original-100396'/'lib'
-          for fn,finders in {
-              'deda_stage50_verified_friend_ink_badge.dart':['class DedaStage50VerifiedFriendInkBadge','class DedaStage50PremiumPublicCard'],
-              'main.dart':['DedaStage50VerifiedFriendInkBadge(', 'class DedaShareLocationPage', 'Future<void> _send() async', 'DedaQa32PublicRecipientResolver', 'class DedaFriends', 'class DedaSocial', 'otherPublicId(', 'createLocationShare('],
-              'deda_weekly_leaderboard_page.dart':['DedaUnifiedActiveIdLabel100410('],
-          }.items():
-              source=(root/fn).read_text()
-              print('FILE',fn,'SIZE',len(source))
-              for term in finders:
-                  positions=[];seek=0
-                  while True:
-                      idx=source.find(term,seek)
-                      if idx<0: break
-                      positions.append(idx)
-                      seek=idx+len(term)
-                  print('AUDIT_TERM',repr(term),'COUNT',len(positions))
-                  for offset in positions[:6]:
-                      print('AUDIT_CONTEXT',repr(source[max(0,offset-500):offset+1200]))
-          PY
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py "$project"
+          cd "$project"
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_friend_id_copy_100411.dart lib/deda_stage50_verified_friend_ink_badge.dart lib/deda_unified_active_id_100410.dart
+          cp "$GITHUB_WORKSPACE/test/deda_100411_friend_copy_test.dart" test/
+          flutter test test/deda_100411_friend_copy_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_100410_unified_active_id_test.dart" test/
+          flutter test test/deda_100410_unified_active_id_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_location_identity_entry_test.dart" test/
+          flutter test test/deda_location_identity_entry_test.dart --no-pub
+          echo 'SOURCE QA ONLY: NO APK, NO FIREBASE DEPLOY, NO PLAY.'
