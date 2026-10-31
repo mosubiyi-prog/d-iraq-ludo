@@ -1,0 +1,93 @@
+name: DEDA 100405 Live Firebase Permissions and Rules Read-Only Gate
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100405-live-permissions-readonly-gate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-rules-readonly-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Verify actual project, rules, scoped permissions and empty/live score state (NO WRITES)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth google-cloud-firestore requests
+          python - <<'PY'
+          import os, json, hashlib, pathlib
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          from google.cloud import firestore
+          project='deda-25b88'
+          raw=os.getenv('PRIMARY') or os.getenv('FALLBACK') or ''
+          try:
+            info=json.loads(raw)
+            if info.get('project_id')!=project or info.get('type')!='service_account':
+              raise ValueError('wrong-project-or-credential')
+            credential=service_account.Credentials.from_service_account_info(
+              info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          except Exception:
+            print('AUTH=UNAVAILABLE_OR_WRONG_PROJECT')
+            raise SystemExit(0)
+          print('AUTH=CORRECT_PROJECT')
+          api=AuthorizedSession(credential)
+          def request(method,url,body=None):
+            try:
+              r=api.request(method,url,json=body,timeout=20)
+              return r.status_code,r.json() if r.content else {}
+            except Exception:
+              return 'TRANSPORT_FAILURE',{}
+          apiroot='https://firebaserules.googleapis.com/v1/projects/'+project
+          status,release=request('GET',apiroot+'/releases/cloud.firestore')
+          print('LIVE_RELEASE_HTTP='+str(status))
+          if status==200 and isinstance(release,dict):
+            name=release.get('rulesetName','')
+            status,rules=request('GET','https://firebaserules.googleapis.com/v1/'+name)
+            print('LIVE_RULESET_HTTP='+str(status))
+            if status==200:
+              files=rules.get('source',{}).get('files',[])
+              texts=[f.get('content','') for f in files if f.get('name','').endswith('firestore.rules')]
+              if not texts and len(files)==1:
+                texts=[files[0].get('content','')]
+              if texts:
+                deployed=texts[0]
+                local=pathlib.Path('firestore.rules').read_text()
+                print('DEPLOYED_RULES_SHA256='+hashlib.sha256(deployed.encode()).hexdigest())
+                print('CANDIDATE_RULES_SHA256='+hashlib.sha256(local.encode()).hexdigest())
+                for key in ('match /deda_weekly_direct_control/',
+                            'match /deda_weekly_direct_reviews/',
+                            'match /deda_weekly_direct_weeks/',
+                            'match /deda_diamond_gifts/'):
+                  print('PUBLISHED_HAS_'+key.split('/')[-2].upper()+'='+str(key in deployed))
+                print('RULES_EXACT_MATCH='+str(local.replace('\r\n','\n').strip()==deployed.replace('\r\n','\n').strip()))
+              else:
+                print('RULES_CONTENT=NOT_AVAILABLE')
+          requested=['firebaserules.rulesets.create','firebaserules.releases.update',
+                     'datastore.entities.get','datastore.entities.list']
+          status,perms=request('POST',
+            'https://cloudresourcemanager.googleapis.com/v1/projects/'+project+':testIamPermissions',
+            {'permissions':requested})
+          print('IAM_HTTP='+str(status))
+          have=set(perms.get('permissions',[])) if status==200 else set()
+          for p in requested:
+            print('IAM_'+p+'='+str(p in have))
+          try:
+            db=firestore.Client(project=project,credentials=credential)
+            rows=db.collection('deda_weekly_direct_weeks').document('2026-10-31').collection('scores').limit(2).get(timeout=20)
+            print('WEEK_2026_10_31_ANY_REAL_SCORES='+str(bool(rows)))
+            print('WEEK_SCORE_DOC_SAMPLE_COUNT_CAP2='+str(len(rows)))
+          except Exception as e:
+            print('LIVE_SCORE_READ_ERROR='+type(e).__name__)
+          print('READ_ONLY=true; NO_DEPLOY_NO_PRIZE_NO_APK')
+          PY
