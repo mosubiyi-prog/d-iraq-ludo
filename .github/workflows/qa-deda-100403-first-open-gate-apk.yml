@@ -2,7 +2,7 @@ name: DEDA 100403 Signed Direct Firestore League Private Phone APK (NO PLAY)
 on:
   push:
     branches: [deda-100403-fix-league-first-open-account-gate-2026-10-31]
-    paths: ['.github/workflows/qa-deda-100403-first-open-gate-apk.yml','tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py','lib/deda_weekly_firestore_direct_bridge.dart']
+    paths: ['.github/workflows/qa-deda-100403-first-open-gate-apk.yml','tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py','lib/deda_weekly_account_view_gate.dart','test/deda_weekly_100403_first_open_gate_test.dart']
   workflow_dispatch:
 permissions:
   contents: read
@@ -113,6 +113,7 @@ jobs:
           assert data['weekly100402FirestoreDirect']['noWalletOrDiamondWrites'] is True
           assert data['weekly100403FirstOpenGate']['officialHomeRoutes'] == 2
           assert data['weekly100403FirstOpenGate']['doesNotTreatMissingInitialUidAsLogout'] is True
+          assert "widget.privateTrialXp != null && !previousWeek && !view.verified" in (Path('lib/deda_weekly_leaderboard_page.dart')).read_text()
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
           data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
