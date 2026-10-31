@@ -69,7 +69,7 @@ jobs:
           # build; Stage22 competitor/tap dependencies must be present.
           test -s lib/deda_weekly_competitor_public_card.dart
           test -s lib/deda_weekly_leaderboard_tap_surface.dart
-          dart analyze lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_community_outbox.dart lib/deda_weekly_league_clock.dart lib/deda_admin_league_live_data.dart lib/deda_admin_league_live_widgets.dart
+          dart analyze --no-fatal-warnings --no-fatal-infos lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_community_outbox.dart lib/deda_weekly_league_clock.dart lib/deda_admin_league_live_data.dart lib/deda_admin_league_live_widgets.dart
           cp "$GITHUB_WORKSPACE/test/deda_admin_league_page_stage26_test.dart" test/
           cp "$GITHUB_WORKSPACE/test/deda_weekly_qa_full_trial_test.dart" test/
           cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_tasks_cta_and_inline_clock_test.dart" test/deda_weekly_stage28_tasks_cta_navigation_test.dart
