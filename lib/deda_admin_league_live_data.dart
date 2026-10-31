@@ -106,7 +106,16 @@ class DedaAdminLeagueLiveData {
     if (phase.phase == DedaWeeklyPhase.beforeFirstWeek) {
       return Stream.value(const <DedaAdminLeagueRow>[]);
     }
-    return _scores(weekId(phase.weekStart)).limit(100).snapshots().map(
+    return scoresForWeek(weekId(phase.weekStart));
+  }
+
+  /// Existing shared score source for historical review and frozen payouts.
+  /// Returns no alternate XP or locally calculated claim balance.
+  Stream<List<DedaAdminLeagueRow>> scoresForWeek(String id) {
+    if (!RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$').hasMatch(id)) {
+      throw ArgumentError.value(id, 'weekId');
+    }
+    return _scores(id).limit(100).snapshots().map(
       (snapshot) => DedaAdminLeagueProjection.fromRecords([
         for (final doc in snapshot.docs) MapEntry(doc.id, doc.data()),
       ]),
