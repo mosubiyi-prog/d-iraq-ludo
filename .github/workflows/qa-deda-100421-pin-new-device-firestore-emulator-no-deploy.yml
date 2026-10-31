@@ -1,0 +1,45 @@
+name: DEDA 100421 PIN New Device Auth Security EMULATOR (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100421-canonical-account-binding-audit-no-deploy-2026-11-01
+    paths:
+      - 'test/deda_100421_pin_cross_device_security_emulator.test.cjs'
+      - '.github/workflows/qa-deda-100421-pin-new-device-firestore-emulator-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-auth-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-deda-100421-pin-cross-device-security
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Resolve tools ONLY for local emulator
+        run: npm install --prefix functions --no-save --no-audit --no-fund firebase@11 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Run six synthetic owner authentication and cross-device proof tests (NO LIVE ACCESS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-deda-100421-pin-cross-device-security
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100421-pin-cross-device-security --only firestore \
+            'node --test test/deda_100421_pin_cross_device_security_emulator.test.cjs'
+          echo 'SECURITY_AUDIT_SOURCE_ONLY_UNRATED_6_DIGIT_PIN_NO_SERVER_RATE_GATE'
+      - name: Verify no deploy or build
+        run: |
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'NO_APK_NO_REAL_FIREBASE_WRITES_NO_PLAY_NO_WALLET_CHANGES'
