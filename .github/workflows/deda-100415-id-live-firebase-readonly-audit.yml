@@ -1,0 +1,109 @@
+name: DEDA 100415 LIVE Firebase ID Permission Compatibility READ ONLY (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100415-id-firebase-live-readonly-audit-no-deploy-2026-10-31
+    paths:
+      - '.github/workflows/deda-100415-id-live-firebase-readonly-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-actual-live-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit CURRENT LIVE Firebase rules against 100414 normal/premium ID code WITHOUT WRITES
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,hashlib,re,sys
+          import requests
+          from google.auth.transport.requests import Request
+          from google.oauth2.service_account import Credentials
+          PROJECT='deda-25b88'
+          raw=os.environ.get('DEDA_SERVICE_ACCOUNT') or os.environ.get('DEDA_FALLBACK_ACCOUNT')
+          if not raw:
+            raise SystemExit('SAFE_STOP_NO_READONLY_RULES_ACCOUNT')
+          service=json.loads(raw)
+          if service.get('project_id')!=PROJECT:
+            raise SystemExit('SAFE_STOP_WRONG_FIREBASE_PROJECT')
+          creds=Credentials.from_service_account_info(
+             service,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          h={'Authorization':'Bearer '+creds.token}
+          base='https://firebaserules.googleapis.com/v1/'
+          def get(endpoint):
+            r=requests.get(base+endpoint,headers=h,timeout=30)
+            if r.status_code!=200:
+              raise SystemExit('SAFE_STOP_FIREBASE_READ_HTTP_'+str(r.status_code))
+            return r.json()
+          release=get('projects/'+PROJECT+'/releases/cloud.firestore')
+          name=release.get('rulesetName','')
+          if not name.startswith('projects/'+PROJECT+'/rulesets/'):
+            raise SystemExit('SAFE_STOP_LIVE_RELEASE_RULESET_INVALID')
+          rules=get(name).get('source',{}).get('files',[])
+          if len(rules)!=1 or not isinstance(rules[0].get('content'),str):
+            raise SystemExit('SAFE_STOP_UNEXPECTED_RULESET_FILES')
+          live=rules[0]['content']
+          sha=hashlib.sha256(live.encode('utf-8')).hexdigest()
+          from pathlib import Path
+          source=Path('lib/deda_owner_legacy_public_proof_100414.dart').read_text()
+          reader=Path('lib/deda_unified_active_id_100410.dart').read_text()
+          directory=Path('lib/deda_qa32_spark_public_identifier_directory.dart').read_text()
+          candidate=Path('docs/qa32_spark_free_firestore_public_ids_RULES_CANDIDATE_NOT_DEPLOYED.txt').read_text()
+          print('FIREBASE_PROJECT_CONFIRMED',PROJECT)
+          print('LIVE_FIRESTORE_RULESET_NAME',name)
+          print('LIVE_FIRESTORE_RULES_SHA256',sha)
+          # Never print a credential, token, document contents or entire rules source.
+          for collection in ('deda_public_active_aliases','deda_public_alias_routes',
+                             'deda_stage71_active_identifier','deda_share_ids',
+                             'deda_sessions','users'):
+            print('LIVE_RULES_CONTAINS_'+collection.upper(),collection in live)
+          # Check exact active-owner rule contract, not only whether Spark exists.
+          start=live.find('function sparkOwnerAuthed(')
+          if start<0:
+            print('LIVE_SPARK_OWNER_HELPER_MISSING',True)
+            raise SystemExit('SAFE_STOP_SPARK_OWNER_HELPER_NOT_LIVE')
+          end=live.find('\n    }',start)
+          fn=live[start:(end if end>start else start+2200)]
+          condition='account.data.sharePersonalId == originalId'
+          print('LIVE_OWNER_REQUIRES_SHARE_PERSONAL_ID',condition in fn)
+          print('CLIENT_LEGACY_CAN_HAVE_MISSING_SHARE_PERSONAL_ID',
+                "user['sharePersonalId'] == null" in source)
+          print('CLIENT_LEGACY_REPAIR_WRITES_FIELD',
+                "tx.update(userRef, {'sharePersonalId': originalId})" in source)
+          print('CLIENT_LEGACY_REPAIR_NEEDS_STAGE71_NORMAL_CREATE',
+                "tx.set(activeRef" in source)
+          print('CLIENT_PUBLIC_READER_REQUIRES_NEW_PROJECTION',
+                "collection('deda_public_active_aliases')" in reader)
+          print('CLIENT_PUBLIC_PROJECTION_NORMAL_WRITTEN',
+                'selectedAlias: activeId' in Path('lib/deda_active_id_public_sync_100409.dart').read_text())
+          stage_start=live.find('match /deda_stage71_active_identifier/')
+          stage=live[stage_start:stage_start+2400] if stage_start>=0 else ''
+          print('LIVE_STAGE71_ACTIVE_MATCH_EXISTS',bool(stage))
+          print('LIVE_STAGE71_CREATE_PATH_PRESENT',
+                bool(re.search(r'allow\s+(create|write)\s*:',stage)))
+          print('LIVE_RULES_CURRENT_PUBLIC_ACTIVE_CREATE_MATCH',
+                live.count('match /deda_public_active_aliases/{originalId} {'))
+          print('LIVE_SPARK_CANDIDATE_REQUIRES_SHARE_PERSONAL_ID',
+                condition in candidate)
+          print('CLIENT_ERRORS_SILENCED_FOR_LEGACY_PROOF',
+                '    } catch (_) {' in source)
+          print('CLIENT_UNKNOWN_ID_SHOWS_PENDING_TEXT',
+                'جارِ تأكيد الآيدي' in reader)
+          mismatch=condition in fn and "user['sharePersonalId'] == null" in source
+          print('CONFIRMED_RULE_CLIENT_LEGACY_FIELD_MISMATCH',mismatch)
+          print('NO_RULES_DEPLOY_NO_FIRESTORE_DOCUMENT_READ_NO_USER_DATA_WRITE')
+          PY
