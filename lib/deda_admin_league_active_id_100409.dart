@@ -91,9 +91,12 @@ class _DedaAdminLeagueActiveIdState extends State<DedaAdminLeagueActiveId> {
 
   @override
   Widget build(BuildContext context) {
-    if (Firebase.apps.isEmpty || _stream == null) {
-      return _label('معرّف غير متاح');
+    if (Firebase.apps.isEmpty) {
+      // Existing pure widget-test fixtures have no Firebase backend;
+      // display their supplied original ID without issuing network reads.
+      return _label(widget.originalId);
     }
+    if (_stream == null) return _label('تعذر تأكيد الآيدي');
     return ValueListenableBuilder<int>(
       valueListenable: DedaVerifiedActiveIdStore.revision,
       builder: (context, _, __) {
