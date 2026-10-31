@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'deda_verified_active_id_store.dart';
@@ -9,6 +12,8 @@ import 'deda_qa32_spark_public_identifier_directory.dart';
 class DedaWeeklyFirestoreDirectBridge {
   DedaWeeklyFirestoreDirectBridge._();
   static final db = FirebaseFirestore.instance;
+  static final ValueNotifier<int> standingRefresh = ValueNotifier<int>(0);
+  static final Set<String> _retrying = <String>{};
   static final origin = DateTime.utc(2026, 10, 31, 3); // Sat 06:00 Baghdad
   static final accountPattern = RegExp(r'^[0-9]{10,16}$');
   static final idPattern = RegExp(r'^@DEDA-[A-Z0-9]{4,12}$');
@@ -140,10 +145,25 @@ class DedaWeeklyFirestoreDirectBridge {
     if (!sameViewer()) throw StateError('league-account-switched');
     final me = await identity(accountKey);
     if (me == null || !sameViewer()) throw StateError('league-account-missing');
-    await DedaWeeklyCommunityOutbox.retry(
-      accountKey: accountKey, uid: me.uid, limit: 8,
-      send: (task, day) => _send(accountKey, me.uid, task, day),
-    );
+    // Do not block first standings paint on up to eight server transactions.
+    // A confirmed old-task retry updates the standings once completed, with
+    // no fabricated XP or changed awards. The journal serializes duplicate
+    // sends and only replays existing same-week authenticated task receipts.
+    final retryKey = '${me.uid}|$accountKey';
+    if (_retrying.add(retryKey)) {
+      unawaited(DedaWeeklyCommunityOutbox.retry(
+        accountKey: accountKey, uid: me.uid, limit: 8,
+        send: (task, day) => _send(accountKey, me.uid, task, day),
+      ).then((count) {
+        if (count > 0 && FirebaseAuth.instance.currentUser?.uid == me.uid) {
+          try {
+            if (sameViewer()) standingRefresh.value += 1;
+          } catch (_) { /* View disposed or account switched. */ }
+        }
+      }).catchError((Object _) {
+        // Failed deliveries remain pending under the same authenticated UID.
+      }).whenComplete(() => _retrying.remove(retryKey)));
+    }
     if (!sameViewer()) throw StateError('league-account-switched');
     final w = week(DateTime.now().toUtc());
     final first = w.start.isAtSameMomentAs(origin);
