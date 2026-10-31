@@ -54,3 +54,35 @@ The present branch does **not yet** solve recovery. Before marking STEP 1 comple
 - Prior 100421 reassembly runs safely stopped while diagnosing historical vs reconstructed helper drift; the final staging code enforces exact lifecycle-preserving expected source and only replaces the single account-owner match expression.
 - No signed APK or deployed Firebase rule/function changed; the reference 100420 installed build is unchanged.
 - STEP 1 remains **PARTIAL**. Server-authoritative proof of stable canonical account identity under real PIN login, security/rate-limit audit and two-device access are not yet proven by these tests. STEP 2–4 still held in original order.
+
+## Verified production PIN + new-device security gate — 2026-11-01
+
+**Emulator test: PASS, 6/6** — https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41249919127.
+This tested the branch candidate `firestore.rules` on an isolated `demo-` Firestore emulator with synthetic PINs and UIDs only:
+- incorrect PIN cannot create proof or establish a session;
+- correct synthetic PIN allows a different Firebase anonymous UID to sign into the same logical account (without rewriting the existing old UID);
+- new UID can write its own users projection after a PIN-authenticated session, not before;
+- another account's PIN cannot establish this owner's session;
+- after a PIN-verified session, a new local install ID can be added to the profile's trusted installs;
+- the rule accepts distinct UID-specific PIN proofs for the same synthetic PIN. There was no attack automation or mass guessing.
+
+**Published LIVE Firebase Rules read (GET-only): PASS** — https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41250035991.
+The active release ruleset is **exactly** the one documented as verified in DEDA 100420 (`projects/deda-25b88/rulesets/9f11d792-0d1e-4a28-bd72-606459b5c659`).
+The read-only auditor inspected only Firebase Rules release/ruleset metadata via Rules API. It did NOT read any user accounts, PIN documents, wallet balances, Firestore collections, signing keys, or admin data; it emitted Boolean findings only.
+
+Observed from the deployed rules:
+- The six-digit PIN is compared to `deda_credentials` in the `deda_auth_attempts` write permission rule. The proof document schema contains a `pin` field (no credential document read by an ordinary client).
+- The proof is scoped to `request.auth.uid`, and the session rule checks the PIN proof against a matching account key.
+- **No explicit server-side attempt counter or lockout is referenced by the PIN proof permission clause.** Client-side `SharedPreferences` attempt limits do not provide global protection across new devices/anonymous UIDs. Other external protections have not been audited, so do NOT assert definitively that no other rate limiting exists.
+- The session rule can alternatively allow a previously trusted `installId`, and the session-authorized profile update rule permits `trustedInstallIds` changes. This makes verifying the prerequisite strong identity and device-trust policy critical.
+- The `deda_sessions` rule does not directly bind a verified immutable `sharePersonalId` / `originalId`. The helper `DedaOwner18OriginalAccountProof.verify` provides a later read-only ownership check for selected callers, but does not replace an account-wide canonical authority.
+- No actual phone/SMS possession, device attestation or financial history restoration was proven here.
+
+### Exact outstanding Step-1 blockers before full account restoration
+A. Define an immutable, **server-owned** canonical account→original ID mapping and cross-device proof that remains valid through anonymous Firebase UID rotation, without auto-merging `07...` and `9647...` phone formats.
+B. Review/introduce a trusted server-enforced authentication attempt limit and protected short-lived proof; client-only retry counters are insufficient for high-value recovery. Do not silently invent OTP verification.
+C. Ensure source modules reject any mismatched/missing/revoked account, original ID and owner route prior to **every** recovered item/financial read. No UID/accountKey text-only bypass; preserve existing owner/admin authorization.
+D. Verify production availability of the authorized backend to perform (A)/(B) and safely test against emulator; do not turn disabled Cloud Functions/financial flags on just because source tests pass.
+E. Real phone/tablet login and profile verification follows only after this security barrier; the financial restore, Google linking and Play publishing remain disabled.
+
+**Current verdict: STEP 1 security audit advanced with verified live evidence, but security gate NOT complete. No production changes were made.**
