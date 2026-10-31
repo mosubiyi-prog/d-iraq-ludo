@@ -90,7 +90,7 @@ jobs:
           assert unifier.count('ensureOwner(widget.originalId)')==0, 'no friend public private owner reads'
           assert unifier.count('publishAfterVerifiedRead(')==1, 'owner-verified normal publication'
           assert 'await DedaBackend\n                                    .currentDedaAccountCanSeeAdminEntry' not in main, 'no tap re-read'
-          assert 'onPressed: _adminEntryTapBusy ? null' in main
+          assert 'final gateAllowed = _adminEntryVisible &&' in main
           assert 'currentAdminSessionMatchesDedaEntry(' in main
           assert main.count('DedaFriendIdCopy100411(')>=1
           assert 'stream: _controlStream,' in prize
