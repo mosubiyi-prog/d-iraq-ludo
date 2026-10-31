@@ -100,18 +100,15 @@ def bind(workspace):
     final phone''',
       'ignore late gateway result after session rotate')
     block=one(block,
-      '''    if (!mounted) return;
-    setState(() => _adminEntryVisible = allowed);
-  }''',
-      '''    final livePhone=DedaPreferences.accountPhone.trim().isNotEmpty
+      '''setState(() => _adminEntryVisible = allowed);''',
+      '''final livePhone=DedaPreferences.accountPhone.trim().isNotEmpty
         ? DedaPreferences.accountPhone : DedaPreferences.phone;
-    if (!mounted || revision!=_adminGateRevision || livePhone!=phone ||
+    if (revision!=_adminGateRevision || livePhone!=phone ||
         !DedaPreferences.isLoggedIn) return;
     setState(() {
       _adminEntryVisible=allowed;
       _adminEntryVerifiedPhone=allowed ? phone : '';
-    });
-  }''',
+    });''',
       'keep card for same confirmed session only')
     main=main[:settings]+block+main[settingsEnd:]
 
