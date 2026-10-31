@@ -370,26 +370,17 @@ def bind(dest):
     # account protection is the entry guard above.
     if "createLocationShare(" not in share:
         raise ValueError("original location-share backend operation missing")
-    import re
-    # Match the awaited GPS CALL, not the baseline's whitespace layout.
-    # Restrict to the send body; never alter initialization or original keys.
-    gps_calls=list(re.finditer(r"await\s+_currentPosition\s*\(\s*\)\s*;",
-                               share[send:]))
-    if len(gps_calls)!=1:
-        positions=[m.start() for m in re.finditer(r"_currentPosition",share[send:])]
-        for pos in positions[:3]:
-            print("100410_ACTUAL_ASSEMBLED_SEND_GPS",
-                  repr(share[send+max(0,pos-330):send+pos+450]))
-        raise ValueError("100410 GPS send anchor count="+str(len(gps_calls))+
-                         " occurrences="+str(positions))
-    after_gps=send+gps_calls[0].end()
-    share=share[:after_gps]+"""
-        // GPS can resolve after logout or switching from A to B.
-        // Do not submit A's original routing key while B is signed in.
+    # Verified exact assembled 100409 call (from GitHub QA run 18):
+    # _currentPosition runs inside SectionOperationContext.wait, so do not
+    # search for a direct await. Keep all existing snapshot/route protections.
+    gps_before="        final position = await DedaSectionOperationContext.wait(() => _currentPosition());"
+    share=one(share,gps_before,
+              gps_before+"""
+        // Late GPS must never resume a share for B from A's open page.
         if (!mounted || !DedaPreferences.isLoggedIn ||
-            DedaPreferences.phone != _ownerPhoneAtOpen) return;
-"""+share[after_gps:]
-    print("100410_GPS_AWAIT_ACCOUNT_GUARD_INSERTED")
+            DedaPreferences.phone != _ownerPhoneAtOpen) return;""",
+              "actual assembled GPS wrapper account isolation")
+    print("100410_GPS_WRAPPED_AWAIT_SESSION_GUARD_INSERTED")
     main=main[:share_begin]+share+main[share_end:]
     print("100410_SHARE_ACCOUNT_SWITCH_AND_LATE_GPS_PROTECTED")
 
