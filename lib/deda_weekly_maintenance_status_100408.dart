@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_weekly_league_clock.dart';
@@ -20,7 +21,8 @@ class DedaWeeklyMaintenanceStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (FirebaseAuth.instance.currentUser == null) return normal;
+    if (Firebase.apps.isEmpty ||
+        FirebaseAuth.instance.currentUser == null) return normal;
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('deda_weekly_direct_control')
