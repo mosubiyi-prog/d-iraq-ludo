@@ -97,11 +97,13 @@ def bind(project):
   Future<void> _dedaHydrateProfileCounters() async {
     final current = DedaPreferences.phone;
     final epoch = ++_dedaProfileCountersEpoch;
-    if (_dedaProfileCountersOwner != current && mounted) {
-      setState(() {
-        _dedaProfileCountersOwner = current;
-        _dedaProfileCountersReady = false;
-      });
+    if (_dedaProfileCountersOwner != current) {
+      final hadPreviousOwner = _dedaProfileCountersOwner != null;
+      _dedaProfileCountersOwner = current;
+      _dedaProfileCountersReady = false;
+      // Initial setup is already before first build; only a live account
+      // transition needs a synchronous redraw to hide old account counters.
+      if (hadPreviousOwner && mounted) setState(() {});
     }
     try {
       // Actual account-scoped readers; no fabricated or minted amount.
