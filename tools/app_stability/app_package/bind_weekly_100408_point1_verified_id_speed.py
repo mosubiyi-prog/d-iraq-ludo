@@ -47,8 +47,14 @@ def bind(project):
         "static Future<({String id, String? color})> activeWithColor(")
     optimized=once(optimized,"if (!doc.exists) return originalId;",
         "if (!doc.exists) return (id: originalId, color: null);","no active")
-    optimized=once(optimized,"if (current==originalId) return originalId;",
-        "if (current==originalId) return (id: originalId, color: null);","ordinary")
+    import re
+    optimized, count = re.subn(
+        r'if\\s*\\(\\s*current\\s*==\\s*originalId\\s*\\)\\s*return\\s+originalId\\s*;',
+        'if (current == originalId) return (id: originalId, color: null);',
+        optimized, count=1)
+    if count != 1:
+        at=optimized.find("final current=")
+        raise ValueError("active current source differs "+repr(optimized[at:at+450]))
     optimized=once(optimized,"    return current;",
         "    return (id: current, color: owner.baseColor);","verified active color")
     assert "source: Source.server" in optimized
