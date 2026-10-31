@@ -1,0 +1,78 @@
+name: DEDA 100409 DIAGNOSE OWNER ID STARTUP ONLY (NO APK)
+on:
+  push:
+    branches: [deda-100409-identity-single-source-no-play-2026-10-31]
+    paths: ['.github/workflows/qa-deda-100409-owner-cache-read-sequence-no-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Restore original signed 100396 including validated leaderboard and task button
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-original-100396" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Print exact built identity scope and stored verified cache read sequence
+        shell: bash
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          scope=Path('lib/deda_qa32_active_account_scope.dart').read_text().splitlines()
+          needles=['preloadForUid','DedaVerifiedActiveIdStore.restore','DedaVerifiedActiveIdStore.confirmed','_attachAuthWhenReady','void initState','Future<void> _load','Widget build','Keep a verified same-owner ID visible','DedaVerifiedActiveIdStore.read']
+          found=[(i,l) for i,l in enumerate(scope) if any(n in l for n in needles)]
+          print('SCOPED_OWNER_CACHE_REFERENCES',len(found))
+          seen=set()
+          for i,l in found:
+            print('MATCH_START',i+1,l)
+            for k in range(max(0,i-9),min(len(scope),i+34)):
+              if k not in seen:
+                print('SCOPE_LINE',k+1,scope[k][:240]);seen.add(k)
+          print('SOURCE_ONLY_NO_APK_NO_FIREBASE_NO_ACCOUNT_TOUCH')
+          PY
