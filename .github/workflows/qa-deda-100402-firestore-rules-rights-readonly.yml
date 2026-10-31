@@ -1,0 +1,47 @@
+name: DEDA 100402 Firestore Rules Rollout Capability READ ONLY
+on:
+  push:
+    branches: [deda-100402-firestore-direct-league-first-apk-2026-10-31]
+    paths: ['.github/workflows/qa-deda-100402-firestore-rules-rights-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-firestore-rule-rights:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python -m pip install --quiet google-auth requests
+          python - <<'PY'
+          import os,json
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'
+          try:
+            data=json.loads(os.getenv('PRIMARY') or os.getenv('FALLBACK') or '{}')
+            assert data.get('project_id')==p
+            auth=service_account.Credentials.from_service_account_info(data,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            s=AuthorizedSession(auth)
+          except Exception:
+            print('CREDENTIAL=NOT_READY');raise SystemExit(0)
+          perms=['firebaserules.rulesets.create','firebaserules.releases.update','firebaserules.releases.get','firebaserules.rulesets.get','datastore.entities.create','datastore.entities.update','datastore.entities.list']
+          try:
+            r=s.post(f'https://cloudresourcemanager.googleapis.com/v1/projects/{p}:testIamPermissions',json={'permissions':perms},timeout=15)
+            allowed=set(r.json().get('permissions',[])) if r.status_code==200 else set()
+            for key in perms:print('IAM_'+key+'='+('YES' if key in allowed else 'NO_OR_UNKNOWN'))
+            print('PROJECT_IAM_HTTP='+str(r.status_code))
+            for url,label in [(f'https://firebaserules.googleapis.com/v1/projects/{p}/releases/cloud.firestore','FIRESTORE_RELEASE'),(f'https://firebaserules.googleapis.com/v1/projects/{p}/rulesets?pageSize=1','FIRESTORE_RULESETS')]:
+              try:
+                d=s.get(url,timeout=12)
+                print(label+'_HTTP='+str(d.status_code))
+              except Exception: print(label+'_HTTP=TRANSPORT_UNKNOWN')
+          except Exception:print('IAM=TRANSPORT_UNKNOWN')
+          print('NO_WRITES_NO_DEPLOY_NO_BILLING')
+          PY
