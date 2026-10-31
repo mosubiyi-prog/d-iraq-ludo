@@ -45,6 +45,35 @@ def bind(workspace):
     shutil.copy2(ROOT/"lib/deda_admin_league_active_id_100409.dart",project/ADMIN)
     scope=(project/SCOPE).read_text()
     scope=one(scope,
+        "import 'package:firebase_auth/firebase_auth.dart';",
+        "import 'package:cloud_firestore/cloud_firestore.dart';\n"
+        "import 'package:firebase_auth/firebase_auth.dart';",
+        "owner verified direct registry read import")
+    scope=one(scope,
+        "import 'deda_stage71_free_owned_use_profile.dart';",
+        "import 'deda_stage71_free_owned_use_profile.dart';\n"
+        "import 'deda_stage71_free_manager_200_service.dart';",
+        "exact selected identifier registry reference")
+    # Stage71.active() already checks same owner, authenticated session,
+    # selected registry entry and gifted receipt before it returns. Do NOT
+    # repeat a full 200-item owned-list query and second _requireOriginal.
+    # A single verified registry document is sufficient to determine color.
+    scope=one(scope,
+        """      final owned = await DedaStage71OwnedIdentifierService.owned(original);
+      final matching = owned.where((row) => row.identifier == active).toList();
+      if (matching.length != 1) throw StateError('alias-not-owned');
+      color = matching.single.baseColor;""",
+        """      final selected = await FirebaseFirestore.instance
+          .collection(DedaStage71Admin200.registry).doc(active)
+          .get(const GetOptions(source: Source.server));
+      final verified = DedaStage71OwnedIdentifier.read(
+          selected.id, selected.data() ?? {}, original);
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        throw StateError('alias-reader-account-switched');
+      }
+      color = verified.baseColor;""",
+        "no redundant full 200 owned-ID fetch after Stage71 verified active")
+    scope=one(scope,
         "import 'deda_verified_active_id_store.dart';",
         "import 'deda_verified_active_id_store.dart';\n"
         "import 'deda_active_id_public_sync_100409.dart';",
@@ -113,6 +142,7 @@ def bind(workspace):
     meta["versionCode"]=100409
     meta["weekly100409SingleVerifiedIdentity"]={
         "oneStage71ServerConfirmedSource": True,
+        "selectedIdSingleRegistryReadInsteadOfAllOwnedList": True,
         "profileCachedSameUidFirst": True,
         "publicAliasSyncAfterOwnerVerifiedReadOnly": True,
         "publicRuleGuardsOwnedIdAndColor": True,
