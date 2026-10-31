@@ -55,7 +55,10 @@ class DedaAdminLeagueControlPanel extends StatelessWidget {
           return const Text('تعذر قراءة إعدادات الدوري. التحكم غير متاح.');
         }
         if (!snapshot.hasData) return const LinearProgressIndicator();
-        final paused = snapshot.data!.data()?['paused'] == true;
+        final nowWeek = DedaAdminLeagueLiveData.weekId(phase.weekStart);
+        final record = snapshot.data!.data();
+        final paused = record?['paused'] == true &&
+            record?['weekId'] == nowWeek;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
