@@ -143,6 +143,47 @@ class DedaWeeklyPrizeAmount extends StatelessWidget {
   }
 }
 
+/// Always show the confirmed current-week plan, even after resuming; never
+/// display a stale hardcoded total once the manager has raised an amount.
+class DedaAdminLeaguePrizeSummary extends StatelessWidget {
+  const DedaAdminLeaguePrizeSummary({super.key});
+
+  Widget _amounts(List<int> values) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (var i=0; i<10; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Text('المركز ${i+1}'),
+              Text('${values[i]} ماسة',
+                style: const TextStyle(fontWeight: FontWeight.bold))],
+          ),
+        ),
+      const Divider(),
+      Text('إجمالي جوائز الأسبوع: ${values.fold<int>(0,(a,b)=>a+b)} ماسة',
+        style: const TextStyle(fontWeight: FontWeight.bold)),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (Firebase.apps.isEmpty) return _amounts(DedaWeeklyPrizePlan.minimum);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: DedaWeeklyPrizePlan.ref(DedaWeeklyPrizePlan.thisWeekId).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Text('تعذر تأكيد المبالغ الحالية من Firebase.');
+        }
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        if (snapshot.data!.metadata.hasPendingWrites) {
+          return const Text('جارِ تأكيد مبالغ الجوائز من الخادم...');
+        }
+        return _amounts(DedaWeeklyPrizePlan.amounts(snapshot.data!.data()));
+      },
+    );
+  }
+}
+
 class DedaAdminLeaguePrizeEditor extends StatefulWidget {
   const DedaAdminLeaguePrizeEditor({super.key});
   @override
