@@ -10,6 +10,7 @@ MAIN='lib/main.dart'
 PAGE='lib/deda_weekly_leaderboard_page.dart'
 CLOCK='lib/deda_weekly_league_clock.dart'
 DIRECT='lib/deda_weekly_firestore_direct_bridge.dart'
+OUTBOX='lib/deda_weekly_community_outbox.dart'
 
 HEADER_ROW="""        Expanded(
           flex: 5,
@@ -172,13 +173,20 @@ def bind(project):
         updatedDirect.count('DedaWeeklyLeagueClock.at(')!=2):
         raise ValueError('unexpected direct Firestore score module')
     (p/DIRECT).write_text(updatedDirect)
-    for relative in (MAIN,PAGE,CLOCK,DIRECT):
+    originalOutbox=(p/OUTBOX).read_text()
+    newestOutbox=(ROOT/OUTBOX).read_text()
+    if (originalOutbox.count('deda_weekly_community_pending_100400')!=1 or
+        newestOutbox.count('deda_weekly_community_pending_100404')!=1):
+        raise ValueError('Cannot safely isolate pre-six legacy pending reports')
+    (p/OUTBOX).write_text(newestOutbox)
+    for relative in (MAIN,PAGE,CLOCK,DIRECT,OUTBOX):
         m['sourceHashes'][relative]=sha(p/relative)
     m['versionCode']=100404
     m['weekly100404InlineClock']={
         'weekStartsSaturday06Baghdad':True,
         'freezesSaturday00Through06':True,
         'beforeFirstStartNoQueueOrScore':True,
+        'oldPreStartReportsCannotReplayAfterStart':True,
         'fullLeaderboardAlwaysVisible':True,
         'previousWeekTabRemoved':True,
         'inlineCountdownInOriginalTopRow':True,
