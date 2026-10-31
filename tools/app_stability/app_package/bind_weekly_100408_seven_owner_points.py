@@ -196,6 +196,54 @@ def bind(project):
                  "lib/deda_admin_league_control_widgets.dart"):
         meta["sourceHashes"][file]=sha(project/file)
 
+
+    # Point 7: manager-only prize-increase editor; plan read by competitors.
+    # Payment worker stays entirely disabled; rules require real GM and pause.
+    prize_source="lib/deda_weekly_prize_plan_100408.dart"
+    prize_target="lib/deda_weekly_prize_plan.dart"
+    shutil.copy2(ROOT/prize_source,project/prize_target)
+    admin_page=project/"lib/deda_admin_league_page.dart"
+    admin=admin_page.read_text()
+    admin=one(admin,
+        "import 'deda_admin_league_reward_status.dart';",
+        "import 'deda_admin_league_reward_status.dart';\n"
+        "import 'deda_weekly_prize_plan.dart';",
+        "point7 import manager editor")
+    admin=one(admin,
+        """                        DedaAdminLeagueRewardStatus(isArabic: isArabic),""",
+        """                        const DedaAdminLeaguePrizeEditor(),
+                        const SizedBox(height: 10),
+                        DedaAdminLeagueRewardStatus(isArabic: isArabic),""",
+        "point7 expose editor within GM-only prize plan card")
+    admin_page.write_text(admin)
+    page=page_file.read_text()
+    page=one(page,
+        "import 'deda_weekly_maintenance_status.dart';",
+        "import 'deda_weekly_maintenance_status.dart';\n"
+        "import 'deda_weekly_prize_plan.dart';",
+        "point7 import public server prize plan")
+    page=one(page,
+        """                    pill('💎 ${prize(place)}',
+                        accent, navy),""",
+        """                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                      decoration: BoxDecoration(color: accent,
+                        borderRadius: BorderRadius.circular(28)),
+                      child: DedaWeeklyPrizeAmount(
+                        place: place, color: navy, fontSize: 14 * scale),
+                    ),""",
+        "point7 dynamic prize on top three")
+    page=one(page,
+        """child: fitted('💎 10 ماسات',
+                              size: 11 * scale, color: silver)),""",
+        """child: DedaWeeklyPrizeAmount(
+                              place: rank, color: silver, fontSize: 11 * scale)),""",
+        "point7 dynamic prizes ranks 4-10")
+    page_file.write_text(page)
+    for file in (prize_target, "lib/deda_admin_league_page.dart",
+                 "lib/deda_weekly_leaderboard_page.dart"):
+        meta["sourceHashes"][file]=sha(project/file)
+
     meta["sourceHashes"][SCOPE]=sha(project/SCOPE)
     meta["versionCode"]=100408
     meta["weekly100408OwnerSevenPoints"]={
@@ -208,7 +256,7 @@ def bind(project):
       "point4SlowLeagueFirstPaint": True,
       "point5PodiumNumberOpacity": True,
       "point6AdminAliasPresentation": True,
-      "point7ManagerPausedPrizeEditor": False,
+      "point7ManagerPausedPrizeEditor": True,
       "payoutActivated": False,
       "walletOrXPModified": False,
     }
