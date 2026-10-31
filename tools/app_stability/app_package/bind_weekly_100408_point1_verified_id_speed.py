@@ -47,14 +47,21 @@ def bind(project):
         "static Future<({String id, String? color})> activeWithColor(")
     optimized=once(optimized,"if (!doc.exists) return originalId;",
         "if (!doc.exists) return (id: originalId, color: null);","no active")
-    import re
-    optimized, count = re.subn(
-        r'if\\s*\\(\\s*current\\s*==\\s*originalId\\s*\\)\\s*return\\s+originalId\\s*;',
-        'if (current == originalId) return (id: originalId, color: null);',
-        optimized, count=1)
-    if count != 1:
-        at=optimized.find("final current=")
-        raise ValueError("active current source differs "+repr(optimized[at:at+450]))
+    optimized=once(optimized,
+        "if (current == originalId) return originalId;",
+        "if (current == originalId) return (id: originalId, color: null);",
+        "ordinary confirmed ID")
+    # Critical: old verified active() synchronizes a missing public alias
+    # projection (additional network calls). That is NOT necessary to paint a
+    # verified same-owner active ID, and it is the owner phone's latency issue.
+    # Leave original active() unchanged for its recovery/repair duties.
+    repair_start=optimized.find("    // Restore a missing public projection")
+    repair_end=optimized.find("    return current;",repair_start)
+    if repair_start<0 or repair_end<repair_start or (
+        "DedaOwner18PublicAliasRepair.ensure(" not in
+        optimized[repair_start:repair_end]):
+        raise ValueError("public repair must be removed only from fast UI read")
+    optimized=optimized[:repair_start]+optimized[repair_end:]
     optimized=once(optimized,"    return current;",
         "    return (id: current, color: owner.baseColor);","verified active color")
     assert "source: Source.server" in optimized
