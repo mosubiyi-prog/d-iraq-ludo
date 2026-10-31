@@ -50,6 +50,44 @@ def bind(project):
         shutil.copy2(ROOT/name,target)
         meta['sourceHashes'][name]=digest(target)
     meta['sourceHashes'][PAGE]=digest(manager)
+    # Admin review notification is private to the signed-in DEDA account.
+    # Extend ONLY the assembled 100404 UI/decoder, not the accepted source.
+    model=p/'lib/deda_weekly_leaderboard_page.dart'
+    page=model.read_text()
+    constructor='    this.remainingUntilWeekEnd,\n'
+    field='  final Duration? remainingUntilWeekEnd;\n'
+    status='child: fitted(widget.previewOnly\n'
+    if (page.count(constructor)!=1 or page.count(field)!=1 or
+        page.count(status)!=1):
+        raise ValueError('100404 owner-approved league notice anchors changed')
+    page=page.replace(constructor,constructor+'    this.reviewNotice,\n',1)
+    page=page.replace(field,field+'  final String? reviewNotice;\n',1)
+    page=page.replace(status,
+        "child: fitted(view.reviewNotice != null\n"
+        "            ? (view.reviewNotice!.contains('اكتملت')\n"
+        "                ? 'إشعار الإدارة: تم رفع تجميد نقاط الدوري.'\n"
+        "                : 'إشعار الإدارة: نقاط الدوري قيد المراجعة.')\n"
+        "            : widget.previewOnly\n",1)
+    model.write_text(page)
+    parse=p/'lib/deda_weekly_snapshot_decode.dart'
+    decoder=parse.read_text()
+    finish='      remainingUntilWeekEnd: Duration(milliseconds: remainingMs),\n'
+    rtrn='    return DedaLeaderboardViewData(\n      verified: true,'
+    if decoder.count(finish)!=1 or decoder.count(rtrn)!=1:
+        raise ValueError('100404 source snapshot contract changed')
+    decoder=decoder.replace(rtrn,
+        "    final reviewNotice = json['reviewNotice'];\n"
+        "    if (reviewNotice != null && (reviewNotice is! String ||\n"
+        "        reviewNotice.length < 12 || reviewNotice.length > 240)) {\n"
+        "      throw const FormatException('invalid private manager notice');\n"
+        "    }\n"
+        +rtrn,1)
+    decoder=decoder.replace(finish,
+        finish+'      reviewNotice: reviewNotice as String?,\n',1)
+    parse.write_text(decoder)
+    for path in ('lib/deda_weekly_leaderboard_page.dart',
+                 'lib/deda_weekly_snapshot_decode.dart'):
+        meta['sourceHashes'][path]=digest(p/path)
     meta['versionCode']=100405
     meta['weekly100405AdminProgress']={
         'readOnlyLiveTopTen':True,
@@ -61,6 +99,7 @@ def bind(project):
         'approved100404Unchanged':True,
         'apkDelivered':False,
         'stageOfFive':2,
+        'privateAdminReviewNoticeInLeague':True,
         'managerPauseFreezeSourceCreated':True,
         'managerPauseFreezeFirestoreRulesTestPending':True,
     }
