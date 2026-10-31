@@ -25,7 +25,11 @@ class DedaOwner18OriginalAccountProof {
         route['kind'] == 'personal' &&
         route['active'] == true &&
         route['ownerUid'] is String &&
-        (route['ownerUid'] as String).isNotEmpty;
+        (route['ownerUid'] as String).isNotEmpty &&
+        // A replacement device has a different anonymous Firebase UID.
+        // Its own server account projection must explicitly bind the immutable
+        // original DEDA ID; a matching phone/accountKey alone is not proof.
+        (route['ownerUid'] == uid || account['sharePersonalId'] == original);
   }
 
   static Future<String> verify(String original) async {
