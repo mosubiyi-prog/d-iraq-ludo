@@ -1,0 +1,58 @@
+name: DEDA 100406 Screenshot Account Exact Alias and Avatar Check READ ONLY
+on:
+  push:
+    branches: [deda-100406-league-active-id-avatar-frame-clock-no-play-2026-10-31]
+    paths: ['.github/workflows/deda-100406-screenshot-active-account-readonly.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Identify only screenshot public ID lineage and appearance classes, never log raw active ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet firebase-admin
+          python - <<'PY'
+          import os,json,firebase_admin
+          from firebase_admin import credentials,firestore
+          data=json.loads(os.getenv('PRIMARY') or os.getenv('FALLBACK') or '{}')
+          assert data.get('project_id')=='deda-25b88'
+          firebase_admin.initialize_app(credentials.Certificate(data),{'projectId':'deda-25b88'})
+          db=firestore.client()
+          original='@DEDA-AQPYXJ'
+          def doc(path):
+            x=db.document(path).get(timeout=20)
+            return x.to_dict() if x.exists else {}
+          owner=doc('deda_share_ids/'+original)
+          active=doc('deda_stage71_active_identifier/'+original)
+          spark=doc('deda_public_active_aliases/'+original)
+          score=doc('deda_weekly_direct_weeks/2026-10-31/scores/'+original)
+          social=doc('deda_social_profiles/'+original)
+          uid=owner.get('ownerUid')
+          user=doc('users/'+uid) if isinstance(uid,str) else {}
+          session=doc('deda_sessions/'+uid) if isinstance(uid,str) else {}
+          print('SCREENSHOT_ORIGINAL_ROUTE_ACTIVE_PERSONAL='+str(owner.get('kind')=='personal' and owner.get('active') is True))
+          print('SCREENSHOT_ORIGINAL_UID_AND_SESSION_MATCH='+str(bool(user.get('accountKey') and user.get('accountKey')==session.get('accountKey'))))
+          print('SCREENSHOT_ORIGINAL_USER_SHARE_ID_MATCH='+str(user.get('sharePersonalId')==original))
+          print('SCREENSHOT_WEEKLY_SCORE_EXISTS='+str(bool(score)))
+          print('SCREENSHOT_STAGE71_PREMIUM_ACTIVE='+str(bool(active and active.get('activeId') not in (None,original))))
+          print('SCREENSHOT_SPARK_PROJECTION_EXISTS='+str(bool(spark)))
+          print('SCREENSHOT_SPARK_MATCHES_STAGE71='+str(bool(active and spark and active.get('activeId')==spark.get('activeId'))))
+          avatar=social.get('avatarStyle')
+          frame=social.get('frameStyle')
+          print('SCREENSHOT_SOCIAL_APPEARANCE_SAVED='+str(type(avatar)==int and type(frame)==int))
+          print('SCREENSHOT_AVATAR_NONDEFAULT='+str(type(avatar)==int and avatar!=0))
+          print('SCREENSHOT_FRAME_NONDEFAULT='+str(type(frame)==int and frame!=0))
+          print('SCREENSHOT_PUBLIC_SOCIAL_OWNER_MATCH='+str(social.get('ownerUid')==uid))
+          print('SCREENSHOT_PUBLIC_SOCIAL_PUBLICID_MATCH='+str(social.get('publicId')==original))
+          print('NO_ACCOUNT_WRITES_NO_RAW_PREMIUM_IDS=True')
+          PY
