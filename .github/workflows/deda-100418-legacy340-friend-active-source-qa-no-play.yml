@@ -4,6 +4,9 @@ on:
     branches: [deda-100418-legacy340-public-active-read-candidate-no-deploy-2026-10-31]
     paths:
       - '.github/workflows/deda-100418-legacy340-friend-active-source-qa-no-play.yml'
+      - 'tools/app_stability/app_package/bind_weekly_100418_legacy340_friend_active_compat.py'
+      - 'lib/deda_legacy340_active_selection_100418.dart'
+      - 'test/deda_100418_legacy340_selection_test.dart'
       - 'lib/deda_weekly_prize_plan_100408.dart'
       - 'test/deda_100412_prize_response_guard_test.dart'
       - 'tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py'
