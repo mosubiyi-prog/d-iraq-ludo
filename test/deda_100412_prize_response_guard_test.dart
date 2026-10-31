@@ -23,7 +23,7 @@ void main() {
         contains('الحدود'));
     final older = List<int>.from(saved)..[4] = 100;
     expect(DedaPrizeDraftGuard100412.validate(saved, older, reason),
-        contains('خفض'));
+        contains('تخفيض'));
     expect(DedaPrizeDraftGuard100412.validate(saved, null, reason),
         contains('الخادم'));
   });
