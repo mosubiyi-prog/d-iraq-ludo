@@ -5,7 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_stage71_free_owned_use_profile.dart';
-import 'deda_verified_active_id_store.dart';
 import 'deda_stability_read_scope.dart';
 
 /// Verified *owner-only* account display. Never changes the immutable
@@ -252,30 +251,11 @@ class _DedaQa32ActiveAccountScopeState
     final uid = _currentUid();
     final original = widget.originalId;
     if (!mounted) return;
-    // Do not flash the retired original ID while the SAME account refreshes.
-    // Never keep proof when principal, original route, or session changes.
-    if (_proof != null && (uid == null ||
-        !_proof!.verifiedFor(uid, original))) {
-      setState(() => _proof = null);
-    }
+    if (_proof != null) setState(() => _proof = null);
     if (dedaStabilityIdentityPilot && _paused) return;
     if (uid == null || !widget._source.enabled ||
         !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original)) {
       return;
-    }
-    // Only same-UID Stage71-confirmed display state may prefill the profile.
-    // The server remains authoritative and will reconcile the cache below.
-    if (widget._source is _FirebaseIdentitySource) {
-      final saved = DedaVerifiedActiveIdStore.read(uid, original);
-      if (saved != null && saved.wellFormed &&
-          _currentUid() == uid && widget.originalId == original &&
-          (_proof?.displayId != saved.displayId ||
-           _proof?.fixedColor != saved.fixedColor)) {
-        setState(() => _proof = DedaQa32ActiveAccountIdentity(
-          uid: uid, originalId: original,
-          displayId: saved.displayId, fixedColor: saved.fixedColor,
-        ));
-      }
     }
     try {
       Future<DedaQa32ActiveAccountIdentity> readVerified() =>
@@ -294,14 +274,6 @@ class _DedaQa32ActiveAccountScopeState
           _currentUid() != uid ||
           widget.originalId != original || !next.verifiedFor(uid, original)) {
         return;
-      }
-      // One shared verified UI store for owner profile and weekly league.
-      // No server account IDs, grants, points or wallet data are changed.
-      if (widget._source is _FirebaseIdentitySource) {
-        DedaVerifiedActiveIdStore.confirmed(
-          uid: uid, originalId: original, displayId: next.displayId,
-          fixedColor: next.fixedColor,
-        );
       }
       setState(() => _proof = next);
     } catch (_) {
