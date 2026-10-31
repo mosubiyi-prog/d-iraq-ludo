@@ -55,6 +55,7 @@ class DedaAdminLeagueControls {
     final events = _db.collection('deda_weekly_direct_admin_events').doc();
     final batch = _db.batch();
     batch.set(control, {
+      'weekId': id,
       'paused': paused,
       'reason': why,
       'updatedAt': FieldValue.serverTimestamp(),
