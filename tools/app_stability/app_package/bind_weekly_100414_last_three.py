@@ -118,12 +118,10 @@ def bind(path):
     admin_start=s.index('  static Future<bool> signInAdmin({')
     admin_end=s.index('  static Future<void> updateCurrentAdminDisplayName(',admin_start)
     admin=s[admin_start:admin_end]
-    admin=one(admin,
-      '''await FirebaseFirestore.instance.collection('admins').doc(uid).get();''',
-      '''await FirebaseFirestore.instance.collection('admins').doc(uid)
-            .get(const GetOptions(source: Source.server))
-            .timeout(const Duration(seconds: 12));''',
-      'fresh admin proof, never cached')
+    # The assembled signed-app stages wrap admin reads in operation-context
+    # timeout guards; preserve that existing server verification verbatim.
+    if "collection('admins')" not in admin or 'final data = admin.data();' not in admin:
+        raise ValueError('100414 expected real admin server authorization missing')
     begin=admin.index('      final cleanName = displayName.trim();')
     finish=admin.index('      return true;',begin)
     old=admin[begin:finish]
