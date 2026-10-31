@@ -67,54 +67,17 @@ def bind(workspace):
         ));"""+scope[end+2:]
     (project/SCOPE).write_text(scope)
 
-    # Stage71 use() must NEVER block its already server-verified activation
-    # on optional public alias publication. The initial selection, ownership
-    # and gifted-receipt checks remain intact; we reuse the verified foil.
+    # Do not patch Stage71 purchase/use/grant code: its assembled variant
+    # differs across existing owner stages. The verified profile callback
+    # above independently repairs the public display projection. All
+    # original Stage71 account ownership, receipt, and real ID use behavior
+    # remains bit-for-bit untouched.
     stage_file="lib/deda_stage71_free_owned_use_profile.dart"
     stage=(project/stage_file).read_text()
-    stage=one(stage,
-        "import 'deda_qa32_spark_public_identifier_directory.dart';",
-        "import 'deda_qa32_spark_public_identifier_directory.dart';\n"
-        "import 'deda_active_id_public_sync_100409.dart';",
-        "stage71 nonblocking projection module")
-    snippet_index=stage.find("static Future<void> use(")
-    if snippet_index >= 0:
-        print("STAGE71_USE_100409_AUDIT_BEGIN")
-        print(stage[snippet_index:snippet_index+5400])
-        print("STAGE71_USE_100409_AUDIT_END")
-    stage=one(stage,
-        """    final db=FirebaseFirestore.instance;
-    if (identifier!=originalId) {
-      final owner=await db.collection(DedaStage71Admin200.registry)""",
-        """    final db=FirebaseFirestore.instance;
-    String? verifiedFoil;
-    if (identifier!=originalId) {
-      final owner=await db.collection(DedaStage71Admin200.registry)""",
-        "stage71 verified color belongs to existing owner registry")
-    stage=one(stage,
-        """      DedaStage71OwnedIdentifier.read(
-        owner.id,owner.data() ?? {},originalId);""",
-        """      verifiedFoil = DedaStage71OwnedIdentifier.read(
-        owner.id,owner.data() ?? {},originalId).baseColor;""",
-        "reuse existing server-verified active color")
-    old_begin=stage.index("    // Spark owner publication only after original ID")
-    old_end=stage.index(
-        "    if (FirebaseAuth.instance.currentUser?.uid != uid) {\n"
-        "      throw StateError('account-switched-before-use-notifier');",
-        old_begin)
-    stage=stage[:old_begin]+"""    // OPTIONAL sync. Stage71 use() already verified ownership, the gifted
-    // receipt (if any), and persisted the current active ID. Do not delay the
-    // immediate success notifier on a public display index network request.
-    if (DedaQa32SparkPublicIdentifierDirectory.enabled &&
-        FirebaseAuth.instance.currentUser?.uid == uid) {
-      unawaited(DedaActiveIdPublicSync100409.publishAfterVerifiedRead(
-        uid: uid, originalId: originalId, activeId: identifier,
-        fixedColor: verifiedFoil,
-      ));
-    }
-"""+stage[old_end:]
-    (project/stage_file).write_text(stage)
-
+    print("STAGE71_BUILD_USE_MARKER",stage.find("static Future<void> use("))
+    print("STAGE71_BUILD_SPARK_MARKER",stage.find("Spark owner publication only"))
+    print("STAGE71_BUILD_USE_CONTEXT",repr(stage[max(0,stage.find("static Future<void> use(")):][:2000]))
+    
     for path in (PUBLIC, ADMIN, SCOPE, stage_file):
         meta["sourceHashes"][path]=sha(project/path)
     meta["versionCode"]=100409
@@ -126,7 +89,7 @@ def bind(workspace):
         "publicRuleGuardsOwnedIdAndColor": True,
         "managerOneStableReadSubscription": True,
         "managerOwnVerifiedIdRevisionRefresh": True,
-        "stage71UseDoesNotWaitForPublicProjection": True,
+        "stage71ActivationLogicUnchanged": True,
         "managerReadErrorAndSixSecondBound": True,
         "noRetiredOriginalFallbackOnUnknownAlias": True,
         "accountKeysUnchanged": True,
