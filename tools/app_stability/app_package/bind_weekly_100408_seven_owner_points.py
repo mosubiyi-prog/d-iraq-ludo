@@ -82,6 +82,38 @@ def bind(project):
       );""",
         "point2 close bottom status banner")
 
+    # Point 4: independent Firebase identity document reads in parallel,
+    # bounded public appearance queries. No fake ranks or guessed premium IDs.
+    bridge_file=project/"lib/deda_weekly_firestore_direct_bridge.dart"
+    bridge=bridge_file.read_text()
+    bridge=one(bridge,
+        """    final sess = await db.collection('deda_sessions').doc(uid).get();
+    if (sess.data()?['accountKey'] != accountKey) return null;
+    final doc = await db.collection('users').doc(uid).get();""",
+        """    final ownerDocs = await Future.wait([
+      db.collection('deda_sessions').doc(uid).get(),
+      db.collection('users').doc(uid).get(),
+    ]);
+    final sess = ownerDocs[0];
+    if (sess.data()?['accountKey'] != accountKey) return null;
+    final doc = ownerDocs[1];""",
+        "point4 parallel same-principal identity reads")
+    old_query="""              .get(const GetOptions(source: Source.server))
+              .then((doc) => doc.data()).catchError((_) => null),"""
+    if bridge.count(old_query)!=2:
+        raise ValueError("point4 two independent profile queries required")
+    bridge=bridge.replace(old_query,
+        """              .get(const GetOptions(source: Source.server))
+              .timeout(const Duration(seconds: 5))
+              .then((doc) => doc.data()).catchError((_) => null),""")
+    bridge=one(bridge,
+        """          .doc(w.id).collection('users').doc(me.id).get();""",
+        """          .doc(w.id).collection('users').doc(me.id).get()
+          .timeout(const Duration(seconds: 3));""",
+        "point4 no slow optional notice blocking ranks")
+    bridge_file.write_text(bridge)
+    meta["sourceHashes"]["lib/deda_weekly_firestore_direct_bridge.dart"] = sha(bridge_file)
+
     # Point 5: tiny translucent medallion below the portrait, never over face.
     begin=page.index("  Widget podium(")
     finish=page.index("  Widget rankingTable(",begin)
@@ -173,7 +205,7 @@ def bind(project):
       "point1OwnerPhoneTestPending": True,
       "point2MaintenanceBanner": True,
       "point3WrongTransitionalBalances": False,
-      "point4SlowLeagueFirstPaint": False,
+      "point4SlowLeagueFirstPaint": True,
       "point5PodiumNumberOpacity": True,
       "point6AdminAliasPresentation": True,
       "point7ManagerPausedPrizeEditor": False,
