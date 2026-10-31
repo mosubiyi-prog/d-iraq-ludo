@@ -1,0 +1,23 @@
+name: DEDA 100405 Weekend 06 Baghdad Gift Plan Dry Run (NO REAL DIAMONDS)
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths:
+      - '.github/workflows/qa-deda-100405-weekly-prizes-pure-plan-no-deploy.yml'
+      - 'functions/deda_weekly_direct_prize_plan.js'
+      - 'functions/tests/deda_weekly_direct_prize_plan.test.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dry-run-plan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          set -euo pipefail
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+          echo "DRY_RUN_ONLY NO_FIREBASE_WRITES NO_REAL_DIAMONDS NO_APK NO_PLAY"
