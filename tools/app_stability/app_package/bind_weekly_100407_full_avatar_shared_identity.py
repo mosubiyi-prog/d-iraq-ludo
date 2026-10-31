@@ -92,67 +92,14 @@ def bind(project):
     page=page[:begin]+podium+page[finish:]
     assert page.count("drawOriginalEquippedAvatar!")>=2
     (project/PAGE).write_text(page)
-    # The original 100406 stable profile already validates Stage71 ownership,
-    # but its UI waits for repeated serial reads on every widget mount.
-    # Apply only AFTER the protected baseline has been reconstructed.
-    # A same-UID, Stage71-confirmed last display may be painted immediately;
-    # ordinary authenticated server revalidation always follows it.
+    # Verified 100406 assembled source ALREADY implements the single Stage71
+    # owner cache: restore same-UID UI state and server-confirm readback.
+    # Never copy a second source or duplicate an identity subscription.
     scope=(project/SCOPE).read_text()
-    scope=once(scope,
-        "import 'deda_stage71_free_owned_use_profile.dart';",
-        "import 'deda_stage71_free_owned_use_profile.dart';\n"
-        "import 'deda_verified_active_id_store.dart';",
-        "shared active-ID store import after prepare")
-    if "    if (_proof != null) setState(() => _proof = null);" not in scope:
-        at=scope.find("Future<void> _load() async")
-        raise ValueError("100407 generated scope differs: "+repr(scope[at:at+1800]))
-    scope=once(scope,
-        """    if (_proof != null) setState(() => _proof = null);
-    if (dedaStabilityIdentityPilot && _paused) return;""",
-        """    // Same-account refresh must not flash the retired original ID.
-    // On UID/original change, clear the previous account proof immediately.
-    if (_proof != null && (uid == null ||
-        !_proof!.verifiedFor(uid, original))) {
-      setState(() => _proof = null);
-    }
-    if (dedaStabilityIdentityPilot && _paused) return;""",
-        "no old-ID flicker on verified same account")
-    scope=once(scope,
-        """    try {
-      Future<DedaQa32ActiveAccountIdentity> readVerified() =>""",
-        """    // Presentation only. A fresh device with no previously confirmed
-    // per-UID state waits for the ordinary verified owner server read.
-    if (widget._source is _FirebaseIdentitySource) {
-      final saved = DedaVerifiedActiveIdStore.read(uid, original);
-      if (saved != null && saved.wellFormed &&
-          _currentUid() == uid && widget.originalId == original &&
-          (_proof?.displayId != saved.displayId ||
-           _proof?.fixedColor != saved.fixedColor)) {
-        setState(() => _proof = DedaQa32ActiveAccountIdentity(
-          uid: uid, originalId: original,
-          displayId: saved.displayId, fixedColor: saved.fixedColor,
-        ));
-      }
-    }
-    try {
-      Future<DedaQa32ActiveAccountIdentity> readVerified() =>""",
-        "prefill verified same-UID ID only")
-    scope=once(scope,
-        """      setState(() => _proof = next);
-    } catch (_) {""",
-        """      if (widget._source is _FirebaseIdentitySource) {
-        // A genuine Stage71-verified read updates the ONE UI source shared
-        // with league. Never treats this cache as purchase or auth authority.
-        DedaVerifiedActiveIdStore.confirmed(
-          uid: uid, originalId: original, displayId: next.displayId,
-          fixedColor: next.fixedColor,
-        );
-      }
-      setState(() => _proof = next);
-    } catch (_) {""",
-        "server-confirmed alias projection into shared owner cache")
-    (project/SCOPE).write_text(scope)
-
+    if (scope.count("DedaVerifiedActiveIdStore.confirmed(")!=1 or
+        "DedaVerifiedActiveIdStore.restore(uid, original)" not in scope or
+        "Keep a verified same-owner ID visible during a normal refresh." not in scope):
+        raise ValueError("owner profile unified verified store not present")
     # A single stable notifier combines real XP with the existing
     # server-confirmed Stage71 display-ID revision. Do not instantiate the
     # merged Listenable on every Flutter rebuild (would reset league state).
@@ -200,7 +147,7 @@ enum DedaMapStyle {""",
     meta["versionCode"]=100407
     meta["weekly100407OwnerCorrections"]={
         "alreadyServerConfirmedSameUidDisplayCacheReused":True,
-        "profileServerReadSeedsSharedCache":True,
+        "profileAlreadyUsesVerifiedOwnerStore":True,
         "leagueAutoRefreshesOnOwnerVerifiedIdChange":True,
         "scoreReadNeverBlocksOnEightPendingRetries":True,
         "scoreAndOriginalRouteNeverChanged":True,
