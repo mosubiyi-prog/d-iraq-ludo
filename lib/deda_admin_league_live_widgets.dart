@@ -181,20 +181,53 @@ class DedaAdminLeagueLiveArchive extends StatefulWidget {
 class _DedaAdminLeagueLiveArchiveState
     extends State<DedaAdminLeagueLiveArchive> {
   late Future<List<DedaAdminLeagueWeek>> _weeks;
+  late String _month;
+  List<String> get _months =>
+      DedaAdminLeagueLiveData.archiveMonths(DateTime.now().toUtc());
   @override
   void initState() {
     super.initState();
+    final months = _months;
+    _month = months.isEmpty ? '' : months.first;
     _load();
   }
+
   void _load() {
     _weeks = widget.injectedWeeks ??
-        DedaAdminLeagueLiveData().completedWeeks(DateTime.now().toUtc());
+        (_month.isEmpty
+          ? Future.value(const <DedaAdminLeagueWeek>[])
+          : DedaAdminLeagueLiveData().completedWeeksForMonth(
+              DateTime.now().toUtc(), _month));
+  }
+
+  @override
+  void didUpdateWidget(covariant DedaAdminLeagueLiveArchive oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.injectedWeeks != widget.injectedWeeks) _load();
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (widget.injectedWeeks == null && _months.isNotEmpty)
+          Row(children: [
+            Text(widget.isArabic ? 'اختر الشهر' : 'Select month'),
+            const SizedBox(width: 12),
+            Expanded(child: DropdownButton<String>(
+              key: const Key('deda-admin-archive-month'),
+              isExpanded: true,
+              value: _month,
+              items: [
+                for (final m in _months)
+                  DropdownMenuItem(value: m, child: Text(m)),
+              ],
+              onChanged: (month) {
+                if (month == null || month == _month) return;
+                setState(() { _month = month; _load(); });
+              },
+            )),
+          ]),
         Align(
           alignment: AlignmentDirectional.centerEnd,
           child: TextButton.icon(
