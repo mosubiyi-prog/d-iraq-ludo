@@ -2463,6 +2463,8 @@ service cloud.firestore {
           // temporarily pause ONLY the shared league, never the level XP.
           && (!exists(/databases/$(database)/documents/deda_weekly_direct_control/active)
             || get(/databases/$(database)/documents/deda_weekly_direct_control/active)
+                .data.weekId != weekId
+            || get(/databases/$(database)/documents/deda_weekly_direct_control/active)
                 .data.paused != true)
           && (!exists(/databases/$(database)/documents/deda_weekly_direct_reviews/$(weekId)/users/$(publicId))
             || get(/databases/$(database)/documents/deda_weekly_direct_reviews/$(weekId)/users/$(publicId))
@@ -2544,8 +2546,10 @@ service cloud.firestore {
       allow get: if signedIn() && controlId == 'active';
       allow list, delete: if false;
       function validControl(d) {
-        return d.keys().hasOnly(['paused','reason','updatedAt','updatedBy'])
-          && d.keys().hasAll(['paused','reason','updatedAt','updatedBy'])
+        return d.keys().hasOnly(['weekId','paused','reason','updatedAt','updatedBy'])
+          && d.keys().hasAll(['weekId','paused','reason','updatedAt','updatedBy'])
+          && d.weekId is string
+          && d.weekId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')
           && d.paused is bool
           && d.reason is string && d.reason.size() >= 8
           && d.reason.size() <= 200
