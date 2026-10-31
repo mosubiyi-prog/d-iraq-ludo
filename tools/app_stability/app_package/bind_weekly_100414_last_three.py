@@ -180,26 +180,23 @@ def bind(path):
     start=s.index('  static Future<bool> currentAdminSessionMatchesDedaEntry(')
     end=s.index('\n  }',start)+4
     block=s[start:end]
-    block=one(block,
-      '''    } catch (_) {
-      return false;
-    }
-  }''',
-      '''    } on FirebaseException catch (error) {
-      // Network uncertainty is NOT an authorization denial; do not sign
-      // out an already valid admin because the first gateway read timed out.
-      // Dashboard access still requires a successful server verification.
+    # Exact signed baseline wraps async calls; retain the final fail-closed
+    # catch and insert transport catches immediately BEFORE it. A transport
+    # timeout is not proof of a revoked admin permission.
+    import re
+    caught=list(re.finditer(r'\\}\\s*catch\\s*\\([^)]*\\)\\s*\\{',block))
+    if not caught or 'return false' not in block[caught[-1].start():]:
+        raise ValueError('100414 outer admin gateway catch missing')
+    where=caught[-1].start()
+    block=block[:where]+''' } on FirebaseException catch (error) {
       if (error.code=='unavailable' ||
           error.code=='deadline-exceeded' ||
           error.code=='network-request-failed') rethrow;
       return false;
     } on TimeoutException {
       rethrow;
-    } catch (_) {
-      return false;
-    }
-  }''',
-      'admin gate propagate transport errors but fail closed on denied access')
+    '''+block[where:]
+
     s=s[:start]+block+s[end:]
     f.write_text(s)
 
