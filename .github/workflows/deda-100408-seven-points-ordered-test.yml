@@ -69,6 +69,27 @@ jobs:
           python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100408_point1_verified_id_speed.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100408_point2_pause_notice.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Locate original account profile staging fields for point 3 without modifying them
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main.dart')
+          s=p.read_text().splitlines()
+          tags=('class _DedaSocialProfile', 'class _DedaSocialHub',
+                'جار التحقق من المعر', 'نقاط المستوى:', 'ملفي',
+                'DedaDiamondsWallet', 'friendCount', 'friendsCount',
+                'عدد الأصدقاء', 'dedaProfileVisibleDiamonds')
+          match=[i for i,v in enumerate(s) if any(tag in v for tag in tags)]
+          print('ORIGINAL_PROFILE_LOCATIONS',len(s),[i+1 for i in match[:80]])
+          seen=set()
+          for i in match[:18]:
+              for j in range(max(0,i-7),min(len(s),i+11)):
+                  if j in seen:continue
+                  seen.add(j)
+                  print(f'{j+1}: {s[j][:230]}')
+          PY
       - name: Verify seven points and catch all 100406 Flutter compile errors before Gradle
         working-directory: ${{ runner.temp }}/deda-original-100396
         shell: bash
