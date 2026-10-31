@@ -44,6 +44,16 @@ def stage(target: Path) -> None:
     current = path.read_text()
     reviewed = (ROOT / REL).read_text()
     if reviewed.count(NEW) != 1 or reviewed.replace(NEW, OLD) != current:
+        import difflib
+        expected = reviewed.replace(NEW, OLD)
+        differences = "".join(difflib.unified_diff(
+            current.splitlines(keepends=True),
+            expected.splitlines(keepends=True),
+            fromfile="verified_100420_reconstruction",
+            tofile="repo_pre_100421_reviewed_guard",
+        ))
+        print("SAFE_STOP_RECONSTRUCTED_HELPER_DRIFT_SOURCE_ONLY_DIFF")
+        print(differences[:8000] if differences else "PATCH_ANCHOR_OR_METADATA_DRIFT")
         raise ValueError("ORIGINAL_100420_HELPER_DIFFERENT_FROM_REVIEWED_PATCH")
     if flags["sourceHashes"].get(REL) != sha(current.encode()):
         raise ValueError("ORIGINAL_SOURCE_HASH_MISMATCH")
