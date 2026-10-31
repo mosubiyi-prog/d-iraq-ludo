@@ -1,0 +1,32 @@
+name: DEDA 100421 LIVE PIN Rules Boolean Audit (GET ONLY, NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100421-canonical-account-binding-audit-no-deploy-2026-11-01
+    paths:
+      - 'tools/deda_100421_pin_live_rules_readonly_no_deploy.py'
+      - 'test/test_deda_100421_live_pin_policy_readonly.py'
+      - '.github/workflows/qa-deda-100421-live-pin-rules-readonly-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production-rules-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_100421_PRIMARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_100421_SECONDARY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test source-only boolean audit contract (no credentials)
+        run: python3 -m unittest test/test_deda_100421_live_pin_policy_readonly.py -v
+      - name: Google credentials for GET-only published Firebase Rules API
+        run: python3 -m pip install --disable-pip-version-check google-auth requests
+      - name: Inspect ONLY the published ruleset, not Firestore documents
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100421_pin_live_rules_readonly_no_deploy.py
+          echo 'DEDA_100421_NO_FIREBASE_WRITES_NO_APK_NO_GOOGLE_PLAY'
