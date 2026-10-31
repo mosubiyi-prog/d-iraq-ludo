@@ -107,7 +107,7 @@ def bind(dest):
     }
 """ + use[finish:]
     stage=stage[:use_begin]+use+stage[use_finish:]
-    foil_begin=stage.index("class _DedaStage71ActiveProfileFoilState")
+    foil_begin=stage.find("class _DedaStage71ActiveProfileFoilState")
     if not stage.endswith("}\n"):
         raise ValueError("foil not last widget; refuse unsafe replacement")
     foil=r"""class _DedaStage71ActiveProfileFoilState
@@ -170,7 +170,10 @@ def bind(dest):
   }
 }
 """
-    stage=stage[:foil_begin]+foil
+    if foil_begin >= 0:
+        stage=stage[:foil_begin]+foil
+    else:
+        print("100410 ASSEMBLED_STAGE71_USES_DIFFERENT_PROFILE_FOIL; core owner source stays single")
     (dest/"lib/deda_stage71_free_owned_use_profile.dart").write_text(stage)
 
     # Public leaderboard paints through the SAME store: other users' old ID
