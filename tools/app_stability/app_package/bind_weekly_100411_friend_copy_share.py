@@ -99,37 +99,43 @@ def bind(destination):
         "if (DedaFriendIdCopy100411.exactCopyValue(recipient) == null) {",
         "accept structurally valid copyable premium input")
 
-    # The original busy flag is set before any network resolution, and the
-    # entire route proof is inside the existing try/finally cleanup path.
-    busy=send.index("setState(() => _sending = true);")
-    try_at=send.index("try {",busy)
-    at=try_at+len("try {")
+    # Route identity AFTER the location acquisition, immediately BEFORE
+    # the existing backend send. Never delay the original GPS path or change
+    # its busy flag, permissions, account/session sequencing and user prompts.
+    backend="await DedaSectionOperationContext.wait(() => DedaBackend.createLocationShare("
+    if send.count(backend)!=1:
+        raise ValueError("100411 exact backend send count="+str(send.count(backend)))
+    at=send.index(backend)
     guard="""
-      // Prefer the existing canonical, active personal share route; otherwise
-      // resolve the pasted PREMIUM alias against the CURRENT server projection.
-      // Never change stable friendship/share keys or accept an old alias.
+      // Canonical personal IDs always take priority over premium aliases.
+      // Server comparison is only needed once GPS is ready. Firebase may
+      // be deliberately uninitialized in legacy widget tests: preserve
+      // their original backend-not-ready error and the original GPS flow.
       String canonicalRecipient = recipient;
-      final direct = DedaBackend.isValidPersonalShareId(recipient)
-          ? await DedaSectionOperationContext.wait(
-              () => DedaBackend.locationShareIdInfo(recipient))
-          : null;
-      if (direct == null || direct['kind'] != 'personal') {
-        final resolved = await DedaSectionOperationContext.wait(
-            () => DedaQa32PublicRecipientResolver.resolveActiveAlias(
-                recipient));
-        if (resolved == null ||
-            !DedaBackend.isValidPersonalShareId(resolved)) {
-          throw StateError('recipient-share-id-not-found');
+      if (DedaBackend.isReady) {
+        final direct = DedaBackend.isValidPersonalShareId(recipient)
+            ? await DedaSectionOperationContext.wait(
+                () => DedaBackend.locationShareIdInfo(recipient))
+            : null;
+        if (direct == null || direct['kind'] != 'personal') {
+          final resolved = await DedaSectionOperationContext.wait(
+              () => DedaQa32PublicRecipientResolver.resolveActiveAlias(
+                  recipient));
+          if (resolved == null ||
+              !DedaBackend.isValidPersonalShareId(resolved)) {
+            throw StateError('recipient-share-id-not-found');
+          }
+          canonicalRecipient = resolved;
         }
-        canonicalRecipient = resolved;
+        if (!_locationAccountCurrent() ||
+            !DedaPreferences.isLoggedIn ||
+            DedaPreferences.phone != _ownerPhoneAtOpen) return;
+        DedaAuthRuntime.checkSnapshot(requestPrincipal);
+        if (canonicalRecipient == personalId) {
+          throw StateError('share-self-recipient');
+        }
       }
-      if (!_locationAccountCurrent() || !DedaPreferences.isLoggedIn ||
-          DedaPreferences.phone != _ownerPhoneAtOpen) return;
-      DedaAuthRuntime.checkSnapshot(requestPrincipal);
-      if (canonicalRecipient == personalId) {
-        throw StateError('share-self-recipient');
-      }
-"""
+      """
     send=send[:at]+guard+send[at:]
     send=once(send,"recipientPublicId: recipient,",
                    "recipientPublicId: canonicalRecipient,",
