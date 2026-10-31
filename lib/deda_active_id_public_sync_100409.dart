@@ -50,16 +50,25 @@ class DedaActiveIdPublicSync100409 {
     try {
       // Avoid network writes if this server-confirmed public projection
       // already matches the owner's genuine active selection.
-      final existing = await FirebaseFirestore.instance
-          .collection('deda_public_active_aliases').doc(originalId)
-          .get(const GetOptions(source: Source.server))
-          .timeout(const Duration(seconds: 5));
+      final db = FirebaseFirestore.instance;
+      final docs = await Future.wait([
+        db.collection('deda_public_active_aliases').doc(originalId)
+            .get(const GetOptions(source: Source.server)),
+        db.collection('deda_public_alias_routes').doc(activeId)
+            .get(const GetOptions(source: Source.server)),
+      ]).timeout(const Duration(seconds: 5));
       if (FirebaseAuth.instance.currentUser?.uid != uid) return;
+      final active = docs[0].data();
+      final route = docs[1].data();
       final proof =
           DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
-              originalId, existing.data());
+              originalId, active);
+      final consistentOriginal =
+          DedaQa32SparkPublicIdentifierDirectory.originalFromProjection(
+              activeId, route, active);
       if (proof?['displayId'] != activeId ||
-          proof?['permanentColor'] != fixedColor) {
+          proof?['permanentColor'] != fixedColor ||
+          consistentOriginal != originalId) {
         await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
           originalId: originalId,
           selectedAlias: activeId,
