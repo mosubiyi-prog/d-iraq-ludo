@@ -66,33 +66,28 @@ def bind(project):
                 ),
 """,
         "row avatar double border")
-    page=once(page,
-        """                        padding: EdgeInsets.all(3 * scale),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(colors: [
-                            accent, accent.withValues(alpha: .55), accent]),
-                          boxShadow: [BoxShadow(
-                            color: accent.withValues(alpha: .50),
-                            blurRadius: 13 * scale)],
-                        ),
-""",
+    # Stage18 is the accepted luxury podium with extra shimmer, a white
+    # border and two shadows. Keep its styling only for empty fallback slots;
+    # do not wrap a player's verified purchased frame in this second ring.
+    begin=page.index("  Widget podium(")
+    finish=page.index("  Widget rankingTable(",begin)
+    podium=page[begin:finish]
+    podium=once(podium,
+        "                        padding: EdgeInsets.all(3 * scale),",
         """                        padding: player != null && player.canShowEquippedFrame &&
                                 widget.drawOriginalEquippedAvatar != null
-                            ? EdgeInsets.zero : EdgeInsets.all(3 * scale),
-                        decoration: player != null && player.canShowEquippedFrame &&
+                            ? EdgeInsets.zero : EdgeInsets.all(3 * scale),""",
+        "verified podium padding")
+    podium=once(podium,
+        """                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,""",
+        """                        decoration: player != null && player.canShowEquippedFrame &&
                                 widget.drawOriginalEquippedAvatar != null
                             ? null
                             : BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(colors: [
-                                  accent, accent.withValues(alpha: .55), accent]),
-                                boxShadow: [BoxShadow(
-                                  color: accent.withValues(alpha: .50),
-                                  blurRadius: 13 * scale)],
-                              ),
-""",
-        "top three duplicate frame and inset")
+                          shape: BoxShape.circle,""",
+        "verified podium standalone frame")
+    page=page[:begin]+podium+page[finish:]
     assert page.count("drawOriginalEquippedAvatar!")>=2
     (project/PAGE).write_text(page)
     # A single stable notifier combines real XP with the existing
