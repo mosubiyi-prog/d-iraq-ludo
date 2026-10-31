@@ -5,7 +5,7 @@ import {initializeTestEnvironment, assertSucceeds, assertFails}
 import {doc, collection, getDoc, getDocs, setDoc, updateDoc,
   serverTimestamp, Timestamp} from 'firebase/firestore';
 
-const source=readFileSync('firestore.rules','utf8');
+const source=readFileSync(process.env.DEDA_DIRECT_RULES_PATH || 'firestore.rules','utf8');
 const PROJECT='demo-deda-weekly-100402-direct';
 const week='2026-10-31';
 const start=Timestamp.fromDate(new Date(Date.now()-60000)); // emulator test clock only
