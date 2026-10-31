@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'deda_weekly_community_outbox.dart';
+import 'deda_weekly_league_clock.dart';
 
 /// Same original +20 XP -> direct Firestore score; no Functions, money or XP grants.
 class DedaWeeklyFirestoreDirectBridge {
@@ -59,6 +60,8 @@ class DedaWeeklyFirestoreDirectBridge {
     if (FirebaseAuth.instance.currentUser?.uid != uid ||
         DedaWeeklyCommunityOutbox.baghdadDay() != day) return false;
     final now = DateTime.now().toUtc();
+    // No queue, receipt or weekly XP before 06:00 or in Saturday freeze.
+    if (!DedaWeeklyLeagueClock.at(now).canAccumulate) return false;
     final w = week(now);
     if (!now.isBefore(w.close)) return false;
     final person = await identity(accountKey);
@@ -115,6 +118,7 @@ class DedaWeeklyFirestoreDirectBridge {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || !user.isAnonymous ||
+        !DedaWeeklyLeagueClock.at(DateTime.now().toUtc()).canAccumulate ||
         !DedaWeeklyCommunityOutbox.tasks.contains(taskId)) return false;
     try {
       return await DedaWeeklyCommunityOutbox.recordAndSend(
