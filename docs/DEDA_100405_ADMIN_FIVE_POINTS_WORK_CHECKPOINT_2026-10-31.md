@@ -35,3 +35,14 @@ Source of truth: owner-accepted signed DEDA 100404 remains untouched. Working re
 ## Delivery rule
 
 No intermediate APK, no Play publication, no Google billing changes, no unrelated account/wallet/level XP/ID modifications. Only produce one signed test APK after all five genuinely work, with a prebuild owner checklist and real phone/tablet QA. Preserve DEDA 100404 as the tested rollback.
+
+## Owner screenshot 2026-10-31, 06:00 Baghdad — league opening QA checkpoint
+
+Owner-supplied screenshot `1000101797.jpg` (visual observation, not backend trace) from signed DEDA **100404** immediately after the 06:00 start:
+
+- Top clock says **`ينتهي الدوري بعد 161:59:10`**, matching the approved 162-hour accrual period ending following Saturday **00:00 Baghdad**, followed by the single weekly 00:00–06:00 freeze (not daily).
+- Owner-accepted podium, rank 4–10 cards, prize values and bottom player card remain visually present at expected positions and size.
+- All participants/own rank still show dashes in that image. This is **not itself an error immediately at the inaugural start**, since no post-06:00 task grant has been verified yet.
+- Critical owner-visible footer: **`فحص نقاط مهامي هذا الأسبوع: 200 XP محلياً؛ لا ترتيب حقيقياً ولا جوائز.`** This is a **local fallback**, not a verified leaderboard score. **Do not say Firebase scoring/ranks work based on this screenshot alone**; the 200 local XP must not be mistaken for a verified +200 league score or paid prize.
+- Mandatory next phone QA on SAME 100404: (1) after 06:00, complete a fresh eligible DAILY task and claim +20 level XP; (2) reopen standings, verify +20 shared weekly XP and correct own rank; (3) if another account available, confirm cross-device shared score; (4) check no pre-06:00 XP was imported. Compare app message, task status, Firestore score doc and calendar before declaring go-live.
+- **Do not overwrite proven 100404**, modify level XP or release a partial APK. Continue five-point 100405 branch separately; admin data integration must not be declared truly live/settled until verified on device and backend.
