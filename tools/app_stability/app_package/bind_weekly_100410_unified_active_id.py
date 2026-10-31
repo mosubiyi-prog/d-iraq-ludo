@@ -363,13 +363,23 @@ def bind(dest):
     if (!DedaPreferences.isLoggedIn ||
         DedaPreferences.phone != _ownerPhoneAtOpen) return;
 """+share[body:]
-    create=share.index("      await DedaBackend.createLocationShare(",send)
-    share=share[:create]+"""      // GPS can finish after logout or A->B switching. The initial
-      // original-ID route is private to the account that opened the page.
-      if (!mounted || !DedaPreferences.isLoggedIn ||
-          DedaPreferences.phone != _ownerPhoneAtOpen) return;
-
-"""+share[create:]
+    # Only the GPS branch awaits before making the original backend call.
+    # Guard IMMEDIATELY after its await, instead of matching an obsolete
+    # indentation of createLocationShare in the assembled real owner source.
+    # The place branch is synchronous until the same backend call, so its
+    # account protection is the entry guard above.
+    if "createLocationShare(" not in share:
+        raise ValueError("original location-share backend operation missing")
+    gps_before="""        final position = await _currentPosition();
+        if (position == null) return;"""
+    gps_after="""        final position = await _currentPosition();
+        // GPS can resolve after logout or switching from A to B.
+        // Do not submit A's original routing key while B is signed in.
+        if (!mounted || !DedaPreferences.isLoggedIn ||
+            DedaPreferences.phone != _ownerPhoneAtOpen) return;
+        if (position == null) return;"""
+    share=one(share,gps_before,gps_after,
+              "GPS continuation must reject changed account")
     main=main[:share_begin]+share+main[share_end:]
     print("100410_SHARE_ACCOUNT_SWITCH_AND_LATE_GPS_PROTECTED")
 
