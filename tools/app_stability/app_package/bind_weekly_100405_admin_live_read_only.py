@@ -51,6 +51,18 @@ def bind(project):
         shutil.copy2(ROOT/name,target)
         meta['sourceHashes'][name]=digest(target)
     meta['sourceHashes'][PAGE]=digest(manager)
+    # Preserve accepted 100404 in source; only in 100405 assembled workspace
+    # carry legitimate same-week task receipts across a GM review/stop.
+    for source,target in (
+        ('lib/deda_weekly_community_outbox_100405.dart',
+         'lib/deda_weekly_community_outbox.dart'),
+        ('lib/deda_weekly_firestore_direct_bridge_100405.dart',
+         'lib/deda_weekly_firestore_direct_bridge.dart'),
+    ):
+        if not (p/target).is_file() or target not in meta['sourceHashes']:
+            raise ValueError('100404 league score source absent: '+target)
+        shutil.copy2(ROOT/source,p/target)
+        meta['sourceHashes'][target]=digest(p/target)
     # Admin review notification is private to the signed-in DEDA account.
     # Extend ONLY the assembled 100404 UI/decoder, not the accepted source.
     model=p/'lib/deda_weekly_leaderboard_page.dart'
@@ -101,6 +113,8 @@ def bind(project):
         'apkDelivered':False,
         'stageOfFive':2,
         'privateAdminReviewNoticeInLeague':True,
+        'heldTaskSameWeekRetryOnly':True,
+        'priorWeekReplayForbidden':True,
         'managerPauseFreezeSourceCreated':True,
         'managerPauseFreezeFirestoreRulesTestPending':True,
     }
