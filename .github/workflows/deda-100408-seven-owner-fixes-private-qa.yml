@@ -1,0 +1,244 @@
+name: DEDA 100408 Seven Owner Corrections Ordered QA (NO PLAY)
+on:
+  push:
+    branches: [deda-100408-seven-owner-fixes-ordered-no-play-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100406-league-four-owner-fixes-signed-apk.yml'
+      - 'tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py'
+      - 'tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py'
+      - 'lib/deda_weekly_maintenance_status_100408.dart'
+      - 'lib/deda_admin_league_active_id_100408.dart'
+      - '.github/workflows/deda-100408-seven-owner-fixes-private-qa.yml'
+      - 'lib/deda_weekly_firestore_direct_bridge_100406.dart'
+      - '.github/workflows/deda-100407-league-shared-identity-avatar-frame-private-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  signed-owner-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Restore original signed 100396 including validated leaderboard and task button
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-original-100396" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Verify seven points and catch all 100406 Flutter compile errors before Gradle
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          # Catch missing transitive imports BEFORE the expensive signed APK
+          # build; Stage22 competitor/tap dependencies must be present.
+          test -s lib/deda_weekly_competitor_public_card.dart
+          test -s lib/deda_weekly_leaderboard_tap_surface.dart
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_community_outbox.dart lib/deda_weekly_league_clock.dart lib/deda_admin_league_live_data.dart lib/deda_admin_league_live_widgets.dart lib/deda_admin_league_controls.dart lib/deda_admin_league_control_widgets.dart lib/deda_admin_league_reward_status.dart
+          cp "$GITHUB_WORKSPACE/test/deda_admin_league_page_stage26_test.dart" test/
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_qa_full_trial_test.dart" test/
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_tasks_cta_and_inline_clock_test.dart" test/deda_weekly_stage28_tasks_cta_navigation_test.dart
+          flutter test test/deda_admin_league_page_stage26_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_admin_league_live_projection_test.dart" test/
+          cp "$GITHUB_WORKSPACE/test/deda_admin_league_live_widgets_test.dart" test/
+          flutter test test/deda_admin_league_live_projection_test.dart --no-pub
+          flutter test test/deda_admin_league_live_widgets_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_admin_league_month_archive_test.dart" test/
+          flutter test test/deda_admin_league_month_archive_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_admin_league_reward_status_test.dart" test/
+          flutter test test/deda_admin_league_reward_status_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100405_held_same_week_retry_test.dart" test/
+          flutter test test/deda_weekly_100405_held_same_week_retry_test.dart --no-pub
+          flutter test test/deda_weekly_qa_full_trial_test.dart --no-pub
+          flutter test test/deda_weekly_stage28_tasks_cta_navigation_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100403_first_open_gate_test.dart" test/
+          flutter test test/deda_weekly_100403_first_open_gate_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_league_clock_test.dart" test/
+          flutter test test/deda_weekly_100404_league_clock_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_weekly_100406_days_hours_only_test.dart" test/
+          flutter test test/deda_weekly_100406_days_hours_only_test.dart --no-pub
+          echo 'QA only: no APK, no Firebase deploy, no Play, no prize payout.'
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          datafile=Path('internal-build-inputs.json')
+          data=json.loads(datafile.read_text())
+          assert data['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert data['versionCode']==100408
+          assert data['weeklyStage13']['realRankingsAvailable'] is False
+          assert data['weeklyStage17']['realPrizesCredited'] is False
+          assert data['weeklyStage18']['writesFirestore'] is False
+          assert data['weeklyStage19']['walletOrXpModified'] is False
+          assert data['weeklyStage27']['adminLeagueTileInOriginal'] is True
+          assert data['weeklyStage27']['adminGeneralManagerOnly'] is True
+          assert data['weekly100405AdminProgress']['readOnlyLiveTopTen'] is True
+          assert data['weekly100405AdminProgress']['diamondSettlementActive'] is False
+          assert data['weekly100405AdminProgress']['managerPauseFreezeSourceCreated'] is True
+          assert data['weekly100405AdminProgress']['heldTaskSameWeekRetryOnly'] is True
+          assert data['weekly100405AdminProgress']['priorWeekReplayForbidden'] is True
+          assert data['weekly100405AdminProgress']['sevenPointOwnerBundle'] is True
+          assert data['weekly100405AdminProgress']['ownerRemovedPublicQaLabEntry'] is True
+          assert data['weekly100405AdminProgress']['ownerCountDaysHoursMinutesSeconds'] is True
+          assert data['weekly100405AdminProgress']['weekdayOrFreezeBoundariesChanged'] is False
+          public_league=Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert 'drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar' in Path('lib/deda_weekly_leaderboard_safe_screen.dart').read_text()
+          assert Path('lib/main.dart').read_text().count('drawOriginalEquippedAvatar: (ctx, avatarStyle')==2
+          assert "'activePublicId': displayedId" in Path('lib/deda_weekly_firestore_direct_bridge.dart').read_text()
+          assert "'publicAppearance': publicAppearance" in Path('lib/deda_weekly_firestore_direct_bridge.dart').read_text()
+
+          assert "فتح مختبر الدوري" not in public_league
+          assert "DedaWeeklyQaFullTrialPage(" not in public_league
+          assert "fitted(clock.daysAndHours," in public_league
+          assert "fitted(clock.minutesAndSeconds," not in public_league
+          assert 'fitted(clock.countdown,' not in public_league
+          assert data['weekly100405AdminProgress']['manualLeagueControlsActive'] is False
+          assert data['weekly100405AdminProgress']['apkDelivered'] is False
+          assert data['weeklyStage27']['liveLeagueControlsEnabled'] is False
+          assert data['weeklyStage27']['actualPrizePayoutEnabled'] is False
+          assert data['weeklyStage27']['writesRealXP'] is False
+          assert data['weeklyStage27']['writesRealDiamonds'] is False
+          assert data['weeklyStage28']['bothOfficialHomeLayouts'] is True
+          assert data['weeklyStage28']['originalDailyTasksNavigation'] is True
+          assert data['weeklyStage28']['taskClaimChanged'] is False
+          assert data['weeklyStage28']['userXPChanged'] is False
+          assert data['weeklyStage28']['walletChanged'] is False
+          assert data['weekly100397OwnerRealScoresQA']['ownerOnlyQA'] is True
+          assert data['weekly100397OwnerRealScoresQA']['sameWalletAndDiamonds'] is True
+          assert data['weekly100397OwnerRealScoresQA']['sharedFirebaseScoringRequiresBackendDeployment'] is True
+          assert data['weekly100397OwnerRealScoresQA']['source100396ShaVerified'] is True
+          assert data['weekly100397OwnerRealScoresQA']['twoOriginalLeaderboardRoutes']==2
+          assert data['weekly100397OwnerRealScoresQA']['sameWalletAndDiamonds'] is True
+          assert data['weekly100397OwnerRealScoresQA']['realPrizesEnabled'] is False
+          assert data['weekly100397OwnerRealScoresQA']['sharedFirebaseScoringRequiresBackendDeployment'] is True
+          assert data['completeOwnerDelivery'] is False
+          assert data['financialRestoreEnabled'] is False
+          assert data['weekly100402FirestoreDirect']['noCloudFunctionsOrBilling'] is True
+          assert data['weekly100402FirestoreDirect']['noWalletOrDiamondWrites'] is True
+          assert data['weekly100403FirstOpenGate']['officialHomeRoutes'] == 2
+          assert data['weekly100403FirstOpenGate']['doesNotTreatMissingInitialUidAsLogout'] is True
+          assert data['weekly100404InlineClock']['freezesSaturday00Through06'] is True
+          assert data['weekly100404InlineClock']['oldPreStartReportsCannotReplayAfterStart'] is True
+          assert data['weekly100404InlineClock']['fullLeaderboardAlwaysVisible'] is True
+          assert 'deda-weekly-inline-countdown' in Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert "'الأسبوع السابق'" not in Path('lib/deda_weekly_leaderboard_page.dart').read_text()
+          assert "widget.privateTrialXp != null && !view.verified" in (Path('lib/deda_weekly_leaderboard_page.dart')).read_text()
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
+          data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+          datafile.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          PY
+
+      - name: Restore original release signing identity in private ephemeral runner
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart run flutter_launcher_icons
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+      - name: Produce signed same-package DEDA 100407 owner QA Android APK
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,json
+          manifest=json.loads(Path('internal-build-inputs.json').read_text())
+          assert manifest['versionCode']==100408
+          assert manifest['weekly100406DisplayFixes']['ownerReportedFourIssues'] is True
+          assert manifest['weekly100407OwnerCorrections']['alreadyServerConfirmedSameUidDisplayCacheReused'] is True
+          assert manifest['weekly100407OwnerCorrections']['independentAliasAndEquipmentReadsParallel'] is True
+          assert manifest['weekly100407OwnerCorrections']['originalEquippedFrameOutsideWithoutDuplicateRing'] is True
+          assert manifest['weekly100408OwnerSevenPoints']['point1VerifiedCacheBeforeServerRecheck'] is True
+          assert manifest['weekly100408OwnerSevenPoints']['point2MaintenanceBanner'] is True
+          assert manifest['weekly100406DisplayFixes']['walletOrLevelXpChanged'] is False
+          assert manifest['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert manifest['weekly100405AdminProgress']['sevenPointOwnerBundle'] is True
+          assert manifest['weekly100405AdminProgress']['ownerRemovedPublicQaLabEntry'] is True
+          assert manifest['weekly100405AdminProgress']['ownerCountDaysHoursMinutesSeconds'] is True
+          assert manifest['financialRestoreEnabled'] is False
+          flags=manifest['flags']
+          cmd=['flutter','build','apk','--release','--build-number=100408','--no-pub']
+          cmd+=['--dart-define='+k+'='+str(v).lower() for k,v in flags.items()]
+          subprocess.run(cmd,check=True)
+          PY
+      - name: Verify exact official package signature and original assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/deda-100408-seven-owner-points-private-qa"
+          mkdir -p "$out"
+          python3 tools/app_stability/app_package/verify.py \
+            "$RUNNER_TEMP/deda-original-100396" \
+            "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" \
+            --output "$out/verification.json"
+          cp "$RUNNER_TEMP/deda-original-100396/build/app/outputs/flutter-apk/app-release.apk" \
+            "$out/DEDA-100408-SEVEN-OWNER-POINTS-PRIVATE-QA.apk"
+          sha256sum "$out/DEDA-100408-SEVEN-OWNER-POINTS-PRIVATE-QA.apk" > "$out/SHA256.txt"
+          printf '%s\n' \
+            'DEDA 100408 signed private owner QA. NO GOOGLE PLAY PUBLICATION.' \
+            'Five administrative league points plus removed public lab entry and days/hours clock.' \
+            'Check production Firestore rules and verified XP before claiming real prize activation.' \
+            'Prize-worker scheduling is protected separately and is not enabled by installing an APK.' \
+            'Keep DEDA 100404 untouched as fallback. Do not delete local data or reset account.' \
+            > "$out/READ-ME.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100408-SEVEN-OWNER-POINTS-PRIVATE-QA
+          path: |
+            ${{ runner.temp }}/deda-100408-seven-owner-points-private-qa/*.apk
+            ${{ runner.temp }}/deda-100408-seven-owner-points-private-qa/*.json
+            ${{ runner.temp }}/deda-100408-seven-owner-points-private-qa/*.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Delete ephemeral signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/deda-original-100396/android/app/deda-release.jks"
