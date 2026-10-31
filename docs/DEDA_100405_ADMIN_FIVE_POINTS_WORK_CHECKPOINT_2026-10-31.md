@@ -82,3 +82,12 @@ Two new screenshots `1000101801.jpg` (owner profile) and `1000101802.jpg` (leade
 - Potential shared dependency: leaderboard account identity similarly reads DEDA Firebase session+profile; however the verified empty Firestore standing and failed Stage71 check are distinct until error evidence proves a common cause.
 
 **Next checks WITHOUT editing successful owner device install**: inspect original Firebase UID/account/session and Stage71 original route + active grant read response (error code, NOT credentials/phone), check actual live Firestore score doc for the week, and distinguish 12s timeout vs rules-denied vs ownership mismatch. Then correct only proven root cause in the same private 100405 integration; protect 100404 and keep the 5-point scope and one consolidated delivery rule.
+
+## Source-verified diagnostic — premium ID is NOT a prerequisite for league membership
+
+After owner hypothesized no leaderboard name because premium ID verification hangs, inspect exact signed 100404 source:
+
+- `lib/deda_weekly_firestore_direct_bridge.dart::identity(accountKey)` checks anonymous Firebase UID, `deda_sessions/{uid}.accountKey`, `users/{uid}.accountKey`, and `users/{uid}.sharePersonalId` (4–12 alphanumeric DEDA ID), then name from users/profile. League `_send` persists a score under original/public share ID; the league does **not** call `DedaStage71OwnedIdentifierService.active` or wait for premium alias.
+- `lib/deda_stage71_free_owned_use_profile.dart::_requireOriginal()` performs its own extra server checks against `deda_share_ids/{originalId}` and authentic ownership; `active()` then fetches `deda_stage71_active_used_ids` collection (verify actual constant) and premium grant/gift receipt. It can fail while the simpler weekly identity succeeds.
+- Screenshot at 06:25 has verified-empty leaderboard UI. That is consistent with `loadStandings` successfully resolving its league identity and Firestore *read*, but no matching valid `scores` records. Therefore premium ID delay is **not a proven causal block** for weekly score; a common auth/profile/rule defect could affect both, but distinguish score *write* from Stage71 *verification*.
+- Correct QA: inspect unmodified current server score docs, original reward-to-`claimAfterOriginalReward` invocation, `_send` result, `DedaWeeklyCommunityOutbox` pending journal, and separate Stage71 error/timeout code. No active-ID replacement/reset, no replay of original XP, no loosening Firebase authorization to make a screen pass.
