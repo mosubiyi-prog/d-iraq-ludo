@@ -163,9 +163,6 @@ def bind(project):
                  alias_target, "lib/deda_admin_league_live_widgets.dart",
                  "lib/deda_admin_league_control_widgets.dart"):
         meta["sourceHashes"][file]=sha(project/file)
-    meta["weekly100408OwnerSevenPoints"]["point2MaintenanceBanner"]=True
-    meta["weekly100408OwnerSevenPoints"]["point5PodiumNumberOpacity"]=True
-    meta["weekly100408OwnerSevenPoints"]["point6AdminAliasPresentation"]=True
 
     meta["sourceHashes"][SCOPE]=sha(project/SCOPE)
     meta["versionCode"]=100408
@@ -174,11 +171,11 @@ def bind(project):
       "point1OriginalAccountKeyImmutable": True,
       "point1OtherAccountCacheForbidden": True,
       "point1OwnerPhoneTestPending": True,
-      "point2MaintenanceBanner": False,
+      "point2MaintenanceBanner": True,
       "point3WrongTransitionalBalances": False,
       "point4SlowLeagueFirstPaint": False,
-      "point5PodiumNumberOpacity": False,
-      "point6AdminAliasPresentation": False,
+      "point5PodiumNumberOpacity": True,
+      "point6AdminAliasPresentation": True,
       "point7ManagerPausedPrizeEditor": False,
       "payoutActivated": False,
       "walletOrXPModified": False,
