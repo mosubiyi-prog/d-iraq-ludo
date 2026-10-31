@@ -140,6 +140,16 @@ jobs:
           flutter test test/deda_100409_owner_active_id_publication_gate_test.dart --no-pub
           cp "$GITHUB_WORKSPACE/test/deda_100410_unified_active_id_test.dart" test/
           flutter test test/deda_100410_unified_active_id_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_verified_active_id_store_test.dart" test/
+          flutter test test/deda_verified_active_id_store_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_100377_point13_unified_identity_source_test.dart" test/
+          flutter test test/deda_100377_point13_unified_identity_source_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_qa32_public_friend_full_premium_card_test.dart" test/
+          flutter test test/deda_qa32_public_friend_full_premium_card_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_qa32_public_alias_resume_no_backend_test.dart" test/
+          flutter test test/deda_qa32_public_alias_resume_no_backend_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_location_identity_entry_test.dart" test/
+          flutter test test/deda_location_identity_entry_test.dart --no-pub
           echo 'QA only: no APK, no Firebase deploy, no Play, no prize payout.'
           python3 - <<'PY'
           from pathlib import Path
