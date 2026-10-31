@@ -27,7 +27,9 @@ New regressions in `test/deda_owner18_original_account_proof_test.dart`:
 - old original route owner retains legacy preliminary compatibility;
 - a mismatched account session or missing route owner is rejected.
 
-Isolated source QA: `.github/workflows/qa-deda-100421-canonical-owner-uid-guard-no-deploy.yml`. **Do not mark PASS until GitHub Actions has a successful completed run.**
+Isolated source QA: `.github/workflows/qa-deda-100421-canonical-owner-uid-guard-no-deploy.yml`.
+- **PASS — source-only QA**: https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41248944233 — unit tests and nonfatal Dart analyzer completed successfully. This is NOT phone login/restore or real Firebase server validation.
+- First test run https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41248826964 failed before tests because the old repository lockfile could not be used with --enforce-lockfile; the workflow was corrected to resolve dependencies only on a disposable runner, then the second run passed.
 
 ## Remaining step-1 acceptance gate
 The present branch does **not yet** solve recovery. Before marking STEP 1 complete:
