@@ -82,6 +82,78 @@ def bind(project):
       );""",
         "point2 close bottom status banner")
 
+    # Point 3: profile notifiers initially display old/zero values while the
+    # authenticated owner wallet and friends load. Presentation gate only.
+    main_file=project/"lib/main.dart"
+    main=main_file.read_text()
+    owner_init="""  @override
+  void initState() {
+    super.initState();
+    DedaProfileAppearanceState.syncFromPreferences();"""
+    prelude="""  bool _dedaProfileCountersReady = false;
+  String? _dedaProfileCountersOwner;
+  int _dedaProfileCountersEpoch = 0;
+
+  Future<void> _dedaHydrateProfileCounters() async {
+    final current = DedaPreferences.phone;
+    final epoch = ++_dedaProfileCountersEpoch;
+    if (_dedaProfileCountersOwner != current && mounted) {
+      setState(() {
+        _dedaProfileCountersOwner = current;
+        _dedaProfileCountersReady = false;
+      });
+    }
+    try {
+      // Actual account-scoped readers; no fabricated or minted amount.
+      await Future.wait<void>([
+        DedaDiamondsWallet.load(),
+        dedaRefreshFriendCount(),
+      ]);
+    } catch (_) {
+      // Unavailable source remains unknown, not falsely zero.
+      return;
+    }
+    if (!mounted || !dedaSectionCurrent ||
+        _dedaProfileCountersOwner != current ||
+        DedaPreferences.phone != current || epoch != _dedaProfileCountersEpoch) {
+      return;
+    }
+    setState(() => _dedaProfileCountersReady = true);
+  }
+
+"""
+    main=one(main,owner_init,prelude+owner_init,
+             "point3 account-scoped display loading gate")
+    main=one(main,
+        """    unawaited(DedaDiamondsWallet.load());
+    unawaited(() async {""",
+        """    unawaited(_dedaHydrateProfileCounters());
+    unawaited(() async {""",
+        "point3 use original wallet and friend readers together")
+    main=one(main,
+        """    unawaited(dedaRefreshFriendCount());
+    final appearanceOwnerPhone = DedaPreferences.phone;""",
+        """    // Friend count is loaded in _dedaHydrateProfileCounters.
+    final appearanceOwnerPhone = DedaPreferences.phone;""",
+        "point3 avoid duplicate first-open friend count")
+    main=one(main,
+        """value:
+                    '${dedaProfileVisibleDiamonds(ordinaryEarnedAndGifted: normalDiamonds, hasGeneralManagerPersonalWallet: DedaDiamondsWallet.hasGeneralManagerPersonalWallet, generalManagerPersonal: managerDiamonds)}',
+                label: dedaText('الماسات', 'Diamonds'),""",
+        """value: _dedaProfileCountersReady
+                    ? '${dedaProfileVisibleDiamonds(ordinaryEarnedAndGifted: normalDiamonds, hasGeneralManagerPersonalWallet: DedaDiamondsWallet.hasGeneralManagerPersonalWallet, generalManagerPersonal: managerDiamonds)}'
+                    : '—',
+                label: dedaText('الماسات', 'Diamonds'),""",
+        "point3 no false initial wallet figure")
+    main=one(main,
+        """value: '$friends',
+              label: dedaText('الأصدقاء', 'Friends'),""",
+        """value: _dedaProfileCountersReady ? '$friends' : '—',
+              label: dedaText('الأصدقاء', 'Friends'),""",
+        "point3 no false initial friend count")
+    main_file.write_text(main)
+    meta["sourceHashes"]["lib/main.dart"]=sha(main_file)
+
     # Point 4: independent Firebase identity document reads in parallel,
     # bounded public appearance queries. No fake ranks or guessed premium IDs.
     bridge_file=project/"lib/deda_weekly_firestore_direct_bridge.dart"
@@ -268,7 +340,7 @@ def bind(project):
       "point1OtherAccountCacheForbidden": True,
       "point1OwnerPhoneTestPending": True,
       "point2MaintenanceBanner": True,
-      "point3WrongTransitionalBalances": False,
+      "point3WrongTransitionalBalances": True,
       "point4SlowLeagueFirstPaint": True,
       "point5PodiumNumberOpacity": True,
       "point6AdminAliasPresentation": True,
