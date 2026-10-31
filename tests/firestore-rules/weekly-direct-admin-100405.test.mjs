@@ -68,7 +68,7 @@ before(async()=>{
 after(async()=>{if(env) await env.cleanup();});
 
 test('ONLY verified original general manager may pause or resume league',async()=>{
-  const paused={paused:true,reason:'Review weekly results pending',
+  const paused={weekId:week,paused:true,reason:'Review weekly results pending',
     updatedBy:managerId,updatedAt:serverTimestamp()};
   await assertFails(setDoc(control(user),paused));
   await assertFails(setDoc(control(agent),paused));
