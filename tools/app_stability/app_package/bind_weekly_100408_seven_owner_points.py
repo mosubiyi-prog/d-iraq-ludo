@@ -56,6 +56,117 @@ def bind(project):
 }""",
         "point1 same UID cached profile paint")
     (project/SCOPE).write_text(scope)
+
+    # Point 2: the existing bottom status card shows only this week's
+    # server-confirmed official pause notice and clears on resume.
+    import shutil
+    pause_source="lib/deda_weekly_maintenance_status_100408.dart"
+    pause_target="lib/deda_weekly_maintenance_status.dart"
+    shutil.copy2(ROOT/pause_source,project/pause_target)
+    page_file=project/"lib/deda_weekly_leaderboard_page.dart"
+    page=page_file.read_text()
+    page=one(page,
+        "import 'deda_weekly_league_clock.dart';",
+        "import 'deda_weekly_league_clock.dart';\n"
+        "import 'deda_weekly_maintenance_status.dart';",
+        "point2 import")
+    page=one(page,
+        "child: fitted(view.reviewNotice != null",
+        "child: DedaWeeklyMaintenanceStatus(normal: fitted(view.reviewNotice != null",
+        "point2 official pause notice in existing card")
+    page=one(page,
+        """            size: 11 * scale, color: silver),
+      );""",
+        """            size: 11 * scale, color: silver),
+        ),
+      );""",
+        "point2 close bottom status banner")
+
+    # Point 5: tiny translucent medallion below the portrait, never over face.
+    begin=page.index("  Widget podium(")
+    finish=page.index("  Widget rankingTable(",begin)
+    podium=page[begin:finish]
+    podium=one(podium,
+        """                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: 10 * scale, vertical: 2 * scale),""",
+        """                  Positioned(
+                    bottom: -5 * scale,
+                    child: Opacity(
+                      opacity: .70,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 7 * scale, vertical: 1 * scale),""",
+        "point5 move medal below portrait")
+    podium=one(podium,
+        """                              fontSize: 20 * scale,
+                              fontWeight: FontWeight.w900)),
+                    ),
+                  ),""",
+        """                              fontSize: 14 * scale,
+                              fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ),""",
+        "point5 translucent smaller number")
+    page=page[:begin]+podium+page[finish:]
+    page_file.write_text(page)
+
+    # Point 6: display verified alias, but retain original ID as Firestore
+    # score document / freeze / manager-review key.
+    alias_source="lib/deda_admin_league_active_id_100408.dart"
+    alias_target="lib/deda_admin_league_active_id.dart"
+    shutil.copy2(ROOT/alias_source,project/alias_target)
+    live_file=project/"lib/deda_admin_league_live_widgets.dart"
+    live=live_file.read_text()
+    live=one(live,
+        "import 'deda_admin_league_live_data.dart';",
+        "import 'deda_admin_league_live_data.dart';\n"
+        "import 'deda_admin_league_active_id.dart';",
+        "point6 live manager alias import")
+    live=one(live,
+        """Text(person.publicId,
+                            textDirection: TextDirection.ltr,
+                            style: const TextStyle(fontSize: 11)),""",
+        """DedaAdminLeagueActiveId(originalId: person.publicId,
+                            style: const TextStyle(fontSize: 11)),""",
+        "point6 live Top10 verified alias")
+    live=one(live,
+        "subtitle: Text(player.publicId),",
+        "subtitle: DedaAdminLeagueActiveId(originalId: player.publicId),",
+        "point6 archive public alias")
+    live_file.write_text(live)
+    review_file=project/"lib/deda_admin_league_control_widgets.dart"
+    review=review_file.read_text()
+    review=one(review,
+        "import 'deda_admin_league_controls.dart';",
+        "import 'deda_admin_league_controls.dart';\n"
+        "import 'deda_admin_league_active_id.dart';",
+        "point6 frozen user display only")
+    review=one(review,
+        """Text('${row.publicId} — ${row.xp} XP',
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(fontSize: 11)),""",
+        """Row(children: [
+                  Flexible(child: DedaAdminLeagueActiveId(
+                    originalId: row.publicId,
+                    style: const TextStyle(fontSize: 11))),
+                  Text(' — ${row.xp} XP',
+                    textDirection: TextDirection.ltr,
+                    style: const TextStyle(fontSize: 11)),
+                ]),""",
+        "point6 freeze panel display not control key")
+    review_file.write_text(review)
+    for file in (pause_target, "lib/deda_weekly_leaderboard_page.dart",
+                 alias_target, "lib/deda_admin_league_live_widgets.dart",
+                 "lib/deda_admin_league_control_widgets.dart"):
+        meta["sourceHashes"][file]=sha(project/file)
+    meta["weekly100408OwnerSevenPoints"]["point2MaintenanceBanner"]=True
+    meta["weekly100408OwnerSevenPoints"]["point5PodiumNumberOpacity"]=True
+    meta["weekly100408OwnerSevenPoints"]["point6AdminAliasPresentation"]=True
+
     meta["sourceHashes"][SCOPE]=sha(project/SCOPE)
     meta["versionCode"]=100408
     meta["weekly100408OwnerSevenPoints"]={
