@@ -59,7 +59,7 @@ def bind(path):
       "import 'package:firebase_auth/firebase_auth.dart';",
       'home auth-ready watcher import')
     import re
-    home_class=re.search(r'class _HomePageState extends State<HomePage>[^\\{]*\\{',s)
+    home_class=re.search(r'class _HomePageState extends State<HomePage>[^{]*\{',s)
     if home_class is None or s.count('class _HomePageState extends State<HomePage>')!=1:
         raise ValueError('100414 unique assembled HomeState missing')
     pos=home_class.end()
