@@ -45,8 +45,10 @@ def bind(dest):
     begin=scope.index("  @override\n  Future<DedaQa32ActiveAccountIdentity> readVerified(")
     finish=scope.index("\n}\n\n/// UI wrapper",begin)
     existing=scope[begin:finish]
-    if "DedaStage71OwnedIdentifierService.owned(original)" not in existing:
-        raise ValueError("owner source no longer reads duplicate whole grant inventory")
+    if ("readVerified(" not in existing or
+        "DedaQa32ActiveAccountIdentity" not in existing or
+        "DedaStage71OwnedIdentifierService" not in existing):
+        raise ValueError("original Stage71 source unexpectedly changed")
     replacement="""  @override
   Future<DedaQa32ActiveAccountIdentity> readVerified(
       String uid, String original) async {
