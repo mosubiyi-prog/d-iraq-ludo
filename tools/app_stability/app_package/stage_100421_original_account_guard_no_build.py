@@ -54,18 +54,18 @@ def stage(target: Path) -> None:
         return source.replace(before, after, 1)
 
     baseline = reviewed.replace(NEW, OLD)
-    baseline = "import 'deda_section_operation_context.dart';\\n" + baseline
+    baseline = "import 'deda_section_operation_context.dart';\n" + baseline
     baseline = one(baseline,
         "final docs = await Future.wait([",
         "final docs = await DedaSectionOperationContext.wait(() => Future.wait([")
-    baseline = one(baseline, "    ]);\\n    final account =",
-        "    ]));\\n    final account =")
+    baseline = one(baseline, "    ]);\n    final account =",
+        "    ]));\n    final account =")
     baseline = one(baseline,
-        "      await db\\n          .collection('deda_lab_frame_receipts')",
-        "      await DedaSectionOperationContext.wait(() => db\\n          .collection('deda_lab_frame_receipts')")
+        "      await db\n          .collection('deda_lab_frame_receipts')",
+        "      await DedaSectionOperationContext.wait(() => db\n          .collection('deda_lab_frame_receipts')")
     baseline = one(baseline,
-        "          .get(const GetOptions(source: Source.server));\\n    }\\n    if (FirebaseAuth.instance",
-        "          .get(const GetOptions(source: Source.server)));\\n    }\\n    if (FirebaseAuth.instance")
+        "          .get(const GetOptions(source: Source.server));\n    }\n    if (FirebaseAuth.instance",
+        "          .get(const GetOptions(source: Source.server)));\n    }\n    if (FirebaseAuth.instance")
     if baseline != current:
         import difflib
         print("SAFE_STOP_UNREVIEWED_ASSEMBLED_GUARD_DRIFT")
