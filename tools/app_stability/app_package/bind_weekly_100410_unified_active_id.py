@@ -307,44 +307,38 @@ def bind(dest):
                     return i+2 if source[i+1:i+2]==',' else i+1
         raise ValueError("unclosed Dart call")
 
-    ctx=main.find("'معرفي الشخصي'")
-    print("100410_MAIN_MY_ID_CONTEXT",repr(main[max(0,ctx-1000):ctx+1650]) if ctx>=0 else "NOT_FOUND")
-    ctx=main.find("Widget _shareCard(")
-    print("100410_MAIN_RECEIVED_SHARE_CONTEXT",repr(main[ctx:ctx+2700]) if ctx>=0 else "NOT_FOUND")
-    if main.count("id: _personalId,")!=1:
-        raise ValueError("owner share personal-ID UI changed unexpectedly")
-    idx=main.index("id: _personalId,")
-    begin=main.rfind("_idCard(",0,idx)
-    if begin<0 or idx-begin>350 or "معرفي الشخصي" not in main[begin:idx]:
-        raise ValueError("unsafe owner share ID card matching")
+    # The assembled original already has two QA32 per-section wrappers.
+    # Remove their separate resolution/fallback to the retired original ID.
+    flag="// DEDA_QA32_SHARE_SENDER_VERIFIED_ACTIVE_ID_VISUAL_ONLY"
+    if main.count(flag)!=1:
+        raise ValueError("assembled owner's location ID wrapper not unique")
+    begin=main.index("DedaQa32ActiveAccountScope(",main.index(flag))
     finish=call_end(main,begin)
+    assert "originalId: _personalId" in main[begin:finish]
+    assert "'معرفي الشخصي'" in main[begin:finish]
     main=main[:begin]+"""DedaUnifiedActiveIdBuilder100410(
                             originalId:_personalId,
                             builder:(context,active) => active==null
                               ? const SizedBox(height:48,child:Center(
                                   child:Text('جارِ تأكيد الآيدي...',
-                                      textDirection:TextDirection.rtl)))
+                                    textDirection:TextDirection.rtl)))
                               : _idCard(
                                   title:dedaText('معرفي الشخصي','My personal ID'),
                                   id:active,icon:Icons.person),
                           ),"""+main[finish:]
-    card=main.index("Widget _shareCard(")
-    sender=main.index("senderId,",card)
-    begin=main.rfind("Text(",card,sender)
-    if begin<0 or sender-begin>110 or "textDirection:" not in main[sender:sender+180]:
-        raise ValueError("unsafe received share sender-ID label matching")
+    marker="// DEDA_QA32_RECEIVED_PERSONAL_LOCATION_VERIFIED_SENDER_ALIAS_NO_DEPLOY"
+    if main.count(marker)!=1:
+        raise ValueError("assembled recipient sharing display anchor changed")
+    begin=main.index("DedaSixReceivedIdentity(",main.index(marker))
     finish=call_end(main,begin)
-    main=main[:begin]+"""DedaUnifiedActiveId100410.valid(senderId)
-                         ? DedaUnifiedActiveIdLabel100410(
-                             originalId:senderId,
-                             style:const TextStyle(
-                               color:Color(0xFF5C635D),
-                               fontWeight:FontWeight.w700))
-                         : Text(senderId,
-                             textDirection:TextDirection.ltr,
-                             style:const TextStyle(
-                               color:Color(0xFF5C635D),
-                               fontWeight:FontWeight.w700)),"""+main[finish:]
+    if "originalId: senderId" not in main[begin:finish]:
+        raise ValueError("sender personal ID resolver not safe to replace")
+    main=main[:begin]+"""DedaUnifiedActiveIdLabel100410(
+                            originalId:senderId,
+                            style:const TextStyle(
+                              color:Color(0xFF5C635D),
+                              fontWeight:FontWeight.w700)),"""+main[finish:]
+    print("100410_SHARE_OWNER_AND_RECIPIENT_ROUTING_KEYS_PRESERVED")
     main_file.write_text(main)
 
     for path in (source,admin,"lib/deda_qa32_active_account_scope.dart",
