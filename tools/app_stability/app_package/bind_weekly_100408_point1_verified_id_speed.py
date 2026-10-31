@@ -73,31 +73,29 @@ def bind(project):
     # notify on success, while stale different-UID work is rejected.
     scope_path=project/SCOPE
     scope=scope_path.read_text()
-    before="""    final active = await DedaStage71OwnedIdentifierService.active(original);
-    String? color;
-    if (active != original) {
-      final owned = await DedaStage71OwnedIdentifierService.owned(original);
-      final matching = owned.where((row) => row.identifier == active).toList();
-      if (matching.length != 1) throw StateError('alias-not-owned');
-      color = matching.single.baseColor;
-    }
-    return DedaQa32ActiveAccountIdentity(
-      uid: uid, originalId: original, displayId: active, fixedColor: color,
-    );"""
-    after="""    // Read just the verified active entitlement, not the full owned-ID store.
-    // Stage71 still checks the canonical account + gift receipt server-side.
+    # Match the exact class/method boundary, not pretty-print whitespace.
+    # Generated baseline has mandatory server ownership checks in Stage71;
+    # only the redundant full-inventory display query is being replaced.
+    scope_marker=scope.index("class _FirebaseIdentitySource")
+    begin=scope.index("  Future<DedaQa32ActiveAccountIdentity> readVerified(",scope_marker)
+    finish=scope.index("\n  }\n}",begin)+len("\n  }")
+    old_reader=scope[begin:finish]
+    if ("DedaStage71OwnedIdentifierService.active(original)" not in old_reader or
+        "DedaStage71OwnedIdentifierService.owned(original)" not in old_reader or
+        "DedaQa32ActiveAccountIdentity(" not in old_reader):
+        raise ValueError("unexpected owner verified proof path "+repr(old_reader[:1000]))
+    new_reader="""  Future<DedaQa32ActiveAccountIdentity> readVerified(
+      String uid, String original) async {
+    // Same owner-authenticated Stage71 proof, one active entitlement only.
     final verified =
         await DedaStage71OwnedIdentifierService.activeWithColor(original);
     if (currentUid != uid) throw StateError('active-id-owner-rotated');
     return DedaQa32ActiveAccountIdentity(
       uid: uid, originalId: original,
       displayId: verified.id, fixedColor: verified.color,
-    );"""
-    if before not in scope:
-        pos=scope.index("class _FirebaseIdentitySource")
-        pos=scope.index("Future<DedaQa32ActiveAccountIdentity> readVerified(",pos)
-        raise ValueError("p1 real generated owner read: "+repr(scope[pos:pos+1650]))
-    scope=once(scope,before,after,"owner header verified optimized read")
+    );
+  }"""
+    scope=scope[:begin]+new_reader+scope[finish:]
     assert "DedaVerifiedActiveIdStore.confirmed(" in scope
     assert "DedaVerifiedActiveIdStore.restore(uid, original)" in scope
     scope_path.write_text(scope)
