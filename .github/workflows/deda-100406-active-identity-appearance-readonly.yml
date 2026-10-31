@@ -1,0 +1,66 @@
+name: DEDA 100406 Real Active ID and Appearance Read-Only Diagnosis
+on:
+  push:
+    branches: [deda-100406-league-active-id-avatar-frame-clock-no-play-2026-10-31]
+    paths: ['.github/workflows/deda-100406-active-identity-appearance-readonly.yml']
+permissions: {contents: read}
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Inspect deployed policy and ORIGINAL owner public projections only; redact identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet firebase-admin google-auth requests
+          python - <<'PY'
+          import os,json
+          import firebase_admin
+          from firebase_admin import credentials,firestore
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          info=json.loads(os.environ.get('PRIMARY') or os.environ.get('FALLBACK') or '{}')
+          assert info.get('type')=='service_account' and info.get('project_id')=='deda-25b88'
+          firebase_admin.initialize_app(credentials.Certificate(info),{'projectId':'deda-25b88'})
+          db=firestore.client()
+          original='@DEDA-D62UEB'
+          def read(coll,id):
+            try:
+              snap=db.collection(coll).document(id).get()
+              return snap.to_dict() if snap.exists else None
+            except Exception as error:
+              print('READ_ERROR_'+coll+'='+type(error).__name__)
+              return None
+          active=read('deda_stage71_active_identifier',original)
+          public=read('deda_public_active_aliases',original)
+          cosmetic=read('deda_native_account_cosmetics',original)
+          owner=read('deda_share_ids',original)
+          print('HAS_STAGE71_ACTIVE='+str(active is not None))
+          print('STAGE71_ACTIVE_HAS_PREMIUM='+str(bool(active and active.get('activeId') not in (None,original))))
+          print('HAS_SPARK_PUBLIC_PROJECTION='+str(public is not None))
+          print('SPARK_MATCHES_STAGE71='+str(bool(active and public and public.get('activeId')==active.get('activeId'))))
+          print('HAS_NATIVE_COSMETICS='+str(cosmetic is not None))
+          print('NATIVE_AVATAR_IS_INT='+str(type(cosmetic.get('avatar'))==int) if cosmetic else 'NATIVE_AVATAR_IS_INT=False')
+          print('NATIVE_EQUIPPED_FRAME_IS_INT='+str(type(cosmetic.get('frame'))==int) if cosmetic else 'NATIVE_EQUIPPED_FRAME_IS_INT=False')
+          print('ORIGINAL_OWNER_PERSONAL_ACTIVE='+str(bool(owner and owner.get('active') and owner.get('kind')=='personal')))
+          print('DIAMOND_FRAME_INVENTORY_EXISTS='+str(bool(cosmetic and cosmetic.get('ownedFrames'))))
+          print('CANONICAL_OWNER_UID_PRESENT='+str(bool(owner and owner.get('ownerUid'))))
+          api=AuthorizedSession(service_account.Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform']))
+          prefix='https://firebaserules.googleapis.com/v1/'
+          release=api.get(prefix+'projects/deda-25b88/releases/cloud.firestore',timeout=25)
+          if release.status_code==200:
+            rules=api.get(prefix+release.json()['rulesetName'],timeout=25)
+            if rules.status_code==200:
+              content='\n'.join(f.get('content','') for f in rules.json()['source']['files'])
+              for name in ['deda_stage71_active_identifier','deda_public_active_aliases','deda_native_account_cosmetics','deda_weekly_direct_weeks']:
+                print('LIVE_RULES_HAS_'+name+'='+str(name in content))
+          print('NO_ID_VALUES_NO_SECRETS_NO_USER_DATA_WRITES=True')
+          PY
