@@ -338,6 +338,40 @@ def bind(dest):
                             style:const TextStyle(
                               color:Color(0xFF5C635D),
                               fontWeight:FontWeight.w700)),"""+main[finish:]
+    # Security regression caught by the added location identity tests.
+    # An existing page must not use a changed/logged-out account, even if
+    # GPS and permission callbacks complete long after the switch.
+    share_begin=main.index("class DedaShareLocationPage")
+    share_end=main.index("class DedaReceived",share_begin) if "class DedaReceived" in main[share_begin:] else main.index("Widget _shareCard(",share_begin)
+    share=main[share_begin:share_end]
+    if "Future<void> _send() async {" not in share:
+        raise ValueError("location sender guard could not be reviewed")
+    share=one(share,
+        """  String _personalId = '';""",
+        """  String _personalId = '';
+  late final String _ownerPhoneAtOpen;""",
+        "account isolation fixed when opening share page")
+    share=one(share,
+        """    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);""",
+        """    _ownerPhoneAtOpen = DedaPreferences.phone;
+    _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);""",
+        "snapshot opening identity for old page protection")
+    send=share.index("Future<void> _send() async {")
+    busy=share.index("    if (_sending) return;",send)
+    share=share[:busy]+"""    // Never continue a stale page's send under another/loginless account.
+    if (!DedaPreferences.isLoggedIn ||
+        DedaPreferences.phone != _ownerPhoneAtOpen) return;
+"""+share[busy:]
+    create=share.index("      await DedaBackend.createLocationShare(",send)
+    share=share[:create]+"""      // GPS can finish after logout or A->B switching. The initial
+      // original-ID route is private to the account that opened the page.
+      if (!mounted || !DedaPreferences.isLoggedIn ||
+          DedaPreferences.phone != _ownerPhoneAtOpen) return;
+
+"""+share[create:]
+    main=main[:share_begin]+share+main[share_end:]
+    print("100410_SHARE_ACCOUNT_SWITCH_AND_LATE_GPS_PROTECTED")
+
     print("100410_SHARE_OWNER_AND_RECIPIENT_ROUTING_KEYS_PRESERVED")
     main_file.write_text(main)
 
@@ -358,6 +392,7 @@ def bind(dest):
       "weeklyPodiumAndTop10SharedDisplay":True,
       "adminUsesSharedDisplay":True,
       "locationSenderAndRecipientUseSameVerifiedDisplay":True,
+      "locationSessionGuardPreAndPostGps":True,
       "friendProfilesUseUnifiedServerVerifiedAlias":True,
       "originalKeysNeverReplaced":True,
       "noXpDiamondOrRewardWrites":True,
