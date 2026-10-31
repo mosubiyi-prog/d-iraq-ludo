@@ -37,19 +37,19 @@ def bind(project):
         raise ValueError('unexpected generated 100405 safe screen')
     begin=source.index(constructor)
     closing=source.index('  });',begin)
-    source=(source[:closing] + '    this.drawOriginalEquippedAvatar,\\n'
+    source=(source[:closing] + '    this.drawOriginalEquippedAvatar,\n'
             + source[closing:])
     field='  final Duration? refreshInterval;'
     if source.count(field)!=1:
         raise ValueError('original safe reader field missing')
     source=source.replace(field,
-        field + '\\n  final Widget Function(BuildContext, int, int, double)? '
+        field + '\n  final Widget Function(BuildContext, int, int, double)? '
         'drawOriginalEquippedAvatar;',1)
     forwarded='onOpenDailyTasks: widget.onOpenDailyTasks,'
     if source.count(forwarded)!=1:
         raise ValueError('original safe screen task CTA missing')
     source=source.replace(forwarded,
-        forwarded + '\\n      drawOriginalEquippedAvatar: '
+        forwarded + '\n      drawOriginalEquippedAvatar: '
         'widget.drawOriginalEquippedAvatar,',1)
     assert 'this.localTrialAccountKey' in source
     assert 'drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar' in source
