@@ -1,0 +1,67 @@
+name: DEDA 100416 Exact LIVE ID Policy Shape Read-Only (NO DEPLOY)
+on:
+  push:
+    branches: [deda-100416-legacy-normal-id-firestore-safe-rules-emulator-no-deploy-2026-10-31]
+    paths: ['.github/workflows/deda-100416-live-rule-shape-readonly.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Read exact production rule shape without any user documents or writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,hashlib,requests
+          from google.auth.transport.requests import Request
+          from google.oauth2.service_account import Credentials
+          raw=os.getenv('DEDA_SERVICE_ACCOUNT') or os.getenv('DEDA_FALLBACK_ACCOUNT')
+          if not raw: raise SystemExit('SAFE_STOP_NO_AUTH')
+          info=json.loads(raw)
+          if info.get('project_id')!='deda-25b88': raise SystemExit('SAFE_STOP_WRONG_PROJECT')
+          cred=Credentials.from_service_account_info(info,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          cred.refresh(Request())
+          h={'Authorization':'Bearer '+cred.token}
+          def read(p):
+            resp=requests.get('https://firebaserules.googleapis.com/v1/'+p,headers=h,timeout=25)
+            if resp.status_code!=200: raise SystemExit('READ_ONLY_FIREBASE_ERROR_'+str(resp.status_code))
+            return resp.json()
+          release=read('projects/deda-25b88/releases/cloud.firestore')
+          obj=read(release['rulesetName'])
+          src=obj['source']['files']
+          if len(src)!=1: raise SystemExit('RULES_MULTIFILE')
+          rules=src[0]['content']
+          print('RULESET',release['rulesetName'])
+          print('SHA256',hashlib.sha256(rules.encode()).hexdigest())
+          def block(anchor):
+            start=rules.find(anchor)
+            if start<0: raise SystemExit('MISSING_BLOCK_'+anchor)
+            begin=rules.find('{',start)
+            depth=0
+            for i in range(begin,len(rules)):
+              if rules[i]=='{': depth+=1
+              if rules[i]=='}':
+                depth-=1
+                if depth==0: return rules[start:i+1]
+            raise SystemExit('UNBALANCED_MATCH')
+          for anchor in ['match /deda_stage71_active_identifier/{originalId}',
+                         'match /users/{uid}',
+                         'match /deda_public_active_aliases/{originalId}',
+                         'function sparkOwnerAuthed(']:
+            b=block(anchor)
+            print('EXACT_BLOCK_BEGIN',anchor,'SIZE',len(b))
+            print(b[:8000])
+            print('EXACT_BLOCK_END',anchor)
+          print('PASS_READ_ONLY_NO_USER_DATA_NO_FIREBASE_MUTATION')
+          PY
