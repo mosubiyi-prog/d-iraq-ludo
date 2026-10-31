@@ -43,18 +43,40 @@ def stage(target: Path) -> None:
     path = target / REL
     current = path.read_text()
     reviewed = (ROOT / REL).read_text()
-    if reviewed.count(NEW) != 1 or reviewed.replace(NEW, OLD) != current:
+    if reviewed.count(NEW) != 1 or current.count(OLD) != 1:
+        raise ValueError("ORIGINAL_GUARD_PATCH_ANCHOR_CHANGED")
+    # The real 100420 assembly has additional section-lifecycle guards.
+    # Keep ALL of those wrappers; never replace the whole helper with a
+    # historical repository copy that would drop session cancellation.
+    def one(source: str, before: str, after: str) -> str:
+        if source.count(before) != 1:
+            raise ValueError("RECONSTRUCTED_LIFECYCLE_WRAPPER_DRIFT")
+        return source.replace(before, after, 1)
+
+    baseline = reviewed.replace(NEW, OLD)
+    baseline = "import 'deda_section_operation_context.dart';\\n" + baseline
+    baseline = one(baseline,
+        "final docs = await Future.wait([",
+        "final docs = await DedaSectionOperationContext.wait(() => Future.wait([")
+    baseline = one(baseline, "    ]);\\n    final account =",
+        "    ]));\\n    final account =")
+    baseline = one(baseline,
+        "      await db\\n          .collection('deda_lab_frame_receipts')",
+        "      await DedaSectionOperationContext.wait(() => db\\n          .collection('deda_lab_frame_receipts')")
+    baseline = one(baseline,
+        "          .get(const GetOptions(source: Source.server));\\n    }\\n    if (FirebaseAuth.instance",
+        "          .get(const GetOptions(source: Source.server)));\\n    }\\n    if (FirebaseAuth.instance")
+    if baseline != current:
         import difflib
-        expected = reviewed.replace(NEW, OLD)
-        differences = "".join(difflib.unified_diff(
-            current.splitlines(keepends=True),
-            expected.splitlines(keepends=True),
-            fromfile="verified_100420_reconstruction",
-            tofile="repo_pre_100421_reviewed_guard",
-        ))
-        print("SAFE_STOP_RECONSTRUCTED_HELPER_DRIFT_SOURCE_ONLY_DIFF")
-        print(differences[:8000] if differences else "PATCH_ANCHOR_OR_METADATA_DRIFT")
-        raise ValueError("ORIGINAL_100420_HELPER_DIFFERENT_FROM_REVIEWED_PATCH")
+        print("SAFE_STOP_UNREVIEWED_ASSEMBLED_GUARD_DRIFT")
+        print("".join(difflib.unified_diff(
+            current.splitlines(keepends=True), baseline.splitlines(keepends=True),
+            fromfile="verified_100420", tofile="expected_reconstructed",
+        ))[:5000])
+        raise ValueError("UNEXPECTED_100420_MODULE_CHANGE")
+    patched = current.replace(OLD, NEW, 1)
+    if patched.replace(NEW, OLD) != current:
+        raise ValueError("RECONSTRUCTED_GUARD_ONLY_CHANGE_VIOLATION")
     if flags["sourceHashes"].get(REL) != sha(current.encode()):
         raise ValueError("ORIGINAL_SOURCE_HASH_MISMATCH")
     if "DedaOwner18OriginalAccountProof.verify" not in (
@@ -63,8 +85,8 @@ def stage(target: Path) -> None:
     if "signInAnonymously()" not in (target / "lib/deda_pin_auth.dart").read_text():
         raise ValueError("AUTH_FLOW_DRIFT_REVIEW_REQUIRED")
     # Make exactly one source-only change inside the isolated candidate.
-    path.write_text(reviewed)
-    flags["sourceHashes"][REL] = sha(reviewed.encode())
+    path.write_text(patched)
+    flags["sourceHashes"][REL] = sha(patched.encode())
     flags["weekly100421CanonicalOriginalIdGuardSourceOnly"] = {
         "real100420Assembly": True, "sourceOnly": True,
         "noFirebaseChanges": True, "noWalletRestore": True,
