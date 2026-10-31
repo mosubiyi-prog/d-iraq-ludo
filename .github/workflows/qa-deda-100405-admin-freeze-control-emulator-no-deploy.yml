@@ -1,0 +1,37 @@
+name: DEDA 100405 Admin Control Freeze Permissions Firestore Emulator NO DEPLOY
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths:
+      - '.github/workflows/qa-deda-100405-admin-freeze-control-emulator-no-deploy.yml'
+      - 'firestore.rules'
+      - 'tests/firestore-rules/weekly-direct-admin-100405.test.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules-two-users:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Compile and test DEDA exact Firestore rules without cloud changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 5c710e5b227e70726d15a9853b41a00aa69cee27 HEAD -- \
+            lib/main.dart lib/deda_backend.dart functions/index.js \
+            firebase.json storage.rules android/ assets/
+          npm install --prefix tests/firestore-rules --no-audit --no-fund --no-save firebase-tools@14
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100405-admin-review --only firestore \
+            'node --test tests/firestore-rules/weekly-direct-admin-100405.test.mjs'
+          echo 'PASS: exact GM, staff, user, anonymous pause/freeze, immutable audit; no Firebase deploy, no XP/wallet changes'
