@@ -11,6 +11,8 @@ MANIFEST='internal-build-inputs.json'
 NEW_FILES=[
  'lib/deda_admin_league_live_data.dart',
  'lib/deda_admin_league_live_widgets.dart',
+ 'lib/deda_admin_league_controls.dart',
+ 'lib/deda_admin_league_control_widgets.dart',
 ]
 PAGE='lib/deda_admin_league_page.dart'
 
@@ -58,7 +60,9 @@ def bind(project):
         'userFreezeNotificationActive':False,
         'approved100404Unchanged':True,
         'apkDelivered':False,
-        'stageOfFive':1,
+        'stageOfFive':2,
+        'managerPauseFreezeSourceCreated':True,
+        'managerPauseFreezeFirestoreRulesTestPending':True,
     }
     file.write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
     return meta['weekly100405AdminProgress']
