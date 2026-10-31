@@ -203,7 +203,7 @@ jobs:
           dart run flutter_launcher_icons
           python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
           keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
-      - name: Produce signed same-package DEDA 100407 owner QA Android APK
+      - name: Produce signed same-package DEDA 100408 seven-point owner QA Android APK
         working-directory: ${{ runner.temp }}/deda-original-100396
         shell: bash
         run: |
@@ -219,6 +219,15 @@ jobs:
           assert manifest['weekly100407OwnerCorrections']['originalEquippedFrameOutsideWithoutDuplicateRing'] is True
           assert manifest['weekly100408OwnerSevenPoints']['point1VerifiedCacheBeforeServerRecheck'] is True
           assert manifest['weekly100408OwnerSevenPoints']['point2MaintenanceBanner'] is True
+          for point in (
+              'point3WrongTransitionalBalances',
+              'point4SlowLeagueFirstPaint',
+              'point5PodiumNumberOpacity',
+              'point6AdminAliasPresentation',
+              'point7ManagerPausedPrizeEditor'):
+              assert manifest['weekly100408OwnerSevenPoints'][point] is True, point
+          assert manifest['weekly100408OwnerSevenPoints']['walletOrXPModified'] is False
+          assert manifest['weekly100408OwnerSevenPoints']['payoutActivated'] is False
           assert manifest['weekly100406DisplayFixes']['walletOrLevelXpChanged'] is False
           assert manifest['package']=='com.diraq.ludo.d_iraq_ludo'
           assert manifest['weekly100405AdminProgress']['sevenPointOwnerBundle'] is True
@@ -248,7 +257,7 @@ jobs:
             'Five administrative league points plus removed public lab entry and days/hours clock.' \
             'Check production Firestore rules and verified XP before claiming real prize activation.' \
             'Prize-worker scheduling is protected separately and is not enabled by installing an APK.' \
-            'Keep DEDA 100404 untouched as fallback. Do not delete local data or reset account.' \
+            'Keep DEDA 100407 untouched as fallback. Do not delete local data or reset account.' \
             > "$out/READ-ME.txt"
       - uses: actions/upload-artifact@v4
         with:
