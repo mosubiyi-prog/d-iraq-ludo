@@ -1,4 +1,4 @@
-"""100405 QA stage 1 of 5; real GM ranking and closed-week history only.
+"""100405 integrated seven-point owner feature bundle; QA workspace ONLY.
 
 Never create APK or change source source tree, Firestore rules, XP or wallets.
 Must start from SHA-checked accepted owner-tested 100404 workspace.
@@ -81,7 +81,46 @@ def bind(project):
         "                ? 'إشعار الإدارة: تم رفع تجميد نقاط الدوري.'\n"
         "                : 'إشعار الإدارة: نقاط الدوري قيد المراجعة.')\n"
         "            : widget.previewOnly\n",1)
+    # Seven-point owner bundle: eliminate the confusing QA sandbox entry
+    # from the ACTUAL public league info popup, not its isolated Flutter tests.
+    # This only alters the workspace after verifying the 100404 base SHA.
+    qa_start = "                      if (widget.privateQaAccountScope != null &&\\n"
+    qa_end = "                          child: const Text('فتح مختبر الدوري'),\\n                        ),\\n"
+    if page.count(qa_start) != 1 or page.count(qa_end) != 1:
+        raise ValueError('Original QA lab entry changed; refuse destructive UI patch')
+    left = page.index(qa_start)
+    right = page.index(qa_end, left) + len(qa_end)
+    if right - left > 1100 or 'DedaWeeklyQaFullTrialPage(' not in page[left:right]:
+        raise ValueError('Cannot precisely isolate only the obsolete QA lab button')
+    page = page[:left] + page[right:]
+    if "فتح مختبر الدوري" in page or 'DedaWeeklyQaFullTrialPage(' in page:
+        raise ValueError('User-facing league still exposes QA sandbox')
+
+    # Keep the two-line clock host, its width, the podium geometry and
+    # the Saturday 06:00/00:00 time boundaries unchanged.
+    old_clock = "                      fitted(clock.countdown,\\n                          size: 17 * scale, color: gold, ltr: true),"
+    new_clock = (
+        "                      fitted(clock.daysAndHours,\\n"
+        "                          size: 15 * scale, color: gold),\\n"
+        "                      fitted(clock.minutesAndSeconds,\\n"
+        "                          size: 11 * scale, color: silver),"
+    )
+    if page.count(old_clock) != 1 or page.count("deda-weekly-inline-countdown") != 1:
+        raise ValueError('Owner-approved leaderboard countdown slot changed')
+    page = page.replace(old_clock, new_clock, 1)
+    if "fitted(clock.countdown" in page or 'previousWeek' in page:
+        raise ValueError('Old total-hour counter or old week tab still visible')
     model.write_text(page)
+    # Original 100404 week math is retained exactly; extra display getters
+    # belong ONLY to this 100405 feature bundle, never the rollback 100404.
+    clock_module = p/'lib/deda_weekly_league_clock.dart'
+    clock_upgrade = ROOT/'lib/deda_weekly_league_clock_100405.dart'
+    if clock_module.read_text().count('class DedaWeeklyLeagueClock') != 1 or \\
+       clock_module.read_text().count('String get countdown') != 1 or \\
+       clock_upgrade.read_text().count('String get daysAndHours') != 1:
+        raise ValueError('Could not preserve original authoritative weekly clock')
+    shutil.copy2(clock_upgrade, clock_module)
+    meta['sourceHashes']['lib/deda_weekly_league_clock.dart'] = digest(clock_module)
     parse=p/'lib/deda_weekly_snapshot_decode.dart'
     decoder=parse.read_text()
     finish='      remainingUntilWeekEnd: Duration(milliseconds: remainingMs),\n'
@@ -115,6 +154,10 @@ def bind(project):
         'privateAdminReviewNoticeInLeague':True,
         'heldTaskSameWeekRetryOnly':True,
         'priorWeekReplayForbidden':True,
+        'sevenPointOwnerBundle':True,
+        'ownerRemovedPublicQaLabEntry':True,
+        'ownerCountDaysHoursMinutesSeconds':True,
+        'weekdayOrFreezeBoundariesChanged':False,
         'managerPauseFreezeSourceCreated':True,
         'managerPauseFreezeFirestoreRulesTestPending':True,
     }
