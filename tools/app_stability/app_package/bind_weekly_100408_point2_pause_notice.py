@@ -57,9 +57,9 @@ def bind(project):
     }
     final localWeek = DedaWeeklyLeagueClock.at(
       DateTime.now().toUtc()).weekStart.add(const Duration(hours: 3));
-    final weekId = '\${localWeek.year.toString().padLeft(4, '0')}-'
-        '\${localWeek.month.toString().padLeft(2, '0')}-'
-        '\${localWeek.day.toString().padLeft(2, '0')}';
+    final weekId = '${localWeek.year.toString().padLeft(4, '0')}-'
+        '${localWeek.month.toString().padLeft(2, '0')}-'
+        '${localWeek.day.toString().padLeft(2, '0')}';
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection(
         'deda_weekly_direct_control').doc('active').snapshots(),
