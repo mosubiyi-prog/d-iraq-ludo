@@ -1,0 +1,279 @@
+name: DEDA 100420 Legacy Play 340 Friend ID Signed Private Phone Tablet QA (NO PLAY)
+on:
+  push:
+    branches: [deda-100420-legacy340-friends-read-signed-private-qa-no-play-2026-11-01]
+    paths:
+      - '.github/workflows/deda-100420-legacy340-private-signed-apk-no-play.yml'
+      - 'lib/deda_legacy340_active_selection_100418.dart'
+      - 'tools/app_stability/app_package/bind_weekly_100418_legacy340_friend_active_compat.py'
+      - 'test/deda_100420_signed_live_friend_reader_enabled_test.dart'
+      - 'lib/deda_weekly_prize_plan_100408.dart'
+      - 'test/deda_100412_prize_response_guard_test.dart'
+      - 'tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py'
+      - 'tools/app_stability/app_package/bind_weekly_100413_owner_id_admin_response.py'
+      - 'lib/deda_friend_id_copy_100411.dart'
+      - 'lib/deda_owner_legacy_public_proof_100414.dart'
+      - 'tools/app_stability/app_package/bind_weekly_100414_last_three.py'
+      - 'test/deda_100414_legacy_owner_public_proof_test.dart'
+      - 'test/deda_100411_friend_copy_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  signed-owner-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Restore original signed 100396 including validated leaderboard and task button
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-original-100396" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100410_unified_active_id.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Bind 100411 and 100413 after verified 100412 in isolated app (NO APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100413_owner_id_admin_response.py "$project"
+          cd "$project"
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          main=Path('lib/main.dart').read_text()
+          unifier=Path('lib/deda_unified_active_id_100410.dart').read_text()
+          prize=Path('lib/deda_weekly_prize_plan.dart').read_text()
+          proof=json.loads(Path('internal-build-inputs.json').read_text())
+          assert proof['versionCode']==100413
+          assert unifier.count('ensureOwner(widget.originalId)')==0, 'no friend public private owner reads'
+          assert unifier.count('publishAfterVerifiedRead(')==1, 'owner-verified normal publication'
+          assert 'await DedaBackend\n                                    .currentDedaAccountCanSeeAdminEntry' not in main, 'no tap re-read'
+          assert 'final gateAllowed = _adminEntryVisible &&' in main
+          assert 'currentAdminSessionMatchesDedaEntry(' in main
+          assert main.count('DedaFriendIdCopy100411(')>=1
+          assert 'stream: _controlStream,' in prize
+          assert proof['weekly100413PublicOwnerAdminResponsive']['walletAndPrizesUnchanged'] is True
+          print('PASS_100413_NO_N_PRIVATE_OWNER_READS_ADMIN_ENTRY_VERIFIED')
+          PY
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_unified_active_id_100410.dart lib/deda_weekly_prize_plan.dart lib/deda_friend_id_copy_100411.dart
+          for t in deda_100411_friend_copy_test.dart deda_100412_prize_response_guard_test.dart deda_100410_unified_active_id_test.dart deda_100409_owner_active_id_publication_gate_test.dart deda_location_identity_entry_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$t" test/
+            flutter test "test/$t" --no-pub
+          done
+          echo 'PASS_100413_ALL_SOURCE_TESTS_NO_FIREBASE_WRITES_NO_APK_NO_PLAY'
+      - name: Bind 100414 and verify canonical ID, admin login and prize regressions (NO BUILD)
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100414_last_three.py "$project"
+          cd "$project"
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          data=json.loads(Path('internal-build-inputs.json').read_text())
+          assert data['versionCode']==100414
+          flags=data['weekly100414FinalThree']
+          assert flags['adminServerProofMandatory']
+          assert flags['adminGateFailClosed']
+          assert flags['legacyRouteDifferentUidFailClosed']
+          assert not flags['noLiveFirestoreRulesDeploy'] is False
+          unifier=Path('lib/deda_unified_active_id_100410.dart').read_text()
+          backend=Path('lib/deda_backend.dart').read_text()
+          home=Path('lib/main.dart').read_text()
+          admin=Path('lib/admin_pages.dart').read_text()
+          assert 'DedaOwnerLegacyPublicProof100414.ensureAndPublish' in unifier
+          assert not 'ensureOwner(widget.originalId)' in unifier
+          assert '_ownerAuthReady=FirebaseAuth.instance.authStateChanges()' in home
+          assert 'unawaited(_adminLoginHousekeeping100414(' in backend
+          assert 'currentAdminSessionMatchesDedaEntry(' in admin
+          assert 'DedaWeeklyPrizePlan' in Path('lib/deda_weekly_prize_plan.dart').read_text()
+          print('PASS_100414_STRICT_SOURCE_INVARIANTS')
+          PY
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/deda_owner_legacy_public_proof_100414.dart lib/deda_unified_active_id_100410.dart lib/deda_backend.dart lib/admin_pages.dart lib/main.dart lib/deda_weekly_prize_plan.dart
+          cp "$GITHUB_WORKSPACE/test/deda_100414_legacy_owner_public_proof_test.dart" test/
+          flutter test test/deda_100414_legacy_owner_public_proof_test.dart --no-pub
+          for t in deda_100411_friend_copy_test.dart deda_100412_prize_response_guard_test.dart deda_100410_unified_active_id_test.dart deda_100409_owner_active_id_publication_gate_test.dart deda_location_identity_entry_test.dart; do
+            flutter test "test/$t" --no-pub
+          done
+          echo 'PASS_100414_SOURCE_TESTS_NO_FIREBASE_WRITES_NO_APK_NO_PLAY'
+      - name: Read back exact 100419 LIVE Firebase rule and reject unapproved drift (NO WRITES)
+        shell: bash
+        env:
+          DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+          DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import importlib.util
+          spec=importlib.util.spec_from_file_location('firebaserules','tools/deda_100419_owner_approved_public_active_get_rules_only.py')
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          name,src=mod.read_live(mod.session())
+          assert name == 'projects/deda-25b88/rulesets/9f11d792-0d1e-4a28-bd72-606459b5c659','SAFE_STOP_UNEXPECTED_FIREBASE_RULESET'
+          assert mod.sha(src) == '273d20ffa0196709af7742dbf8f3fb4137edc2f3c7bb56f5e80d2c3506c62cb1','SAFE_STOP_LIVE_RULES_DRIFT'
+          assert src.count(mod.ADDED_GET) == 1,'SAFE_STOP_PUBLIC_FRIEND_READ_NOT_ACTIVE'
+          print('PASS_100420_EXACT_PRODUCTION_FIREBASE_ACTIVE_READ_RULE_APPROVED_AND_LIVE')
+          print('NO_FIREBASE_WRITE_NO_PLAY_DEPLOY')
+          PY
+      - name: Bind reviewed 100418 legacy340 normal+premium active source and test actual enabled mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100418_legacy340_friend_active_compat.py "$project"
+          cd "$project"
+          cp "$GITHUB_WORKSPACE/test/deda_100418_legacy340_selection_test.dart" test/
+          cp "$GITHUB_WORKSPACE/test/deda_100420_signed_live_friend_reader_enabled_test.dart" test/
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/deda_legacy340_active_selection_100418.dart lib/deda_unified_active_id_100410.dart lib/deda_stage50_verified_friend_ink_badge.dart lib/main.dart
+          flutter test test/deda_100418_legacy340_selection_test.dart --no-pub
+          flutter test test/deda_100420_signed_live_friend_reader_enabled_test.dart \
+            --no-pub --dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          d=json.loads(Path('internal-build-inputs.json').read_text())
+          assert d['versionCode']==100418
+          assert d['weekly100418Legacy340OwnerOnlyAuthReadCandidate']['adminPrizesBalancesUnchanged'] is True
+          assert 'DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED' in Path('lib/deda_legacy340_active_selection_100418.dart').read_text()
+          assert 'DedaLegacy340ActiveSelection100418.watch(original)' in Path('lib/deda_unified_active_id_100410.dart').read_text()
+          assert 'DedaFriendIdCopy100411(' in Path('lib/main.dart').read_text()
+          print('PASS_100420_REAL_ENABLED_CLIENT_COMPILE_FRIEND_NORMAL_PREMIUM_ID_SOURCE')
+          PY
+
+      - name: Restore SAME original DEDA release signing key on private runner
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart run flutter_launcher_icons
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+
+      - name: Build signed DEDA 100420 legacy340 public active friend ID private QA APK
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess,hashlib
+          meta=Path('internal-build-inputs.json')
+          d=json.loads(meta.read_text())
+          assert d['versionCode']==100418
+          assert d['weekly100418Legacy340OwnerOnlyAuthReadCandidate']['adminPrizesBalancesUnchanged'] is True
+          assert d['weekly100418Legacy340OwnerOnlyAuthReadCandidate']['neverShowsOldIdIfSelectedPremium'] is True
+          d['versionCode']=100420
+          d['weekly100420LiveReadPhoneQA']={'approvedReadRuleVerified':True,'legacy340EnabledInSignedBuild':True,'noPlay':True,'phoneAndTabletQAPending':True}
+          assert d['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert d['completeOwnerDelivery'] is False
+          assert d['financialRestoreEnabled'] is False
+          assert d['weekly100414FinalThree']['noLiveFirestoreRulesDeploy'] is True
+          assert d['weekly100414FinalThree']['neverRekeyPremiumOrFriends'] is True
+          assert d['weekly100414FinalThree']['adminGateFailClosed'] is True
+          assert d['weekly100413PublicOwnerAdminResponsive']['adminTileServerOnly'] is True
+          assert d['weekly100411FriendCopy']['originalIdStillRoutingOnly'] is True
+          assert d['weekly100408OwnerSevenPoints']['walletOrXPModified'] is False
+          assert d['weekly100408OwnerSevenPoints']['payoutActivated'] is False
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
+          d['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+          meta.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          flags=d['flags']
+          cmd=['flutter','build','apk','--release','--build-number=100420','--no-pub',
+               '--dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true']
+          cmd+=['--dart-define='+k+'='+str(v).lower() for k,v in flags.items()]
+          cmd.append('--dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true')
+          subprocess.run(cmd,check=True)
+          PY
+
+      - name: Verify APK exact original package, certificate, version, portraits and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/deda-100420-private-phone-tablet"
+          mkdir -p "$out"
+          python3 tools/app_stability/app_package/verify.py \
+            "$RUNNER_TEMP/deda-original-100396" \
+            "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" \
+            --output "$out/verification.json"
+          cp "$RUNNER_TEMP/deda-original-100396/build/app/outputs/flutter-apk/app-release.apk" \
+             "$out/DEDA-100420-PRIVATE-PHONE-TABLET-QA.apk"
+          cd "$out"
+          sha256sum DEDA-100420-PRIVATE-PHONE-TABLET-QA.apk > SHA256.txt
+          printf '%s\n' \
+            'DEDA 100420 signed private owner QA APK. NO Google Play deployment.' \
+            'Test with existing installed DEDA app; do NOT clear app data or uninstall prior app.' \
+            'Areas: friend IDs normal/premium and exact copy; shared location; league ranking; admin access and login; prize editor.' \
+            'The Smart Guardian proposal is documented only, not installed in this APK.' \
+            'LIVE Firebase Stage71 read-only permission was deployed and verified in 100419. This APK deploy does NOT modify Firebase. No user accounts, wallets or awards edited.' \
+            'Test friends on legacy Play340: normal and premium ID display, correct copy, no old retired ID, friends/requests latency. If any ID cannot verify, capture the phone video and do NOT claim success.' \
+            > README.txt
+
+      - name: Upload exact signed private owner APK and verification, no publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100420-PRIVATE-PHONE-TABLET-QA-APK
+          path: |
+            ${{ runner.temp }}/deda-100420-private-phone-tablet/*.apk
+            ${{ runner.temp }}/deda-100420-private-phone-tablet/*.json
+            ${{ runner.temp }}/deda-100420-private-phone-tablet/*.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Delete private signing key from ephemeral runner
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/deda-original-100396/android/app/deda-release.jks"
