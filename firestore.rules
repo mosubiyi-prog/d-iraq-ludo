@@ -2459,6 +2459,14 @@ service cloud.firestore {
     match /deda_weekly_direct_weeks/{weekId}/scores/{publicId} {
       function canScore() {
         return signedIn()
+          // Original +20 XP and 7-day schedule remain unchanged; a GM can
+          // temporarily pause ONLY the shared league, never the level XP.
+          && (!exists(/databases/$(database)/documents/deda_weekly_direct_control/active)
+            || get(/databases/$(database)/documents/deda_weekly_direct_control/active)
+                .data.paused != true)
+          && (!exists(/databases/$(database)/documents/deda_weekly_direct_reviews/$(weekId)/users/$(publicId))
+            || get(/databases/$(database)/documents/deda_weekly_direct_reviews/$(weekId)/users/$(publicId))
+                .data.frozen != true)
           && exists(/databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId))
           && sameAccount(get(
               /databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId)
@@ -2523,6 +2531,108 @@ service cloud.firestore {
           'claimedKeys', 'lastClaimKey', 'completedTasks', 'weeklyXp', 'updatedAt'
         ]);
       allow delete: if false;
+    }
+
+    // DEDA 100405 manager-only league controls: never change real XP/wallet.
+    function exactWeeklyLeagueGeneralManager() {
+      return signedIn() && isAdmin()
+        && adminData().role == 'general_manager'
+        && adminData().status == 'active';
+    }
+
+    match /deda_weekly_direct_control/{controlId} {
+      allow get: if signedIn() && controlId == 'active';
+      allow list, delete: if false;
+      function validControl(d) {
+        return d.keys().hasOnly(['paused','reason','updatedAt','updatedBy'])
+          && d.keys().hasAll(['paused','reason','updatedAt','updatedBy'])
+          && d.paused is bool
+          && d.reason is string && d.reason.size() >= 8
+          && d.reason.size() <= 200
+          && d.updatedAt == request.time
+          && d.updatedBy == request.auth.uid;
+      }
+      allow create, update: if controlId == 'active'
+        && exactWeeklyLeagueGeneralManager()
+        && validControl(request.resource.data);
+    }
+
+    match /deda_weekly_direct_reviews/{weekId}/users/{publicId} {
+      function leagueOwner() {
+        return exists(
+          /databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId))
+          && sameAccount(get(
+            /databases/$(database)/documents/deda_weekly_direct_accounts/$(publicId))
+            .data.accountKey);
+      }
+      // A user can read ONLY their own notification; other players do not
+      // see the owner's private reason for holding a suspect result.
+      allow get: if exactWeeklyLeagueGeneralManager() || leagueOwner();
+      allow list: if exactWeeklyLeagueGeneralManager();
+      allow delete: if false;
+      function validReview(d) {
+        return d.keys().hasOnly([
+            'weekId','publicId','frozen','notice','reason','updatedAt','updatedBy'])
+          && d.keys().hasAll([
+            'weekId','publicId','frozen','notice','reason','updatedAt','updatedBy'])
+          && weekId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+          && publicId.matches('^@DEDA-[A-Z0-9]{4,12}
+      allow read, write: if isGeneralManager()
+        || (
+          counterId == 'place_approval'
+          && hasAdminPermission('approvePlaces')
+        );
+    }
+  }
+}
+
+// DEDA location sharing v1 deployment marker
+)
+          && d.weekId == weekId
+          && d.publicId == publicId
+          && d.frozen is bool
+          && d.notice is string && d.notice.size() >= 12
+          && d.notice.size() <= 240
+          && d.reason is string && d.reason.size() >= 8
+          && d.reason.size() <= 300
+          && d.updatedAt == request.time
+          && d.updatedBy == request.auth.uid;
+      }
+      allow create, update: if exactWeeklyLeagueGeneralManager()
+        && validReview(request.resource.data);
+    }
+
+    // Immutable manager action trail (pauses, freezes, clears, and reasons).
+    match /deda_weekly_direct_admin_events/{eventId} {
+      allow get, list: if exactWeeklyLeagueGeneralManager();
+      allow update, delete: if false;
+      allow create: if exactWeeklyLeagueGeneralManager()
+        && request.resource.data.keys().hasOnly([
+          'action','weekId','publicId','reason','createdAt','createdBy'])
+        && request.resource.data.keys().hasAll([
+          'action','weekId','publicId','reason','createdAt','createdBy'])
+        && request.resource.data.action in [
+          'pause', 'resume', 'freeze', 'unfreeze']
+        && request.resource.data.weekId is string
+        && request.resource.data.weekId.size() <= 24
+        && request.resource.data.publicId is string
+        && request.resource.data.publicId.size() <= 30
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() >= 8
+        && request.resource.data.reason.size() <= 300
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
     }
 
     match /system_counters/{counterId} {
