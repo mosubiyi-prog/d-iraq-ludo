@@ -295,16 +295,26 @@ def bind(dest):
         "import 'deda_verified_active_id_store.dart';\n"
         "import 'deda_unified_active_id_100410.dart';",
         "shared display labels in main location share UI")
-    main=one(main,
-        """                          _idCard(
-                            title: dedaText(
-                              'معرفي الشخصي',
-                              'My personal ID',
-                            ),
-                            id: _personalId,
-                            icon: Icons.person,
-                          ),""",
-        """                          DedaUnifiedActiveIdBuilder100410(
+    # Parse the existing Dart call by parentheses instead of relying on
+    # whitespace or a prior UI-stage's exact indentation.
+    def call_end(source,start):
+        depth=0
+        for i in range(start,len(source)):
+            if source[i]=='(': depth+=1
+            elif source[i]==')':
+                depth-=1
+                if depth==0:
+                    return i+2 if source[i+1:i+2]==',' else i+1
+        raise ValueError("unclosed Dart call")
+
+    if main.count("id: _personalId,")!=1:
+        raise ValueError("owner share personal-ID UI changed unexpectedly")
+    idx=main.index("id: _personalId,")
+    begin=main.rfind("_idCard(",0,idx)
+    if begin<0 or idx-begin>350 or "معرفي الشخصي" not in main[begin:idx]:
+        raise ValueError("unsafe owner share ID card matching")
+    finish=call_end(main,begin)
+    main=main[:begin]+"""DedaUnifiedActiveIdBuilder100410(
                             originalId:_personalId,
                             builder:(context,active) => active==null
                               ? const SizedBox(height:48,child:Center(
@@ -313,18 +323,14 @@ def bind(dest):
                               : _idCard(
                                   title:dedaText('معرفي الشخصي','My personal ID'),
                                   id:active,icon:Icons.person),
-                          ),""",
-        "location-share my personal ID displays only selected verified alias")
-    main=one(main,
-        """                       Text(
-                         senderId,
-                         textDirection: TextDirection.ltr,
-                         style: const TextStyle(
-                           color: Color(0xFF5C635D),
-                           fontWeight: FontWeight.w700,
-                         ),
-                       ),""",
-        """                       DedaUnifiedActiveId100410.valid(senderId)
+                          ),"""+main[finish:]
+    card=main.index("Widget _shareCard(")
+    sender=main.index("senderId,",card)
+    begin=main.rfind("Text(",card,sender)
+    if begin<0 or sender-begin>110 or "textDirection:" not in main[sender:sender+180]:
+        raise ValueError("unsafe received share sender-ID label matching")
+    finish=call_end(main,begin)
+    main=main[:begin]+"""DedaUnifiedActiveId100410.valid(senderId)
                          ? DedaUnifiedActiveIdLabel100410(
                              originalId:senderId,
                              style:const TextStyle(
@@ -334,9 +340,7 @@ def bind(dest):
                              textDirection:TextDirection.ltr,
                              style:const TextStyle(
                                color:Color(0xFF5C635D),
-                               fontWeight:FontWeight.w700)),
-""",
-        "recipient location share shows sender's active ID, not historical original")
+                               fontWeight:FontWeight.w700)),"""+main[finish:]
     main_file.write_text(main)
 
     for path in (source,admin,"lib/deda_qa32_active_account_scope.dart",
