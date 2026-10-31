@@ -1,0 +1,98 @@
+name: DEDA 100412 Admin Prize Responsive Draft Regression QA (NO DEPLOY)
+on:
+  push:
+    branches: [deda-100412-admin-prize-responsive-safe-qa-no-deploy-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100412-prize-response-no-deploy.yml'
+      - 'lib/deda_weekly_prize_plan_100408.dart'
+      - 'test/deda_100412_prize_response_guard_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  signed-owner-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Restore original signed 100396 including validated leaderboard and task button
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/prepare.py "$RUNNER_TEMP/deda-original-100396" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100410_unified_active_id.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Audit stable admin form + run prize regression tests (NO APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-original-100396"
+          cd "$project"
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('lib/deda_weekly_prize_plan.dart').read_text()
+          checks={
+            'stream_created_only_in_initState':source.count("snapshots(includeMetadataChanges: true)")==1,
+            'cached_stream_used':"stream: _controlStream," in source,
+            'only_authorized_pause':"control.data!.metadata.isFromCache" in source,
+            'reject_bad_draft_before_write':"if (problem != null)" in source,
+            'never_auto_retry_writes':"No automatic write retry" in source,
+            'server_gm_required':"currentAdminProfile(forceRefresh: true)" in source,
+            'wallet_unmodified':"deda_wallets" not in source,
+            'source_is_new_100412':"class DedaPrizeDraftGuard100412" in source,
+          }
+          print('DEDA_100412_FORM_GUARD',checks)
+          assert all(checks.values())
+          PY
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/deda_weekly_prize_plan.dart
+          cp "$GITHUB_WORKSPACE/test/deda_100412_prize_response_guard_test.dart" test/
+          flutter test test/deda_100412_prize_response_guard_test.dart --no-pub
+          cp "$GITHUB_WORKSPACE/test/deda_100410_unified_active_id_test.dart" test/
+          flutter test test/deda_100410_unified_active_id_test.dart --no-pub
+          echo 'PASS_100412_SOURCE_QA_ONLY_NO_APK_NO_FIREBASE_NO_PLAY'
