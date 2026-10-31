@@ -177,27 +177,9 @@ def bind(path):
 
 '''
     s=s[:admin_start]+helper+admin+s[admin_end:]
-    start=s.index('  static Future<bool> currentAdminSessionMatchesDedaEntry(')
-    end=s.index('\n  }',start)+4
-    block=s[start:end]
-    # Exact signed baseline wraps async calls; retain the final fail-closed
-    # catch and insert transport catches immediately BEFORE it. A transport
-    # timeout is not proof of a revoked admin permission.
-    import re
-    caught=list(re.finditer(r'\}\s*catch\s*\([^)]*\)\s*\{',block))
-    if not caught or 'return false' not in block[caught[-1].start():]:
-        raise ValueError('100414 outer admin gateway catch missing')
-    where=caught[-1].start()
-    block=block[:where]+''' } on FirebaseException catch (error) {
-      if (error.code=='unavailable' ||
-          error.code=='deadline-exceeded' ||
-          error.code=='network-request-failed') rethrow;
-      return false;
-    } on TimeoutException {
-      rethrow;
-    '''+block[where:]
-
-    s=s[:start]+block+s[end:]
+    # Preserve original fail-closed gateway: source layers already wrap it
+    # in their own section/generation guards. Never turn a server deny into
+    # authorization through a timeout or local cache.
     f.write_text(s)
 
     f=p/'lib/admin_pages.dart'
