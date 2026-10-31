@@ -1,0 +1,63 @@
+name: DEDA 100405 Owner Account League Binding Diagnose (READ ONLY)
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths: ['.github/workflows/deda-100405-owner-score-binding-readonly.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  read-only-owner-league-binding:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Compare original DEDA account ownership, anonymous session and league score (do not log identifiers)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-cloud-firestore google-auth
+          python - <<'PY'
+          import os,json
+          from google.oauth2 import service_account
+          from google.cloud import firestore
+          info=json.loads(os.getenv('PRIMARY') or os.getenv('FALLBACK') or '{}')
+          if info.get('project_id')!='deda-25b88': raise SystemExit('WRONG_PROJECT')
+          credentials=service_account.Credentials.from_service_account_info(info)
+          db=firestore.Client(project='deda-25b88',credentials=credentials)
+          # Historical ORIGINAL DEDA ID from owner QA; never logs UID, PIN, names or account keys.
+          public='@DEDA-D62UEB'
+          def fetch(path):
+            try:
+              snap=db.document(path).get(timeout=20)
+              return (snap.to_dict() or {}) if snap.exists else {}
+            except Exception:
+              return {'__readFailed': True}
+          owner=fetch('deda_share_ids/'+public)
+          print('ORIGINAL_PUBLIC_ID_LOOKUP='+('read_failed' if owner.get('__readFailed') else 'present' if owner else 'missing'))
+          uid=owner.get('ownerUid')
+          if isinstance(uid,str) and 6<=len(uid)<=128:
+            user=fetch('users/'+uid)
+            session=fetch('deda_sessions/'+uid)
+            print('ORIGINAL_OWNER_UID_HAS_USER_PROFILE='+str(bool(user)))
+            print('ORIGINAL_OWNER_UID_HAS_SESSION='+str(bool(session)))
+            print('ORIGINAL_OWNER_ACCOUNT_SESSION_MATCH='+str(bool(user.get('accountKey') and user.get('accountKey')==session.get('accountKey'))))
+            print('ORIGINAL_OWNER_PUBLIC_ID_MATCH='+str(user.get('sharePersonalId')==public))
+            print('ORIGINAL_OWNER_ID_ACTIVE='+str(owner.get('active') is True))
+            print('ORIGINAL_OWNER_ID_KIND_PERSONAL='+str(owner.get('kind')=='personal'))
+          else: print('ORIGINAL_OWNER_UID_UNAVAILABLE=True')
+          direct=fetch('deda_weekly_direct_accounts/'+public)
+          print('WEEKLY_DIRECT_ACCOUNT_BINDING='+str(bool(direct)))
+          scores=fetch('deda_weekly_direct_weeks/2026-10-31/scores/'+public)
+          print('WEEKLY_SCORE_FOR_OLD_PUBLIC_ID='+str(bool(scores)))
+          try:
+            allbind=list(db.collection('deda_weekly_direct_accounts').limit(2).get(timeout=20))
+            print('ANY_DIRECT_ACCOUNT_BINDINGS='+str(bool(allbind)))
+          except Exception as e: print('BINDING_COLLECTION_ERROR='+type(e).__name__)
+          print('NO_IDENTIFIERS_LOGGED_NO_WALLET_WRITES_NO_CLAIMS=TRUE')
+          PY
