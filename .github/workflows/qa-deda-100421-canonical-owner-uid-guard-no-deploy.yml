@@ -1,0 +1,36 @@
+name: DEDA 100421 Canonical Account UID Guard SOURCE QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100421-canonical-account-binding-audit-no-deploy-2026-11-01
+    paths:
+      - 'lib/deda_owner18_original_account_proof.dart'
+      - 'test/deda_owner18_original_account_proof_test.dart'
+      - '.github/workflows/qa-deda-100421-canonical-owner-uid-guard-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  canonical-owner-uid-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Test original UID, new UID, mismatched account and missing original binding
+        run: flutter test test/deda_owner18_original_account_proof_test.dart --no-pub
+      - name: Nonfatal static analysis of canonical-owner guard
+        run: dart analyze --no-fatal-warnings lib/deda_owner18_original_account_proof.dart
+      - name: Record restrictions
+        run: |
+          echo 'DEDA_100421_SOURCE_QA_ONLY'
+          echo 'NO_FIREBASE_READ_WRITE_OR_DEPLOY'
+          echo 'NO_APK_OR_GOOGLE_PLAY'
