@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {before,after,test} from 'node:test';
 import {initializeTestEnvironment,assertSucceeds,assertFails}
   from '@firebase/rules-unit-testing';
-import {doc,getDoc,setDoc,updateDoc,serverTimestamp,Timestamp}
+import {doc,getDoc,setDoc,updateDoc,serverTimestamp,Timestamp,writeBatch}
   from 'firebase/firestore';
 
 const rules=readFileSync('firestore.rules','utf8');
@@ -18,6 +18,7 @@ let env,gm,user,other,agent,anonymous;
 const score=(db)=>doc(db,'deda_weekly_direct_weeks',week,'scores',id);
 const control=(db)=>doc(db,'deda_weekly_direct_control','active');
 const review=(db)=>doc(db,'deda_weekly_direct_reviews',week,'users',id);
+const notice=(db)=>doc(db,'deda_weekly_direct_notices',week,'users',id);
 const scoreInitial={
   weekId:week,weekStart:started,publicId:id,displayName:'مستخدم ديدا',
   claimedKeys:['2026-10-31|open_map'],
@@ -80,16 +81,34 @@ test('ONLY verified original general manager may pause or resume league',async()
 test('score owner gets own freeze notice; other users do not read reason',async()=>{
   await assertFails(setDoc(review(user),moderation(true)));
   await assertFails(setDoc(review(agent),moderation(true)));
-  await assertSucceeds(setDoc(review(gm),moderation(true)));
-  const myNote=await assertSucceeds(getDoc(review(user)));
-  if(myNote.data()?.frozen!==true)throw Error('owner freeze missing');
+  const first=writeBatch(gm);
+  first.set(review(gm),moderation(true));
+  first.set(notice(gm),{
+    weekId:week,publicId:id,frozen:true,
+    notice:'نقاط الدوري قيد المراجعة وسوف تستمر نقاط المستوى',
+    updatedAt:serverTimestamp(),updatedBy:managerId,
+  });
+  await assertSucceeds(first.commit());
+  await assertFails(getDoc(review(user))); // Confidential manager reason.
+  const myNote=await assertSucceeds(getDoc(notice(user)));
+  if(myNote.data()?.frozen!==true || 'reason' in myNote.data()) {
+    throw Error('owner freeze notification leaked manager reason');
+  }
   await assertFails(getDoc(review(other)));
+  await assertFails(getDoc(notice(other)));
   await assertFails(updateDoc(score(user),{
     claimedKeys:['2026-10-31|open_map','2026-10-31|long_trip'],
     lastClaimKey:'2026-10-31|long_trip',completedTasks:2,
     weeklyXp:40,updatedAt:serverTimestamp(),
   }));
-  await assertSucceeds(setDoc(review(gm),moderation(false)));
+  const cleared=writeBatch(gm);
+  cleared.set(review(gm),moderation(false));
+  cleared.set(notice(gm),{
+    weekId:week,publicId:id,frozen:false,
+    notice:'اكتملت مراجعة نقاط الدوري ورفعت الإدارة التجميد',
+    updatedAt:serverTimestamp(),updatedBy:managerId,
+  });
+  await assertSucceeds(cleared.commit());
   await assertSucceeds(updateDoc(score(user),{
     claimedKeys:['2026-10-31|open_map','2026-10-31|long_trip'],
     lastClaimKey:'2026-10-31|long_trip',completedTasks:2,
