@@ -113,98 +113,58 @@ class DedaAdminLeagueLiveData {
     );
   }
 
-  /// Archive months indexed by the Saturday start in Baghdad, not by
-  /// prize payout date. No fixed 12-week truncation; old scores stay
-  /// available and each month requires at most five score reads.
+  /// Months since the first Saturday 06:00 Baghdad league.
   static List<String> archiveMonths(DateTime now) {
-    final moment = now.toUtc();
-    if (moment.isBefore(DedaWeeklyLeagueClock.origin)) return const [];
-    final local = moment.add(const Duration(hours: 3));
-    final start = DedaWeeklyLeagueClock.origin.add(
-        const Duration(hours: 3));
+    final date = now.toUtc().add(const Duration(hours: 3));
+    final begin = DedaWeeklyLeagueClock.origin.add(const Duration(hours: 3));
+    if (now.toUtc().isBefore(DedaWeeklyLeagueClock.origin)) return const [];
     final result = <String>[];
-    var year = local.year;
-    var month = local.month;
-    while (year > start.year ||
-        (year == start.year && month >= start.month)) {
-      final mm = month.toString().padLeft(2, '0');
-      result.add('$year-$mm');
-      if (month == 1) {
-        year--;
-        month = 12;
-      } else {
-        month--;
-      }
+    var year = date.year;
+    var month = date.month;
+    while (year > begin.year || (year == begin.year && month >= begin.month)) {
+      result.add('$year-${month.toString().padLeft(2, '0')}');
+      month--;
+      if (month == 0) { month = 12; year--; }
     }
     return List.unmodifiable(result);
   }
 
-  /// Returns only fully ended weeks beginning in the selected Baghdad month.
-  /// The clock is checked every time; an active or frozen week is NEVER an
-  /// archived completed week until following Saturday at 06:00 Baghdad.
+  /// Week including Saturday 00:00–06:00 freeze is not archived until 06.
   static List<DateTime> completedWeekStartsForMonth(
       DateTime now, String selectedMonth) {
-    if (!RegExp(r'^20[0-9]{2}-(0[1-9]|1[0-2])
-      {int maxWeeks = 12}) async {
-    if (maxWeeks < 1 || maxWeeks > 24) {
-      throw ArgumentError.value(maxWeeks, 'maxWeeks');
-    }
-    final moment = now.toUtc();
-    if (moment.isBefore(DedaWeeklyLeagueClock.origin)) return const [];
-    final weeks = <DedaAdminLeagueWeek>[];
-    final current = DedaWeeklyLeagueClock.at(moment).weekStart;
-    for (var n = 1; n <= maxWeeks; n++) {
-      final start = current.subtract(Duration(
-          milliseconds: DedaWeeklyLeagueClock.weekLength.inMilliseconds * n));
-      if (start.isBefore(DedaWeeklyLeagueClock.origin)) break;
-      final end = start.add(DedaWeeklyLeagueClock.weekLength);
-      if (moment.isBefore(end)) continue;
-      final id = weekId(start);
-      final snap = await _scores(id).limit(100).get();
-      final ranks = DedaAdminLeagueProjection.fromRecords([
-        for (final doc in snap.docs) MapEntry(doc.id, doc.data()),
-      ]);
-      weeks.add(DedaAdminLeagueWeek(
-        id: id, rows: ranks.take(10).toList(growable: false),
-        finishedAt: end,
-      ));
-    }
-    return weeks;
-  }
-}
-)
-        .hasMatch(selectedMonth) ||
+    final valid = RegExp(r'^20[0-9]{2}-(0[1-9]|1[0-2])$');
+    if (!valid.hasMatch(selectedMonth) ||
         !archiveMonths(now).contains(selectedMonth)) {
       throw ArgumentError.value(selectedMonth, 'selectedMonth');
     }
-    final finished = now.toUtc();
-    final results = <DateTime>[];
-    final start = DedaWeeklyLeagueClock.origin;
-    final elapsed = finished.difference(start).inMilliseconds;
-    final slots = elapsed ~/ DedaWeeklyLeagueClock.weekLength.inMilliseconds;
-    for (var i = 0; i <= slots; i++) {
-      final begin = start.add(Duration(
-          milliseconds: i * DedaWeeklyLeagueClock.weekLength.inMilliseconds));
+    final elapsed = now.toUtc().difference(DedaWeeklyLeagueClock.origin);
+    final maxIndex = elapsed.inMilliseconds ~/
+        DedaWeeklyLeagueClock.weekLength.inMilliseconds;
+    final result = <DateTime>[];
+    for (var index = 0; index <= maxIndex; index++) {
+      final begin = DedaWeeklyLeagueClock.origin.add(Duration(
+          milliseconds: index * DedaWeeklyLeagueClock.weekLength.inMilliseconds));
       final baghdad = begin.add(const Duration(hours: 3));
-      final mm = baghdad.month.toString().padLeft(2, '0');
-      if ('${baghdad.year}-$mm' != selectedMonth) continue;
-      if (!finished.isBefore(begin.add(DedaWeeklyLeagueClock.weekLength))) {
-        results.add(begin);
+      final month = baghdad.month.toString().padLeft(2, '0');
+      if ('${baghdad.year}-$month' != selectedMonth) continue;
+      if (!now.toUtc().isBefore(begin.add(DedaWeeklyLeagueClock.weekLength))) {
+        result.add(begin);
       }
     }
-    results.sort((a, b) => b.compareTo(a));
-    return List.unmodifiable(results);
+    result.sort((left, right) => right.compareTo(left));
+    return List.unmodifiable(result);
   }
 
+  /// One selected month requires at most five completed weekly reads.
   Future<List<DedaAdminLeagueWeek>> completedWeeksForMonth(
-      DateTime now, String month) async {
-    final weeks = completedWeekStartsForMonth(now, month);
+      DateTime now, String selectedMonth) async {
+    final starts = completedWeekStartsForMonth(now, selectedMonth);
     final result = <DedaAdminLeagueWeek>[];
-    for (final begin in weeks) {
+    for (final begin in starts) {
       final id = weekId(begin);
-      final snap = await _scores(id).limit(100).get();
+      final snapshot = await _scores(id).limit(100).get();
       final ranks = DedaAdminLeagueProjection.fromRecords([
-        for (final doc in snap.docs) MapEntry(doc.id, doc.data()),
+        for (final doc in snapshot.docs) MapEntry(doc.id, doc.data()),
       ]);
       result.add(DedaAdminLeagueWeek(
         id: id,
