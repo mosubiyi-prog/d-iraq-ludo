@@ -60,6 +60,9 @@ before(async()=>{
     await setDoc(doc(db,'deda_weekly_direct_accounts',id),{
       accountKey:account,publicId:id,createdByUid:uid,createdAt:started,
     });
+    await setDoc(doc(db,'deda_share_ids',id),{
+      ownerUid:uid,accountKey:account,kind:'personal',active:true,
+    });
   });
 });
 after(async()=>{if(env) await env.cleanup();});
@@ -123,4 +126,41 @@ test('immutable audit events are general-manager-only, not editable',async()=>{
   await assertSucceeds(setDoc(ref,audit('freeze',managerId)));
   await assertFails(updateDoc(ref,{reason:'Changed audit data'}));
   await assertFails(getDoc(doc(user,'deda_weekly_direct_admin_events','event-1')));
+});
+
+test('original Hadaya owner can claim backend-created weekly prize ONCE; no invented gems',async()=>{
+  const gid='deda-weekly-'+week+'-'+id.slice(1);
+  const gift=(database)=>doc(database,'deda_diamond_gifts',gid);
+  const balance=(database)=>doc(database,'deda_diamond_gift_balances',id);
+  await env.withSecurityRulesDisabled(async ctx=>{
+    await setDoc(gift(ctx.firestore()),{
+      giftId:gid,sourceType:'weekly_league',
+      adminUid:'deda-weekly-league-system',
+      adminName:'دوري DEDA',senderLabel:'إدارة DEDA',
+      targetPublicId:id,targetName:'مستخدم ديدا',amount:150,
+      reason:'جائزة دوري DEDA — الأسبوع '+week+' — المركز 1',
+      status:'pending',createdAt:Timestamp.now(),
+    });
+  });
+  const claim=writeBatch(user);
+  claim.set(balance(user),{
+    publicId:id,balance:150,lastClaimGiftId:gid,
+    createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  });
+  claim.update(gift(user),{
+    status:'received',claimedAt:serverTimestamp(),
+  });
+  await assertSucceeds(claim.commit());
+  const claimed=(await getDoc(balance(user))).data();
+  if(claimed.balance!==150)throw Error('receipt was not credited');
+  const second=writeBatch(user);
+  second.update(balance(user),{
+    balance:300,lastClaimGiftId:gid,updatedAt:serverTimestamp(),
+  });
+  second.update(gift(user),{
+    status:'received',claimedAt:serverTimestamp(),
+  });
+  await assertFails(second.commit());
+  const final=(await getDoc(balance(user))).data();
+  if(final.balance!==150)throw Error('duplicate credit');
 });
