@@ -32,23 +32,25 @@ def bind(project):
     # repository template breaks the signed Android release compilation.
     source=(project/SAFE).read_text()
     assert source.count('drawOriginalEquippedAvatar') == 0
-    anchors=[
-        ('    this.onOpenDailyTasks,\\n',
-         '    this.onOpenDailyTasks,\\n    this.drawOriginalEquippedAvatar,\\n'),
-        ('  final VoidCallback? onOpenDailyTasks;\\n',
-         '  final VoidCallback? onOpenDailyTasks;\\n'
-         '  final Widget Function(BuildContext, int, int, double)? '
-         'drawOriginalEquippedAvatar;\\n'),
-        ('    return DedaWeeklyLeaderboardPage(\\n'
-         '      onOpenDailyTasks: widget.onOpenDailyTasks,\\n',
-         '    return DedaWeeklyLeaderboardPage(\\n'
-         '      onOpenDailyTasks: widget.onOpenDailyTasks,\\n'
-         '      drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar,\\n'),
-    ]
-    for anchor, replacement in anchors:
-        if source.count(anchor)!=1:
-            raise ValueError('100405 safe-screen exact anchor missing: '+anchor)
-        source=source.replace(anchor,replacement,1)
+    constructor='  const DedaWeeklyLeaderboardSafeScreen({'
+    if source.count(constructor)!=1 or source.count('drawOriginalEquippedAvatar')!=0:
+        raise ValueError('unexpected generated 100405 safe screen')
+    begin=source.index(constructor)
+    closing=source.index('  });',begin)
+    source=(source[:closing] + '    this.drawOriginalEquippedAvatar,\\n'
+            + source[closing:])
+    field='  final Duration? refreshInterval;'
+    if source.count(field)!=1:
+        raise ValueError('original safe reader field missing')
+    source=source.replace(field,
+        field + '\\n  final Widget Function(BuildContext, int, int, double)? '
+        'drawOriginalEquippedAvatar;',1)
+    forwarded='onOpenDailyTasks: widget.onOpenDailyTasks,'
+    if source.count(forwarded)!=1:
+        raise ValueError('original safe screen task CTA missing')
+    source=source.replace(forwarded,
+        forwarded + '\\n      drawOriginalEquippedAvatar: '
+        'widget.drawOriginalEquippedAvatar,',1)
     assert 'this.localTrialAccountKey' in source
     assert 'drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar' in source
     (project/SAFE).write_text(source)
