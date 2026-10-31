@@ -97,23 +97,46 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
   return Object.freeze(report);
 }
 
+// Recover a missed run without paying before the next Saturday 06 Baghdad.
+// The newest completed week is first. Older periods are optional catch-up.
+function latestFinishedWeekIds(nowMs, maxWeeks = 4) {
+  const {ORIGIN}=require('./deda_weekly_direct_prize_plan.js');
+  if(!Number.isSafeInteger(nowMs)||maxWeeks<1||maxWeeks>24) {
+    throw Error('INVALID_SETTLEMENT_CALENDAR');
+  }
+  const count=Math.floor((nowMs-ORIGIN)/WEEK_MS);
+  if(count<1)return [];
+  const weeks=[];
+  for(let i=count-1;i>=Math.max(0,count-maxWeeks);i--) {
+    const time=ORIGIN+i*WEEK_MS+3*3600000;
+    const local=new Date(time);
+    const pad=x=>String(x).padStart(2,'0');
+    weeks.push(local.getUTCFullYear()+'-'+
+      pad(local.getUTCMonth()+1)+'-'+pad(local.getUTCDate()));
+  }
+  return weeks;
+}
+
 async function main() {
   if(!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     throw Error('NO_SERVICE_ACCOUNT_CREDENTIALS');
   }
-  const weekId=process.env.DEDA_LEAGUE_WEEK;
-  if(!weekId) throw Error('DEDA_LEAGUE_WEEK_REQUIRED');
+  const configured=process.env.DEDA_LEAGUE_WEEK;
+  const weeks=configured?[configured]:latestFinishedWeekIds(Date.now());
   // Firebase Admin SDK bypasses client rules; ONLY the protected
   // scheduled backend workflow is authorized to call this function.
   const {initializeApp,applicationDefault}=require('firebase-admin/app');
   const {getFirestore,FieldValue}=require('firebase-admin/firestore');
   initializeApp({credential:applicationDefault(),projectId:'deda-25b88'});
-  const result=await settleWeek(getFirestore(),weekId,Date.now(),{
-    dryRun:process.env.DEDA_LEAGUE_ACTUALLY_PAY!=='APPROVED_BY_OWNER',
-    clockTimestamp:()=>FieldValue.serverTimestamp(),
-  });
-  console.log(JSON.stringify(result));
-  if(result.dryRun) console.log('DRY_RUN_NO_PRODUCTION_WRITES');
+  const dryRun=process.env.DEDA_LEAGUE_ACTUALLY_PAY!=='APPROVED_BY_OWNER';
+  for(const weekId of weeks) {
+    const result=await settleWeek(getFirestore(),weekId,Date.now(),{
+      dryRun,
+      clockTimestamp:()=>FieldValue.serverTimestamp(),
+    });
+    console.log(JSON.stringify(result));
+  }
+  if(dryRun) console.log('DRY_RUN_NO_PRODUCTION_WRITES');
 }
 if(require.main===module) {
   main().catch(error=>{
@@ -121,4 +144,4 @@ if(require.main===module) {
     process.exitCode=1;
   });
 }
-module.exports={settleWeek};
+module.exports={settleWeek,latestFinishedWeekIds};
