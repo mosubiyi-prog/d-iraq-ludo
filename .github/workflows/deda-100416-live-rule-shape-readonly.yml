@@ -47,7 +47,8 @@ jobs:
           def block(anchor):
             start=rules.find(anchor)
             if start<0: raise SystemExit('MISSING_BLOCK_'+anchor)
-            begin=rules.find('{',start)
+            begin=(rules.find(' {',start)+1) if anchor.startswith('match ') else rules.find('{',start)
+            if begin<=0: raise SystemExit('RULES_BRACE_NOT_FOUND')
             depth=0
             for i in range(begin,len(rules)):
               if rules[i]=='{': depth+=1
