@@ -59,7 +59,9 @@ jobs:
           for anchor in ['match /deda_stage71_active_identifier/{originalId}',
                          'match /users/{uid}',
                          'match /deda_public_active_aliases/{originalId}',
-                         'function sparkOwnerAuthed(']:
+                         'function sparkOwnerAuthed(',
+                         'function stage71SelfRecipient(',
+                         'function verifiedDiamondsPersonalOwner(']:
             b=block(anchor)
             print('EXACT_BLOCK_BEGIN',anchor,'SIZE',len(b))
             print(b[:8000])
