@@ -175,7 +175,10 @@ def bind(project):
     (p/DIRECT).write_text(updatedDirect)
     originalOutbox=(p/OUTBOX).read_text()
     newestOutbox=(ROOT/OUTBOX).read_text()
-    if ("static const _prefix = 'deda_weekly_community_pending_100400';" not in originalOutbox or
+    if (not any(marker in originalOutbox for marker in (
+          "static const _prefix = 'deda_weekly_community_pending_100400';",
+          "static const _prefix = 'deda_weekly_community_pending_100404';"
+        )) or
         "static const _prefix = 'deda_weekly_community_pending_100404';" not in newestOutbox):
         raise ValueError('Cannot safely isolate pre-six legacy pending reports')
     (p/OUTBOX).write_text(newestOutbox)
