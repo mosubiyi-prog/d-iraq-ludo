@@ -79,7 +79,10 @@ jobs:
                 'DedaDiamondsWallet','friendCount','friendsCount')
           match=[i for i,s in enumerate(main) if any(w in s for w in tags)]
           print('PROFILE_MATCH_LOCATIONS',[(i+1,main[i][:150]) for i in match[:60]])
-          for a,b in ((31195,31325),(32090,32170),(12775,12880)):
+          social=[i for i,s in enumerate(main) if 'class DedaSocialFriendCount' in s]
+          print('FRIEND_COUNT_CLASS_LINE',[i+1 for i in social])
+          limits=[(max(1,i-1),i+145) for i in social[:1]]
+          for a,b in ((30630,30700),(12880,12985),(31195,31325),*limits):
               print(f'PROFILE_SCOPE_{a}_{b}')
               for j in range(a-1,min(len(main),b)):
                   print(f'{j+1}: {main[j][:220]}')
