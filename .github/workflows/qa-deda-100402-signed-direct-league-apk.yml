@@ -51,7 +51,7 @@ jobs:
           python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$RUNNER_TEMP/deda-original-100396"
-          python3 tools/app_stability/app_package/bind_weekly_100402_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$RUNNER_TEMP/deda-original-100396"
