@@ -2,13 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-/// PRIVATE DEDA ACCOUNT DISPLAY SCOPE ONLY. NOT identity proof for payouts.
-///
-/// Captures the original anonymous Firebase UID plus original DEDA canonical
-/// account at navigation. If either changes, the account-specific league page
-/// is permanently revoked. No task, XP, wallet, Firestore or league writes.
-/// The eventual server leaderboard reader MUST separately authenticate and
-/// verify App Check, immutable canonical account binding and signed XP events.
+/// The original DEDA user/anonymous Firebase auth can finish warming up after
+/// tapping the league card. Never freeze an EMPTY UID then call it a logout.
+/// Once a VALID identity is bound, account changes still revoke old results.
 class DedaWeeklyAccountViewGate extends StatefulWidget {
   const DedaWeeklyAccountViewGate({
     super.key,
@@ -17,25 +13,17 @@ class DedaWeeklyAccountViewGate extends StatefulWidget {
     required this.authEvents,
     required this.builder,
     this.refreshSignal,
+    this.startsAt,
+    this.clock,
   });
 
-  /// Current original DEDA account selected by the app.
-  /// Client preference is merely a DISPLAY scope, NOT login authority.
   final String Function() readCanonicalAccount;
-
-  /// Current Firebase Auth UID; return null for missing/unauthorized sessions.
   final String? Function() readSessionUid;
-
-  /// FirebaseAuth.instance.authStateChanges() in the actual DEDA app.
   final Stream<Object?> authEvents;
   final Listenable? refreshSignal;
-
-  /// Called only while the captured viewer account + UID remain unchanged.
-  final Widget Function(
-    BuildContext context,
-    String capturedAccountKey,
-    bool Function() stillSameViewer,
-  ) builder;
+  final DateTime? startsAt;
+  final DateTime Function()? clock;
+  final Widget Function(BuildContext, String, bool Function()) builder;
 
   @override
   State<DedaWeeklyAccountViewGate> createState() =>
@@ -47,10 +35,13 @@ class _DedaWeeklyAccountViewGateState
   static final RegExp _account = RegExp(r'^[0-9]{10,16}$');
   static final RegExp _uid = RegExp(r'^[A-Za-z0-9_-]{8,128}$');
 
-  late final String _capturedAccount;
-  late final String _capturedUid;
-  StreamSubscription<Object?>? _subscription;
+  String? _boundAccount;
+  String? _boundUid;
+  bool _authReady = false;
   bool _revoked = false;
+  int _pendingSeconds = 0;
+  StreamSubscription<Object?>? _subscription;
+  Timer? _poll;
 
   String _readAccount() {
     try {
@@ -68,32 +59,75 @@ class _DedaWeeklyAccountViewGateState
     }
   }
 
-  bool _sameViewer() =>
-      !_revoked &&
-      _account.hasMatch(_capturedAccount) &&
-      _uid.hasMatch(_capturedUid) &&
-      _readAccount() == _capturedAccount &&
-      _readUid() == _capturedUid;
+  DateTime _now() => (widget.clock?.call() ?? DateTime.now()).toUtc();
 
-  void _checkSession() {
-    if (_revoked || !mounted) return;
-    if (!_sameViewer()) {
-      // Revocation persists, including if switching back to the old account:
-      // reopening through the official home route is then required.
-      setState(() => _revoked = true);
+  bool get _bound => _boundAccount != null && _boundUid != null;
+
+  bool _sameViewer() =>
+      _bound &&
+      !_revoked &&
+      _readAccount() == _boundAccount &&
+      _readUid() == _boundUid;
+
+  void _refreshSession() {
+    if (!mounted || _revoked) return;
+    final account = _readAccount();
+    final uid = _readUid();
+
+    if (!_bound) {
+      // Wait for the FIRST Firebase auth-state emission. Reading currentUser
+      // synchronously during navigation is not proof auth startup is complete.
+      if (_authReady && _account.hasMatch(account) && _uid.hasMatch(uid)) {
+        setState(() {
+          _boundAccount = account;
+          _boundUid = uid;
+        });
+      } else if (_authReady) {
+        _pendingSeconds++;
+        if (_pendingSeconds % 2 == 0) setState(() {});
+      }
+      return;
     }
+
+    if (account != _boundAccount || uid != _boundUid) {
+      setState(() => _revoked = true);
+      _poll?.cancel();
+      _poll = null;
+      return;
+    }
+    final start = widget.startsAt;
+    if (start != null && _now().isBefore(start.toUtc())) {
+      // Live countdown, without attempting any Firestore reads before 06:00.
+      setState(() {});
+    } else {
+      _poll?.cancel();
+      _poll = null;
+      // Build next frame at the actual start time and show shared standings.
+      if (start != null) setState(() {});
+    }
+  }
+
+  void _onAuthEvent(Object? _) {
+    if (!_authReady) _authReady = true;
+    _refreshSession();
+  }
+
+  void _attachAuth() {
+    _subscription = widget.authEvents.listen(
+      _onAuthEvent,
+      onError: (Object _) => _onAuthEvent(null),
+    );
   }
 
   @override
   void initState() {
     super.initState();
-    _capturedAccount = _readAccount();
-    _capturedUid = _readUid();
-    _subscription = widget.authEvents.listen(
-      (_) => _checkSession(),
-      onError: (Object _) => _checkSession(),
-    );
-    widget.refreshSignal?.addListener(_checkSession);
+    _attachAuth();
+    widget.refreshSignal?.addListener(_refreshSession);
+    // Include a small retry window for account preferences that hydrate after
+    // the Firebase stream. Never lose session or modify DEDA credentials.
+    _poll = Timer.periodic(
+      const Duration(seconds: 1), (_) => _refreshSession());
   }
 
   @override
@@ -101,40 +135,115 @@ class _DedaWeeklyAccountViewGateState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.authEvents != widget.authEvents) {
       _subscription?.cancel();
-      _subscription = widget.authEvents.listen(
-        (_) => _checkSession(),
-        onError: (Object _) => _checkSession(),
-      );
+      _authReady = false;
+      _attachAuth();
     }
     if (oldWidget.refreshSignal != widget.refreshSignal) {
-      oldWidget.refreshSignal?.removeListener(_checkSession);
-      widget.refreshSignal?.addListener(_checkSession);
+      oldWidget.refreshSignal?.removeListener(_refreshSession);
+      widget.refreshSignal?.addListener(_refreshSession);
     }
-    _checkSession();
+    _refreshSession();
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     _subscription?.cancel();
-    widget.refreshSignal?.removeListener(_checkSession);
+    widget.refreshSignal?.removeListener(_refreshSession);
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (!_sameViewer()) {
-      return const Scaffold(
+  Widget _message(String label, {bool showSpinner = false}) =>
+      Scaffold(
         body: SafeArea(
           child: Center(
-            child: Text(
-              'تغيّر الحساب أو انتهت الجلسة. ارجع للواجهة وافتح الدوري من جديد.',
-              key: Key('deda_weekly_account_scope_revoked'),
-              textAlign: TextAlign.center,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showSpinner) ...[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 20),
+                  ],
+                  Text(label, textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 18)),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        _refreshSession();
+                      }
+                    },
+                    child: Text(Navigator.of(context).canPop()
+                        ? 'رجوع للرئيسية' : 'إعادة المحاولة'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
+
+  @override
+  Widget build(BuildContext context) {
+    if (_revoked) {
+      return _message(
+        'تم تبديل الحساب أثناء عرض الدوري. ارجع للرئيسية وافتح الدوري من جديد.',
+      );
     }
-    return widget.builder(context, _capturedAccount, _sameViewer);
+    if (!_bound) {
+      return _message(
+        _authReady && _pendingSeconds >= 20
+          ? 'تعذر تهيئة جلسة الدوري. لا حاجة لتسجيل الخروج أو حذف التطبيق.'
+          : 'جاري تهيئة حساب الدوري...',
+        showSpinner: _pendingSeconds < 20,
+      );
+    }
+    if (!_sameViewer()) {
+      return _message(
+        'تغيّر الحساب أثناء فتح الدوري. ارجع للرئيسية وافتحه مجدداً.',
+      );
+    }
+    final start = widget.startsAt;
+    if (start != null) {
+      final remaining = start.toUtc().difference(_now());
+      if (remaining > Duration.zero) {
+        final total = remaining.inSeconds + 1;
+        final hours = (total ~/ 3600).toString().padLeft(2, '0');
+        final minutes = ((total ~/ 60) % 60).toString().padLeft(2, '0');
+        final seconds = (total % 60).toString().padLeft(2, '0');
+        return Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.emoji_events_outlined, size: 68),
+                  const SizedBox(height: 16),
+                  const Text('الدوري الأسبوعي',
+                      style: TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  const Text('سيبدأ الدوري بعد',
+                      style: TextStyle(fontSize: 20)),
+                  const SizedBox(height: 10),
+                  Text('$hours:$minutes:$seconds',
+                    key: const Key('deda_weekly_prestart_countdown'),
+                    style: const TextStyle(
+                      fontSize: 36, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 14),
+                  const Text('السبت 31 أكتوبر — الساعة 6 صباحاً بتوقيت العراق',
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    return widget.builder(context, _boundAccount!, _sameViewer);
   }
 }
