@@ -1,0 +1,75 @@
+name: DEDA 100416 Actual LIVE Legacy Owner ID Firestore Emulator (READONLY NO DEPLOY)
+on:
+  push:
+    branches: [deda-100416-legacy-normal-id-firestore-safe-rules-emulator-no-deploy-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100416-legacy-firestore-live-emulator-no-deploy.yml'
+      - 'test/deda_100416_live_legacy_normal_ownership_rules.test.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-production-rules-legacy-id:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 26
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch only CURRENT live Firebase Rules into local emulator fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import os,json,hashlib,requests
+          from google.auth.transport.requests import Request
+          from google.oauth2.service_account import Credentials
+          raw=os.getenv('DEDA_SERVICE_ACCOUNT') or os.getenv('DEDA_FALLBACK_ACCOUNT')
+          if not raw: raise SystemExit('SAFE_STOP_NO_READONLY_FIREBASE_ID_RULES_ACCOUNT')
+          account=json.loads(raw)
+          if account.get('project_id')!='deda-25b88':raise SystemExit('SAFE_STOP_WRONG_FIREBASE_PROJECT')
+          cred=Credentials.from_service_account_info(account,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          cred.refresh(Request());h={'Authorization':'Bearer '+cred.token}
+          def get(endpoint):
+            res=requests.get('https://firebaserules.googleapis.com/v1/'+endpoint,headers=h,timeout=25)
+            if res.status_code!=200:raise SystemExit('SAFE_STOP_READ_ONLY_HTTP_'+str(res.status_code))
+            return res.json()
+          release=get('projects/deda-25b88/releases/cloud.firestore')
+          source=get(release['rulesetName'])['source']['files']
+          if len(source)!=1:raise SystemExit('SAFE_STOP_MULTIFILE')
+          live=source[0]['content']
+          if 'function stage71SelfRecipient(' not in live or 'function sparkOwnerAuthed(' not in live:
+            raise SystemExit('SAFE_STOP_STAGE71_SPARK_LIVE_RULES_MISSING')
+          import pathlib
+          path=pathlib.Path('/tmp/deda100416-exact-production.rules')
+          path.write_text(live)
+          config={'firestore':{'rules':str(path)},
+             'emulators':{'firestore':{'host':'127.0.0.1','port':8092},'ui':{'enabled':False}}}
+          pathlib.Path('/tmp/deda100416-emulator-config.json').write_text(json.dumps(config))
+          print('PASS_100416_EXACT_LIVE_RULESET',release['rulesetName'])
+          print('PASS_100416_READ_ONLY_SHA256',hashlib.sha256(live.encode()).hexdigest())
+          print('NO_FIREBASE_RULES_DEPLOY_NO_USER_DATA_READS_NO_USER_WRITES')
+          PY
+      - name: Test 100414 failure and the STRICT safe owner two-phase route on emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-100416-live-rules \
+            --config /tmp/deda100416-emulator-config.json \
+            --only firestore --non-interactive \
+            'node --test test/deda_100416_live_legacy_normal_ownership_rules.test.cjs'
+          echo PASS_100416_RULES_ACTUAL_CURRENT_PRODUCTION_EMULATOR_ONLY
