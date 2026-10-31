@@ -108,7 +108,7 @@ def bind(dest):
     foil_begin=stage.index("class _DedaStage71ActiveProfileFoilState")
     if not stage.endswith("}\n"):
         raise ValueError("foil not last widget; refuse unsafe replacement")
-    foil=String.raw"""class _DedaStage71ActiveProfileFoilState
+    foil=r"""class _DedaStage71ActiveProfileFoilState
     extends State<DedaStage71ActiveProfileFoil> {
   StreamSubscription<User?>? _auth;
   void _repaint() { if(mounted) setState(() {}); }
