@@ -61,7 +61,7 @@ class DedaWeeklyPrizePlan {
     }
     final profile = await DedaBackend.currentAdminProfile(forceRefresh: true);
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || FirebaseAuth.instance.currentUser?.isAnonymous == true ||
+    if (uid == null ||
         DedaBackend.normalizeAdminRole(profile['role']) != 'general_manager' ||
         DedaBackend.normalizeAdminStatus(profile) != 'active') {
       throw StateError('active-manager-required');
