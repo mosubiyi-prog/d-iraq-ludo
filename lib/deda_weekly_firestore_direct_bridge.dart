@@ -148,7 +148,7 @@ class DedaWeeklyFirestoreDirectBridge {
     // DEDA 100405: own-account private admin-review message.
     // This is NOT a public accusation and never modifies original level XP.
     try {
-      final noticeDoc = await db.collection('deda_weekly_direct_reviews')
+      final noticeDoc = await db.collection('deda_weekly_direct_notices')
           .doc(w.id).collection('users').doc(me.id).get();
       final review = noticeDoc.data();
       if (review != null && review['publicId'] == me.id &&
