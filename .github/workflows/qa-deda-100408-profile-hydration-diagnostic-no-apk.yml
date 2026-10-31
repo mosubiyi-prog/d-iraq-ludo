@@ -82,6 +82,12 @@ jobs:
           for begin,end in ((30580,30720),(31235,31310)):
               for index in range(begin-1,min(end,len(lines))):
                   print('PROFILE_DETAIL',index+1,lines[index][:220])
+          for marker in ('class DedaDiamondsWallet', 'dedaRefreshFriendCount()'):
+              found=[n for n,s in enumerate(lines) if marker in s]
+              print('WALLET_MARKER',marker,'occurrences',len(found))
+              for n in found[:3]:
+                  for index in range(max(0,n-4),min(len(lines),n+115)):
+                      print('WALLET_DETAIL',index+1,lines[index][:200])
           PY
       - name: Verify diagnostics done (no APK/no Firebase deploy)
         shell: bash
