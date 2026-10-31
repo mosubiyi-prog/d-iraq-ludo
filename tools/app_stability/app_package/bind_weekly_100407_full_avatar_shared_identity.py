@@ -103,6 +103,9 @@ def bind(project):
         "import 'deda_stage71_free_owned_use_profile.dart';\n"
         "import 'deda_verified_active_id_store.dart';",
         "shared active-ID store import after prepare")
+    if "    if (_proof != null) setState(() => _proof = null);" not in scope:
+        at=scope.find("Future<void> _load() async")
+        raise ValueError("100407 generated scope differs: "+repr(scope[at:at+1800]))
     scope=once(scope,
         """    if (_proof != null) setState(() => _proof = null);
     if (dedaStabilityIdentityPilot && _paused) return;""",
