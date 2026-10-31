@@ -307,6 +307,10 @@ def bind(dest):
                     return i+2 if source[i+1:i+2]==',' else i+1
         raise ValueError("unclosed Dart call")
 
+    ctx=main.find("'معرفي الشخصي'")
+    print("100410_MAIN_MY_ID_CONTEXT",repr(main[max(0,ctx-1000):ctx+1650]) if ctx>=0 else "NOT_FOUND")
+    ctx=main.find("Widget _shareCard(")
+    print("100410_MAIN_RECEIVED_SHARE_CONTEXT",repr(main[ctx:ctx+2700]) if ctx>=0 else "NOT_FOUND")
     if main.count("id: _personalId,")!=1:
         raise ValueError("owner share personal-ID UI changed unexpectedly")
     idx=main.index("id: _personalId,")
