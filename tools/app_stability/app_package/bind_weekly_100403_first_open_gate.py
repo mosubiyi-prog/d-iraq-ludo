@@ -12,6 +12,7 @@ import argparse
 ROOT=Path(__file__).resolve().parents[3]
 GATE=Path('lib/deda_weekly_account_view_gate.dart')
 MAIN=Path('lib/main.dart')
+PAGE=Path('lib/deda_weekly_leaderboard_page.dart')
 
 def sha(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -50,6 +51,16 @@ def bind(project):
     if result.count(replacement)!=2:
         raise ValueError('Unexpected edited original navigation')
     (p/MAIN).write_text(result)
+    # Old local-QA footer must not describe verified Firestore ranks as local.
+    page=p/PAGE
+    ui=page.read_text()
+    notice="widget.privateTrialXp != null && !previousWeek"
+    if ui.count(notice)!=1:
+        raise ValueError('Expected exactly one local-trial footer')
+    page.write_text(ui.replace(
+        notice,"widget.privateTrialXp != null && !previousWeek && !view.verified",1
+    ))
+    data['sourceHashes'][str(PAGE)]=sha(page)
     data['sourceHashes'][str(MAIN)]=sha(p/MAIN)
     data['sourceHashes'][str(GATE)]=sha(current)
     data['versionCode']=100403
