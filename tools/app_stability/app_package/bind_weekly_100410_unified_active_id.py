@@ -219,9 +219,62 @@ def bind(dest):
         "podium ID uses common ID authority")
     league_file.write_text(league)
 
+    # Location shares must keep immutable original IDs for routing but show
+    # the current active alias, including at the recipient's stored cards.
+    main_file=dest/"lib/main.dart"
+    main=main_file.read_text()
+    main=one(main,
+        "import 'deda_verified_active_id_store.dart';",
+        "import 'deda_verified_active_id_store.dart';\n"
+        "import 'deda_unified_active_id_100410.dart';",
+        "shared display labels in main location share UI")
+    main=one(main,
+        """                          _idCard(
+                            title: dedaText(
+                              'معرفي الشخصي',
+                              'My personal ID',
+                            ),
+                            id: _personalId,
+                            icon: Icons.person,
+                          ),""",
+        """                          DedaUnifiedActiveIdBuilder100410(
+                            originalId:_personalId,
+                            builder:(context,active) => active==null
+                              ? const SizedBox(height:48,child:Center(
+                                  child:Text('جارِ تأكيد الآيدي...',
+                                      textDirection:TextDirection.rtl)))
+                              : _idCard(
+                                  title:dedaText('معرفي الشخصي','My personal ID'),
+                                  id:active,icon:Icons.person),
+                          ),""",
+        "location-share my personal ID displays only selected verified alias")
+    main=one(main,
+        """                       Text(
+                         senderId,
+                         textDirection: TextDirection.ltr,
+                         style: const TextStyle(
+                           color: Color(0xFF5C635D),
+                           fontWeight: FontWeight.w700,
+                         ),
+                       ),""",
+        """                       DedaUnifiedActiveId100410.valid(senderId)
+                         ? DedaUnifiedActiveIdLabel100410(
+                             originalId:senderId,
+                             style:const TextStyle(
+                               color:Color(0xFF5C635D),
+                               fontWeight:FontWeight.w700))
+                         : Text(senderId,
+                             textDirection:TextDirection.ltr,
+                             style:const TextStyle(
+                               color:Color(0xFF5C635D),
+                               fontWeight:FontWeight.w700)),
+""",
+        "recipient location share shows sender's active ID, not historical original")
+    main_file.write_text(main)
+
     for path in (source,admin,"lib/deda_qa32_active_account_scope.dart",
                  "lib/deda_stage71_free_owned_use_profile.dart",
-                 "lib/deda_weekly_leaderboard_page.dart"):
+                 "lib/deda_weekly_leaderboard_page.dart","lib/main.dart"):
         meta["sourceHashes"][path]=sha(dest/path)
     meta["versionCode"]=100410
     meta["weekly100410UnifiedActiveId"]={
@@ -234,6 +287,7 @@ def bind(dest):
       "profileFoilNoIndependentActiveAndOwnedReader":True,
       "weeklyPodiumAndTop10SharedDisplay":True,
       "adminUsesSharedDisplay":True,
+      "locationSenderAndRecipientUseSameVerifiedDisplay":True,
       "originalKeysNeverReplaced":True,
       "noXpDiamondOrRewardWrites":True,
       "phoneTestPending":True,
