@@ -65,7 +65,50 @@ def bind(workspace):
         ));"""+scope[end+2:]
     (project/SCOPE).write_text(scope)
 
-    for path in (PUBLIC, ADMIN, SCOPE):
+    # Stage71 use() must NEVER block its already server-verified activation
+    # on optional public alias publication. The initial selection, ownership
+    # and gifted-receipt checks remain intact; we reuse the verified foil.
+    stage_file="lib/deda_stage71_free_owned_use_profile.dart"
+    stage=(project/stage_file).read_text()
+    stage=one(stage,
+        "import 'deda_qa32_spark_public_identifier_directory.dart';",
+        "import 'deda_qa32_spark_public_identifier_directory.dart';\n"
+        "import 'deda_active_id_public_sync_100409.dart';",
+        "stage71 nonblocking projection module")
+    stage=one(stage,
+        """    final db=FirebaseFirestore.instance;
+    if (identifier!=originalId) {
+      final owner=await db.collection(DedaStage71Admin200.registry)""",
+        """    final db=FirebaseFirestore.instance;
+    String? verifiedFoil;
+    if (identifier!=originalId) {
+      final owner=await db.collection(DedaStage71Admin200.registry)""",
+        "stage71 verified color belongs to existing owner registry")
+    stage=one(stage,
+        """      DedaStage71OwnedIdentifier.read(
+        owner.id,owner.data() ?? {},originalId);""",
+        """      verifiedFoil = DedaStage71OwnedIdentifier.read(
+        owner.id,owner.data() ?? {},originalId).baseColor;""",
+        "reuse existing server-verified active color")
+    old_begin=stage.index("    // Spark owner publication only after original ID")
+    old_end=stage.index(
+        "    if (FirebaseAuth.instance.currentUser?.uid != uid) {\n"
+        "      throw StateError('account-switched-before-use-notifier');",
+        old_begin)
+    stage=stage[:old_begin]+"""    // OPTIONAL sync. Stage71 use() already verified ownership, the gifted
+    // receipt (if any), and persisted the current active ID. Do not delay the
+    // immediate success notifier on a public display index network request.
+    if (DedaQa32SparkPublicIdentifierDirectory.enabled &&
+        FirebaseAuth.instance.currentUser?.uid == uid) {
+      unawaited(DedaActiveIdPublicSync100409.publishAfterVerifiedRead(
+        uid: uid, originalId: originalId, activeId: identifier,
+        fixedColor: verifiedFoil,
+      ));
+    }
+"""+stage[old_end:]
+    (project/stage_file).write_text(stage)
+
+    for path in (PUBLIC, ADMIN, SCOPE, stage_file):
         meta["sourceHashes"][path]=sha(project/path)
     meta["versionCode"]=100409
     meta["weekly100409SingleVerifiedIdentity"]={
@@ -75,6 +118,7 @@ def bind(workspace):
         "publicRuleGuardsOwnedIdAndColor": True,
         "managerOneStableReadSubscription": True,
         "managerOwnVerifiedIdRevisionRefresh": True,
+        "stage71UseDoesNotWaitForPublicProjection": True,
         "managerReadErrorAndSixSecondBound": True,
         "noRetiredOriginalFallbackOnUnknownAlias": True,
         "accountKeysUnchanged": True,
