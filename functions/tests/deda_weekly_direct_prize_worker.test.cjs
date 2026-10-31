@@ -3,7 +3,7 @@ const {test,before,after}=require('node:test');
 const assert=require('node:assert/strict');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,Timestamp}=require('firebase-admin/firestore');
-const {settleWeek}=require('../deda_weekly_direct_prize_worker.cjs');
+const {settleWeek,latestFinishedWeekIds}=require('../deda_weekly_direct_prize_worker.cjs');
 const {weekStart,WEEK_MS}=require('../deda_weekly_direct_prize_plan.js');
 
 let app,db;
@@ -86,4 +86,12 @@ test('abnormal 20000 score fails closed; no third gift',async()=>{
     dryRun:false,clockTimestamp:stamp,
   }),/UNTRUSTED_SCORE_ROW/);
   assert.equal((await gifts().get()).size,2);
+});
+
+test('automatic runner never pays before first completed Saturday 06 and targets JUST closed week',()=>{
+  assert.deepEqual(latestFinishedWeekIds(started+WEEK_MS-1),[]);
+  assert.deepEqual(latestFinishedWeekIds(started+WEEK_MS),['2026-10-31']);
+  assert.deepEqual(latestFinishedWeekIds(started+2*WEEK_MS),[
+    '2026-11-07','2026-10-31',
+  ]);
 });
