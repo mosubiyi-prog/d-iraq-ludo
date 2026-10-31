@@ -26,9 +26,10 @@ class DedaActiveIdPublicSync100409 {
   }) {
     return uid.isNotEmpty && currentUid == uid &&
         RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId) &&
-        activeId != originalId &&
         RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(activeId) &&
-        const {'gold', 'diamond', 'royal', 'pink'}.contains(fixedColor);
+        (activeId == originalId && fixedColor == null ||
+         activeId != originalId &&
+            const {'gold', 'diamond', 'royal', 'pink'}.contains(fixedColor));
   }
 
   static Future<void> publishAfterVerifiedRead({
@@ -54,19 +55,24 @@ class DedaActiveIdPublicSync100409 {
       final docs = await Future.wait([
         db.collection('deda_public_active_aliases').doc(originalId)
             .get(const GetOptions(source: Source.server)),
-        db.collection('deda_public_alias_routes').doc(activeId)
-            .get(const GetOptions(source: Source.server)),
+        if (activeId != originalId)
+          db.collection('deda_public_alias_routes').doc(activeId)
+              .get(const GetOptions(source: Source.server)),
       ]).timeout(const Duration(seconds: 5));
       if (FirebaseAuth.instance.currentUser?.uid != uid) return;
       final active = docs[0].data();
-      final route = docs[1].data();
-      final proof =
-          DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
+      final exactNormal = activeId == originalId &&
+          active != null && active.length == 4 &&
+          active['originalId'] == originalId &&
+          active['activeId'] == originalId && active['baseColor'] == null;
+      final proof = activeId == originalId
+          ? null : DedaQa32SparkPublicIdentifierDirectory.styleFromProjection(
               originalId, active);
-      final consistentOriginal =
-          DedaQa32SparkPublicIdentifierDirectory.originalFromProjection(
-              activeId, route, active);
-      if (proof?['displayId'] != activeId ||
+      final consistentOriginal = activeId == originalId
+          ? null : DedaQa32SparkPublicIdentifierDirectory.originalFromProjection(
+              activeId, docs[1].data(), active);
+      if (activeId == originalId ? !exactNormal :
+          proof?['displayId'] != activeId ||
           proof?['permanentColor'] != fixedColor ||
           consistentOriginal != originalId) {
         await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
