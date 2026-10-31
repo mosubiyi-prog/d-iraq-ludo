@@ -32,17 +32,26 @@ class DedaUnifiedActiveId100410 {
   }
   static bool valid(String id) => RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(id);
 
-  static String? display(String original) {
+  /// Owner-verified or server-rule-verified public proof, shared by
+  /// friend cards as well as league and own profile. Never inferred.
+  static DedaVerifiedActiveId? proof(String original) {
     if (!valid(original)) return null;
     final current=uid;
     if (current!=null) {
       final own=DedaVerifiedActiveIdStore.read(current,original);
-      if (own!=null && own.wellFormed) return own.displayId;
+      if (own!=null && own.wellFormed) return own;
     }
     final projection=_public[original];
-    if (projection!=null && projection.wellFormed) return projection.displayId;
-    return _normal.contains(original) ? original : null;
+    if (projection!=null && projection.wellFormed) return projection;
+    if (_normal.contains(original)) {
+      return DedaVerifiedActiveId(
+        uid:'public-server',originalId:original,
+        displayId:original,fixedColor:null);
+    }
+    return null;
   }
+
+  static String? display(String original) => proof(original)?.displayId;
 
   @visibleForTesting
   static bool accept(String original,Map<String,dynamic>? data) {
