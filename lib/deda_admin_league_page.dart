@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'deda_backend.dart';
 import 'deda_admin_league_live_widgets.dart';
 import 'deda_admin_league_control_widgets.dart';
+import 'deda_admin_league_reward_status.dart';
 
 /// Isolated management entry for a FUTURE real weekly league.
 ///
@@ -339,12 +340,14 @@ class DedaAdminLeagueOverview extends StatelessWidget {
                         'Total per full 10-winner week'),
                         t('370 ماسة', '370 diamonds')),
                       const SizedBox(height: 7),
-                      _notice(t(
-                        'صرف الجوائز مقفول إلى أن يُربط برصيد الماسات '
-                        'المكتسبة الحقيقي مع منع التكرار.',
-                        'Payout is locked until an audited earned-diamond '
-                        'wallet is connected with duplicate prevention.',
-                      )),
+                      if (liveDataEnabled) ...[
+                        const SizedBox(height: 10),
+                        DedaAdminLeagueRewardStatus(isArabic: isArabic),
+                      ] else
+                        _notice(t(
+                          'صرف الجوائز مقفول إلى أن يكتمل تحقق الخادم.',
+                          'Reward payout is locked pending server verification.',
+                        )),
                     ],
                   ),
                 ),
