@@ -17,7 +17,7 @@ const value=(a,by)=>({weekId:week,amounts:a,reason:'زيادة جوائز الم
 before(async()=>{
   env=await initializeTestEnvironment({
     projectId:project,
-    firestore:{rules:readFileSync('firestore.rules','utf8')},
+    firestore:{rules:readFileSync(process.env.DEDA_DIRECT_RULES_PATH || 'firestore.rules','utf8')},
   });
   gm=env.authenticatedContext(manager).firestore();
   staff=env.authenticatedContext('league-staff').firestore();
