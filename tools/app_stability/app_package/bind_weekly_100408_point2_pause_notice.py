@@ -20,7 +20,7 @@ def bind(project):
     manifest=project/"internal-build-inputs.json"
     m=json.loads(manifest.read_text())
     if (m.get("versionCode")!=100408 or
-        m.get("weekly100408Point1",{}).get("verifiedServerOwnedActiveAndColorOnePass") is not True):
+        m.get("weekly100408Point1",{}).get("fastVerifiedUiReadPreservesOriginalGrantReceipt") is not True):
         raise ValueError("point1 verified build must precede point2")
     for p,h in m["sourceHashes"].items():
         if not (project/p).is_file() or sha(project/p)!=h:
