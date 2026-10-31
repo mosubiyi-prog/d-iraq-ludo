@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DedaWeeklyCommunityOutbox {
   DedaWeeklyCommunityOutbox._();
 
-  static const _prefix = 'deda_weekly_community_pending_100400';
+  static const _prefix = 'deda_weekly_community_pending_100404';
   static final _account = RegExp(r'^[0-9]{10,16}$');
   static final _uid = RegExp(r'^[A-Za-z0-9_-]{6,128}$');
   static final _day = RegExp(r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}$');
