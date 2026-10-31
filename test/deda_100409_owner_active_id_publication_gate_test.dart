@@ -21,7 +21,6 @@ void main() {
   test('never publishes guessed, original, wrongly-colored IDs', () {
     for (final candidate in [
       ('@DEDA-FAKE!', 'gold'),
-      (original, null),
       (premium, 'invalid'),
       (premium, null),
     ]) {
@@ -30,6 +29,17 @@ void main() {
         activeId: candidate.$1, fixedColor: candidate.$2,
       ), isFalse);
     }
+  });
+
+  test('server-confirmed return to original ID can clear public premium display', () {
+    expect(DedaActiveIdPublicSync100409.shouldPublish(
+      uid: uid, currentUid: uid, originalId: original,
+      activeId: original, fixedColor: null,
+    ), isTrue);
+    expect(DedaActiveIdPublicSync100409.shouldPublish(
+      uid: uid, currentUid: uid, originalId: original,
+      activeId: original, fixedColor: 'gold',
+    ), isFalse);
   });
 
   test('strict public projection proof rejects stale, mismatched aliases', () {
