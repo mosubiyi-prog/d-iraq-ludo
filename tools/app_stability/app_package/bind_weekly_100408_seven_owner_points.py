@@ -108,7 +108,7 @@ def bind(project):
     try {
       // Actual account-scoped readers; no fabricated or minted amount.
       await Future.wait<void>([
-        DedaDiamondsWallet.load(),
+        DedaDiamondsWallet.load().then<void>((_) {}),
         dedaRefreshFriendCount(),
       ]);
     } catch (_) {
