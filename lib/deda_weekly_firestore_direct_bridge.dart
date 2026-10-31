@@ -18,9 +18,9 @@ class DedaWeeklyFirestoreDirectBridge {
           const Duration(days: 7).inMilliseconds,
     ));
     final local = start.add(const Duration(hours: 3));
-    final id = '\${local.year.toString().padLeft(4, '0')}-'
-        '\${local.month.toString().padLeft(2, '0')}-'
-        '\${local.day.toString().padLeft(2, '0')}';
+    final id = '${local.year.toString().padLeft(4, '0')}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}';
     return (id: id, start: start,
       close: start.add(const Duration(days: 6, hours: 18)));
   }
@@ -180,7 +180,7 @@ class DedaWeeklyFirestoreDirectBridge {
       final rank = all.indexOf(r) + 1;
       final pid = r['id'] as String;
       rows.add({
-        'place': rank, 'participantId': 'weekly-user-\${pid.substring(1)}',
+        'place': rank, 'participantId': 'weekly-user-${pid.substring(1)}',
         'displayName': r['name'], 'activePublicId': pid,
         'weeklyPoints': r['xp'], 'verifiedTaskCompletions': r['tasks'],
         'diamondsIfFinalWinner': rank == 1 ? 150 : rank == 2 ? 100 :
@@ -192,7 +192,7 @@ class DedaWeeklyFirestoreDirectBridge {
       'weekId': id, 'remainingMs': left.clamp(0, const Duration(days: 7).inMilliseconds),
       'rows': rows,
       'viewerParticipantId': place >= 0
-          ? 'weekly-user-\${viewer.substring(1)}' : null,
+          ? 'weekly-user-${viewer.substring(1)}' : null,
       'viewerPlace': place >= 0 ? place + 1 : null,
     };
   }
