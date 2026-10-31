@@ -150,7 +150,7 @@ jobs:
           datafile=Path('internal-build-inputs.json')
           data=json.loads(datafile.read_text())
           assert data['package']=='com.diraq.ludo.d_iraq_ludo'
-          assert data['weekly100408Point1']['verifiedServerOwnedActiveAndColorOnePass'] is True
+          assert data['weekly100408Point1']['fastVerifiedUiReadPreservesOriginalGrantReceipt'] is True
           assert data['weekly100408Point2']['readsCurrentWeekPauseInRealtime'] is True
           assert data['versionCode']==100408
           assert data['weeklyStage13']['realRankingsAvailable'] is False
