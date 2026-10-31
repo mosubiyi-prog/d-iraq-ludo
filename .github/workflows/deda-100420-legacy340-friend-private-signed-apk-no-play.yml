@@ -241,6 +241,7 @@ jobs:
           meta=Path('internal-build-inputs.json')
           d=json.loads(meta.read_text())
           assert d['versionCode']==100418
+          d['versionCode']=100420  # compiled Android build number; verify.py checks manifest version
           assert d['package']=='com.diraq.ludo.d_iraq_ludo'
           assert d['completeOwnerDelivery'] is False
           assert d['financialRestoreEnabled'] is False
