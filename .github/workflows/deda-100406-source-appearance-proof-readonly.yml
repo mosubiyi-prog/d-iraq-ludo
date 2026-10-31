@@ -1,0 +1,53 @@
+name: DEDA 100406 Source Identity Score & Social Avatar Read-Only Audit
+on:
+  push:
+    branches: [deda-100406-league-active-id-avatar-frame-clock-no-play-2026-10-31]
+    paths: ['.github/workflows/deda-100406-source-appearance-proof-readonly.yml']
+permissions: {contents: read}
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Audit only known screenshot user by account and server-backed profile data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet firebase-admin
+          python - <<'PY'
+          import os,json,firebase_admin
+          from firebase_admin import credentials,firestore
+          info=json.loads(os.environ.get('PRIMARY') or os.environ.get('FALLBACK') or '{}')
+          assert info.get('project_id')=='deda-25b88'
+          firebase_admin.initialize_app(credentials.Certificate(info),{'projectId':'deda-25b88'})
+          db=firestore.client()
+          original='@DEDA-D62UEB'
+          screenshot='@DEDA-AQPYXJ'
+          def read(collection,id):
+            v=db.collection(collection).document(id).get(timeout=20)
+            return v.to_dict() if v.exists else None
+          a=read('deda_stage71_active_identifier',original)
+          if a:
+            print('STAGE71_EQUALS_SCREENSHOT_ID='+str(a.get('activeId')==screenshot))
+            print('STAGE71_IS_PREMIUM='+str(a.get('activeId')!=original))
+          score=list(db.collection('deda_weekly_direct_weeks').document('2026-10-31').collection('scores').limit(20).get(timeout=20))
+          print('CURRENT_WEEK_ANY_SCORE='+str(bool(score)))
+          print('CURRENT_WEEK_SCORE_FOR_ORIGINAL='+str(any(d.id==original for d in score)))
+          print('CURRENT_WEEK_SCORE_FOR_SCREENSHOT='+str(any(d.id==screenshot for d in score)))
+          print('CURRENT_WEEK_HAS_OWNER_NAME='+str(any(d.to_dict().get('displayName')=='سالم حسن' for d in score)))
+          for public in (original,screenshot):
+            profile=read('deda_social_profiles',public)
+            print('PROFILE_EXISTS_'+('ORIGINAL' if public==original else 'SCREENSHOT')+'='+str(profile is not None))
+            if profile:
+              print('PROFILE_AVATAR_INT_'+('ORIGINAL' if public==original else 'SCREENSHOT')+'='+str(type(profile.get('avatarStyle'))==int))
+              print('PROFILE_FRAME_INT_'+('ORIGINAL' if public==original else 'SCREENSHOT')+'='+str(type(profile.get('frameStyle'))==int))
+              print('PROFILE_APPROVED_OWNER_'+('ORIGINAL' if public==original else 'SCREENSHOT')+'='+str(bool(profile.get('ownerUid'))))
+          print('READ_ONLY_NO_USER_DATA_LOGS=True')
+          PY
