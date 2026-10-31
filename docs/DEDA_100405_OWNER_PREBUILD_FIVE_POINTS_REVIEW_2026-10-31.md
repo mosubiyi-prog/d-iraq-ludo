@@ -38,3 +38,15 @@
 5. إصدار APK واحد للفحص الشخصي دون نشر Play، بعد اكتمال النقاط والموافقة.
 
 **هذه قائمة مراجعة ما قبل النسخة، وليست إعلان جاهزية إطلاق أو صرف جوائز حيّة.**
+
+## Owner video QA — 1000101803.mp4: legacy full QA lab is embedded in 100404
+
+Source of evidence: owner's 13.31-second screen recording, inspected at sampled frames 0–13 s. First screen is the real **متصدرين المهام** leaderboard, with correct countdown **161:19:56**, but vacant rank 1–10 and personal rank. Owner taps info icon, then **فتح مختبر الدوري**, which navigates to a second screen titled **DEDA دوري مختبر**. That page explicitly says **بيانات ومكافآت تجريبية فقط** and **ماكو مستخدمين وهميين في الدوري الحقيقي**. It shows **220 XP** local task signal and **550** sample sandbox diamonds; it can switch among fictitious rank/weekly cycles (example displayed test week **23-11-2026**, not the actual league starting 31 Oct). The 150/100/50/10 prize test is NOT a real Hadaya credit.
+
+CODE VERIFIED:
+- `tools/app_stability/app_package/bind_weekly_full_qa_stage18.py` injects the **فتح مختبر الدوري** button into the *real* leaderboard info dialog, navigating to `DedaWeeklyQaFullTrialPage`.
+- `lib/deda_weekly_qa_full_trial.dart::DedaWeeklyQaSandbox` stores fake ranks/payouts in local `SharedPreferences`, under `deda_weekly_qa_earned_shadow_v1_${accountKey}`; **no Firebase points or real diamonds**.
+- `lib/deda_weekly_private_trial_local_xp.dart` counts an independent Monday-based local QA test week; it is NOT the authentic Saturday 06:00 league scoring calendar, explaining mismatch between 220 QA XP and real vacant ranks.
+- `tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py` wires the authentic route to `DedaWeeklyFirestoreDirectBridge.loadStandings/claimAfterOriginalReward` and Firestore `deda_weekly_direct_weeks/{weekId}/scores`, separate from the mock lab. Presence of lab is visually confusing but **NOT demonstrably a cause of missing Firestore scores**.
+- Owner says the premium ID eventually rendered normally, while real league still showed no user entry; independent review must focus on claim call, account identity/UID, score write + rules and parser; do NOT arbitrarily alter the premium ID.
+- Prebuild owner review: propose hiding/removing the QA lab button and its entry in final single 100405 APK, **without deleting or mutating real XP, Hadaya or database**. Wait for owner approval before declaring it removed. Keep 100404 unchanged.
