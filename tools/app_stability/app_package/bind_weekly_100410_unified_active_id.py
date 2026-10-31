@@ -224,6 +224,70 @@ def bind(dest):
         "podium ID uses common ID authority")
     league_file.write_text(league)
 
+    # Public friend profile previously displayed the original ID as a
+    # fallback and ran its OWN distinct style/Cloud Functions read. Keep all
+    # existing verified artwork but drive it from the SAME shared projection.
+    friend_file="lib/deda_stage50_verified_friend_ink_badge.dart"
+    friend=(dest/friend_file).read_text()
+    friend=one(friend,
+        "import 'package:firebase_auth/firebase_auth.dart';",
+        "import 'package:firebase_auth/firebase_auth.dart';\n"
+        "import 'package:firebase_core/firebase_core.dart';",
+        "friend safe tests with uninitialized Firebase")
+    friend=one(friend,
+        "import 'deda_qa32_spark_public_identifier_directory.dart';",
+        "import 'deda_qa32_spark_public_identifier_directory.dart';\n"
+        "import 'deda_unified_active_id_100410.dart';",
+        "friend unified display import")
+    begin=friend.index("class DedaStage50VerifiedFriendInkBadge extends StatefulWidget")
+    finish=friend.index("/// Use the SAME full Crown/Jewel ID artwork",begin)
+    friend=friend[:begin]+"""class DedaStage50VerifiedFriendInkBadge extends StatelessWidget {
+  const DedaStage50VerifiedFriendInkBadge({
+    super.key, required this.originalId, required this.fallback,
+    this.premiumCardBuilder,
+  });
+  final String originalId;
+  final Widget fallback;
+  final Widget Function(DedaStage50PublicIdStyle verified)? premiumCardBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!DedaStage50PublicIdStyleBridge.enabled ||
+        Firebase.apps.isEmpty) return fallback;
+    return DedaUnifiedActiveIdBuilder100410(
+      originalId:originalId,
+      builder:(context,active) {
+        final proof=DedaUnifiedActiveId100410.proof(originalId);
+        if(proof==null || active==null) {
+          // Never substitute the potentially retired original ID while
+          // waiting for server-authorized premium proof.
+          return const SizedBox(height:20,child:Text(
+              'جارِ تأكيد الآيدي...',textDirection:TextDirection.rtl));
+        }
+        if(active==originalId) return fallback;
+        final verified=DedaStage50PublicIdStyle(
+          requestedId:originalId,displayId:proof.displayId,
+          permanentColor:proof.fixedColor,
+        );
+        if (premiumCardBuilder != null && proof.fixedColor != null) {
+          return DedaStage50PremiumPublicCard(
+            originalId:originalId,verified:verified,
+            fallback:const SizedBox.shrink(),
+            builder:premiumCardBuilder!,
+          );
+        }
+        return DedaStage50FriendIdInkText(
+          originalId:originalId,verified:verified,
+          fallback:const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+}
+
+"""+friend[finish:]
+    (dest/friend_file).write_text(friend)
+
     # Location shares must keep immutable original IDs for routing but show
     # the current active alias, including at the recipient's stored cards.
     main_file=dest/"lib/main.dart"
@@ -279,7 +343,8 @@ def bind(dest):
 
     for path in (source,admin,"lib/deda_qa32_active_account_scope.dart",
                  "lib/deda_stage71_free_owned_use_profile.dart",
-                 "lib/deda_weekly_leaderboard_page.dart","lib/main.dart"):
+                 "lib/deda_weekly_leaderboard_page.dart","lib/main.dart",
+                 friend_file):
         meta["sourceHashes"][path]=sha(dest/path)
     meta["versionCode"]=100410
     meta["weekly100410UnifiedActiveId"]={
@@ -293,6 +358,7 @@ def bind(dest):
       "weeklyPodiumAndTop10SharedDisplay":True,
       "adminUsesSharedDisplay":True,
       "locationSenderAndRecipientUseSameVerifiedDisplay":True,
+      "friendProfilesUseUnifiedServerVerifiedAlias":True,
       "originalKeysNeverReplaced":True,
       "noXpDiamondOrRewardWrites":True,
       "phoneTestPending":True,
