@@ -8,6 +8,7 @@ import argparse,hashlib,json
 
 ROOT=Path(__file__).resolve().parents[3]
 PAGE="lib/deda_weekly_leaderboard_page.dart"
+MAIN="lib/main.dart"
 BRIDGE="lib/deda_weekly_firestore_direct_bridge.dart"
 
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -94,16 +95,37 @@ def bind(project):
         "top three duplicate frame and inset")
     assert page.count("drawOriginalEquippedAvatar!")>=2
     (project/PAGE).write_text(page)
+    # A single stable notifier combines real XP with the existing
+    # server-confirmed Stage71 display-ID revision. Do not instantiate the
+    # merged Listenable on every Flutter rebuild (would reset league state).
+    main=(project/MAIN).read_text()
+    old_signal="          refreshSignal: DedaSocialProgressWallet.xpNotifier,\n"
+    if main.count(old_signal)!=2:
+        raise ValueError("both official league refresh callbacks required")
+    main=main.replace(old_signal,
+        "          refreshSignal: dedaWeeklyXpAndVerifiedIdRefresh,\n")
+    main=once(main,"enum DedaMapStyle {",
+        """// UI-only. XP source remains original level XP; active ID source remains
+// server-confirmed Stage71, never a separate leaderboard identifier.
+final Listenable dedaWeeklyXpAndVerifiedIdRefresh = Listenable.merge([
+  DedaSocialProgressWallet.xpNotifier,
+  DedaVerifiedActiveIdStore.revision,
+]);
+
+enum DedaMapStyle {""",
+        "one shared active-ID + XP refresh notifier")
+    (project/MAIN).write_text(main)
     bridge=(project/BRIDGE).read_text()
     if ("Future.wait<Map<String, dynamic>>(" not in bridge or
         "DedaVerifiedActiveIdStore.read(authUid, pid)" not in bridge or
         "final ref = scores(w.id).doc(person.id);" not in bridge):
         raise ValueError("single confirmed ID / parallel safe score bridge missing")
-    for name in (PAGE, BRIDGE):
+    for name in (PAGE, BRIDGE, MAIN):
         meta["sourceHashes"][name]=sha(project/name)
     meta["versionCode"]=100407
     meta["weekly100407OwnerCorrections"]={
         "alreadyServerConfirmedSameUidDisplayCacheReused":True,
+        "leagueAutoRefreshesOnOwnerVerifiedIdChange":True,
         "scoreAndOriginalRouteNeverChanged":True,
         "independentAliasAndEquipmentReadsParallel":True,
         "neverBorrowAppearanceFromViewer":True,
