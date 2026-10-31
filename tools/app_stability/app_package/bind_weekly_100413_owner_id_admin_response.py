@@ -85,32 +85,14 @@ def bind(workspace):
     settings=main.index('class _DedaSettingsPageState')
     settingsEnd=main.index('  Widget _sectionTitle(',settings)
     block=main[settings:settingsEnd]
+    # Keep the original strict gateway visibility check untouched.
+    # Speed up only the ALREADY-VISIBLE tile's tap. The destination retains
+    # server-verified manager authorization and exact DEDA phone match.
     block=one(block,
       '''  bool _adminEntryVisible = false;''',
       '''  bool _adminEntryVisible = false;
-  bool _adminEntryTapBusy = false;
-  String _adminEntryVerifiedPhone = '';
-  int _adminGateRevision = 0;''',
-      'scoped verified administrative tile state')
-    block=one(block,
-      '''  Future<void> _refreshAdminEntryVisibility() async {
-    final phone''',
-      '''  Future<void> _refreshAdminEntryVisibility() async {
-    final revision=++_adminGateRevision;
-    final phone''',
-      'ignore late gateway result after session rotate')
-    print('100413_REAL_ADMIN_GATE_SCOPE',repr(block[:4800]))
-    block=one(block,
-      '''setState(() => _adminEntryVisible = allowed);''',
-      '''final livePhone=DedaPreferences.accountPhone.trim().isNotEmpty
-        ? DedaPreferences.accountPhone : DedaPreferences.phone;
-    if (revision!=_adminGateRevision || livePhone!=phone ||
-        !DedaPreferences.isLoggedIn) return;
-    setState(() {
-      _adminEntryVisible=allowed;
-      _adminEntryVerifiedPhone=allowed ? phone : '';
-    });''',
-      'keep card for same confirmed session only')
+  bool _adminEntryTapBusy = false;''',
+      'single-flight admin tap guard')
     main=main[:settings]+block+main[settingsEnd:]
 
     begin=main.index('                                final gateAllowed = await DedaBackend',settings)
@@ -123,7 +105,6 @@ def bind(workspace):
                                 // same gateway on tap. The destination admin
                                 // session still has independent server guards.
                                 if (!_adminEntryVisible ||
-                                    _adminEntryVerifiedPhone!=phone ||
                                     !DedaPreferences.isLoggedIn ||
                                     _adminEntryTapBusy) return;
                                 setState(() => _adminEntryTapBusy=true);
