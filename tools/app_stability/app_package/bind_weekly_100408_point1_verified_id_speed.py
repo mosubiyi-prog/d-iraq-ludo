@@ -93,6 +93,10 @@ def bind(project):
       uid: uid, originalId: original,
       displayId: verified.id, fixedColor: verified.color,
     );"""
+    if before not in scope:
+        pos=scope.index("class _FirebaseIdentitySource")
+        pos=scope.index("Future<DedaQa32ActiveAccountIdentity> readVerified(",pos)
+        raise ValueError("p1 real generated owner read: "+repr(scope[pos:pos+1650]))
     scope=once(scope,before,after,"owner header verified optimized read")
     assert "DedaVerifiedActiveIdStore.confirmed(" in scope
     assert "DedaVerifiedActiveIdStore.restore(uid, original)" in scope
