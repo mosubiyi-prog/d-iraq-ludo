@@ -67,6 +67,19 @@ jobs:
           python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path(__import__('os').environ['RUNNER_TEMP'])/'deda-original-100396'
+          v=(p/'lib/deda_stage71_free_owned_use_profile.dart').read_text()
+          a=v.index('  static Future<String> active(String originalId) async {')
+          z=v.index('  static Future<void> use(',a)
+          print('ACTIVE_VERIFIED_METHOD_ASSEMBLED_SOURCE',repr(v[a:z][:2400]))
+          main=(p/'lib/main.dart').read_text().splitlines()
+          tags=('class _DedaSocialProfile','class _DedaSocialHub','جار التحقق من المعر',
+                'DedaDiamondsWallet','friendCount','friendsCount')
+          match=[i for i,s in enumerate(main) if any(w in s for w in tags)]
+          print('PROFILE_MATCH_LOCATIONS',[(i+1,main[i][:150]) for i in match[:60]])
+          PY
           python3 tools/app_stability/app_package/bind_weekly_100408_point1_verified_id_speed.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100408_point2_pause_notice.py "$RUNNER_TEMP/deda-original-100396"
       - name: Locate original account profile staging fields for point 3 without modifying them
