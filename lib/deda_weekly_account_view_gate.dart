@@ -103,7 +103,7 @@ class _DedaWeeklyAccountViewGateState
       _poll?.cancel();
       _poll = null;
       // Build next frame at the actual start time and show shared standings.
-      if (start != null) setState(() {});
+      setState(() {});
     }
   }
 
@@ -211,7 +211,7 @@ class _DedaWeeklyAccountViewGateState
     if (start != null) {
       final remaining = start.toUtc().difference(_now());
       if (remaining > Duration.zero) {
-        final total = remaining.inSeconds + 1;
+        final total = remaining.inSeconds;
         final hours = (total ~/ 3600).toString().padLeft(2, '0');
         final minutes = ((total ~/ 60) % 60).toString().padLeft(2, '0');
         final seconds = (total % 60).toString().padLeft(2, '0');
