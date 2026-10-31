@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'deda_admin_league_live_data.dart';
-import 'deda_weekly_league_clock.dart';
 
 /// Only mounted after the current GENERAL MANAGER has passed the original
 /// DEDA admin profile/active-status gate. Uses original shared score docs.
@@ -130,12 +129,18 @@ class _DedaAdminLeagueLivePodiumState extends State<DedaAdminLeagueLivePodium> {
     return StreamBuilder<List<DedaAdminLeagueRow>>(
       stream: _rows,
       builder: (context, snap) {
-        if (snap.hasError) return Text(widget.isArabic
-            ? 'تعذر قراءة النتائج الحقيقية.' : 'Live ranks unavailable.');
-        if (!snap.hasData) return const LinearProgressIndicator();
+        if (snap.hasError) {
+          return Text(widget.isArabic
+              ? 'تعذر قراءة النتائج الحقيقية.' : 'Live ranks unavailable.');
+        }
+        if (!snap.hasData) {
+          return const LinearProgressIndicator();
+        }
         final top = snap.data!.take(3).toList();
-        if (top.isEmpty) return Text(widget.isArabic
-            ? 'لا يوجد متصدرون حتى الآن.' : 'No leaders yet.');
+        if (top.isEmpty) {
+          return Text(widget.isArabic
+              ? 'لا يوجد متصدرون حتى الآن.' : 'No leaders yet.');
+        }
         const icons = [Icons.emoji_events, Icons.workspace_premium,
           Icons.military_tech];
         const colors = [Color(0xFFD7A828), Color(0xFF9BA9B4), Color(0xFFB87846)];
@@ -201,15 +206,19 @@ class _DedaAdminLeagueLiveArchiveState
         FutureBuilder<List<DedaAdminLeagueWeek>>(
           future: _weeks,
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Text(widget.isArabic
-                ? 'تعذر قراءة سجل الأسابيع.' : 'Week history unavailable.');
+            if (snapshot.hasError) {
+              return Text(widget.isArabic
+                  ? 'تعذر قراءة سجل الأسابيع.' : 'Week history unavailable.');
+            }
             if (!snapshot.hasData) {
               return const LinearProgressIndicator();
             }
             final weeks = snapshot.data!;
-            if (weeks.isEmpty) return Text(widget.isArabic
-                ? 'لا توجد أسابيع مكتملة بعد.'
-                : 'No completed league weeks yet.');
+            if (weeks.isEmpty) {
+              return Text(widget.isArabic
+                  ? 'لا توجد أسابيع مكتملة بعد.'
+                  : 'No completed league weeks yet.');
+            }
             return Column(children: [
               for (final week in weeks)
                 ExpansionTile(
