@@ -141,6 +141,10 @@ def bind(destination):
           permanentColor:proof?.fixedColor,
         );""",
         'premium without published foil still displays verified new ID text')
+    t=one(t,
+        'if (premiumCardBuilder != null && proof.fixedColor != null) {',
+        'if (premiumCardBuilder != null && verified.permanentColor != null) {',
+        'render premium foil only with actual verified color')
     friend.write_text(t)
     for path in (helper,'lib/deda_unified_active_id_100410.dart',
                  'lib/deda_stage50_verified_friend_ink_badge.dart'):
