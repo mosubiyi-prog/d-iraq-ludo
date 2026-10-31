@@ -370,16 +370,23 @@ def bind(dest):
     # account protection is the entry guard above.
     if "createLocationShare(" not in share:
         raise ValueError("original location-share backend operation missing")
-    gps_before="""        final position = await _currentPosition();
-        if (position == null) return;"""
-    gps_after="""        final position = await _currentPosition();
+    import re
+    # Match the awaited GPS CALL, not the baseline's whitespace layout.
+    # Restrict to the send body; never alter initialization or original keys.
+    gps_calls=list(re.finditer(r"await\s+_currentPosition\s*\(\s*\)\s*;",
+                               share[send:]))
+    if len(gps_calls)!=1:
+        positions=[m.start() for m in re.finditer(r"_currentPosition",share[send:])]
+        raise ValueError("100410 GPS send anchor count="+str(len(gps_calls))+
+                         " occurrences="+str(positions))
+    after_gps=send+gps_calls[0].end()
+    share=share[:after_gps]+"""
         // GPS can resolve after logout or switching from A to B.
         // Do not submit A's original routing key while B is signed in.
         if (!mounted || !DedaPreferences.isLoggedIn ||
             DedaPreferences.phone != _ownerPhoneAtOpen) return;
-        if (position == null) return;"""
-    share=one(share,gps_before,gps_after,
-              "GPS continuation must reject changed account")
+"""+share[after_gps:]
+    print("100410_GPS_AWAIT_ACCOUNT_GUARD_INSERTED")
     main=main[:share_begin]+share+main[share_end:]
     print("100410_SHARE_ACCOUNT_SWITCH_AND_LATE_GPS_PROTECTED")
 
