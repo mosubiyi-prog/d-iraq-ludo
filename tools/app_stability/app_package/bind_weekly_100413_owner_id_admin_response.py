@@ -82,80 +82,27 @@ def bind(workspace):
     });'''
     main=one(main,home,after,'home owner proof nonblocking prewarm')
 
+    # Real assembled Settings uses DedaSectionState and wraps requests in
+    # DedaSectionOperationContext.wait. Preserve all SectionState/auth
+    # guards as-is and remove ONLY the duplicate gateway read on button tap.
     settings=main.index('class _DedaSettingsPageState')
-    settingsEnd=main.index('  Widget _sectionTitle(',settings)
-    block=main[settings:settingsEnd]
-    # Keep the original strict gateway visibility check untouched.
-    # Speed up only the ALREADY-VISIBLE tile's tap. The destination retains
-    # server-verified manager authorization and exact DEDA phone match.
-    block=one(block,
-      '''  bool _adminEntryVisible = false;''',
-      '''  bool _adminEntryVisible = false;
-  bool _adminEntryTapBusy = false;''',
-      'single-flight admin tap guard')
-    main=main[:settings]+block+main[settingsEnd:]
-
-    print('100413_REAL_SETTINGS_OPEN',repr(main[settings:settings+5200]),flush=True)
-    for kw in ('currentDedaAccountCanSeeAdminEntry','currentUserIsAdmin','onPressed: () async','دخول الإدارة'):
-        print('100413_SETTINGS_ANCHOR',kw,main.find(kw,settings),flush=True)
-    begin=main.index('                                final gateAllowed = await DedaBackend',settings)
-    end=main.index('                              icon: const Icon(',begin)
-    old=main[begin:end]
-    if old.count('currentDedaAccountCanSeeAdminEntry')!=1 or old.count('currentUserIsAdmin')!=1 or old.count('currentAdminSessionMatchesDedaEntry')!=1 or old.count('Navigator.push')!=1:
-        raise ValueError('100413 admin button structure changed; refuse patch')
-    replacement='''                                // The tile is ALREADY server-verified for
-                                // this exact DEDA phone. Never re-read the
-                                // same gateway on tap. The destination admin
-                                // session still has independent server guards.
-                                if (!_adminEntryVisible ||
-                                    !DedaPreferences.isLoggedIn ||
-                                    _adminEntryTapBusy) return;
-                                setState(() => _adminEntryTapBusy=true);
-                                try {
-                                  // ONE session+phone match instead of
-                                  // gateway + admin role + session rechecks.
-                                  // false opens the actual admin LOGIN,
-                                  // not the protected dashboard.
-                                  final verifiedAdmin = await DedaBackend
-                                      .currentAdminSessionMatchesDedaEntry(
-                                        phone: phone,
-                                      ).timeout(const Duration(seconds: 10));
-                                  final livePhone = DedaPreferences.accountPhone
-                                          .trim().isNotEmpty
-                                      ? DedaPreferences.accountPhone
-                                      : DedaPreferences.phone;
-                                  if (!mounted || !DedaPreferences.isLoggedIn ||
-                                      livePhone!=phone) return;
-                                  Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => verifiedAdmin
-                                        ? DedaAdminDashboardPage(
-                                            isArabic:DedaLanguageState.isArabic)
-                                        : DedaAdminLoginPage(
-                                            isArabic:DedaLanguageState.isArabic,
-                                            dedaPhone:phone),
-                                  ));
-                                } catch (_) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content:Text(dedaText(
-                                        'تعذر تأكيد الجلسة الإدارية. أعد المحاولة.',
-                                        'Unable to verify admin session. Retry.'))),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) {
-                                    setState(() => _adminEntryTapBusy=false);
-                                  }
-                                }
-                              },
-'''
-    main=main[:begin]+replacement+main[end:]
-    main=one(main,
-        '''OutlinedButton.icon(
-                              onPressed: () async {''',
-        '''OutlinedButton.icon(
-                              onPressed: _adminEntryTapBusy ? null : () async {''',
-        'disable duplicate admin entry taps')
+    gate=main.index('final gateAllowed =',settings)
+    terminal=main.index(';',gate)+1
+    old=main[gate:terminal]
+    if ('currentDedaAccountCanSeeAdminEntry(' not in old or
+        'DedaSectionOperationContext.wait' not in old):
+        raise ValueError('100413 on-tap gateway read unexpected; refuse')
+    # The visible admin tile ALREADY came from live server owner gateway
+    # check, enforced by _refreshAdminEntryVisibility and fail-closed logic.
+    # The existing admin session + matching-phone guards remain after this.
+    main=main[:gate]+"""final gateAllowed = _adminEntryVisible &&
+                                    DedaPreferences.isLoggedIn;"""+main[terminal:]
+    # No admin role, login, phone match or server permission is cached for
+    # the protected dashboard. Existing checks proceed in original order.
+    if 'currentUserIsAdmin()' not in main[gate:gate+1800]:
+        raise ValueError('100413 current user admin verification not preserved')
+    if 'currentAdminSessionMatchesDedaEntry(' not in main[gate:gate+2200]:
+        raise ValueError('100413 session+phone gate not preserved')
     mainfile.write_text(main)
 
     for name in ['lib/deda_unified_active_id_100410.dart','lib/main.dart']:
