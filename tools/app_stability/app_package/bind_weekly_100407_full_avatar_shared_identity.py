@@ -9,6 +9,7 @@ import argparse,hashlib,json
 ROOT=Path(__file__).resolve().parents[3]
 PAGE="lib/deda_weekly_leaderboard_page.dart"
 MAIN="lib/main.dart"
+SCOPE="lib/deda_qa32_active_account_scope.dart"
 WRAPPER="lib/deda_weekly_owner_pilot_bridge.dart"
 BRIDGE="lib/deda_weekly_firestore_direct_bridge.dart"
 
@@ -91,6 +92,64 @@ def bind(project):
     page=page[:begin]+podium+page[finish:]
     assert page.count("drawOriginalEquippedAvatar!")>=2
     (project/PAGE).write_text(page)
+    # The original 100406 stable profile already validates Stage71 ownership,
+    # but its UI waits for repeated serial reads on every widget mount.
+    # Apply only AFTER the protected baseline has been reconstructed.
+    # A same-UID, Stage71-confirmed last display may be painted immediately;
+    # ordinary authenticated server revalidation always follows it.
+    scope=(project/SCOPE).read_text()
+    scope=once(scope,
+        "import 'deda_stage71_free_owned_use_profile.dart';",
+        "import 'deda_stage71_free_owned_use_profile.dart';\n"
+        "import 'deda_verified_active_id_store.dart';",
+        "shared active-ID store import after prepare")
+    scope=once(scope,
+        """    if (_proof != null) setState(() => _proof = null);
+    if (dedaStabilityIdentityPilot && _paused) return;""",
+        """    // Same-account refresh must not flash the retired original ID.
+    // On UID/original change, clear the previous account proof immediately.
+    if (_proof != null && (uid == null ||
+        !_proof!.verifiedFor(uid, original))) {
+      setState(() => _proof = null);
+    }
+    if (dedaStabilityIdentityPilot && _paused) return;""",
+        "no old-ID flicker on verified same account")
+    scope=once(scope,
+        """    try {
+      Future<DedaQa32ActiveAccountIdentity> readVerified() =>""",
+        """    // Presentation only. A fresh device with no previously confirmed
+    // per-UID state waits for the ordinary verified owner server read.
+    if (widget._source is _FirebaseIdentitySource) {
+      final saved = DedaVerifiedActiveIdStore.read(uid, original);
+      if (saved != null && saved.wellFormed &&
+          _currentUid() == uid && widget.originalId == original &&
+          (_proof?.displayId != saved.displayId ||
+           _proof?.fixedColor != saved.fixedColor)) {
+        setState(() => _proof = DedaQa32ActiveAccountIdentity(
+          uid: uid, originalId: original,
+          displayId: saved.displayId, fixedColor: saved.fixedColor,
+        ));
+      }
+    }
+    try {
+      Future<DedaQa32ActiveAccountIdentity> readVerified() =>""",
+        "prefill verified same-UID ID only")
+    scope=once(scope,
+        """      setState(() => _proof = next);
+    } catch (_) {""",
+        """      if (widget._source is _FirebaseIdentitySource) {
+        // A genuine Stage71-verified read updates the ONE UI source shared
+        // with league. Never treats this cache as purchase or auth authority.
+        DedaVerifiedActiveIdStore.confirmed(
+          uid: uid, originalId: original, displayId: next.displayId,
+          fixedColor: next.fixedColor,
+        );
+      }
+      setState(() => _proof = next);
+    } catch (_) {""",
+        "server-confirmed alias projection into shared owner cache")
+    (project/SCOPE).write_text(scope)
+
     # A single stable notifier combines real XP with the existing
     # server-confirmed Stage71 display-ID revision. Do not instantiate the
     # merged Listenable on every Flutter rebuild (would reset league state).
@@ -133,11 +192,12 @@ enum DedaMapStyle {""",
         "standingRefresh.value += 1" not in bridge or
         "final ref = scores(w.id).doc(person.id);" not in bridge):
         raise ValueError("single confirmed ID / parallel safe score bridge missing")
-    for name in (PAGE, BRIDGE, MAIN, WRAPPER):
+    for name in (PAGE, BRIDGE, MAIN, WRAPPER, SCOPE):
         meta["sourceHashes"][name]=sha(project/name)
     meta["versionCode"]=100407
     meta["weekly100407OwnerCorrections"]={
         "alreadyServerConfirmedSameUidDisplayCacheReused":True,
+        "profileServerReadSeedsSharedCache":True,
         "leagueAutoRefreshesOnOwnerVerifiedIdChange":True,
         "scoreReadNeverBlocksOnEightPendingRetries":True,
         "scoreAndOriginalRouteNeverChanged":True,
