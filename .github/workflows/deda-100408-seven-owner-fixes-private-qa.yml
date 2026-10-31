@@ -87,6 +87,9 @@ jobs:
           for n in indexes[:30]:
               print('COUNTER_CONTEXT',n+1,' | '.join(
                   lines[max(0,n-2):min(len(lines),n+3)])[:650])
+          for begin,end in ((30580,30720),(31235,31310)):
+              for index in range(begin-1,min(end,len(lines))):
+                  print('PROFILE_DETAIL',index+1,lines[index][:220])
           PY
       - name: Verify seven points and catch all 100406 Flutter compile errors before Gradle
         working-directory: ${{ runner.temp }}/deda-original-100396
