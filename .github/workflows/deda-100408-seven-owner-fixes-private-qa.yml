@@ -8,6 +8,8 @@ on:
       - 'tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py'
       - 'lib/deda_weekly_maintenance_status_100408.dart'
       - 'lib/deda_admin_league_active_id_100408.dart'
+      - 'lib/deda_weekly_prize_plan_100408.dart'
+      - 'firestore.rules'
       - '.github/workflows/deda-100408-seven-owner-fixes-private-qa.yml'
       - 'lib/deda_weekly_firestore_direct_bridge_100406.dart'
       - '.github/workflows/deda-100407-league-shared-identity-avatar-frame-private-apk.yml'
@@ -70,6 +72,22 @@ jobs:
           python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$RUNNER_TEMP/deda-original-100396"
           python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$RUNNER_TEMP/deda-original-100396"
+      - name: Audit owner profile transient values before editing point three
+        working-directory: ${{ runner.temp }}/deda-original-100396
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          lines=Path('lib/main.dart').read_text().splitlines()
+          terms=('DedaSocialProgressWallet','DedaUnifiedCurrencyTotals',
+                 'dedaProfileVisibleDiamonds','friendCount','friendsCount',
+                 'مدير','myDiamonds')
+          indexes=[i for i,line in enumerate(lines) if any(t in line for t in terms)]
+          print('OWNER_PROFILE_COUNTER_OCCURRENCES',len(indexes))
+          for n in indexes[:30]:
+              print('COUNTER_CONTEXT',n+1,' | '.join(
+                  lines[max(0,n-2):min(len(lines),n+3)])[:650])
+          PY
       - name: Verify seven points and catch all 100406 Flutter compile errors before Gradle
         working-directory: ${{ runner.temp }}/deda-original-100396
         shell: bash
