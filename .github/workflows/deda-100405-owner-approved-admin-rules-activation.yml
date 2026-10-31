@@ -1,0 +1,73 @@
+name: DEDA 100405 Owner Authorized Additive Admin Permissions Activation (NO PLAY)
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100405-owner-approved-admin-rules-activation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100405-live-firestore-rules-owner-approved
+  cancel-in-progress: false
+jobs:
+  audit-test-deploy-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Reconstruct only owner-approved admin rules into exact ACTIVE policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet google-auth requests
+          python3 tools/deda_100405_additive_live_admin_rules.py prepare
+      - name: Verify exact merged production policy with original real league + owner/staff/user attacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix tests/firestore-rules --no-audit --no-fund --no-save firebase-tools@14
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100405-live-policy-guard --only firestore \
+            --config "$RUNNER_TEMP/deda-100405-live-admin-config.json" \
+            'node --test tests/firestore-rules/weekly-direct-admin-100405.test.mjs'
+          echo 'PRODUCTION_MERGED_EMULATOR_PASS'
+      - name: Refuse stale rule release before exact additive deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100405_additive_live_admin_rules.py predeploy
+      - name: Deploy ONLY protected GM pause freeze private notice and immutable audit
+        shell: bash
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/deda-100405-service-identity.json
+        run: |
+          set -euo pipefail
+          tests/firestore-rules/node_modules/.bin/firebase deploy \
+            --only firestore:rules --project deda-25b88 \
+            --config "$RUNNER_TEMP/deda-100405-live-admin-config.json" \
+            --non-interactive
+      - name: Independently read back published cloud rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100405_additive_live_admin_rules.py verify
+      - name: Erase temporary cloud credentials and full rule source
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/deda-100405-service-identity.json" \
+            "$RUNNER_TEMP/deda-100405-live-admin-merged.rules" \
+            "$RUNNER_TEMP/deda-100405-live-admin-config.json" \
+            "$RUNNER_TEMP/deda-100405-live-admin-release.sha"
