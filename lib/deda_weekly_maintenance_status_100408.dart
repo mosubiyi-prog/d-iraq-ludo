@@ -44,18 +44,29 @@ class DedaWeeklyMaintenanceStatus extends StatelessWidget {
         final reason = (data?['reason'] ?? '').toString();
         final maintenance = reason.contains('صيانة') ||
             reason.toLowerCase().contains('maintenance');
-        final text = maintenance
-            ? '🛠️ الدوري تحت الصيانة مؤقتاً • المدة المتوقعة 30 إلى 90 دقيقة • نقاط المستوى والماسات محفوظة'
-            : '⏸️ الدوري موقوف مؤقتاً من الإدارة • نقاط المستوى والماسات محفوظة';
+        final headline = maintenance
+            ? '🛠️ الدوري تحت الصيانة • غالباً من 30 إلى 90 دقيقة'
+            : '⏸️ الدوري موقوف مؤقتاً من الإدارة';
+        const details = 'نقاط المستوى والماسات محفوظة';
         return Semantics(
           liveRegion: true,
-          label: text,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(text, textDirection: TextDirection.rtl,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                  color: Color(0xFFFFD16A))),
+          label: '$headline. $details',
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(headline, textDirection: TextDirection.rtl,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFFFD16A))),
+              ),
+              const Text(details, maxLines: 1,
+                style: TextStyle(fontSize: 10,
+                  color: Color(0xFFAAC8EA))),
+            ],
           ),
         );
       },
