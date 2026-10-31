@@ -1,0 +1,47 @@
+name: DEDA 100405 Firebase Auth Owner League Type Check READ ONLY
+on:
+  push:
+    branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
+    paths: ['.github/workflows/deda-100405-league-auth-provider-readonly.yml']
+permissions: {contents: read}
+jobs:
+  compare-current-owner-auth-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Check Firebase owner profile UID account provider mismatch WITHOUT ids
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet firebase-admin
+          python - <<'PY'
+          import os,json,firebase_admin
+          from firebase_admin import credentials,firestore,auth
+          info=json.loads(os.environ.get('PRIMARY') or os.environ.get('FALLBACK') or '{}')
+          assert info.get('project_id')=='deda-25b88'
+          firebase_admin.initialize_app(credentials.Certificate(info),{'projectId':'deda-25b88'})
+          db=firestore.client()
+          owner=db.collection('deda_share_ids').document('@DEDA-D62UEB').get().to_dict() or {}
+          uid=owner.get('ownerUid')
+          if not isinstance(uid,str): raise SystemExit('OWNER_UID_NOT_VERIFIED')
+          user=db.collection('users').document(uid).get().to_dict() or {}
+          session=db.collection('deda_sessions').document(uid).get().to_dict() or {}
+          print('ORIGINAL_ACCOUNT_SESSION_MATCH='+str(bool(user.get('accountKey') and user.get('accountKey')==session.get('accountKey'))))
+          try:
+            authuser=auth.get_user(uid)
+            print('ORIGINAL_OWNER_AUTH_UID_PRESENT=True')
+            print('ORIGINAL_OWNER_AUTH_ACCOUNT_DISABLED='+str(authuser.disabled))
+            print('ORIGINAL_OWNER_AUTH_HAS_EMAIL='+str(bool(authuser.email)))
+            print('ORIGINAL_OWNER_AUTH_HAS_LINKED_PROVIDER='+str(bool(authuser.provider_data)))
+            print('ORIGINAL_OWNER_AUTH_ANONYMOUS_COMPATIBLE='+str(not authuser.email and not authuser.provider_data and not authuser.disabled))
+          except Exception as e:
+            print('FIREBASE_AUTH_INSPECTION_ERROR='+type(e).__name__)
+          print('READ_ONLY=True; NO_PRIVATE_IDS_OR_AUTH_TOKENS_LOGGED')
+          PY
