@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'deda_backend.dart';
+import 'deda_admin_league_live_widgets.dart';
 
 /// Isolated management entry for a FUTURE real weekly league.
 ///
@@ -95,7 +96,7 @@ class _DedaAdminLeaguePageState extends State<DedaAdminLeaguePage>
                     ),
                   ),
                 )
-              : DedaAdminLeagueOverview(isArabic: widget.isArabic),
+              : DedaAdminLeagueOverview(isArabic: widget.isArabic, liveDataEnabled: true),
     );
   }
 }
@@ -106,9 +107,10 @@ class _DedaAdminLeaguePageState extends State<DedaAdminLeaguePage>
 /// issuer, server calendar, top-ten ranker, authenticated profile/friend
 /// links, owned frames, earned-diamond wallet and admin-only rules exist.
 class DedaAdminLeagueOverview extends StatelessWidget {
-  const DedaAdminLeagueOverview({super.key, required this.isArabic});
+  const DedaAdminLeagueOverview({super.key, required this.isArabic, this.liveDataEnabled = false});
 
   final bool isArabic;
+  final bool liveDataEnabled;
 
   String t(String ar, String en) => isArabic ? ar : en;
 
@@ -220,7 +222,10 @@ class DedaAdminLeagueOverview extends StatelessWidget {
                       ),
                       const SizedBox(height: 7),
                       Text(
-                        t('مرحلة اختبار — لم يُفعّل الدوري الحقيقي بعد',
+                        liveDataEnabled
+                          ? t('ترتيب الدوري مرتبط بقاعدة Firebase الحقيقية — الجوائز والتحكم قيد الإكمال',
+                              'Live standings connected; rewards and controls not enabled yet')
+                          : t('مرحلة اختبار — لم يُفعّل الدوري الحقيقي بعد',
                           'QA preview — real league not yet enabled'),
                         style: const TextStyle(
                           color: Color(0xFFFFDC9B),
@@ -267,34 +272,40 @@ class DedaAdminLeagueOverview extends StatelessWidget {
                 _panel(
                   icon: Icons.leaderboard_outlined,
                   title: t('المتصدرون العشرة', 'Top ten competitors'),
-                  child: _notice(t(
+                  child: liveDataEnabled
+                    ? DedaAdminLeagueLiveStandings(isArabic: isArabic)
+                    : _notice(t(
                     'لا توجد نتائج خادم موثوقة للعرض. ستظهر المراكز 1–10 '
                     'ونقاط XP الأسبوعية بعد الربط الحقيقي، بدون أسماء تجريبية.',
                     'No trusted server standings yet. Ranks 1–10 and '
                     'weekly XP will appear only from the real backend.',
-                  )),
+                  )), 
                 ),
                 _panel(
                   icon: Icons.emoji_events_outlined,
                   title: t('المراكز الثلاثة الأولى', 'Top three podium'),
-                  child: _notice(t(
+                  child: liveDataEnabled
+                    ? DedaAdminLeagueLivePodium(isArabic: isArabic)
+                    : _notice(t(
                     'الذهبي والفضي والبرونزي سيُعرضون من ترتيب الأسبوع '
                     'المؤكد، وليس من بيانات هاتف المدير.',
                     'Gold, silver and bronze will come from verified '
                     'weekly standings, never the manager phone.',
-                  )),
+                  )), 
                 ),
                 _panel(
                   icon: Icons.calendar_month_outlined,
                   title: t('السجل الأسبوعي والأرشيف الشهري',
                     'Weekly history and monthly archive'),
-                  child: _notice(t(
+                  child: liveDataEnabled
+                    ? DedaAdminLeagueLiveArchive(isArabic: isArabic)
+                    : _notice(t(
                     'هيكل السجل الشهري خضع لاختبارات معزولة. الأرشيف '
                     'الحقيقي وصلاحية المدير العام للخادم ما زالا غير مربوطين.',
                     'The monthly archive model passed isolated tests. '
                     'Real history and server-enforced manager access '
                     'are not connected yet.',
-                  )),
+                  )), 
                 ),
                 _panel(
                   icon: Icons.diamond_outlined,
