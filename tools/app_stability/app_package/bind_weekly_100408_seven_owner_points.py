@@ -211,8 +211,10 @@ def bind(project):
         "point7 import manager editor")
     # Dynamic exact amounts replace the four original static summary rows.
     # The original 370-masa base plan remains only for older static previews.
-    left=admin.index("                       _prizeRow(t('الأول'")
-    right=admin.index("                       const SizedBox(height: 7),",left)
+    start=admin.index("_prizeRow(t('الأول'")
+    left=admin.rfind("\n",0,start)+1
+    marker=admin.index("const SizedBox(height: 7),",start)
+    right=admin.rfind("\n",0,marker)+1
     prior=admin[left:right]
     if prior.count("_prizeRow(")!=5:
         raise ValueError("unexpected fixed original prize summary")
