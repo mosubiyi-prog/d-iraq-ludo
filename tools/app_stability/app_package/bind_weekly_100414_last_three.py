@@ -58,14 +58,15 @@ def bind(path):
       "import 'package:cloud_firestore/cloud_firestore.dart';\n"
       "import 'package:firebase_auth/firebase_auth.dart';",
       'home auth-ready watcher import')
-    s=one(s,
-      '''class _HomePageState extends State<HomePage> {
-  final searchController = TextEditingController();''',
-      '''class _HomePageState extends State<HomePage> {
+    import re
+    home_class=re.search(r'class _HomePageState extends State<HomePage>[^\\{]*\\{',s)
+    if home_class is None or s.count('class _HomePageState extends State<HomePage>')!=1:
+        raise ValueError('100414 unique assembled HomeState missing')
+    pos=home_class.end()
+    s=s[:pos]+'''
   StreamSubscription<User?>? _ownerAuthReady;
   String? _lastOwnerRead;
-  final searchController = TextEditingController();''',
-      'one owner subscription per home')
+'''+s[pos:]
     old='''      if (DedaPreferences.isLoggedIn) {
         final openingPhone=DedaPreferences.phone;
         final original=DedaBackend.personalShareIdForPhone(openingPhone);
