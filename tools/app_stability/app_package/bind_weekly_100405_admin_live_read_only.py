@@ -84,8 +84,8 @@ def bind(project):
     # Seven-point owner bundle: eliminate the confusing QA sandbox entry
     # from the ACTUAL public league info popup, not its isolated Flutter tests.
     # This only alters the workspace after verifying the 100404 base SHA.
-    qa_start = "                      if (widget.privateQaAccountScope != null &&\\n"
-    qa_end = "                          child: const Text('فتح مختبر الدوري'),\\n                        ),\\n"
+    qa_start = "                      if (widget.privateQaAccountScope != null &&\n"
+    qa_end = "                          child: const Text('فتح مختبر الدوري'),\n                        ),\n"
     if page.count(qa_start) != 1 or page.count(qa_end) != 1:
         raise ValueError('Original QA lab entry changed; refuse destructive UI patch')
     left = page.index(qa_start)
@@ -98,11 +98,11 @@ def bind(project):
 
     # Keep the two-line clock host, its width, the podium geometry and
     # the Saturday 06:00/00:00 time boundaries unchanged.
-    old_clock = "                      fitted(clock.countdown,\\n                          size: 17 * scale, color: gold, ltr: true),"
+    old_clock = "                      fitted(clock.countdown,\n                          size: 17 * scale, color: gold, ltr: true),"
     new_clock = (
-        "                      fitted(clock.daysAndHours,\\n"
-        "                          size: 15 * scale, color: gold),\\n"
-        "                      fitted(clock.minutesAndSeconds,\\n"
+        "                      fitted(clock.daysAndHours,\n"
+        "                          size: 15 * scale, color: gold),\n"
+        "                      fitted(clock.minutesAndSeconds,\n"
         "                          size: 11 * scale, color: silver),"
     )
     if page.count(old_clock) != 1 or page.count("deda-weekly-inline-countdown") != 1:
@@ -115,8 +115,8 @@ def bind(project):
     # belong ONLY to this 100405 feature bundle, never the rollback 100404.
     clock_module = p/'lib/deda_weekly_league_clock.dart'
     clock_upgrade = ROOT/'lib/deda_weekly_league_clock_100405.dart'
-    if clock_module.read_text().count('class DedaWeeklyLeagueClock') != 1 or \\
-       clock_module.read_text().count('String get countdown') != 1 or \\
+    if clock_module.read_text().count('class DedaWeeklyLeagueClock') != 1 or \
+       clock_module.read_text().count('String get countdown') != 1 or \
        clock_upgrade.read_text().count('String get daysAndHours') != 1:
         raise ValueError('Could not preserve original authoritative weekly clock')
     shutil.copy2(clock_upgrade, clock_module)
