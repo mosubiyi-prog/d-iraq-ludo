@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'deda_backend.dart';
 import 'deda_admin_league_live_widgets.dart';
+import 'deda_admin_league_control_widgets.dart';
 
 /// Isolated management entry for a FUTURE real weekly league.
 ///
@@ -239,7 +240,9 @@ class DedaAdminLeagueOverview extends StatelessWidget {
                 _panel(
                   icon: Icons.toggle_off_outlined,
                   title: t('التحكم بالدوري', 'League controls'),
-                  child: Column(
+                  child: liveDataEnabled
+                    ? const DedaAdminLeagueControlPanel()
+                    : Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _notice(t(
@@ -307,6 +310,12 @@ class DedaAdminLeagueOverview extends StatelessWidget {
                     'are not connected yet.',
                   )), 
                 ),
+                if (liveDataEnabled)
+                  _panel(
+                    icon: Icons.lock_clock_outlined,
+                    title: t('مراجعة نقاط المستخدمين', 'Review participant XP'),
+                    child: const DedaAdminLeagueFreezePanel(),
+                  ),
                 _panel(
                   icon: Icons.diamond_outlined,
                   title: t('خطة الجوائز الأسبوعية', 'Weekly prize plan'),
