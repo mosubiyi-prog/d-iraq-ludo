@@ -225,12 +225,15 @@ def bind(project):
     page=one(page,
         """                    pill('💎 ${prize(place)}',
                         accent, navy),""",
-        """                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-                      decoration: BoxDecoration(color: accent,
-                        borderRadius: BorderRadius.circular(28)),
-                      child: DedaWeeklyPrizeAmount(
-                        place: place, color: navy, fontSize: 14 * scale),
+        """                    SizedBox(
+                      height: 15 * scale,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(color: accent,
+                          borderRadius: BorderRadius.circular(28)),
+                        child: Center(child: DedaWeeklyPrizeAmount(
+                          place: place, color: navy, fontSize: 10 * scale)),
+                      ),
                     ),""",
         "point7 dynamic prize on top three")
     page=one(page,
