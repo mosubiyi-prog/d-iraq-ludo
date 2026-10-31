@@ -182,34 +182,9 @@ def bind(path):
     # authorization through a timeout or local cache.
     f.write_text(s)
 
-    f=p/'lib/admin_pages.dart'
-    s=f.read_text()
-    a=s.index('class _DedaAdminLoginPageState')
-    b=s.index('  Future<bool> _forcePasswordChange()',a)
-    login=s[a:b]
-    login=one(login,
-      '''      await _saveIdentity();
-      final profile = await DedaBackend.currentAdminProfile();
-      final gateMatches =
-          await DedaBackend.currentAdminSessionMatchesDedaEntry(
-        phone: widget.dedaPhone,
-      );''',
-      '''      // Session and linked DEDA phone are checked on SERVER first.
-      // That check refreshes the admin profile, reused below for password
-      // policy without a second redundant Firestore admin read.
-      final gateMatches =
-          await DedaBackend.currentAdminSessionMatchesDedaEntry(
-        phone: widget.dedaPhone,
-      );''',
-      'single verified server admin profile read at first login')
-    login=one(login,
-      '''      if (profile['mustChangePassword'] == true) {''',
-      '''      await _saveIdentity();
-      final profile = await DedaBackend.currentAdminProfile();
-      if (profile['mustChangePassword'] == true) {''',
-      'cached after server authentication for password policy')
-    s=s[:a]+login+s[b:]
-    f.write_text(s)
+    # Preserve signed-app's actual administrator login page SectionState
+    # guards intact; the backend now makes noncritical sign-in follow-ups
+    # asynchronous, without changing credential, session or phone checks.
 
     for name in [extra,'lib/deda_unified_active_id_100410.dart','lib/main.dart',
                  'lib/deda_backend.dart','lib/admin_pages.dart']:
