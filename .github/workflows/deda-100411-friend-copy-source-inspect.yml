@@ -70,7 +70,8 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          root=Path('${RUNNER_TEMP}/deda-original-100396')/lib
+          import os
+          root=Path(os.environ['RUNNER_TEMP'])/'deda-original-100396'/'lib'
           for fn,finders in {
               'deda_stage50_verified_friend_ink_badge.dart':['class DedaStage50VerifiedFriendInkBadge','class DedaStage50PremiumPublicCard'],
               'main.dart':['DedaStage50VerifiedFriendInkBadge(', 'class DedaShareLocationPage', 'Future<void> _send() async', 'DedaQa32PublicRecipientResolver', 'class DedaFriends', 'class DedaSocial', 'otherPublicId(', 'createLocationShare('],
