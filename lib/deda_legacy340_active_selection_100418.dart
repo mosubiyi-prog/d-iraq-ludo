@@ -90,7 +90,9 @@ class DedaLegacy340ActiveSelection100418 {
 
   static void _fail((String, String) key, Object error) {
     if (_uid() != key.$1 || !_users.containsKey(key)) return;
-    final changed = _confirmed.remove(key) != null || _failed.add(key);
+    final wasVisible = _confirmed.remove(key) != null;
+    final markedFailed = _failed.add(key);
+    final changed = wasVisible || markedFailed;
     if (error is FirebaseException) {
       debugPrint('DEDA 100418 active read error: ${error.code}');
     } else {
@@ -109,7 +111,9 @@ class DedaLegacy340ActiveSelection100418 {
       return;
     }
     _timeouts.remove(key)?.cancel();
-    final change = _confirmed[key] != selected || _failed.remove(key);
+    final changedId = _confirmed[key] != selected;
+    final recovered = _failed.remove(key);
+    final change = changedId || recovered;
     _confirmed[key] = selected;
     if (change) _notify();
   }
