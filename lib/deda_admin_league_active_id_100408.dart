@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_qa32_spark_public_identifier_directory.dart';
@@ -16,6 +17,10 @@ class DedaAdminLeagueActiveId extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (Firebase.apps.isEmpty) {
+      return Text(originalId, textDirection: TextDirection.ltr,
+        style: style ?? const TextStyle(fontSize: 11));
+    }
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final own = uid == null ? null :
         DedaVerifiedActiveIdStore.read(uid, originalId);
