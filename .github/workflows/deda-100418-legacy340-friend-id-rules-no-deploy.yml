@@ -1,0 +1,44 @@
+name: DEDA 100418 Legacy 340 Friend IDs Real-Rules Emulator ONLY (NO DEPLOY)
+on:
+  push:
+    branches: [deda-100418-legacy340-public-active-read-candidate-no-deploy-2026-10-31]
+    paths:
+      - '.github/workflows/deda-100418-legacy340-friend-id-rules-no-deploy.yml'
+      - 'test/deda_100418_legacy340_active_public_rule.test.cjs'
+      - 'tools/deda_100418_legacy340_public_active_read_candidate_no_deploy.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules-security-legacy340:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Read production rules and stage local-only friend ID read candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_100418_legacy340_public_active_read_candidate_no_deploy.py
+      - name: Emulate real baseline plus single narrow public ID read change
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts \
+            @firebase/rules-unit-testing@4.0.0 firebase@11.10.0
+          npx --yes firebase-tools@13.35.1 emulators:exec \
+            --project demo-deda-100418-legacy340 \
+            --config /tmp/deda100418-emulator-config.json \
+            --only firestore --non-interactive \
+            'node --test test/deda_100418_legacy340_active_public_rule.test.cjs'
+          echo 'PASS_100418_NO_LIVE_FIREBASE_CHANGE_NO_PLAY_NO_USER_DATA_MODIFICATION'
