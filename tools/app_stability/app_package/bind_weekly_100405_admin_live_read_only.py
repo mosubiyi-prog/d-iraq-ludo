@@ -13,6 +13,7 @@ NEW_FILES=[
  'lib/deda_admin_league_live_widgets.dart',
  'lib/deda_admin_league_controls.dart',
  'lib/deda_admin_league_control_widgets.dart',
+ 'lib/deda_admin_league_reward_status.dart',
 ]
 PAGE='lib/deda_admin_league_page.dart'
 
