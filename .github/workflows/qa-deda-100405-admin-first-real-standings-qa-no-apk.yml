@@ -2,7 +2,7 @@ name: DEDA 100405 Admin Stage1 Real Firebase Standings Archive NO APK
 on:
   push:
     branches: [deda-100405-admin-five-points-integrated-no-apk-until-qa-2026-10-31]
-    paths: ['.github/workflows/qa-deda-100405-admin-first-real-standings-qa-no-apk.yml','lib/deda_admin_league_page.dart','lib/deda_admin_league_live_data.dart','lib/deda_admin_league_live_widgets.dart','tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py','test/deda_admin_league_live_projection_test.dart','test/deda_admin_league_live_widgets_test.dart']
+    paths: ['.github/workflows/qa-deda-100405-admin-first-real-standings-qa-no-apk.yml','lib/deda_admin_league_page.dart','lib/deda_admin_league_live_data.dart','lib/deda_admin_league_live_widgets.dart','lib/deda_admin_league_controls.dart','lib/deda_admin_league_control_widgets.dart','tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py','test/deda_admin_league_live_projection_test.dart','test/deda_admin_league_live_widgets_test.dart']
   workflow_dispatch:
 permissions:
   contents: read
@@ -69,7 +69,7 @@ jobs:
           # build; Stage22 competitor/tap dependencies must be present.
           test -s lib/deda_weekly_competitor_public_card.dart
           test -s lib/deda_weekly_leaderboard_tap_surface.dart
-          dart analyze --no-fatal-warnings lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_community_outbox.dart lib/deda_weekly_league_clock.dart lib/deda_admin_league_live_data.dart lib/deda_admin_league_live_widgets.dart
+          dart analyze --no-fatal-warnings lib/deda_admin_league_page.dart lib/deda_weekly_leaderboard_page.dart lib/deda_weekly_leaderboard_safe_screen.dart lib/deda_weekly_competitor_public_card.dart lib/deda_weekly_leaderboard_tap_surface.dart lib/deda_weekly_snapshot_decode.dart lib/deda_weekly_account_view_gate.dart lib/deda_weekly_owner_pilot_bridge.dart lib/deda_weekly_firestore_direct_bridge.dart lib/deda_weekly_community_outbox.dart lib/deda_weekly_league_clock.dart lib/deda_admin_league_live_data.dart lib/deda_admin_league_live_widgets.dart lib/deda_admin_league_controls.dart lib/deda_admin_league_control_widgets.dart
           cp "$GITHUB_WORKSPACE/test/deda_admin_league_page_stage26_test.dart" test/
           cp "$GITHUB_WORKSPACE/test/deda_weekly_qa_full_trial_test.dart" test/
           cp "$GITHUB_WORKSPACE/test/deda_weekly_100404_tasks_cta_and_inline_clock_test.dart" test/deda_weekly_stage28_tasks_cta_navigation_test.dart
@@ -100,6 +100,8 @@ jobs:
           assert data['weeklyStage27']['adminGeneralManagerOnly'] is True
           assert data['weekly100405AdminProgress']['readOnlyLiveTopTen'] is True
           assert data['weekly100405AdminProgress']['diamondSettlementActive'] is False
+          assert data['weekly100405AdminProgress']['managerPauseFreezeSourceCreated'] is True
+          assert data['weekly100405AdminProgress']['manualLeagueControlsActive'] is False
           assert data['weekly100405AdminProgress']['apkDelivered'] is False
           assert data['weeklyStage27']['liveLeagueControlsEnabled'] is False
           assert data['weeklyStage27']['actualPrizePayoutEnabled'] is False
