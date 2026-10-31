@@ -2626,49 +2626,14 @@ service cloud.firestore {
            == request.resource.data.frozen;
     }
 
-    // DEDA 100408: increases to prize PLAN only; cannot issue diamonds.
+    // 100408: GM-only ten-place prize PLAN increases while current league paused.
     match /deda_weekly_direct_prize_plans/{weekId} {
       allow get: if signedIn();
       allow list, delete: if false;
       function validPrizePlan(d) {
-        return d.keys().hasOnly([
-              'weekId','amounts','reason','updatedAt','updatedBy'])
-          && d.keys().hasAll([
-              'weekId','amounts','reason','updatedAt','updatedBy'])
-          && weekId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}
-    match /deda_weekly_direct_admin_events/{eventId} {
-      allow get, list: if exactWeeklyLeagueGeneralManager();
-      allow update, delete: if false;
-      allow create: if exactWeeklyLeagueGeneralManager()
-        && request.resource.data.keys().hasOnly([
-          'action','weekId','publicId','reason','createdAt','createdBy'])
-        && request.resource.data.keys().hasAll([
-          'action','weekId','publicId','reason','createdAt','createdBy'])
-        && request.resource.data.action in [
-          'pause', 'resume', 'freeze', 'unfreeze', 'prizes_increase']
-        && request.resource.data.weekId is string
-        && request.resource.data.weekId.size() <= 24
-        && request.resource.data.publicId is string
-        && request.resource.data.publicId.size() <= 30
-        && request.resource.data.reason is string
-        && request.resource.data.reason.size() >= 8
-        && request.resource.data.reason.size() <= 300
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.createdBy == request.auth.uid;
-    }
-
-    match /system_counters/{counterId} {
-      allow read, write: if isGeneralManager()
-        || (
-          counterId == 'place_approval'
-          && hasAdminPermission('approvePlaces')
-        );
-    }
-  }
-}
-
-// DEDA location sharing v1 deployment marker
-)
+        return d.keys().hasOnly(['weekId','amounts','reason','updatedAt','updatedBy'])
+          && d.keys().hasAll(['weekId','amounts','reason','updatedAt','updatedBy'])
+          && weekId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')
           && d.weekId == weekId
           && d.amounts is list && d.amounts.size() == 10
           && d.amounts[0] is int
@@ -2711,10 +2676,10 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/deda_weekly_direct_control/active).data.weekId == weekId
           && get(/databases/$(database)/documents/deda_weekly_direct_control/active).data.paused == true;
       }
-      allow create: if exactWeeklyLeagueGeneralManager() &&
-          pausedActiveWeek() && validPrizePlan(request.resource.data);
-      allow update: if exactWeeklyLeagueGeneralManager() &&
-          pausedActiveWeek() && validPrizePlan(request.resource.data)
+      allow create: if exactWeeklyLeagueGeneralManager()
+          && pausedActiveWeek() && validPrizePlan(request.resource.data);
+      allow update: if exactWeeklyLeagueGeneralManager()
+          && pausedActiveWeek() && validPrizePlan(request.resource.data)
           && resource.data.weekId == weekId
           && resource.data.amounts is list
           && resource.data.amounts.size() == 10
@@ -2740,7 +2705,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll([
           'action','weekId','publicId','reason','createdAt','createdBy'])
         && request.resource.data.action in [
-          'pause', 'resume', 'freeze', 'unfreeze']
+          'pause', 'resume', 'freeze', 'unfreeze', 'prizes_increase']
         && request.resource.data.weekId is string
         && request.resource.data.weekId.size() <= 24
         && request.resource.data.publicId is string
