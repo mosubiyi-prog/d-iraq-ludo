@@ -184,7 +184,7 @@ def bind(path):
     # catch and insert transport catches immediately BEFORE it. A transport
     # timeout is not proof of a revoked admin permission.
     import re
-    caught=list(re.finditer(r'\\}\\s*catch\\s*\\([^)]*\\)\\s*\\{',block))
+    caught=list(re.finditer(r'\}\s*catch\s*\([^)]*\)\s*\{',block))
     if not caught or 'return false' not in block[caught[-1].start():]:
         raise ValueError('100414 outer admin gateway catch missing')
     where=caught[-1].start()
