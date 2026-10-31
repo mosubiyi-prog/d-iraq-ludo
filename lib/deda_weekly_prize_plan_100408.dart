@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'deda_backend.dart';
 import 'deda_weekly_league_clock.dart';
@@ -117,6 +118,10 @@ class DedaWeeklyPrizeAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (place < 1 || place > 10) return const SizedBox.shrink();
+    if (Firebase.apps.isEmpty) {
+      return Text('💎 ${DedaWeeklyPrizePlan.minimum[place - 1]} ماسة',
+        style: TextStyle(color: color, fontSize: fontSize));
+    }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: DedaWeeklyPrizePlan.ref(DedaWeeklyPrizePlan.thisWeekId).snapshots(),
       builder: (context, snapshot) {
@@ -153,7 +158,9 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
   @override
   void initState() {
     super.initState();
-    _original = DedaWeeklyPrizePlan.fetch(DedaWeeklyPrizePlan.thisWeekId);
+    _original = Firebase.apps.isEmpty
+        ? Future.value(List.of(DedaWeeklyPrizePlan.minimum))
+        : DedaWeeklyPrizePlan.fetch(DedaWeeklyPrizePlan.thisWeekId);
   }
   @override
   void dispose() {
@@ -189,6 +196,7 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
 
   @override
   Widget build(BuildContext context) {
+    if (Firebase.apps.isEmpty) return const Text('إدارة الجوائز تحتاج اتصال Firebase.');
     final weekId = DedaWeeklyPrizePlan.thisWeekId;
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection(
