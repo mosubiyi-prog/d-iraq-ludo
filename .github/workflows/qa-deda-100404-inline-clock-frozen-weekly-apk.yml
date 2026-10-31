@@ -121,7 +121,7 @@ jobs:
           assert data['weekly100404InlineClock']['fullLeaderboardAlwaysVisible'] is True
           assert 'deda-weekly-inline-countdown' in Path('lib/deda_weekly_leaderboard_page.dart').read_text()
           assert "'الأسبوع السابق'" not in Path('lib/deda_weekly_leaderboard_page.dart').read_text()
-          assert "widget.privateTrialXp != null && !previousWeek && !view.verified" in (Path('lib/deda_weekly_leaderboard_page.dart')).read_text()
+          assert "widget.privateTrialXp != null && !view.verified" in (Path('lib/deda_weekly_leaderboard_page.dart')).read_text()
           manifest=Path('android/app/src/main/AndroidManifest.xml')
           assert manifest.read_text().count('ca-app-pub-2512641627784244~4635932278')==1
           data['platformHashes'][str(manifest)]=hashlib.sha256(manifest.read_bytes()).hexdigest()
