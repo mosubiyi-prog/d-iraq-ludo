@@ -39,7 +39,8 @@ class DedaWeeklyPrizePlan {
   }
 
   static Future<List<int>> fetch(String weekId) async {
-    final doc = await ref(weekId).get(const GetOptions(source: Source.server));
+    final doc = await ref(weekId).get(const GetOptions(source: Source.server))
+        .timeout(const Duration(seconds: 12));
     return amounts(doc.data());
   }
 
@@ -184,6 +185,64 @@ class DedaAdminLeaguePrizeSummary extends StatelessWidget {
   }
 }
 
+/// Local draft validation only. Does not authorize or write prizes.
+class DedaPrizeDraftGuard100412 {
+  static String? validate(List<int> proposed, List<int>? saved, String reason) {
+    final text = reason.trim();
+    if (text.length < 8 || text.length > 200) {
+      return 'اكتب سبب تعديل الجوائز من 8 إلى 200 حرف.';
+    }
+    if (saved == null || proposed.length != 10 || saved.length != 10) {
+      return 'جارِ تأكيد مبالغ الجوائز الحالية من الخادم.';
+    }
+    var raised = false;
+    for (var i = 0; i < 10; i++) {
+      if (proposed[i] < DedaWeeklyPrizePlan.minimum[i] ||
+          proposed[i] > 1000000) {
+        return 'تأكد أن مبالغ الجوائز ضمن الحدود المسموحة.';
+      }
+      if (proposed[i] < saved[i]) {
+        return 'لا يمكن تخفيض مبلغ سبق اعتماده.';
+      }
+      if (proposed[i] > saved[i]) raised = true;
+    }
+    if (!raised) return 'ارفع جائزة مركز واحد على الأقل قبل الحفظ.';
+    return null;
+  }
+
+  static String errorMessage(Object error) {
+    if (error is FirebaseException) {
+      switch (error.code) {
+        case 'permission-denied':
+          return 'رفض الخادم تعديل الجوائز. تحقق من صلاحية المدير العام.';
+        case 'unavailable':
+        case 'deadline-exceeded':
+          return 'تعذر تأكيد الحفظ من الخادم. تحقق من الاتصال وحالة الجوائز قبل إعادة المحاولة.';
+      }
+    }
+    final code = error.toString();
+    if (code.contains('league-must-be-paused-by-manager')) {
+      return 'لا يمكن الحفظ حتى يؤكد الخادم أن الدوري موقوف لهذا الأسبوع.';
+    }
+    if (code.contains('no-prize-increases-requested')) {
+      return 'لا توجد زيادة جديدة لحفظها.';
+    }
+    if (code.contains('only-increases-are-allowed')) {
+      return 'لا يمكن خفض جوائز سبق اعتمادها.';
+    }
+    if (code.contains('invalid-week-prize-editor-input')) {
+      return 'انتهت صلاحية الأسبوع أو بيانات التعديل غير مكتملة.';
+    }
+    if (code.contains('active-manager-required')) {
+      return 'صلاحية المدير العام غير مؤكدة؛ لم تنفذ عملية الحفظ.';
+    }
+    if (code.contains('timeout') || code.contains('unavailable')) {
+      return 'تعذر التأكد من الحفظ الآن. راجع المبالغ الحالية قبل إعادة المحاولة.';
+    }
+    return 'تعذر تأكيد حفظ الجوائز. أعد قراءة الخطة ثم حاول مرة أخرى.';
+  }
+}
+
 class DedaAdminLeaguePrizeEditor extends StatefulWidget {
   const DedaAdminLeaguePrizeEditor({super.key});
   @override
@@ -191,32 +250,76 @@ class DedaAdminLeaguePrizeEditor extends StatefulWidget {
 }
 class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor> {
   late Future<List<int>> _original;
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>>? _controlStream;
+  late final String _openedWeekId;
   final _reason = TextEditingController();
   List<int> _edited = List.of(DedaWeeklyPrizePlan.minimum);
+  List<int>? _lastConfirmed;
+  String? _errorMessage;
   bool _initialized = false, _saving = false;
   int _formVersion = 0;
 
   @override
   void initState() {
     super.initState();
-    _original = Firebase.apps.isEmpty
-        ? Future.value(List.of(DedaWeeklyPrizePlan.minimum))
-        : DedaWeeklyPrizePlan.fetch(DedaWeeklyPrizePlan.thisWeekId);
+    _openedWeekId = DedaWeeklyPrizePlan.thisWeekId;
+    final ready = Firebase.apps.isNotEmpty;
+    // An inline snapshots() call in build creates a NEW stream on every
+    // keystroke/setState. That discards the form and may lose typed values.
+    _controlStream = ready
+        ? FirebaseFirestore.instance.collection('deda_weekly_direct_control')
+            .doc('active').snapshots(includeMetadataChanges: true)
+        : null;
+    _original = ready
+        ? DedaWeeklyPrizePlan.fetch(_openedWeekId)
+        : Future.value(List.of(DedaWeeklyPrizePlan.minimum));
+    _reason.addListener(_reasonChanged);
+  }
+
+  void _reasonChanged() {
+    if (!mounted) return;
+    setState(() => _errorMessage = null);
+  }
+
+  void _retryRead() {
+    if (_saving) return;
+    setState(() {
+      _original = DedaWeeklyPrizePlan.fetch(_openedWeekId);
+      _initialized = false;
+      _lastConfirmed = null;
+      _errorMessage = null;
+    });
   }
   @override
   void dispose() {
+    _reason.removeListener(_reasonChanged);
     _reason.dispose();
     super.dispose();
   }
 
   Future<void> _save(String weekId) async {
     if (_saving) return;
-    setState(() => _saving = true);
+    final problem = DedaPrizeDraftGuard100412.validate(
+        _edited, _lastConfirmed, _reason.text);
+    if (problem != null) {
+      setState(() => _errorMessage = problem);
+      return; // Invalid drafts must NOT attempt any Firebase write.
+    }
+    if (weekId != _openedWeekId) {
+      setState(() => _errorMessage =
+          'بدأ أسبوع جديد؛ أغلق هذه الصفحة وافتحها لتأكيد جوائزه.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _errorMessage = null;
+    });
     try {
+      // No automatic write retry: a slow transaction may commit after timeout.
       await DedaWeeklyPrizePlan.increase(
         weekId: weekId,
         values: List<int>.from(_edited),
-        reason: _reason.text,
+        reason: _reason.text.trim(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -224,12 +327,12 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
       setState(() {
         _original = DedaWeeklyPrizePlan.fetch(weekId);
         _initialized = false;
+        _lastConfirmed = null;
         _formVersion++;
       });
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-          'لم تُحفظ الجوائز؛ تحقق من إيقاف الدوري وصلاحيات Firebase والأرقام.')));
+    } catch (error) {
+      if (mounted) setState(() =>
+          _errorMessage = DedaPrizeDraftGuard100412.errorMessage(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -239,11 +342,21 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
   Widget build(BuildContext context) {
     if (Firebase.apps.isEmpty) return const Text('إدارة الجوائز تحتاج اتصال Firebase.');
     final weekId = DedaWeeklyPrizePlan.thisWeekId;
+    if (weekId != _openedWeekId) {
+      return const Text('بدأ أسبوع جديد؛ أعد فتح إدارة الجوائز لتحديث البيانات.');
+    }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection(
-        'deda_weekly_direct_control').doc('active').snapshots(),
+      stream: _controlStream,
       builder: (context, control) {
+        if (control.hasError) {
+          return const Text('تعذر التحقق من حالة إيقاف الدوري من Firebase.');
+        }
         if (!control.hasData) return const LinearProgressIndicator();
+        // A cache-only "paused" flag cannot authorize a new prize write.
+        if (control.data!.metadata.hasPendingWrites ||
+            control.data!.metadata.isFromCache) {
+          return const Text('جارِ تأكيد إيقاف الدوري من الخادم...');
+        }
         final c = control.data!.data();
         final paused = c?['weekId'] == weekId && c?['paused'] == true;
         if (!paused) {
@@ -254,12 +367,19 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
           future: _original,
           builder: (context, snap) {
             if (!snap.hasData) return snap.hasError
-                ? const Text('تعذر تأكيد خطة الجوائز من Firebase.')
+                ? Column(children: [
+                    const Text('تعذر تأكيد خطة الجوائز من Firebase.'),
+                    TextButton(onPressed: _retryRead,
+                      child: const Text('إعادة قراءة الجوائز')),
+                  ])
                 : const LinearProgressIndicator();
             if (!_initialized) {
               _edited = List<int>.from(snap.data!);
               _initialized = true;
             }
+            _lastConfirmed = List<int>.from(snap.data!);
+            final formError = DedaPrizeDraftGuard100412.validate(
+                _edited, _lastConfirmed, _reason.text);
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -286,13 +406,21 @@ class _DedaAdminLeaguePrizeEditorState extends State<DedaAdminLeaguePrizeEditor>
                 const SizedBox(height: 6),
                 Text('إجمالي الجوائز: ${_edited.fold<int>(0, (a, b) => a+b)} ماسة'),
                 TextField(
+                  key: const Key('deda_100412_prize_reason'),
                   controller: _reason, maxLength: 200,
                   decoration: const InputDecoration(
                     labelText: 'سبب تعديل الجوائز (8 أحرف على الأقل)'),
                 ),
+                if (_errorMessage != null)
+                  Text(_errorMessage!,
+                      style: const TextStyle(color: Colors.red)),
+                if (formError != null && _errorMessage == null)
+                  Text(formError,
+                      style: const TextStyle(color: Colors.deepOrange)),
                 FilledButton.icon(
                   key: const Key('deda_gm_save_weekly_prize_increase'),
-                  onPressed: _saving ? null : () => _save(weekId),
+                  onPressed: _saving || formError != null
+                      ? null : () => _save(weekId),
                   icon: const Icon(Icons.save_outlined),
                   label: Text(_saving ? 'جارِ التحقق والحفظ...' : 'حفظ زيادة الجوائز'),
                 ),
