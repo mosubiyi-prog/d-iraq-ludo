@@ -357,11 +357,12 @@ def bind(dest):
     _personalId = DedaBackend.personalShareIdForPhone(DedaPreferences.phone);""",
         "snapshot opening identity for old page protection")
     send=share.index("Future<void> _send() async {")
-    busy=share.index("    if (_sending) return;",send)
-    share=share[:busy]+"""    // Never continue a stale page's send under another/loginless account.
+    body=send+len("Future<void> _send() async {")
+    share=share[:body]+"""
+    // A page opened under A cannot validate or send anything under B/logout.
     if (!DedaPreferences.isLoggedIn ||
         DedaPreferences.phone != _ownerPhoneAtOpen) return;
-"""+share[busy:]
+"""+share[body:]
     create=share.index("      await DedaBackend.createLocationShare(",send)
     share=share[:create]+"""      // GPS can finish after logout or A->B switching. The initial
       // original-ID route is private to the account that opened the page.
