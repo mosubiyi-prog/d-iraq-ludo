@@ -26,11 +26,16 @@ def bind(project):
         if not (project/p).is_file() or sha(project/p)!=h:
             raise ValueError("p2 baseline SHA drift "+p)
     page=(project/PAGE).read_text()
-    page=once(page,"    this.reviewNotice,\n","    this.reviewNotice,\n    this.maintenanceNotice,\n","constructor")
-    page=once(page,"  final String? reviewNotice;\n",
-        "  final String? reviewNotice;\n"
-        "  /// Server-read current week GM pause; never inferred from the phone.\n"
-        "  final String? maintenanceNotice;\n","field")
+    page=once(page,
+        "    this.drawOriginalEquippedAvatar,\n",
+        "    this.drawOriginalEquippedAvatar,\n    this.maintenanceNotice,\n",
+        "leaderboard widget constructor")
+    page=once(page,
+        "      drawOriginalEquippedAvatar;\n",
+        "      drawOriginalEquippedAvatar;\n"
+        "  /// Server-read current-week pause; never based on the local phone.\n"
+        "  final String? maintenanceNotice;\n",
+        "leaderboard widget field")
     page=once(page,
         "child: fitted(view.reviewNotice != null\n",
         "child: fitted(widget.maintenanceNotice != null\n"
