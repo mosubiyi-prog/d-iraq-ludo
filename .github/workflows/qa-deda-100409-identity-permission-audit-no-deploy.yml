@@ -39,5 +39,13 @@ jobs:
           for path in ['deda_public_active_aliases','deda_public_alias_routes',
                        'deda_stage71_active_identifier','deda_social_profiles']:
             print('LIVE_FIRESTORE_MATCH_'+path.upper()+'='+str('match /'+path+'/' in source))
+          for name in ['deda_public_active_aliases','deda_stage71_active_identifier']:
+            anchor='match /'+name+'/'
+            start=source.find(anchor)
+            if start>=0:
+              piece=source[start:start+1900]
+              clauses=[line.strip() for line in piece.splitlines() if
+                line.strip().startswith(('allow get:','allow read:','allow list:','allow create:','allow update:'))]
+              print('LIVE_ID_RULE_CLAUSES_'+name.upper()+'='+str(clauses[:6]))
           print('LIVE_FIRESTORE_RULES_READ_ONLY=TRUE')
           PY
