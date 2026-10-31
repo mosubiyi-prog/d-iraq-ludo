@@ -8,7 +8,7 @@ import {doc, collection, getDoc, getDocs, setDoc, updateDoc,
 const source=readFileSync('firestore.rules','utf8');
 const PROJECT='demo-deda-weekly-100402-direct';
 const week='2026-10-31';
-const start=Timestamp.fromDate(new Date('2026-10-31T03:00:00Z'));
+const start=Timestamp.fromDate(new Date(Date.now()-60000)); // emulator test clock only
 const account1='07701234567',account2='07707654321';
 const id1='@DEDA-AB1234',id2='@DEDA-CD5678';
 let env,a,b,other,anonymous;
