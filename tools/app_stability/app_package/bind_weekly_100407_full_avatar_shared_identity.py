@@ -9,6 +9,7 @@ import argparse,hashlib,json
 ROOT=Path(__file__).resolve().parents[3]
 PAGE="lib/deda_weekly_leaderboard_page.dart"
 MAIN="lib/main.dart"
+WRAPPER="lib/deda_weekly_owner_pilot_bridge.dart"
 BRIDGE="lib/deda_weekly_firestore_direct_bridge.dart"
 
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -105,22 +106,40 @@ def bind(project):
 final Listenable dedaWeeklyXpAndVerifiedIdRefresh = Listenable.merge([
   DedaSocialProgressWallet.xpNotifier,
   DedaVerifiedActiveIdStore.revision,
+  DedaWeeklyOwnerPilotBridge.standingRefresh,
 ]);
 
 enum DedaMapStyle {""",
         "one shared active-ID + XP refresh notifier")
     (project/MAIN).write_text(main)
+    # Same canonical task receipt retry: first paint is never blocked by up to
+    # eight sequential Firebase network writes; update after true delivery.
+    wrapper=(project/WRAPPER).read_text()
+    wrapper=once(wrapper,
+        "import 'deda_weekly_firestore_direct_bridge.dart';",
+        "import 'package:flutter/foundation.dart';\\n"
+        "import 'deda_weekly_firestore_direct_bridge.dart';",
+        "reactive score notifier import")
+    wrapper=once(wrapper,
+        "  const DedaWeeklyOwnerPilotBridge._();",
+        """  const DedaWeeklyOwnerPilotBridge._();
+  static Listenable get standingRefresh =>
+      DedaWeeklyFirestoreDirectBridge.standingRefresh;""",
+        "single standings completion notifier")
+    (project/WRAPPER).write_text(wrapper)
     bridge=(project/BRIDGE).read_text()
     if ("Future.wait<Map<String, dynamic>>(" not in bridge or
         "DedaVerifiedActiveIdStore.read(authUid, pid)" not in bridge or
+        "standingRefresh.value += 1" not in bridge or
         "final ref = scores(w.id).doc(person.id);" not in bridge):
         raise ValueError("single confirmed ID / parallel safe score bridge missing")
-    for name in (PAGE, BRIDGE, MAIN):
+    for name in (PAGE, BRIDGE, MAIN, WRAPPER):
         meta["sourceHashes"][name]=sha(project/name)
     meta["versionCode"]=100407
     meta["weekly100407OwnerCorrections"]={
         "alreadyServerConfirmedSameUidDisplayCacheReused":True,
         "leagueAutoRefreshesOnOwnerVerifiedIdChange":True,
+        "scoreReadNeverBlocksOnEightPendingRetries":True,
         "scoreAndOriginalRouteNeverChanged":True,
         "independentAliasAndEquipmentReadsParallel":True,
         "neverBorrowAppearanceFromViewer":True,
