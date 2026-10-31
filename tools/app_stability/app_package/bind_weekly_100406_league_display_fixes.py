@@ -27,9 +27,30 @@ def bind(project):
         if not f.is_file() or sha(f)!=h:raise ValueError('INPUT_DRIFT '+rel)
     # 100405 renderer already supports genuine externally validated equipment,
     # but SafeScreen never forwarded the owner's real DedaFramedAvatar painter.
-    source=(ROOT/'lib/deda_weekly_leaderboard_safe_screen_100406.dart').read_text()
+    # Preserve the 100405 assembled screen, including the original
+    # localTrialAccountKey constructor parameter. Replacing it with an older
+    # repository template breaks the signed Android release compilation.
+    source=(project/SAFE).read_text()
+    assert source.count('drawOriginalEquippedAvatar') == 0
+    anchors=[
+        ('    this.onOpenDailyTasks,\\n',
+         '    this.onOpenDailyTasks,\\n    this.drawOriginalEquippedAvatar,\\n'),
+        ('  final VoidCallback? onOpenDailyTasks;\\n',
+         '  final VoidCallback? onOpenDailyTasks;\\n'
+         '  final Widget Function(BuildContext, int, int, double)? '
+         'drawOriginalEquippedAvatar;\\n'),
+        ('    return DedaWeeklyLeaderboardPage(\\n'
+         '      onOpenDailyTasks: widget.onOpenDailyTasks,\\n',
+         '    return DedaWeeklyLeaderboardPage(\\n'
+         '      onOpenDailyTasks: widget.onOpenDailyTasks,\\n'
+         '      drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar,\\n'),
+    ]
+    for anchor, replacement in anchors:
+        if source.count(anchor)!=1:
+            raise ValueError('100405 safe-screen exact anchor missing: '+anchor)
+        source=source.replace(anchor,replacement,1)
+    assert 'this.localTrialAccountKey' in source
     assert 'drawOriginalEquippedAvatar: widget.drawOriginalEquippedAvatar' in source
-    assert (project/SAFE).read_text().count('drawOriginalEquippedAvatar')==0
     (project/SAFE).write_text(source)
 
     before=(project/MAIN).read_text()
