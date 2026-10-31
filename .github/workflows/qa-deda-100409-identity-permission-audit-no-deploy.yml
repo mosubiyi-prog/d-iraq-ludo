@@ -47,5 +47,6 @@ jobs:
               clauses=[line.strip() for line in piece.splitlines() if
                 line.strip().startswith(('allow get:','allow read:','allow list:','allow create:','allow update:'))]
               print('LIVE_ID_RULE_CLAUSES_'+name.upper()+'='+str(clauses[:6]))
+              print('LIVE_ID_RULE_HEAD_'+name.upper()+'='+repr(piece[:1450]))
           print('LIVE_FIRESTORE_RULES_READ_ONLY=TRUE')
           PY
