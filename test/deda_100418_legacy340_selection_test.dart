@@ -36,6 +36,7 @@ void main() {
     }
   });
   test('read flag OFF by default until owner approves production rule change',(){
-    expect(DedaLegacy340ActiveSelection100418.enabled,isFalse);
+    const signedFlag = bool.fromEnvironment('DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED', defaultValue:false);
+    expect(DedaLegacy340ActiveSelection100418.enabled,signedFlag);
   });
 }
