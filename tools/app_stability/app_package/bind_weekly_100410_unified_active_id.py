@@ -200,28 +200,26 @@ def bind(dest):
   }
 
 """+anchor,1)
-    original="""child: fitted(details?.activePublicId ?? '—',
-                       size: 11, color: silver, weight: FontWeight.w500,
-                       ltr: true),"""
-    target="""child: _originalFromWeekly(row) == null
+    first=league.index("fitted(details?.activePublicId")
+    first_start=league.rfind("child:",0,first)
+    if first_start<0 or first-first_start>35:
+        raise ValueError("league label not inside expected child")
+    first_end=league.index("),",first)+2
+    league=league[:first_start]+"""child: _originalFromWeekly(row) == null
                     ? fitted(details?.activePublicId ?? '—',
                         size: 11, color: silver, weight: FontWeight.w500,
                         ltr: true)
                     : DedaUnifiedActiveIdLabel100410(
                         originalId:_originalFromWeekly(row)!,
-                        style:TextStyle(fontSize:11,color:silver)), """
-    league=one(league,original,target,
-        "top10 public label uses common ID authority")
-    league=one(league,
-        """fitted(profile(row)?.activePublicId ?? '—',
-                         size: 11 * scale, color: silver, ltr: true),""",
-        """_originalFromWeekly(row) == null
+                        style:TextStyle(fontSize:11,color:silver)),"""+league[first_end:]
+    podium=league.index("fitted(profile(row)?.activePublicId")
+    podium_end=league.index("),",podium)+2
+    league=league[:podium]+"""_originalFromWeekly(row) == null
                       ? fitted(profile(row)?.activePublicId ?? '—',
                           size: 11 * scale, color: silver, ltr: true)
                       : DedaUnifiedActiveIdLabel100410(
                           originalId:_originalFromWeekly(row)!,
-                          style:TextStyle(fontSize:11*scale,color:silver)),""",
-        "podium ID uses common ID authority")
+                          style:TextStyle(fontSize:11*scale,color:silver)),"""+league[podium_end:]
     league_file.write_text(league)
 
     # Public friend profile previously displayed the original ID as a
