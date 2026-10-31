@@ -88,6 +88,8 @@ class DedaAdminLeagueControls {
     const clearedNotice =
         'اكتملت مراجعة نقاط الدوري ورفعت الإدارة التجميد عن مشاركتك.';
     final doc = review(weekId, publicId);
+    final noticeRef = _db.collection('deda_weekly_direct_notices')
+        .doc(weekId).collection('users').doc(publicId);
     final events = _db.collection('deda_weekly_direct_admin_events').doc();
     final batch = _db.batch();
     batch.set(doc, <String, dynamic>{
@@ -96,6 +98,16 @@ class DedaAdminLeagueControls {
       'frozen': frozen,
       'notice': frozen ? frozenNotice : clearedNotice,
       'reason': why,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': who,
+    });
+    // Privacy: notice is readable by the participant, administrative reason
+    // stays only in the manager review document. Same atomic write batch.
+    batch.set(noticeRef, <String, dynamic>{
+      'weekId': weekId,
+      'publicId': publicId,
+      'frozen': frozen,
+      'notice': frozen ? frozenNotice : clearedNotice,
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': who,
     });
