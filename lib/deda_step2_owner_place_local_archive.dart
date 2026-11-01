@@ -120,6 +120,24 @@ class DedaStep2OwnerPlaceServerRow {
   final bool fromCache, pendingWrites;
 }
 
+/// Compare fields semantically, never using JSON map insertion order from
+/// Firestore, which is not guaranteed to match the source map order.
+bool _sameArchiveBody(Map<String, dynamic> old,
+    Map<String, dynamic> source) {
+  const fields = ['format','kind','accountKey','sourceUid','captureId'];
+  if (!fields.every((k) => old[k] == source[k])) return false;
+  final records = old['records'];
+  final expected = source['records'];
+  if (records is! Map || expected is! Map ||
+      records.length != dedaStep2OwnerPlaceSourceKeys.length ||
+      expected.length != dedaStep2OwnerPlaceSourceKeys.length) {
+    return false;
+  }
+  return dedaStep2OwnerPlaceSourceKeys.every((key) =>
+      records.containsKey(key) && expected.containsKey(key) &&
+      records[key] == expected[key]);
+}
+
 abstract class DedaStep2OwnerPlaceCloudIo {
   Future<DedaStep2OwnerPlaceServerRow> read(
       String accountKey, String captureId);
@@ -154,9 +172,7 @@ class DedaStep2OwnerPlaceFirestore implements DedaStep2OwnerPlaceCloudIo {
       if (existing.exists) {
         final recorded = existing.data() ?? {};
         if (recorded.length != source.length + 1 ||
-            !source.entries.every((e) => e.key == 'records'
-              ? jsonEncode(recorded[e.key]) == jsonEncode(e.value)
-              : recorded[e.key] == e.value)) {
+            !_sameArchiveBody(recorded, source)) {
           throw const DedaStep2OwnerPlaceArchiveHold(
               'immutable-place-snapshot-conflict');
         }
@@ -246,9 +262,7 @@ class DedaStep2OwnerPlaceLocalArchive {
     if (stored.fromCache || stored.pendingWrites || data == null ||
         data.length != body.length + 1 ||
         data['createdAt'] is! Timestamp ||
-        !body.entries.every((e) => e.key == 'records'
-          ? jsonEncode(data[e.key]) == jsonEncode(e.value)
-          : data[e.key] == e.value)) {
+        !_sameArchiveBody(data, body)) {
       throw const DedaStep2OwnerPlaceArchiveHold(
           'place-archive-server-readback-mismatch');
     }
