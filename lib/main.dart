@@ -1929,9 +1929,11 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> _completeVerifiedLogin(String normalizedPhone) async {
+  Future<void> _completeVerifiedLogin(
+    String normalizedPhone, {String? verifiedName}
+  ) async {
     if (!mounted) return;
-    final name = nameController.text.trim();
+    final name = verifiedName ?? nameController.text.trim();
     if (name.length < 2) {
       _showLoginMessage(
         'أدخل الاسم الكامل أولاً.',
@@ -1974,12 +1976,11 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _signInToConfirmedAccount() async {
-    final name = nameController.text.trim();
     final phone = _normalizeIraqiPhone(phoneController.text);
-    if (name.length < 2 || phone == null) {
+    if (phone == null) {
       _showLoginMessage(
-        'أدخل الاسم ورقم الهاتف الصحيح أولاً.',
-        'Enter your name and valid phone number first.',
+        'أدخل رقم الهاتف الصحيح أولاً.',
+        'Enter your valid phone number first.',
       );
       return;
     }
@@ -1996,11 +1997,15 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted || pin == null) return;
     try {
       final originalId = DedaBackend.personalShareIdForPhone(phone);
-      await DedaOwnerUidContinuity.loginLinkedOriginalUid(
+      final originalUid = await DedaOwnerUidContinuity.loginLinkedOriginalUid(
         phone: phone, pin: pin, originalId: originalId,
       );
+      final originalName =
+          await DedaOwnerUidContinuity.verifiedProfileNameForLinkedOwner(
+        phone: phone, originalId: originalId, expectedUid: originalUid,
+      );
       if (!mounted) return;
-      await _completeVerifiedLogin(phone);
+      await _completeVerifiedLogin(phone, verifiedName: originalName);
     } catch (_) {
       _showLoginMessage(
         'تعذر تأكيد الحساب. لم يتم تغيير أو استرجاع أي رصيد.',
