@@ -6,6 +6,8 @@ import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
+import 'deda_step2_owner_place_local_archive.dart';
+import 'deda_step2_owner_place_backup_journal.dart';
 
 /// DEDA 100433: explicit user action and non-persistent PIN entry only.
 /// This is NOT password reset, not Google Sign-In and does not transfer money.
@@ -151,9 +153,64 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       final uid = await confirmed(widget.phone,pin,widget.originalId);
       if (!mounted) return;
       if (uid.isEmpty) throw StateError('owner-link-failed');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('تم ربط معرّف Firebase الأصلي. '
-          'احتفظ بالتطبيق على هذا الهاتف لحين فحص الاسترجاع.'),
+      // PRIVATE QA ONLY. The original place archive requires a *linked*
+      // (nonanonymous) owner UID, so it must run AFTER successful UID
+      // linking, never before. A backup failure must not falsely claim
+      // that the UID link itself failed or log out the original phone.
+      var placeSourceConfirmed = false;
+      var placeSourceUnconfirmed = false;
+      if (dedaStep2OwnerPlaceLocalArchiveEnabled) {
+        try {
+          final profile =
+              await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
+            phone: widget.phone, originalId: widget.originalId,
+            expectedUid: uid,
+          );
+          if (profile.accountType == 'placeOwner') {
+            final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+            final original = FirebaseAuth.instance.currentUser;
+            if (original?.uid != uid || original?.isAnonymous != false) {
+              throw const DedaStep2OwnerPlaceArchiveHold(
+                  'original-linked-session-changed');
+            }
+            final current = () => mounted &&
+                FirebaseAuth.instance.currentUser?.uid == uid &&
+                FirebaseAuth.instance.currentUser?.isAnonymous == false;
+            final local = await DedaStep2OwnerPlaceSource.readOriginal(
+              const DedaStep2OwnerPlaceSharedLocal(),
+              accountKey: account, isCurrent: current,
+            );
+            if (local.hasAnyEvidence) {
+              final backup = DedaStep2OwnerPlaceDurableBackup(
+                archive: DedaStep2OwnerPlaceLocalArchive.firebase(),
+                journal: const DedaStep2OwnerPlacePrefsJournal(),
+              );
+              await backup.prepare(accountKey: account,
+                  originalUid: uid, isCurrent: current);
+              final proof = await backup.uploadPending(
+                  accountKey: account, originalUid: uid,
+                  isCurrent: current);
+              if (!proof.journalCleared) {
+                throw const DedaStep2OwnerPlaceArchiveHold(
+                    'old-place-backup-journal-still-pending');
+              }
+              placeSourceConfirmed = true;
+            }
+          }
+        } catch (_) {
+          placeSourceUnconfirmed = true;
+        }
+      }
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(placeSourceUnconfirmed
+          ? 'تم ربط الحساب الأصلي، لكن نسخ بيانات إدارة المكان لم يتأكد. '
+            'لا تحذف التطبيق من الهاتف الأصلي؛ يلزم إعادة محاولة الحفظ.'
+          : placeSourceConfirmed
+            ? 'تم ربط الحساب وحفظ مصدر إدارة المكان للفحص. '
+              'لا تحذف التطبيق الأصلي قبل استرجاع جميع البيانات.'
+            : 'تم ربط معرّف Firebase الأصلي. '
+              'احتفظ بالتطبيق على هذا الهاتف لحين فحص الاسترجاع.'),
       ));
     } catch (_) {
       if (!mounted) return;
