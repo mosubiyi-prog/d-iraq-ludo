@@ -1345,3 +1345,8 @@ exports.dedaWeeklyCommunityStandingsV1 = dedaCommunityWeekly.dedaWeeklyCommunity
 // DEDA 100422: separately reviewed server PIN HOLD; NOT a migration or login cutover.
 exports.dedaSecurePinPreflightV1 =
   require("./deda_secure_pin_gate.js").makeCallableSecurePinGate();
+
+// DEDA 100423: immutable original-ID HOLD after fresh server PIN verification.
+// Opt-in recovery-only callable; all migration and financial operations remain OFF.
+exports.dedaCanonicalOriginalHoldV1 =
+  require("./deda_canonical_account_proof.js").makeCallableCanonicalOriginalHold();

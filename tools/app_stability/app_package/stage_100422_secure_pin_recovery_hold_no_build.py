@@ -17,12 +17,12 @@ IMPORT_ANCHOR = "import 'package:cloud_firestore/cloud_firestore.dart';\n"
 LOGIN_ANCHOR = "  static Future<Map<String, dynamic>> signIn({\n"
 ENTRY = """  // Explicit preflight for a FUTURE, controlled server-authorized recovery.
   // HOLD only: does not create a DEDA session or restore any data.
-  static Future<void> verifyRecoveryIdentityWithServer({
+  static Future<String> verifyRecoveryIdentityWithServer({
     required String phone,
     required String pin,
   }) async {
     await _ensureAnonymousSession();
-    await DedaSecurePinPreflight.verifyHoldOnly(phone: phone, pin: pin);
+    return DedaSecurePinPreflight.verifyCanonicalHold(phone: phone, pin: pin);
   }
 
 """
@@ -79,6 +79,7 @@ def stage(target: Path) -> None:
         "productionCallableDeployed": False,
         "normalSignInUnchanged": True,
         "recoveryEntryOptInAndHoldOnly": True,
+        "canonicalOriginalServerHoldOnly": True,
         "walletAndIdentityMigrationEnabled": False,
         "noApkOrFirebaseOrPlay": True,
     }

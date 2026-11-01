@@ -2,6 +2,32 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_secure_pin_preflight.dart';
 
 void main() {
+  test('canonical original HOLD must bind original ID and keep financial flags false', () {
+    final safe = <String, dynamic>{
+      'status': 'PIN_VERIFIED_HOLD',
+      'serverOwned': true,
+      'productionMigrationEnabled': false,
+      'canRestoreAssets': false,
+      'canCreditXp': false,
+      'canCreditDiamonds': false,
+      'canIssueGift': false,
+      'canMigrate': false,
+      'canonicalOriginalVerified': true,
+      'canonicalOriginalId': '@DEDA-AB3C5D',
+    };
+    expect(DedaSecurePinPreflight.isCanonicalHold(safe), isTrue);
+    for (final key in ['canonicalOriginalVerified','canMigrate',
+                       'canRestoreAssets','canCreditDiamonds']) {
+      final bad = Map<String, dynamic>.from(safe)
+        ..[key] = key == 'canonicalOriginalVerified' ? false : true;
+      expect(DedaSecurePinPreflight.isCanonicalHold(bad), isFalse);
+    }
+    for (final candidate in ['', '@DEDA-WRONG', '@DEDA-AB3C5D-X']) {
+      expect(DedaSecurePinPreflight.isCanonicalHold(
+        {...safe, 'canonicalOriginalId': candidate}), isFalse);
+    }
+  });
+
   test('valid phone format and six-digit PIN are enforced for recovery', () {
     expect(DedaSecurePinPreflight.validAccountAndPin('07705551111', '684295'), isTrue);
     expect(DedaSecurePinPreflight.validAccountAndPin('+9647705551111', '684295'), isTrue);
