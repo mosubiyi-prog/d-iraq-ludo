@@ -218,6 +218,13 @@ class DedaStep2OwnerPlaceDurableBackup {
       isCurrent: isCurrent,
     );
     _check(isCurrent);
+    // A place-owner account with no original local place data must not
+    // acquire an empty, unrecoverable pending journal. Do not invent place
+    // ownership or create a cloud receipt that can never be acknowledged.
+    if (!source.hasAnyEvidence) {
+      throw const DedaStep2OwnerPlaceArchiveHold(
+          'no-original-place-source-to-archive');
+    }
     final intent = DedaStep2OwnerPlacePending(
       accountKey: accountKey, originalUid: originalUid,
       captureId: captureId ?? newCaptureId(), source: source,
