@@ -4265,6 +4265,24 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
       } else {
         await _loadDraftOnly();
       }
+    } catch (_) {
+      // A failed remote read must never render a fake editable draft as
+      // though an existing owner's approved map place had disappeared.
+      // Only private STEP 2 builds take this safety path.
+      if (!dedaStep2LinkedPublishedPlaceEnabled) rethrow;
+      _status = 'recovery_blocked';
+      _editingApproved = false;
+      _decisionNote = dedaText(
+        'تعذر التحقق من مكانك الآن. مكانك وملكيته لم يتغيرا، '
+        'تحقق من الاتصال ثم حاول مرة ثانية.',
+        'Your published place cannot be verified right now. '
+        'Nothing was deleted or reassigned. Check the connection and retry.',
+      );
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(_decisionNote!)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
