@@ -26,3 +26,15 @@ No changes to deployed Firebase Rules, existing user wallets/profiles, Play 1003
 On a real old handset with a SAFE TEST account, read all baseline values, verify full upload and immutable owner identity, open same account on replacement phone, prove every category matches, repeat restart and login switch, verify no reissue or repeated debit on both phones, and ensure 100340 still signs in. Release only after automatic rollback path and owner approval.
 
 **Status: partial working source implementations and emulator QA. Major point 2 OPEN until actual full restoration is verified.**
+
+## Latest fully green 100432 QA
+
+- [GitHub Actions #41339792251](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41339792251): **SUCCESS both jobs**, **42/42 local tests, 0 failures**.
+- 12 Flutter cloud-quiz transport tests: account-locked OLD-phone upload, replacement SAME-UID restore, missing-only hydrated keys, idempotent retry, foreign UID, original ID, altered payload, failed owner proof and no reward writes.
+- 10 Flutter local UI hydration tests + 9 linked owner session policy tests.
+- 8 Firebase Firestore emulator tests against exact published source plus one ADD-only local rules fragment: anonymous outsider cannot access the other UID, fake original cannot upload, immutable archive, no financial keys; 3 existing 100408 league/GM prize security tests still pass.
+- Flutter analyzer: **No issues found**. Full app non-deploy branch only.
+- Previous first passes had wrong test expectations for FormatException/StateError and a fixture's wallet value assertion; both corrected without relaxing actual Firestore allow/deny or client validation. Latest entire run is green.
+- **PRODUCTION DOES NOT HAVE the new quiz-backup Firestore match; release is NOT active.** The Flutter functions have no automatic app caller and the optional authentication upgrade is disabled. These are fully implemented/tested *components*, not complete deployed account restoration.
+
+**Latest verified 100432 decision: QA GREEN, no deploy, major owner point 2 still OPEN.**
