@@ -1,0 +1,57 @@
+name: DEDA 100426 Spark Firestore Recovery HOLD vs LIVE Rules (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100426-free-firestore-recovery-hold-no-deploy-2026-11-01
+    paths:
+      - 'tools/deda_100426_free_recovery_live_rules_preflight.py'
+      - 'tools/app_stability/account_security/deda_free_recovery_hold.rules.fragment'
+      - 'tests/firestore-rules/deda-100426-spark-recovery-hold.test.mjs'
+      - '.github/workflows/qa-deda-100426-spark-recovery-published-rules-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-live-rules-free-spark-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_DIRECT_RULES_PATH: ${{ runner.temp }}/deda-100426-active-merged.rules
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read ACTUAL live Firebase Rules, merge ONLY new recovery HOLD (no deploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --quiet google-auth requests
+          python3 tools/deda_100426_free_recovery_live_rules_preflight.py
+      - name: Test original-device enrollment, new-device correct PIN, tamper and old 100340 compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-audit --no-fund --no-save firebase-tools@14
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100426-spark-recovery \
+            --only firestore \
+            --config "$RUNNER_TEMP/deda-100426-active-merged-emulator.json" \
+            'node --test tests/firestore-rules/deda-100426-spark-recovery-hold.test.mjs'
+          echo 'PASS_ACTUAL_LIVE_FIRESTORE_RULES_PLUS_ONLY_ADDITIVE_SPARK_RECOVERY_HOLD'
+      - name: Assert ABSOLUTELY NO production mutation or financial restoration
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/deda-100426-active-merged.rules"
+          echo 'NO_PRODUCTION_FIREBASE_WRITES_NO_DEPLOY_NO_PLAY_NO_ACCOUNT_TRANSFER_NO_DIAMONDS'
