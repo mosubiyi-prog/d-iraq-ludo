@@ -4,8 +4,8 @@ const {displayOnlyEngagementArchive:read}=
   require("../deda_100429_daily_quiz_continuity_NOT_EXPORTED.js");
 const A="07712345678",B="07799999999",ID="@DEDA-ABC123",DAY="2026-11-01";
 const questions=[
- "sign_stop_v1","sign_yield_v2","sign_school_v1",
- "sign_speed_60_v3","sign_no_entry_v2",
+ "sign_stop","sign_yield_v2","sign_school_v3",
+ "sign_speed_60_v4","sign_no_entry_v5",
 ];
 const capture=()=>({
  format:1,kind:"untrusted-local-ui-evidence",
@@ -59,11 +59,13 @@ test("client attempts to add XP, points, diamonds, or a reward receipt are rejec
    assert.throws(()=>read(args(bad)),/untrusted/);
  }
 });
-test("quiz answers must only use five selected known-format questions and options 0..2",()=>{
+test("quiz answers must only use five actual bank questions and options 0..3",()=>{
  for(const invalid of [
   {answered:{unknown_question:1}},
-  {answered:{[questions[0]]:3}},
+  {answered:{[questions[0]]:4}},
   {correct:["sign_other_v4"]},
+  {selected:["sign_fake_v2",...questions.slice(1)]},
+  {selected:["sign_stop_v1",...questions.slice(1)]},
   {selected:[questions[0],questions[0],...questions.slice(2)]},
   {index:9},
  ]){
@@ -91,6 +93,12 @@ test("question bank seen IDs, unfinished progress and selected correct subset re
  assert.deepEqual(r.snapshot.quiz.correct,[questions[0]]);
  assert.equal(r.canRestoreUi,false);
 });
+test("fourth answer choice is valid as recorded by the real existing app",()=>{
+ const old=capture();old.days[0].quiz.answered[questions[0]]=3;
+ const r=read(args(old));
+ assert.equal(r.snapshot.quiz.answered[questions[0]],3);
+ assert.equal(r.canReissueQuizPoints,false);
+});
 test("a completed five-question quiz must have five answered IDs; no points inferred",()=>{
  const bad=capture();delete bad.days[0].quiz.answered[questions[4]];
  assert.throws(()=>read(args(bad)),/untrusted/);
@@ -115,4 +123,19 @@ test("new-day phone UI data cannot override previous same-day answers or claim e
  assert.equal(b.snapshot.quiz.completed,false);
  assert.equal(b.canReissueQuizPoints,false);
  assert.equal(b.canGrantRewards,false);
+});
+
+test("mirror exactly existing Dart 20-base × 5-variant 100-question bank",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const dart=fs.readFileSync(path.join(__dirname,"../../lib/traffic_quiz_page.dart"),"utf8");
+ const segment=dart.split("const List<_TrafficQuestion> _trafficQuestionBase = [")[1]
+   ?.split("const int _trafficVariantsPerBase")[0];
+ assert.ok(segment,"Flutter traffic bank source missing");
+ const base=[...segment.matchAll(/\bid:\s*'([^']+)'/g)].map(m=>m[1]);
+ const registry=[...require("../deda_100429_daily_quiz_continuity_NOT_EXPORTED").TRAFFIC_BASE??[]];
+ assert.equal(base.length,20);
+ assert.deepEqual(new Set(registry),new Set(base));
+ assert.match(dart,/const int _trafficVariantsPerBase = 5;/);
+ assert.match(dart,/base.answersAr.length != 4/);
+ for(const id of base)assert.ok(!id.includes("_v1"));
 });
