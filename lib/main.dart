@@ -26,6 +26,7 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
+import 'deda_step2_linked_published_place_recovery.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -4074,6 +4075,46 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
 
       final prefs = await SharedPreferences.getInstance();
       await _migrateLegacyOwnerStorageIfOwned(prefs);
+      // STEP 2 / PRIVATE QA ONLY: on a replacement handset, the scoped
+      // published place ID is missing even when the approved Firestore place
+      // still exists. Restore ONLY that verified ID for the SAME linked
+      // original owner. Never recreate the place, change ownerUid, approval
+      // number, map coordinates, or inherit another account's local place.
+      // A denied/ambiguous server read is HOLD, not "empty new place".
+      if (dedaStep2LinkedPublishedPlaceEnabled &&
+          DedaPreferences.accountType == DedaAccountType.placeOwner &&
+          (prefs.getString(_placeIdKey)?.trim().isNotEmpty != true)) {
+        final account = _ownerStorageAccountKey;
+        final originalUid = FirebaseAuth.instance.currentUser?.uid;
+        try {
+          if (originalUid == null || originalUid.isEmpty) {
+            throw const DedaStep2PublishedPlaceHold(
+                'signed-in-original-place-owner-required');
+          }
+          await DedaStep2LinkedPublishedPlaceRecovery.firebase()
+              .recoverOriginalPublishedPlace(
+            accountKey: account,
+            originalUid: originalUid,
+            isCurrent: () => mounted &&
+                _ownerStorageAccountKey == account &&
+                FirebaseAuth.instance.currentUser?.uid == originalUid,
+          );
+        } catch (_) {
+          _status = 'recovery_blocked';
+          _decisionNote = dedaText(
+            'لم يتم تأكيد مكانك المنشور على هذا الهاتف. '
+            'لم نحذف المكان أو نغيّر ملكيته؛ تحقق من الاتصال والحساب وأعد المحاولة.',
+            'Your published place could not be verified on this phone. '
+            'Nothing was deleted or reassigned; check the connection and account, then retry.',
+          );
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(content: Text(_decisionNote!)),
+            );
+          }
+          return;
+        }
+      }
       _placeId = prefs.getString(_placeIdKey);
       _pendingEditId = prefs.getString(_pendingEditIdKey);
       final snapshotRaw = prefs.getString(_submittedSnapshotKey);
