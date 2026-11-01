@@ -32,7 +32,7 @@ void main() {
       {'accountKey': account, 'name': ''},
       {'accountKey': account, 'name': '  '},
       {'accountKey': account, 'name': 'A'},
-      {'accountKey': account, 'name': 'N' * 101},
+      {'accountKey': account, 'name': List<String>.filled(101, 'N').join()},
     ]) {
       expect(
         () => DedaOwnerUidContinuity.validatedServerProfileName(
