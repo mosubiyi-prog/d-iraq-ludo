@@ -54,6 +54,19 @@ jobs:
             --config "$RUNNER_TEMP/deda-100426-emulator.json" --only firestore \
             'node --test test/deda_100426_live_session_guard_emulator.test.cjs'
           echo 'PASS_100426_LOCAL_QA_ONLY_NO_DEPLOY'
+      - name: Recheck previous 100408 league ten-prize security suite against exact same live-based Rules candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix tests/firestore-rules install --no-save --no-audit --no-fund \
+            firebase@11.10.0 @firebase/rules-unit-testing@4
+          env -u DEDA_SA_PRIMARY -u DEDA_SA_FALLBACK \
+            DEDA_DIRECT_RULES_PATH="$DEDA_100426_CANDIDATE_PATH" \
+            functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100426-no-billing-qa \
+            --config "$RUNNER_TEMP/deda-100426-emulator.json" --only firestore \
+            'node --test tests/firestore-rules/weekly-direct-manager-prizes-100408.test.mjs'
+          echo 'PASS_100426_ORIGINAL_100408_LEAGUE_SECURITY_REGRESSION'
       - name: Explicit no production Firebase writes, APK or Play
         run: |
           test ! -f build/app/outputs/flutter-apk/app-release.apk
