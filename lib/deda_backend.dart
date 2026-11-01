@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import 'deda_pin_auth.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
 
 class DedaBackend {
   static bool get isReady => Firebase.apps.isNotEmpty;
@@ -94,8 +95,17 @@ class DedaBackend {
         }
       } catch (_) {}
     } else {
-      // Admin sign-in uses the same FirebaseAuth instance. Leaving admin work
-      // for owner work must close that admin session cleanly first.
+      // In the optional account-recovery build the same original owner UID
+      // becomes non-anonymous after the verified provider link. Do NOT
+      // mistake that signed-in DEDA user for an administrator and sign out.
+      if (dedaLinkedOwnerCompatEnabled &&
+          DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)) {
+        if (await DedaLinkedOwnerSessionPolicy.verified(user, cleanKey)) {
+          return user;
+        }
+        throw StateError('linked-owner-not-verified-no-session-churn');
+      }
+      // A real admin still needs an explicit switch back to DEDA owner mode.
       await signOutAdmin();
     }
 
@@ -1309,7 +1319,9 @@ class DedaBackend {
         // Restore only the already trusted DEDA account session. Firestore
         // rules then allow this account to read its own gateway document.
         await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
-      } else if (!await currentUserIsAdmin()) {
+      } else if (!(dedaLinkedOwnerCompatEnabled &&
+          await DedaLinkedOwnerSessionPolicy.verified(authUser, accountKey)) &&
+          !await currentUserIsAdmin()) {
         // Never replace or sign out a non-anonymous non-admin session merely
         // to decide whether an administration UI element should be visible.
         return false;
