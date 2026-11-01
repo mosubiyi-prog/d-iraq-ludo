@@ -77,6 +77,15 @@ jobs:
           grep -q "'DEDA_STEP2_OWNER_PLACE_DRAFT_HYDRATION', defaultValue: false" lib/deda_step2_owner_place_draft_hydration.dart
           grep -q 'DedaStep2OwnerPlaceDurableBackup(' lib/deda_100433_owner_confirmation_ui.dart
           grep -q 'DedaStep2OwnerPlaceDraftHydration.firebase()' lib/main.dart
+          grep -q "request.auth.token.firebase.sign_in_provider == 'password'" tools/app_stability/account_security/deda_step2_original_progress_evidence.rules.fragment
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('lib/deda_100430_owner_uid_continuity.dart').read_text()
+          linked = src.split('static Future<String> loginLinkedOriginalUid({',1)[1]
+          assert "collection('deda_auth_attempts')" not in linked, 'LINKED_LOGIN_MUST_NOT_STORE_RAW_PIN'
+          assert 'signInWithEmailAndPassword' in linked
+          assert 'original-linked-auth-proof-lost' in linked
+          PY
           ! grep -q 'DEDA_STEP2_OWNER_PLACE_DRAFT_HYDRATION=true' android/app/build.gradle
           grep -q "'DEDA_STEP2_FRIENDSHIP_READBACK', defaultValue: false" lib/deda_step2_friendship_readback.dart
           grep -q "'DEDA_STEP2_FULL_ACCOUNT_PREFLIGHT', defaultValue: false" lib/deda_step2_full_account_preflight.dart
