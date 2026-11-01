@@ -15,6 +15,7 @@ on:
       - 'lib/deda_step2_owner_place_local_archive.dart'
       - 'lib/deda_step2_owner_place_backup_journal.dart'
       - 'lib/deda_step2_friendship_readback.dart'
+      - 'lib/deda_step2_full_account_preflight.dart'
       - 'lib/deda_lab_frame_secure_checkout.dart'
       - 'lib/deda_owned_frame_reader.dart'
       - 'tools/app_stability/account_security/deda_step2_original_progress_evidence.rules.fragment'
@@ -30,6 +31,7 @@ on:
       - 'test/deda_step2_owner_place_local_archive_test.dart'
       - 'test/deda_step2_owner_place_backup_journal_test.dart'
       - 'test/deda_step2_friendship_readback_test.dart'
+      - 'test/deda_step2_full_account_preflight_test.dart'
       - 'test/deda_published_place_recovery_test.dart'
       - 'test/deda_owned_frame_reader_test.dart'
       - '.github/workflows/qa-deda-100434-original-profile-restore-private-no-deploy.yml'
@@ -71,6 +73,9 @@ jobs:
           grep -q 'archivePreparedOriginal(' lib/deda_step2_owner_place_local_archive.dart
           grep -q 'DedaStep2OwnerPlacePendingJournal' lib/deda_step2_owner_place_backup_journal.dart
           grep -q "'DEDA_STEP2_FRIENDSHIP_READBACK', defaultValue: false" lib/deda_step2_friendship_readback.dart
+          grep -q "'DEDA_STEP2_FULL_ACCOUNT_PREFLIGHT', defaultValue: false" lib/deda_step2_full_account_preflight.dart
+          grep -q 'bool get allowPhoneCutover => false;' lib/deda_step2_full_account_preflight.dart
+          ! grep -q 'DEDA_STEP2_FULL_ACCOUNT_PREFLIGHT=true' android/app/build.gradle
           ! grep -q 'DEDA_STEP2_FRIENDSHIP_READBACK=true' android/app/build.gradle
           ! grep -q "DEDA_STEP2_OWNER_PLACE_LOCAL_ARCHIVE=true" android/app/build.gradle
           grep -q "recoverOriginalPublishedPlace(" lib/main.dart
@@ -103,12 +108,13 @@ jobs:
           flutter test test/deda_step2_owner_place_local_archive_test.dart --no-pub
           flutter test test/deda_step2_owner_place_backup_journal_test.dart --no-pub
           flutter test test/deda_step2_friendship_readback_test.dart --no-pub
+          flutter test test/deda_step2_full_account_preflight_test.dart --no-pub
           flutter test test/deda_published_place_recovery_test.dart --no-pub
           flutter test test/deda_owned_frame_reader_test.dart --no-pub
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart --no-pub
           flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
           flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
-          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart lib/deda_step2_original_source_continuity.dart lib/deda_step2_visual_prefs_continuity.dart lib/deda_step2_assets_readback.dart lib/deda_lab_frame_secure_checkout.dart lib/deda_step2_linked_published_place_recovery.dart lib/deda_step2_owner_place_local_archive.dart lib/deda_step2_owner_place_backup_journal.dart lib/deda_step2_friendship_readback.dart
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart lib/deda_step2_original_source_continuity.dart lib/deda_step2_visual_prefs_continuity.dart lib/deda_step2_assets_readback.dart lib/deda_lab_frame_secure_checkout.dart lib/deda_step2_linked_published_place_recovery.dart lib/deda_step2_owner_place_local_archive.dart lib/deda_step2_owner_place_backup_journal.dart lib/deda_step2_friendship_readback.dart lib/deda_step2_full_account_preflight.dart
           echo 'PASS_100434_VERIFIED_ORIGINAL_PROFILE_NO_PRODUCTION_DEPLOY'
       - name: Never build a release APK or publish to Play
         run: |
