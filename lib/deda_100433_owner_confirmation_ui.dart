@@ -5,8 +5,7 @@ import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 
 /// DEDA 100433: explicit user action and non-persistent PIN entry only.
-/// This is NOT a password reset, not Google Sign-In and does not transfer
-/// account balances. The 6-digit legacy PIN is never logged or saved here.
+/// This is NOT password reset, not Google Sign-In and does not transfer money.
 class DedaOwnerPinPrompt {
   const DedaOwnerPinPrompt._();
 
@@ -14,61 +13,75 @@ class DedaOwnerPinPrompt {
     BuildContext context, {
     required String title,
     required String explanation,
-  }) async {
-    final controller = TextEditingController();
-    try {
-      return await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialog) => AlertDialog(
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(explanation),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('deda-owner-pin-input'),
-                controller: controller,
-                autofocus: true,
-                obscureText: true,
-                enableSuggestions: false,
-                autocorrect: false,
-                keyboardType: TextInputType.number,
-                textDirection: TextDirection.ltr,
-                maxLength: 6,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'رمز الحساب / Account PIN',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialog),
-              child: const Text('إلغاء / Cancel'),
-            ),
-            FilledButton(
-              key: const ValueKey('deda-owner-pin-submit'),
-              onPressed: () {
-                final value = controller.text;
-                if (RegExp(r'^\d{6}$').hasMatch(value)) {
-                  Navigator.pop(dialog, value);
-                }
-              },
-              child: const Text('تأكيد / Confirm'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      // Keep no PIN in app preferences or clipboard.
-      controller.clear();
-      controller.dispose();
-    }
+  }) => showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _DedaOwnerPinDialog(
+      title: title, explanation: explanation),
+  );
+}
+
+class _DedaOwnerPinDialog extends StatefulWidget {
+  const _DedaOwnerPinDialog({
+    required this.title, required this.explanation,
+  });
+  final String title, explanation;
+  @override
+  State<_DedaOwnerPinDialog> createState() => _DedaOwnerPinDialogState();
+}
+
+class _DedaOwnerPinDialogState extends State<_DedaOwnerPinDialog> {
+  final controller = TextEditingController();
+  @override
+  void dispose() {
+    controller.clear();
+    controller.dispose();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(widget.explanation),
+        const SizedBox(height: 12),
+        TextField(
+          key: const ValueKey('deda-owner-pin-input'),
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          enableSuggestions: false,
+          autocorrect: false,
+          keyboardType: TextInputType.number,
+          textDirection: TextDirection.ltr,
+          maxLength: 6,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'رمز الحساب / Account PIN',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إلغاء / Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('deda-owner-pin-submit'),
+        onPressed: () {
+          final value = controller.text;
+          if (RegExp(r'^\\d{6}$').hasMatch(value)) {
+            Navigator.pop(context, value);
+          }
+        },
+        child: const Text('تأكيد / Confirm'),
+      ),
+    ],
+  );
 }
 
 /// Visible above Sign out ONLY when owner explicitly opts into the private
