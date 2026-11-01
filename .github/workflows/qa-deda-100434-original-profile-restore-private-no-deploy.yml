@@ -39,7 +39,7 @@ jobs:
           grep -q "verifiedCanonicalProfile: verifiedName != null" lib/main.dart
           grep -q "if (!verifiedCanonicalProfile)" lib/main.dart
           grep -q "verifiedType: originalProfile.accountType" lib/main.dart
-          grep -q "verifiedName: originalName" lib/main.dart
+          grep -q "verifiedName: originalProfile.name" lib/main.dart
           ! grep -q "DEDA_STEP2_LINKED_OWNER_COMPAT=true" android/app/build.gradle
           ! grep -q "DEDA_STEP2_QUIZ_CLOUD=true" android/app/build.gradle
           echo 'NO_AUTOMATIC_USER_LINK_NO_OLD_ACCOUNT_SIGNOUT_NO_WALLET_TRANSFER'
