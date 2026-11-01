@@ -156,25 +156,25 @@ class DedaLabFrameSecureCheckout {
     final db = FirebaseFirestore.instance;
     final ids = paidFrameIds.toList()..sort();
     final checks = await Future.wait<String?>(ids.map((frameId) async {
-      try {
-        final pair = await Future.wait([
-          _receipt(db, originalId, frameId)
-              .get(const GetOptions(source: Source.server)),
-          _ownership(db, originalId, frameId)
-              .get(const GetOptions(source: Source.server)),
-        ]);
-        if (!pair[0].exists && !pair[1].exists) {
-          return null;
-        }
-        if (!_valid(pair[0].data(), pair[1].data(),
-                    originalId, frameId)) {
-          return null;
-        }
-        return frameId;
-      } catch (_) {
-        // No offline/local guess and no forged or partial receipt.
+      final pair = await Future.wait([
+        _receipt(db, originalId, frameId)
+            .get(const GetOptions(source: Source.server)),
+        _ownership(db, originalId, frameId)
+            .get(const GetOptions(source: Source.server)),
+      ]);
+      if (pair.any((snap) => snap.metadata.isFromCache ||
+          snap.metadata.hasPendingWrites)) {
+        throw StateError('paid-frame-server-source-required');
+      }
+      if (!pair[0].exists && !pair[1].exists) {
         return null;
       }
+      if (!_valid(pair[0].data(), pair[1].data(), originalId, frameId)) {
+        // Never show a purchased item as "not owned" if its receipt
+        // exists but the pair is incomplete or altered.
+        throw StateError('partial-or-forged-frame-ownership');
+      }
+      return frameId;
     }));
     if (FirebaseAuth.instance.currentUser?.uid != uid) {
       throw StateError('account-switched-during-frame-inventory');
