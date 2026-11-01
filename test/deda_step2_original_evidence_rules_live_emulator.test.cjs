@@ -336,9 +336,12 @@ test("same original UID Firebase password login refreshes session without any ra
   const got=await assertSucceeds(getDoc(doc(owner,"deda_sessions",UID)));
   assert.equal(got.data().uid,UID);
   assert.equal(got.data().accountKey,ACCOUNT);
-  const attempt=await env.withSecurityRulesDisabled(async c=>
-    getDoc(doc(c.firestore(),"deda_auth_attempts",UID)));
-  assert.equal(attempt.exists(),false);
+  let rawPinAttemptExists=true;
+  await env.withSecurityRulesDisabled(async c=>{
+    const attempt=await getDoc(doc(c.firestore(),"deda_auth_attempts",UID));
+    rawPinAttemptExists=attempt.exists();
+  });
+  assert.equal(rawPinAttemptExists,false);
 });
 test("other UID, wrong email, anonymous and non-password provider cannot refresh original owner session",async()=>{
   for(const [actor,fields] of [
