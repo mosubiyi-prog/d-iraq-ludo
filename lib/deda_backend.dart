@@ -94,34 +94,8 @@ class DedaBackend {
         }
       } catch (_) {}
     } else {
-      // 100430: a verified password-linked DEDA owner must retain the SAME
-      // Firebase UID across phone replacement. The previous generic
-      // non-anonymous branch signed that user out as if it were an admin,
-      // replacing it with an unrelated anonymous UID and orphaning the
-      // original owner's frames, profile and cloud-backed gifts.
-      //
-      // Fail closed: only the existing synthetic phone-auth namespace AND
-      // a server-read owner accountKey are sufficient to preserve the UID.
-      // Never treat an administrator's email or a premium display ID as an
-      // owner credential, and never fall back to anonymous on owner mismatch.
-      final email = user.email?.trim().toLowerCase() ?? '';
-      if (email.endsWith('@deda-login.invalid')) {
-        final expectedEmail = DedaPinAuth.authEmailForPhone(cleanKey);
-        if (email != expectedEmail) {
-          throw StateError('linked-owner-account-key-mismatch');
-        }
-        final snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get(const GetOptions(source: Source.server));
-        final actualKey =
-            (snapshot.data()?['accountKey'] ?? '').toString().trim();
-        if (actualKey != cleanKey) {
-          throw StateError('linked-owner-server-account-not-proven');
-        }
-        return user;
-      }
-      // Only genuine admin/non-owner providers may be signed out here.
+      // Admin sign-in uses the same FirebaseAuth instance. Leaving admin work
+      // for owner work must close that admin session cleanly first.
       await signOutAdmin();
     }
 
