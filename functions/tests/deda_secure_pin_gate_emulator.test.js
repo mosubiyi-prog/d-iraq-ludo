@@ -13,7 +13,7 @@ const {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc} =
   require("firebase/firestore");
 const {securePinPreflight, PinDenied} = require("../deda_secure_pin_gate_core");
 
-const {canonicalOriginalHold, CanonicalDenied} =
+const {canonicalOriginalHold, CanonicalDenied, originalLockDocumentId} =
   require("../deda_canonical_account_proof_core");
 const {rateDocumentId} = require("../deda_secure_pin_gate_core");
 
@@ -158,6 +158,12 @@ test("canonical original is server-attested identically for two anonymous UIDs w
   const mapping=await db.doc("deda_secure_canonical_accounts/"+rateDocumentId(KEY,KEY1)).get();
   assert.equal(mapping.data().sourceOwnerUid,a.uid);
   assert.equal(mapping.data().originalId,ORIGINAL);
+  const locked=await db.doc("deda_secure_original_id_owners/"+
+    originalLockDocumentId(KEY,ORIGINAL)).get();
+  assert.equal(locked.exists,true);
+  assert.equal(locked.data().accountHash,rateDocumentId(KEY,KEY1));
+  assert.equal(locked.data().sourceOwnerUid,a.uid);
+  assert.equal(locked.data().canMigrate,false);
   assert.equal((await db.doc("users/"+a.uid+"/wallet/original").get()).data().diamonds,420);
   assert.equal((await db.doc("users/"+b.uid+"/wallet/original").get()).exists,false);
 });
@@ -201,4 +207,70 @@ test("tampered canonical mapping makes new device proof fail closed", async()=>{
   await assert.rejects(holdOriginal(b),e=>e instanceof CanonicalDenied);
   await ref.update({originalId:ORIGINAL});
   assert.equal((await holdOriginal(b)).canonicalOriginalId,ORIGINAL);
+});
+
+
+test("one original ID cannot bind two different PIN accounts from the same creator UID", async()=>{
+  // Legacy installation could create multiple numbers using one Firebase UID.
+  // Source route ownership alone then passes; the server original-ID lock
+  // MUST reject binding an already reserved public ID to another account.
+  const otherKey="07905553333",otherPin="629415";
+  const newcomer=await phone();
+  await seedAccount(otherKey,otherPin,a.uid);
+  await db.doc("users/"+a.uid).update({accountKey:otherKey});
+  try {
+    await assert.rejects(holdOriginal(newcomer,otherKey,otherPin),
+      e=>e instanceof CanonicalDenied);
+    assert.equal((await db.doc("deda_secure_canonical_accounts/"+
+      rateDocumentId(KEY,otherKey)).get()).exists,false);
+    const locked=(await db.doc("deda_secure_original_id_owners/"+
+      originalLockDocumentId(KEY,ORIGINAL)).get()).data();
+    assert.equal(locked.accountHash,rateDocumentId(KEY,KEY1));
+    assert.equal(locked.sourceOwnerUid,a.uid);
+  } finally {
+    await db.doc("users/"+a.uid).update({accountKey:KEY1});
+  }
+  assert.equal((await holdOriginal(b)).canonicalOriginalId,ORIGINAL);
+});
+
+test("canonical mapping and original lock must both exist: no auto-repair", async()=>{
+  const lockRef=db.doc("deda_secure_original_id_owners/"+
+    originalLockDocumentId(KEY,ORIGINAL));
+  const snap=await lockRef.get(),value=snap.data();
+  await lockRef.delete();
+  try {
+    await assert.rejects(holdOriginal(b),e=>e instanceof CanonicalDenied);
+    assert.equal((await db.doc("deda_secure_canonical_accounts/"+
+      rateDocumentId(KEY,KEY1)).get()).data().originalId,ORIGINAL);
+  } finally {await lockRef.set(value);}
+  assert.equal((await holdOriginal(b)).canonicalOriginalId,ORIGINAL);
+});
+
+test("tampered original ID lock and changed owner account are rejected",async()=>{
+  const lockRef=db.doc("deda_secure_original_id_owners/"+
+    originalLockDocumentId(KEY,ORIGINAL));
+  const snapshot=await lockRef.get(),original=snapshot.data();
+  await lockRef.update({accountHash:rateDocumentId(KEY,"07700000000")});
+  try {
+    await assert.rejects(holdOriginal(a),e=>e instanceof CanonicalDenied);
+  } finally {await lockRef.set(original);}
+  assert.equal((await holdOriginal(a)).canonicalOriginalId,ORIGINAL);
+});
+
+test("no anonymous app may read, overwrite or invent original-ID lock",async()=>{
+  const path="deda_secure_original_id_owners/"+
+    originalLockDocumentId(KEY,ORIGINAL);
+  await assert.rejects(getDoc(doc(attacker.clientDb,path)),
+    e=>e.code==="permission-denied");
+  await assert.rejects(setDoc(doc(attacker.clientDb,path),{
+    accountHash:rateDocumentId(KEY,KEY2),originalId:ORIGINAL,
+    sourceOwnerUid:attacker.uid,
+  }),e=>e.code==="permission-denied");
+});
+
+test("account limiter namespace and original-ID lock use distinct HMAC domains",()=>{
+  assert.notEqual(originalLockDocumentId(KEY,ORIGINAL),
+    rateDocumentId(KEY,KEY1));
+  assert.notEqual(originalLockDocumentId(KEY,ORIGINAL),
+    originalLockDocumentId(KEY,"@DEDA-ZZ9999"));
 });
