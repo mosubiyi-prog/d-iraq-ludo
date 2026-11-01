@@ -160,8 +160,9 @@ void main() {
     await expectLater(restore(store, source(
       answers: {...{for (final q in questions) q: 1}, questions.first: 4})),
       throwsFormatException);
-    await expectLater(restore(store, source(
-      selected: [questions.first, questions.first, ...questions.skip(2)])),
+    // Source decoder already blocks duplicate saved choices before hydrate.
+    expect(() => source(
+      selected: [questions.first, questions.first, ...questions.skip(2)]),
       throwsFormatException);
     expect(store.values, isEmpty);
   });
