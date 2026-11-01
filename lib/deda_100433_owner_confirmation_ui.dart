@@ -74,7 +74,7 @@ class _DedaOwnerPinDialogState extends State<_DedaOwnerPinDialog> {
         key: const ValueKey('deda-owner-pin-submit'),
         onPressed: () {
           final value = controller.text;
-          if (RegExp(r'^\d{6}.hasMatch(value)) {
+          if (RegExp(r'^\d{6}$').hasMatch(value)) {
             Navigator.pop(context, value);
           }
         },
