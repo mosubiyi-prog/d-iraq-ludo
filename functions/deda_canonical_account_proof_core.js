@@ -2,11 +2,21 @@
 // Server-only proof for original DEDA identity after a fresh PIN+AppCheck
 // check. No wallet, inventory, session, user record or ID route is modified.
 const {securePinPreflight, rateDocumentId} = require("./deda_secure_pin_gate_core");
+const {createHmac} = require("node:crypto");
 class CanonicalDenied extends Error {
   constructor() {super("canonical-original-hold-denied"); this.name="CanonicalDenied";}
 }
 const deny=()=>{throw new CanonicalDenied();};
 const originalPattern=/^@DEDA-[A-Z0-9]{6}$/;
+
+// Private, stable unique index: one original ID may be owned by ONE account.
+// HMAC keys keep public IDs out of document paths; use a distinct domain.
+function originalLockDocumentId(secret, originalId) {
+  if(typeof secret!=="string" || Buffer.byteLength(secret,"utf8")<32 ||
+      typeof originalId!=="string" || !originalPattern.test(originalId)) deny();
+  return createHmac("sha256",secret)
+      .update("deda_original_id_owner_v1:"+originalId).digest("hex");
+}
 
 function canonicalMatches({accountKey, directory, credential, profile,
                            owner, route, originalId}) {
@@ -66,6 +76,20 @@ async function canonicalOriginalHold({request, db, auth, secret,
       const route=routeSnapshot.exists?routeSnapshot.data():null;
       if(!canonicalMatches({accountKey,directory,credential,profile,
                             owner,route,originalId:candidate})) deny();
+      const originalLockRef=db.doc("deda_secure_original_id_owners/"+
+        originalLockDocumentId(secret,candidate));
+      const lockSnap=await tx.get(originalLockRef);
+      // Reject partial, corrupted, or legacy one-sided reservations instead of
+      // silently repairing their identity or allowing a second owner.
+      if(m.exists!==lockSnap.exists) deny();
+      if(lockSnap.exists) {
+        const held=lockSnap.data() || {};
+        if(held.status!=="PIN_VERIFIED_HOLD" ||
+            held.accountHash!==id || held.originalId!==candidate ||
+            held.sourceOwnerUid!==sourceUid ||
+            held.canRestoreAssets!==false || held.canMigrate!==false ||
+            held.canCreditDiamonds!==false) deny();
+      }
       if(m.exists) {
         const old=m.data();
         if(old?.status!=="PIN_VERIFIED_HOLD" ||
@@ -82,6 +106,14 @@ async function canonicalOriginalHold({request, db, auth, secret,
           canRestoreAssets:false,canMigrate:false,
           canCreditXp:false,canCreditDiamonds:false,canIssueGift:false
         });
+        // Both server-only directions are created atomically in one
+        // Firestore transaction. A second account cannot claim this original.
+        tx.create(originalLockRef,{
+          accountHash:id,sourceOwnerUid:sourceUid,originalId:candidate,
+          status:"PIN_VERIFIED_HOLD",createdAtMs:nowMs,
+          canRestoreAssets:false,canMigrate:false,
+          canCreditXp:false,canCreditDiamonds:false,canIssueGift:false
+        });
       }
       return candidate;
     },{maxAttempts:5});
@@ -93,4 +125,5 @@ async function canonicalOriginalHold({request, db, auth, secret,
   return {...hold,canonicalOriginalVerified:true,canonicalOriginalId:originalId,
           canMigrate:false};
 }
-module.exports={CanonicalDenied,canonicalMatches,canonicalOriginalHold};
+module.exports={CanonicalDenied,canonicalMatches,canonicalOriginalHold,
+  originalLockDocumentId};
