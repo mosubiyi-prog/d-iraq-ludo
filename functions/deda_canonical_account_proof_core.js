@@ -67,6 +67,14 @@ async function canonicalOriginalHold({request, db, auth, secret,
           binding?.canRestoreAssets!==false ||
           binding?.canCreditDiamonds!==false) deny();
       // Legacy original projection is a *candidate*, not an authorization.
+      // A legacy anonymous UID can have created multiple phone accounts.
+      // Never choose one by whichever mutable users/{uid}.accountKey happens
+      // to be on that device. In that case require a separate verified
+      // recovery adjudication (not automatic ownership transfer).
+      const siblingAccounts=await tx.get(db.collection("deda_account_directory")
+          .where("createdUid","==",sourceUid).limit(2));
+      if(siblingAccounts.size!==1 ||
+          siblingAccounts.docs[0].id!==accountKey) deny();
       const originalOwner=await tx.get(db.doc("users/"+sourceUid));
       const owner=originalOwner.exists?originalOwner.data():null;
       const candidate=owner?.sharePersonalId;
