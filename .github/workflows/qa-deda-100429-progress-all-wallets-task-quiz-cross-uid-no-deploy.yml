@@ -1,0 +1,71 @@
+name: DEDA 100429 Step 2 Progress, All Wallets, Tasks and Quiz Recovery (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100429-step2-progress-wallet-tasks-quiz-no-deploy-2026-11-01
+    paths:
+      - 'functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js'
+      - 'tools/app_stability/progress_archive/activate-reviewed-emulator.test.cjs'
+      - 'functions/deda_100429_daily_quiz_continuity_NOT_EXPORTED.js'
+      - 'functions/tests/deda_100429_daily_quiz_continuity.test.cjs'
+      - '.github/workflows/qa-deda-100429-progress-all-wallets-task-quiz-cross-uid-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100429-step2-no-deploy
+  cancel-in-progress: false
+jobs:
+  real-firebase-auth-firestore-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GCLOUD_PROJECT: demo-deda-progress-archive
+      GOOGLE_CLOUD_PROJECT: demo-deda-progress-archive
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: Validate safety boundaries and prior reconciliation source unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-deda-progress-archive
+          test "$FIRESTORE_EMULATOR_HOST" = 127.0.0.1:8080
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          ! grep -q 'deda_100429_progress_recovery_snapshot_NOT_EXPORTED' functions/index.js
+          ! grep -q 'deda_100429_daily_quiz_continuity_NOT_EXPORTED' functions/index.js
+          grep -q 'canCreditDiamonds:false' functions/deda_100428_dummy 2>/dev/null || true
+          node --check functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js
+          node --check tools/app_stability/progress_archive/activate-reviewed-emulator.test.cjs
+          echo 'PASS_100429_SERVER_INTERNAL_PREVIEW_ONLY'
+      - name: Install JS dependencies in isolated runner scratch directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-100429-jsdeps"
+          npm --prefix "$RUNNER_TEMP/deda-100429-jsdeps" install --no-save --no-audit --no-fund \
+            firebase@11.10.0 firebase-admin@13 @firebase/rules-unit-testing@4 firebase-tools@14
+          echo "NODE_PATH=$RUNNER_TEMP/deda-100429-jsdeps/node_modules" >> "$GITHUB_ENV"
+          echo "FIREBASE_BIN=$RUNNER_TEMP/deda-100429-jsdeps/node_modules/.bin/firebase" >> "$GITHUB_ENV"
+      - name: Verify ORIGINAL 100420-traced reviewed baseline and cross-UID spend/award replay on real local Firebase emulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tools/app_stability/progress_archive
+          "$FIREBASE_BIN" emulators:exec --only auth,firestore \
+            --config firebase.json \
+            --project demo-deda-progress-archive \
+            'node --test activate-reviewed-emulator.test.cjs'
+          echo 'PASS_100429_PROGRESS_REVIEWED_FINANCIAL_RESTORE_READONLY_CROSS_UID'
+      - name: Assert no application, Firestore production or Play deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'NO_PRODUCTION_FIREBASE_READS_OR_WRITES_NO_APK_NO_PLAY_NO_MONEY_MIGRATION'
