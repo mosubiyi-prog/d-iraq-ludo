@@ -164,3 +164,32 @@
       allow update, delete: if false;
     }
 
+
+    // STEP 2 FRIENDS: owner-only SOURCE query for same original UID.
+    // Firestore client queries must filter members arrayContains current UID
+    // and be bounded to 201 documents. Reads only. Never send/reaccept,
+    // rename, delete or reassign a friendship. NOT DEPLOYED TO PRODUCTION.
+    match /deda_friendships/{pairId} {
+      function verifiedOriginalFriendReader() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey is string
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey
+              == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey)).data.createdUid
+              == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey)).data.active
+              == true;
+      }
+      allow get: if verifiedOriginalFriendReader()
+        && resource.data.members is list
+        && request.auth.uid in resource.data.members;
+      allow list: if verifiedOriginalFriendReader()
+        && request.query.limit != null && request.query.limit <= 201
+        && resource.data.members is list
+        && request.auth.uid in resource.data.members;
+      allow create, update, delete: if false;
+    }
+
