@@ -74,9 +74,6 @@ def exact_candidate(live, candidate, approved_sha):
         raise RuntimeError("SAFE_STOP_LIVE_POLICY_CHANGED_REVIEW_AGAIN")
     if stage(live) != candidate:
         raise RuntimeError("SAFE_STOP_NOT_EXACT_ONE_SESSION_FALLBACK_DIFF")
-    if candidate.replace(stage(live).split("100426: trusted-install alone", 1)[-1],
-                         stage(live).split("100426: trusted-install alone", 1)[-1]) != candidate:
-        raise RuntimeError("SAFE_STOP_INVALID_CANDIDATE")
     # The staging function proves byte-for-byte preservation of every other
     # policy: manager/league/diamonds/premium IDs/users/sign-in PIN path.
     return digest(candidate)
