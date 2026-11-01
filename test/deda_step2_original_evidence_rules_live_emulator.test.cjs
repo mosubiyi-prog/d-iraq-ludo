@@ -319,3 +319,41 @@ test("foreign UID cannot read/list/edit an original account friendship",async()=
     status:"accepted",updatedAt:serverTimestamp(),
   }));
 });
+
+const linkedOwnerEmail=ACCOUNT+"@deda-login.invalid";
+const linkedSession=(uid=UID, claims={
+  email:linkedOwnerEmail,
+  firebase:{sign_in_provider:"password"},
+})=>env.authenticatedContext(uid,claims).firestore();
+const linkedSessionSource=(overrides={})=>({
+  uid:UID,accountKey:ACCOUNT,installId:"original-linked-device-2026",
+  signedInAt:serverTimestamp(),lastSeenAt:serverTimestamp(),...overrides
+});
+test("same original UID Firebase password login refreshes session without any raw PIN attempt",async()=>{
+  const owner=linkedSession();
+  await assertSucceeds(setDoc(doc(owner,"deda_sessions",UID),
+    linkedSessionSource()));
+  const got=await assertSucceeds(getDoc(doc(owner,"deda_sessions",UID)));
+  assert.equal(got.data().uid,UID);
+  assert.equal(got.data().accountKey,ACCOUNT);
+  const attempt=await env.withSecurityRulesDisabled(async c=>
+    getDoc(doc(c.firestore(),"deda_auth_attempts",UID)));
+  assert.equal(attempt.exists(),false);
+});
+test("other UID, wrong email, anonymous and non-password provider cannot refresh original owner session",async()=>{
+  for(const [actor,fields] of [
+    [linkedSession(OTHER),linkedSessionSource({uid:OTHER})],
+    [linkedSession(UID,{email:"different@deda-login.invalid",firebase:{sign_in_provider:"password"}}),
+      linkedSessionSource()],
+    [linkedSession(UID,{email:linkedOwnerEmail,firebase:{sign_in_provider:"anonymous"}}),
+      linkedSessionSource()],
+    [linkedSession(UID,{email:linkedOwnerEmail,firebase:{sign_in_provider:"google.com"}}),
+      linkedSessionSource()],
+    [linkedSession(),linkedSessionSource({accountKey:"07799999999"})],
+    [linkedSession(),linkedSessionSource({installId:"a"})],
+    [linkedSession(),linkedSessionSource({walletBalance:9000000})],
+  ]) {
+    await assertFails(setDoc(doc(actor,"deda_sessions",
+      fields.uid),fields));
+  }
+});
