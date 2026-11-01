@@ -231,6 +231,9 @@ void main() {
       originalId: original, originalUid: uid,
       weekId: '2026-99-99-INVALID', isCurrent: () => true),
       throwsA(isA<DedaStep2AssetsHold>()));
-    expect(h.io.calls, isEmpty);
+    // A premium-looking value may have the same six-character syntax as an
+    // original ID. The immutable server route still rejects it, and the
+    // malformed week never triggers another read.
+    expect(h.io.calls, ['deda_share_ids/@DEDA-VIP123']);
   });
 }
