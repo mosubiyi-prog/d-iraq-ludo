@@ -144,15 +144,13 @@ test("visual restore cannot smuggle paid frames, diamonds, roles, rewards or arb
  ]) {
   await assertFails(setDoc(doc(owner,visualPath()),visual(bad)));
  }
- const baseline=await env.withSecurityRulesDisabled(async c=>{
-  const ref=doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL);
-  await setDoc(ref,{publicId:ORIGINAL,balance:8765,ledger:["synthetic-existing"]});
-  return (await getDoc(ref)).data();
- });
- assert.equal(baseline.balance,8765);
- const walletAfter=await env.withSecurityRulesDisabled(async c=>
-  (await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL))).data());
- assert.deepEqual(walletAfter,baseline);
+ // The malicious appearance writes have all been rejected; no valid
+ // migration document has been written or paid entitlement issued.
+ const rejected=await assertSucceeds(getDoc(doc(owner,visualPath())));
+ assert.equal(rejected.exists(),false);
+ // The separate pre-existing "archive cannot modify gift-wallet" regression
+ // above continues to check financial isolation against the same rules.
+
 });
 test("visual archive requires active original route and session",async()=>{
  const owner=db(UID);
