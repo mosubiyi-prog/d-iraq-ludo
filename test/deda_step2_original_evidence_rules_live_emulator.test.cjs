@@ -297,6 +297,9 @@ async function seedFriendship(){
 test("same original Firebase UID replacement phone queries its saved friendship records",async()=>{
   await seedFriendship();
   const source=db(UID);
+  const direct=await assertSucceeds(getDoc(
+    doc(source,"deda_friendships",friendshipPair)));
+  assert.equal(direct.data().requesterPublicId,ORIGINAL);
   const result=await assertSucceeds(getDocs(query(
     collection(source,"deda_friendships"),
     where("members","array-contains",UID),limit(201)
