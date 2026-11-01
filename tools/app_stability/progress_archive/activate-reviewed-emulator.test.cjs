@@ -329,6 +329,10 @@ test('100429 forged or duplicated weekly task receipt cannot become a restored r
      claimedKeys:['2026-10-31|open_map']},
    {publicId:'@DEDA-OTHER1',weekId:'2026-10-31',completedTasks:1,weeklyXp:20,
      claimedKeys:['2026-10-31|open_map']},
+   {publicId:original,weekId:'2026-10-31',completedTasks:1,weeklyXp:20,
+     claimedKeys:['2026-10-31|fabricated_task']},
+   {publicId:original,weekId:'2026-10-31',completedTasks:1,weeklyXp:20,
+     claimedKeys:['2026-11-14|open_map']},
  ]){
    await db.doc(path).set(bad);
    await assert.rejects(restoreView(next),e=>e.code==='progress-weekly-receipt-conflict');
