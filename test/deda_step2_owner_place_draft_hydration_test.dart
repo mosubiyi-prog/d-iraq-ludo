@@ -14,7 +14,7 @@ class ArchivedCloud implements DedaStep2OwnerPlaceCloudIo {
       'format':1,'kind':'untrusted-local-owner-place-evidence',
       'accountKey':account,'sourceUid':uid,'captureId':capture,
       'createdAt': Timestamp.fromMillisecondsSinceEpoch(1000),
-      'records':{
+      'records':<String,dynamic>{
         'placeId':place,'pendingEditId':'pending-2020',
         'draftRaw':oldDraft,'submittedRaw':'{"name":"Snapshot"}',
       }
