@@ -1,13 +1,13 @@
+    // Fewer rule-document calls: a missing get(...).data fails closed. The
+    // Firestore Rules per-write document-access budget is strictly limited.
     // DEDA 100426 Spark-tier account identity: a fresh correct PIN is
     // necessary. Trusted-install copies and a legacy session are NOT proof.
     function dedaRecoveryFreshPin(accountKey) {
       return signedIn()
         && accountKey is string
         && accountKey.matches('^[0-9]{8,15}$')
-        && exists(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid))
         && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
         && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt >= request.time - duration.value(5, 'm')
-        && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
         && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
         && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.pin
           == get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin;
@@ -19,14 +19,11 @@
       return originalId is string
         && originalId.matches('^@DEDA-[A-Z0-9]{6}$')
         && sourceUid is string && sourceUid.size() > 0
-        && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
         && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
         && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == sourceUid
         && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.createdUid == sourceUid
-        && exists(/databases/$(database)/documents/users/$(sourceUid))
         && get(/databases/$(database)/documents/users/$(sourceUid)).data.accountKey == accountKey
         && get(/databases/$(database)/documents/users/$(sourceUid)).data.sharePersonalId == originalId
-        && exists(/databases/$(database)/documents/deda_share_ids/$(originalId))
         && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.publicId == originalId
         && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.kind == 'personal'
         && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.active == true
