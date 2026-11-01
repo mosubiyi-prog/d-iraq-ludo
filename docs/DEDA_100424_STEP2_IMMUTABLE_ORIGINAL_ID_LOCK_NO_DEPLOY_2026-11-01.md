@@ -22,3 +22,9 @@
 - Live client-writable legacy source is not historic cryptographic ownership evidence. Accounts with ambiguous creation UID must be held for audited adjudication. No claim that every existing 100340 account can already recover. This is deliberately safer than false ownership.
 - Point 3 must address actual Cloud enablement/billing/secret permissions and an approved compatible login/Rules activation without cutting off legacy APKs. Two-device real-world QA is a separate final gate.
 - This checkpoint means point 2 **server source and emulator verification**, not a functioning production restore. No financial restoration permitted.
+
+## VERIFIED QA closeout — 2026-11-01
+- [GitHub Actions run #41322571150](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41322571150): **both jobs completed SUCCESS** on source commit `5f3efa9c7d4bb680d887d5ddb6dab92db34ca436`.
+- Backend: 28/28 Node unit tests, **19/19 real local Firebase Auth + Firestore emulator tests**, zero failure. The new test explicitly confirms a previously unclaimed original ID cannot be automatically associated with a creator UID holding two phone-account directory entries. The cross-account unique lock, tamper, one-sided map and mobile-deny cases also pass.
+- Flutter: exact 100420 prebuild source reconstructed with 100421 and 100423 opt-in HOLD; original-owner and PIN client tests plus Dart analysis **SUCCESS**. Legacy production signIn not switched.
+- **Point 2 result: SOURCE AND LOCAL QA COMPLETE, PRODUCTION NOT ACTIVATED.** Point 3 must address Cloud Build, Artifact Registry, Cloud Run and Secret Manager availability (currently disabled), billing read denial, missing production callable, safe migration and existing 100340 compatibility. The legacy mutable owner projection is not independent historical ownership proof; ambiguous source accounts remain HOLD until verified.
