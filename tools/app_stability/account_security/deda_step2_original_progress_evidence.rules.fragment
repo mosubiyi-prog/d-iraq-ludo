@@ -101,3 +101,66 @@
       allow update, delete: if false;
     }
 
+
+    // STEP 2: owner-place LOCAL source archive. Observations only, NEVER map
+    // approval/role/ownership authority. Source must be linked to the same
+    // verified original owner + placeOwner profile. CREATE-only forever.
+    match /deda_step2_owner_place_evidence/{accountKey}/captures/{captureId} {
+      function sameOriginalOwnerPlaceArchive() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/deda_account_profiles/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_profiles/$(accountKey)).data.accountType == 'placeOwner'
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow get: if sameOriginalOwnerPlaceArchive();
+      allow list: if sameOriginalOwnerPlaceArchive()
+        && request.query.limit != null && request.query.limit <= 20;
+      allow create: if sameOriginalOwnerPlaceArchive()
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','sourceUid',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'untrusted-local-owner-place-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.captureId == captureId
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'placeId','pendingEditId','draftRaw','submittedRaw'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'placeId','pendingEditId','draftRaw','submittedRaw'
+        ])
+        && (request.resource.data.records.placeId == null ||
+            (request.resource.data.records.placeId is string
+             && request.resource.data.records.placeId.size() <= 256))
+        && (request.resource.data.records.pendingEditId == null ||
+            (request.resource.data.records.pendingEditId is string
+             && request.resource.data.records.pendingEditId.size() <= 256))
+        && (request.resource.data.records.draftRaw == null ||
+            (request.resource.data.records.draftRaw is string
+             && request.resource.data.records.draftRaw.size() <= 65536))
+        && (request.resource.data.records.submittedRaw == null ||
+            (request.resource.data.records.submittedRaw is string
+             && request.resource.data.records.submittedRaw.size() <= 65536))
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
