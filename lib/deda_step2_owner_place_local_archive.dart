@@ -263,15 +263,20 @@ class DedaStep2OwnerPlaceLocalArchive {
     return source;
   }
 
-  Future<DedaStep2OwnerPlaceSource> archiveOriginalPhone({
+  /// A caller with a durable pending journal may replay the SAME source
+  /// bytes and capture ID after an uncertain network response. The server
+  /// is inspected first. Only authoritative absence permits a CREATE.
+  Future<DedaStep2OwnerPlaceSource> archivePreparedOriginal({
+    required DedaStep2OwnerPlaceSource source,
     required String accountKey,
     required String originalUid,
     required String captureId,
     required bool Function() isCurrent,
   }) async {
     void check() => _check(accountKey, originalUid, isCurrent);
-    if (!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
-      throw const DedaStep2OwnerPlaceArchiveHold('invalid-place-capture-id');
+    if (!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId) ||
+        source.accountKey != accountKey || !source.hasAnyEvidence) {
+      throw const DedaStep2OwnerPlaceArchiveHold('invalid-place-backup-intent');
     }
     check();
     if (!await verifyOriginalOwner(originalUid, accountKey)) {
@@ -279,13 +284,7 @@ class DedaStep2OwnerPlaceLocalArchive {
           'place-archive-owner-not-verified');
     }
     check();
-    final source = await DedaStep2OwnerPlaceSource.readOriginal(local,
-        accountKey: accountKey, isCurrent: isCurrent);
-    check();
-    if (!source.hasAnyEvidence) {
-      throw const DedaStep2OwnerPlaceArchiveHold('no-local-place-to-preserve');
-    }
-    final body = {
+    final body = <String, dynamic>{
       'format': 1,
       'kind': 'untrusted-local-owner-place-evidence',
       'accountKey': accountKey,
@@ -293,20 +292,66 @@ class DedaStep2OwnerPlaceLocalArchive {
       'captureId': captureId,
       'records': source.toRecords(),
     };
-    // A lost write acknowledgement leaves captureId unresolved: the caller
-    // MUST reuse this ID and original bytes; it may not claim success.
+
+    void confirmed(DedaStep2OwnerPlaceServerRow row) {
+      check();
+      final data = row.data;
+      if (row.fromCache || row.pendingWrites || data == null ||
+          data.length != body.length + 1 ||
+          data['createdAt'] is! Timestamp ||
+          !_sameArchiveBody(data, body)) {
+        throw const DedaStep2OwnerPlaceArchiveHold(
+            'place-archive-server-readback-mismatch');
+      }
+    }
+
+    // A prior commit whose response was lost MUST NOT cause a second write.
+    // A server outage is not proof of absence and MUST NOT trigger create.
+    final previous = await cloud.read(accountKey, captureId);
+    check();
+    if (previous.fromCache || previous.pendingWrites) {
+      throw const DedaStep2OwnerPlaceArchiveHold(
+          'place-archive-server-required');
+    }
+    if (previous.data != null) {
+      confirmed(previous);
+      return source;
+    }
     await cloud.writeOnce(accountKey, captureId, body);
     check();
-    final stored = await cloud.read(accountKey, captureId);
+    confirmed(await cloud.read(accountKey, captureId));
     check();
-    final data = stored.data;
-    if (stored.fromCache || stored.pendingWrites || data == null ||
-        data.length != body.length + 1 ||
-        data['createdAt'] is! Timestamp ||
-        !_sameArchiveBody(data, body)) {
-      throw const DedaStep2OwnerPlaceArchiveHold(
-          'place-archive-server-readback-mismatch');
-    }
     return source;
+  }
+
+  /// Non-journal legacy QA entrypoint. A durable production pilot must use
+  /// DedaStep2OwnerPlaceDurableBackup to freeze bytes before sending.
+  Future<DedaStep2OwnerPlaceSource> archiveOriginalPhone({
+    required String accountKey,
+    required String originalUid,
+    required String captureId,
+    required bool Function() isCurrent,
+  }) async {
+    await proveOriginalOwner(accountKey: accountKey,
+        originalUid: originalUid, isCurrent: isCurrent);
+    final source = await DedaStep2OwnerPlaceSource.readOriginal(local,
+        accountKey: accountKey, isCurrent: isCurrent);
+    return archivePreparedOriginal(
+      source: source, accountKey: accountKey,
+      originalUid: originalUid, captureId: captureId,
+      isCurrent: isCurrent);
+  }
+
+  Future<void> proveOriginalOwner({
+    required String accountKey,
+    required String originalUid,
+    required bool Function() isCurrent,
+  }) async {
+    _check(accountKey, originalUid, isCurrent);
+    if (!await verifyOriginalOwner(originalUid, accountKey)) {
+      throw const DedaStep2OwnerPlaceArchiveHold(
+          'place-archive-owner-not-verified');
+    }
+    _check(accountKey, originalUid, isCurrent);
   }
 }
