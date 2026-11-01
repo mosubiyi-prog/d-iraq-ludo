@@ -49,8 +49,21 @@ function protectScope({accountKey,originalId,claimantUid,weekId,secret}){
  * It NEVER creates a session, locks, snapshots or financial records.
  */
 async function scanAccountRestoreReadiness({db,auth,secret,accountKey,
-                                           originalId,claimantUid,weekId}){
+                                           originalId,claimantUid,weekId,
+                                           freshCanonicalHold}){
   protectScope({accountKey,originalId,claimantUid,weekId,secret});
+  // The caller must obtain this from canonicalOriginalHold in the SAME
+  // trusted backend invocation after fresh AppCheck+PIN verification.
+  // Never accept it from client request.data or a cached proof. As a plain
+  // JS object this is a caller contract, NOT independent attestation.
+  if(!freshCanonicalHold ||
+     freshCanonicalHold.status!=="PIN_VERIFIED_HOLD" ||
+     freshCanonicalHold.serverOwned!==true ||
+     freshCanonicalHold.canonicalOriginalVerified!==true ||
+     freshCanonicalHold.canonicalOriginalId!==originalId ||
+     freshCanonicalHold.canRestoreAssets!==false ||
+     freshCanonicalHold.canMigrate!==false ||
+     freshCanonicalHold.productionMigrationEnabled!==false) deny();
   if(!db||typeof db.runTransaction!=="function" || !auth||
      typeof auth.getUser!=="function") deny();
   let claimant;
