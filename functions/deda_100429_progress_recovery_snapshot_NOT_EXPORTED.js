@@ -3,9 +3,9 @@
 // This only composes EXISTING verified progress, owner session, canonical
 // original, received-gift and GM wallet sources. NO CLIENT CALLABLE and NO
 // migration or release of legacy balances or daily/quiz rewards.
-const {withVerifiedOwnerSession}=require('../../tools/app_stability/progress_archive/point-tier-session.cjs');
-const {loadMigratedContext}=require('../../tools/app_stability/progress_archive/migration-gate.cjs');
-const {requireReviewedActivation}=require('../../tools/app_stability/progress_archive/reviewed-activation-proof.cjs');
+const {withVerifiedOwnerSession}=require('../tools/app_stability/progress_archive/point-tier-session.cjs');
+const {loadMigratedContext}=require('../tools/app_stability/progress_archive/migration-gate.cjs');
+const {requireReviewedActivation}=require('../tools/app_stability/progress_archive/reviewed-activation-proof.cjs');
 const safe=v=>Number.isSafeInteger(v)&&v>=0;
 const orig=v=>typeof v==='string'&&/^@DEDA-[A-Z0-9]{6}$/.test(v);
 const week=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
