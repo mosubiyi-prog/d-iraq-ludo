@@ -1,0 +1,83 @@
+name: DEDA 100430 No-billing Firebase Auth Owner UID Continuity (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100430-step2-owner-uid-continuity-no-billing-private-qa-2026-11-01
+    paths:
+      - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'functions/tests/deda_100430_uid_auth_emulator.test.cjs'
+      - '.github/workflows/qa-deda-100430-free-managed-auth-uid-bridge-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100430-uid-bridge-no-deploy
+  cancel-in-progress: false
+jobs:
+  managed-auth-same-owner-uid-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-deda-100430-uid-continuity
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Ensure this project cannot reach any live identity or wallet resource
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-deda-100430-uid-continuity
+          test "$FIREBASE_AUTH_EMULATOR_HOST" = 127.0.0.1:9099
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          ! grep -q "deda_100430_owner_uid_continuity" lib/main.dart
+          ! grep -q "deda_100430_owner_uid_continuity" functions/index.js
+          node --check functions/tests/deda_100430_uid_auth_emulator.test.cjs
+      - name: Install disposable test-only authentication SDK and Auth Emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix functions install --no-save --no-audit --no-fund firebase@11.10.0 firebase-tools@14
+          cat > "$RUNNER_TEMP/deda-100430-auth-qa.json" <<'JSON'
+          {
+            "emulators": {
+              "auth": {"port": 9099},
+              "ui": {"enabled": false},
+              "singleProjectMode": true
+            }
+          }
+          JSON
+      - name: Verify same UID on two phones and reject number collisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100430-uid-continuity \
+            --config "$RUNNER_TEMP/deda-100430-auth-qa.json" --only auth \
+            'node --test functions/tests/deda_100430_uid_auth_emulator.test.cjs'
+          echo 'PASS_100430_FIREBASE_AUTH_SAME_OWNER_UID_NO_BILLING_EMULATOR'
+      - name: Explicit no production or Play
+        run: |
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'SOURCE_ONLY_NO_REAL_AUTH_USER_LINKED_NO_FIRESTORE_MUTATION_NO_CLOUD_FUNCTIONS_NO_PLAY'
+      - name: Remove transient test project
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deda-100430-auth-qa.json"
+  flutter-compile-owner-continuity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: '3.47.7',channel: stable,cache: false}
+      - name: Validate existing app compiles standalone owner UID bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart
+          echo 'PASS_100430_DART_ACCOUNT_LINK_SOURCE_ONLY_NO_APK'
