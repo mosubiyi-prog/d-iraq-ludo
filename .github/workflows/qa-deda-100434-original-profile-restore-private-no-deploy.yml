@@ -35,7 +35,10 @@ jobs:
           grep -q "DedaOwnerConfirmButton(" lib/main.dart
           grep -q "onPressed: _signInToConfirmedAccount" lib/main.dart
           grep -q "onPressed: _logout" lib/main.dart
-          grep -q "verifiedProfileNameForLinkedOwner" lib/main.dart
+          grep -q "verifiedProfileForLinkedOwner" lib/main.dart
+          grep -q "verifiedCanonicalProfile: verifiedName != null" lib/main.dart
+          grep -q "if (!verifiedCanonicalProfile)" lib/main.dart
+          grep -q "verifiedType: originalProfile.accountType" lib/main.dart
           grep -q "verifiedName: originalName" lib/main.dart
           ! grep -q "DEDA_STEP2_LINKED_OWNER_COMPAT=true" android/app/build.gradle
           ! grep -q "DEDA_STEP2_QUIZ_CLOUD=true" android/app/build.gradle
