@@ -10,7 +10,13 @@ const SLOTS=new Set(["share_personal_location","open_map",
   "share_registered_place","open_saved_place","open_received_place",
   "review_added_place","traffic_skills","long_trip"]);
 const DAY=/^\d{4}-\d{2}-\d{2}$/;
-const QUESTION=/^sign_[a-z0-9_]{2,48}(?:_v[0-9]{1,2})?$/;
+// Literal source list from lib/traffic_quiz_page.dart, which uses 20 bases
+// and exactly five variants (base + _v2/_v3/_v4/_v5). Do NOT accept guessed
+// question IDs: that would silently corrupt an account's quiz progress.
+const TRAFFIC_BASE=Object.freeze(["sign_pedestrian_crossing","sign_no_entry","sign_stop","sign_speed_60","sign_yield","sign_traffic_light","sign_no_parking","sign_no_stopping","sign_roundabout","sign_turn_right","sign_school","sign_road_works","sign_slippery","sign_bend_right","sign_crossroad","sign_one_way","sign_priority_road","sign_horn_prohibited","sign_bicycle_path","sign_parking"]);
+const QUESTION_IDS=new Set(TRAFFIC_BASE.flatMap(id=>
+  [id,...[2,3,4,5].map(v=>id+"_v"+v)]));
+if(QUESTION_IDS.size!==100)throw Error("traffic-question-bank-registry-conflict");
 const ACCOUNT=/^[0-9]{8,15}$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
 const CAPTURE=/^[A-Za-z0-9_-]{20,80}$/;
@@ -32,8 +38,8 @@ function arr(v,limit,pred){
 }
 function quiz(record){
  exact(record,["selected","seen","answered","correct","index","completed"]);
- const selected=arr(record.selected,5,v=>typeof v==="string"&&QUESTION.test(v));
- const seen=arr(record.seen,100,v=>typeof v==="string"&&QUESTION.test(v));
+ const selected=arr(record.selected,5,v=>typeof v==="string"&&QUESTION_IDS.has(v));
+ const seen=arr(record.seen,100,v=>typeof v==="string"&&QUESTION_IDS.has(v));
  if(selected.length!==5||!Number.isInteger(record.index)||record.index<0||
     record.index>=5||typeof record.completed!=="boolean")stop();
  const set=new Set(selected),all=new Set(seen);
@@ -42,7 +48,7 @@ function quiz(record){
  if(!answered||typeof answered!=="object"||Array.isArray(answered)||
     Object.keys(answered).length>5)stop();
  for(const [q,option]of Object.entries(answered)){
-  if(!set.has(q)||!Number.isInteger(option)||option<0||option>2)stop();
+  if(!set.has(q)||!Number.isInteger(option)||option<0||option>3)stop();
  }
  const correct=arr(record.correct,5,q=>typeof q==="string"&&set.has(q));
  if(correct.some(q=>!Object.prototype.hasOwnProperty.call(answered,q)))stop();
