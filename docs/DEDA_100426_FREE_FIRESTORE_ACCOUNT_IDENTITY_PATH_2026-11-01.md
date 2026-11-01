@@ -1,0 +1,29 @@
+# DEDA 100426 — reuse yesterday's no-billing Firestore league path for account identity
+
+Date: 2026-11-01. Branch: `deda-100426-free-firestore-recovery-hold-no-deploy-2026-11-01`.
+Based on immutable checkpoint 100425, without any production login, APK, Firebase or Play mutation.
+
+## Verified prior precedent
+- GitHub Actions [41151399255](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41151399255) on 2026-10-31 **SUCCESS**: `qa-deda-100402-publish-additive-firestore-rules.yml` fetched the ACTUAL published `deda-25b88` Firestore policy, merged only additive weekly-league rules, emulator-tested exact merged policy, deployed **firestore:rules only**, then verified the live ruleset. No billing / Cloud Functions/Cloud Run required for this deployed league rules path.
+- [41205718222](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41205718222) similarly used additive Firestore-only prize-plan permission activation. This establishes that the prior blanket statement "everything requires billing" was wrong. It does **not** prove that the same client-rule path can safely implement unrestricted account recovery or server-side brute-force prevention.
+
+## Implemented alternative (private source only)
+1. Spark Firestore-only fragment `tools/app_stability/account_security/deda_free_recovery_hold.rules.fragment`, with **no** Cloud Functions or billing requirement:
+   - `deda_recovery_original_anchors/{accountKey}`: original UID enrolls one immutable original ID after a fresh correct PIN attempt; read permitted to another UID with the same freshly proven numeric account key.
+   - `deda_recovery_original_locks/{originalId}`: immutable per-original lock, created atomically with anchor via a client batch `getAfter`, no mobile reads. A different phone account cannot enroll the same original ID.
+   - `deda_recovery_identity_holds/{uid}`: client can create exactly one HOLD after recent correct PIN and matching anchor, directory, credential, owner projection and original personal route. Financial / migration / ID transfer flags all false. No wallet, XP, premium frames, gifts, league, user, or `deda_sessions` writes.
+2. `tools/deda_100426_free_recovery_live_rules_preflight.py` fetches the actual published Firestore policy via read-only GET, adds exactly the fragment before the known `system_counters` anchor, proves the unmodified live policy is preserved byte-for-byte, outputs local emulator candidate, and refuses unexpected source drift. **No production deploy performed.**
+3. Flutter source-only adapter `lib/deda_free_firestore_recovery_hold.dart` exposes immutable source-device enrollment and new-device PIN-based original-ID lookup and HOLD-only claim. `tools/app_stability/app_package/stage_100426_free_firestore_recovery_hold_no_build.py` adds **unused opt-in** DedaPinAuth entrypoints after exact 100420/100421/100422 source staging; legacy normal `signIn`, `createAccount`, sessions, trusted-install and UI paths remain unchanged. No signed test APK has been built yet.
+
+## QA evidence
+- First attempt revealed Firestore Rules per-write document access budget excess. Reduced redundant existence checks (missing document access still denies) and reran the exact live-policy emulator.
+- [GitHub Actions 41324929989](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41324929989): **SUCCESS — 10/10 real Firestore emulator tests, zero failure**, against the actual currently published rules plus only the new additive fragment. Checks fresh correct PIN, bad PIN rejection, two-device original-ID lookup, unauthorized copied install, tampered original and source UID, one-owner uniqueness, stale proof, no asset credits, no mobile reads of lock.
+- Observed original deployed ruleset `projects/deda-25b88/rulesets/9f11d792-0d1e-4a28-bd72-606459b5c659`, SHA256 `273d20ffa0196709af7742dbf8f3fb4137edc2f3c7bb56f5e80d2c3506c62cb1`. Candidate SHA256 `a9eb0488a9b7bba6e3d07f774dc7250356c88e5c9694e5812a53247ca2ff0504`; production remains unchanged.
+- Flutter code has its own separate exact-source workflow; record verified result only once final CI concludes.
+
+## Precise limitations and safe rollout order
+- **No global per-account PIN lockout can be enforced purely by these client Firestore Rules.** A new anonymous UID can retry PIN at the old `deda_auth_attempts` path, and `trustedInstallIds` legacy route still exists. This is NOT equivalent to the un-deployed 100422 Cloud Function security gate. A 6-digit PIN remains vulnerable to online guessing if not independently constrained.
+- An existing account must be safely enrolled from its verified original creator UID before replacement-phone lookup can succeed. A lost original installation and accounts with multiple accounts created under one Firebase UID may not be independently recoverable without manual verified adjudication; do not invent or transfer an ID.
+- No financial state, goods, premium ID, identity route or weekly league restoration has been enabled. HOLD is not an authenticated ownership certificate for granting balances. Users must never see a success message saying "full restoration complete" from the HOLD response.
+- Existing `users/{uid}.sharePersonalId` is a legacy client-editable projection, not independent historical cryptographic identity proof. All asset restore features stay disabled.
+- Next step: finish exact Flutter QA; review enrollment UX and backwards-compatible staging for 100340; if owner approves production activation after final safety review, deploy **ONLY** the additive tested rule snippet with a fresh predeploy reread and exact-ruleset lease, no application or Cloud API changes. Then private APK with same safe hold adapter and real two-phone QA. Never silently deploy or claim full recovery from emulator results.
