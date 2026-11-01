@@ -164,6 +164,60 @@ void main() {
     }
   });
 
+  test('already cached correct approved place revalidates against server on each opening', () async {
+    final h = H();
+    h.io.local[account] = approvedPlace;
+    expect(await h.restore(), approvedPlace);
+    expect(await h.restore(), approvedPlace);
+    expect(h.io.reads, 2);
+    expect(h.io.writes, 0);
+    expect(h.io.local[account], approvedPlace);
+    expect(h.io.result.documents.single.fields['approvalNumber'],
+        'DEDA-APPROVED-OLD');
+  });
+
+  test('local approved place ID does NOT survive remote owner reassignment unnoticed', () async {
+    final h = H();
+    h.io.local[account] = approvedPlace;
+    final source = h.io.result.documents.single;
+    h.io.result = DedaStep2PublishedPlacesResult([
+      DedaStep2PublishedPlaceRow(source.id, {
+        ...source.fields,
+        'ownerUid': 'foreign-user-id',
+      }),
+    ]);
+    await expectLater(h.restore(), throwsA(
+        held('published-place-owner-or-approval-mismatch')));
+    expect(h.io.local[account], approvedPlace);
+    expect(h.io.writes, 0);
+  });
+
+  test('approved-looking stale local ID never overrides missing live map publication', () async {
+    final h = H();
+    h.io.local[account] = approvedPlace;
+    h.io.result = const DedaStep2PublishedPlacesResult([]);
+    await expectLater(h.restore(), throwsA(
+        held('published-place-not-uniquely-verified')));
+    expect(h.io.local[account], approvedPlace);
+    expect(h.io.writes, 0);
+  });
+
+  test('approval receipt missing in cloud cannot be replaced by cached phone data', () async {
+    final h = H();
+    h.io.local[account] = approvedPlace;
+    final source = h.io.result.documents.single;
+    h.io.result = DedaStep2PublishedPlacesResult([
+      DedaStep2PublishedPlaceRow(source.id, {
+        ...source.fields,
+        'approvalNumber': '',
+      }),
+    ]);
+    await expectLater(h.restore(), throwsA(
+        held('published-place-owner-or-approval-mismatch')));
+    expect(h.io.writes, 0);
+    expect(h.io.local[account], approvedPlace);
+  });
+
   test('a different local place ID is preserved, never silently replaced', () async {
     final h = H();
     h.io.local[account] = 'older-owned-place';
