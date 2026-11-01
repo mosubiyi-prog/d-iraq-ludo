@@ -111,6 +111,59 @@ class DedaOwnerUidContinuity {
     return originalUid;
   }
 
+  /// Use only the original server-authoritative account profile to display
+  /// the identity on a replacement phone. A typed name or old local cache
+  /// must never silently replace the recovered account name.
+  static String validatedServerProfileName(
+    Map<String, dynamic>? profile, {
+    required String accountKey,
+  }) {
+    if (profile?['accountKey'] != accountKey) {
+      throw StateError('linked-owner-profile-account-mismatch');
+    }
+    final raw = profile?['name'];
+    if (raw is! String) {
+      throw StateError('linked-owner-profile-name-missing');
+    }
+    final name = raw.trim();
+    if (name.length < 2 || name.length > 100) {
+      throw StateError('linked-owner-profile-name-invalid');
+    }
+    return name;
+  }
+
+  /// Called only after the same-UID linked login has succeeded. All reads
+  /// are from the server, and immutable route ownership is checked again
+  /// before the original name is admitted into local UI preferences.
+  static Future<String> verifiedProfileNameForLinkedOwner({
+    required String phone,
+    required String originalId,
+    required String expectedUid,
+  }) async {
+    final accountKey = _account(phone);
+    _original(originalId);
+    final current = FirebaseAuth.instance.currentUser;
+    if (current == null || current.uid != expectedUid ||
+        current.isAnonymous || current.email != authEmail(phone)) {
+      throw StateError('linked-owner-profile-session-mismatch');
+    }
+    await _verifyOriginalUid(
+      accountKey: accountKey,
+      originalId: originalId,
+      uid: expectedUid,
+    );
+    final result = await FirebaseFirestore.instance
+        .collection('deda_account_profiles').doc(accountKey)
+        .get(const GetOptions(source: Source.server));
+    final name = validatedServerProfileName(
+      result.data(), accountKey: accountKey,
+    );
+    if (FirebaseAuth.instance.currentUser?.uid != expectedUid) {
+      throw StateError('linked-owner-profile-session-changed');
+    }
+    return name;
+  }
+
   /// Password-backed login is independent of anonymous UID churn. Absent an
   /// owner-proved original document, reject even if Firebase Auth signed in.
   /// This does NOT hydrate local game progress or enable financial migration.
