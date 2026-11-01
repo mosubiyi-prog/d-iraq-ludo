@@ -17,3 +17,13 @@ Date: 2026-11-01. Branch `deda-100422-secure-pin-gate-integrated-no-deploy-2026-
 ## QA
 - `.github/workflows/qa-deda-100422-secure-pin-merged-no-deploy.yml` tests backend syntax/index export, 12 unit tests, 7 local Auth+Firestore emulator tests, HOLD-only Flutter contract, and reassembled 100420 source with 100421 guard + staged opt-in recovery entry. A pass is *source/emulator QA only*; actual Firebase/App Check/2-device checks remain pending.
 - Keep the 100420 signed baseline and 100421 verified guard fixed as rollback checkpoints.
+
+## Verified CI result — 2026-11-01
+**PASS: both independent jobs** in GitHub Actions run [41319254259](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41319254259), tested source commit `13376dadb9c65cf9187029c62f765f9238ac3392`.
+
+- **Backend: PASS** — 12/12 Node unit tests and 7/7 actual local Firebase Auth + Firestore emulator tests, with synthetic accounts and no production access.
+- **Authentic app source: PASS** — regenerated the exact 100420 baseline through the 100418 binders, kept the 100421 canonical helper protections, staged the dedicated 100422 recovery-only preflight in ephemeral source, and verified all recorded source hashes.
+- **Flutter: PASS** — owner18 original-account proof tests + secure recovery HOLD contract tests passed; Dart analysis of the reassembled PIN auth and proof modules reported `No issues found!`.
+- **No APK, live Firebase changes, wallet/user mutations, migration, signing or Play upload** occurred in this workflow.
+
+**Decision:** 100422 code merge and QA are complete. **Production security activation and overall account-recovery Step 1 are NOT complete** until server-owned immutable original-ID authority, legacy PIN-bypass cutover planning, a real App Check/credential deploy, and owner phone/tablet acceptance. The published 100420 app still uses legacy login; never claim it is already server-rate-limited by the new callable.
