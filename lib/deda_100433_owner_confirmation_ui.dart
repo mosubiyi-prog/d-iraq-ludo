@@ -160,13 +160,16 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     // frozen place-source upload without entering or retaining the PIN again.
     // This is necessary after a lost network acknowledgement: linking is
     // intentionally not attempted a second time.
-    final existingUser = FirebaseAuth.instance.currentUser;
-    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    // The default widget/test build must not access Firebase Auth before
+    // Firebase.initializeApp(). Only the explicitly enabled private pilot
+    // may check an existing linked session to retry place evidence.
     if (dedaStep2OwnerPlaceLocalArchiveEnabled &&
-        dedaLinkedOwnerCompatEnabled &&
-        existingUser != null && !existingUser.isAnonymous &&
-        existingUser.email ==
-            DedaLinkedOwnerSessionPolicy.ownerEmail(account)) {
+        dedaLinkedOwnerCompatEnabled) {
+      final existingUser = FirebaseAuth.instance.currentUser;
+      final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+      if (existingUser != null && !existingUser.isAnonymous &&
+          existingUser.email ==
+              DedaLinkedOwnerSessionPolicy.ownerEmail(account)) {
       setState(() => _running = true);
       try {
         final archived = await _archiveLinkedOriginalPlace(existingUser.uid);
@@ -187,7 +190,8 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       } finally {
         if (mounted) setState(() => _running = false);
       }
-      return;
+        return;
+      }
     }
     final pin = await DedaOwnerPinPrompt.ask(
       context,
