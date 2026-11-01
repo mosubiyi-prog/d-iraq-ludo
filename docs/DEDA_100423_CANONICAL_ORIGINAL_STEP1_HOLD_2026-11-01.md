@@ -17,3 +17,8 @@ Base: signed private 100420 source, verified 100421 account guard, verified 1004
 - Stop on absent original route rather than inventing an original ID, writing a replacement, or normalizing `07...` and `9647...` automatically.
 
 **Checkpoint: source integration only until CI confirms; Step 1 production completion remains OPEN.**
+
+## Verified server QA and cloud service metadata (2026-11-01)
+- [GitHub Actions #41320252989](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41320252989): backend job **SUCCESS** with 28/28 Node unit cases and 13/13 actual local Firebase Auth/Firestore emulator cases; 0 failures. Its first Flutter job exposed a malformed interpolation of the Dart original-ID pattern; this was corrected using the exact previous green 100422 source as a base at commit `25425c7dabe0a743ee6a4db2b5bd949b2ecc3357`, followed by a fresh separate CI run.
+- [Production service metadata GET-only #41320434509](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41320434509): Cloud Functions API ENABLED, but **Cloud Build, Artifact Registry, Cloud Run and Secret Manager APIs DISABLED**. Billing status `UNKNOWN_HTTP_403`; production PIN HMAC secret metadata `UNKNOWN_OR_ABSENT_HTTP_403`. Neither `dedaSecurePinPreflightV1` nor `dedaCanonicalOriginalHoldV1` is deployed. GET-only project metadata checks; no services/billing/user data were changed.
+- Therefore do **NOT** deploy the Gen2 callables, cut legacy login rules or claim full account restoration readiness. Service enablement / billing rights, server secret creation, genuine App Check, an authorized legacy-APK cutover and real owner device checks remain gates. Never silently transfer ownership or deda balances.
