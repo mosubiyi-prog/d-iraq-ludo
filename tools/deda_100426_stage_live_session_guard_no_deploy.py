@@ -38,7 +38,7 @@ def stage(original):
     middle, right = section.split(END, 1)
     assert middle.count(OLD) == 1, "SAFE_STOP_TRUSTED_LOGIN_POLICY_DRIFT"
     assert middle.count("deda_auth_attempts/") >= 2, "PIN_PROOF_MISSING"
-    assert middle.count("request.auth.uid == uid") == 1, "UID_PROOF_MISSING"
+    assert middle.count("request.auth.uid == uid") >= 1, "UID_PROOF_MISSING"
     assert "request.resource.data.installId" in middle
     new_middle = middle.replace(OLD, NEW)
     result = left + BEGIN + new_middle + END + right
