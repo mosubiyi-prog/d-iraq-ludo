@@ -9,6 +9,21 @@ const {requireReviewedActivation}=require('../tools/app_stability/progress_archi
 const safe=v=>Number.isSafeInteger(v)&&v>=0;
 const orig=v=>typeof v==='string'&&/^@DEDA-[A-Z0-9]{6}$/.test(v);
 const week=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v);
+const VALID_DAILY_TASKS=new Set(["share_personal_location","open_map",
+ "share_registered_place","open_saved_place","open_received_place",
+ "review_added_place","traffic_skills","long_trip"]);
+function isWeeklyTaskKey(key,weekId){
+ if(typeof key!=="string"||key.length>120)return false;
+ const parts=key.split("|");
+ if(parts.length!==2||!week(parts[0])||
+    !VALID_DAILY_TASKS.has(parts[1]))return false;
+ const actual=Date.parse(parts[0]+"T00:00:00Z");
+ const start=Date.parse(weekId+"T00:00:00Z");
+ return Number.isFinite(actual)&&Number.isFinite(start)&&
+   new Date(actual).toISOString().startsWith(parts[0]) &&
+   new Date(start).toISOString().startsWith(weekId) &&
+   actual>=start && actual-start<7*86400000;
+}
 function stop(code='progress-recovery-hold'){throw Object.assign(new Error(code),{code});}
 function add(a,b){if(!safe(a)||!safe(b)||!safe(a+b))stop('progress-overflow');return a+b;}
 function ownerRoute(user,route,oldUser,accountKey,originalId,uid){
@@ -56,7 +71,7 @@ function weeklyReceipt(existing,originalId,weekId){
  const keys=existing.claimedKeys;
  if(existing.publicId!==originalId||existing.weekId!==weekId||
     !Array.isArray(keys)||keys.length>56||
-    keys.some(k=>typeof k!=='string'||k.length<4||k.length>120)||
+    keys.some(k=>!isWeeklyTaskKey(k,weekId))||
     new Set(keys).size!==keys.length||
     !safe(existing.completedTasks)||!safe(existing.weeklyXp)||
     existing.completedTasks!==keys.length||existing.weeklyXp!==20*keys.length)
