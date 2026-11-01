@@ -13,6 +13,10 @@ const {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc} =
   require("firebase/firestore");
 const {securePinPreflight, PinDenied} = require("../deda_secure_pin_gate_core");
 
+const {canonicalOriginalHold, CanonicalDenied} =
+  require("../deda_canonical_account_proof_core");
+const {rateDocumentId} = require("../deda_secure_pin_gate_core");
+
 const PROJECT = "demo-deda-secure-pin-private-qa";
 if (process.env.GCLOUD_PROJECT !== PROJECT ||
     process.env.DEDA_SECURE_PIN_EMULATOR_ONLY !== "true" ||
@@ -126,4 +130,75 @@ test("original full Firestore Rules deny mobile reads/writes to both backend nam
     await assert.rejects(setDoc(doc(a.clientDb, path), {faked: true}),
       err => err.code === "permission-denied");
   }
+});
+
+
+const ORIGINAL = "@DEDA-AB3C5D";
+const holdOriginal = (phoneClient, accountKey=KEY1, pin=PIN1, extras={}) =>
+  canonicalOriginalHold({
+    db, auth, secret:KEY, request:request(phoneClient,accountKey,pin,extras),
+  });
+async function seedOriginal() {
+  await db.doc("users/"+a.uid).set({
+    accountKey:KEY1,sharePersonalId:ORIGINAL,
+  },{merge:true});
+  await db.doc("deda_share_ids/"+ORIGINAL).set({
+    publicId:ORIGINAL,kind:"personal",active:true,ownerUid:a.uid,
+  });
+}
+
+test("canonical original is server-attested identically for two anonymous UIDs without wallet migration", async()=>{
+  await seedOriginal();
+  const x=await holdOriginal(a);
+  const y=await holdOriginal(b);
+  assert.equal(x.canonicalOriginalId,ORIGINAL);
+  assert.equal(y.canonicalOriginalId,ORIGINAL);
+  assert.equal(x.canRestoreAssets,false);
+  assert.equal(y.canMigrate,false);
+  const mapping=await db.doc("deda_secure_canonical_accounts/"+rateDocumentId(KEY,KEY1)).get();
+  assert.equal(mapping.data().sourceOwnerUid,a.uid);
+  assert.equal(mapping.data().originalId,ORIGINAL);
+  assert.equal((await db.doc("users/"+a.uid+"/wallet/original").get()).data().diamonds,420);
+  assert.equal((await db.doc("users/"+b.uid+"/wallet/original").get()).exists,false);
+});
+
+test("canonical proof rejects absent or revoked original route, preserving mapping", async()=>{
+  await db.doc("deda_share_ids/"+ORIGINAL).update({active:false});
+  await assert.rejects(holdOriginal(b),e=>e instanceof CanonicalDenied);
+  await db.doc("deda_share_ids/"+ORIGINAL).update({active:true});
+  const mapping=await db.doc("deda_secure_canonical_accounts/"+rateDocumentId(KEY,KEY1)).get();
+  assert.equal(mapping.data().originalId,ORIGINAL);
+});
+
+test("canonical proof rejects conflicting owner original and never rewrites mapping", async()=>{
+  await db.doc("users/"+a.uid).update({sharePersonalId:"@DEDA-ZZ9999"});
+  await assert.rejects(holdOriginal(a),e=>e instanceof CanonicalDenied);
+  await db.doc("users/"+a.uid).update({sharePersonalId:ORIGINAL});
+  assert.equal((await holdOriginal(a)).canonicalOriginalId,ORIGINAL);
+});
+
+test("canonical proof rejects copied UID, account-format alias and injected route", async()=>{
+  await assert.rejects(holdOriginal(attacker,KEY1,PIN1,{ownerUid:a.uid}),
+    e=>e.name==="PinDenied");
+  // The PIN account key is exact: no silent 07 ↔ 9647 merge.
+  await assert.rejects(holdOriginal(attacker,"9647705551111",PIN1),
+    e=>e.name==="PinDenied");
+  assert.equal((await db.doc("deda_secure_account_bindings/"+attacker.uid).get()).exists,false);
+});
+
+test("original account mapping cannot be changed or read by a mobile user", async()=>{
+  const mapped="deda_secure_canonical_accounts/"+rateDocumentId(KEY,KEY1);
+  await assert.rejects(getDoc(doc(b.clientDb,mapped)),
+    e=>e.code==="permission-denied");
+  await assert.rejects(setDoc(doc(b.clientDb,mapped),{
+    originalId:"@DEDA-ZZ9999",sourceOwnerUid:b.uid,
+  }),e=>e.code==="permission-denied");
+});
+
+test("tampered canonical mapping makes new device proof fail closed", async()=>{
+  const ref=db.doc("deda_secure_canonical_accounts/"+rateDocumentId(KEY,KEY1));
+  await ref.update({originalId:"@DEDA-ZZ9999"});
+  await assert.rejects(holdOriginal(b),e=>e instanceof CanonicalDenied);
+  await ref.update({originalId:ORIGINAL});
+  assert.equal((await holdOriginal(b)).canonicalOriginalId,ORIGINAL);
 });
