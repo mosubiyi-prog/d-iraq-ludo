@@ -44,6 +44,14 @@ jobs:
           node --check functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js
           node --check tools/app_stability/progress_archive/activate-reviewed-emulator.test.cjs
           echo 'PASS_100429_SERVER_INTERNAL_PREVIEW_ONLY'
+      - name: Test 100-question and 8 daily-task UI evidence without awarding ANY points
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_100429_daily_quiz_continuity_NOT_EXPORTED.js
+          node --check functions/tests/deda_100429_daily_quiz_continuity.test.cjs
+          node --test functions/tests/deda_100429_daily_quiz_continuity.test.cjs
+          echo 'PASS_100429_LOCAL_DAILY_QUIZ_EVIDENCE_NO_REWARDS'
       - name: Install JS dependencies in isolated runner scratch directory
         shell: bash
         run: |
