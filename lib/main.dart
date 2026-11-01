@@ -803,14 +803,18 @@ class DedaPreferences {
     required String name,
     required String normalizedPhone,
     required DedaAccountType type,
+    bool verifiedCanonicalProfile = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final previousPhone = prefs.getString(_phoneKey) ?? '';
     final previousName = prefs.getString(_userNameKey) ?? '';
-    final resolvedName =
-        previousPhone == normalizedPhone && previousName.trim().isNotEmpty
+    // Never prefer a previous local name over a verified original-server
+    // profile during replacement-phone restoration.
+    final resolvedName = verifiedCanonicalProfile
+        ? name.trim()
+        : (previousPhone == normalizedPhone && previousName.trim().isNotEmpty
             ? previousName.trim()
-            : name.trim();
+            : name.trim());
 
     userName = resolvedName;
     phone = normalizedPhone;
@@ -835,13 +839,17 @@ class DedaPreferences {
 
     // Do not hold the login screen open while Firebase/network profile syncs.
     // Local account state is already complete, so the user can enter DEDA now.
-    unawaited(
-      DedaBackend.syncCurrentUserProfile(
-        name: resolvedName,
-        phone: normalizedPhone,
-        accountType: type.name,
-      ).catchError((_) {}),
-    );
+    // The recovered profile is authoritative: a stale local preference must
+    // not write it back to Firestore during the first restored login.
+    if (!verifiedCanonicalProfile) {
+      unawaited(
+        DedaBackend.syncCurrentUserProfile(
+          name: resolvedName,
+          phone: normalizedPhone,
+          accountType: type.name,
+        ).catchError((_) {}),
+      );
+    }
   }
 
   static Future<void> setAccountType(DedaAccountType type) async {
@@ -1930,9 +1938,14 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _completeVerifiedLogin(
-    String normalizedPhone, {String? verifiedName}
-  ) async {
+    String normalizedPhone, {
+    String? verifiedName,
+    DedaAccountType? verifiedType,
+  }) async {
     if (!mounted) return;
+    if ((verifiedName == null) != (verifiedType == null)) {
+      throw StateError('incomplete-verified-owner-profile');
+    }
     final name = verifiedName ?? nameController.text.trim();
     if (name.length < 2) {
       _showLoginMessage(
@@ -1943,15 +1956,16 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final savedType = DedaPreferences.accountType;
-    final type =
-        savedType != null && DedaPreferences.accountPhone == normalizedPhone
+    final type = verifiedType ??
+        (savedType != null && DedaPreferences.accountPhone == normalizedPhone
             ? savedType
-            : (savedType ?? DedaAccountType.user);
+            : DedaAccountType.user);
 
     await DedaPreferences.saveLogin(
       name: name,
       normalizedPhone: normalizedPhone,
       type: type,
+      verifiedCanonicalProfile: verifiedName != null,
     );
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
@@ -2000,12 +2014,18 @@ class _LoginPageState extends State<LoginPage> {
       final originalUid = await DedaOwnerUidContinuity.loginLinkedOriginalUid(
         phone: phone, pin: pin, originalId: originalId,
       );
-      final originalName =
-          await DedaOwnerUidContinuity.verifiedProfileNameForLinkedOwner(
+      final originalProfile =
+          await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
         phone: phone, originalId: originalId, expectedUid: originalUid,
       );
       if (!mounted) return;
-      await _completeVerifiedLogin(phone, verifiedName: originalName);
+      await _completeVerifiedLogin(
+        phone,
+        verifiedName: originalProfile.name,
+        verifiedType: originalProfile.accountType == 'placeOwner'
+            ? DedaAccountType.placeOwner
+            : DedaAccountType.user,
+      );
     } catch (_) {
       _showLoginMessage(
         'تعذر تأكيد الحساب. لم يتم تغيير أو استرجاع أي رصيد.',
