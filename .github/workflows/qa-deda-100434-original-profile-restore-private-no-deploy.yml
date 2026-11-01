@@ -8,8 +8,10 @@ on:
       - 'lib/deda_100433_owner_confirmation_ui.dart'
       - 'lib/deda_100430_owner_uid_continuity.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'lib/deda_step2_original_backup_readback.dart'
       - 'test/deda_100433_owner_confirmation_ui_test.dart'
       - 'test/deda_100434_recovery_original_profile_test.dart'
+      - 'test/deda_step2_original_backup_readback_test.dart'
       - '.github/workflows/qa-deda-100434-original-profile-restore-private-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -40,6 +42,7 @@ jobs:
           grep -q "if (!verifiedCanonicalProfile)" lib/main.dart
           grep -q "verifiedType: originalProfile.accountType" lib/main.dart
           grep -q "verifiedName: originalProfile.name" lib/main.dart
+          grep -q "'DEDA_STEP2_ORIGINAL_EVIDENCE_READBACK', defaultValue: false" lib/deda_step2_original_backup_readback.dart
           ! grep -q "DEDA_STEP2_LINKED_OWNER_COMPAT=true" android/app/build.gradle
           ! grep -q "DEDA_STEP2_QUIZ_CLOUD=true" android/app/build.gradle
           echo 'NO_AUTOMATIC_USER_LINK_NO_OLD_ACCOUNT_SIGNOUT_NO_WALLET_TRANSFER'
@@ -50,9 +53,10 @@ jobs:
           flutter pub get
           flutter test test/deda_100433_owner_confirmation_ui_test.dart --no-pub
           flutter test test/deda_100434_recovery_original_profile_test.dart --no-pub
+          flutter test test/deda_step2_original_backup_readback_test.dart --no-pub
           flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
           flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
-          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart
           echo 'PASS_100434_VERIFIED_ORIGINAL_PROFILE_NO_PRODUCTION_DEPLOY'
       - name: Never build a release APK or publish to Play
         run: |
