@@ -1,0 +1,75 @@
+name: DEDA 100425 Step 3 Live Backend Prerequisites (READ ONLY)
+on:
+  push:
+    branches:
+      - deda-100425-step3-firebase-safe-activation-gate-no-deploy-2026-11-01
+    paths:
+      - '.github/workflows/qa-deda-100425-activation-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firebase-services-metadata-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_SA_PRIMARY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_SA_FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Retrieve project service metadata ONLY; no deploy or secret values
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          project='deda-25b88'
+          raw=os.environ.get('DEDA_SA_PRIMARY') or os.environ.get('DEDA_SA_FALLBACK')
+          try:
+              info=json.loads(raw or '{}')
+              assert info.get('type')=='service_account' and info.get('project_id')==project
+              sess=AuthorizedSession(service_account.Credentials.from_service_account_info(
+                  info,scopes=['https://www.googleapis.com/auth/cloud-platform']))
+              print('ACCOUNT_METADATA_ACCESS=AVAILABLE')
+          except Exception:
+              print('ACCOUNT_METADATA_ACCESS=UNKNOWN')
+              raise SystemExit(0)
+          def get(url):
+              try:
+                  r=sess.get(url,timeout=20)
+                  return r.status_code,r.json() if r.status_code==200 else {}
+              except Exception: return 'ERROR',{}
+          services={}
+          for name in ('cloudfunctions','cloudbuild','artifactregistry','run','secretmanager','firebaseappcheck'):
+              status,payload=get('https://serviceusage.googleapis.com/v1/projects/'+project+'/services/'+name+'.googleapis.com')
+              value=payload.get('state','UNKNOWN_HTTP_'+str(status))
+              print('SERVICE_'+name.upper()+'='+str(value))
+              services[name]=value
+          status,payload=get('https://cloudbilling.googleapis.com/v1/projects/'+project+'/billingInfo')
+          billing_enabled=(status==200 and payload.get('billingEnabled') is True)
+          print('BILLING_STATUS='+('ENABLED' if payload.get('billingEnabled') is True
+              else 'DISABLED' if status==200 else 'UNKNOWN_HTTP_'+str(status)))
+          status,payload=get('https://secretmanager.googleapis.com/v1/projects/'+project+'/secrets/DEDA_ACCOUNT_PIN_RATE_KEY')
+          rate_secret_visible=(status==200)
+          print('SECURE_RATE_SECRET_METADATA='+('EXISTS' if status==200 else 'UNKNOWN_OR_ABSENT_HTTP_'+str(status)))
+          status,payload=get('https://cloudfunctions.googleapis.com/v2/projects/'+project+'/locations/us-central1/functions?pageSize=100')
+          targets={'dedaSecurePinPreflightV1','dedaCanonicalOriginalHoldV1'}
+          deployed=set()
+          if status==200:
+              names={row.get('name','').split('/')[-1] for row in payload.get('functions',[])}
+              deployed=targets.intersection(names)
+              for name in sorted(targets):
+                  print('DEPLOYED_'+name+'='+('YES' if name in names else 'NO'))
+          else: print('FUNCTIONS_LIST=UNKNOWN_HTTP_'+str(status))
+          infra_ready=(all(services.get(s)=='ENABLED' for s in
+              ('cloudfunctions','cloudbuild','artifactregistry','run','secretmanager','firebaseappcheck'))
+              and billing_enabled and rate_secret_visible and targets.issubset(deployed))
+          print('SERVICE_INFRA_GATE='+('READY_FOR_FURTHER_SECURITY_REVIEW' if infra_ready else 'BLOCKED'))
+          # App Check attestation configuration, service account deploy powers,
+          # published Rules versions and 100340 compatibility remain separate.
+          print('PRODUCTION_AUTH_CUTOVER_GATE=NOT_AUTHORIZED_BY_METADATA')
+          print('NO_DEPLOY_NO_API_ENABLE_NO_BILLING_CHANGES_NO_FIRESTORE_WRITES')
+          print('METADATA_GET_ONLY_NO_FIREBASE_WRITES_NO_SECRET_VALUES_NO_BILLING_ACTIONS_NO_APK')
+          PY
