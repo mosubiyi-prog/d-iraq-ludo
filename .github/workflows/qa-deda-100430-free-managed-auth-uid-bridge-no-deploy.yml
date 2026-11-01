@@ -5,6 +5,8 @@ on:
       - deda-100430-step2-owner-uid-continuity-no-billing-private-qa-2026-11-01
     paths:
       - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'lib/deda_100430_quiz_ui_hydration.dart'
+      - 'test/deda_100430_quiz_ui_hydration_test.dart'
       - 'functions/tests/deda_100430_uid_auth_emulator.test.cjs'
       - '.github/workflows/qa-deda-100430-free-managed-auth-uid-bridge-no-deploy.yml'
   workflow_dispatch:
@@ -79,5 +81,6 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart
+          flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
+          dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart lib/deda_100430_quiz_ui_hydration.dart test/deda_100430_quiz_ui_hydration_test.dart
           echo 'PASS_100430_DART_ACCOUNT_LINK_SOURCE_ONLY_NO_APK'
