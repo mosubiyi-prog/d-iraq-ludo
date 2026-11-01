@@ -132,7 +132,7 @@ test("mirror exactly existing Dart 20-base × 5-variant 100-question bank",()=>{
    ?.split("const int _trafficVariantsPerBase")[0];
  assert.ok(segment,"Flutter traffic bank source missing");
  const base=[...segment.matchAll(/\bid:\s*'([^']+)'/g)].map(m=>m[1]);
- const registry=[...require("../deda_100429_daily_quiz_continuity_NOT_EXPORTED").TRAFFIC_BASE??[]];
+ const registry=require("../deda_100429_daily_quiz_continuity_NOT_EXPORTED").TRAFFIC_BASE;
  assert.equal(base.length,20);
  assert.deepEqual(new Set(registry),new Set(base));
  assert.match(dart,/const int _trafficVariantsPerBase = 5;/);
