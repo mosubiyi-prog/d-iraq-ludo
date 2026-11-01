@@ -104,7 +104,7 @@ void main(){
     final second=await h.save();
     expect(first.records,second.records);
     expect(h.cloud.writes,1);
-    expect(h.cloud.reads,2);
+    expect(h.cloud.reads,3);
   });
 
   test('after lost response original ID can be checked with same bytes',()async{
@@ -220,7 +220,7 @@ void main(){
     await expectLater(h.archive.inspectOnReplacementPhone(
       accountKey:account,originalUid:uid,captureId:id,
       isCurrent:()=>true),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
-    expect(h.cloud.reads,1); // only original phone confirmation read
+    expect(h.cloud.reads,2); // original preflight + confirmation; denied replacement reads none
   });
 
   test('forged or missing remote original place archive is rejected',()async{
