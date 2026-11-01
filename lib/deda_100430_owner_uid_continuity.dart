@@ -206,15 +206,16 @@ class DedaOwnerUidContinuity {
       await _verifyOriginalUid(
         accountKey: accountKey, originalId: originalId, uid: uid,
       );
-      // PIN proof from this SAME Firebase Auth UID; do not call
-      // DedaPinAuth._ensureAnonymousSession, which would sign out the owner.
+      // The Firebase Auth password sign-in above is the credential proof
+      // for this *linked* original UID. Never re-send or persist its raw PIN
+      // into deda_auth_attempts on the replacement phone. This requires
+      // the separately QA-tested same-UID session rule, not a client bypass.
+      if (FirebaseAuth.instance.currentUser?.uid != uid ||
+          FirebaseAuth.instance.currentUser?.isAnonymous != false ||
+          FirebaseAuth.instance.currentUser?.email != authEmail(phone)) {
+        throw StateError('original-linked-auth-proof-lost');
+      }
       final db = FirebaseFirestore.instance;
-      await db.collection('deda_auth_attempts').doc(uid).set({
-        'uid': uid,
-        'accountKey': accountKey,
-        'pin': pin,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
       final install = await DedaPinAuth.installId();
       await db.collection('deda_sessions').doc(uid).set({
         'uid': uid,
