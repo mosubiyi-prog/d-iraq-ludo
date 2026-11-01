@@ -20,6 +20,9 @@ import 'package:image_picker/image_picker.dart';
 
 import 'admin_pages.dart';
 import 'deda_backend.dart';
+import 'deda_100430_owner_uid_continuity.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -1970,6 +1973,42 @@ class _LoginPageState extends State<LoginPage> {
     await _completeVerifiedLogin(normalizedPhone);
   }
 
+  Future<void> _signInToConfirmedAccount() async {
+    final name = nameController.text.trim();
+    final phone = _normalizeIraqiPhone(phoneController.text);
+    if (name.length < 2 || phone == null) {
+      _showLoginMessage(
+        'أدخل الاسم ورقم الهاتف الصحيح أولاً.',
+        'Enter your name and valid phone number first.',
+      );
+      return;
+    }
+    final pin = await DedaOwnerPinPrompt.ask(
+      context,
+      title: dedaText('دخول حساب DEDA المؤكّد', 'Sign into confirmed DEDA account'),
+      explanation: dedaText(
+        'هذا الدخول للحساب الذي سبق تأكيده على الهاتف الأصلي فقط. '
+        'لن تُنقل الماسات أو النقاط قبل التحقق من سجلاتها.',
+        'Use only for an account previously linked on its original phone. '
+        'This does not transfer balances or points.',
+      ),
+    );
+    if (!mounted || pin == null) return;
+    try {
+      final originalId = DedaBackend.personalShareIdForPhone(phone);
+      await DedaOwnerUidContinuity.loginLinkedOriginalUid(
+        phone: phone, pin: pin, originalId: originalId,
+      );
+      if (!mounted) return;
+      await _completeVerifiedLogin(phone);
+    } catch (_) {
+      _showLoginMessage(
+        'تعذر تأكيد الحساب. لم يتم تغيير أو استرجاع أي رصيد.',
+        'Confirmed account sign-in was not verified; no balance restored.',
+      );
+    }
+  }
+
   void _openContact() {
     Navigator.push(
       context,
@@ -2271,6 +2310,18 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                               ),
+                              if (dedaLinkedOwnerCompatEnabled) ...[
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  key: const ValueKey('deda-confirmed-account-login'),
+                                  onPressed: _signInToConfirmedAccount,
+                                  icon: const Icon(Icons.verified_user_outlined),
+                                  label: Text(dedaText(
+                                    'دخول الحساب المؤكّد',
+                                    'Sign into confirmed account',
+                                  )),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -10359,6 +10410,11 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
               ),
             ),
             const SizedBox(height: 20),
+            if (dedaLinkedOwnerCompatEnabled)
+              DedaOwnerConfirmButton(
+                phone: DedaPreferences.phone,
+                originalId: _personalDedaId,
+              ),
             OutlinedButton.icon(
               onPressed: _logout,
               style: OutlinedButton.styleFrom(
