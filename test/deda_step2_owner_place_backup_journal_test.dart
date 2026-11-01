@@ -103,6 +103,17 @@ void main(){
     expect(h.local.reads,1);
   });
 
+  test('blank original place-owner source never creates a dead pending journal',()async{
+    final h=H();
+    for(final key in h.local.values.keys.toList()){
+      h.local.values[key]=null;
+    }
+    await expectLater(h.prepare(),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
+    expect(h.journal.values[account],isNull);
+    expect(h.journal.writes,0);
+    expect(h.cloud.writes,0);
+  });
+
   test('successful server readback removes only the acknowledged journal',()async{
     final h=H();
     await h.prepare();
