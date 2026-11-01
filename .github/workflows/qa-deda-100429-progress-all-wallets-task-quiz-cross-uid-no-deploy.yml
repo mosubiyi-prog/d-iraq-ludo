@@ -40,7 +40,7 @@ jobs:
           test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
           ! grep -q 'deda_100429_progress_recovery_snapshot_NOT_EXPORTED' functions/index.js
           ! grep -q 'deda_100429_daily_quiz_continuity_NOT_EXPORTED' functions/index.js
-          grep -q 'canCreditDiamonds:false' functions/deda_full_restore_inventory_core_NOT_EXPORTED.js
+          grep -q 'safeToCreditDiamonds:false' functions/deda_full_restore_inventory_core_NOT_EXPORTED.js
           node --check functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js
           node --check tools/app_stability/progress_archive/activate-reviewed-emulator.test.cjs
           echo 'PASS_100429_SERVER_INTERNAL_PREVIEW_ONLY'
