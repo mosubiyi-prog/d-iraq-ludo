@@ -95,7 +95,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter pub get --enforce-lockfile
+          # GitHub main's legacy lockfile predates Flutter 3.47.7 SDK; isolate
+          # dependency resolution in this ephemeral QA runner, not in repo.
+          flutter pub get
           flutter test test/deda_100429_local_task_traffic_evidence_test.dart --no-pub
           dart analyze --no-fatal-warnings lib/deda_100429_local_task_traffic_evidence.dart test/deda_100429_local_task_traffic_evidence_test.dart
           grep -q 'bool get canCreditPoints => false' lib/deda_100429_local_task_traffic_evidence.dart
