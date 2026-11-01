@@ -95,4 +95,4 @@ function displayOnlyEngagementArchive({record,accountKey,originalId,day,priorDig
    snapshot:today??null,
  });
 }
-module.exports={displayOnlyEngagementArchive};
+module.exports={displayOnlyEngagementArchive,TRAFFIC_BASE};
