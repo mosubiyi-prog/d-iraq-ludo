@@ -188,7 +188,6 @@
         && request.auth.uid in resource.data.members;
       allow list: if verifiedOriginalFriendReader()
         && request.query.limit != null && request.query.limit <= 201
-        && resource.data.members is list
         && request.auth.uid in resource.data.members;
       allow create, update, delete: if false;
     }
