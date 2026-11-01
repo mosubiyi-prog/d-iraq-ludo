@@ -1,0 +1,42 @@
+    // 100432: optional, immutable and DISPLAY-ONLY quiz UI history.
+    // The client's recorded answers are NEVER trusted as points, reward
+    // receipts, scores, purchases or proof of wallet ownership.
+    match /deda_quiz_ui_snapshots/{uid}/days/{dayId} {
+      function quizSameOriginalUid() {
+        return request.auth != null
+          && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && exists(/databases/$(database)/documents/deda_sessions/$(uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(uid)).data.accountKey
+               == get(/databases/$(database)/documents/users/$(uid)).data.accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(uid)).data.accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(uid)).data.accountKey)).data.createdUid == uid
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.ownerUid == uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow get: if quizSameOriginalUid();
+      allow list, update, delete: if false;
+      allow create: if quizSameOriginalUid()
+        && dayId.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly([
+          'format','kind','uid','accountKey','originalId','day','encoded','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','uid','accountKey','originalId','day','encoded','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'display-only-untrusted-quiz-v1'
+        && request.resource.data.uid == uid
+        && request.resource.data.accountKey
+             == get(/databases/$(database)/documents/users/$(uid)).data.accountKey
+        && request.resource.data.originalId
+             == get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+        && request.resource.data.day == dayId
+        && request.resource.data.encoded is string
+        && request.resource.data.encoded.size() >= 50
+        && request.resource.data.encoded.size() <= 60000
+        && request.resource.data.createdAt == request.time;
+    }
+
