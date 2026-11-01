@@ -6,7 +6,7 @@ const req=createRequire(path.resolve(__dirname,"../functions/package.json"));
 const {initializeTestEnvironment,assertSucceeds,assertFails}=
   req("@firebase/rules-unit-testing");
 const {doc,setDoc,getDoc,getDocs,collection,deleteDoc,updateDoc,
-  serverTimestamp,query,orderBy,limit}=req("firebase/firestore");
+  serverTimestamp,query,orderBy,where,limit}=req("firebase/firestore");
 const PROJECT="demo-deda-100434-original-evidence";
 const RULE=process.env.DEDA_100434_RULES_PATH;
 if(process.env.GCLOUD_PROJECT!==PROJECT ||
@@ -279,4 +279,36 @@ test("bounded place history cannot enumerate every owner or create duplicate cap
     collection(owner,"deda_step2_owner_place_evidence",ACCOUNT,"captures"),limit(20))));
  assert.equal(list.size,1);
  await assertFails(getDocs(collection(owner,"deda_step2_owner_place_evidence",ACCOUNT,"captures")));
+});
+
+const friendshipPair=([UID,"friend_uid_434"].sort().join("__"));
+async function seedFriendship(){
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),"deda_friendships",friendshipPair),{
+      pairKey:friendshipPair,members:[UID,"friend_uid_434"],
+      requesterUid:UID,recipientUid:"friend_uid_434",
+      requesterPublicId:ORIGINAL,recipientPublicId:"@DEDA-OTHER1",
+      requesterName:"Synthetic Original",recipientName:"Synthetic Friend",
+      status:"accepted",createdAt:serverTimestamp(),
+      updatedAt:serverTimestamp(),
+    });
+  });
+}
+test("same original Firebase UID replacement phone queries its saved friendship records",async()=>{
+  await seedFriendship();
+  const source=db(UID);
+  const result=await assertSucceeds(getDocs(query(
+    collection(source,"deda_friendships"),
+    where("members","array-contains",UID),limit(201)
+  )));
+  assert.equal(result.docs.length,1);
+  assert.equal(result.docs[0].data().requesterPublicId,ORIGINAL);
+  assert.equal(result.docs[0].data().status,"accepted");
+});
+test("foreign UID cannot fetch or edit an original account friendship",async()=>{
+  await seedFriendship();
+  await assertFails(getDoc(doc(db(OTHER),"deda_friendships",friendshipPair)));
+  await assertFails(updateDoc(doc(db(OTHER),"deda_friendships",friendshipPair),{
+    status:"accepted",updatedAt:serverTimestamp(),
+  }));
 });
