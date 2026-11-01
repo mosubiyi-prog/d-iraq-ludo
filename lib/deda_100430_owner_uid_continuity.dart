@@ -132,10 +132,26 @@ class DedaOwnerUidContinuity {
     return name;
   }
 
+  /// Account type is part of the original owner profile, not a preference
+  /// inherited from whichever user last opened this Android installation.
+  static String validatedServerAccountType(
+    Map<String, dynamic>? profile, {
+    required String accountKey,
+  }) {
+    if (profile?['accountKey'] != accountKey) {
+      throw StateError('linked-owner-profile-account-mismatch');
+    }
+    final raw = profile?['accountType'];
+    if (raw != 'user' && raw != 'placeOwner') {
+      throw StateError('linked-owner-profile-type-not-verified');
+    }
+    return raw as String;
+  }
+
   /// Called only after the same-UID linked login has succeeded. All reads
   /// are from the server, and immutable route ownership is checked again
   /// before the original name is admitted into local UI preferences.
-  static Future<String> verifiedProfileNameForLinkedOwner({
+  static Future<({String name, String accountType})> verifiedProfileForLinkedOwner({
     required String phone,
     required String originalId,
     required String expectedUid,
@@ -158,10 +174,13 @@ class DedaOwnerUidContinuity {
     final name = validatedServerProfileName(
       result.data(), accountKey: accountKey,
     );
+    final accountType = validatedServerAccountType(
+      result.data(), accountKey: accountKey,
+    );
     if (FirebaseAuth.instance.currentUser?.uid != expectedUid) {
       throw StateError('linked-owner-profile-session-changed');
     }
-    return name;
+    return (name: name, accountType: accountType);
   }
 
   /// Password-backed login is independent of anonymous UID churn. Absent an
