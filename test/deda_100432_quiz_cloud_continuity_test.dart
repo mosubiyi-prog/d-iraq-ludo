@@ -112,8 +112,9 @@ void main(){
   test('Different account or premium public ID cannot read other owners backup',() async {
     await upload(bridge(prefsOld));
     await expectLater(restore(bridge(prefsNew),user:'another_uid'),throwsStateError);
-    await expectLater(restore(bridge(prefsNew),orig:'@DEDA-KING99'),throwsFormatException);
-    await expectLater(restore(bridge(prefsNew),acc:'07799999999'),throwsFormatException);
+    // The owner-identity gate denies the request before payload decoding.
+    await expectLater(restore(bridge(prefsNew),orig:'@DEDA-KING99'),throwsStateError);
+    await expectLater(restore(bridge(prefsNew),acc:'07799999999'),throwsStateError);
     expect(prefsNew.data,isEmpty);
   });
   test('Fake signed-in but unverified account cannot upload or restore',() async {
