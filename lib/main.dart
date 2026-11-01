@@ -16,6 +16,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'admin_pages.dart';
@@ -23,6 +24,8 @@ import 'deda_backend.dart';
 import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100433_owner_confirmation_ui.dart';
+import 'deda_pin_auth.dart';
+import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -2019,6 +2022,25 @@ class _LoginPageState extends State<LoginPage> {
         phone: phone, originalId: originalId, expectedUid: originalUid,
       );
       if (!mounted) return;
+      // Private QA only. Before marking this linked login locally, restore
+      // FREE, per-account avatar/background values already archived by the
+      // original phone. No paid frame, points, gems or gifts may be hydrated.
+      // Missing/invalid cloud archive must fail closed, not become a false
+      // 'complete account recovery' success on the replacement phone.
+      if (dedaStep2VisualPrefsMigrationEnabled) {
+        await DedaStep2VisualPrefsContinuity.firebase().restoreReplacementPhone(
+          accountKey: DedaPinAuth.accountKeyForPhone(phone),
+          originalId: originalId,
+          originalUid: originalUid,
+          isCurrent: () => mounted &&
+              FirebaseAuth.instance.currentUser?.uid == originalUid &&
+              FirebaseAuth.instance.currentUser?.email ==
+                  DedaOwnerUidContinuity.authEmail(phone),
+        );
+      }
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
+        return;
+      }
       await _completeVerifiedLogin(
         phone,
         verifiedName: originalProfile.name,
