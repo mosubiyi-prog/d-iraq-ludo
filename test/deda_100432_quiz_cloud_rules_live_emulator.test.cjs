@@ -74,15 +74,19 @@ test("different anonymous UID cannot get or create other owner's UI document",as
  await assertFails(setDoc(doc(thief,addr(OTHER)),payload({uid:OTHER})));
 });
 test("cannot add any task points / financial credits to UI archive schema",async()=>{
+ const originalWallet=await env.withSecurityRulesDisabled(async c=>{
+   const x=await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL));
+   return x.data();
+ });
  const owner=db(UID);
  await assertFails(setDoc(doc(owner,addr()),payload({diamonds:999999})));
  await assertFails(setDoc(doc(owner,addr()),payload({taskAwards:["already-paid"]})));
  await assertFails(setDoc(doc(owner,addr()),payload({kind:"verified-wallet"})));
- const wallet=await env.withSecurityRulesDisabled(async c=>{
+ const after=await env.withSecurityRulesDisabled(async c=>{
    const x=await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL));
-   return x.data().balance;
+   return x.data();
  });
- assert.equal(wallet,9876);
+ assert.deepEqual(after,originalWallet);
 });
 test("no missing/forged original route or UID ownership can upload",async()=>{
  await env.withSecurityRulesDisabled(async c=>{
