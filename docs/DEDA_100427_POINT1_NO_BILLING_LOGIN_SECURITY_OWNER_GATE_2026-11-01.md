@@ -37,3 +37,9 @@ Base: proven 100426 Firestore-only exact-live-rules guard. No Play publication, 
 4. Only after approval, run an owner-reviewed strict rules-only release with double SHA lease, emulator/league tests in same run, rollback metadata and Firebase live readback. A final real-device login check must follow the released rule. Do not cut over old session paths to a global PIN mechanism that has not been deployed.
 
 **Status: POINT 1 UNDER IMPLEMENTATION — tested security candidate and tightly gated release prepared, LIVE activation intentionally held until real-device approval and scoped publish.**
+
+## Final reviewed source and last green QA
+- [CI #41326791755](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41326791755): **SUCCESS on commit `0f6576e1903207f6ff18cf1fd0a317aafa623dde`**. All 3 reversible-branch tests, 11 actual Firestore Auth/session/ID compatibility tests, 3 existing league-prizes tests, **6 manual release safety tests**, zero failures. The release-workflow test confirms `workflow_dispatch` only, no push or schedule and mandatory physical QA and live fingerprint inputs.
+- Published LIVE rules SHA and local candidate SHA remain respectively `273d20ffa0196709af7742dbf8f3fb4137edc2f3c7bb56f5e80d2c3506c62cb1` and `a0c4be5a6451bcfa9dd800d2df3646f099de308e41d127506f6e0b9b3d4d97cb`.
+- Manual release file was created on this **non-default private QA branch** and has no automatic action trigger; it must not be mistaken for a live deploy or runnable default-branch workflow. The prior 100419 release code demonstrates the existing REST Rules API approach with rollback and is only a reference, not an authorization to publish now.
+- **Decision:** code and local proof complete for this narrow security improvement; production activation remains PENDING safe real-device acceptance and explicit manual release authorization. Zero production Firestore Rules writes, user/wallet changes or Play actions.
