@@ -168,6 +168,65 @@ async function scanAccountRestoreReadiness({db,auth,secret,accountKey,
         weeklyScore.weekId!==weekId ||
         !uint(weeklyScore.weeklyXp))) deny();
 
+      // Source-of-truth premium grants & user-acknowledged gift receipts:
+      // original DEDA ID stays canonical, active premium ID is display only.
+      // These are bounded READ-ONLY queries. Never call receive(), use(),
+      // grant(), claim() or migrate() here.
+      const grantsSnap=await tx.get(db.collection("deda_stage71_granted_registry")
+        .where("recipientOriginalId","==",originalId).limit(201));
+      const giftSnap=await tx.get(db.collection("deda_stage74_id_gift_receipts")
+        .where("originalId","==",originalId).limit(201));
+      if(grantsSnap.size>200||giftSnap.size>200) deny();
+      const giftReceipts=new Map();
+      for(const item of giftSnap.docs){
+        const v=item.data();
+        if(v?.identifier!==item.id||v.originalId!==originalId ||
+           !["001","002"].includes(v.group) ||
+           !v.receivedAt || typeof v.receivedAt.toMillis!=="function" ||
+           !Number.isSafeInteger(v.receivedAt.toMillis())) deny();
+        giftReceipts.set(item.id,v);
+      }
+      let verifiedPremium=0,pendingPremiumGifts=0,acceptedPremiumGifts=0;
+      const verifiedAliases=new Set();
+      const observedGrants=new Set();
+      for(const item of grantsSnap.docs){
+        const v=item.data();
+        if(v?.identifier!==item.id||
+           !/^@DEDA-[A-Z0-9]{4,12}$/.test(item.id) ||
+           v.recipientOriginalId!==originalId ||
+           !["001","002"].includes(v.group) ||
+           !["gold","diamond","royal","pink"].includes(v.baseColor) ||
+           !["gifted","self_used"].includes(v.kind) ||
+           observedGrants.has(item.id)) deny();
+        observedGrants.add(item.id);
+        if(v.kind==="gifted"){
+          const received=giftReceipts.get(item.id);
+          if(received){
+            if(received.group!==v.group) deny();
+            acceptedPremiumGifts++;
+            verifiedPremium++;
+            verifiedAliases.add(item.id);
+          }else{
+            pendingPremiumGifts++;
+          }
+        }else{
+          if(giftReceipts.has(item.id)) deny();
+          verifiedPremium++;
+          verifiedAliases.add(item.id);
+        }
+      }
+      // A valid incoming receipt cannot exist without its original
+      // recipient's grant; that would create a false owned item.
+      for(const id of giftReceipts.keys()){
+        if(!observedGrants.has(id)) deny();
+      }
+      const activePremiumOwned=!!active &&
+        verifiedAliases.has(active.activeId);
+      // Legacy paid / non-Stage71 alias may have its OWN ownership
+      // registry. It must NOT be falsely marked unowned or restored here.
+      const activeNeedsIndependentProof=!!active &&
+        active.activeId!==originalId && !activePremiumOwned;
+
       // All unscanned streams stay as UNVERIFIED, not zeros. A valid
       // inventory read does not transfer UID-owned merchandise or awards.
       const domains={...ALL_BLOCKED,
@@ -175,9 +234,12 @@ async function scanAccountRestoreReadiness({db,auth,secret,accountKey,
         paidFrames:"receipt-and-ownership-pairs-readonly",
         diamondsAndBalances:wallet?
           "partial-verified-gift-wallet-only":"unverified-wallet-sources",
-        premiumIdentifier:active?
-          "display-selection-seen-ownership-not-yet-proven":
-          "active-selection-absent-needs-review",
+        premiumIdentifier:activePremiumOwned?
+          "stage71-received-or-self-used-alias-verified-readonly":
+          activeNeedsIndependentProof?
+            "active-selection-needs-independent-ownership-proof":
+            active?"original-selection-seen":"active-selection-absent-needs-review",
+        gifts:"stage71-gift-receipts-audited-only",
         weeklyLeague:weekId&&weeklyScore?
           "score-seen-payout-unverified":"week-score-unverified",
       };
@@ -190,6 +252,10 @@ async function scanAccountRestoreReadiness({db,auth,secret,accountKey,
         verifiedPaidFramePairs:found,
         verifiedGiftWalletPresent:!!wallet,
         activeDisplaySelectionPresent:!!active,
+        activeStage71OwnershipVerified:activePremiumOwned,
+        verifiedStage71PremiumItems:verifiedPremium,
+        pendingStage71GiftReceipts:pendingPremiumGifts,
+        acceptedStage71GiftReceipts:acceptedPremiumGifts,
         weeklyAccountSeen:!!weeklyOwner,
         domains:Object.freeze(domains),
       });
