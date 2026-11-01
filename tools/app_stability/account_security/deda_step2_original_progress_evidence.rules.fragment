@@ -1,0 +1,57 @@
+    // STEP 2: immutable UNTRUSTED legacy source evidence only.
+    // This document can NEVER grant/credit points, diamonds, rewards,
+    // paid frames or weekly prizes. Creation is restricted to the same
+    // original UID, session, directory and original-ID route.
+    match /deda_progress_evidence/{accountKey}/captures/{captureId} {
+      function sameOriginalEvidenceOwner() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal';
+      }
+      allow get: if sameOriginalEvidenceOwner();
+      allow list: if sameOriginalEvidenceOwner()
+        && request.query.limit != null && request.query.limit <= 26;
+      allow create: if sameOriginalEvidenceOwner()
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid','installId',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','sourceUid','installId',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'legacy-local-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.installId is string
+        && request.resource.data.installId.size() >= 1
+        && request.resource.data.installId.size() <= 128
+        && request.resource.data.captureId == captureId
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && (request.resource.data.records.taskPoints == null ||
+          request.resource.data.records.taskPoints is string)
+        && (request.resource.data.records.socialCoinsAndXp == null ||
+          request.resource.data.records.socialCoinsAndXp is string)
+        && (request.resource.data.records.earnedDiamonds == null ||
+          request.resource.data.records.earnedDiamonds is string)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
