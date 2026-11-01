@@ -217,7 +217,7 @@ const ownerArchiveFields=(overrides={})=>({
  accountKey:ACCOUNT,sourceUid:UID,captureId:CAPTURE,
  records:{
   placeId:"approved-place-123",pendingEditId:"edit-57",
-  draftRaw:'{"placeName":"Original owner's draft"}',
+  draftRaw:JSON.stringify({placeName:"Original owner's draft"}),
   submittedRaw:'{"approvalNumber":"DEDA-APPROVED-123"}'
  },
  createdAt:serverTimestamp(),...overrides
