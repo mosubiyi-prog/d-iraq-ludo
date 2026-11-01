@@ -62,6 +62,10 @@ jobs:
           grep -q "'DEDA_STEP2_ASSETS_READBACK', defaultValue: false" lib/deda_step2_assets_readback.dart
           grep -q "'DEDA_STEP2_LINKED_PUBLISHED_PLACE', defaultValue: false" lib/deda_step2_linked_published_place_recovery.dart
           grep -q "recoverOriginalPublishedPlace(" lib/main.dart
+          grep -q "_verifyPublishedPlaceBeforeOwnerControls" lib/main.dart
+          test "$(grep -F -c '_verifyPublishedPlaceBeforeOwnerControls(_placeId!)' lib/main.dart)" -eq 2
+          grep -q "dedaStep2LinkedPublishedPlaceEnabled && published == null" lib/main.dart
+          grep -q "_status = 'recovery_blocked'" lib/main.dart
           ! grep -q "DEDA_STEP2_LINKED_PUBLISHED_PLACE=true" android/app/build.gradle
           grep -q "throw StateError('partial-or-forged-frame-ownership')" lib/deda_lab_frame_secure_checkout.dart
           ! grep -q "DEDA_STEP2_ASSETS_READBACK=true" android/app/build.gradle
