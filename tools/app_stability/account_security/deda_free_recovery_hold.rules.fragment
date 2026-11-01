@@ -1,20 +1,100 @@
-    // DEDA 100426: opt-in account identity HOLD over Spark Firestore Rules.
-    // No financial restore, ID transfer, account merge or login replacement.
-    // A valid *fresh PIN proof* is required; trustedInstallIds are NOT proof.
+    // DEDA 100426 Spark-tier account identity: a fresh correct PIN is
+    // necessary. Trusted-install copies and a legacy session are NOT proof.
+    function dedaRecoveryFreshPin(accountKey) {
+      return signedIn()
+        && accountKey is string
+        && accountKey.matches('^[0-9]{8,15}$')
+        && exists(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.accountKey == accountKey
+        && get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.createdAt >= request.time - duration.value(5, 'm')
+        && exists(/databases/$(database)/documents/deda_credentials/$(accountKey))
+        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.active == true
+        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.pin
+          == get(/databases/$(database)/documents/deda_auth_attempts/$(request.auth.uid)).data.pin;
+    }
+
+    // This verifies the ORIGINAL personal ID, not the active premium alias.
+    // The legacy user projection is client mutable, so grants remain HOLD-only.
+    function dedaRecoveryOriginalMatches(accountKey, originalId, sourceUid) {
+      return originalId is string
+        && originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+        && sourceUid is string && sourceUid.size() > 0
+        && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == sourceUid
+        && get(/databases/$(database)/documents/deda_credentials/$(accountKey)).data.createdUid == sourceUid
+        && exists(/databases/$(database)/documents/users/$(sourceUid))
+        && get(/databases/$(database)/documents/users/$(sourceUid)).data.accountKey == accountKey
+        && get(/databases/$(database)/documents/users/$(sourceUid)).data.sharePersonalId == originalId
+        && exists(/databases/$(database)/documents/deda_share_ids/$(originalId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.publicId == originalId
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.kind == 'personal'
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.active == true
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.ownerUid == sourceUid;
+    }
+
+    // Original-device enrollment stores only a stable original ID pointer.
+    // Enrollment must write anchor + unique original-owner lock atomically.
+    // No account data, balances or sessions are moved.
+    match /deda_recovery_original_anchors/{accountKey} {
+      allow list, update, delete: if false;
+      allow get: if dedaRecoveryFreshPin(accountKey);
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'accountKey','originalId','sourceUid','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'accountKey','originalId','sourceUid','createdAt'
+        ])
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && dedaRecoveryFreshPin(accountKey)
+        && dedaRecoveryOriginalMatches(
+          accountKey,request.resource.data.originalId,request.auth.uid)
+        && !exists(/databases/$(database)/documents/deda_recovery_original_locks/$(request.resource.data.originalId))
+        && getAfter(/databases/$(database)/documents/deda_recovery_original_locks/$(request.resource.data.originalId)).data.accountKey == accountKey
+        && getAfter(/databases/$(database)/documents/deda_recovery_original_locks/$(request.resource.data.originalId)).data.sourceUid == request.auth.uid;
+    }
+
+    // One original ID may be enrolled by one account only. No mobile reads.
+    match /deda_recovery_original_locks/{originalId} {
+      allow get, list, update, delete: if false;
+      allow create: if signedIn()
+        && originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+        && request.resource.data.keys().hasOnly([
+          'accountKey','originalId','sourceUid','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'accountKey','originalId','sourceUid','createdAt'
+        ])
+        && request.resource.data.originalId == originalId
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && dedaRecoveryFreshPin(request.resource.data.accountKey)
+        && dedaRecoveryOriginalMatches(
+          request.resource.data.accountKey,originalId,request.auth.uid)
+        && !exists(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey))
+        && getAfter(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey)).data.originalId == originalId
+        && getAfter(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey)).data.sourceUid == request.auth.uid;
+    }
+
+    // New phone: resolve the original ID by number+fresh PIN from immutable
+    // bootstrap. HOLD only. No financial/profile/migration access granted.
     match /deda_recovery_identity_holds/{uid} {
       allow list, update, delete: if false;
       allow get: if signedIn() && request.auth.uid == uid;
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
-          'uid', 'accountKey', 'originalId', 'sourceUid',
-          'status', 'canRestoreAssets', 'canMigrate',
-          'canCreditXp', 'canCreditDiamonds', 'canIssueGift', 'createdAt'
+          'uid','accountKey','originalId','sourceUid','status','createdAt',
+          'canRestoreAssets','canMigrate','canCreditXp',
+          'canCreditDiamonds','canIssueGift'
         ])
         && request.resource.data.keys().hasAll([
-          'uid', 'accountKey', 'originalId', 'sourceUid',
-          'status', 'canRestoreAssets', 'canMigrate',
-          'canCreditXp', 'canCreditDiamonds', 'canIssueGift', 'createdAt'
+          'uid','accountKey','originalId','sourceUid','status','createdAt',
+          'canRestoreAssets','canMigrate','canCreditXp',
+          'canCreditDiamonds','canIssueGift'
         ])
         && request.resource.data.uid == uid
         && request.resource.data.status == 'PIN_PROVED_HOLD'
@@ -24,40 +104,12 @@
         && request.resource.data.canCreditXp == false
         && request.resource.data.canCreditDiamonds == false
         && request.resource.data.canIssueGift == false
-        && request.resource.data.accountKey is string
-        && request.resource.data.accountKey.matches('^[0-9]{8,15}$')
-        && request.resource.data.originalId is string
-        && request.resource.data.originalId.matches('^@DEDA-[A-Z0-9]{6}$')
-        && request.resource.data.sourceUid is string
-        && request.resource.data.sourceUid.size() > 0
-        && exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey
-          == request.resource.data.accountKey
-        && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.createdAt
-          >= request.time - duration.value(5, 'm')
-        && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
-        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.active == true
-        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin
-          == get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
-        && exists(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey))
-        && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.active == true
-        && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.createdUid
-          == request.resource.data.sourceUid
-        && get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.createdUid
-          == request.resource.data.sourceUid
-        && exists(/databases/$(database)/documents/users/$(request.resource.data.sourceUid))
-        && get(/databases/$(database)/documents/users/$(request.resource.data.sourceUid)).data.accountKey
-          == request.resource.data.accountKey
-        && get(/databases/$(database)/documents/users/$(request.resource.data.sourceUid)).data.sharePersonalId
-          == request.resource.data.originalId
-        && exists(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.originalId))
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.originalId)).data.publicId
-          == request.resource.data.originalId
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.originalId)).data.kind
-          == 'personal'
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.originalId)).data.active
-          == true
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.originalId)).data.ownerUid
-          == request.resource.data.sourceUid;
+        && dedaRecoveryFreshPin(request.resource.data.accountKey)
+        && exists(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey))
+        && get(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey)).data.originalId == request.resource.data.originalId
+        && get(/databases/$(database)/documents/deda_recovery_original_anchors/$(request.resource.data.accountKey)).data.sourceUid == request.resource.data.sourceUid
+        && dedaRecoveryOriginalMatches(
+          request.resource.data.accountKey,request.resource.data.originalId,
+          request.resource.data.sourceUid);
     }
 
