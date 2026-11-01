@@ -1,0 +1,86 @@
+name: DEDA 100431 In-App Linked Owner and Financial-Safe Restore QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100431-step2-integrate-linked-owner-safe-qa-no-deploy-2026-11-01
+    paths:
+      - 'lib/deda_pin_auth.dart'
+      - 'lib/deda_backend.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_100431_linked_owner_session_policy_test.dart'
+      - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'lib/deda_100430_quiz_ui_hydration.dart'
+      - 'test/deda_100430_quiz_ui_hydration_test.dart'
+      - '.github/workflows/qa-deda-100431-app-linked-owner-compat-restore-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100431-private-qa
+  cancel-in-progress: false
+jobs:
+  flutter-real-auth-and-old-ui-compat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 48
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: '3.47.7',channel: stable,cache: false}
+      - name: Prove optional bridge OFF in shipping builds and no live money enabled
+        run: |
+          set -euo pipefail
+          grep -q "'DEDA_STEP2_LINKED_OWNER_COMPAT', defaultValue: false" lib/deda_100431_linked_owner_session_policy.dart
+          ! grep -q 'deda_100430_owner_uid_continuity' lib/main.dart
+          ! grep -q 'deda_100429_progress_recovery_snapshot_NOT_EXPORTED' functions/index.js
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+      - name: Flutter compile-check real login/backend changes and test account ownership/quiz
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
+          flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
+          flutter test test/deda_100429_local_task_traffic_evidence_test.dart --no-pub
+          dart analyze --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_100431_linked_owner_session_policy.dart lib/deda_100430_owner_uid_continuity.dart lib/deda_100430_quiz_ui_hydration.dart
+          echo 'PASS_100431_FLUTTER_IN_APP_PIN_BACKEND_SESSION_AND_QUIZ_UI'
+      - name: No signed APK or app store release
+        run: |
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'NO_APP_DEPLOY_NO_FIREBASE_OR_WALLET_MUTATION'
+  real-managed-firebase-auth-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-deda-100430-uid-continuity
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Only disposable demo-project credentials allowed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-deda-100430-uid-continuity
+          test "$FIREBASE_AUTH_EMULATOR_HOST" = 127.0.0.1:9099
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          node --check functions/tests/deda_100430_uid_auth_emulator.test.cjs
+          npm --prefix functions install --no-save --no-audit --no-fund firebase@11.10.0 firebase-tools@14
+          cat > "$RUNNER_TEMP/auth-only.json" <<'JSON'
+          {"emulators":{"auth":{"port":9099},"ui":{"enabled":false},"singleProjectMode":true}}
+          JSON
+      - name: Confirm old UID equals new UID and reject fake login
+        shell: bash
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config "$RUNNER_TEMP/auth-only.json" --project demo-deda-100430-uid-continuity \
+            --only auth 'node --test functions/tests/deda_100430_uid_auth_emulator.test.cjs'
+          echo 'PASS_100431_SAME_UID_TWO_PHONES_NO_BILLING'
+      - name: Remove disposable config
+        if: always()
+        run: rm -f "$RUNNER_TEMP/auth-only.json"
