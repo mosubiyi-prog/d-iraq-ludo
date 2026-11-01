@@ -62,11 +62,15 @@ def stage(target: Path) -> None:
     for rel in [HELPER, TEST]:
         src = ROOT / rel
         dst = target / rel
-        if dst.exists():
-            raise ValueError("UNEXPECTED_PREEXISTING_STAGED_FILE_" + rel)
-        dst.parent.mkdir(parents=True, exist_ok=True)
         data = src.read_bytes()
-        dst.write_bytes(data)
+        if dst.exists():
+            # prepare.py already stages some unit tests; only accept an
+            # exact byte-for-byte match, never overwrite unrelated content.
+            if dst.read_bytes() != data:
+                raise ValueError("UNREVIEWED_PREEXISTING_STAGED_FILE_" + rel)
+        else:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(data)
         flags["sourceHashes"][rel] = sha(data)
     (target / PIN).write_text(updated)
     flags["sourceHashes"][PIN] = sha(updated.encode())
