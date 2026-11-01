@@ -46,8 +46,10 @@ def stage(target: Path) -> None:
     original = (target / PIN).read_text()
     if original.count(IMPORT_ANCHOR) != 1 or original.count(LOGIN_ANCHOR) != 1:
         raise ValueError("UNREVIEWED_LOGIN_SOURCE_DRIFT")
-    if "await _provePin(accountKey: accountKey, pin: pin);" not in original:
-        raise ValueError("ORIGINAL_PIN_LOGIN_FLOW_MISSING")
+    # The exact 100420 assembled login differs from the historical repository
+    # helper. We preserve it byte-for-byte outside the two addition anchors.
+    if "class DedaPinAuth" not in original:
+        raise ValueError("ORIGINAL_PIN_AUTH_CLASS_MISSING")
     if "DedaSecurePinPreflight" in original:
         raise ValueError("BRIDGE_ALREADY_APPLIED")
     if flags["sourceHashes"].get(PIN) != sha(original.encode()):
