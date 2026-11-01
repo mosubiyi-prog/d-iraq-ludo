@@ -74,19 +74,19 @@ class DedaStep2OwnerPlaceSource {
       if (raw != null && raw is! String) {
         throw const DedaStep2OwnerPlaceArchiveHold('wrong-place-native-type');
       }
-      final value = raw as String?;
-      if (value != null && utf8.encode(value).length >
+      final fieldText = raw as String?;
+      if (fieldText != null && utf8.encode(fieldText).length >
           (field == 'placeId' || field == 'pendingEditId' ? 256 : 65536)) {
         throw const DedaStep2OwnerPlaceArchiveHold('place-evidence-too-large');
       }
-      if (value != null && (field == 'placeId' ||
-          field == 'pendingEditId') && (value.contains('/') ||
-          value.trim().isEmpty)) {
+      if (fieldText != null && (field == 'placeId' ||
+          field == 'pendingEditId') && (fieldText.contains('/') ||
+          fieldText.trim().isEmpty)) {
         throw const DedaStep2OwnerPlaceArchiveHold('invalid-place-reference');
       }
       // A malformed draft is preserved verbatim as evidence, not corrected,
       // published, or used to overwrite existing documents.
-      data[field] = value;
+      data[field] = fieldText;
     }
     return DedaStep2OwnerPlaceSource._(account, data);
   }
@@ -222,10 +222,9 @@ class DedaStep2OwnerPlaceLocalArchive {
     }
   }
 
-  /// Replacement handset: read the SAME original account's archived local
-  /// source. Never writes it into OwnerPlacePage, nor elevates privileges.
-  /// Published-place ownerUid, approval and deletion history must still be
-  /// independently checked against live server before enabling edit controls.
+  /// Replacement handset: verified original user may INSPECT the old local
+  /// evidence only. It must never be used to grant map editing privileges;
+  /// those require published_places ownerUid and approval checks separately.
   Future<DedaStep2OwnerPlaceSource> inspectOnReplacementPhone({
     required String accountKey,
     required String originalUid,
@@ -233,54 +232,7 @@ class DedaStep2OwnerPlaceLocalArchive {
     required bool Function() isCurrent,
   }) async {
     void check() => _check(accountKey, originalUid, isCurrent);
-    if (!RegExp(r'^[A-Za-z0-9_-]{20,80}
-    required String accountKey,
-    required String originalUid,
-    required String captureId,
-    required bool Function() isCurrent,
-  }) async {
-    void check() => _check(accountKey, originalUid, isCurrent);
     if (!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
-      throw const DedaStep2OwnerPlaceArchiveHold('invalid-place-capture-id');
-    }
-    check();
-    if (!await verifyOriginalOwner(originalUid, accountKey)) {
-      throw const DedaStep2OwnerPlaceArchiveHold(
-          'place-archive-owner-not-verified');
-    }
-    check();
-    final source = await DedaStep2OwnerPlaceSource.readOriginal(local,
-        accountKey: accountKey, isCurrent: isCurrent);
-    check();
-    if (!source.hasAnyEvidence) {
-      throw const DedaStep2OwnerPlaceArchiveHold('no-local-place-to-preserve');
-    }
-    final body = {
-      'format': 1,
-      'kind': 'untrusted-local-owner-place-evidence',
-      'accountKey': accountKey,
-      'sourceUid': originalUid,
-      'captureId': captureId,
-      'records': source.toRecords(),
-    };
-    // A lost write acknowledgement leaves captureId unresolved: the caller
-    // MUST reuse this ID and original bytes; it may not claim success.
-    await cloud.writeOnce(accountKey, captureId, body);
-    check();
-    final stored = await cloud.read(accountKey, captureId);
-    check();
-    final data = stored.data;
-    if (stored.fromCache || stored.pendingWrites || data == null ||
-        data.length != body.length + 1 ||
-        data['createdAt'] is! Timestamp ||
-        !_sameArchiveBody(data, body)) {
-      throw const DedaStep2OwnerPlaceArchiveHold(
-          'place-archive-server-readback-mismatch');
-    }
-    return source;
-  }
-}
-).hasMatch(captureId)) {
       throw const DedaStep2OwnerPlaceArchiveHold('invalid-place-capture-id');
     }
     check();
@@ -298,13 +250,12 @@ class DedaStep2OwnerPlaceLocalArchive {
         data['accountKey'] != accountKey ||
         data['sourceUid'] != originalUid ||
         data['captureId'] != captureId ||
-        data['createdAt'] is! Timestamp ||
-        data['records'] is! Map) {
+        data['createdAt'] is! Timestamp || data['records'] is! Map) {
       throw const DedaStep2OwnerPlaceArchiveHold(
           'place-archive-not-authoritative');
     }
     final source = DedaStep2OwnerPlaceSource.checked(
-      accountKey, Map<String, dynamic>.from(data['records'] as Map));
+        accountKey, Map<String, dynamic>.from(data['records'] as Map));
     check();
     if (!source.hasAnyEvidence) {
       throw const DedaStep2OwnerPlaceArchiveHold('no-place-archive-records');
