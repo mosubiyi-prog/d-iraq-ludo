@@ -192,3 +192,47 @@
       allow create, update, delete: if false;
     }
 
+
+    // STEP 2: LINKED original UID replacement-phone session only.
+    // Firebase Auth password verification replaces the old PIN-as-Firestore-
+    // document proof for this pilot. Original UID and immutable personal ID
+    // route MUST both belong to the account. Does not grant anything to an
+    // anonymous UID, unrelated auth provider, another phone number or staff.
+    // This rule is staged on the emulator only: NO PRODUCTION DEPLOY.
+    match /deda_sessions/{uid} {
+      function signedInAsLinkedOriginalOwner() {
+        return request.auth != null
+          && request.auth.uid == uid
+          && request.auth.token.email is string
+          && request.auth.token.firebase.sign_in_provider == 'password'
+          && request.resource.data.accountKey is string
+          && request.resource.data.accountKey.matches('^[0-9]{8,16}$')
+          && request.auth.token.email
+              == request.resource.data.accountKey + '@deda-login.invalid'
+          && exists(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.createdUid == uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && get(/databases/$(database)/documents/users/$(uid)).data.accountKey
+              == request.resource.data.accountKey
+          && get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.ownerUid == uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow create, update: if signedInAsLinkedOriginalOwner()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.installId is string
+        && request.resource.data.installId.size() >= 8
+        && request.resource.data.installId.size() <= 128
+        && request.resource.data.signedInAt == request.time
+        && request.resource.data.lastSeenAt == request.time;
+    }
+
