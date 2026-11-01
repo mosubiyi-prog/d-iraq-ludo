@@ -16,6 +16,7 @@ const {reviewLegacySettlement}=require('./review-legacy-settlement.cjs');
 const {frames}=require('./purchase-frames.cjs');
 const {purchaseReviewedFrameForOwnerSession}=require('./purchase-reviewed-frame.cjs');
 const {readMigratedProgressForOwnerSession,claimReviewedPointTierForOwnerSession}=require('./point-tier-session.cjs');
+const {readReviewedStep2Snapshot}=require('../../../functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js');
 const A='07700000000',original='@DEDA-ABC234',captureId='sdk_activation_capture_0001';
 const migrationId='sdk_activation_migration_01',settlementId='sdk_activation_settlement_1';
 const revision='sdk_owner_review_policy_01',deploymentRevision='sdk_deployment_fixture_01',fenceId='sdk_enforced_fence_fixture_1';
@@ -229,4 +230,140 @@ test('actual aborted atomic purchase writes neither debit, payment, receipt nor 
  assert.equal((await db.collection(`${root}/framePurchases`).get()).size,0);
  assert.equal((await db.doc(`deda_lab_frame_receipts/${original}/frames/FRAME_03`).get()).exists,false);
  assert.deepEqual((await db.doc(`deda_native_account_cosmetics/${original}`).get()).data().ownedFrames,[]);
+});
+
+
+/* 100429 step2 reviewed source: the following tests are run on REAL local
+ * Firebase Auth + Firestore emulators. Old and replacement anonymous UIDs are
+ * created by Firebase Auth; historical evidence/fence are explicitly seeded
+ * QA fixtures; no real account can be read or mutated by these tests.
+ */
+const restoreView=(identity,weekId='2026-10-31')=>
+ readReviewedStep2Snapshot({store,auth,idToken:identity.idToken,weekId});
+
+test('100429 same reviewed progress and confirmed gifted diamonds return on NEW UID with zero rewards',async()=>{
+ await reviewedFixture();await activate();
+ await db.doc(`deda_diamond_gift_balances/${original}`).set({
+   publicId:original,balance:52,source:'fixture-received-gifts'});
+ const before=await current();
+ const walletBefore=(await db.doc(`deda_diamond_gift_balances/${original}`).get()).data();
+ const a=await restoreView(owner),b=await restoreView(next);
+ assert.equal(a.status,'REVIEWED_PROGRESS_READONLY');
+ assert.equal(b.status,a.status);
+ assert.equal(a.originalId,original);
+ assert.deepEqual([a.points,a.coins,a.xp],[1000,30,20]);
+ assert.equal(a.level,null);
+ assert.equal(a.diamonds.earned,9);
+ assert.equal(a.diamonds.gifted,52);
+ assert.equal(a.diamonds.manager,null);
+ assert.equal(a.diamonds.visible,61);
+ assert.equal(a.diamonds.purchase,61);
+ assert.deepEqual(a,b);
+ assert.equal(a.canCreditDiamonds,false);
+ assert.equal(a.canCreditPoints,false);
+ assert.equal(a.canRepeatOldRewards,false);
+ assert.equal(a.canReapplyDebits,false);
+ assert.equal(a.dailyTasks.canAwardOnRestore,false);
+ assert.equal(a.trafficQuiz.canAwardOnRestore,false);
+ assert.deepEqual(await current(),before);
+ assert.deepEqual((await db.doc(`deda_diamond_gift_balances/${original}`).get()).data(),walletBefore);
+ assert.equal((await db.collection(`${statePath}/events`).get()).size,1);
+});
+
+test('100429 missing gift wallet is UNKNOWN, never magically zero on a replacement phone',async()=>{
+ await reviewedFixture();await activate();
+ const r=await restoreView(next);
+ assert.equal(r.diamonds.earned,9);
+ assert.equal(r.diamonds.gifted,null);
+ assert.equal(r.diamonds.visible,null);
+ assert.equal(r.diamonds.purchase,null);
+ assert.equal(r.diamonds.allDiamondSourcesVerified,false);
+ assert.equal(r.canCreditDiamonds,false);
+});
+
+test('100429 legitimate GM personal wallet stays separate from earned + gifted and grant pool',async()=>{
+ await reviewedFixture();await activate();
+ await db.doc(`deda_diamond_gift_balances/${original}`).set({publicId:original,balance:52});
+ await db.doc(`admin_entry_access/${A}`).set({
+   accountKey:A,active:true,status:'active',
+   accessType:'general_manager_gateway',allowedRole:'general_manager'});
+ await db.doc(`deda_gm_personal_diamond_wallets/${A}`).set({
+   accountKey:A,initialBalance:1000000,balance:1000000});
+ const r=await restoreView(next);
+ assert.equal(r.diamonds.earned,9);
+ assert.equal(r.diamonds.gifted,52);
+ assert.equal(r.diamonds.manager,1000000);
+ assert.equal(r.diamonds.ordinary,61);
+ assert.equal(r.diamonds.visible,1000061);
+ assert.equal(r.diamonds.purchase,1000000);
+ assert.equal((await db.doc(`deda_gm_personal_diamond_wallets/${A}`).get()).data().balance,1000000);
+});
+
+test('100429 two phone views of weekly task claims never recredit total XP/points or replay prize',async()=>{
+ await reviewedFixture();await activate();
+ const path='deda_weekly_direct_weeks/2026-10-31/scores/'+original;
+ const source={publicId:original,weekId:'2026-10-31',
+   completedTasks:2,weeklyXp:40,claimedKeys:['2026-10-31|traffic_skills','2026-10-31|open_map']};
+ await db.doc(path).set(source);
+ const before=await current();
+ const a=await restoreView(owner),b=await restoreView(next);
+ assert.equal(a.currentWeek.status,'read-only-verified-week-claims');
+ assert.equal(a.currentWeek.claimCount,2);
+ assert.equal(a.currentWeek.weeklyXp,40);
+ assert.equal(b.currentWeek.weeklyXp,40);
+ assert.deepEqual(b.dailyTasks,a.dailyTasks);
+ assert.equal(a.points,before.balances.points);
+ assert.equal(a.xp,before.balances.xp);
+ assert.equal((await db.doc(path).get()).data().completedTasks,2);
+ assert.equal((await db.collection(`${root}/pointTierClaims`).get()).size,0);
+ assert.deepEqual(await current(),before);
+});
+
+test('100429 forged or duplicated weekly task receipt cannot become a restored reward',async()=>{
+ await reviewedFixture();await activate();
+ const path='deda_weekly_direct_weeks/2026-10-31/scores/'+original;
+ for(const bad of [
+   {publicId:original,weekId:'2026-10-31',completedTasks:2,weeklyXp:40,
+     claimedKeys:['2026-10-31|open_map','2026-10-31|open_map']},
+   {publicId:original,weekId:'2026-10-31',completedTasks:1,weeklyXp:999,
+     claimedKeys:['2026-10-31|open_map']},
+   {publicId:'@DEDA-OTHER1',weekId:'2026-10-31',completedTasks:1,weeklyXp:20,
+     claimedKeys:['2026-10-31|open_map']},
+ ]){
+   await db.doc(path).set(bad);
+   await assert.rejects(restoreView(next),e=>e.code==='progress-weekly-receipt-conflict');
+ }
+ assert.equal((await current()).balances.xp,20);
+});
+
+test('100429 physical changing UID then replay of one frame purchase does not double debit',async()=>{
+ await fundedPurchase();
+ const first=await purchase(next,'FRAME_03');
+ const second=await purchase(owner,'FRAME_03');
+ assert.equal(first.replayed,false);
+ assert.equal(second.replayed,true);
+ const a=await restoreView(next),b=await restoreView(owner);
+ assert.deepEqual(a,b);
+ assert.equal(a.diamonds.earned,0);
+ assert.equal(a.diamonds.gifted,1000);
+ assert.equal(a.diamonds.visible,1000);
+ assert.equal((await db.collection(`${root}/framePurchases`).get()).size,1);
+ assert.equal((await db.collection(`deda_lab_frame_receipts/${original}/frames`).get()).size,1);
+ assert.equal((await db.collection(`deda_lab_owned_frames/${original}/frames`).get()).size,1);
+});
+
+test('100429 missing reviewed cutover blocks new phone preview even when legacy local wallet exists',async()=>{
+ await reviewedFixture();
+ await assert.rejects(restoreView(next));
+ assert.equal(await current(),null);
+});
+
+test('100429 owner route mismatch and revoked phone token refuse every financial read',async()=>{
+ await reviewedFixture();await activate();
+ await db.doc(`deda_share_ids/${original}`).update({active:false});
+ await assert.rejects(restoreView(next),e=>e.code==='progress-original-owner-mismatch');
+ await db.doc(`deda_share_ids/${original}`).update({active:true});
+ await auth.updateUser(next.uid,{disabled:true});
+ await assert.rejects(restoreView(next),e=>e.code==='auth/user-disabled');
+ assert.equal((await current()).balances.earnedDiamonds,9);
 });
