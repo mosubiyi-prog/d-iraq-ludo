@@ -8,6 +8,8 @@ class FakePlaces implements DedaStep2LinkedPlaceIo {
   final local = <String, String>{};
   int reads = 0, writes = 0;
   bool rejectWrite = false;
+  bool networkDown = false;
+  Future<void> Function()? beforeQueryReturn;
   DedaStep2PublishedPlacesResult result = const DedaStep2PublishedPlacesResult([
     DedaStep2PublishedPlaceRow(approvedPlace, {
       'placeName':'Synthetic Place',
@@ -22,6 +24,8 @@ class FakePlaces implements DedaStep2LinkedPlaceIo {
       String accountKey) async {
     reads++;
     if (accountKey != account) throw StateError('wrong-account-query');
+    if (networkDown) throw StateError('temporary-firestore-failure');
+    await beforeQueryReturn?.call();
     return result;
   }
 
@@ -216,6 +220,26 @@ void main() {
         held('published-place-owner-or-approval-mismatch')));
     expect(h.io.writes, 0);
     expect(h.io.local[account], approvedPlace);
+  });
+
+  test('server outage never erases approved local place or creates editable draft', () async {
+    final h = H();
+    h.io.local[account] = approvedPlace;
+    h.io.networkDown = true;
+    await expectLater(h.restore(), throwsStateError);
+    expect(h.io.local[account], approvedPlace);
+    expect(h.io.writes, 0);
+  });
+
+  test('switching accounts while place server query is in flight stops writes', () async {
+    final h = H();
+    h.io.beforeQueryReturn = () async {
+      h.currentUid = 'a-different-account';
+    };
+    await expectLater(h.restore(), throwsA(
+        held('place-original-owner-required')));
+    expect(h.io.writes, 0);
+    expect(h.io.local,isEmpty);
   });
 
   test('a different local place ID is preserved, never silently replaced', () async {
