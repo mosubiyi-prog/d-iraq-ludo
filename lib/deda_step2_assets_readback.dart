@@ -165,9 +165,9 @@ class DedaStep2AssetsReadback {
     }
     final profile = await _read('deda_account_profiles/$accountKey',
       originalUid, isCurrent);
-    if (profile?['accountKey'] != accountKey ||
-        profile?['name'] is! String ||
-        (profile!['name'] as String).trim().length < 2 ||
+    if (profile == null || profile['accountKey'] != accountKey ||
+        profile['name'] is! String ||
+        (profile['name'] as String).trim().length < 2 ||
         !['user','placeOwner'].contains(profile['accountType'])) {
       throw const DedaStep2AssetsHold('original-profile-unverified');
     }
