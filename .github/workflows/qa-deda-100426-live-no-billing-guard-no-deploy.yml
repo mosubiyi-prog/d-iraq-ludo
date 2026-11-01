@@ -23,7 +23,6 @@ jobs:
       DEDA_SA_FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       GCLOUD_PROJECT: demo-deda-100426-no-billing-qa
       FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
-      DEDA_100426_CANDIDATE_PATH: ${{ runner.temp }}/deda-100426-live-session-candidate.rules
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
@@ -41,6 +40,7 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet --disable-pip-version-check google-auth requests
           python3 tools/deda_100426_stage_live_session_guard_no_deploy.py
+          echo "DEDA_100426_CANDIDATE_PATH=$RUNNER_TEMP/deda-100426-live-session-candidate.rules" >> "$GITHUB_ENV"
       - name: Test legacy PIN, stolen install token, existing sessions and original identity on emulator
         shell: bash
         run: |
