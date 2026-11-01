@@ -27,6 +27,7 @@ import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_linked_published_place_recovery.dart';
+import 'deda_step2_owner_place_draft_hydration.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -4158,6 +4159,44 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
             );
           }
           return;
+        }
+      }
+      // PRIVATE QA only: after the original published place was verified
+      // above, a replacement handset may fill an ABSENT local draft from
+      // the original phone's immutable owner-scoped cloud capture. This
+      // never transfers approval or place ownership, never restores pending
+      // edits, and never overwrites any new-phone draft.
+      if (dedaStep2OwnerPlaceDraftHydrationEnabled &&
+          dedaStep2LinkedPublishedPlaceEnabled &&
+          DedaPreferences.accountType == DedaAccountType.placeOwner &&
+          prefs.getString(_draftKey) == null) {
+        final account = _ownerStorageAccountKey;
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        try {
+          if (uid == null || uid.isEmpty) {
+            throw const DedaStep2PlaceDraftHold('missing-linked-owner-uid');
+          }
+          await DedaStep2OwnerPlaceDraftHydration.firebase()
+              .restoreMissingDraft(
+            accountKey: account, originalUid: uid,
+            isCurrent: () => mounted &&
+                _ownerStorageAccountKey == account &&
+                FirebaseAuth.instance.currentUser?.uid == uid,
+          );
+        } catch (_) {
+          // An old draft is NOT a map-ownership credential. If the archive
+          // is absent, the independently verified place and its controls
+          // must remain accessible, with the old draft explicitly unproven.
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+              content: Text(dedaText(
+                'تعذر توثيق مسودة المكان القديمة. مكانك المنشور لم يتغير؛ '
+                'احتفظ ببيانات الهاتف الأصلي لحين إكمال الاسترجاع.',
+                'The old place draft could not be verified. '
+                'Your published place was not changed; preserve old-phone data.',
+              )),
+            ));
+          }
         }
       }
       _placeId = prefs.getString(_placeIdKey);
