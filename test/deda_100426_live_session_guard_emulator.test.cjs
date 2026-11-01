@@ -101,3 +101,57 @@ test("new server-only identity ledgers remain unreadable and unwritable",async()
     await assertFails(setDoc(doc(c,namespace,"synthetic"),{fake:true}));
   }
 });
+
+
+test("100427 real signIn follow-through: profile trust update and users projection still work",async()=>{
+  const c=db(NEW);
+  await assertSucceeds(setDoc(doc(c,"deda_auth_attempts",NEW),attempt(NEW)));
+  await assertSucceeds(setDoc(doc(c,"deda_sessions",NEW),session(NEW)));
+  const profile=await getDoc(doc(c,"deda_account_profiles",P));
+  await assertSucceeds(setDoc(doc(c,"deda_account_profiles",P),{
+    trustedInstallIds:[...profile.data().trustedInstallIds,"new-phone-install"],
+    updatedAt:serverTimestamp(),lastSeenAt:serverTimestamp(),
+  },{merge:true}));
+  await assertSucceeds(setDoc(doc(c,"users",NEW),{
+    name:"Synthetic account",phone:P,accountKey:P,accountType:"user",
+    authMethod:"deda_pin_firestore_v1",
+    trustedInstallIds:["new-phone-install"],lastSeenAt:serverTimestamp(),
+    updatedAt:serverTimestamp(),
+  },{merge:true}));
+  assert.equal((await getDoc(doc(c,"users",NEW))).data().accountKey,P);
+});
+
+test("100427 sign-out removes session, copied install alone cannot recreate it",async()=>{
+  const c=db(OLD);
+  await assertSucceeds(setDoc(doc(c,"deda_auth_attempts",OLD),attempt(OLD)));
+  await assertSucceeds(setDoc(doc(c,"deda_sessions",OLD),session(OLD)));
+  await assertSucceeds(deleteDoc(doc(c,"deda_auth_attempts",OLD)));
+  await assertSucceeds(deleteDoc(doc(c,"deda_sessions",OLD)));
+  await assertFails(setDoc(doc(c,"deda_sessions",OLD),session(OLD)));
+  await assertSucceeds(setDoc(doc(c,"deda_auth_attempts",OLD),attempt(OLD)));
+  await assertSucceeds(setDoc(doc(c,"deda_sessions",OLD),session(OLD)));
+});
+
+test("100427 different Firebase UID can re-login with fresh PIN and different install",async()=>{
+  const old=db(OLD),other=db(NEW);
+  await assertSucceeds(setDoc(doc(old,"deda_auth_attempts",OLD),attempt(OLD)));
+  await assertSucceeds(setDoc(doc(old,"deda_sessions",OLD),session(OLD)));
+  await assertFails(setDoc(doc(other,"deda_sessions",NEW),
+    session(NEW,P,"unrecognized-other-install")));
+  await assertSucceeds(setDoc(doc(other,"deda_auth_attempts",NEW),attempt(NEW)));
+  await assertSucceeds(setDoc(doc(other,"deda_sessions",NEW),
+    session(NEW,P,"unrecognized-other-install")));
+  assert.equal((await getDoc(doc(other,"deda_sessions",NEW))).data().accountKey,P);
+});
+
+test("100427 switching accounts requires exact second PIN, never shared install",async()=>{
+  const c=db(OLD);
+  await assertSucceeds(setDoc(doc(c,"deda_auth_attempts",OLD),attempt(OLD)));
+  await assertSucceeds(setDoc(doc(c,"deda_sessions",OLD),session(OLD)));
+  await assertSucceeds(deleteDoc(doc(c,"deda_auth_attempts",OLD)));
+  await assertFails(setDoc(doc(c,"deda_sessions",OLD),session(OLD,ACCOUNT2)));
+  await assertSucceeds(setDoc(doc(c,"deda_auth_attempts",OLD),
+    attempt(OLD,ACCOUNT2,"333333")));
+  await assertSucceeds(setDoc(doc(c,"deda_sessions",OLD),session(OLD,ACCOUNT2)));
+  assert.equal((await getDoc(doc(c,"deda_sessions",OLD))).data().accountKey,ACCOUNT2);
+});
