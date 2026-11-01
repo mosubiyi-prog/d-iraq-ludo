@@ -41,4 +41,16 @@ class ManualReleaseTest(unittest.TestCase):
             mod.exact_candidate(sample,candidate,"a"*64)
         with self.assertRaisesRegex(RuntimeError,"EXACT"):
             mod.exact_candidate(sample,candidate+"//tamper",mod.digest(sample))
+    def test_release_workflow_is_manual_only_not_automatic(self):
+        wf=(pathlib.Path(__file__).resolve().parents[1] /
+            ".github/workflows/deda-100427-owner-device-approved-login-rules-only-manual.yml").read_text()
+        self.assertIn("on:\\n  workflow_dispatch:",wf)
+        self.assertNotIn("on:\\n  push:",wf)
+        self.assertNotIn("schedule:",wf)
+        self.assertIn("tested_real_play_100340_pin",wf)
+        self.assertIn("tested_real_new_phone_pin",wf)
+        self.assertIn("expected_published_rules_sha256",wf)
+        self.assertIn("deda_100427_login_guard_manual_release.py deploy",wf)
+        self.assertIn("deda_100427_login_guard_manual_release.py verify",wf)
+        self.assertIn("100408_LEAGUE",wf.replace("Retest unchanged 100408 league/prizes permissions","100408_LEAGUE"))
 if __name__=="__main__": unittest.main()
