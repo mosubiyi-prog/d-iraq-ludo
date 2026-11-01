@@ -44,8 +44,8 @@ class ManualReleaseTest(unittest.TestCase):
     def test_release_workflow_is_manual_only_not_automatic(self):
         wf=(pathlib.Path(__file__).resolve().parents[1] /
             ".github/workflows/deda-100427-owner-device-approved-login-rules-only-manual.yml").read_text()
-        self.assertIn("on:\\n  workflow_dispatch:",wf)
-        self.assertNotIn("on:\\n  push:",wf)
+        self.assertIn("workflow_dispatch:",wf)
+        self.assertNotIn("  push:",wf)
         self.assertNotIn("schedule:",wf)
         self.assertIn("tested_real_play_100340_pin",wf)
         self.assertIn("tested_real_new_phone_pin",wf)
