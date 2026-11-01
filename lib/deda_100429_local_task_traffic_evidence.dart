@@ -23,8 +23,7 @@ class DedaStep2SharedPrefsUiReadStore implements DedaStep2UiEvidenceReadStore {
 class DedaStep2UiCapture {
   DedaStep2UiCapture._(this.accountKey, this.originalId, this.iraqDay,
       this.taskPointsRaw, this.seen, this.selected, this.progressRaw,
-      this.completed)
-      : assert(seen == null || selected == null || seen.length >= 0);
+      this.completed);
 
   final String accountKey, originalId, iraqDay;
   final String? taskPointsRaw, progressRaw;
@@ -62,7 +61,7 @@ class DedaStep2UiCapture {
     _scope(accountKey, originalId, iraqDay);
     final raw = jsonDecode(json);
     if (raw is! Map ||
-        raw.length != 9 ||
+        raw.length != 10 ||
         raw['format'] != 1 ||
         raw['kind'] != 'untrusted-local-task-quiz-ui-evidence' ||
         raw['accountKey'] != accountKey ||
