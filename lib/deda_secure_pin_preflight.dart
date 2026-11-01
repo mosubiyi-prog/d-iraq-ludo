@@ -23,41 +23,15 @@ class DedaSecurePinPreflight {
         RegExp(r'^\d{6}$').hasMatch(pin);
   }
 
-  // Server attests the original ID after a NEW PIN check. This does not grant
-  // account restoration or wallet access; it is an identity HOLD only.
+  // HOLD-only: original ID is server verified after a fresh PIN check.
+  // This does NOT enable restoration, transfers, or a new login session.
   static bool isCanonicalHold(Object? response) {
     if (!isHoldOnly(response) || response is! Map) return false;
     final original = response['canonicalOriginalId'];
     return response['canonicalOriginalVerified'] == true &&
         response['canMigrate'] == false &&
         original is String &&
-        RegExp(r'^@DEDA-[A-Z0-9]{6}
-    required String phone,
-    required String pin,
-  }) async {
-    if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || !user.isAnonymous) {
-      throw StateError('authenticated-anonymous-session-required');
-    }
-    final uid = user.uid;
-    final key = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (!validAccountAndPin(phone, pin)) {
-      throw ArgumentError('invalid-account-or-pin-format');
-    }
-    // Do not store PINs, account keys, receipts or tokens in SharedPreferences.
-    // Callable enforces Firebase Auth, App Check and global server-side limits.
-    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('dedaSecurePinPreflightV1')
-        .call(<String, Object>{'accountKey': key, 'pin': pin});
-    if (FirebaseAuth.instance.currentUser?.uid != uid ||
-        !isHoldOnly(result.data)) {
-      throw StateError('server-recovery-preflight-not-approved');
-    }
-    // HOLD receipt grants no user/profile/financial read privileges.
-  }
-}
-).hasMatch(original);
+        RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original);
   }
 
   static Future<String> verifyCanonicalHold({
