@@ -43,6 +43,7 @@ test.beforeEach(async()=>{
     setDoc(doc(d,"deda_sessions",UID),{uid:UID,accountKey:ACCOUNT,installId:"original-device"}),
     setDoc(doc(d,"users",UID),{accountKey:ACCOUNT,sharePersonalId:ORIGINAL}),
     setDoc(doc(d,"deda_account_directory",ACCOUNT),{accountKey:ACCOUNT,createdUid:UID,active:true}),
+    setDoc(doc(d,"deda_account_profiles",ACCOUNT),{accountKey:ACCOUNT,name:"Synthetic Owner",accountType:"placeOwner"}),
     setDoc(doc(d,"deda_share_ids",ORIGINAL),{publicId:ORIGINAL,kind:"personal",active:true,ownerUid:UID}),
     setDoc(doc(d,"deda_diamond_gift_balances",ORIGINAL),{publicId:ORIGINAL,balance:8765}),
   ]);
@@ -208,4 +209,74 @@ test("foreign UID cannot manage or take over another account's published place",
   assert.equal(unchanged.data().ownerUid,UID);
   assert.equal(unchanged.data().approvalNumber,"ORIGINAL-DEDA-APPROVAL-434");
   assert.equal(unchanged.data().isAvailableNow,false);
+});
+
+const ownerArchivePath="deda_step2_owner_place_evidence/"+ACCOUNT+"/captures/"+CAPTURE;
+const ownerArchiveFields=(overrides={})=>({
+ format:1,kind:"untrusted-local-owner-place-evidence",
+ accountKey:ACCOUNT,sourceUid:UID,captureId:CAPTURE,
+ records:{
+  placeId:"approved-place-123",pendingEditId:"edit-57",
+  draftRaw:'{"placeName":"Original owner's draft"}',
+  submittedRaw:'{"approvalNumber":"DEDA-APPROVED-123"}'
+ },
+ createdAt:serverTimestamp(),...overrides
+});
+test("original verified placeOwner can archive account-scoped local place data once",async()=>{
+ const owner=db(UID),ref=doc(owner,ownerArchivePath);
+ await assertSucceeds(setDoc(ref,ownerArchiveFields()));
+ const record=await assertSucceeds(getDoc(ref));
+ assert.equal(record.data().records.placeId,"approved-place-123");
+ assert.equal(record.data().sourceUid,UID);
+ await assertFails(setDoc(ref,ownerArchiveFields()));
+ await assertFails(deleteDoc(ref));
+});
+test("same original UID on another phone reads archive, outsider cannot steal it",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),ownerArchivePath),ownerArchiveFields()));
+ const saved=await assertSucceeds(getDoc(doc(db(UID),ownerArchivePath)));
+ assert.equal(saved.data().records.submittedRaw,'{"approvalNumber":"DEDA-APPROVED-123"}');
+ await assertFails(getDoc(doc(db(OTHER),ownerArchivePath)));
+ await assertFails(setDoc(doc(db(OTHER),ownerArchivePath),ownerArchiveFields()));
+ await assertFails(getDocs(query(
+  collection(db(OTHER),"deda_step2_owner_place_evidence",ACCOUNT,"captures"),limit(20))));
+});
+test("ordinary account cannot create place-owner local evidence",async()=>{
+ await env.withSecurityRulesDisabled(async c=>{
+   await setDoc(doc(c.firestore(),"deda_account_profiles",ACCOUNT),{
+     accountKey:ACCOUNT,name:"Synthetic User",accountType:"user"
+   });
+ });
+ await assertFails(setDoc(doc(db(UID),ownerArchivePath),ownerArchiveFields()));
+});
+test("unscoped or financial private records cannot enter original owner-place archive",async()=>{
+ for(const records of [
+  {...ownerArchiveFields().records,walletBalance:9000000},
+  {...ownerArchiveFields().records,paidFrames:["FRAME_03"]},
+  {...ownerArchiveFields().records,deda_personal_places_v1:"someone-else"},
+  {...ownerArchiveFields().records,submittedRaw:true},
+  {...ownerArchiveFields().records,draftRaw:"x".repeat(65537)},
+  {placeId:"unscoped-place"},
+ ]) {
+  await assertFails(setDoc(doc(db(UID),ownerArchivePath),
+    ownerArchiveFields({records})));
+ }
+ const absent=await assertSucceeds(getDoc(doc(db(UID),ownerArchivePath)));
+ assert.equal(absent.exists(),false);
+});
+test("revoked original owner directory or placeOwner profile blocks archived place read",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),ownerArchivePath),ownerArchiveFields()));
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),"deda_account_directory",ACCOUNT),{
+   accountKey:ACCOUNT,createdUid:OTHER,active:true
+  });
+ });
+ await assertFails(getDoc(doc(db(UID),ownerArchivePath)));
+});
+test("bounded place history cannot enumerate every owner or create duplicate capture",async()=>{
+ const owner=db(UID);
+ await assertSucceeds(setDoc(doc(owner,ownerArchivePath),ownerArchiveFields()));
+ const list=await assertSucceeds(getDocs(query(
+    collection(owner,"deda_step2_owner_place_evidence",ACCOUNT,"captures"),limit(20))));
+ assert.equal(list.size,1);
+ await assertFails(getDocs(collection(owner,"deda_step2_owner_place_evidence",ACCOUNT,"captures")));
 });
