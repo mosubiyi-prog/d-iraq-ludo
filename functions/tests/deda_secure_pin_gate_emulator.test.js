@@ -9,7 +9,7 @@ const {getAuth: adminAuth} = require("firebase-admin/auth");
 const {getFirestore: adminFirestore} = require("firebase-admin/firestore");
 const {initializeApp: initClient, deleteApp: deleteClient} = require("firebase/app");
 const {getAuth, connectAuthEmulator, signInAnonymously} = require("firebase/auth");
-const {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc} =
+const {getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, serverTimestamp} =
   require("firebase/firestore");
 const {securePinPreflight, PinDenied} = require("../deda_secure_pin_gate_core");
 
@@ -305,4 +305,47 @@ test("fresh original ID is not claimed when one legacy UID created two PIN accou
   // No guess from latest users/{uid} state or from the caller's phone.
   assert.equal((await db.doc("users/"+creator.uid).get()).data().accountKey,
     firstKey);
+});
+
+/* 100425 legacy compatibility: these tests deliberately show that old builds
+ * can still log in under the currently published rules. This is NOT a new
+ * security guarantee; it demonstrates why switching rules immediately is unsafe.
+ */
+test("100425 legacy compatibility: old PIN proof and session succeed without new callable", async () => {
+  const old=await phone();
+  await setDoc(doc(old.clientDb,"deda_auth_attempts/"+old.uid),{
+    uid:old.uid,accountKey:KEY1,pin:PIN1,createdAt:serverTimestamp(),
+  });
+  await setDoc(doc(old.clientDb,"deda_sessions/"+old.uid),{
+    uid:old.uid,accountKey:KEY1,installId:"legacy-phone-independent-install",
+    signedInAt:serverTimestamp(),lastSeenAt:serverTimestamp(),
+  });
+  const session=await getDoc(doc(old.clientDb,"deda_sessions/"+old.uid));
+  assert.equal(session.data().accountKey,KEY1);
+  const profile=await getDoc(doc(old.clientDb,"deda_account_profiles/"+KEY1));
+  assert.equal(profile.data().accountKey,KEY1);
+  assert.equal((await db.doc("deda_secure_account_bindings/"+old.uid).get()).exists,false);
+});
+test("100425 legacy risk: trusted-install session still bypasses server PIN limiter", async () => {
+  const old=await phone();
+  // Profile contains a legacy trustedInstallIds entry; this is an
+  // isolated emulated account. The client knows the install string.
+  await setDoc(doc(old.clientDb,"deda_sessions/"+old.uid),{
+    uid:old.uid,accountKey:KEY1,installId:"copied-id-is-not-proof",
+    signedInAt:serverTimestamp(),lastSeenAt:serverTimestamp(),
+  });
+  assert.equal((await getDoc(doc(old.clientDb,"deda_sessions/"+old.uid)))
+      .data().accountKey,KEY1);
+  assert.equal((await db.doc("deda_auth_attempts/"+old.uid).get()).exists,false);
+  assert.equal((await db.doc("deda_secure_account_bindings/"+old.uid).get()).exists,false);
+});
+test("100425 protected canonical namespaces remain unreachable from legacy clients", async () => {
+  const old=await phone();
+  for(const namespace of ["deda_secure_canonical_accounts","deda_secure_original_id_owners",
+     "deda_secure_account_bindings","deda_secure_pin_account_limits"]){
+    const path=namespace+"/legacy-emulator-only";
+    await assert.rejects(getDoc(doc(old.clientDb,path)),e=>e.code==="permission-denied");
+    await assert.rejects(setDoc(doc(old.clientDb,path),{fake:true}),
+        e=>e.code==="permission-denied");
+  }
 });
