@@ -229,6 +229,11 @@ test("one original ID cannot bind two different PIN accounts from the same creat
     assert.equal(locked.sourceOwnerUid,a.uid);
   } finally {
     await db.doc("users/"+a.uid).update({accountKey:KEY1});
+    // Remove this test-only second directory record; a shared original
+    // creator UID is intentionally DENIED by the new ambiguity guard.
+    await db.doc("deda_account_directory/"+otherKey).delete();
+    await db.doc("deda_credentials/"+otherKey).delete();
+    await db.doc("deda_account_profiles/"+otherKey).delete();
   }
   assert.equal((await holdOriginal(b)).canonicalOriginalId,ORIGINAL);
 });
@@ -273,4 +278,31 @@ test("account limiter namespace and original-ID lock use distinct HMAC domains",
     rateDocumentId(KEY,KEY1));
   assert.notEqual(originalLockDocumentId(KEY,ORIGINAL),
     originalLockDocumentId(KEY,"@DEDA-ZZ9999"));
+});
+
+
+test("fresh original ID is not claimed when one legacy UID created two PIN accounts",async()=>{
+  const creator=await phone();
+  const requestor=await phone();
+  const firstKey="07555500001",secondKey="07555500002";
+  const firstPin="738294",secondPin="582316";
+  const id="@DEDA-CC7D8E";
+  await seedAccount(firstKey,firstPin,creator.uid);
+  await seedAccount(secondKey,secondPin,creator.uid);
+  await db.doc("users/"+creator.uid).set({
+    accountKey:firstKey,sharePersonalId:id,
+  });
+  await db.doc("deda_share_ids/"+id).set({
+    publicId:id,kind:"personal",active:true,ownerUid:creator.uid,
+  });
+  const req=request(requestor,firstKey,firstPin);
+  await assert.rejects(canonicalOriginalHold({request:req,db,auth,secret:KEY}),
+    e=>e instanceof CanonicalDenied);
+  assert.equal((await db.doc("deda_secure_canonical_accounts/"+
+    rateDocumentId(KEY,firstKey)).get()).exists,false);
+  assert.equal((await db.doc("deda_secure_original_id_owners/"+
+    originalLockDocumentId(KEY,id)).get()).exists,false);
+  // No guess from latest users/{uid} state or from the caller's phone.
+  assert.equal((await db.doc("users/"+creator.uid).get()).data().accountKey,
+    firstKey);
 });
