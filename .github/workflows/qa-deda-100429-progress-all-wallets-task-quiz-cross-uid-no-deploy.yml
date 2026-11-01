@@ -7,6 +7,8 @@ on:
       - 'functions/deda_100429_progress_recovery_snapshot_NOT_EXPORTED.js'
       - 'tools/app_stability/progress_archive/activate-reviewed-emulator.test.cjs'
       - 'functions/deda_100429_daily_quiz_continuity_NOT_EXPORTED.js'
+      - 'lib/deda_100429_local_task_traffic_evidence.dart'
+      - 'test/deda_100429_local_task_traffic_evidence_test.dart'
       - 'functions/tests/deda_100429_daily_quiz_continuity.test.cjs'
       - '.github/workflows/qa-deda-100429-progress-all-wallets-task-quiz-cross-uid-no-deploy.yml'
   workflow_dispatch:
@@ -77,3 +79,31 @@ jobs:
           set -euo pipefail
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           echo 'NO_PRODUCTION_FIREBASE_READS_OR_WRITES_NO_APK_NO_PLAY_NO_MONEY_MIGRATION'
+
+  flutter-exact-old-device-ui-evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Test REAL Flutter local SharedPreferences capture with zero award authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          flutter test test/deda_100429_local_task_traffic_evidence_test.dart --no-pub
+          dart analyze --no-fatal-warnings lib/deda_100429_local_task_traffic_evidence.dart test/deda_100429_local_task_traffic_evidence_test.dart
+          grep -q 'bool get canCreditPoints => false' lib/deda_100429_local_task_traffic_evidence.dart
+          grep -q 'bool get canCreditDiamonds => false' lib/deda_100429_local_task_traffic_evidence.dart
+          echo 'PASS_100429_FLUTTER_OLD_PHONE_UI_EVIDENCE_LOCAL_ONLY_NO_AWARDS_NO_APK'
+      - name: No APK and no production backend work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'FLUTTER_LOCAL_ONLY_NO_FINANCIAL_CREDIT_NO_PLAY'
