@@ -144,9 +144,15 @@ test("visual restore cannot smuggle paid frames, diamonds, roles, rewards or arb
  ]) {
   await assertFails(setDoc(doc(owner,visualPath()),visual(bad)));
  }
- const wallet=await env.withSecurityRulesDisabled(async c=>
+ const baseline=await env.withSecurityRulesDisabled(async c=>{
+  const ref=doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL);
+  await setDoc(ref,{publicId:ORIGINAL,balance:8765,ledger:["synthetic-existing"]});
+  return (await getDoc(ref)).data();
+ });
+ assert.equal(baseline.balance,8765);
+ const walletAfter=await env.withSecurityRulesDisabled(async c=>
   (await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL))).data());
- assert.equal(wallet.balance,8765);
+ assert.deepEqual(walletAfter,baseline);
 });
 test("visual archive requires active original route and session",async()=>{
  const owner=db(UID);
