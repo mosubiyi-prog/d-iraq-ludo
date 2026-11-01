@@ -5,7 +5,7 @@ const {createRequire}=require("node:module");
 const req=createRequire(path.resolve(__dirname,"../functions/package.json"));
 const {initializeTestEnvironment,assertSucceeds,assertFails}=
   req("@firebase/rules-unit-testing");
-const {doc,setDoc,getDoc,getDocs,collection,deleteDoc,
+const {doc,setDoc,getDoc,getDocs,collection,deleteDoc,updateDoc,
   serverTimestamp,query,orderBy,limit}=req("firebase/firestore");
 const PROJECT="demo-deda-100434-original-evidence";
 const RULE=process.env.DEDA_100434_RULES_PATH;
@@ -159,4 +159,53 @@ test("visual archive requires active original route and session",async()=>{
  });
  await assertFails(setDoc(doc(owner,visualPath()),visual()));
  await assertFails(getDoc(doc(owner,visualPath())));
+});
+
+const publishedPlacePath="published_places/DEDA-ORIGINAL-APPROVED-PLACE-434";
+async function seedPublishedOwnerPlace(){
+  await env.withSecurityRulesDisabled(async c=>{
+    await setDoc(doc(c.firestore(),publishedPlacePath),{
+      placeName:"Synthetic Approved Owner Place",
+      accountKey:ACCOUNT,ownerUid:UID,published:true,
+      approvalNumber:"ORIGINAL-DEDA-APPROVAL-434",
+      isAvailableNow:false,likes:17,followers:9,
+      updatedAt:serverTimestamp(),
+    });
+  });
+}
+test("same original UID on replacement phone can manage original approved place availability",async()=>{
+  await seedPublishedOwnerPlace();
+  const newPhoneSameUid=db(UID);
+  const ref=doc(newPhoneSameUid,publishedPlacePath);
+  const before=await assertSucceeds(getDoc(ref));
+  assert.equal(before.data().ownerUid,UID);
+  assert.equal(before.data().approvalNumber,"ORIGINAL-DEDA-APPROVAL-434");
+  await assertSucceeds(updateDoc(ref,{
+    isAvailableNow:true,updatedAt:serverTimestamp(),
+  }));
+  const after=await assertSucceeds(getDoc(ref));
+  assert.equal(after.data().isAvailableNow,true);
+  assert.equal(after.data().ownerUid,UID);
+  assert.equal(after.data().approvalNumber,before.data().approvalNumber);
+  assert.equal(after.data().likes,17);
+  assert.equal(after.data().followers,9);
+});
+test("foreign UID cannot manage or take over another account's published place",async()=>{
+  await seedPublishedOwnerPlace();
+  const foreign=db(OTHER);
+  const ref=doc(foreign,publishedPlacePath);
+  // The map place itself is public; management is never public.
+  const visible=await assertSucceeds(getDoc(ref));
+  assert.equal(visible.data().published,true);
+  await assertFails(updateDoc(ref,{
+    isAvailableNow:true,updatedAt:serverTimestamp(),
+  }));
+  const owner=db(UID);
+  await assertFails(updateDoc(doc(owner,publishedPlacePath),{
+    ownerUid:OTHER,approvalNumber:"FORGED",updatedAt:serverTimestamp(),
+  }));
+  const unchanged=await assertSucceeds(getDoc(doc(owner,publishedPlacePath)));
+  assert.equal(unchanged.data().ownerUid,UID);
+  assert.equal(unchanged.data().approvalNumber,"ORIGINAL-DEDA-APPROVAL-434");
+  assert.equal(unchanged.data().isAvailableNow,false);
 });
