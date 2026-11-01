@@ -1341,3 +1341,7 @@ exports.dedaWeeklyOwnerPilotStandingsV1 = dedaOwnerWeeklyPilot.dedaWeeklyOwnerPi
 const dedaCommunityWeekly = require("./deda_weekly_community_scores_callable.js");
 exports.dedaWeeklyCommunityClaimV1 = dedaCommunityWeekly.dedaWeeklyCommunityClaimV1;
 exports.dedaWeeklyCommunityStandingsV1 = dedaCommunityWeekly.dedaWeeklyCommunityStandingsV1;
+
+// DEDA 100422: separately reviewed server PIN HOLD; NOT a migration or login cutover.
+exports.dedaSecurePinPreflightV1 =
+  require("./deda_secure_pin_gate.js").makeCallableSecurePinGate();
