@@ -206,3 +206,98 @@ test("fresh canonical PIN verification context is mandatory and cannot be suppli
  const result=await scanAccountRestoreReadiness(good);
  assert.equal(result.safeToRestore,false);
 });
+
+
+test("premium ID activated for original account stays a read-only alias, never replaces canonical ID",async()=>{
+ const s=await seed(16);
+ const alias="@DEDA-VIP016";
+ await write("deda_stage71_granted_registry/"+alias,{
+   identifier:alias,recipientOriginalId:s.originalId,
+   kind:"self_used",group:"001",baseColor:"gold"
+ });
+ const r=await scanAccountRestoreReadiness(req(s));
+ assert.equal(r.activeStage71OwnershipVerified,true);
+ assert.equal(r.verifiedStage71PremiumItems,1);
+ assert.equal(r.domains.premiumIdentifier,
+   "stage71-received-or-self-used-alias-verified-readonly");
+ assert.equal(r.safeToTransferPremiumId,false);
+ assert.equal("activeId" in r,false);
+ assert.equal("originalId" in r,false);
+});
+test("gifted premium ID with NO received receipt stays pending, never silently owned",async()=>{
+ const s=await seed(17);
+ const alias="@DEDA-VIP017";
+ await write("deda_stage71_granted_registry/"+alias,{
+   identifier:alias,recipientOriginalId:s.originalId,
+   kind:"gifted",group:"001",baseColor:"royal"
+ });
+ const r=await scanAccountRestoreReadiness(req(s));
+ assert.equal(r.verifiedStage71PremiumItems,0);
+ assert.equal(r.pendingStage71GiftReceipts,1);
+ assert.equal(r.acceptedStage71GiftReceipts,0);
+ assert.equal(r.activeStage71OwnershipVerified,false);
+ assert.equal(r.domains.premiumIdentifier,
+   "active-selection-needs-independent-ownership-proof");
+});
+test("a user-accepted gift receipt changes only verified ownership, NEVER mints items",async()=>{
+ const s=await seed(18);
+ const alias="@DEDA-VIP018";
+ const grant=ref("deda_stage71_granted_registry/"+alias);
+ const receipt=ref("deda_stage74_id_gift_receipts/"+alias);
+ await grant.set({
+   identifier:alias,recipientOriginalId:s.originalId,kind:"gifted",
+   group:"002",baseColor:"diamond"});
+ const {Timestamp}=require("firebase-admin/firestore");
+ const record={identifier:alias,originalId:s.originalId,
+   group:"002",receivedAt:Timestamp.now()};
+ await receipt.set(record);
+ const before=(await receipt.get()).data();
+ const r=await scanAccountRestoreReadiness(req(s));
+ assert.equal(r.verifiedStage71PremiumItems,1);
+ assert.equal(r.pendingStage71GiftReceipts,0);
+ assert.equal(r.acceptedStage71GiftReceipts,1);
+ assert.equal(r.activeStage71OwnershipVerified,true);
+ assert.equal(r.safeToReissueGifts,false);
+ assert.deepEqual((await receipt.get()).data(),before);
+});
+test("mismatched gift receipt group or orphan receipt is rejected with no invented ownership",async()=>{
+ const s=await seed(19);
+ const alias="@DEDA-VIP019";
+ const {Timestamp}=require("firebase-admin/firestore");
+ await write("deda_stage71_granted_registry/"+alias,{
+    identifier:alias,recipientOriginalId:s.originalId,kind:"gifted",
+    group:"001",baseColor:"pink"});
+ const receipt=ref("deda_stage74_id_gift_receipts/"+alias);
+ await receipt.set({identifier:alias,originalId:s.originalId,
+    group:"002",receivedAt:Timestamp.now()});
+ await assert.rejects(scanAccountRestoreReadiness(req(s)),InventoryDenied);
+ await receipt.update({group:"001"});
+ const good=await scanAccountRestoreReadiness(req(s));
+ assert.equal(good.acceptedStage71GiftReceipts,1);
+ await ref("deda_stage71_granted_registry/"+alias).delete();
+ await assert.rejects(scanAccountRestoreReadiness(req(s)),InventoryDenied);
+});
+test("premium alias of another original ID cannot be treated as this account's received item",async()=>{
+ const s=await seed(20);
+ const alias="@DEDA-VIP020";
+ await write("deda_stage71_granted_registry/"+alias,{
+    identifier:alias,recipientOriginalId:"@DEDA-888888",
+    kind:"self_used",group:"001",baseColor:"gold"});
+ const r=await scanAccountRestoreReadiness(req(s));
+ assert.equal(r.verifiedStage71PremiumItems,0);
+ assert.equal(r.activeStage71OwnershipVerified,false);
+ assert.equal(r.safeToRestore,false);
+});
+test("no premium grant duplicate or account/route overwrite on repeat inventory scan",async()=>{
+ const s=await seed(21);
+ const alias="@DEDA-VIP021";
+ const grant=ref("deda_stage71_granted_registry/"+alias);
+ await grant.set({identifier:alias,recipientOriginalId:s.originalId,
+    kind:"self_used",group:"001",baseColor:"gold"});
+ const before=(await grant.get()).data();
+ const first=await scanAccountRestoreReadiness(req(s));
+ const second=await scanAccountRestoreReadiness(req(s));
+ assert.deepEqual(first,second);
+ assert.equal(first.safeToRestore,false);
+ assert.deepEqual((await grant.get()).data(),before);
+});
