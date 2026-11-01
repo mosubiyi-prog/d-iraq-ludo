@@ -28,3 +28,9 @@ The owner asked for same phone+PIN account opened on another Android phone with 
 - This checkpoint is not user approval to enable a low-entropy new authentication method in production. If original owner phone has already been lost, a server-side verified account recovery or stronger second factor is required; never allow an arbitrary fresh UID to claim a source-owned account just from a public identifier.
 
 **Release decision: HOLD, point 2 NOT COMPLETE. The owner requested a full working cross-device restoration; representing these source/QA components as that delivery would be misleading.**
+
+
+## Final CI result (same source, no deploy)
+- [GitHub Actions #41336396856](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41336396856): **SUCCESS**, both jobs. Exactly **6/6** managed Firebase Auth emulator UID link/wrong PIN/collision checks plus **10/10** native Flutter quiz hydration/idempotence/UID scope/no-reward checks; **16/16 green**. Flutter `dart analyze`: **No issues found**.
+- Correction of the prior Flutter test changed only the expected failure point for duplicate question IDs: the existing 100429 source decoder already rejects duplicates before they reach the hydration method.
+- **UNCHANGED production status:** no old account has been linked by this build, no automatic wallet/XP/task restore, and no real device acceptance yet. This milestone is a technical feasibility proof, NOT completed owner point 2.
