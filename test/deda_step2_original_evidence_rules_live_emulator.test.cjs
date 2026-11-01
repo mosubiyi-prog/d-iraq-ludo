@@ -111,3 +111,48 @@ test("bounded list is required, never scan a user's entire account history",asyn
  await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
  await assertFails(getDocs(collection(db(UID),"deda_progress_evidence",ACCOUNT,"captures")));
 });
+
+const visualPath=(key=ACCOUNT)=>"deda_profile_ui_migration/"+key;
+const visual=(overrides={})=>({
+ format:1,kind:"free-profile-appearance-only",accountKey:ACCOUNT,
+ originalId:ORIGINAL,uid:UID,avatarStyle:3,backgroundStyle:5,
+ createdAt:serverTimestamp(),...overrides,
+});
+test("original phone stores immutable FREE visual preference snapshot, second device with SAME UID reads",async()=>{
+ const original=db(UID);
+ await assertSucceeds(setDoc(doc(original,visualPath()),visual()));
+ const sameUidPhone2=db(UID);
+ const snapshot=await assertSucceeds(getDoc(doc(sameUidPhone2,visualPath())));
+ assert.equal(snapshot.data().avatarStyle,3);
+ assert.equal(snapshot.data().backgroundStyle,5);
+ await assertFails(setDoc(doc(original,visualPath()),visual({avatarStyle:4})));
+ await assertFails(deleteDoc(doc(original,visualPath())));
+});
+test("other UID cannot read, enumerate or create visual preferences",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),visualPath()),visual()));
+ await assertFails(getDoc(doc(db(OTHER),visualPath())));
+ await assertFails(getDocs(collection(db(OTHER),"deda_profile_ui_migration")));
+ await assertFails(setDoc(doc(db(OTHER),visualPath()),visual()));
+});
+test("visual restore cannot smuggle paid frames, diamonds, roles, rewards or arbitrary amounts",async()=>{
+ const owner=db(UID);
+ for(const bad of [
+  {paidFrames:["f13"]}, {diamondBalance:100000},
+  {weeklyPrizes:150}, {accountType:"admin"}, {premiumId:"@DEDA-AAAAAA"},
+  {avatarStyle:6}, {backgroundStyle:-1}, {avatarStyle:"5"},
+  {uid:OTHER}, {accountKey:"07799999999"}, {originalId:"@DEDA-FFFFFF"},
+ ]) {
+  await assertFails(setDoc(doc(owner,visualPath()),visual(bad)));
+ }
+ const wallet=await env.withSecurityRulesDisabled(async c=>
+  (await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL))).data());
+ assert.equal(wallet.balance,8765);
+});
+test("visual archive requires active original route and session",async()=>{
+ const owner=db(UID);
+ await env.withSecurityRulesDisabled(async c=>{
+  await deleteDoc(doc(c.firestore(),"deda_sessions",UID));
+ });
+ await assertFails(setDoc(doc(owner,visualPath()),visual()));
+ await assertFails(getDoc(doc(owner,visualPath())));
+});
