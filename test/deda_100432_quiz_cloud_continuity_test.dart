@@ -113,7 +113,9 @@ void main(){
     await upload(bridge(prefsOld));
     await expectLater(restore(bridge(prefsNew),user:'another_uid'),throwsStateError);
     // The owner-identity gate denies the request before payload decoding.
-    await expectLater(restore(bridge(prefsNew),orig:'@DEDA-KING99'),throwsStateError);
+    // Original-ID mismatch is caught by archive scope validation.
+    await expectLater(restore(bridge(prefsNew),orig:'@DEDA-KING99'),throwsFormatException);
+    // Wrong account is denied earlier by authenticated owner check.
     await expectLater(restore(bridge(prefsNew),acc:'07799999999'),throwsStateError);
     expect(prefsNew.data,isEmpty);
   });
