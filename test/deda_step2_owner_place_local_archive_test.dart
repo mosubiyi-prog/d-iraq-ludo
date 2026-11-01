@@ -170,7 +170,7 @@ void main(){
       expect(h.cloud.writes,0);
     }
     final h=H();
-    h.local.values['deda_owner_submitted_snapshot_v2_$account']='x'*65537;
+    h.local.values['deda_owner_submitted_snapshot_v2_$account']=List<String>.filled(65537, 'x').join();
     await expectLater(h.save(),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
     expect(h.cloud.writes,0);
   });
