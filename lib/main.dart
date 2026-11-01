@@ -4066,6 +4066,51 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
     }
   }
 
+  /// Private QA gate: local IDs, including restored IDs, are not proof of
+  /// authority over a published map place. Verify the canonical remote place
+  /// before enabling edits or availability, without changing its owner UID,
+  /// approval or any Firestore document.
+  Future<bool> _verifyPublishedPlaceBeforeOwnerControls(
+      String expectedPlaceId) async {
+    if (!dedaStep2LinkedPublishedPlaceEnabled) return true;
+    final account = _ownerStorageAccountKey;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    try {
+      if (uid == null || uid.isEmpty || expectedPlaceId.trim().isEmpty) {
+        throw const DedaStep2PublishedPlaceHold('missing-owner-or-place');
+      }
+      final confirmedPlaceId =
+          await DedaStep2LinkedPublishedPlaceRecovery.firebase()
+              .recoverOriginalPublishedPlace(
+        accountKey: account,
+        originalUid: uid,
+        isCurrent: () => mounted &&
+            _ownerStorageAccountKey == account &&
+            FirebaseAuth.instance.currentUser?.uid == uid,
+      );
+      if (confirmedPlaceId != expectedPlaceId) {
+        throw const DedaStep2PublishedPlaceHold(
+            'local-place-does-not-match-server-approved-place');
+      }
+      return true;
+    } catch (_) {
+      _status = 'recovery_blocked';
+      _editingApproved = false;
+      _decisionNote = dedaText(
+        'تعذر تأكيد ملكية مكانك المنشور. لم يتم حذف المكان أو تغيير صاحبه؛ '
+        'تحقق من الاتصال والحساب ثم حاول مرة أخرى.',
+        'Published place ownership could not be verified. '
+        'The place was not removed or reassigned; check your account and retry.',
+      );
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(_decisionNote!)),
+        );
+      }
+      return false;
+    }
+  }
+
   Future<void> _loadState() async {
     if (mounted) setState(() => _loading = true);
     try {
@@ -4167,6 +4212,22 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
           _decisionNote = request['decisionNote']?.toString();
           if (_status == 'approved') {
             final published = await DedaBackend.publishedPlaceById(_placeId!);
+            // An approved request alone is not proof the original map
+            // publication still exists on the server. Do not enable editing
+            // of a ghost or foreign place in a linked account.
+            if (dedaStep2LinkedPublishedPlaceEnabled && published == null) {
+              _status = 'recovery_blocked';
+              _editingApproved = false;
+              _decisionNote = dedaText(
+                'لم يتم تأكيد نشر مكانك على الخريطة. لا يوجد أي حذف أو نقل ملكية.',
+                'Published place not verified; nothing was deleted or reassigned.',
+              );
+              return;
+            }
+            if (published != null &&
+                !await _verifyPublishedPlaceBeforeOwnerControls(_placeId!)) {
+              return;
+            }
             _applyData(published ?? request);
             if (_pendingEditId != null) {
               await prefs.remove(_pendingEditIdKey);
@@ -4180,6 +4241,9 @@ class _OwnerPlacePageState extends State<OwnerPlacePage> {
         } else {
           final published = await DedaBackend.publishedPlaceById(_placeId!);
           if (published != null) {
+            if (!await _verifyPublishedPlaceBeforeOwnerControls(_placeId!)) {
+              return;
+            }
             final lastSource =
                 (published['lastSourceRequestId'] ?? '').toString();
             if (_pendingEditId != null && lastSource != _pendingEditId) {
