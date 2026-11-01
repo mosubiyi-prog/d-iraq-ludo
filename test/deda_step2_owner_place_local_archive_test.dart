@@ -193,6 +193,51 @@ void main(){
     }
   });
 
+  test('replacement handset with same verified UID reads original archive without local writes',()async{
+    final h=H();
+    final oldSource=await h.save();
+    // Different local installation after login, same verified Firebase UID.
+    final replacementLocal=Local();
+    replacementLocal.values.clear();
+    final phone2=DedaStep2OwnerPlaceLocalArchive(
+      local:replacementLocal,cloud:h.cloud,currentUid:()=>uid,
+      verifyOriginalOwner:(u,key)async=>u==uid && key==account,
+      enabled:true);
+    final found=await phone2.inspectOnReplacementPhone(
+      accountKey:account,originalUid:uid,captureId:id,
+      isCurrent:()=>true);
+    expect(found.records,oldSource.records);
+    expect(found.canRestoreMapOwnership,isFalse);
+    expect(found.canApprovePlace,isFalse);
+    expect(replacementLocal.reads,0);
+    expect(h.cloud.writes,1);
+  });
+
+  test('foreign account cannot inspect original owner place archive',()async{
+    final h=H();
+    await h.save();
+    h.currentUid='wrong-uid';
+    await expectLater(h.archive.inspectOnReplacementPhone(
+      accountKey:account,originalUid:uid,captureId:id,
+      isCurrent:()=>true),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
+    expect(h.cloud.reads,1); // only original phone confirmation read
+  });
+
+  test('forged or missing remote original place archive is rejected',()async{
+    final h=H();
+    await h.save();
+    final saved=h.cloud.docs['$account/$id']!;
+    saved['sourceUid']='other-user';
+    await expectLater(h.archive.inspectOnReplacementPhone(
+      accountKey:account,originalUid:uid,captureId:id,
+      isCurrent:()=>true),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
+    saved['sourceUid']=uid;
+    saved['records']={'placeId':'other-user'}; // incomplete
+    await expectLater(h.archive.inspectOnReplacementPhone(
+      accountKey:account,originalUid:uid,captureId:id,
+      isCurrent:()=>true),throwsA(isA<DedaStep2OwnerPlaceArchiveHold>()));
+  });
+
   test('normal user build disabled and cannot read local records',()async{
     final h=H();
     final off=DedaStep2OwnerPlaceLocalArchive(
