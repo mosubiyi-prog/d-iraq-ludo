@@ -58,6 +58,9 @@ class DedaQuizUiHydration {
       for (var version = 2; version <= 5; version++) '${base}_v$version',
   };
 
+  /// Explicit validation for a UI-only archive before any server write.
+  static void validateUiOnly(DedaStep2UiCapture capture) => _validateQuiz(capture);
+
   static void _validateQuiz(DedaStep2UiCapture capture) {
     final seen = capture.seen, selected = capture.selected;
     final raw = capture.progressRaw, completed = capture.completed;
