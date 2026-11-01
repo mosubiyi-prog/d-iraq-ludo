@@ -37,3 +37,9 @@ The existing 100420-derived DEDA source uses DIFFERENT authorities for these use
 4. **Physical two-device QA, private signed APK and post-cutover rollback**. Do not erase or overwrite the only working account to test recovery.
 
 **STATUS: Source-level reviewed progress readback + all known diamond wallet sources + daily/quiz non-award evidence validation implemented and locally tested. Full restoration point 1 NOT COMPLETE or deployed; final remaining work cannot be described as 'only tests' or 'already activated'. Do NOT proceed to user's point 2 of other account data until this point's actual cutover and end-to-end QA are verified.**
+
+## Latest bank-fidelity verification
+
+- [GitHub Actions #41332588471](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41332588471): **SUCCESS** — 25/25 real isolated Auth+Firestore reviewed balance/replay tests and **14/14** source-matched traffic/daily validator tests, **39/39, zero fail**. Actual Flutter traffic source is **20 canonical signs × five versions = 100 questions, with four choices in the current checkout**; original base ID has NO `_v1` suffix, variants run `_v2` through `_v5`.
+- Added `test/deda_100429_local_task_traffic_evidence_test.dart` with eight independent native Flutter tests of exact old-device preference keys, source capture/roundtrip, account/original binding, asynchronous session race, preserved malformed local record, incomplete reads, bad day and quiz list. Added a second Flutter job to this same source-only workflow; verify its successful latest run before making a Flutter QA claim.
+- These tests do not change the existing **four-choice** quiz UI. A prior three-choice requirement is a separate unfinished UI decision and **not** license to discard a stored fourth-choice answer during phone migration. Existing bank IDs and answered choice indices must be restored exactly when a real backup transport is authorized.
