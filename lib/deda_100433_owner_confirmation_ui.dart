@@ -112,8 +112,83 @@ class DedaOwnerConfirmButton extends StatefulWidget {
 class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
   bool _running = false;
 
+  /// Original phone only, after the UID has been safely linked. This action
+  /// can also be retried after an uncertain upload without re-linking the
+  /// same Firebase account, since the durable journal keeps the old bytes.
+  Future<bool> _archiveLinkedOriginalPlace(String uid) async {
+    final profile =
+        await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
+      phone: widget.phone, originalId: widget.originalId,
+      expectedUid: uid,
+    );
+    if (profile.accountType != 'placeOwner') return false;
+    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    final original = FirebaseAuth.instance.currentUser;
+    if (original?.uid != uid || original?.isAnonymous != false) {
+      throw const DedaStep2OwnerPlaceArchiveHold(
+          'original-linked-session-changed');
+    }
+    final isCurrent = () => mounted &&
+        FirebaseAuth.instance.currentUser?.uid == uid &&
+        FirebaseAuth.instance.currentUser?.isAnonymous == false;
+    final backup = DedaStep2OwnerPlaceDurableBackup(
+      archive: DedaStep2OwnerPlaceLocalArchive.firebase(),
+      journal: const DedaStep2OwnerPlacePrefsJournal(),
+    );
+    try {
+      await backup.prepare(accountKey: account,
+          originalUid: uid, isCurrent: isCurrent);
+    } on DedaStep2OwnerPlaceArchiveHold catch (error) {
+      if (error.reason == 'no-original-place-source-to-archive') {
+        return false;
+      }
+      rethrow;
+    }
+    final proof = await backup.uploadPending(
+        accountKey: account, originalUid: uid,
+        isCurrent: isCurrent);
+    if (!proof.journalCleared) {
+      throw const DedaStep2OwnerPlaceArchiveHold(
+          'old-place-backup-journal-still-pending');
+    }
+    return true;
+  }
+
   Future<void> _submit() async {
     if (_running) return;
+    // A user whose ORIGINAL UID was already linked can retry the previously
+    // frozen place-source upload without entering or retaining the PIN again.
+    // This is necessary after a lost network acknowledgement: linking is
+    // intentionally not attempted a second time.
+    final existingUser = FirebaseAuth.instance.currentUser;
+    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    if (dedaStep2OwnerPlaceLocalArchiveEnabled &&
+        dedaLinkedOwnerCompatEnabled &&
+        existingUser != null && !existingUser.isAnonymous &&
+        existingUser.email ==
+            DedaLinkedOwnerSessionPolicy.ownerEmail(account)) {
+      setState(() => _running = true);
+      try {
+        final archived = await _archiveLinkedOriginalPlace(existingUser.uid);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(archived
+            ? 'تم تأكيد حفظ مصدر إدارة المكان على Firebase. '
+              'احتفظ بالهاتف الأصلي لحين فحص جميع البيانات.'
+            : 'الحساب الأصلي مؤكد، لكن لا توجد بيانات مكان محلية لنقلها. '
+              'لا تحذف التطبيق قبل فحص الاسترجاع.'),
+        ));
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('الحساب الأصلي ما زال مرتبطاً، '
+              'لكن حفظ المكان لم يتأكد. أعد المحاولة عند توفر الإنترنت.'),
+        ));
+      } finally {
+        if (mounted) setState(() => _running = false);
+      }
+      return;
+    }
     final pin = await DedaOwnerPinPrompt.ask(
       context,
       title: 'تأكيد حساب DEDA / Confirm account',
@@ -161,42 +236,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       var placeSourceUnconfirmed = false;
       if (dedaStep2OwnerPlaceLocalArchiveEnabled) {
         try {
-          final profile =
-              await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
-            phone: widget.phone, originalId: widget.originalId,
-            expectedUid: uid,
-          );
-          if (profile.accountType == 'placeOwner') {
-            final account = DedaPinAuth.accountKeyForPhone(widget.phone);
-            final original = FirebaseAuth.instance.currentUser;
-            if (original?.uid != uid || original?.isAnonymous != false) {
-              throw const DedaStep2OwnerPlaceArchiveHold(
-                  'original-linked-session-changed');
-            }
-            final current = () => mounted &&
-                FirebaseAuth.instance.currentUser?.uid == uid &&
-                FirebaseAuth.instance.currentUser?.isAnonymous == false;
-            final local = await DedaStep2OwnerPlaceSource.readOriginal(
-              const DedaStep2OwnerPlaceSharedLocal(),
-              accountKey: account, isCurrent: current,
-            );
-            if (local.hasAnyEvidence) {
-              final backup = DedaStep2OwnerPlaceDurableBackup(
-                archive: DedaStep2OwnerPlaceLocalArchive.firebase(),
-                journal: const DedaStep2OwnerPlacePrefsJournal(),
-              );
-              await backup.prepare(accountKey: account,
-                  originalUid: uid, isCurrent: current);
-              final proof = await backup.uploadPending(
-                  accountKey: account, originalUid: uid,
-                  isCurrent: current);
-              if (!proof.journalCleared) {
-                throw const DedaStep2OwnerPlaceArchiveHold(
-                    'old-place-backup-journal-still-pending');
-              }
-              placeSourceConfirmed = true;
-            }
-          }
+          placeSourceConfirmed = await _archiveLinkedOriginalPlace(uid);
         } catch (_) {
           placeSourceUnconfirmed = true;
         }
