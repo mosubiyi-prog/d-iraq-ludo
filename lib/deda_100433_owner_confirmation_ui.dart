@@ -201,7 +201,12 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           placeSourceUnconfirmed = true;
         }
       }
-      if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+      // Existing widget's injected confirmation path is still testable
+      // without Firebase bootstrapping. A LIVE private place-backup pilot,
+      // however, must retain the exact verified linked owner UID.
+      if (!mounted ||
+          (dedaStep2OwnerPlaceLocalArchiveEnabled &&
+              FirebaseAuth.instance.currentUser?.uid != uid)) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(placeSourceUnconfirmed
           ? 'تم ربط الحساب الأصلي، لكن نسخ بيانات إدارة المكان لم يتأكد. '
