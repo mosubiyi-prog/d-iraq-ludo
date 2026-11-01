@@ -29,6 +29,11 @@ const ref=p=>db.doc(p);
 const req=s=>({
  db,auth,secret,accountKey:s.accountKey,originalId:s.originalId,
  claimantUid:s.claimantUid,weekId:s.weekId,
+ freshCanonicalHold:{
+   status:"PIN_VERIFIED_HOLD",serverOwned:true,
+   productionMigrationEnabled:false,canonicalOriginalVerified:true,
+   canonicalOriginalId:s.originalId,canRestoreAssets:false,canMigrate:false,
+ },
 });
 async function write(p,v){await ref(p).set(v)}
 async function seed(n,{wallet=true,frames=true,active=true,weekly=true}={}){
@@ -179,4 +184,25 @@ test("phone alias and active premium ID never count as canonical account identit
    {accountKey:"07-700-0014"},{weekId:"2026/10/31"}]){
    await assert.rejects(scanAccountRestoreReadiness({...req(s),...altered}),InventoryDenied);
  }
+});
+
+test("fresh canonical PIN verification context is mandatory and cannot be supplied as a stale/alias receipt",async()=>{
+ const s=await seed(15);
+ const good=req(s);
+ await assert.rejects(scanAccountRestoreReadiness({
+   ...good,freshCanonicalHold:undefined,
+ }),InventoryDenied);
+ for(const bad of [
+   {canonicalOriginalId:"@DEDA-VIP015"},
+   {canonicalOriginalVerified:false},
+   {canMigrate:true},
+   {serverOwned:false},
+   {productionMigrationEnabled:true},
+ ]){
+  await assert.rejects(scanAccountRestoreReadiness({
+    ...good,freshCanonicalHold:{...good.freshCanonicalHold,...bad},
+  }),InventoryDenied);
+ }
+ const result=await scanAccountRestoreReadiness(good);
+ assert.equal(result.safeToRestore,false);
 });
