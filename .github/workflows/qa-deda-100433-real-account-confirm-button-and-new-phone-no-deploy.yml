@@ -1,0 +1,89 @@
+name: DEDA 100433 Confirm Original Account + New Phone Login (PRIVATE QA / NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100433-step2-account-confirm-new-phone-ui-private-no-deploy-2026-11-01
+    paths:
+      - 'lib/main.dart'
+      - 'lib/deda_100433_owner_confirmation_ui.dart'
+      - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_100433_owner_confirmation_ui_test.dart'
+      - '.github/workflows/qa-deda-100433-real-account-confirm-button-and-new-phone-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100433-private
+  cancel-in-progress: false
+jobs:
+  flutter-account-confirm-and-new-phone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: '3.47.7',channel: stable,cache: false}
+      - name: Safety gate — this code MUST NOT run in ordinary users' APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          grep -q "'DEDA_STEP2_LINKED_OWNER_COMPAT', defaultValue: false" lib/deda_100431_linked_owner_session_policy.dart
+          grep -q "DedaOwnerConfirmButton(" lib/main.dart
+          grep -q "onPressed: _signInToConfirmedAccount" lib/main.dart
+          grep -q "onPressed: _logout" lib/main.dart
+          ! grep -q "DEDA_STEP2_LINKED_OWNER_COMPAT=true" android/app/build.gradle
+          ! grep -q "DEDA_STEP2_QUIZ_CLOUD=true" android/app/build.gradle
+          echo 'NO_AUTOMATIC_USER_LINK_NO_OLD_ACCOUNT_SIGNOUT_NO_WALLET_TRANSFER'
+      - name: Test actual widget, account identity, existing old phone quiz and in-app source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test test/deda_100433_owner_confirmation_ui_test.dart --no-pub
+          flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
+          flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart
+          echo 'PASS_100433_ACCOUNT_CONFIRM_UI_AND_NEW_PHONE_WITHOUT_PRODUCTION_DEPLOY'
+      - name: Never build a release APK or publish to Play
+        run: |
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo 'NO_RELEASE_APK_NO_REAL_FIREBASE_DATA_NO_PLAY_NO_BILLING'
+  real-firebase-auth-account-link-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-deda-100430-uid-continuity
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Only demo Firebase Emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-deda-100430-uid-continuity
+          test "$FIREBASE_AUTH_EMULATOR_HOST" = 127.0.0.1:9099
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          npm --prefix functions install --no-save --no-audit --no-fund firebase@11.10.0 firebase-tools@14
+          cat > "$RUNNER_TEMP/deda-100433-auth.json" <<'JSON'
+          {"emulators":{"auth":{"port":9099},"ui":{"enabled":false},"singleProjectMode":true}}
+          JSON
+      - name: Preserve original UID; wrong PIN, duplicate number and premium alias fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          functions/node_modules/.bin/firebase emulators:exec \
+            --config "$RUNNER_TEMP/deda-100433-auth.json" \
+            --project demo-deda-100430-uid-continuity --only auth \
+            'node --test functions/tests/deda_100430_uid_auth_emulator.test.cjs'
+          echo 'PASS_100433_ORIGINAL_UID_SAME_ON_NEW_PHONE_NO_CLOUD_FUNCTIONS'
+      - name: Remove disposable emulator config
+        if: always()
+        run: rm -f "$RUNNER_TEMP/deda-100433-auth.json"
