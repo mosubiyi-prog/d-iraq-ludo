@@ -55,3 +55,49 @@
       allow update, delete: if false;
     }
 
+
+    // STEP 2: first migration of two FREE profile appearance preferences,
+    // NOT paid frames or any rewards. Immutable and original UID scoped.
+    match /deda_profile_ui_migration/{accountKey} {
+      function sameOriginalVisualOwner() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow get: if sameOriginalVisualOwner();
+      allow list: if false;
+      allow create: if sameOriginalVisualOwner()
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','originalId','uid',
+          'avatarStyle','backgroundStyle','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','originalId','uid',
+          'avatarStyle','backgroundStyle','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'free-profile-appearance-only'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.originalId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId
+        && request.resource.data.avatarStyle is int
+        && request.resource.data.avatarStyle >= 0
+        && request.resource.data.avatarStyle <= 5
+        && request.resource.data.backgroundStyle is int
+        && request.resource.data.backgroundStyle >= 0
+        && request.resource.data.backgroundStyle <= 5
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
