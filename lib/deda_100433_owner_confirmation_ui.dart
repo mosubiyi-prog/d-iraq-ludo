@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_pin_auth.dart';
+import 'deda_step2_visual_prefs_continuity.dart';
 
 /// DEDA 100433: explicit user action and non-persistent PIN entry only.
 /// This is NOT password reset, not Google Sign-In and does not transfer money.
@@ -119,6 +122,29 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     if (pin == null || !mounted) return;
     setState(() => _running = true);
     try {
+      // On a separately owner-approved private build ONLY: persist the
+      // original phone's FREE appearance preferences BEFORE UID linking.
+      // If this archive is missing or denied, leave the original anonymous
+      // account intact, rather than linking and claiming a complete backup.
+      // This never reads or credits paid frames, gems, points or prizes.
+      if (dedaStep2VisualPrefsMigrationEnabled) {
+        final originalUid = FirebaseAuth.instance.currentUser?.uid;
+        if (originalUid == null || originalUid.isEmpty ||
+            FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+          throw StateError('original-phone-session-required-for-visual-backup');
+        }
+        await DedaStep2VisualPrefsContinuity.firebase().saveOriginalPhone(
+          accountKey: DedaPinAuth.accountKeyForPhone(widget.phone),
+          originalId: widget.originalId,
+          originalUid: originalUid,
+          isCurrent: () => mounted &&
+              FirebaseAuth.instance.currentUser?.uid == originalUid &&
+              FirebaseAuth.instance.currentUser?.isAnonymous == true,
+        );
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
+          return;
+        }
+      }
       final confirmed = widget.confirm ??
           (phone,pin,originalId) => DedaOwnerUidContinuity.linkExistingOriginalUid(
                 phone:phone,pin:pin,originalId:originalId);
