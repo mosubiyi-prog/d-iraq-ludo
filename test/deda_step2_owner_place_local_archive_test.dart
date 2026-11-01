@@ -86,7 +86,6 @@ void main(){
     expect(snap.records['pendingEditId'],'pending-edit-77');
     expect(snap.records['draftRaw'],'{"placeName":"Old phone source"}');
     expect(snap.records['submittedRaw'],'{"approvalNumber":"ORIGINAL-123"}');
-    expect(snap.toRecords().keys,toSet());
     expect(snap.toRecords().keys,containsAll(dedaStep2OwnerPlaceSourceKeys));
     expect(snap.toRecords().length,4);
     expect(h.cloud.writes,1);
