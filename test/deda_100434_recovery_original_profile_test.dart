@@ -23,6 +23,40 @@ void main() {
     );
   });
 
+  test('Linked recovery restores original role only from matched server account', () {
+    expect(
+      DedaOwnerUidContinuity.validatedServerAccountType(
+        {'accountKey': account, 'accountType': 'user'}, accountKey: account,
+      ),
+      'user',
+    );
+    expect(
+      DedaOwnerUidContinuity.validatedServerAccountType(
+        {'accountKey': account, 'accountType': 'placeOwner'},
+        accountKey: account,
+      ),
+      'placeOwner',
+    );
+  });
+
+  test('A stale local owner role cannot be adopted from missing or foreign data', () {
+    for (final profile in <Map<String, dynamic>?>[
+      null,
+      {'accountKey': account},
+      {'accountKey': account, 'accountType': 'admin'},
+      {'accountKey': account, 'accountType': 'general_manager'},
+      {'accountKey': account, 'accountType': ''},
+      {'accountKey': '07700000000', 'accountType': 'placeOwner'},
+    ]) {
+      expect(
+        () => DedaOwnerUidContinuity.validatedServerAccountType(
+          profile, accountKey: account,
+        ),
+        throwsStateError,
+      );
+    }
+  });
+
   test('Recovery refuses absent, empty, invalid and oversized profile names', () {
     for (final profile in <Map<String, dynamic>?>[
       null,
