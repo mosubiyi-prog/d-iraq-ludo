@@ -308,9 +308,13 @@ test("same original Firebase UID replacement phone queries its saved friendship 
   assert.equal(result.docs[0].data().requesterPublicId,ORIGINAL);
   assert.equal(result.docs[0].data().status,"accepted");
 });
-test("foreign UID cannot fetch or edit an original account friendship",async()=>{
+test("foreign UID cannot read/list/edit an original account friendship",async()=>{
   await seedFriendship();
   await assertFails(getDoc(doc(db(OTHER),"deda_friendships",friendshipPair)));
+  await assertFails(getDocs(query(
+    collection(db(OTHER),"deda_friendships"),
+    where("members","array-contains",UID),limit(201)
+  )));
   await assertFails(updateDoc(doc(db(OTHER),"deda_friendships",friendshipPair),{
     status:"accepted",updatedAt:serverTimestamp(),
   }));
