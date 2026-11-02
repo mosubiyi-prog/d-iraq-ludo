@@ -18,7 +18,7 @@ function normalizeName(value) {
  * request document and displays its new recoveryPin to requesterUid only.
  */
 async function autoRecoverForgottenPin(firestore, {
-  requestId, nowMs=Date.now(),
+  requestId, nowMs=Date.now(), auth=null,
 }) {
   if (!requestId || typeof requestId !== "string") {
     return {outcome:"invalid-request-id"};
@@ -54,6 +54,26 @@ async function autoRecoverForgottenPin(firestore, {
         tx.get(directoryRef),tx.get(profileRef),
         tx.get(credentialRef),tx.get(limitRef),
       ]);
+    // Client-only PIN reset would strand linked original Firebase Auth UID
+    // with its OLD password. The automatic legacy path is reserved for
+    // VERIFIED anonymous owners; linked identities require the new safe
+    // general-manager callable. Refuse when Auth cannot be verified.
+    const directoryOwner = String((directorySnap.data() || {}).createdUid || "");
+    if (!auth || !directoryOwner) {
+      return {outcome:"manual-review",reason:"original-owner-auth-unknown"};
+    }
+    let ownerAuth;
+    try {
+      ownerAuth = await auth.getUser(directoryOwner);
+    } catch (_) {
+      return {outcome:"manual-review",reason:"original-owner-auth-unavailable"};
+    }
+    const linkedEmail = key + "@deda-login.invalid";
+    if (ownerAuth.email === linkedEmail ||
+        ownerAuth.email || ownerAuth.disabled ||
+        (credentialSnap.data() || {}).pendingRecovery) {
+      return {outcome:"manual-review",reason:"linked-or-pending-pin-requires-server-sync"};
+    }
     const profile=profileSnap.data()||{};
     const directory=directorySnap.data()||{};
     const credential=credentialSnap.data()||{};
