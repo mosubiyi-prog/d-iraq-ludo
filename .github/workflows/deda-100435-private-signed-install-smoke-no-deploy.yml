@@ -1,0 +1,133 @@
+name: DEDA 100435 Signed Private Install Smoke (NO DEPLOY / NO PLAY)
+on:
+  push:
+    branches: [deda-100434-step2-verified-original-profile-private-qa-no-deploy-2026-11-01]
+    paths: ['.github/workflows/deda-100435-private-signed-install-smoke-no-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  owner-signed-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+      APP: ${{ runner.temp }}/deda-100435-package
+      OUT: ${{ runner.temp }}/deda-100435-artifact
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with: {flutter-version: '3.47.7', channel: stable, cache: false}
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Check original signing inputs without disclosing them
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in DEDA_KEYSTORE_BASE64 DEDA_KEY_ALIAS DEDA_STORE_PASSWORD DEDA_KEY_PASSWORD; do
+            test -n "${!key:-}" || { echo "SAFE_STOP missing official signing secret"; exit 5; }
+          done
+          test -s "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk"
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+      - name: Rebuild original Android scaffold and overlay latest reviewed DEDA Flutter source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$APP"
+          python3 tools/app_stability/app_package/prepare.py "$APP" --variant candidate
+          cp -a "$GITHUB_WORKSPACE/lib/." "$APP/lib/"
+          cp -a "$GITHUB_WORKSPACE/assets/." "$APP/assets/"
+          rm -f "$APP/assets/deda_traffic_500_bank_ar_v1.json"
+          cp "$GITHUB_WORKSPACE/pubspec.yaml" "$APP/pubspec.yaml"
+          cp "$GITHUB_WORKSPACE/pubspec.lock" "$APP/pubspec.lock"
+          python3 - <<'PY'
+          import json,hashlib,os
+          from pathlib import Path
+          p=Path(os.environ['APP']); target=p/'internal-build-inputs.json'
+          d=json.loads(target.read_text())
+          assert d['package']=='com.diraq.ludo.d_iraq_ludo'
+          assert d['financialRestoreEnabled'] is False
+          assert d['completeOwnerDelivery'] is False
+          d['versionCode']=100435
+          d['purpose']='SIGNED INSTALL-ONLY QA, linked recovery awaits live Firebase activation'
+          blocked=['DEDA_STEP2_LINKED_OWNER_COMPAT',
+            'DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT',
+            'DEDA_STEP2_ORIGINAL_EVIDENCE_READBACK',
+            'DEDA_STEP2_LEVEL_POINTS_RESTORE',
+            'DEDA_STEP2_ASSETS_READBACK',
+            'DEDA_STEP2_PURCHASE_SOURCE_READBACK']
+          for name in blocked:d['flags'][name]=False
+          sha=lambda f:hashlib.sha256(f.read_bytes()).hexdigest()
+          d['sourceHashes']={str(f.relative_to(p)):sha(f) for f in (p/'lib').rglob('*.dart')}
+          d['sourceHashes'].update({n:sha(p/n) for n in ('pubspec.yaml','pubspec.lock')})
+          target.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          assert 'DedaStep2LevelPointsRestore.firebase().restoreOnVerifiedPhone(' in (p/'lib/main.dart').read_text()
+          print('PASSED_100435_EXACT_BRANCH_SOURCE_ALL_RECOVERY_FLAGS_DISABLED_FOR_SAFE_INSTALL')
+          PY
+          cd "$APP"
+          flutter pub get --enforce-lockfile
+          flutter test test/deda_step2_level_points_restore_test.dart --no-pub
+          flutter test test/deda_100434_recovery_original_profile_test.dart --no-pub
+      - name: Restore genuine official release signing key into ephemeral workspace
+        shell: bash
+        working-directory: ${{ env.APP }}
+        run: |
+          set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+      - name: Build signed same-package 100435 APK WITHOUT turning on undeployed recovery
+        working-directory: ${{ env.APP }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          d=json.loads(Path('internal-build-inputs.json').read_text())
+          assert d['versionCode']==100435 and not d['completeOwnerDelivery']
+          assert all(not v for k,v in d['flags'].items() if k.startswith('DEDA_STEP2_'))
+          cmd=['flutter','build','apk','--release','--build-number=100435','--no-pub']
+          cmd+=['--dart-define='+k+'='+str(v).lower() for k,v in d['flags'].items()]
+          subprocess.run(cmd,check=True)
+          PY
+      - name: Verify signed APK against original DEDA certificate and package plus SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          python3 tools/app_stability/app_package/verify.py \
+            "$APP" "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" \
+            --output "$OUT/verification.json"
+          cp "$APP/build/app/outputs/flutter-apk/app-release.apk" "$OUT/DEDA-100435-PRIVATE-SIGNED-INSTALL-QA.apk"
+          (cd "$OUT" && sha256sum DEDA-100435-PRIVATE-SIGNED-INSTALL-QA.apk > SHA256.txt)
+          printf '%s\n' \
+            'DEDA 100435 signed owner-only Android INSTALL SMOKE; never Play.' \
+            'SAME original Android package and release-signing certificate verified.' \
+            'NOT a full account recovery test: new Firebase functions and live evidence rules are NOT yet published.' \
+            'Original UID link and level restore flags deliberately OFF.' \
+            'Test only installation, ordinary upgrade, startup without clearing data.' \
+            'Preserve old phone app and data. Do NOT uninstall it, log out or reset PIN during test.' \
+            > "$OUT/README.txt"
+          echo 'PASS_100435_INSTALL_SMOKE_SIGNED_NO_BACKEND_DEPLOY'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100435-PRIVATE-SIGNED-INSTALL-QA
+          path: ${{ env.OUT }}/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Erase original signing key from temporary runner
+        if: always()
+        shell: bash
+        run: rm -f "$APP/android/app/deda-release.jks"
