@@ -725,8 +725,10 @@ class DedaPreferences {
   static const String _accountTypeKey = 'deda_account_type_v1';
   static const String _accountPhoneKey = 'deda_account_phone_v1';
   // Private linked-owner provenance only; never stores PIN or wallet value.
-  static const String _linkedVerifiedUidKey = 'deda_step2_linked_verified_uid_v1';
-  static const String _linkedVerifiedAccountKey = 'deda_step2_linked_verified_account_v1';
+  static const String _linkedVerifiedUidKey =
+      DedaLinkedOwnerSessionPolicy.linkedUidPreferencesKey;
+  static const String _linkedVerifiedAccountKey =
+      DedaLinkedOwnerSessionPolicy.linkedAccountPreferencesKey;
   static const String _voiceEnabledKey = 'deda_voice_enabled_v1';
   static const String _speechRateKey = 'deda_speech_rate_v1';
   static const String _travelModeKey = 'deda_default_travel_mode_v1';
