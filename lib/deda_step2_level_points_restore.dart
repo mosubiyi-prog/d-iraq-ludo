@@ -84,7 +84,12 @@ class DedaStep2LevelStateValidator {
       }
       final parts = id.split('|');
       final points = row['points'] as int;
-      if (parts.length < 2 || !_realDay(parts[1])) {
+      if (parts.length < 2) {
+        throw const DedaStep2LevelHold('invalid-original-award-id');
+      }
+      final isDateAward = parts[0] == 'task' ||
+          parts[0] == 'traffic_answer' || parts[0] == 'daily_login';
+      if (isDateAward && !_realDay(parts[1])) {
         throw const DedaStep2LevelHold('invalid-original-award-day');
       }
       if (parts[0] == 'task') {
@@ -106,13 +111,48 @@ class DedaStep2LevelStateValidator {
             row['dayId'] != parts[1] || row['cycleId'] != parts[1]) {
           throw const DedaStep2LevelHold('invalid-original-daily-award');
         }
+      } else if (parts[0] == 'point_tier_reserve' ||
+          parts[0] == 'point_tier_claim') {
+        // Same EXISTING point-tier account cards. Their reservations are
+        // negative and the matching claim returns reserve + fixed bonus.
+        // Reject changing just one side to inflate the recovered balance.
+        final threshold = int.tryParse(parts[1]);
+        const bonuses = <int,int>{
+          5000:50,10000:100,15000:150,20000:200,25000:250,
+        };
+        if (parts.length != 2 || threshold == null ||
+            !bonuses.containsKey(threshold) ||
+            row['threshold'] != threshold ||
+            row['reservedPoints'] != threshold ||
+            row['bonusPoints'] != bonuses[threshold]) {
+          throw const DedaStep2LevelHold('invalid-original-point-tier');
+        }
+        if (parts[0] == 'point_tier_reserve') {
+          if (points != -threshold ||
+              row['type'] != 'point_tier_reserve') {
+            throw const DedaStep2LevelHold('invalid-original-tier-reserve');
+          }
+        } else if (points != threshold + bonuses[threshold]! ||
+            row['type'] != 'point_tier_claim' ||
+            !awards.containsKey('point_tier_reserve|' + parts[1])) {
+          throw const DedaStep2LevelHold('invalid-original-tier-claim');
+        }
+      } else if (id == 'point_tier|5000') {
+        // Pre-233 legacy +50; the existing profile hub removes this older
+        // entry once. Preserve it rather than refusing genuine old users.
+        if (points != 50) {
+          throw const DedaStep2LevelHold('invalid-original-legacy-tier');
+        }
       } else {
         throw const DedaStep2LevelHold('unrecognized-original-award');
       }
       sum += points;
-      if (sum > 9007199254740991) {
+      if (sum.abs() > 9007199254740991) {
         throw const DedaStep2LevelHold('invalid-original-point-total');
       }
+    }
+    if (sum < 0) {
+      throw const DedaStep2LevelHold('negative-original-available-points');
     }
     for (final item in ledger) {
       if (item is! Map || item['id'] is! String ||
