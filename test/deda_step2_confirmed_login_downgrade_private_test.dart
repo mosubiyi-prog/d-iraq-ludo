@@ -73,6 +73,39 @@ void main() {
     expect(prefs.containsKey('deda_step2_linked_verified_account_v1'),false);
   });
 
+  test('sign out clears active session but keeps protected account guard', () async {
+    SharedPreferences.setMockInitialValues({
+      'deda_logged_in_v1': true,
+      'deda_user_name_v1': 'الاسم المؤكد',
+      'deda_phone_v1': phone,
+      'deda_account_phone_v1': phone,
+      'deda_account_type_v1': 'user',
+    });
+    await DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid: sourceUid, isCurrent: () => true,
+    );
+    await DedaPreferences.logout();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('deda_logged_in_v1'), isFalse);
+    expect(prefs.containsKey('deda_step2_linked_verified_uid_v1'), isFalse);
+    expect(prefs.containsKey('deda_step2_linked_verified_account_v1'), isFalse);
+    expect(prefs.getString('deda_step2_verified_owner_guard_v1_$account'), sourceUid);
+    // A second phone/name-only login must not defeat explicit sign-out.
+    await expectLater(attemptUnverified(), throwsStateError);
+    expect(prefs.getString('deda_step2_verified_owner_guard_v1_$account'), sourceUid);
+  });
+
+  test('a guard-only interrupted linked login also blocks phone-only takeover', () async {
+    SharedPreferences.setMockInitialValues({
+      'deda_logged_in_v1': false,
+      'deda_step2_verified_owner_guard_v1_$account': sourceUid,
+    });
+    await expectLater(attemptUnverified(), throwsStateError);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('deda_step2_verified_owner_guard_v1_$account'), sourceUid);
+    expect(prefs.getBool('deda_logged_in_v1'), isFalse);
+  });
+
   test('even a torn/partial confirmed UID proof cannot be downgraded', () async {
     for (final partial in <Map<String, Object>>[
       {'deda_step2_linked_verified_uid_v1': sourceUid},
