@@ -9,6 +9,8 @@ import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
 import 'deda_step2_owner_place_local_archive.dart';
 import 'deda_step2_owner_place_backup_journal.dart';
+import 'deda_100429_local_task_traffic_evidence.dart';
+import 'deda_100432_quiz_cloud_continuity.dart';
 
 /// DEDA 100433: explicit user action and non-persistent PIN entry only.
 /// This is NOT password reset, not Google Sign-In and does not transfer money.
@@ -155,6 +157,37 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     return true;
   }
 
+  /// Private QA only: transfer the existing quiz-only UI snapshot for the
+  /// current local day AFTER the original UID is linked and verified.
+  /// If the owner never started today's quiz, there is no snapshot to copy;
+  /// this must not create a fake completed day or award any task points.
+  Future<bool> _archiveLinkedOriginalQuiz(String uid) async {
+    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    final localDay = DateTime.now().toLocal();
+    final day = '${localDay.year.toString().padLeft(4, '0')}-'
+        '${localDay.month.toString().padLeft(2, '0')}-'
+        '${localDay.day.toString().padLeft(2, '0')}';
+    bool isCurrent() => mounted &&
+        FirebaseAuth.instance.currentUser?.uid == uid &&
+        FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+        FirebaseAuth.instance.currentUser?.email ==
+            DedaLinkedOwnerSessionPolicy.ownerEmail(account);
+    if (!isCurrent()) throw StateError('quiz-original-uid-changed');
+    final source = await DedaStep2UiCapture.capture(
+      store: const DedaStep2SharedPrefsUiReadStore(),
+      accountKey: account, originalId: widget.originalId,
+      iraqDay: day, isCurrent: isCurrent,
+    );
+    if (source.seen == null || source.selected == null ||
+        source.progressRaw == null || source.completed == null) {
+      return false;
+    }
+    await DedaQuizCloudContinuity.firebase().saveOldPhoneQuiz(
+      uid: uid, source: source, isCurrent: isCurrent,
+    );
+    return true;
+  }
+
   /// Remember the already-linked original UID on the ORIGINAL phone too.
   /// Without this, its next cold start could trust an old local profile after
   /// Firebase Auth switched to a different user. An uncertain preference
@@ -193,16 +226,30 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
         final archived = dedaStep2OwnerPlaceLocalArchiveEnabled
             ? await _archiveLinkedOriginalPlace(existingUser.uid)
             : false;
+        var quizArchived = false;
+        var quizUnconfirmed = false;
+        if (dedaQuizCloudSyncEnabled) {
+          try {
+            quizArchived = await _archiveLinkedOriginalQuiz(existingUser.uid);
+          } catch (_) {
+            quizUnconfirmed = true;
+          }
+        }
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(archived
+          content: Text((archived
             ? 'تم تأكيد ربط الحساب وحفظ مصدر إدارة المكان على Firebase. '
               'احتفظ بالهاتف الأصلي لحين فحص جميع البيانات.'
             : dedaStep2OwnerPlaceLocalArchiveEnabled
               ? 'تم تأكيد الحساب الأصلي، ولا توجد بيانات مكان محلية لنقلها. '
                 'لا تحذف التطبيق قبل فحص الاسترجاع.'
               : 'تم تثبيت ارتباط الحساب الأصلي على هذا الهاتف. '
-                'احتفظ به حتى التأكد من استرجاع جميع البيانات.'),
+                'احتفظ به حتى التأكد من استرجاع جميع البيانات.') +
+              (quizUnconfirmed
+                  ? ' تعذر تأكيد نسخة أسئلة اليوم؛ لا تحذف بيانات الهاتف.'
+                  : quizArchived
+                      ? ' حُفظت حالة أسئلة اليوم فقط للفحص.'
+                      : '')),
         ));
       } catch (_) {
         if (!mounted) return;
@@ -282,6 +329,15 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           placeSourceUnconfirmed = true;
         }
       }
+      var quizSourceConfirmed = false;
+      var quizSourceUnconfirmed = false;
+      if (dedaQuizCloudSyncEnabled) {
+        try {
+          quizSourceConfirmed = await _archiveLinkedOriginalQuiz(uid);
+        } catch (_) {
+          quizSourceUnconfirmed = true;
+        }
+      }
       // Existing widget's injected confirmation path is still testable
       // without Firebase bootstrapping. A LIVE private place-backup pilot,
       // however, must retain the exact verified linked owner UID.
@@ -296,7 +352,12 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
             ? 'تم ربط الحساب وحفظ مصدر إدارة المكان للفحص. '
               'لا تحذف التطبيق الأصلي قبل استرجاع جميع البيانات.'
             : 'تم ربط معرّف Firebase الأصلي. '
-              'احتفظ بالتطبيق على هذا الهاتف لحين فحص الاسترجاع.'),
+              'احتفظ بالتطبيق على هذا الهاتف لحين فحص الاسترجاع.') +
+          (quizSourceUnconfirmed
+              ? ' تعذر تأكيد نسخة أسئلة اليوم؛ احتفظ بالهاتف الأصلي.'
+              : quizSourceConfirmed
+                  ? ' تم حفظ أسئلة اليوم فقط، دون نقاط أو جوائز.'
+                  : ''),
       ));
     } catch (_) {
       if (!mounted) return;
