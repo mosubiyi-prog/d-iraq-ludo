@@ -360,3 +360,91 @@ test("other UID, wrong email, anonymous and non-password provider cannot refresh
       fields.uid),fields));
   }
 });
+
+const purchasePath=(key=ACCOUNT,id=CAPTURE)=>
+  `deda_purchase_evidence/${key}/captures/${id}`;
+const purchaseLocalSnapshot=JSON.stringify({
+  format:1,accountKey:ACCOUNT,originalId:ORIGINAL,
+  inventory:'{"owned":["FRAME_03"]}',
+  frameJournals:Object.fromEntries([
+    "FRAME_03","FRAME_05","FRAME_06","FRAME_07","FRAME_08",
+    "FRAME_09","FRAME_10","FRAME_11","FRAME_12","FRAME_13",
+    "FRAME_14","FRAME_15","FRAME_16"].map(frame=>[frame,null]))
+});
+const purchasePayload=(overrides={})=>({
+  format:1,kind:"legacy-purchase-evidence",accountKey:ACCOUNT,
+  sourceUid:UID,installId:"original-device",captureId:CAPTURE,
+  records:{originalId:ORIGINAL,progressCaptureId:CAPTURE,
+    localSnapshot:purchaseLocalSnapshot},
+  createdAt:serverTimestamp(),...overrides,
+});
+test("purchase sidecar needs its matching original progress capture FIRST",async()=>{
+ const owner=db(UID);
+ await assertFails(setDoc(doc(owner,purchasePath()),purchasePayload()));
+ await assertSucceeds(setDoc(doc(owner,addr()),payload()));
+ await assertSucceeds(setDoc(doc(owner,purchasePath()),purchasePayload()));
+ const source=await assertSucceeds(getDoc(doc(owner,purchasePath())));
+ assert.equal(source.data().records.progressCaptureId,CAPTURE);
+ assert.equal(source.data().records.localSnapshot,purchaseLocalSnapshot);
+ await assertFails(setDoc(doc(owner,purchasePath()),purchasePayload()));
+ await assertFails(deleteDoc(doc(owner,purchasePath())));
+});
+test("verified same original UID replacement phone reads paired source; no purchase listing",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
+ await assertSucceeds(setDoc(doc(db(UID),purchasePath()),purchasePayload()));
+ const replacementPhone=linkedSession();
+ await assertSucceeds(setDoc(doc(replacementPhone,"deda_sessions",UID),
+    linkedSessionSource()));
+ const got=await assertSucceeds(getDoc(doc(replacementPhone,purchasePath())));
+ assert.equal(got.data().sourceUid,UID);
+ assert.equal(got.data().installId,"original-device");
+ await assertFails(getDocs(query(
+   collection(replacementPhone,"deda_purchase_evidence",ACCOUNT,"captures"),
+   limit(10))));
+});
+test("other uid cannot GET, list or create purchase source",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
+ await assertSucceeds(setDoc(doc(db(UID),purchasePath()),purchasePayload()));
+ const foreign=db(OTHER);
+ await assertFails(getDoc(doc(foreign,purchasePath())));
+ await assertFails(getDocs(query(
+   collection(foreign,"deda_purchase_evidence",ACCOUNT,"captures"),limit(2))));
+ await assertFails(setDoc(doc(foreign,purchasePath()),purchasePayload()));
+});
+test("purchase capture mismatches, fake wallet credit and forged frame fields are denied",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
+ const original=db(UID);
+ for(const altered of [
+  {sourceUid:OTHER}, {accountKey:"07799999999"},
+  {installId:"new-phone-not-original"},
+  {captureId:"ABCDEFGHIJKLMNOPQRSTUVWX234567"},
+  {kind:"paid-ownership-proof"}, {diamondCredit:9000000},
+  {records:{...purchasePayload().records,originalId:"@DEDA-OTHER1"}},
+  {records:{...purchasePayload().records,progressCaptureId:"fake-parent"}},
+  {records:{...purchasePayload().records,paidFrames:["FRAME_03"]}},
+  {records:{...purchasePayload().records,localSnapshot:123}},
+  {records:{...purchasePayload().records,localSnapshot:"x".repeat(200001)}},
+ ]) {
+  await assertFails(setDoc(doc(original,purchasePath()),
+    purchasePayload(altered)));
+ }
+ const absent=await assertSucceeds(getDoc(doc(original,purchasePath())));
+ assert.equal(absent.exists(),false);
+});
+test("inactive original route blocks purchase source even when progress exists",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
+ await env.withSecurityRulesDisabled(async c=>{
+  await setDoc(doc(c.firestore(),"deda_share_ids",ORIGINAL),
+    {publicId:ORIGINAL,kind:"personal",active:false,ownerUid:UID});
+ });
+ await assertFails(setDoc(doc(db(UID),purchasePath()),purchasePayload()));
+});
+test("archiving a purchase local string cannot modify existing diamond wallet",async()=>{
+ await assertSucceeds(setDoc(doc(db(UID),addr()),payload()));
+ const before=await env.withSecurityRulesDisabled(async c=>
+  (await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL))).data());
+ await assertSucceeds(setDoc(doc(db(UID),purchasePath()),purchasePayload()));
+ const after=await env.withSecurityRulesDisabled(async c=>
+  (await getDoc(doc(c.firestore(),"deda_diamond_gift_balances",ORIGINAL))).data());
+ assert.deepEqual(after,before);
+});
