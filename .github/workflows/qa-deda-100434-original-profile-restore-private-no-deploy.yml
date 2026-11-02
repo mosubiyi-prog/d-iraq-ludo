@@ -25,6 +25,8 @@ on:
       - 'test/deda_step2_original_evidence_rules_live_emulator.test.cjs'
       - 'test/deda_100433_owner_confirmation_ui_test.dart'
       - 'test/deda_100434_recovery_original_profile_test.dart'
+      - 'test/deda_100431_linked_owner_session_policy_test.dart'
+      - 'test/deda_step2_confirmed_login_downgrade_private_test.dart'
       - 'test/deda_step2_original_backup_readback_test.dart'
       - 'test/deda_step2_original_source_continuity_test.dart'
       - 'test/deda_progress_backup_coordinator_test.dart'
@@ -66,6 +68,8 @@ jobs:
           grep -q "verified-original-uid-changed-before-login-commit" lib/main.dart
           grep -q "verified-owner-login-commit-not-saved" lib/main.dart
           grep -q "mayResumeLinkedLocalLogin(" lib/main.dart
+          grep -q "mayUseUnverifiedLocalLogin(" lib/main.dart
+          grep -q "linked-owner-requires-verified-login-or-logout" lib/main.dart
           grep -q "verifiedOriginalUid: verifiedUid" lib/main.dart
           grep -q "deda_step2_linked_verified_uid_v1" lib/main.dart
           grep -q "verified-original-uid-changed-during-login-commit" lib/main.dart
@@ -141,6 +145,9 @@ jobs:
           flutter test test/deda_owned_frame_reader_test.dart --no-pub
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart --no-pub
           flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
+          # In this isolated command ONLY, turn the otherwise-off private
+          # gate on to prove the actual local writer cannot erase a saved UID.
+          flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true test/deda_step2_confirmed_login_downgrade_private_test.dart
           flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
           dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart lib/deda_step2_original_source_continuity.dart lib/deda_progress_backup_coordinator.dart lib/deda_step2_visual_prefs_continuity.dart lib/deda_step2_assets_readback.dart lib/deda_lab_frame_secure_checkout.dart lib/deda_step2_linked_published_place_recovery.dart lib/deda_step2_owner_place_local_archive.dart lib/deda_step2_owner_place_backup_journal.dart lib/deda_step2_owner_place_draft_hydration.dart lib/deda_step2_friendship_readback.dart lib/deda_step2_full_account_preflight.dart
           echo 'PASS_100434_VERIFIED_ORIGINAL_PROFILE_NO_PRODUCTION_DEPLOY'
