@@ -102,7 +102,10 @@ test('stored credentials and profile must match original account',async()=>{
  }
 });
 test('same UID session cannot switch account after routing hint',async()=>{
- const f=fixture();f.docs.set('deda_sessions/'+uid,{uid,accountKey:'07700000000'});
+ const f=fixture();
+ // Routing hint was read as the original account before a server change.
+ f.store.readOwnerSession=async()=>({uid,accountKey:key});
+ f.docs.set('deda_sessions/'+uid,{uid,accountKey:'07700000000'});
  await assert.rejects(f.run(async()=>true),e=>e.code==='step2-linked-owner-documents-conflict');
  assert.equal(f.calls.writes,0);
 });
