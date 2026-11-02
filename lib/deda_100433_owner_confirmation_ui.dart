@@ -275,11 +275,11 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       context,
       title: 'تأكيد حساب DEDA / Confirm account',
       explanation: 'أدخل رمز حسابك على الهاتف الأصلي فقط. '
-        'لا تسجل خروجك أو تحذف التطبيق قبل نجاح فحص الهاتف الثاني. '
-        dedaStep2LevelPointsRestoreEnabled
+        'لا تسجل خروجك أو تحذف التطبيق قبل نجاح فحص الهاتف الثاني. ' +
+        (dedaStep2LevelPointsRestoreEnabled
           ? 'سيُحفظ سجل نقاط المستوى الأصلي قبل ربط الحساب. '
             'لا تحذف التطبيق حتى ينجح اختبار الهاتف الجديد.'
-          : 'هذه الخطوة لا تسترجع الماسات أو النقاط تلقائياً.',
+          : 'هذه الخطوة لا تسترجع الماسات أو النقاط تلقائياً.'),
     );
     if (pin == null || !mounted) return;
     setState(() => _running = true);
