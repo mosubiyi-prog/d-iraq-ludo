@@ -26,9 +26,14 @@ class DedaStep2OriginalEvidence {
     required this.captureId,
     required this.sourceUid,
     required this.capture,
+    this.sourceInstallId = '',
   });
   final String captureId;
   final String sourceUid;
+  // Source installation provenance, not an authentication credential.
+  // A new-phone purchase sidecar must prove it was frozen by this very
+  // original-phone installation and the SAME immutable capture request.
+  final String sourceInstallId;
   final DedaLegacyProgressCapture capture;
 
   /// Explicitly false even when cloud readback succeeds.
@@ -146,6 +151,7 @@ class DedaStep2OriginalBackupReadback {
       captureId: doc['captureId'] as String,
       sourceUid: uid,
       capture: capture,
+      sourceInstallId: doc['installId'] as String,
     );
   }
 
@@ -176,7 +182,10 @@ class DedaStep2OriginalBackupReadback {
       final checked = _decode(doc, accountKey, originalUid);
       if (first == null) {
         first = checked;
-      } else if (first.capture.encode() != checked.capture.encode()) {
+      } else if (first.capture.encode() != checked.capture.encode() ||
+          first.sourceInstallId != checked.sourceInstallId) {
+        // Even identical progress bytes from different installations are
+        // insufficient to bind the purchase sidecar to the ORIGINAL source.
         throw const DedaStep2EvidenceHold('old-phone-snapshots-disagree');
       }
     }
