@@ -61,7 +61,10 @@ jobs:
           test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
           grep -q "'DEDA_STEP2_LINKED_OWNER_COMPAT', defaultValue: false" lib/deda_100431_linked_owner_session_policy.dart
           grep -q "DedaOwnerConfirmButton(" lib/main.dart
-          grep -q "onPressed: _signInToConfirmedAccount" lib/main.dart
+          grep -q "onPressed: _confirmedSignInBusy" lib/main.dart
+          grep -q "? null : _signInToConfirmedAccount" lib/main.dart
+          grep -q "verified-original-uid-changed-before-login-commit" lib/main.dart
+          grep -q "verified-owner-login-commit-not-saved" lib/main.dart
           grep -q "onPressed: _logout" lib/main.dart
           grep -q "verifiedProfileForLinkedOwner" lib/main.dart
           grep -q "verifiedCanonicalProfile: verifiedName != null" lib/main.dart
