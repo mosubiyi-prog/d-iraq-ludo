@@ -23,7 +23,7 @@ function mockDb(overrides = {}) {
       enabled:true,enabledAt:ms(NOW-60_000),changedByUid:"gm",
     },
     [`deda_account_directory/${ACCOUNT}`]: {
-      active:true,accountKey:ACCOUNT,
+      active:true,accountKey:ACCOUNT,createdUid:UID,
     },
     [`deda_account_profiles/${ACCOUNT}`]: {
       name:"حسن علي",trustedInstallIds:[INSTALL],
@@ -65,8 +65,9 @@ function mockDb(overrides = {}) {
     },
   };
 }
-const recovery=(db,nowMs=NOW)=>
-  autoRecoverForgottenPin(db,{requestId:REQUEST_ID,nowMs});
+const recovery=(db,nowMs=NOW,auth={
+  async getUser(uid) {return {uid,email:null,disabled:false};},
+})=>autoRecoverForgottenPin(db,{requestId:REQUEST_ID,nowMs,auth});
 
 test("real backend writes PIN, ready request, throttle and audit together after 10 seconds",async()=>{
   const db=mockDb();
@@ -150,4 +151,24 @@ test("disabled or malformed recovery request cannot touch admin credentials",asy
   assert.equal(result.outcome,"manual-review");
   assert.equal(db.writes.length,0);
   assert.equal(db.docs.get(`deda_credentials/${ACCOUNT}`).pin,OLD_PIN);
+});
+
+test("linked original Firebase UID must not have its PIN auto-reset in Firestore alone",async()=>{
+  const db=mockDb();
+  const auth={async getUser(uid) {
+    return {uid,email:ACCOUNT+"@deda-login.invalid",disabled:false};
+  }};
+  const result=await recovery(db,NOW,auth);
+  assert.equal(result.outcome,"manual-review");
+  assert.equal(db.writes.length,0);
+  assert.equal(db.docs.get(`deda_credentials/${ACCOUNT}`).pin,OLD_PIN);
+});
+
+test("pending protected PIN recovery cannot be overwritten by automatic legacy reset",async()=>{
+  const db=mockDb({[`deda_credentials/${ACCOUNT}`]:{
+    pendingRecovery:{requestId:"another",uid:UID,pin:"987654"},
+  }});
+  const result=await recovery(db);
+  assert.equal(result.outcome,"manual-review");
+  assert.equal(db.writes.length,0);
 });
