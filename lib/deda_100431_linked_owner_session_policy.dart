@@ -16,6 +16,10 @@ class DedaLinkedOwnerSessionPolicy {
   static const String linkedUidPreferencesKey = 'deda_step2_linked_verified_uid_v1';
   static const String linkedAccountPreferencesKey =
       'deda_step2_linked_verified_account_v1';
+  // A per-account nonsecret guard survives explicit sign-out so the same
+  // verified account cannot be reopened by the old name/phone-only route.
+  static String protectedAccountKey(String account) =>
+      'deda_step2_verified_owner_guard_v1_$account';
 
   /// Original phone, AFTER verified same-UID Firebase credential linking.
   /// A server-proven owner can retry after uncertain disk acknowledgement
@@ -37,14 +41,21 @@ class DedaLinkedOwnerSessionPolicy {
     }
     final oldUid = prefs.getString(linkedUidPreferencesKey);
     final oldAccount = prefs.getString(linkedAccountPreferencesKey);
+    final oldGuard = prefs.getString(protectedAccountKey(accountKey));
     if ((oldUid != null && oldUid != uid) ||
-        (oldAccount != null && oldAccount != accountKey)) {
+        (oldAccount != null && oldAccount != accountKey) ||
+        (oldGuard != null && oldGuard != uid)) {
       throw StateError('different-linked-owner-provenance-preserved');
     }
-    if (!await prefs.setString(linkedUidPreferencesKey, uid) ||
+    // Save the downgrade guard FIRST. If a crash interrupts the subsequent
+    // active profile proof, the old login still cannot impersonate this owner.
+    if (!await prefs.setString(protectedAccountKey(accountKey), uid) ||
+        !isCurrent() ||
+        !await prefs.setString(linkedUidPreferencesKey, uid) ||
         !isCurrent() ||
         !await prefs.setString(linkedAccountPreferencesKey, accountKey) ||
         !isCurrent() ||
+        prefs.getString(protectedAccountKey(accountKey)) != uid ||
         prefs.getString(linkedUidPreferencesKey) != uid ||
         prefs.getString(linkedAccountPreferencesKey) != accountKey) {
       throw StateError('linked-owner-provenance-not-persisted');
@@ -66,8 +77,10 @@ class DedaLinkedOwnerSessionPolicy {
     required bool linkedOwnerPilotEnabled,
     required bool hasStoredOriginalUid,
     required bool hasStoredAccountKey,
+    bool hasProtectedTargetAccount = false,
   }) => !linkedOwnerPilotEnabled ||
-      (!hasStoredOriginalUid && !hasStoredAccountKey);
+      (!hasStoredOriginalUid && !hasStoredAccountKey &&
+          !hasProtectedTargetAccount);
 
   /// A previously confirmed replacement phone must NEVER resume its cached
   /// display profile when Firebase Auth has a different UID, provider/email,
