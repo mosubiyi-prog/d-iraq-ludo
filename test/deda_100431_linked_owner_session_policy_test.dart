@@ -36,6 +36,24 @@ void main() {
     expect(DedaLinkedOwnerSessionPolicy.emailMatches(
       '$phone@deda-login.invalid',''),false);
   });
+  test('legacy phone/name login cannot downgrade a saved confirmed owner',(){
+    bool allowed(bool uid, bool account, {bool pilot=true}) =>
+        DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
+          linkedOwnerPilotEnabled:pilot,
+          hasStoredOriginalUid:uid,
+          hasStoredAccountKey:account,
+        );
+    // Never erase a complete or partially committed confirmed account
+    // identity via the old local login on a private migration build.
+    expect(allowed(true,true),false);
+    expect(allowed(true,false),false);
+    expect(allowed(false,true),false);
+    expect(allowed(false,false),true);
+    // Public build 100340 behavior is intentionally unaffected.
+    expect(allowed(true,true,pilot:false),true);
+    expect(allowed(true,false,pilot:false),true);
+  });
+
   test('verified new-phone boot permits ONLY original UID + exact account + password email',(){
     const linkedAccount = '9647712345678';
     const originalUid = 'original_firebase_owner_uid';
