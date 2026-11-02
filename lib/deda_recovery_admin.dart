@@ -1,7 +1,6 @@
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import 'deda_backend.dart';
@@ -42,130 +41,46 @@ class DedaRecoveryAdminList extends StatelessWidget {
   String _normalizeName(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
-  String _newPin() =>
-      (100000 + Random.secure().nextInt(900000)).toString();
-
   Future<void> _approve(
     BuildContext context,
     String id,
     Map<String, dynamic> data,
   ) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    // All mutations belong to the privileged server callable. The former
+    // client Firestore batch changed only legacy credentials and stranded
+    // the original Firebase Auth UID on its old six-digit password.
+    // Never create a second user or expose a code until BOTH stores agree.
     final accountKey = (data['accountKey'] ?? '').toString().trim();
-    if (uid.isEmpty || accountKey.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t(
-              'بيانات الطلب غير مكتملة ولا يمكن اعتماده.',
-              'The request is incomplete and cannot be approved.',
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final firestore = FirebaseFirestore.instance;
-    final adminProfile = await DedaBackend.currentAdminProfile();
-    final directory = await firestore
-        .collection('deda_account_directory')
-        .doc(accountKey)
-        .get();
-    if (!directory.exists || directory.data()?['active'] != true) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t(
-              'لا يوجد حساب DEDA فعّال مطابق لهذا الرقم.',
-              'No active DEDA account matches this number.',
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final pin = _newPin();
-    final requestRef = firestore.collection('recovery_requests').doc(id);
-    final credentialRef = firestore.collection('deda_credentials').doc(accountKey);
-    final profileRef =
-        firestore.collection('deda_account_profiles').doc(accountKey);
-    final profile = await profileRef.get();
-
-    final batch = firestore.batch();
-    batch.set(
-      credentialRef,
-      <String, dynamic>{
-        'accountKey': accountKey,
-        'pin': pin,
-        'active': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'recoveryUpdatedBy': uid,
-      },
-      SetOptions(merge: true),
-    );
-
-    if (!profile.exists) {
-      batch.set(profileRef, <String, dynamic>{
-        'accountKey': accountKey,
-        'name': (data['fullName'] ?? '').toString().trim(),
-        'phone': (data['phone'] ?? '').toString().trim(),
-        'accountType': 'user',
-        'trustedInstallIds': <String>[],
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    batch.update(requestRef, <String, dynamic>{
-      'status': 'ready',
-      'recoveryPin': pin,
-      'recoveryPinExpiresAt':
-          Timestamp.fromDate(DateTime.now().add(const Duration(minutes: 30))),
-      'approvedBy': uid,
-      'approvedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    final auditRef = firestore.collection('admin_audit').doc();
-    batch.set(auditRef, <String, dynamic>{
-      'action': 'recovery_approved',
-      'adminUid': uid,
-      'adminName': (adminProfile['displayName'] ?? '').toString(),
-      'adminRole': DedaBackend.normalizeAdminRole(adminProfile['role']),
-      'sourceCollection': 'recovery_requests',
-      'sourceId': id,
-      'targetAccountKey': accountKey,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-
+    if (FirebaseAuth.instance.currentUser == null ||
+        accountKey.isEmpty || id.trim().isEmpty) return;
     try {
-      await batch.commit();
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('dedaApproveLinkedPinRecovery')
+          .call(<String, dynamic>{'requestId': id});
+      final payload = result.data;
+      if (payload is! Map || payload['status'] != 'ready' ||
+          payload['linkedUidPreserved'] != true) {
+        throw StateError('recovery-pin-sync-not-confirmed');
+      }
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t(
-              'تم اعتماد الطلب وإصدار رمز جديد. سيظهر الرمز للمستخدم داخل DEDA.',
-              'Request approved and a new code was issued inside DEDA.',
-            ),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'تم اعتماد طلب استرجاع الرمز للحساب الأصلي. '
+          'ظهر الرمز بعد تأكيد تحديث Firebase ونفس الهوية.',
+          'Original account recovery approved. New PIN issued only '
+          'after same-UID Firebase and credential synchronization.',
+        )),
+      ));
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            t(
-              'تعذر اعتماد الطلب الآن.',
-              'Could not approve the request now.',
-            ),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(t(
+          'لم يتم تأكيد إصدار الرمز الجديد. '
+          'بقي الحساب الأصلي محفوظاً؛ أعد المحاولة أو راجع الطلب.',
+          'New PIN was not confirmed. Original account preserved; '
+          'retry the same request or review its status.',
+        )),
+      ));
     }
   }
 
