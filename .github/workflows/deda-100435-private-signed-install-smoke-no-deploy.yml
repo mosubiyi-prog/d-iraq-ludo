@@ -16,8 +16,8 @@ jobs:
       DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
       DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
       DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
-      APP: ${{ runner.temp }}/deda-100435-package
-      OUT: ${{ runner.temp }}/deda-100435-artifact
+      APP: /tmp/deda-100435-package
+      OUT: /tmp/deda-100435-artifact
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0, persist-credentials: false}
