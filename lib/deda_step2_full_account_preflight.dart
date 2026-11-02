@@ -240,7 +240,7 @@ class DedaStep2FullAccountPreflight {
           ? missing('original-phone-edit-drafts-not-replayed-or-compared')
           : na('not-a-place-owner'),
       'savedPrivatePlaces':
-          missing('legacy-unscoped-personal-place-key-not-owner-proven'),
+          missing('legacy-unscoped-personal-favorites-recent-keys-not-owner-proven'),
       'avatarAndBackground':
           missing('visual-state-not-yet-full-account-migrated'),
       'otherSettings': missing('all-preferences-not-attested'),
