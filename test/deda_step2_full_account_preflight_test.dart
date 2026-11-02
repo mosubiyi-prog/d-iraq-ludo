@@ -216,6 +216,28 @@ void main(){
       DedaStep2SourceStatus.notAttested);
   });
 
+  test('forged non-text approval is never accepted as an owned place',()async{
+    for(final approval in <Object?>[
+      null,12345,true,<String,dynamic>{'id':'APPROVED'},
+      <String>['APPROVED'],'  ',
+    ]){
+      final h=H();
+      h.placeIo.records=[
+        DedaStep2PublishedPlaceRow(placeId,{
+          'accountKey':account,'ownerUid':uid,'published':true,
+          'approvalNumber':approval,
+        }),
+      ];
+      final report=await h.inspect();
+      expect(report.confirmedPlaceId,isNull);
+      expect(report.domains['publishedPlace']!.status,
+        DedaStep2SourceStatus.notAttested);
+      expect(report.allowPhoneCutover,false);
+      expect(h.placeIo.writes,0);
+      expect(h.placeIo.localReads,0);
+    }
+  });
+
   test('ordinary user never reads place-management data or claims a place',()async{
     final h=H();
     h.assetsIo.docs['deda_account_profiles/$account']={
