@@ -19,6 +19,17 @@ class DedaLinkedOwnerSessionPolicy {
       RegExp(r'^[0-9]{8,16}$').hasMatch(accountKey) &&
       email == ownerEmail(accountKey);
 
+  /// Only a confirmed Firebase login may resume a previously linked account
+  /// on this installation. Reject even a PARTIAL saved proof: an interrupted
+  /// disk write must not downgrade account authentication to typed phone/name.
+  /// The existing public 100340 login is unchanged while the pilot is off.
+  static bool mayUseUnverifiedLocalLogin({
+    required bool linkedOwnerPilotEnabled,
+    required bool hasStoredOriginalUid,
+    required bool hasStoredAccountKey,
+  }) => !linkedOwnerPilotEnabled ||
+      (!hasStoredOriginalUid && !hasStoredAccountKey);
+
   /// A previously confirmed replacement phone must NEVER resume its cached
   /// display profile when Firebase Auth has a different UID, provider/email,
   /// or the stored proof belongs to another phone account. This is only a
