@@ -172,7 +172,7 @@ async function inspectLegacy340FinancialLineage({reader,accountKey,originalUid,o
  const root='deda_progress_migrations/'+accountKey;
  const migration=await reader.get(root);
  let progress=Object.freeze({status:'migration-not-started-unknown'});
- let purchase=Object.freeze({status:'old-purchase-journal-unknown'});
+ let purchase=Object.freeze({status:'old-purchase-journal-unknown',pending:null,paid:null,journalStates:null});
  let phase='no-migration-record';
  if(migration!==null){
   if(!isMap(migration)||migration.accountKey!==accountKey||
