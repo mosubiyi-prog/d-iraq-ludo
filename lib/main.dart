@@ -724,6 +724,9 @@ class DedaPreferences {
   static const String _phoneKey = 'deda_phone_v1';
   static const String _accountTypeKey = 'deda_account_type_v1';
   static const String _accountPhoneKey = 'deda_account_phone_v1';
+  // Private linked-owner provenance only; never stores PIN or wallet value.
+  static const String _linkedVerifiedUidKey = 'deda_step2_linked_verified_uid_v1';
+  static const String _linkedVerifiedAccountKey = 'deda_step2_linked_verified_account_v1';
   static const String _voiceEnabledKey = 'deda_voice_enabled_v1';
   static const String _speechRateKey = 'deda_speech_rate_v1';
   static const String _travelModeKey = 'deda_default_travel_mode_v1';
@@ -793,6 +796,26 @@ class DedaPreferences {
         accountType == null) {
       isLoggedIn = false;
     }
+
+    // On a private, confirmed replacement phone, local preferences alone
+    // cannot reopen an account whose Firebase UID has changed or signed out.
+    // No network read is needed just to block a mismatched cached identity.
+    if (dedaLinkedOwnerCompatEnabled &&
+        (prefs.containsKey(_linkedVerifiedUidKey) ||
+            prefs.containsKey(_linkedVerifiedAccountKey))) {
+      final user = Firebase.apps.isNotEmpty
+          ? FirebaseAuth.instance.currentUser : null;
+      if (!DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
+        savedOriginalUid: prefs.getString(_linkedVerifiedUidKey),
+        savedAccountKey: prefs.getString(_linkedVerifiedAccountKey),
+        localPhone: phone,
+        currentUid: user?.uid,
+        currentEmail: user?.email,
+        currentIsAnonymous: user?.isAnonymous ?? true,
+      )) {
+        isLoggedIn = false;
+      }
+    }
   }
 
   static Future<void> setLanguage(DedaLanguage language) async {
@@ -809,6 +832,7 @@ class DedaPreferences {
     required String normalizedPhone,
     required DedaAccountType type,
     bool verifiedCanonicalProfile = false,
+    String? verifiedOriginalUid,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final previousPhone = prefs.getString(_phoneKey) ?? '';
@@ -824,9 +848,29 @@ class DedaPreferences {
     // On a verified replacement-phone login, commit the profile fields
     // BEFORE the persistent "logged in" flag. A process kill between writes
     // must boot into login, not a stale hybrid of two account profiles.
-    if (verifiedCanonicalProfile &&
-        !await prefs.setBool(_loggedInKey, false)) {
-      throw StateError('verified-owner-login-prepare-not-saved');
+    if (verifiedCanonicalProfile) {
+      if (!await prefs.setBool(_loggedInKey, false)) {
+        throw StateError('verified-owner-login-prepare-not-saved');
+      }
+      if (dedaLinkedOwnerCompatEnabled &&
+          (verifiedOriginalUid == null || verifiedOriginalUid.isEmpty)) {
+        throw StateError('verified-owner-original-uid-required');
+      }
+      if (verifiedOriginalUid != null) {
+        final account = normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '');
+        if (verifiedOriginalUid.isEmpty ||
+            !await prefs.setString(_linkedVerifiedUidKey, verifiedOriginalUid) ||
+            !await prefs.setString(_linkedVerifiedAccountKey, account)) {
+          throw StateError('verified-owner-provenance-not-saved');
+        }
+      }
+    } else {
+      // Ordinary legacy local login retains its historical behavior and
+      // cannot inherit a previous verified owner's UID binding.
+      if (!await prefs.remove(_linkedVerifiedUidKey) ||
+          !await prefs.remove(_linkedVerifiedAccountKey)) {
+        throw StateError('stale-owner-provenance-not-cleared');
+      }
     }
 
     final writes = await Future.wait([
@@ -951,6 +995,8 @@ class DedaPreferences {
     profileFrameStyle = 0;
     profileBackgroundStyle = 0;
     await prefs.setBool(_loggedInKey, false);
+    await prefs.remove(_linkedVerifiedUidKey);
+    await prefs.remove(_linkedVerifiedAccountKey);
     await prefs.remove(_userNameKey);
     await prefs.remove(_phoneKey);
     await prefs.remove(_accountPhoneKey);
@@ -1999,6 +2045,7 @@ class _LoginPageState extends State<LoginPage> {
       normalizedPhone: normalizedPhone,
       type: type,
       verifiedCanonicalProfile: verifiedName != null,
+      verifiedOriginalUid: verifiedUid,
     );
     if (verifiedUid != null &&
         (FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
