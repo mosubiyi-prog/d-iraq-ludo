@@ -69,11 +69,12 @@ jobs:
           grep -q "verified-owner-login-commit-not-saved" lib/main.dart
           grep -q "mayResumeLinkedLocalLogin(" lib/main.dart
           grep -q "mayUseUnverifiedLocalLogin(" lib/main.dart
+          grep -q "hasProtectedTargetAccount:" lib/main.dart
+          grep -q "protectedAccountKey(" lib/deda_100431_linked_owner_session_policy.dart
           grep -q "linked-owner-requires-verified-login-or-logout" lib/main.dart
           grep -q "verifiedOriginalUid: verifiedUid" lib/main.dart
           grep -q "deda_step2_linked_verified_uid_v1" lib/deda_100431_linked_owner_session_policy.dart
           grep -q "rememberConfirmedOriginalUid(" lib/deda_100433_owner_confirmation_ui.dart
-          grep -q "linked-owner-requires-verified-login-or-logout" lib/main.dart
           grep -q "verified-original-uid-changed-during-login-commit" lib/main.dart
           grep -q "onPressed: _logout" lib/main.dart
           grep -q "verifiedProfileForLinkedOwner" lib/main.dart
