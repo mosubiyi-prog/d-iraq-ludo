@@ -804,7 +804,9 @@ class DedaPreferences {
     // No network read is needed just to block a mismatched cached identity.
     if (dedaLinkedOwnerCompatEnabled &&
         (prefs.containsKey(_linkedVerifiedUidKey) ||
-            prefs.containsKey(_linkedVerifiedAccountKey))) {
+            prefs.containsKey(_linkedVerifiedAccountKey) ||
+            prefs.containsKey(DedaLinkedOwnerSessionPolicy.protectedAccountKey(
+                phone.replaceAll(RegExp(r'[^0-9]'), ''))))) {
       final user = Firebase.apps.isNotEmpty
           ? FirebaseAuth.instance.currentUser : null;
       if (!DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
@@ -847,6 +849,9 @@ class DedaPreferences {
           linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
           hasStoredOriginalUid: prefs.containsKey(_linkedVerifiedUidKey),
           hasStoredAccountKey: prefs.containsKey(_linkedVerifiedAccountKey),
+          hasProtectedTargetAccount: prefs.containsKey(
+            DedaLinkedOwnerSessionPolicy.protectedAccountKey(
+              normalizedPhone.replaceAll(RegExp(r'[^0-9]'), ''))),
         )) {
       throw StateError('linked-owner-requires-verified-login-or-logout');
     }
@@ -873,7 +878,11 @@ class DedaPreferences {
       }
       if (verifiedOriginalUid != null) {
         final account = normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '');
+        final guardKey = DedaLinkedOwnerSessionPolicy.protectedAccountKey(account);
+        final originalGuard = prefs.getString(guardKey);
         if (verifiedOriginalUid.isEmpty ||
+            (originalGuard != null && originalGuard != verifiedOriginalUid) ||
+            !await prefs.setString(guardKey, verifiedOriginalUid) ||
             !await prefs.setString(_linkedVerifiedUidKey, verifiedOriginalUid) ||
             !await prefs.setString(_linkedVerifiedAccountKey, account)) {
           throw StateError('verified-owner-provenance-not-saved');
