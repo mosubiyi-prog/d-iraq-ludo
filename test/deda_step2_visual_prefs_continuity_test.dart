@@ -120,11 +120,42 @@ void main(){
     expect(h.cloud.writes,0);
   });
 
-  test('missing original device fields never guessed as zero',()async{
+  test('unchanged 100340 default free styles are zero even when no preference key exists',()async{
+    final h=H();
+    final archived=await h.save();
+    expect(archived.avatarStyle,0);
+    expect(archived.backgroundStyle,0);
+    expect(h.cloud.writes,1);
+    expect(h.local.values,isEmpty); // old phone remains untouched
+    h.newDevice();
+    expect(await h.restore(),isTrue);
+    expect(h.local.values['deda_profile_avatar_v1_$account'],0);
+    expect(h.local.values['deda_profile_background_v1_$account'],0);
+    expect(h.local.values.keys.any((key)=>key.contains('frame') ||
+      key.contains('diamond') || key.contains('wallet')),isFalse);
+  });
+
+  test('one missing free style inherits its real UI default without losing custom selection',()async{
     final h=H();
     h.local.values['deda_profile_avatar_v1_$account']=2;
+    final archived=await h.save();
+    expect(archived.avatarStyle,2);
+    expect(archived.backgroundStyle,0);
+    h.newDevice();
+    expect(await h.restore(),isTrue);
+    expect(h.local.values['deda_profile_avatar_v1_$account'],2);
+    expect(h.local.values['deda_profile_background_v1_$account'],0);
+  });
+
+  test('default-style archive still refuses foreign owner and changed UID',()async{
+    final h=H();
+    h.owner=false;
+    await expectLater(h.save(),throwsA(isA<DedaStep2VisualPrefsHold>()));
+    h.owner=true;
+    h.selectedUid='another-account';
     await expectLater(h.save(),throwsA(isA<DedaStep2VisualPrefsHold>()));
     expect(h.cloud.writes,0);
+    expect(h.local.values,isEmpty);
   });
 
   test('bad source values never stored as new style or owned frame',()async{
