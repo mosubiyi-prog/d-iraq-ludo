@@ -161,7 +161,8 @@ void main() {
     };
     awards['point_tier_reserve|5000']=reserve;
     awards['point_tier_claim|5000']=claim;
-    ledger.addAll([reserve,claim]);
+    ledger.add(reserve);
+    ledger.add(claim);
     final restored = DedaStep2LevelStateValidator.inspect(jsonEncode(original));
     expect(restored.earnedPoints,70);
     awards.remove('point_tier_reserve|5000');
