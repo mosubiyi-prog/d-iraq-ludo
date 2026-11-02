@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_legacy_progress_capture.dart';
 import 'package:d_iraq_ludo/deda_legacy_purchase_evidence.dart';
 import 'package:d_iraq_ludo/deda_step2_original_backup_readback.dart';
+import 'package:d_iraq_ludo/deda_step2_financial_source_audit.dart';
 import 'package:d_iraq_ludo/deda_step2_purchase_backup_readback.dart';
 
 const account = '9647712345678';
@@ -104,6 +105,20 @@ void main() {
     expect(result.localPurchaseSnapshot.accountKey, account);
     expect(result.localPurchaseSnapshot.originalId, id);
     expect(result.localPurchaseSnapshot.encode(), oldPurchaseBytes());
+    expect(result.financialSourceAudit.sources.length, 17);
+    expect(result.financialSourceAudit.sources['progress.earnedDiamonds'],
+        DedaStep2LocalArchiveStatus.capturedUntrusted);
+    expect(result.financialSourceAudit.sources['purchase.inventory'],
+        DedaStep2LocalArchiveStatus.capturedUntrusted);
+    expect(result.financialSourceAudit.missingUnknown,
+        contains('purchase.FRAME_05'));
+    expect(result.financialSourceAudit.independentProofRequired, isNotEmpty);
+    expect(result.financialSourceAudit.canSettleFinancialBalances, isFalse);
+    expect(result.financialSourceAudit.canRestoreXpOrPoints, isFalse);
+    expect(result.financialSourceAudit.canGrantPurchases, isFalse);
+    expect(result.financialSourceAudit.canReplayGiftsOrLeaguePrizes, isFalse);
+    expect(result.financialSourceAudit.allowPhoneCutover, isFalse);
+    expect(result.financialSourceAudit.canEraseOriginalPhoneData, isFalse);
     expect(result.canRestoreDiamonds, isFalse);
     expect(result.canGrantPaidFrames, isFalse);
     expect(result.canActivatePremiumId, isFalse);
@@ -204,6 +219,63 @@ void main() {
       throwsA(isA<DedaStep2PurchaseSourceHold>()));
     expect(io.calls, 0);
   });
+
+  test('missing old earned wallet is UNKNOWN, never an assumed zero', () {
+    final source = DedaLegacyProgressCapture.decodeForAccount(
+      jsonEncode({'format': 1, 'accountKey': account,
+        'records': {'taskPoints': '{"claims":["old"]}',
+          'socialCoinsAndXp': '{"xp":200}', 'earnedDiamonds': null}}),
+      expectedAccountKey: account,
+    );
+    final purchase = DedaLegacyPurchaseCapture.decode(oldPurchaseBytes(),
+      accountKey: account, originalId: id);
+    final review = DedaStep2FinancialSourceAudit.inspect(
+      progress: source, purchase: purchase);
+    expect(review.sources['progress.earnedDiamonds'],
+      DedaStep2LocalArchiveStatus.missingUnknown);
+    expect(review.missingUnknown, contains('progress.earnedDiamonds'));
+    expect(review.independentReceiptsAndBalancesVerified, isFalse);
+    expect(review.canSettleFinancialBalances, isFalse);
+    expect(review.allowPhoneCutover, isFalse);
+  });
+
+  test('malformed local values remain untrusted; pending frame is not paid', () {
+    final source = DedaLegacyProgressCapture.decodeForAccount(
+      jsonEncode({'format': 1, 'accountKey': account,
+        'records': {'taskPoints': '{"claims":"incomplete"',
+          'socialCoinsAndXp': '42', 'earnedDiamonds': '{"balance":50000}'}}),
+      expectedAccountKey: account,
+    );
+    final purchase = DedaLegacyPurchaseCapture.decode(jsonEncode({
+      'format': 1, 'accountKey': account, 'originalId': id,
+      'inventory': 'not-json', 'frameJournals': {
+        for (final frame in dedaLegacyPurchaseFrames)
+          frame: frame == 'FRAME_03' ? 'pending-local-operation' : null,
+      },
+    }), accountKey: account, originalId: id);
+    final review = DedaStep2FinancialSourceAudit.inspect(
+      progress: source, purchase: purchase);
+    expect(review.malformedUntrusted, containsAll([
+      'progress.taskPoints', 'progress.socialCoinsAndXp', 'purchase.inventory',
+    ]));
+    expect(review.sources['purchase.FRAME_03'],
+      DedaStep2LocalArchiveStatus.capturedUntrusted);
+    expect(review.canSettleFinancialBalances, isFalse);
+    expect(review.canGrantPurchases, isFalse);
+  });
+
+  test('financial audit refuses progress belonging to a different account', () {
+    final foreign = DedaLegacyProgressCapture.decodeForAccount(
+      jsonEncode({'format': 1, 'accountKey': '9647712340000',
+        'records': {'taskPoints': '{}', 'socialCoinsAndXp': null,
+                    'earnedDiamonds': null}}),
+      expectedAccountKey: '9647712340000');
+    final purchase = DedaLegacyPurchaseCapture.decode(oldPurchaseBytes(),
+      accountKey: account, originalId: id);
+    expect(() => DedaStep2FinancialSourceAudit.inspect(
+      progress: foreign, purchase: purchase), throwsFormatException);
+  });
+
 }
 
 class _SwitchingIo implements DedaStep2PurchaseSourceIo {

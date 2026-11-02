@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_legacy_purchase_evidence.dart';
+import 'deda_step2_financial_source_audit.dart';
 import 'deda_step2_original_backup_readback.dart';
 
 /// Step 2 / PRIVATE QA ONLY. Read a historical purchase/source snapshot that
@@ -65,9 +66,11 @@ class DedaStep2PurchaseSourceEvidence {
     required this.sourceUid,
     required this.sourceInstallId,
     required this.localPurchaseSnapshot,
+    required this.financialSourceAudit,
   });
   final String captureId, sourceUid, sourceInstallId;
   final DedaLegacyPurchaseCapture localPurchaseSnapshot;
+  final DedaStep2FinancialSourceAudit financialSourceAudit;
 
   bool get canGrantPaidFrames => false;
   bool get canRestoreDiamonds => false;
@@ -187,6 +190,9 @@ class DedaStep2PurchaseSourceReadback {
       sourceUid: originalUid,
       sourceInstallId: progress.sourceInstallId,
       localPurchaseSnapshot: capture,
+      financialSourceAudit: DedaStep2FinancialSourceAudit.inspect(
+        progress: progress.capture, purchase: capture,
+      ),
     );
   }
 }
