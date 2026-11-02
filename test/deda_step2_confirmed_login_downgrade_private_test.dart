@@ -45,6 +45,34 @@ void main() {
     expect(prefs.getBool('deda_logged_in_v1'), isFalse);
   });
 
+  test('original phone persists UID on first link and a retry does not replace it', () async {
+    SharedPreferences.setMockInitialValues({});
+    final live = () => true;
+    await DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid: sourceUid, isCurrent: live,
+    );
+    await DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid: sourceUid, isCurrent: live,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('deda_step2_linked_verified_uid_v1'),sourceUid);
+    expect(prefs.getString('deda_step2_linked_verified_account_v1'),account);
+    await expectLater(DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid:'foreign_uid', isCurrent: live,
+    ),throwsStateError);
+    expect(prefs.getString('deda_step2_linked_verified_uid_v1'),sourceUid);
+  });
+
+  test('expired original owner intent cannot create local proof', () async {
+    SharedPreferences.setMockInitialValues({});
+    await expectLater(DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid: sourceUid, isCurrent: () => false,
+    ),throwsStateError);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey('deda_step2_linked_verified_uid_v1'),false);
+    expect(prefs.containsKey('deda_step2_linked_verified_account_v1'),false);
+  });
+
   test('even a torn/partial confirmed UID proof cannot be downgraded', () async {
     for (final partial in <Map<String, Object>>[
       {'deda_step2_linked_verified_uid_v1': sourceUid},
