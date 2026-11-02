@@ -408,3 +408,11 @@
 - أضيف `test/deda_step2_private_places_scoped_store_test.dart` لثلاث عشرة حالة: عزل حسابين على نفس الهاتف، رفض النص المحلي القديم غير المنسوب، تغيّر UID، فساد المصدر/الإحداثيات، duplicate ID، إفشال التخزين والحفاظ على نسخة الهاتف القديمة؛ رُبط الاختبار بنفس workflow 100434 مع `dart analyze` وبوابة تضمن تعطيل الحارة في Android العادي.
 - **أكبر نقص في هذا المجال:** توثيق ملكية الأماكن القديمة غير المقيّدة وإيجاد رفع سحابي مصرح وآمن لاحقاً بعد قرار المالك؛ بدون دليل لا يجوز منحها لحساب، حتى مع رمز PIN صحيح. لا APK/AAB/Play ولا Firebase deploy أو كتابة على مستخدمين حقيقيين. **HOLD / NO CUTOVER**.
 - تنفيذ GitHub Actions لهذا التغيير: [#41449255878](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41449255878)؛ لا تسجل SUCCESS إلا بعد اكتمال الوظائف.
+
+
+### 2026-11-02 — CI النهائية لمسار الأماكن الشخصية المحمي (من دون نشر)
+- [GitHub Actions #41449255878](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41449255878): **COMPLETED / SUCCESS** على كود `178456dd26a41a507ca89349135af37e1ecc83b9`، جميع الوظائف الأربع SUCCESS.
+- **Flutter: 301 اختبار ناجح + 1 skipped** عبر 22 مجموعة؛ منها **13 اختباراً جديداً** لـ`DedaStep2PrivatePlacesScope`. تحليل Dart: **124 ملاحظة غير مانعة**. **Node: 113/113 ناجح**؛ **Firebase Auth emulator: 6/6 ناجح**؛ Firestore Rules emulator والدوري/الجوائز ناجحان. لا عملية تشغيل APK أو نشر.
+- لا خلط بين `savedPrivatePlaces` و`publishedPlace` و`pendingPlaceEdits`: الكود الجديد لا يقرأ `deda_personal_places_v1` القديم ولا يصدر ملكيته ولا يرفع مصدره إلى السحابة. طبقة الحفظ المحلي الجديدة لا تُستخدم حالياً من `PersonalPlacesPage`، والراية الخاصة OFF؛ لذلك `savedPrivatePlaces` تبقى `notAttested` ويظل استرجاع الهاتف الثاني **غير مكتمل**.
+- **إشارة الاستكمال التالية:** لا تنشئ قارئ إطارات أو محفظة أو نظام استرجاع موازياً؛ تحقق من إمكان إسناد الأماكن الشخصية القديمة بشكل مستقل إلى المالك الأصلي ورفع مصدرها في مخطط محمي بعد موافقة المالك، أو أبقها UNKNOWN. يجب الانتهاء من PIN/سياج Play 100340 والحق المالي وإغلاق جميع المجالات الـ23 وفحص هاتفين قبل الإطلاق.
+- **القرار: HOLD / NO CUTOVER / NO APK / NO PLAY / NO FIREBASE PRODUCTION.**
