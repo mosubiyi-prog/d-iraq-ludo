@@ -5,10 +5,7 @@
 const {withLinkedOwnerReadSession}=
  require('./deda_step2_linked_owner_read_session_NOT_EXPORTED.js');
 const {weekStart}=require('./deda_weekly_direct_prize_plan.js');
-const frames=Object.freeze([
- 'FRAME_03','FRAME_05','FRAME_06','FRAME_07','FRAME_08','FRAME_09',
- 'FRAME_10','FRAME_11','FRAME_12','FRAME_13','FRAME_14','FRAME_15','FRAME_16',
-]);
+const {frames}=require('../tools/app_stability/progress_archive/purchase-frames.cjs');
 const id=value=>typeof value==='string'&&/^@DEDA-[A-Z0-9]{4,12}$/.test(value);
 const reject=code=>{throw Object.assign(new Error(code),{code});};
 const stamp=value=>value&&typeof value.toMillis==='function'&&
