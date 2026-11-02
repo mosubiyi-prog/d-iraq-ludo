@@ -52,6 +52,16 @@ void main() {
     // Public build 100340 behavior is intentionally unaffected.
     expect(allowed(true,true,pilot:false),true);
     expect(allowed(true,false,pilot:false),true);
+    expect(DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
+      linkedOwnerPilotEnabled:true,
+      hasStoredOriginalUid:false,hasStoredAccountKey:false,
+      hasProtectedTargetAccount:true,
+    ),false);
+    expect(DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
+      linkedOwnerPilotEnabled:false,
+      hasStoredOriginalUid:false,hasStoredAccountKey:false,
+      hasProtectedTargetAccount:true,
+    ),true);
   });
 
   test('verified new-phone boot permits ONLY original UID + exact account + password email',(){
