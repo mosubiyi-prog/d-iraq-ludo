@@ -56,6 +56,253 @@
     }
 
 
+    // STEP 2 SOURCE-ONLY PAIR: original-phone PURCHASE JSON is NOT proof
+    // of payment, diamonds, frame ownership or an authority to issue rewards.
+    // It can be created only once, for the SAME verified UID and installation
+    // as its already-frozen legacy progress parent. Replacement-phone GET is
+    // owner-only. No list/update/delete, no financial collection access.
+    // Staged on emulator only. NEVER deploy without explicit owner approval.
+    match /deda_purchase_evidence/{accountKey}/captures/{captureId} {
+      function sameOriginalPurchaseOwner() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true;
+      }
+      function exactOriginalProgressParent() {
+        return exists(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
+          && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId)).data.sourceUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId)).data.installId == request.resource.data.installId
+          && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId)).data.captureId == captureId;
+      }
+      allow get: if sameOriginalPurchaseOwner();
+      allow list: if false;
+      allow create: if sameOriginalPurchaseOwner()
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}
+    // NOT paid frames or any rewards. Immutable and original UID scoped.
+    match /deda_profile_ui_migration/{accountKey} {
+      function sameOriginalVisualOwner() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow get: if sameOriginalVisualOwner();
+      allow list: if false;
+      allow create: if sameOriginalVisualOwner()
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','originalId','uid',
+          'avatarStyle','backgroundStyle','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','originalId','uid',
+          'avatarStyle','backgroundStyle','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'free-profile-appearance-only'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.originalId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId
+        && request.resource.data.avatarStyle is int
+        && request.resource.data.avatarStyle >= 0
+        && request.resource.data.avatarStyle <= 5
+        && request.resource.data.backgroundStyle is int
+        && request.resource.data.backgroundStyle >= 0
+        && request.resource.data.backgroundStyle <= 5
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+
+    // STEP 2: owner-place LOCAL source archive. Observations only, NEVER map
+    // approval/role/ownership authority. Source must be linked to the same
+    // verified original owner + placeOwner profile. CREATE-only forever.
+    match /deda_step2_owner_place_evidence/{accountKey}/captures/{captureId} {
+      function sameOriginalOwnerPlaceArchive() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey == accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/deda_account_profiles/$(accountKey))
+          && get(/databases/$(database)/documents/deda_account_profiles/$(accountKey)).data.accountType == 'placeOwner'
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey == accountKey
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.ownerUid == request.auth.uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow get: if sameOriginalOwnerPlaceArchive();
+      allow list: if sameOriginalOwnerPlaceArchive()
+        && request.query.limit != null && request.query.limit <= 20;
+      allow create: if sameOriginalOwnerPlaceArchive()
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','sourceUid',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'untrusted-local-owner-place-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.captureId == captureId
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'placeId','pendingEditId','draftRaw','submittedRaw'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'placeId','pendingEditId','draftRaw','submittedRaw'
+        ])
+        && (request.resource.data.records.placeId == null ||
+            (request.resource.data.records.placeId is string
+             && request.resource.data.records.placeId.size() <= 256))
+        && (request.resource.data.records.pendingEditId == null ||
+            (request.resource.data.records.pendingEditId is string
+             && request.resource.data.records.pendingEditId.size() <= 256))
+        && (request.resource.data.records.draftRaw == null ||
+            (request.resource.data.records.draftRaw is string
+             && request.resource.data.records.draftRaw.size() <= 65536))
+        && (request.resource.data.records.submittedRaw == null ||
+            (request.resource.data.records.submittedRaw is string
+             && request.resource.data.records.submittedRaw.size() <= 65536))
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+
+    // STEP 2 FRIENDS: owner-only SOURCE query for same original UID.
+    // Firestore client queries must filter members arrayContains current UID
+    // and be bounded to 201 documents. Reads only. Never send/reaccept,
+    // rename, delete or reassign a friendship. NOT DEPLOYED TO PRODUCTION.
+    match /deda_friendships/{pairId} {
+      function verifiedOriginalFriendReader() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey is string
+          && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data.accountKey
+              == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey
+          && exists(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey)).data.createdUid
+              == request.auth.uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountKey)).data.active
+              == true;
+      }
+      allow get: if verifiedOriginalFriendReader()
+        && resource.data.members is list
+        && request.auth.uid in resource.data.members;
+      allow list: if verifiedOriginalFriendReader()
+        && request.query.limit != null && request.query.limit <= 201
+        && request.auth.uid in resource.data.members;
+      allow create, update, delete: if false;
+    }
+
+
+    // STEP 2: LINKED original UID replacement-phone session only.
+    // Firebase Auth password verification replaces the old PIN-as-Firestore-
+    // document proof for this pilot. Original UID and immutable personal ID
+    // route MUST both belong to the account. Does not grant anything to an
+    // anonymous UID, unrelated auth provider, another phone number or staff.
+    // This rule is staged on the emulator only: NO PRODUCTION DEPLOY.
+    match /deda_sessions/{uid} {
+      function signedInAsLinkedOriginalOwner() {
+        return request.auth != null
+          && request.auth.uid == uid
+          && request.auth.token.email is string
+          && request.auth.token.firebase.sign_in_provider == 'password'
+          && request.resource.data.accountKey is string
+          && request.resource.data.accountKey.matches('^[0-9]{8,16}$')
+          && request.auth.token.email
+              == request.resource.data.accountKey + '@deda-login.invalid'
+          && exists(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey))
+          && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.createdUid == uid
+          && get(/databases/$(database)/documents/deda_account_directory/$(request.resource.data.accountKey)).data.active == true
+          && exists(/databases/$(database)/documents/users/$(uid))
+          && get(/databases/$(database)/documents/users/$(uid)).data.accountKey
+              == request.resource.data.accountKey
+          && get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId is string
+          && exists(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId))
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.ownerUid == uid
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.kind == 'personal'
+          && get(/databases/$(database)/documents/deda_share_ids/$(get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId)).data.active == true;
+      }
+      allow create, update: if signedInAsLinkedOriginalOwner()
+        && request.resource.data.keys().hasOnly([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.installId is string
+        && request.resource.data.installId.size() >= 8
+        && request.resource.data.installId.size() <= 128
+        && request.resource.data.signedInAt == request.time
+        && request.resource.data.lastSeenAt == request.time;
+    }
+
+)
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid','installId',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','sourceUid','installId',
+          'captureId','records','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'legacy-purchase-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.captureId == captureId
+        && request.resource.data.installId is string
+        && request.resource.data.installId.size() >= 1
+        && request.resource.data.installId.size() <= 128
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'originalId','progressCaptureId','localSnapshot'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'originalId','progressCaptureId','localSnapshot'
+        ])
+        && request.resource.data.records.originalId ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId
+        && request.resource.data.records.progressCaptureId == captureId
+        && request.resource.data.records.localSnapshot is string
+        && request.resource.data.records.localSnapshot.size() <= 200000
+        && request.resource.data.createdAt == request.time
+        && exactOriginalProgressParent();
+      allow update, delete: if false;
+    }
+
+
     // STEP 2: first migration of two FREE profile appearance preferences,
     // NOT paid frames or any rewards. Immutable and original UID scoped.
     match /deda_profile_ui_migration/{accountKey} {
