@@ -424,3 +424,9 @@
 - مسار `DedaStep2PrivatePlacesScope` الحالي يخص **أماكن شخصية جديدة ومقيدة بالحساب على نفس الجهاز فقط**؛ لا يقرأ مفاتيح المفضلة/الأخيرة القديمة، ولا يرسلها للسحابة، ولا يُثبت الاسترجاع على هاتف آخر. يُمنع إنشاء مسار ثالث مكرر أو إسناد التاريخ دون إثبات مستقل.
 - خطر مراجعة عملي ملموس قبل أي تفعيل: `saveScoped` يستخدم SharedPreferences بلا ضمان compare-and-set عبر عمليات متزامنة، لذلك لا يجوز اعتبار الكتابة الإنتاجية آمنة قبل حماية الكاتب الواحد والحفظ الموثق. العلم `DEDA_STEP2_PRIVATE_PLACES_SCOPED_PILOT` يبقى false.
 - لم يُطلب اختبار APK ولا نشر؛ مجالات النقطة الثانية الـ23 تبقى قيد الإغلاق، والأماكن الشخصية/المفضلة/الأخيرة غير مسترجعة بين الهاتفين. HOLD / NO CUTOVER / NO FIREBASE PRODUCTION / NO PLAY.
+
+
+### 2026-11-02 — نتيجة الفحص النهائي لتغطية جميع أماكن الحساب غير المربوطة
+- تم تصحيح السبب ضمن كود الجرد الـ23 نفسه `lib/deda_step2_full_account_preflight.dart`: `savedPrivatePlaces` تبقى `notAttested` مع تسجيل **personal + favorites + recent** جميعها، بدلاً من ذكر أماكني الشخصية وحدها. أضيف اختبار واحد جديد في `test/deda_step2_full_account_preflight_test.dart` كي لا تتحول أي منها إلى مسترجعة بالخطأ.
+- GitHub Actions [#41450666268](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41450666268) على `d9a607240dd474be961308691eeab7f55ed0fe5a` **COMPLETED / SUCCESS في الوظائف الأربع**: Flutter **302 ناجحاً و1 skipped** عبر 22 مجموعة؛ Node **113/113**؛ Firebase Auth emulator **ناجح**؛ Firestore Rules emulator والجوائز **ناجحان**. Dart analyze **124 ملاحظة غير مانعة**. لم يُبن APK أو يُنشر Firebase/Play.
+- توضيح المنجز: **هذا ضبط حقيقي لتصنيف الجرد وليس رفعاً أو استرجاعاً فعلياً للأماكن القديمة**. لم يُثبت مالك بيانات `deda_personal_places_v1`, `deda_favorites_v1`, `deda_recent_v1` بعد؛ ولم يُعالَج سباق كتابات `saveScoped` المحلي، ولذلك يبقى المسار الخاص **معطلاً**، ولا يُسمح بالانتقال بين هاتفين أو حذف البيانات الأصلية. الاسترجاع الكامل للمجالات الـ23 **HOLD**.
