@@ -70,7 +70,7 @@ class FakePurchaseIo implements DedaStep2PurchaseSourceIo {
 const globalsCaptureId = captureId;
 
 DedaStep2PurchaseSourceReadback service(
-  FakePurchaseIo io, {
+  DedaStep2PurchaseSourceIo io, {
   bool enabled = true,
   String? Function()? currentUid,
   Future<bool> Function(String,String)? verify,
