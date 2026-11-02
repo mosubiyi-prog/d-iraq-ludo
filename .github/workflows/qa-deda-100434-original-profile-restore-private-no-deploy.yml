@@ -65,6 +65,10 @@ jobs:
           grep -q "? null : _signInToConfirmedAccount" lib/main.dart
           grep -q "verified-original-uid-changed-before-login-commit" lib/main.dart
           grep -q "verified-owner-login-commit-not-saved" lib/main.dart
+          grep -q "mayResumeLinkedLocalLogin(" lib/main.dart
+          grep -q "verifiedOriginalUid: verifiedUid" lib/main.dart
+          grep -q "deda_step2_linked_verified_uid_v1" lib/main.dart
+          grep -q "verified-original-uid-changed-during-login-commit" lib/main.dart
           grep -q "onPressed: _logout" lib/main.dart
           grep -q "verifiedProfileForLinkedOwner" lib/main.dart
           grep -q "verifiedCanonicalProfile: verifiedName != null" lib/main.dart
