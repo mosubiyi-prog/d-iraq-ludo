@@ -821,6 +821,29 @@ class DedaPreferences {
             ? previousName.trim()
             : name.trim());
 
+    // On a verified replacement-phone login, commit the profile fields
+    // BEFORE the persistent "logged in" flag. A process kill between writes
+    // must boot into login, not a stale hybrid of two account profiles.
+    if (verifiedCanonicalProfile &&
+        !await prefs.setBool(_loggedInKey, false)) {
+      throw StateError('verified-owner-login-prepare-not-saved');
+    }
+
+    final writes = await Future.wait([
+      prefs.setString(_userNameKey, resolvedName),
+      prefs.setString(_phoneKey, normalizedPhone),
+      prefs.setString(_accountPhoneKey, normalizedPhone),
+      prefs.setString(_accountTypeKey, type.name),
+      if (!verifiedCanonicalProfile) prefs.setBool(_loggedInKey, true),
+    ]);
+    if (writes.any((saved) => !saved)) {
+      throw StateError('owner-login-profile-not-saved');
+    }
+    if (verifiedCanonicalProfile &&
+        !await prefs.setBool(_loggedInKey, true)) {
+      throw StateError('verified-owner-login-commit-not-saved');
+    }
+    // In-memory identity becomes visible only after the local write completes.
     userName = resolvedName;
     phone = normalizedPhone;
     accountPhone = normalizedPhone;
@@ -832,14 +855,6 @@ class DedaPreferences {
         .toInt();
     profileBackgroundStyle =
         prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
-
-    await Future.wait([
-      prefs.setString(_userNameKey, resolvedName),
-      prefs.setString(_phoneKey, normalizedPhone),
-      prefs.setString(_accountPhoneKey, normalizedPhone),
-      prefs.setString(_accountTypeKey, type.name),
-      prefs.setBool(_loggedInKey, true),
-    ]);
     unawaited(DedaTaskEngine.initializeForCurrentAccount());
 
     // Do not hold the login screen open while Firebase/network profile syncs.
