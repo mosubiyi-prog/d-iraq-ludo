@@ -7,6 +7,7 @@ on:
       - 'lib/main.dart'
       - 'lib/deda_100433_owner_confirmation_ui.dart'
       - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'lib/deda_step2_before_uid_link_evidence_checkpoint.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'lib/deda_step2_original_backup_readback.dart'
       - 'lib/deda_progress_backup_coordinator.dart'
@@ -29,6 +30,7 @@ on:
       - 'test/deda_step2_confirmed_login_downgrade_private_test.dart'
       - 'test/deda_step2_original_backup_readback_test.dart'
       - 'test/deda_step2_original_source_continuity_test.dart'
+      - 'test/deda_step2_before_uid_link_evidence_checkpoint_test.dart'
       - 'test/deda_progress_backup_coordinator_test.dart'
       - 'test/deda_step2_visual_prefs_continuity_test.dart'
       - 'test/deda_step2_assets_readback_test.dart'
@@ -75,6 +77,10 @@ jobs:
           grep -q "verifiedOriginalUid: verifiedUid" lib/main.dart
           grep -q "deda_step2_linked_verified_uid_v1" lib/deda_100431_linked_owner_session_policy.dart
           grep -q "rememberConfirmedOriginalUid(" lib/deda_100433_owner_confirmation_ui.dart
+          grep -q "'DEDA_STEP2_PRELINK_LEGACY_SOURCE_CHECKPOINT', defaultValue: false" lib/deda_step2_before_uid_link_evidence_checkpoint.dart
+          grep -q "beforeLinkedIdentityTransition:" lib/deda_100433_owner_confirmation_ui.dart
+          grep -q "original-uid-changed-before-evidence-checkpoint" lib/deda_100430_owner_uid_continuity.dart
+          grep -q "requireNonEmptyEvidence: true" lib/deda_step2_before_uid_link_evidence_checkpoint.dart
           grep -q "verified-original-uid-changed-during-login-commit" lib/main.dart
           grep -q "onPressed: _logout" lib/main.dart
           grep -q "verifiedProfileForLinkedOwner" lib/main.dart
@@ -135,6 +141,7 @@ jobs:
           flutter test test/deda_100434_recovery_original_profile_test.dart --no-pub
           flutter test test/deda_step2_original_backup_readback_test.dart --no-pub
           flutter test test/deda_step2_original_source_continuity_test.dart --no-pub
+          flutter test test/deda_step2_before_uid_link_evidence_checkpoint_test.dart --no-pub
           flutter test test/deda_progress_backup_coordinator_test.dart --no-pub
           flutter test test/deda_step2_visual_prefs_continuity_test.dart --no-pub
           flutter test test/deda_step2_assets_readback_test.dart --no-pub
