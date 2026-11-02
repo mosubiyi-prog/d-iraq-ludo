@@ -262,3 +262,11 @@ test('local pending plus owned on old client never authorizes cutover',async()=>
  assert.equal(r.frameCrosscheck.frameSources.FRAME_03.classification,
    'old-local-right-without-server-pair-review');
 });
+
+test('linked rights uses the exact shared frame catalog',()=>{
+ const catalog=require('../../tools/app_stability/progress_archive/purchase-frames.cjs').frames;
+ const linked=require('../deda_step2_linked_rights_audit_NOT_EXPORTED.js').frames;
+ assert.strictEqual(linked,catalog);
+ assert.equal(catalog.length,13);
+ assert.equal(Object.isFrozen(catalog),true);
+});
