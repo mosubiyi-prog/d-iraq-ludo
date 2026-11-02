@@ -24,6 +24,7 @@ import 'deda_backend.dart';
 import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100433_owner_confirmation_ui.dart';
+import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_original_backup_readback.dart';
@@ -2207,6 +2208,34 @@ class _LoginPageState extends State<LoginPage> {
           originalUid: originalUid, progress: progress,
           isCurrent: isOriginalAccount,
         );
+      }
+      // PRIVATE QA, existing quiz-only cloud path: hydrate the current
+      // day's display/answer keys on the replacement device BEFORE the
+      // local login commit. The quiz UI reads the same device-local day.
+      // No task claims, diamonds, XP, awards or frame rights are restored.
+      if (dedaQuizCloudSyncEnabled) {
+        final now = DateTime.now().toLocal();
+        final day = '${now.year.toString().padLeft(4, '0')}-'
+            '${now.month.toString().padLeft(2, '0')}-'
+            '${now.day.toString().padLeft(2, '0')}';
+        bool currentOriginal() => mounted &&
+            FirebaseAuth.instance.currentUser?.uid == originalUid &&
+            FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+            FirebaseAuth.instance.currentUser?.email ==
+                DedaOwnerUidContinuity.authEmail(phone);
+        try {
+          await DedaQuizCloudContinuity.firebase().restoreNewPhoneQuiz(
+            uid: originalUid,
+            accountKey: DedaPinAuth.accountKeyForPhone(phone),
+            originalId: originalId,
+            iraqDay: day,
+            isCurrent: currentOriginal,
+          );
+        } on StateError catch (error) {
+          // A never-started day has no archive: no fake quiz completion.
+          // Any other error (wrong UID, conflicts, network) is NOT ignored.
+          if (!error.toString().contains('no-quiz-cloud-backup')) rethrow;
+        }
       }
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
         throw StateError('recovered-original-uid-lost-before-local-login');
