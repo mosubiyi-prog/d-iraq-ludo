@@ -9,6 +9,7 @@ on:
       - 'lib/deda_100430_owner_uid_continuity.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'lib/deda_step2_original_backup_readback.dart'
+      - 'lib/deda_progress_backup_coordinator.dart'
       - 'lib/deda_step2_visual_prefs_continuity.dart'
       - 'lib/deda_step2_assets_readback.dart'
       - 'lib/deda_step2_linked_published_place_recovery.dart'
@@ -26,6 +27,7 @@ on:
       - 'test/deda_100434_recovery_original_profile_test.dart'
       - 'test/deda_step2_original_backup_readback_test.dart'
       - 'test/deda_step2_original_source_continuity_test.dart'
+      - 'test/deda_progress_backup_coordinator_test.dart'
       - 'test/deda_step2_visual_prefs_continuity_test.dart'
       - 'test/deda_step2_assets_readback_test.dart'
       - 'test/deda_step2_linked_published_place_recovery_test.dart'
@@ -68,6 +70,8 @@ jobs:
           grep -q "verifiedName: originalProfile.name" lib/main.dart
           grep -q "'DEDA_STEP2_ORIGINAL_EVIDENCE_READBACK', defaultValue: false" lib/deda_step2_original_backup_readback.dart
           grep -q "'DEDA_STEP2_EVIDENCE_CONTINUITY_PILOT', defaultValue: false" lib/deda_step2_original_source_continuity.dart
+          grep -q 'requireNonEmptyEvidence: true' lib/deda_step2_original_source_continuity.dart
+          grep -q 'if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord)' lib/deda_progress_backup_coordinator.dart
           grep -q "'DEDA_STEP2_VISUAL_PREFS_MIGRATION', defaultValue: false" lib/deda_step2_visual_prefs_continuity.dart
           grep -q "'DEDA_STEP2_ASSETS_READBACK', defaultValue: false" lib/deda_step2_assets_readback.dart
           grep -q "'DEDA_STEP2_LINKED_PUBLISHED_PLACE', defaultValue: false" lib/deda_step2_linked_published_place_recovery.dart
@@ -117,6 +121,7 @@ jobs:
           flutter test test/deda_100434_recovery_original_profile_test.dart --no-pub
           flutter test test/deda_step2_original_backup_readback_test.dart --no-pub
           flutter test test/deda_step2_original_source_continuity_test.dart --no-pub
+          flutter test test/deda_progress_backup_coordinator_test.dart --no-pub
           flutter test test/deda_step2_visual_prefs_continuity_test.dart --no-pub
           flutter test test/deda_step2_assets_readback_test.dart --no-pub
           flutter test test/deda_step2_linked_published_place_recovery_test.dart --no-pub
@@ -130,7 +135,7 @@ jobs:
           flutter test test/deda_100377_point01_lab_frame_checkout_contract_test.dart --no-pub
           flutter test test/deda_100431_linked_owner_session_policy_test.dart --no-pub
           flutter test test/deda_100430_quiz_ui_hydration_test.dart --no-pub
-          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart lib/deda_step2_original_source_continuity.dart lib/deda_step2_visual_prefs_continuity.dart lib/deda_step2_assets_readback.dart lib/deda_lab_frame_secure_checkout.dart lib/deda_step2_linked_published_place_recovery.dart lib/deda_step2_owner_place_local_archive.dart lib/deda_step2_owner_place_backup_journal.dart lib/deda_step2_owner_place_draft_hydration.dart lib/deda_step2_friendship_readback.dart lib/deda_step2_full_account_preflight.dart
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_100433_owner_confirmation_ui.dart lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_step2_original_backup_readback.dart lib/deda_step2_original_source_continuity.dart lib/deda_progress_backup_coordinator.dart lib/deda_step2_visual_prefs_continuity.dart lib/deda_step2_assets_readback.dart lib/deda_lab_frame_secure_checkout.dart lib/deda_step2_linked_published_place_recovery.dart lib/deda_step2_owner_place_local_archive.dart lib/deda_step2_owner_place_backup_journal.dart lib/deda_step2_owner_place_draft_hydration.dart lib/deda_step2_friendship_readback.dart lib/deda_step2_full_account_preflight.dart
           echo 'PASS_100434_VERIFIED_ORIGINAL_PROFILE_NO_PRODUCTION_DEPLOY'
       - name: Never build a release APK or publish to Play
         run: |
