@@ -178,9 +178,16 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       accountKey: account, originalId: widget.originalId,
       iraqDay: day, isCurrent: isCurrent,
     );
+    // No current-day entries is normal for a never-started quiz.
+    // A PARTIAL day is not normal: preserve it and report an incomplete
+    // backup rather than silently treating an interrupted quiz as absent.
+    if (source.selected == null && source.progressRaw == null &&
+        source.completed == null) {
+      return false;
+    }
     if (source.seen == null || source.selected == null ||
         source.progressRaw == null || source.completed == null) {
-      return false;
+      throw StateError('old-phone-quiz-partial-source-preserved');
     }
     await DedaQuizCloudContinuity.firebase().saveOldPhoneQuiz(
       uid: uid, source: source, isCurrent: isCurrent,
