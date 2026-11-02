@@ -6,6 +6,7 @@ import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
+import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
 import 'deda_step2_owner_place_local_archive.dart';
 import 'deda_step2_owner_place_backup_journal.dart';
 
@@ -250,7 +251,20 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       }
       final confirmed = widget.confirm ??
           (phone,pin,originalId) => DedaOwnerUidContinuity.linkExistingOriginalUid(
-                phone:phone,pin:pin,originalId:originalId);
+                phone:phone,pin:pin,originalId:originalId,
+                // After REAL PIN + server owner proof, and before the
+                // anonymous UID turns into a provider account: retain exact
+                // legacy source bytes. Pilot OFF in every ordinary build.
+                beforeLinkedIdentityTransition:
+                    dedaStep2PreLinkEvidenceCheckpointEnabled
+                        ? (account, uid) async {
+                            await DedaStep2BeforeLinkFirebaseArchive
+                                .captureVerifiedOriginal(
+                              accountKey: account, originalUid: uid,
+                            );
+                          }
+                        : null,
+              );
       final uid = await confirmed(widget.phone,pin,widget.originalId);
       if (!mounted) return;
       if (uid.isEmpty) throw StateError('owner-link-failed');
