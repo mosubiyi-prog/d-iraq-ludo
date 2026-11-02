@@ -835,6 +835,16 @@ class DedaPreferences {
     String? verifiedOriginalUid,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    // In the private linked-owner pilot, a previously confirmed identity
+    // cannot be replaced with the legacy name+phone-only login. Otherwise
+    // the ordinary login action would erase the saved original UID proof and
+    // reopen a local profile without the owner's Firebase credential.
+    // Production 100340 compatibility remains unchanged (pilot flag false).
+    if (dedaLinkedOwnerCompatEnabled && !verifiedCanonicalProfile &&
+        (prefs.containsKey(_linkedVerifiedUidKey) ||
+            prefs.containsKey(_linkedVerifiedAccountKey))) {
+      throw StateError('linked-owner-requires-verified-login-or-logout');
+    }
     final previousPhone = prefs.getString(_phoneKey) ?? '';
     final previousName = prefs.getString(_userNameKey) ?? '';
     // Never prefer a previous local name over a verified original-server
