@@ -79,6 +79,11 @@ class DedaOwnerUidContinuity {
     required String phone,
     required String pin,
     required String originalId,
+    // Old-phone evidence must be frozen BEFORE the anonymous UID becomes
+    // provider-linked; the existing legacy evidence store cannot write after
+    // that transition. Explicit private opt-in ONLY, default null.
+    Future<void> Function(String accountKey, String originalUid)?
+        beforeLinkedIdentityTransition,
   }) async {
     if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
     final accountKey = _account(phone);
@@ -99,6 +104,25 @@ class DedaOwnerUidContinuity {
     await _verifyOriginalUid(
       accountKey: accountKey, originalId: originalId, uid: originalUid,
     );
+    if (beforeLinkedIdentityTransition != null) {
+      // The old phone's original anonymous UID must remain live while all
+      // source-only receipts are written and read back. Never link on a
+      // missing/denied/partially acknowledged archive.
+      await beforeLinkedIdentityTransition(accountKey, originalUid);
+      final stillOriginal = FirebaseAuth.instance.currentUser;
+      if (stillOriginal == null || stillOriginal.uid != originalUid ||
+          !stillOriginal.isAnonymous) {
+        throw StateError('original-uid-changed-before-evidence-checkpoint');
+      }
+      // Re-prove the immutable owner after any asynchronous archive writes.
+      await _verifyOriginalUid(
+        accountKey: accountKey, originalId: originalId, uid: originalUid,
+      );
+      if (FirebaseAuth.instance.currentUser?.uid != originalUid ||
+          FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+        throw StateError('original-owner-changed-before-link');
+      }
+    }
     final credential = EmailAuthProvider.credential(
       email: authEmail(phone), password: pin,
     );
