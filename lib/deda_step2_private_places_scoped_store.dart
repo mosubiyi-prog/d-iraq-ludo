@@ -134,7 +134,9 @@ class DedaStep2PrivatePlacesScope {
     await _prove(originalUid, accountKey, isCurrent);
     final raw = await local.read(key(accountKey, originalUid));
     _current(originalUid, isCurrent);
-    if (raw == null) return List.unmodifiable(<Map<String, dynamic>>[]);
+    if (raw == null) {
+      throw const DedaStep2PrivatePlacesHold('private-place-scope-not-captured-unknown');
+    }
     if (utf8.encode(raw).length > 262144) {
       throw const DedaStep2PrivatePlacesHold('private-place-source-too-large');
     }
