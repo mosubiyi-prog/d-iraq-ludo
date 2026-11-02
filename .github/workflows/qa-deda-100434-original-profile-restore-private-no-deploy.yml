@@ -12,6 +12,8 @@ on:
       - 'lib/deda_step2_original_backup_readback.dart'
       - 'lib/deda_step2_purchase_backup_readback.dart'
       - 'lib/deda_step2_financial_source_audit.dart'
+      - 'functions/deda_step2_verified_receipt_replay_audit_NOT_EXPORTED.js'
+      - 'functions/tests/deda_step2_verified_receipt_replay_audit.test.cjs'
       - 'lib/deda_progress_backup_coordinator.dart'
       - 'lib/deda_step2_visual_prefs_continuity.dart'
       - 'lib/deda_step2_assets_readback.dart'
@@ -175,6 +177,24 @@ jobs:
         run: |
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           echo 'NO_RELEASE_APK_NO_REAL_FIREBASE_DATA_NO_PLAY_NO_BILLING'
+  step2-receipt-replay-readonly-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify audited receipts are READ-ONLY and NOT callable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(printenv GOOGLE_APPLICATION_CREDENTIALS || true)"
+          ! grep -Fq "deda_step2_verified_receipt_replay_audit_NOT_EXPORTED" functions/index.js
+          node --check functions/deda_step2_verified_receipt_replay_audit_NOT_EXPORTED.js
+          node --test functions/tests/deda_step2_verified_receipt_replay_audit.test.cjs
+          echo 'NO_PRODUCTION_FINANCIAL_MIGRATION_NO_RECEIPT_WRITES_NO_DEPLOY'
+
   real-firebase-auth-account-link-regression:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
