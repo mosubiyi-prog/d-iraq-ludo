@@ -19,6 +19,28 @@ class DedaLinkedOwnerSessionPolicy {
       RegExp(r'^[0-9]{8,16}$').hasMatch(accountKey) &&
       email == ownerEmail(accountKey);
 
+  /// A previously confirmed replacement phone must NEVER resume its cached
+  /// display profile when Firebase Auth has a different UID, provider/email,
+  /// or the stored proof belongs to another phone account. This is only a
+  /// local boot guard; privileged server operations still reverify ownership.
+  static bool mayResumeLinkedLocalLogin({
+    required String? savedOriginalUid,
+    required String? savedAccountKey,
+    required String localPhone,
+    required String? currentUid,
+    required String? currentEmail,
+    required bool currentIsAnonymous,
+  }) {
+    final localAccount = localPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    return savedOriginalUid != null && savedOriginalUid.isNotEmpty &&
+        savedAccountKey != null &&
+        emailMatches(ownerEmail(savedAccountKey), savedAccountKey) &&
+        savedAccountKey == localAccount &&
+        currentUid == savedOriginalUid &&
+        !currentIsAnonymous &&
+        emailMatches(currentEmail, savedAccountKey);
+  }
+
   static bool ownerDocumentsMatch({
     required String uid,
     required String accountKey,
