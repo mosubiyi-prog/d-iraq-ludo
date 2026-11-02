@@ -6,9 +6,7 @@ const ACCOUNT=/^[0-9]{10,16}$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
 const CAPTURE=/^[A-Za-z0-9_-]{20,80}$/;
 const PARTS=Object.freeze(['taskPoints','socialCoinsAndXp','earnedDiamonds']);
-const FRAMES=Object.freeze(['FRAME_03','FRAME_05','FRAME_06','FRAME_07',
- 'FRAME_08','FRAME_09','FRAME_10','FRAME_11','FRAME_12','FRAME_13',
- 'FRAME_14','FRAME_15','FRAME_16']);
+const {frames:FRAMES}=require('../tools/app_stability/progress_archive/purchase-frames.cjs');
 const stop=code=>{throw Object.assign(new Error(code),{code});};
 const isMap=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const nonnegative=x=>Number.isSafeInteger(x)&&x>=0;
