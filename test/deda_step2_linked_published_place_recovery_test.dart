@@ -150,6 +150,26 @@ void main() {
     }
   });
 
+  test('non-string cloud approval is never accepted as restored ownership', () async {
+    for (final approval in <Object?>[
+      null, 12345, true, <String, dynamic>{'number': 'APPROVED'},
+      <String>['APPROVED'], '   ',
+    ]) {
+      final h = H();
+      final row = h.io.result.documents.single;
+      h.io.result = DedaStep2PublishedPlacesResult([
+        DedaStep2PublishedPlaceRow(row.id, {
+          ...row.fields,
+          'approvalNumber': approval,
+        }),
+      ]);
+      await expectLater(h.restore(),
+        throwsA(held('published-place-owner-or-approval-mismatch')));
+      expect(h.io.local, isEmpty);
+      expect(h.io.writes, 0);
+    }
+  });
+
   test('cached or pending Firestore snapshots must not hide owner place', () async {
     for(final rows in <DedaStep2PublishedPlacesResult>[
       const DedaStep2PublishedPlacesResult([],fromCache:true),
