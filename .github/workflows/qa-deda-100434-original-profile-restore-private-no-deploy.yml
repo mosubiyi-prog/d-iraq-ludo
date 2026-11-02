@@ -13,6 +13,8 @@ on:
       - 'lib/deda_step2_purchase_backup_readback.dart'
       - 'lib/deda_step2_financial_source_audit.dart'
       - 'functions/deda_step2_verified_receipt_replay_audit_NOT_EXPORTED.js'
+      - 'functions/deda_step2_linked_owner_read_session_NOT_EXPORTED.js'
+      - 'functions/tests/deda_step2_linked_owner_read_session.test.cjs'
       - 'functions/tests/deda_step2_verified_receipt_replay_audit.test.cjs'
       - 'lib/deda_progress_backup_coordinator.dart'
       - 'lib/deda_step2_visual_prefs_continuity.dart'
@@ -193,6 +195,9 @@ jobs:
           ! grep -Fq "deda_step2_verified_receipt_replay_audit_NOT_EXPORTED" functions/index.js
           node --check functions/deda_step2_verified_receipt_replay_audit_NOT_EXPORTED.js
           node --test functions/tests/deda_step2_verified_receipt_replay_audit.test.cjs
+          node --check functions/deda_step2_linked_owner_read_session_NOT_EXPORTED.js
+          node --test functions/tests/deda_step2_linked_owner_read_session.test.cjs
+          ! grep -Fq 'deda_step2_linked_owner_read_session_NOT_EXPORTED' functions/index.js
           echo 'NO_PRODUCTION_FINANCIAL_MIGRATION_NO_RECEIPT_WRITES_NO_DEPLOY'
 
   real-firebase-auth-account-link-regression:

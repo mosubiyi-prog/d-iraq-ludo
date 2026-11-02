@@ -5,6 +5,7 @@ const core=require('../tools/app_stability/progress_archive/reconcile-core.cjs')
 const {loadMigratedContext}=require('../tools/app_stability/progress_archive/migration-gate.cjs');
 const {requireReviewedActivation}=require('../tools/app_stability/progress_archive/reviewed-activation-proof.cjs');
 const {withVerifiedOwnerSession}=require('../tools/app_stability/progress_archive/point-tier-session.cjs');
+const {withLinkedOwnerReadSession}=require('./deda_step2_linked_owner_read_session_NOT_EXPORTED.js');
 const id=v=>typeof v==='string'&&/^[A-Za-z0-9_-]{20,80}$/.test(v);
 const original=v=>typeof v==='string'&&/^@DEDA-[A-Z0-9]{6}$/.test(v);
 const fail=code=>{throw Object.assign(new Error(code),{code});};
@@ -96,4 +97,22 @@ async function previewReviewedReceiptForOwner({store,auth,idToken,receiptId}){
    return inspectClassifiedReceipt({tx,accountKey,context,receiptId});
  });
 }
-module.exports={inspectClassifiedReceipt,previewReviewedReceiptForOwner};
+
+/**
+ * Read-only verified SAME UID linked-password path (replacement phone pilot).
+ * Fails closed on legacy/unreviewed balances. No receipt, reward, or PIN writer.
+ */
+async function previewReviewedReceiptForLinkedOwner({store,auth,idToken,receiptId}){
+ if(!id(receiptId))fail('step2-invalid-receipt-id');
+ return withLinkedOwnerReadSession({store,auth,idToken},async(tx,accountKey,actor)=>{
+   const context=await loadMigratedContext(tx,accountKey);
+   const activation=await requireReviewedActivation(tx,context);
+   const fence=await tx.get(context.root+'/fences/'+activation.legacyFenceId);
+   if(!fence||fence.originalId!==actor.originalId||
+      !original(actor.originalId))
+     fail('step2-linked-reviewed-original-mismatch');
+   return inspectClassifiedReceipt({tx,accountKey,context,receiptId});
+ });
+}
+
+module.exports={inspectClassifiedReceipt,previewReviewedReceiptForOwner,previewReviewedReceiptForLinkedOwner};
