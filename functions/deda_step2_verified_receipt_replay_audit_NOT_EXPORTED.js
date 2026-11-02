@@ -59,7 +59,12 @@ async function inspectClassifiedReceipt({tx,accountKey,context,receiptId}){
       applied.appliedVersion>state.version||
       !core.sameEvent(core.parseReceipt(applied.receipt,accountKey),receipt))
      fail('step2-applied-marker-conflict');
-   const after=core.vector(applied.afterBalances);
+   const after=applied.afterBalances;
+   if(!after||typeof after!=='object'||Array.isArray(after)||
+      Object.keys(after).length!==core.units.length||
+      !core.units.every(u=>Object.hasOwn(after,u)&&
+         Number.isSafeInteger(after[u])&&after[u]>=0))
+     fail('step2-applied-marker-conflict');
    if(applied.appliedVersion===state.version&&
       !sameBalances(after,state.balances))fail('step2-applied-state-conflict');
    status='already-applied-once';
