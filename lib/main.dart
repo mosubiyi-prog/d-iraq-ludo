@@ -1974,7 +1974,9 @@ class _LoginPageState extends State<LoginPage> {
     if (verifiedName != null &&
         (verifiedUid == null || verifiedUid.isEmpty ||
             FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
-            FirebaseAuth.instance.currentUser?.isAnonymous != false)) {
+            FirebaseAuth.instance.currentUser?.isAnonymous != false ||
+            FirebaseAuth.instance.currentUser?.email !=
+                DedaOwnerUidContinuity.authEmail(normalizedPhone))) {
       throw StateError('verified-original-uid-changed-before-login-commit');
     }
     final name = verifiedName ?? nameController.text.trim();
@@ -1999,7 +2001,10 @@ class _LoginPageState extends State<LoginPage> {
       verifiedCanonicalProfile: verifiedName != null,
     );
     if (verifiedUid != null &&
-        FirebaseAuth.instance.currentUser?.uid != verifiedUid) {
+        (FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
+            FirebaseAuth.instance.currentUser?.isAnonymous != false ||
+            FirebaseAuth.instance.currentUser?.email !=
+                DedaOwnerUidContinuity.authEmail(normalizedPhone))) {
       // Do not leave the wrong profile marked logged in after a session
       // switch during the await on SharedPreferences.
       await DedaPreferences.logout();
