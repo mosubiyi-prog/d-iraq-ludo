@@ -321,3 +321,9 @@
 - فحص الجوائز لا يزعم أهلية الأسبوع ولا تسوية أرصدة الماسات أو صحة النسب التاريخية؛ كل صلاحيات credit/claim/reissue/cutover=false. الملفات `functions/tests/deda_step2_historical_weekly_gifts_audit.test.cjs` وworkflow 100434 توسعت بـ17 اختباراً.
 - commit البرمجة `165310c1af03b5b8d1cf5db5ac738d594f840431`؛ GitHub Actions [#41386254080](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41386254080) أثبت نجاح **14+14+17+17+17 = 79/79 Node**، بانتظار فحوص Flutter وFirebase التكميلية وقت تحرير هذه الملاحظة. لا إعلان جاهزية الإصدار قبل اكتمال CI.
 - **HOLD مستمر**: لا ترحيل فعلي للحقوق أو جميع الـ23 مجالاً؛ لا حماية PIN مكتملة على الخادم، ولا سياج نهائي لكتّاب Play 100340، ولا فحص نقل على هاتفين حقيقيين.
+
+### النتيجة النهائية CI لفحص تاريخ جوائز الدوري 2026-11-02
+- GitHub Actions [#41386254080](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/41386254080) **SUCCESS** على مصدر `165310c1af03b5b8d1cf5db5ac738d594f840431`؛ **الأربع وظائف كلها SUCCESS**.
+- Node 79/79 ناجح (14 receipt replay + 14 linked original UID + 17 original/alias rights + 17 Stage71/74 history + 17 bounded week-history). Firebase Auth emulator وFirestore Rules emulator نجحا؛ آخر فحص Flutter: **288 ناجح + 1 skipped**، وDart analyze به **124 تنبيهاً غير مانع**.
+- التدقيق **للإيصالات الموجودة فقط**، وليس إثباتاً لفوز المستخدم أو تملك كل الآيديات التاريخية أو أحقية استرجاع ماسات. الأسبوع الأول يبدأ 2026-10-31 06:00 بتوقيت بغداد، ويكتمل 2026-11-07 06:00؛ لذلك بتاريخ هذا الفحص لا توجد أسابيع مكتملة من هذا الدوري ليُفترض وجود جوائزها.
+- ماكو APK ولا Play ولا نشر قواعد Firebase؛ لا تحويل رصيد أو حذف بيانات. **HOLD للنقطة الثانية** حتى ثبوت استرجاع المجالات الـ23 وتحديد التاريخ القديم والمكافآت مع حماية PIN وفحص جهازين.
