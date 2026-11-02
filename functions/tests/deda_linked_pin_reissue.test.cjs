@@ -148,7 +148,7 @@ test("Firestore final commit failure retains protected pending PIN, retry finish
 });
 
 test("legacy anonymous original uses same UID and Firestore credential, no new Auth password",async()=>{
-  const db=memoryDb(),auth=authFor(undefined);
+  const db=memoryDb(),auth=authFor(null);
   await approve(db,auth);
   assert.equal(auth.updates.length,0);
   assert.equal(db.docs.get("deda_credentials/"+key).pin,newPin);
