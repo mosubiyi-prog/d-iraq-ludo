@@ -143,6 +143,43 @@ void main() {
       throwsA(isA<DedaStep2LevelHold>()));
   });
 
+  test('original 5000-point card reserve plus claim preserves net bonus and claim IDs', () {
+    final original = sample();
+    final awards = original['awards'] as Map;
+    final ledger = original['ledger'] as List;
+    final reserve = {
+      'id':'point_tier_reserve|5000','points':-5000,
+      'type':'point_tier_reserve','event':'point_tier_points_reserved',
+      'threshold':5000,'reservedPoints':5000,'bonusPoints':50,
+      'createdAt':'2026-11-02T11:00:03Z',
+    };
+    final claim = {
+      'id':'point_tier_claim|5000','points':5050,
+      'type':'point_tier_claim','event':'point_tier_points_claimed',
+      'threshold':5000,'reservedPoints':5000,'bonusPoints':50,
+      'createdAt':'2026-11-02T11:00:04Z',
+    };
+    awards['point_tier_reserve|5000']=reserve;
+    awards['point_tier_claim|5000']=claim;
+    ledger.addAll([reserve,claim]);
+    final restored = DedaStep2LevelStateValidator.inspect(jsonEncode(original));
+    expect(restored.earnedPoints,70);
+    awards.remove('point_tier_reserve|5000');
+    expect(() => DedaStep2LevelStateValidator.inspect(jsonEncode(original)),
+      throwsA(isA<DedaStep2LevelHold>()));
+  });
+
+  test('forged reservation or claim bonus cannot inflate old points', () {
+    final original = sample();
+    final awards = original['awards'] as Map;
+    awards['point_tier_claim|5000']={
+      'id':'point_tier_claim|5000','points':5050,
+      'type':'point_tier_claim','threshold':5000,
+      'reservedPoints':5000,'bonusPoints':50};
+    expect(() => DedaStep2LevelStateValidator.inspect(jsonEncode(original)),
+      throwsA(isA<DedaStep2LevelHold>()));
+  });
+
   test('same restored ledger powers existing live points and blocks duplicate task reward', () async {
     SharedPreferences.setMockInitialValues({
       'deda_task_points_state_v1_' + account:jsonEncode(sample()),
