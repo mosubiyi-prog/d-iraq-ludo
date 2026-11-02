@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// DEDA stage 2: distinguish the original user's *linked Firebase UID*
 /// from a staff/admin non-anonymous Firebase session.
@@ -11,6 +12,44 @@ const bool dedaLinkedOwnerCompatEnabled = bool.fromEnvironment(
 
 class DedaLinkedOwnerSessionPolicy {
   const DedaLinkedOwnerSessionPolicy._();
+
+  static const String linkedUidPreferencesKey = 'deda_step2_linked_verified_uid_v1';
+  static const String linkedAccountPreferencesKey =
+      'deda_step2_linked_verified_account_v1';
+
+  /// Original phone, AFTER verified same-UID Firebase credential linking.
+  /// A server-proven owner can retry after uncertain disk acknowledgement
+  /// without having to link the Auth credential for a second time.
+  /// Never overwrite a saved provenance belonging to another original UID.
+  static Future<void> rememberConfirmedOriginalUid({
+    required String accountKey,
+    required String uid,
+    required bool Function() isCurrent,
+  }) async {
+    if (!dedaLinkedOwnerCompatEnabled ||
+        !emailMatches(ownerEmail(accountKey), accountKey) ||
+        uid.trim().isEmpty || !isCurrent()) {
+      throw StateError('linked-owner-original-phone-proof-required');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (!isCurrent()) {
+      throw StateError('linked-owner-session-changed');
+    }
+    final oldUid = prefs.getString(linkedUidPreferencesKey);
+    final oldAccount = prefs.getString(linkedAccountPreferencesKey);
+    if ((oldUid != null && oldUid != uid) ||
+        (oldAccount != null && oldAccount != accountKey)) {
+      throw StateError('different-linked-owner-provenance-preserved');
+    }
+    if (!await prefs.setString(linkedUidPreferencesKey, uid) ||
+        !isCurrent() ||
+        !await prefs.setString(linkedAccountPreferencesKey, accountKey) ||
+        !isCurrent() ||
+        prefs.getString(linkedUidPreferencesKey) != uid ||
+        prefs.getString(linkedAccountPreferencesKey) != accountKey) {
+      throw StateError('linked-owner-provenance-not-persisted');
+    }
+  }
 
   static String ownerEmail(String accountKey) =>
       '$accountKey@deda-login.invalid';
