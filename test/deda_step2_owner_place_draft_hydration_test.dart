@@ -217,6 +217,23 @@ void main(){
     expect(h.phone.writes,0);
   });
 
+  test('non-string and blank place approvals cannot hydrate a draft',()async{
+    for(final approval in <Object?>[
+      null,12345,true,<String,dynamic>{'id':'APPROVED'},
+      <String>['APPROVED'],'  ',
+    ]){
+      final h=H();
+      final row=h.places.rows.single;
+      h.places.rows=[DedaStep2PublishedPlaceRow(row.id,{
+        ...row.fields,'approvalNumber':approval,
+      })];
+      await expectLater(h.hydrate(),throwsA(
+        held('old-phone-place-not-same-approved-owner')));
+      expect(h.phone.writes,0);
+      expect(h.phone.drafts,isEmpty);
+    }
+  });
+
   test('untrusted draft foreign owner and financial payload are never copied',()async{
     for(final raw in [
       '{"accountKey":"07799999999","name":"foreign"}',
