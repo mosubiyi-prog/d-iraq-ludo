@@ -302,6 +302,16 @@ void main(){
     expect(h.placeIo.reads,0);
   });
 
+  test('all old personal, favorite and recent local place histories stay UNKNOWN',()async{
+    final report=await H().inspect();
+    final saved=report.domains['savedPrivatePlaces']!;
+    expect(saved.status,DedaStep2SourceStatus.notAttested);
+    expect(saved.reason,contains('personal-favorites-recent'));
+    expect(saved.reason,contains('not-owner-proven'));
+    expect(report.allAccountDataRestored,false);
+    expect(report.allowPhoneCutover,false);
+  });
+
   test('report status map is immutable and cannot be relabeled restored',()async{
     final report=await H().inspect();
     expect(()=>report.domains['profile']=
