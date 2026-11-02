@@ -12,6 +12,7 @@ const dedaTelegramWebhookSecret =
   defineSecret("DEDA_TELEGRAM_WEBHOOK_SECRET");
 const telegramBinding = require("./deda_telegram_bot_binding.js");
 const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
+const {approveForgottenPin,finishStagedReset} = require("./deda_linked_pin_reissue.js");
 const {recordApprovalBellNotice} = require("./deda_owner_approval_bell.js");
 
 initializeApp();
@@ -295,62 +296,42 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
     },
 );
 
+// Issuance is reserved on Firestore first, then SAME original Firebase Auth
+// UID password is updated, then both credentials and request become ready.
+// If the callable crashes between systems this trigger retries the durable
+// same PIN from a denied-to-clients credentials pendingRecovery record.
 exports.onRecoveryRequestUpdated = onDocumentUpdated(
-    "recovery_requests/{requestId}",
-    async (event) => {
-      const before = event.data && event.data.before.data();
-      const after = event.data && event.data.after.data();
-      if (!before || !after) return;
-      if (before.status === after.status) return;
-      if (after.status !== "approved") return;
-
-      const firestore = getFirestore();
-      const requestRef = event.data.after.ref;
-      const accountKey = String(after.accountKey || "").trim();
-      const requesterUid = String(after.requesterUid || "").trim();
-
+    "recovery_requests/{requestId}", async (event) => {
+      const before = event.data?.before?.data();
+      const after = event.data?.after?.data();
+      if (!before || !after || before.status === after.status ||
+          after.status !== "issuing") return;
       try {
-        const directory = await firestore
-            .collection("deda_account_directory")
-            .doc(accountKey)
-            .get();
-        if (!directory.exists || directory.data().active !== true) {
-          throw new Error("account-directory-missing");
-        }
-
-        const authEmail = String(directory.data().authEmail || "").trim();
-        if (!authEmail) throw new Error("auth-email-missing");
-        const userRecord = await getAuth().getUserByEmail(authEmail);
-        const pin = String(randomInt(100000, 1000000));
-        await getAuth().updateUser(userRecord.uid, {password: pin});
-
-        const now = Date.now();
-        await firestore
-            .collection("recovery_secrets")
-            .doc(event.params.requestId)
-            .set({
-              requesterUid,
-              pin,
-              createdAt: Timestamp.fromMillis(now),
-              expiresAt: Timestamp.fromMillis(now + (30 * 60 * 1000)),
-            });
-
-        await requestRef.update({
-          status: "ready",
-          resolvedAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-          processingError: null,
-        });
+        await finishStagedReset(getFirestore(),getAuth(),event.params.requestId);
       } catch (error) {
-        await requestRef.update({
-          status: "error",
-          updatedAt: Timestamp.now(),
-          processingError: String(error && error.message ? error.message : "recovery-failed"),
-        });
+        // Do NOT mark ready on a partial write; an explicit same-request
+        // admin retry can finish with the exact pending PIN and UID.
+        console.error("DEDA_PIN_SAME_UID_PENDING_RETRY",
+            event.params.requestId,String(error.message || error));
       }
-    },
-);
+    });
 
+// New private/manual recovery endpoint: strong server-side general manager
+// authorization, not a client-side Firestore PIN write. NO new Auth user.
+exports.dedaApproveLinkedPinRecovery = onCall(async (request) => {
+  const actor = await requireGeneralManager(request);
+  const requestId = String(request.data?.requestId || "").trim();
+  try {
+    return await approveForgottenPin(getFirestore(),getAuth(),{
+      requestId, actor,
+    });
+  } catch (error) {
+    console.error("DEDA_PIN_APPROVAL_HOLD",requestId,
+        String(error.message || error));
+    throw new HttpsError("failed-precondition",
+        "original-account-pin-not-synchronized-retry-or-review");
+  }
+});
 
 /**
  * General-manager-only readiness handshake. Exists only when the two
