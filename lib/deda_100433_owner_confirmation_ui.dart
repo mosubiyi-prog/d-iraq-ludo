@@ -7,6 +7,7 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
+import 'deda_step2_level_points_restore.dart';
 import 'deda_step2_owner_place_local_archive.dart';
 import 'deda_step2_owner_place_backup_journal.dart';
 import 'deda_100429_local_task_traffic_evidence.dart';
@@ -275,11 +276,32 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       title: 'تأكيد حساب DEDA / Confirm account',
       explanation: 'أدخل رمز حسابك على الهاتف الأصلي فقط. '
         'لا تسجل خروجك أو تحذف التطبيق قبل نجاح فحص الهاتف الثاني. '
-        'هذه الخطوة لا تسترجع الماسات أو النقاط تلقائياً.',
+        dedaStep2LevelPointsRestoreEnabled
+          ? 'سيُحفظ سجل نقاط المستوى الأصلي قبل ربط الحساب. '
+            'لا تحذف التطبيق حتى ينجح اختبار الهاتف الجديد.'
+          : 'هذه الخطوة لا تسترجع الماسات أو النقاط تلقائياً.',
     );
     if (pin == null || !mounted) return;
     setState(() => _running = true);
     try {
+      // The existing original phone MUST have a complete task/award ledger
+      // before credential linking. The pre-link checkpoint archives its exact
+      // bytes while the original anonymous UID is still authoritative.
+      if (dedaStep2LevelPointsRestoreEnabled && widget.confirm == null) {
+        if (!dedaStep2PreLinkEvidenceCheckpointEnabled) {
+          throw StateError('level-backup-requires-prelink-checkpoint');
+        }
+        final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+        if (FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+          throw StateError('level-backup-requires-original-anonymous-owner');
+        }
+        final raw = await const DedaStep2PrefsLevelLocalIo().read(account);
+        DedaStep2LevelStateValidator.inspect(raw);
+        if (!mounted ||
+            FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+          throw StateError('original-level-owner-changed-before-link');
+        }
+      }
       // On a separately owner-approved private build ONLY: persist the
       // original phone's FREE appearance preferences BEFORE UID linking.
       // If this archive is missing or denied, leave the original anonymous
