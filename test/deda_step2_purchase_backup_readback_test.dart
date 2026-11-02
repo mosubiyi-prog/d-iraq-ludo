@@ -112,7 +112,7 @@ void main() {
         DedaStep2LocalArchiveStatus.capturedUntrusted);
     expect(result.financialSourceAudit.missingUnknown,
         contains('purchase.FRAME_05'));
-    expect(result.financialSourceAudit.independentProofRequired, isNotEmpty);
+    expect(DedaStep2FinancialSourceAudit.independentProofRequired, isNotEmpty);
     expect(result.financialSourceAudit.canSettleFinancialBalances, isFalse);
     expect(result.financialSourceAudit.canRestoreXpOrPoints, isFalse);
     expect(result.financialSourceAudit.canGrantPurchases, isFalse);
