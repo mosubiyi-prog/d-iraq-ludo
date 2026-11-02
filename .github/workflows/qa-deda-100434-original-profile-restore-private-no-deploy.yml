@@ -6,6 +6,12 @@ on:
     paths:
       - 'lib/main.dart'
       - 'lib/deda_100433_owner_confirmation_ui.dart'
+      - 'lib/deda_recovery_admin.dart'
+      - 'functions/index.js'
+      - 'functions/deda_linked_pin_reissue.js'
+      - 'functions/deda_pin_auto_recovery_worker.js'
+      - 'functions/tests/deda_linked_pin_reissue.test.cjs'
+      - 'tests/stage14/deda_pin_auto_recovery_worker.test.cjs'
       - 'lib/deda_100430_owner_uid_continuity.dart'
       - 'functions/tests/deda_100430_uid_auth_emulator.test.cjs'
       - 'lib/deda_step2_before_uid_link_evidence_checkpoint.dart'
@@ -110,6 +116,8 @@ jobs:
           grep -q "verifiedName: originalProfile.name" lib/main.dart
           grep -q "'DEDA_STEP2_ORIGINAL_EVIDENCE_READBACK', defaultValue: false" lib/deda_step2_original_backup_readback.dart
           grep -q "'DEDA_STEP2_LEVEL_POINTS_RESTORE', defaultValue: false" lib/deda_step2_level_points_restore.dart
+          grep -q "httpsCallable('dedaApproveLinkedPinRecovery')" lib/deda_recovery_admin.dart
+          ! grep -q "collection('deda_credentials')" lib/deda_recovery_admin.dart
           grep -q "DedaStep2LevelPointsRestore.firebase().restoreOnVerifiedPhone(" lib/main.dart
           grep -q "DedaStep2LevelStateValidator.inspect(raw)" lib/deda_100433_owner_confirmation_ui.dart
           grep -q "dedaStep2PreLinkEvidenceCheckpointEnabled" lib/deda_100433_owner_confirmation_ui.dart
@@ -277,6 +285,10 @@ jobs:
             --project demo-deda-100430-uid-continuity --only auth \
             'node --test functions/tests/deda_100430_uid_auth_emulator.test.cjs'
           echo 'PASS_100433_ORIGINAL_UID_SAME_ON_NEW_PHONE_NO_CLOUD_FUNCTIONS'
+          node --test functions/tests/deda_linked_pin_reissue.test.cjs
+          node --test tests/stage14/deda_pin_auto_recovery_worker.test.cjs
+          node --check functions/index.js
+          node --check functions/deda_linked_pin_reissue.js
       - name: Remove disposable emulator config
         if: always()
         run: rm -f "$RUNNER_TEMP/deda-100433-auth.json"
