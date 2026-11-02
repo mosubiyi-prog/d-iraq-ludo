@@ -2082,6 +2082,12 @@ class _LoginPageState extends State<LoginPage> {
       verifiedCanonicalProfile: verifiedName != null,
       verifiedOriginalUid: verifiedUid,
     );
+    // The verified replacement phone must load the RESTORED original points
+    // into the actual profile notifier before opening HomePage. Normal new
+    // account creation keeps the earlier nonblocking startup behavior.
+    if (verifiedUid != null && dedaStep2LevelPointsRestoreEnabled) {
+      await DedaTaskEngine.initializeForCurrentAccount();
+    }
     if (verifiedUid != null &&
         (FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
             FirebaseAuth.instance.currentUser?.isAnonymous != false ||
