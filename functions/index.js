@@ -279,6 +279,7 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
           }
           const result = await autoRecoverForgottenPin(firestore, {
             requestId:event.params.requestId,nowMs:Date.now(),
+            auth:getAuth(),
           });
           if (result.outcome === "issued") return;
         }
