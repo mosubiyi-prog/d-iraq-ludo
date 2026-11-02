@@ -2011,7 +2011,12 @@ class _LoginPageState extends State<LoginPage> {
     DedaAccountType? verifiedType,
     String? verifiedUid,
   }) async {
-    if (!mounted) return;
+    if (!mounted) {
+      if (verifiedUid != null) {
+        throw StateError('recovery-login-page-disposed-before-commit');
+      }
+      return;
+    }
     if ((verifiedName == null) != (verifiedType == null)) {
       throw StateError('incomplete-verified-owner-profile');
     }
@@ -2057,7 +2062,15 @@ class _LoginPageState extends State<LoginPage> {
       await DedaPreferences.logout();
       throw StateError('verified-original-uid-changed-during-login-commit');
     }
-    if (!mounted) return;
+    if (!mounted) {
+      if (verifiedUid != null) {
+        if (DedaPreferences.accountPhone == normalizedPhone) {
+          await DedaPreferences.logout();
+        }
+        throw StateError('recovery-login-page-disposed-after-commit');
+      }
+      return;
+    }
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => HomePage(userName: name)),
@@ -2113,7 +2126,9 @@ class _LoginPageState extends State<LoginPage> {
           await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
         phone: phone, originalId: originalId, expectedUid: originalUid,
       );
-      if (!mounted) return;
+      if (!mounted) {
+        throw StateError('recovery-login-page-disposed-during-profile-proof');
+      }
       // Private QA only. Before marking this linked login locally, restore
       // FREE, per-account avatar/background values already archived by the
       // original phone. No paid frame, points, gems or gifts may be hydrated.
