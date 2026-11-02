@@ -1,8 +1,41 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100430_owner_uid_continuity.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:d_iraq_ludo/main.dart' show DedaPreferences, DedaAccountType;
 
 void main() {
   const account = '07712345678';
+
+  test('confirmed new-phone local login commits server name and owner role, not stale local alias', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({
+      'deda_logged_in_v1': false,
+      'deda_phone_v1': '+9647712345678',
+      'deda_user_name_v1': 'هاتف قديم - اسم غير موثق',
+      'deda_account_type_v1': 'user',
+    });
+    final serverName = DedaOwnerUidContinuity.validatedServerProfileName(
+      {'accountKey': account, 'name': '  الاسم الحقيقي المؤكد  '},
+      accountKey: account,
+    );
+    final role = DedaOwnerUidContinuity.validatedServerAccountType(
+      {'accountKey': account, 'accountType': 'placeOwner'},
+      accountKey: account,
+    );
+    await DedaPreferences.saveLogin(
+      name: serverName,
+      normalizedPhone: '+9647712345678',
+      type: role == 'placeOwner' ? DedaAccountType.placeOwner
+          : DedaAccountType.user,
+      verifiedCanonicalProfile: true,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(DedaPreferences.userName, 'الاسم الحقيقي المؤكد');
+    expect(DedaPreferences.accountType, DedaAccountType.placeOwner);
+    expect(prefs.getString('deda_user_name_v1'), 'الاسم الحقيقي المؤكد');
+    expect(prefs.getString('deda_account_type_v1'), 'placeOwner');
+    expect(prefs.getString('deda_phone_v1'), '+9647712345678');
+  });
 
   test('Recovered name comes from scoped server profile, never a typed alias', () {
     final name = DedaOwnerUidContinuity.validatedServerProfileName(
