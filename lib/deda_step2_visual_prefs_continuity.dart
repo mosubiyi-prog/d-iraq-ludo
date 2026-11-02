@@ -228,7 +228,10 @@ class DedaStep2VisualPrefsContinuity {
     _check(scope, isCurrent);
   }
 
-  /// Original phone, before any linked-account transition. Missing is NOT zero.
+  /// Original phone, before any linked-account transition. For these TWO
+  /// free visual fields only, a missing preference means the app's documented
+  /// on-screen default (0): DedaPreferences.load() uses exactly that fallback.
+  /// Financial balances, rewards and paid frames NEVER inherit this rule.
   /// No purchased frame or account credential is uploaded.
   Future<DedaStep2VisualSnapshot> saveOriginalPhone({
     required String accountKey,
@@ -245,12 +248,15 @@ class DedaStep2VisualPrefsContinuity {
     _check(scope, isCurrent);
     final background = await local.getInt(_background(accountKey));
     _check(scope, isCurrent);
-    if (avatar == null || background == null) {
-      throw const DedaStep2VisualPrefsHold('old-phone-visual-data-missing');
-    }
+    // If the user never customized either FREE visual setting, these
+    // SharedPreferences keys were never created on 100340. The UI nevertheless
+    // showed style 0; refusing to link the account would strand that user.
+    // Only apply the same UI defaults after proving the ORIGINAL Firebase UID.
+    final displayedAvatar = avatar ?? 0;
+    final displayedBackground = background ?? 0;
     final source = DedaStep2VisualSnapshot(
       accountKey: accountKey, originalId: originalId, uid: originalUid,
-      avatarStyle: avatar, backgroundStyle: background,
+      avatarStyle: displayedAvatar, backgroundStyle: displayedBackground,
     );
     source.validate();
     await _owner(source, isCurrent);
@@ -261,10 +267,10 @@ class DedaStep2VisualPrefsContinuity {
     if (readback == null ||
         DedaStep2VisualSnapshot.fromCloud(readback,
           accountKey: accountKey, originalId: originalId, uid: originalUid)
-            .avatarStyle != avatar ||
+            .avatarStyle != displayedAvatar ||
         DedaStep2VisualSnapshot.fromCloud(readback,
           accountKey: accountKey, originalId: originalId, uid: originalUid)
-            .backgroundStyle != background) {
+            .backgroundStyle != displayedBackground) {
       throw const DedaStep2VisualPrefsHold('visual-write-not-acknowledged');
     }
     return source;
