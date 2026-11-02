@@ -2102,7 +2102,20 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    await _completeVerifiedLogin(normalizedPhone);
+    try {
+      await _completeVerifiedLogin(normalizedPhone);
+    } on StateError catch (error) {
+      if (!error.toString().contains(
+          'linked-owner-requires-verified-login-or-logout')) {
+        rethrow;
+      }
+      _showLoginMessage(
+        'الحساب المؤكّد يحتاج الدخول بالرقم والرمز من زر دخول الحساب المؤكّد. '
+        'لم يتم تغيير الحساب أو فقدان بياناته.',
+        'Use confirmed account sign-in with your phone and PIN. '
+        'Your existing account data was not replaced.',
+      );
+    }
   }
 
   Future<void> _signInToConfirmedAccount() async {
