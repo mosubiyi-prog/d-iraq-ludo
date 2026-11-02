@@ -352,7 +352,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           (dedaStep2OwnerPlaceLocalArchiveEnabled &&
               FirebaseAuth.instance.currentUser?.uid != uid)) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(placeSourceUnconfirmed
+        content: Text((placeSourceUnconfirmed
           ? 'تم ربط الحساب الأصلي، لكن نسخ بيانات إدارة المكان لم يتأكد. '
             'لا تحذف التطبيق من الهاتف الأصلي؛ يلزم إعادة محاولة الحفظ.'
           : placeSourceConfirmed
@@ -364,7 +364,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
               ? ' تعذر تأكيد نسخة أسئلة اليوم؛ احتفظ بالهاتف الأصلي.'
               : quizSourceConfirmed
                   ? ' تم حفظ أسئلة اليوم فقط، دون نقاط أو جوائز.'
-                  : ''),
+                  : '')),
       ));
     } catch (_) {
       if (!mounted) return;
