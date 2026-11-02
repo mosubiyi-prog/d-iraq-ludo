@@ -142,7 +142,7 @@ class DedaStep2LinkedPublishedPlaceRecovery {
         place['accountKey'] != accountKey ||
         place['ownerUid'] != originalUid ||
         place['published'] != true ||
-        approval == null || approval.toString().trim().isEmpty) {
+        approval is! String || approval.trim().isEmpty) {
       // Do not change ownerUid when a previous device logged in under
       // another UID: it needs trusted adjudication, not implicit takeover.
       throw const DedaStep2PublishedPlaceHold(
