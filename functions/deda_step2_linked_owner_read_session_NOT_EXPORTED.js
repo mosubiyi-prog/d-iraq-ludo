@@ -62,7 +62,31 @@ async function withLinkedOwnerReadSession({store,auth,idToken},work){
       route.kind!=='personal'||route.active!==true)
      fail('step2-linked-original-route-mismatch');
    // Sensitive read callback receives no tx.set/update/delete methods.
-   const reader=Object.freeze({get:path=>tx.get(path)});
+   // Two fixed owner-scoped Admin queries. The private adapter must construct
+   // a Firestore Query with where(field,'==',originalId).limit(201).
+   // No client-provided collection/field/owner/limit; no write capability.
+   const premiumQueries=Object.freeze({
+     grants:Object.freeze(['deda_stage71_granted_registry','recipientOriginalId']),
+     receipts:Object.freeze(['deda_stage74_id_gift_receipts','originalId']),
+   });
+   const listPremiumHistory=async kind=>{
+     const spec=premiumQueries[kind];
+     if(!spec||typeof store.makeReadOnlyQuery!=='function')
+       fail('step2-linked-history-query-unavailable');
+     const query=store.makeReadOnlyQuery(spec[0],spec[1],originalId,201);
+     if(!query)fail('step2-linked-history-query-unavailable');
+     const snap=await tx.get(query);
+     if(!snap||!Array.isArray(snap.docs)||
+        snap.size!==snap.docs.length||snap.docs.length>200)
+       fail('step2-linked-history-unbounded-or-incomplete');
+     return Object.freeze(snap.docs.map(doc=>{
+       if(!doc||typeof doc.id!=='string'||!id(doc.id)||
+          typeof doc.data!=='function')
+         fail('step2-linked-history-doc-invalid');
+       return Object.freeze({id:doc.id,data:doc.data()});
+     }));
+   };
+   const reader=Object.freeze({get:path=>tx.get(path),listPremiumHistory});
    return work(reader,key,Object.freeze({uid:token.uid,originalId}));
  });
 }

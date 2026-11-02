@@ -15,6 +15,8 @@ on:
       - 'functions/deda_step2_verified_receipt_replay_audit_NOT_EXPORTED.js'
       - 'functions/deda_step2_linked_owner_read_session_NOT_EXPORTED.js'
       - 'functions/deda_step2_linked_rights_audit_NOT_EXPORTED.js'
+      - 'functions/deda_step2_all_premium_history_audit_NOT_EXPORTED.js'
+      - 'functions/tests/deda_step2_all_premium_history_audit.test.cjs'
       - 'functions/tests/deda_step2_linked_rights_audit.test.cjs'
       - 'functions/tests/deda_step2_linked_owner_read_session.test.cjs'
       - 'functions/tests/deda_step2_verified_receipt_replay_audit.test.cjs'
@@ -201,6 +203,9 @@ jobs:
           node --test functions/tests/deda_step2_linked_owner_read_session.test.cjs
           node --check functions/deda_step2_linked_rights_audit_NOT_EXPORTED.js
           node --test functions/tests/deda_step2_linked_rights_audit.test.cjs
+          node --check functions/deda_step2_all_premium_history_audit_NOT_EXPORTED.js
+          node --test functions/tests/deda_step2_all_premium_history_audit.test.cjs
+          ! grep -Fq 'deda_step2_all_premium_history_audit_NOT_EXPORTED' functions/index.js
           ! grep -Fq 'deda_step2_linked_rights_audit_NOT_EXPORTED' functions/index.js
           ! grep -Fq 'deda_step2_linked_owner_read_session_NOT_EXPORTED' functions/index.js
           echo 'NO_PRODUCTION_FINANCIAL_MIGRATION_NO_RECEIPT_WRITES_NO_DEPLOY'
