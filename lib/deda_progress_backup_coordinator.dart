@@ -206,7 +206,8 @@ class DedaProgressBackupCoordinator {
     });
 
   Future<DedaProgressBackupIntent> prepare({required String accountKey,
-    required String captureId,required bool Function() isCurrent}) =>
+    required String captureId,required bool Function() isCurrent,
+    bool requireNonEmptyEvidence = false}) =>
     _run(isCurrent,(check) async {
       if(!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
         throw ArgumentError('invalid-backup-capture-id');
@@ -215,8 +216,20 @@ class DedaProgressBackupCoordinator {
       final bound=_bound(owner,check);bound();
       final old=await journal.read(accountKey);bound();
       // Never replace a previous uncertain request with a newer local snapshot.
-      if(old != null) return DedaProgressBackupIntent.decode(old,accountKey);
+      if(old != null) {
+        final pending = DedaProgressBackupIntent.decode(old,accountKey);
+        if(requireNonEmptyEvidence && !pending.capture.hasAnyLocalRecord) {
+          throw const DedaProgressEvidenceMissing();
+        }
+        return pending;
+      }
       final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
+      // The cross-device recovery pilot must never store an empty archive
+      // and call it a confirmed backup. A new/blank account may use the
+      // ordinary backup lane, but cannot pass the migration readiness gate.
+      if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord) {
+        throw const DedaProgressEvidenceMissing();
+      }
       final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
       final intent=DedaProgressBackupIntent(captureId:captureId,capture:capture,
         purchaseCapture:purchaseCapture,purchaseCaptureObserved:purchaseReader!=null,
