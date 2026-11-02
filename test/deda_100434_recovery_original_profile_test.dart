@@ -28,6 +28,7 @@ void main() {
       type: role == 'placeOwner' ? DedaAccountType.placeOwner
           : DedaAccountType.user,
       verifiedCanonicalProfile: true,
+      verifiedOriginalUid: 'original_firebase_owner_uid',
     );
     final prefs = await SharedPreferences.getInstance();
     expect(DedaPreferences.userName, 'الاسم الحقيقي المؤكد');
@@ -35,6 +36,11 @@ void main() {
     expect(prefs.getString('deda_user_name_v1'), 'الاسم الحقيقي المؤكد');
     expect(prefs.getString('deda_account_type_v1'), 'placeOwner');
     expect(prefs.getString('deda_phone_v1'), '+9647712345678');
+    expect(prefs.getBool('deda_logged_in_v1'),true);
+    expect(prefs.getString('deda_step2_linked_verified_uid_v1'),
+      'original_firebase_owner_uid');
+    expect(prefs.getString('deda_step2_linked_verified_account_v1'),
+      '9647712345678');
   });
 
   test('Recovered name comes from scoped server profile, never a typed alias', () {
