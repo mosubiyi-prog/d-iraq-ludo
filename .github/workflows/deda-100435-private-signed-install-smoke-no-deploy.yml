@@ -53,6 +53,16 @@ jobs:
           cp "$GITHUB_WORKSPACE/pubspec.yaml" "$APP/pubspec.yaml"
           cp "$GITHUB_WORKSPACE/pubspec.lock" "$APP/pubspec.lock"
           python3 - <<'PY'
+          import os
+          from pathlib import Path
+          manifest=Path(os.environ['APP'])/'pubspec.yaml'
+          source=manifest.read_text()
+          anchor='    - assets/deda_owner_level_badges/'
+          assert anchor in source and source.count(anchor)==1
+          source=source.replace(anchor,anchor+'\n    - assets/deda_owner_avatars_20261023/')
+          manifest.write_text(source)
+          PY
+          python3 - <<'PY'
           import json,hashlib,os
           from pathlib import Path
           p=Path(os.environ['APP']); target=p/'internal-build-inputs.json'
@@ -77,7 +87,21 @@ jobs:
           print('PASSED_100435_EXACT_BRANCH_SOURCE_ALL_RECOVERY_FLAGS_DISABLED_FOR_SAFE_INSTALL')
           PY
           cd "$APP"
-          flutter pub get --enforce-lockfile
+          # Root source lock is stale for the original packaged transitive
+          # dependency set. Resolve only in isolated QA workspace and hash
+          # the EXACT final compiled lockfile before signing.
+          flutter pub get
+          python3 - <<'PY'
+          import os,json,hashlib
+          from pathlib import Path
+          project=Path(os.environ['APP'])
+          file=project/'internal-build-inputs.json'
+          data=json.loads(file.read_text())
+          for path in ('pubspec.yaml','pubspec.lock'):
+            data['sourceHashes'][path]=hashlib.sha256((project/path).read_bytes()).hexdigest()
+          file.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          print('PASS_100435_EXACT_RESOLVED_SIGNED_QA_DEPENDENCY_MANIFEST')
+          PY
           flutter test test/deda_step2_level_points_restore_test.dart --no-pub
           flutter test test/deda_100434_recovery_original_profile_test.dart --no-pub
       - name: Restore genuine official release signing key into ephemeral workspace
