@@ -29,6 +29,8 @@ import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_original_backup_readback.dart';
 import 'deda_step2_purchase_backup_readback.dart';
+import 'deda_step2_assets_readback.dart';
+import 'deda_weekly_firestore_direct_bridge_100406.dart' as dedaWeekly;
 import 'deda_step2_linked_published_place_recovery.dart';
 import 'deda_step2_owner_place_draft_hydration.dart';
 import 'deda_daily_published_tasks.dart';
@@ -2168,6 +2170,31 @@ class _LoginPageState extends State<LoginPage> {
       );
       if (!mounted) {
         throw StateError('recovery-login-page-disposed-during-profile-proof');
+      }
+      // Private QA: use the existing immutable-ID server account sources
+      // before accepting this phone as the original owner. This is a READ
+      // check, never an XP/diamond/frame credit or a second wallet. Source
+      // gaps remain unresolved rather than treating a missing value as zero.
+      if (dedaStep2AssetsReadbackEnabled) {
+        final key = DedaPinAuth.accountKeyForPhone(phone);
+        final weeklyId = dedaWeekly.DedaWeeklyFirestoreDirectBridge
+            .week(DateTime.now().toUtc()).id;
+        final assets = await DedaStep2AssetsReadback.firebase().inspect(
+          accountKey: key, originalId: originalId,
+          originalUid: originalUid, weekId: weeklyId,
+          isCurrent: () => mounted &&
+              FirebaseAuth.instance.currentUser?.uid == originalUid &&
+              FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+              FirebaseAuth.instance.currentUser?.email ==
+                  DedaOwnerUidContinuity.authEmail(phone),
+        );
+        if (assets.originalUid != originalUid ||
+            assets.originalId != originalId ||
+            assets.accountName != originalProfile.name ||
+            assets.accountType != originalProfile.accountType ||
+            assets.fullAccountRestored || assets.canRestoreDiamonds) {
+          throw StateError('linked-original-core-sources-not-matched');
+        }
       }
       // Private QA only. Before marking this linked login locally, restore
       // FREE, per-account avatar/background values already archived by the
