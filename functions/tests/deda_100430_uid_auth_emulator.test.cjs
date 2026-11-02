@@ -5,7 +5,7 @@ const {createRequire}=require("node:module");
 const req=createRequire(path.resolve(__dirname,"../package.json"));
 const {initializeApp,deleteApp}=req("firebase/app");
 const {getAuth,connectAuthEmulator,signInAnonymously,linkWithCredential,
-       EmailAuthProvider,signOut,signInWithEmailAndPassword}=req("firebase/auth");
+       EmailAuthProvider,signOut,signInWithEmailAndPassword,updatePassword}=req("firebase/auth");
 
 const PROJECT="demo-deda-100430-uid-continuity";
 if(process.env.GCLOUD_PROJECT!==PROJECT||
@@ -80,6 +80,35 @@ test("backend identity preserves UID while display premium-ID remains separate s
  // Never use a mutable premium alias to derive the account's auth email.
  assert.equal(e,"07712300005@deda-login.invalid");
 });
+// Regression: a Firestore-only admin recovery PIN write cannot change the
+// password-provider credential for this ORIGINAL Firebase UID. A new PIN
+// must not be advertised as a working replacement-phone login until Auth
+// password and legacy credential are both updated by a secure server flow.
+test("Firestore-only PIN reissue leaves Auth password unchanged and new phone blocked",async()=>{
+ const original=client(),replacement=client();
+ const owner=(await signInAnonymously(original)).user;
+ const uid=owner.uid,e=email(6);
+ await linkWithCredential(owner,EmailAuthProvider.credential(e,pin));
+ const firestoreOnlyPin="835426";
+ await assert.rejects(signInWithEmailAndPassword(replacement,e,firestoreOnlyPin));
+ assert.equal(replacement.currentUser,null);
+ assert.equal(original.currentUser.uid,uid);
+ assert.equal((await signInWithEmailAndPassword(replacement,e,pin)).user.uid,uid);
+});
+
+test("changing password on original authenticated UID preserves full account identity",async()=>{
+ const original=client(),replacement=client();
+ const owner=(await signInAnonymously(original)).user;
+ const uid=owner.uid,e=email(7),newPin="826315";
+ await linkWithCredential(owner,EmailAuthProvider.credential(e,pin));
+ await updatePassword(original.currentUser,newPin);
+ assert.equal(original.currentUser.uid,uid);
+ await assert.rejects(signInWithEmailAndPassword(replacement,e,pin));
+ const result=await signInWithEmailAndPassword(replacement,e,newPin);
+ assert.equal(result.user.uid,uid);
+ assert.equal(original.currentUser.uid,uid);
+});
+
 test("exact existing Dart phone PIN email domain and no data-cutover are preserved",()=>{
  const source=fs.readFileSync(path.resolve(__dirname,"../../lib/deda_pin_auth.dart"),"utf8");
  const stage=fs.readFileSync(path.resolve(__dirname,"../../lib/deda_100430_owner_uid_continuity.dart"),"utf8");
