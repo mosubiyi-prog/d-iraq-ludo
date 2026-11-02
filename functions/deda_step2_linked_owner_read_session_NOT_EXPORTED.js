@@ -80,7 +80,8 @@ async function withLinkedOwnerReadSession({store,auth,idToken},work){
         snap.size!==snap.docs.length||snap.docs.length>200)
        fail('step2-linked-history-unbounded-or-incomplete');
      return Object.freeze(snap.docs.map(doc=>{
-       if(!doc||typeof doc.id!=='string'||!id(doc.id)||
+       if(!doc||typeof doc.id!=='string'||
+          !/^@DEDA-[A-Z0-9]{4,12}$/.test(doc.id)||
           typeof doc.data!=='function')
          fail('step2-linked-history-doc-invalid');
        return Object.freeze({id:doc.id,data:doc.data()});
