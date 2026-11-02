@@ -840,9 +840,12 @@ class DedaPreferences {
     // the ordinary login action would erase the saved original UID proof and
     // reopen a local profile without the owner's Firebase credential.
     // Production 100340 compatibility remains unchanged (pilot flag false).
-    if (dedaLinkedOwnerCompatEnabled && !verifiedCanonicalProfile &&
-        (prefs.containsKey(_linkedVerifiedUidKey) ||
-            prefs.containsKey(_linkedVerifiedAccountKey))) {
+    if (!verifiedCanonicalProfile &&
+        !DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
+          linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+          hasStoredOriginalUid: prefs.containsKey(_linkedVerifiedUidKey),
+          hasStoredAccountKey: prefs.containsKey(_linkedVerifiedAccountKey),
+        )) {
       throw StateError('linked-owner-requires-verified-login-or-logout');
     }
     final previousPhone = prefs.getString(_phoneKey) ?? '';
