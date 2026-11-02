@@ -7,6 +7,7 @@ import 'deda_verified_active_id_store.dart';
 import 'deda_weekly_community_outbox.dart';
 import 'deda_weekly_league_clock.dart';
 import 'deda_qa32_spark_public_identifier_directory.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
 
 /// Same original +20 XP -> direct Firestore score; no Functions, money or XP grants.
 class DedaWeeklyFirestoreDirectBridge {
@@ -33,22 +34,44 @@ class DedaWeeklyFirestoreDirectBridge {
       close: start.add(const Duration(days: 6, hours: 18)));
   }
 
+  // Linked account access is READ-ONLY. Claim writers still require the
+  // original anonymous session; never reissue a week claim on phone change.
+  static bool mayInspectOriginalWeek({
+    required bool anonymous,
+    required bool readOnlyLinked,
+    required bool linkedOwnerVerified,
+  }) => anonymous || (readOnlyLinked && linkedOwnerVerified);
+
   static Future<({String uid, String id, String name})?> identity(
-      String accountKey) async {
+      String accountKey, {bool allowLinkedReadOnly = false}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (!accountPattern.hasMatch(accountKey) || user == null ||
-        !user.isAnonymous) return null;
+    if (!accountPattern.hasMatch(accountKey) || user == null) return null;
     final uid = user.uid;
-    final sess = await db.collection('deda_sessions').doc(uid).get();
-    if (sess.data()?['accountKey'] != accountKey) return null;
-    final doc = await db.collection('users').doc(uid).get();
+    final linkedVerified = !user.isAnonymous && allowLinkedReadOnly &&
+        dedaLinkedOwnerCompatEnabled &&
+        await DedaLinkedOwnerSessionPolicy.verified(user, accountKey);
+    if (!mayInspectOriginalWeek(
+        anonymous: user.isAnonymous,
+        readOnlyLinked: allowLinkedReadOnly,
+        linkedOwnerVerified: linkedVerified)) return null;
+    if (FirebaseAuth.instance.currentUser?.uid != uid) return null;
+    final sess = await db.collection('deda_sessions').doc(uid)
+        .get(const GetOptions(source: Source.server));
+    if (sess.metadata.isFromCache || sess.metadata.hasPendingWrites ||
+        sess.data()?['uid'] != uid ||
+        sess.data()?['accountKey'] != accountKey) return null;
+    final doc = await db.collection('users').doc(uid)
+        .get(const GetOptions(source: Source.server));
+    if (doc.metadata.isFromCache || doc.metadata.hasPendingWrites) return null;
     final data = doc.data();
     if (data == null || data['accountKey'] != accountKey) return null;
     final id = data['sharePersonalId'];
     if (id is! String || !idPattern.hasMatch(id)) return null;
     var name = (data['name'] is String ? data['name'] as String : '').trim();
     if (name.length < 2 || name.length > 60 || name.contains('@')) {
-      final p = await db.collection('deda_account_profiles').doc(accountKey).get();
+      final p = await db.collection('deda_account_profiles').doc(accountKey)
+          .get(const GetOptions(source: Source.server));
+      if (p.metadata.isFromCache || p.metadata.hasPendingWrites) return null;
       name = (p.data()?['name'] is String ? p.data()!['name'] as String : '').trim();
     }
     if (name.length < 2 || name.length > 60 || name.contains('@')) {
@@ -143,14 +166,15 @@ class DedaWeeklyFirestoreDirectBridge {
     required String accountKey, required bool Function() sameViewer,
   }) async {
     if (!sameViewer()) throw StateError('league-account-switched');
-    final me = await identity(accountKey);
+    final me = await identity(accountKey, allowLinkedReadOnly: true);
     if (me == null || !sameViewer()) throw StateError('league-account-missing');
     // Do not block first standings paint on up to eight server transactions.
     // A confirmed old-task retry updates the standings once completed, with
     // no fabricated XP or changed awards. The journal serializes duplicate
     // sends and only replays existing same-week authenticated task receipts.
     final retryKey = '${me.uid}|$accountKey';
-    if (_retrying.add(retryKey)) {
+    if (FirebaseAuth.instance.currentUser?.isAnonymous == true &&
+        _retrying.add(retryKey)) {
       unawaited(DedaWeeklyCommunityOutbox.retry(
         accountKey: accountKey, uid: me.uid, limit: 8,
         send: (task, day) => _send(accountKey, me.uid, task, day),
