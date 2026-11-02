@@ -7,6 +7,7 @@ on:
       - 'lib/main.dart'
       - 'lib/deda_100433_owner_confirmation_ui.dart'
       - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'functions/tests/deda_100430_uid_auth_emulator.test.cjs'
       - 'lib/deda_step2_before_uid_link_evidence_checkpoint.dart'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'lib/deda_step2_original_backup_readback.dart'
