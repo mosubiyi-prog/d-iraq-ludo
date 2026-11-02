@@ -79,6 +79,7 @@ class DedaStep2OriginalSourceContinuity {
       accountKey: accountKey,
       captureId: captureId ?? newCaptureId(),
       isCurrent: isCurrent,
+      requireNonEmptyEvidence: true,
     );
     check();
     if (intent.sourceUid != originalUid ||
