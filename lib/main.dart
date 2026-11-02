@@ -26,6 +26,8 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
+import 'deda_step2_original_backup_readback.dart';
+import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_linked_published_place_recovery.dart';
 import 'deda_step2_owner_place_draft_hydration.dart';
 import 'deda_daily_published_tasks.dart';
@@ -2180,6 +2182,30 @@ class _LoginPageState extends State<LoginPage> {
               FirebaseAuth.instance.currentUser?.uid == originalUid &&
               FirebaseAuth.instance.currentUser?.email ==
                   DedaOwnerUidContinuity.authEmail(phone),
+        );
+      }
+      // Private, separately gated original-phone source PAIR check:
+      // evidence from the original progress and purchase snapshots must
+      // share one capture ID, one UID and one original install. A downloaded
+      // local purchase JSON is NOT entitlement or a spendable balance.
+      // This does not change any user's login UI, account balance or store.
+      if (dedaStep2PurchaseSourceReadbackEnabled) {
+        final verifiedAccount = DedaPinAuth.accountKeyForPhone(phone);
+        final isOriginalAccount = () => mounted &&
+            FirebaseAuth.instance.currentUser?.uid == originalUid &&
+            FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+            FirebaseAuth.instance.currentUser?.email ==
+                DedaOwnerUidContinuity.authEmail(phone);
+        final progress = await DedaStep2OriginalBackupReadback.firebase()
+            .readOriginalEvidence(
+          accountKey: verifiedAccount, originalUid: originalUid,
+          isCurrent: isOriginalAccount,
+        );
+        await DedaStep2PurchaseSourceReadback.firebase()
+            .inspectPairedWithProgress(
+          accountKey: verifiedAccount, originalId: originalId,
+          originalUid: originalUid, progress: progress,
+          isCurrent: isOriginalAccount,
         );
       }
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
