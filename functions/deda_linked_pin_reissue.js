@@ -100,7 +100,7 @@ async function finishStagedReset(db, auth, requestId) {
   const requestSnap = await reqRef.get();
   const req = requestSnap.data();
   if (!req) throw Error("recovery-request-missing");
-  if (req.status === "ready") return {status:"ready"};
+  if (req.status === "ready") return {status:"ready",linkedUidPreserved:true};
   if (req.status !== "issuing" || !req.approvedBy) {
     throw Error("recovery-not-approved-for-issuance");
   }
