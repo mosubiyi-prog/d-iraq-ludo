@@ -62,7 +62,7 @@ function inspectProgressCapture(raw,accountKey,originalUid,expectedCaptureId){
   allThreePresent:PARTS.every(p=>parts[p]==='captured-local-untrusted')});
 }
 function inspectPurchaseCapture(raw,accountKey,originalId,originalUid,expectedId,progressId,installId){
- if(raw===null)return Object.freeze({status:'old-purchase-journal-unknown',pending:0,paid:0});
+ if(raw===null)return Object.freeze({status:'old-purchase-journal-unknown',pending:null,paid:null,journalStates:null});
  if(!isMap(raw)||raw.format!==1||raw.kind!=='legacy-purchase-evidence'||
     raw.accountKey!==accountKey||raw.sourceUid!==originalUid||
     raw.captureId!==expectedId||!CAPTURE.test(expectedId)||
@@ -82,17 +82,83 @@ function inspectPurchaseCapture(raw,accountKey,originalId,originalUid,expectedId
     !FRAMES.every(frame=>Object.hasOwn(snapshot.frameJournals,frame)))
     stop('step2-legacy-purchase-journal-conflict');
  let pending=0,paid=0;
+ const journalStates={};
  for(const frame of FRAMES){
   const value=snapshot.frameJournals[frame];
-  if(value==='charging')pending++;
-  else if(value==='paid')paid++;
-  else if(value!==null)stop('step2-legacy-purchase-journal-ambiguous');
+  if(value==='charging'){pending++;journalStates[frame]='charging-recorded';}
+  else if(value==='paid'){paid++;journalStates[frame]='paid-recorded';}
+  else if(value===null)journalStates[frame]='not-recorded-on-original-phone';
+  else stop('step2-legacy-purchase-journal-ambiguous');
  }
  if(snapshot.inventory!==null&&typeof snapshot.inventory!=='string'&&
     !Array.isArray(snapshot.inventory))stop('step2-legacy-inventory-invalid');
  return Object.freeze({status:'captured-purchase-journal-not-payment-proof',
-  pending,paid,inventoryRecorded:snapshot.inventory!==null});
+  pending,paid,inventoryRecorded:snapshot.inventory!==null,journalStates:Object.freeze(journalStates)});
 }
+
+function inspectNativeFrameState(native,originalId){
+ if(native===null)return Object.freeze({status:'native-row-unknown',
+   pendingFrames:null,ownedFrames:null,unknownFrameIds:Object.freeze([])});
+ if(!isMap(native)||native.originalId!==originalId)
+   stop('step2-legacy-native-owner-conflict');
+ function read(name){
+  if(!Object.hasOwn(native,name))return null;
+  const value=native[name];
+  if(!Array.isArray(value)||value.some(x=>typeof x!=='string')||
+     new Set(value).size!==value.length)
+    stop('step2-legacy-native-frames-invalid');
+  return Object.freeze([...value]);
+ }
+ const pendingFrames=read('pendingFrames'),ownedFrames=read('ownedFrames');
+ const unknownFrameIds=Object.freeze(
+   [...new Set([...(pendingFrames||[]),...(ownedFrames||[])])]
+     .filter(frame=>!FRAMES.includes(frame)).sort());
+ return Object.freeze({status:'native-account-row-untrusted',
+   pendingFrames,ownedFrames,unknownFrameIds});
+}
+async function auditLegacyFrameCrossSources(reader,originalId,purchase){
+ if(typeof reader?.get!=='function'||!ORIGINAL.test(originalId))
+   stop('step2-legacy-frame-audit-scope');
+ const native=inspectNativeFrameState(
+   await reader.get('deda_native_account_cosmetics/'+originalId),originalId);
+ const frameSources={},unverifiedLocalFrames=[],legacyChargingFrames=[];
+ let verifiedServerPairs=0;
+ for(const frame of FRAMES){
+   const receipt=await reader.get('deda_lab_frame_receipts/'+originalId+'/frames/'+frame);
+   const owned=await reader.get('deda_lab_owned_frames/'+originalId+'/frames/'+frame);
+   if((receipt===null)!==(owned===null))
+     stop('step2-legacy-frame-partial-server-pair');
+   const pair=receipt!==null;
+   if(pair){
+    if(!isMap(receipt)||!isMap(owned)||receipt.kind!=='lab_frame'||
+       receipt.publicId!==originalId||receipt.frameId!==frame||
+       receipt.cost!==1000||owned.publicId!==originalId||
+       owned.frameId!==frame||owned.receiptId!==originalId+'_'+frame)
+      stop('step2-legacy-frame-mismatched-server-pair');
+    verifiedServerPairs++;
+   }
+   const journal=purchase.journalStates?.[frame]??'old-phone-journal-unknown';
+   const nativePending=native.pendingFrames?.includes(frame)??null;
+   const nativeOwned=native.ownedFrames?.includes(frame)??null;
+   const oldPending=journal==='charging-recorded'||nativePending===true;
+   const oldRight=oldPending||journal==='paid-recorded'||nativeOwned===true;
+   if(oldPending)legacyChargingFrames.push(frame);
+   if(!pair&&oldRight)unverifiedLocalFrames.push(frame);
+   const classification=pair
+      ?(oldPending?'server-receipt-and-old-charge-pending-review':'server-pair-readonly-no-new-charge')
+      :(oldRight?'old-local-right-without-server-pair-review':'missing-server-pair-unknown');
+   frameSources[frame]=Object.freeze({classification,journal,nativePending,nativeOwned,
+     pairConfirmed:pair,canCreditOrCharge:false});
+ }
+ return Object.freeze({status:'FRAME_SOURCE_CROSSCHECK_READONLY_HOLD',
+   scannedFrames:FRAMES.length,verifiedServerPairs,
+   nativeSource:native,frameSources:Object.freeze(frameSources),
+   unverifiedLocalFrames:Object.freeze(unverifiedLocalFrames),
+   legacyChargingFrames:Object.freeze(legacyChargingFrames),
+   allPaidRightsRecovered:false,canGrantFrame:false,canChargeFrame:false,
+   canRefundFrame:false,allowPhoneCutover:false});
+}
+
 /**
  * All server-side paths derive from verified original UID/account/ID, inside
  * a single read-only transaction. Archive selectors come from reviewed server
@@ -165,6 +231,7 @@ async function inspectLegacy340FinancialLineage({reader,accountKey,originalUid,o
       stop('step2-legacy-gift-wallet-owner-or-amount-conflict');
   giftWallet='independent-gift-wallet-observed-no-double-credit';
  }
+ const frameCrosscheck=await auditLegacyFrameCrossSources(reader,originalId,purchase);
  const state=await reader.get('deda_verified_progress/'+accountKey);
  if(state!==null&&phase!=='cutover-complete')
   stop('step2-legacy-premature-verified-state-conflict');
@@ -172,7 +239,7 @@ async function inspectLegacy340FinancialLineage({reader,accountKey,originalUid,o
   stop('step2-legacy-completed-verified-state-missing');
  return Object.freeze({status:'LEGACY_100340_FINANCIAL_LINEAGE_READONLY_HOLD',
    migrationPhase:phase,progressSource:progress,purchaseSource:purchase,
-   giftWalletSource:giftWallet,verifiedProgressDocumentObserved:state!==null,
+   giftWalletSource:giftWallet,frameCrosscheck,verifiedProgressDocumentObserved:state!==null,
    sourceReviewAndLegacyWriterFenceProven:false,
    allHistoricalSpendsAndRefundsReconciled:false,
    allTwentyThreeDomainsRestored:false,
@@ -187,5 +254,5 @@ async function previewLegacy340FinancialLineage({store,auth,idToken}){
    (reader,key,owner)=>inspectLegacy340FinancialLineage({reader,
       accountKey:key,originalUid:owner.uid,originalId:owner.originalId}));
 }
-module.exports={inspectProgressCapture,inspectPurchaseCapture,
- inspectLegacy340FinancialLineage,previewLegacy340FinancialLineage};
+module.exports={inspectProgressCapture,inspectPurchaseCapture,inspectNativeFrameState,
+ auditLegacyFrameCrossSources,inspectLegacy340FinancialLineage,previewLegacy340FinancialLineage};

@@ -49,7 +49,7 @@ test('old account without migration is UNKNOWN, not zero balance',async()=>{
  assert.equal(r.progressSource.status,'migration-not-started-unknown');
  assert.equal(r.giftWalletSource,'not-found-unknown-not-zero');
  assert.equal(r.canCreditDiamonds,false);assert.equal(r.allowPhoneCutover,false);
- assert.equal(f.reads.length,3);
+ assert.equal(f.reads.length,30);
 });
 test('gift wallet is independent and never added to local earnings',async()=>{
  const f=fixture();f.docs.set('deda_diamond_gift_balances/'+id,{publicId:id,balance:250});
@@ -162,4 +162,103 @@ test('financial scanner never writes or changes old account documents',async()=>
  const f=fixture();f.settlement();await f.run();
  assert.equal(f.reads.some(p=>p.includes('deda_purchase_evidence/')),true);
  assert.equal(typeof f.reader.set,'undefined');
+});
+
+test('missing old purchase journal is UNKNOWN not zero counted charges',async()=>{
+ const f=fixture(),r=await f.run();
+ assert.equal(r.purchaseSource.paid,null);assert.equal(r.purchaseSource.pending,null);
+ assert.equal(r.frameCrosscheck.scannedFrames,13);
+ assert.equal(r.frameCrosscheck.allPaidRightsRecovered,false);
+});
+test('valid server pair confirms observation but never grants or charges',async()=>{
+ const f=fixture();f.docs.set('deda_lab_frame_receipts/'+id+'/frames/FRAME_03',
+  {kind:'lab_frame',publicId:id,frameId:'FRAME_03',cost:1000});
+ f.docs.set('deda_lab_owned_frames/'+id+'/frames/FRAME_03',
+  {publicId:id,frameId:'FRAME_03',receiptId:id+'_FRAME_03'});
+ const r=await f.run();assert.equal(r.frameCrosscheck.verifiedServerPairs,1);
+ assert.equal(r.frameCrosscheck.canGrantFrame,false);
+ assert.equal(r.frameCrosscheck.frameSources.FRAME_03.pairConfirmed,true);
+});
+test('old paid journal with missing server pair becomes review, not new purchase',async()=>{
+ const f=fixture(),p=f.settlement();p.snapshot.frameJournals.FRAME_03='paid';
+ p.purchase.records.localSnapshot=JSON.stringify(p.snapshot);
+ const r=await f.run();
+ assert.deepEqual(r.frameCrosscheck.unverifiedLocalFrames,['FRAME_03']);
+ assert.equal(r.frameCrosscheck.frameSources.FRAME_03.classification,
+   'old-local-right-without-server-pair-review');
+ assert.equal(r.frameCrosscheck.canChargeFrame,false);
+});
+test('pending charge with server pair remains review rather than refund',async()=>{
+ const f=fixture(),p=f.settlement();p.snapshot.frameJournals.FRAME_03='charging';
+ p.purchase.records.localSnapshot=JSON.stringify(p.snapshot);
+ f.docs.set('deda_lab_frame_receipts/'+id+'/frames/FRAME_03',
+  {kind:'lab_frame',publicId:id,frameId:'FRAME_03',cost:1000});
+ f.docs.set('deda_lab_owned_frames/'+id+'/frames/FRAME_03',
+  {publicId:id,frameId:'FRAME_03',receiptId:id+'_FRAME_03'});
+ const r=await f.run();
+ assert.deepEqual(r.frameCrosscheck.legacyChargingFrames,['FRAME_03']);
+ assert.equal(r.frameCrosscheck.frameSources.FRAME_03.classification,
+   'server-receipt-and-old-charge-pending-review');
+ assert.equal(r.frameCrosscheck.canRefundFrame,false);
+});
+test('native-owned without matching server pair is still an unresolved right',async()=>{
+ const f=fixture();f.docs.set('deda_native_account_cosmetics/'+id,
+ {originalId:id,pendingFrames:['FRAME_03'],ownedFrames:['FRAME_05']});
+ const r=await f.run();
+ assert.deepEqual(r.frameCrosscheck.unverifiedLocalFrames,['FRAME_03','FRAME_05']);
+ assert.deepEqual(r.frameCrosscheck.legacyChargingFrames,['FRAME_03']);
+});
+test('missing native cosmetics is not equivalent to empty ownership',async()=>{
+ const f=fixture(),r=await f.run();
+ assert.equal(r.frameCrosscheck.nativeSource.status,'native-row-unknown');
+ assert.equal(r.frameCrosscheck.frameSources.FRAME_03.nativeOwned,null);
+});
+test('native claims for foreign original owner block entire audit',async()=>{
+ const f=fixture();f.docs.set('deda_native_account_cosmetics/'+id,
+ {originalId:'@DEDA-OTHER1',pendingFrames:[],ownedFrames:[]});
+ await reject(f.run(),'step2-legacy-native-owner-conflict');
+});
+test('duplicate and malformed native frame arrays fail closed',async()=>{
+ for(const patch of [{pendingFrames:['FRAME_03','FRAME_03']},
+  {pendingFrames:'FRAME_03'},{ownedFrames:[12]}]){
+  const f=fixture();f.docs.set('deda_native_account_cosmetics/'+id,
+   {originalId:id,pendingFrames:[],ownedFrames:[],...patch});
+  await reject(f.run(),'step2-legacy-native-frames-invalid');
+ }
+});
+test('unknown native future style stays listed for review, never dropped',async()=>{
+ const f=fixture();f.docs.set('deda_native_account_cosmetics/'+id,
+ {originalId:id,pendingFrames:[],ownedFrames:['FRAME_FUTURE']});
+ const r=await f.run();
+ assert.deepEqual(r.frameCrosscheck.nativeSource.unknownFrameIds,['FRAME_FUTURE']);
+ assert.equal(r.frameCrosscheck.allPaidRightsRecovered,false);
+});
+test('half server receipt pair cannot impersonate frame ownership',async()=>{
+ for(const part of ['receipt','owned']){
+  const f=fixture();
+  if(part==='receipt')f.docs.set('deda_lab_frame_receipts/'+id+'/frames/FRAME_03',
+   {kind:'lab_frame',publicId:id,frameId:'FRAME_03',cost:1000});
+  else f.docs.set('deda_lab_owned_frames/'+id+'/frames/FRAME_03',
+   {publicId:id,frameId:'FRAME_03',receiptId:id+'_FRAME_03'});
+  await reject(f.run(),'step2-legacy-frame-partial-server-pair');
+ }
+});
+test('modified server price, owner or receipt ID blocks frame audit',async()=>{
+ for(const scenario of ['price','owner','receipt']){
+  const f=fixture(),rp='deda_lab_frame_receipts/'+id+'/frames/FRAME_03',
+   op='deda_lab_owned_frames/'+id+'/frames/FRAME_03';
+  f.docs.set(rp,{kind:'lab_frame',publicId:id,frameId:'FRAME_03',
+   cost:scenario==='price'?1:1000});
+  f.docs.set(op,{publicId:scenario==='owner'?'@DEDA-OTHER1':id,
+   frameId:'FRAME_03',receiptId:scenario==='receipt'?'forged':id+'_FRAME_03'});
+  await reject(f.run(),'step2-legacy-frame-mismatched-server-pair');
+ }
+});
+test('local pending plus owned on old client never authorizes cutover',async()=>{
+ const f=fixture();f.docs.set('deda_native_account_cosmetics/'+id,
+ {originalId:id,pendingFrames:['FRAME_03'],ownedFrames:['FRAME_03']});
+ const r=await f.run();assert.equal(r.frameCrosscheck.allowPhoneCutover,false);
+ assert.equal(r.frameCrosscheck.canRefundFrame,false);
+ assert.equal(r.frameCrosscheck.frameSources.FRAME_03.classification,
+   'old-local-right-without-server-pair-review');
 });
