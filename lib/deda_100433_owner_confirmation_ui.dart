@@ -154,17 +154,33 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     return true;
   }
 
+  /// Remember the already-linked original UID on the ORIGINAL phone too.
+  /// Without this, its next cold start could trust an old local profile after
+  /// Firebase Auth switched to a different user. An uncertain preference
+  /// write is retryable without attempting linkWithCredential() again.
+  Future<void> _rememberLinkedOriginalUid(String uid) async {
+    if (!dedaLinkedOwnerCompatEnabled || widget.confirm != null) return;
+    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
+      phone: widget.phone, originalId: widget.originalId,
+      expectedUid: uid,
+    );
+    await DedaLinkedOwnerSessionPolicy.rememberConfirmedOriginalUid(
+      accountKey: account, uid: uid,
+      isCurrent: () => mounted &&
+          FirebaseAuth.instance.currentUser?.uid == uid &&
+          FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+          FirebaseAuth.instance.currentUser?.email ==
+              DedaLinkedOwnerSessionPolicy.ownerEmail(account),
+    );
+  }
+
   Future<void> _submit() async {
     if (_running) return;
-    // A user whose ORIGINAL UID was already linked can retry the previously
-    // frozen place-source upload without entering or retaining the PIN again.
-    // This is necessary after a lost network acknowledgement: linking is
-    // intentionally not attempted a second time.
-    // The default widget/test build must not access Firebase Auth before
-    // Firebase.initializeApp(). Only the explicitly enabled private pilot
-    // may check an existing linked session to retry place evidence.
-    if (dedaStep2OwnerPlaceLocalArchiveEnabled &&
-        dedaLinkedOwnerCompatEnabled) {
+    // After a lost acknowledgement, the SAME already-linked UID can retry
+    // local provenance and any optional place archive without re-linking PIN.
+    // Ordinary/test builds never touch Firebase here unless pilot is enabled.
+    if (dedaLinkedOwnerCompatEnabled && widget.confirm == null) {
       final existingUser = FirebaseAuth.instance.currentUser;
       final account = DedaPinAuth.accountKeyForPhone(widget.phone);
       if (existingUser != null && !existingUser.isAnonymous &&
@@ -172,20 +188,26 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
               DedaLinkedOwnerSessionPolicy.ownerEmail(account)) {
       setState(() => _running = true);
       try {
-        final archived = await _archiveLinkedOriginalPlace(existingUser.uid);
+        await _rememberLinkedOriginalUid(existingUser.uid);
+        final archived = dedaStep2OwnerPlaceLocalArchiveEnabled
+            ? await _archiveLinkedOriginalPlace(existingUser.uid)
+            : false;
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(archived
-            ? 'تم تأكيد حفظ مصدر إدارة المكان على Firebase. '
+            ? 'تم تأكيد ربط الحساب وحفظ مصدر إدارة المكان على Firebase. '
               'احتفظ بالهاتف الأصلي لحين فحص جميع البيانات.'
-            : 'الحساب الأصلي مؤكد، لكن لا توجد بيانات مكان محلية لنقلها. '
-              'لا تحذف التطبيق قبل فحص الاسترجاع.'),
+            : dedaStep2OwnerPlaceLocalArchiveEnabled
+              ? 'تم تأكيد الحساب الأصلي، ولا توجد بيانات مكان محلية لنقلها. '
+                'لا تحذف التطبيق قبل فحص الاسترجاع.'
+              : 'تم تثبيت ارتباط الحساب الأصلي على هذا الهاتف. '
+                'احتفظ به حتى التأكد من استرجاع جميع البيانات.'),
         ));
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('الحساب الأصلي ما زال مرتبطاً، '
-              'لكن حفظ المكان لم يتأكد. أعد المحاولة عند توفر الإنترنت.'),
+          content: Text('ارتباط الحساب الأصلي لم يكتمل توثيقه محلياً '
+              'أو لم يتأكد حفظ المكان. أعد المحاولة ولا تحذف بيانات الهاتف.'),
         ));
       } finally {
         if (mounted) setState(() => _running = false);
@@ -232,6 +254,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       final uid = await confirmed(widget.phone,pin,widget.originalId);
       if (!mounted) return;
       if (uid.isEmpty) throw StateError('owner-link-failed');
+      await _rememberLinkedOriginalUid(uid);
       // PRIVATE QA ONLY. The original place archive requires a *linked*
       // (nonanonymous) owner UID, so it must run AFTER successful UID
       // linking, never before. A backup failure must not falsely claim
