@@ -36,6 +36,36 @@ void main() {
     expect(DedaLinkedOwnerSessionPolicy.emailMatches(
       '$phone@deda-login.invalid',''),false);
   });
+  test('verified new-phone boot permits ONLY original UID + exact account + password email',(){
+    const linkedAccount = '9647712345678';
+    const originalUid = 'original_firebase_owner_uid';
+    const email = '$linkedAccount@deda-login.invalid';
+    bool resume({
+      String? uid = originalUid,
+      String? account = linkedAccount,
+      String phone = '+9647712345678',
+      String? liveUid = originalUid,
+      String? liveEmail = email,
+      bool anonymous = false,
+    }) => DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
+      savedOriginalUid:uid,savedAccountKey:account,
+      localPhone:phone,currentUid:liveUid,currentEmail:liveEmail,
+      currentIsAnonymous:anonymous,
+    );
+    expect(resume(),true);
+    expect(resume(liveUid:'new-device-anonymous'),false);
+    expect(resume(liveUid:null),false);
+    expect(resume(anonymous:true),false);
+    expect(resume(liveEmail:'administrator@deda-login.invalid'),false);
+    expect(resume(liveEmail:null),false);
+    expect(resume(account:'9647000000000'),false);
+    expect(resume(phone:'+9647900000000'),false);
+    expect(resume(uid:null),false);
+    expect(resume(uid:''),false);
+    expect(resume(account:null),false);
+    expect(resume(account:''),false);
+  });
+
   test('All original owner, old UID, personal ID and account documents match',(){
     expect(check(),true);
   });
