@@ -2035,6 +2035,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted || pin == null) return;
     setState(() => _confirmedSignInBusy = true);
     String? recoveredUid;
+    var startedLocalCommit = false;
     try {
       final originalId = DedaBackend.personalShareIdForPhone(phone);
       final originalUid = await DedaOwnerUidContinuity.loginLinkedOriginalUid(
@@ -2065,6 +2066,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
         throw StateError('recovered-original-uid-lost-before-local-login');
       }
+      startedLocalCommit = true;
       await _completeVerifiedLogin(
         phone,
         verifiedName: originalProfile.name,
@@ -2078,9 +2080,15 @@ class _LoginPageState extends State<LoginPage> {
       // an authenticated recovered UID with an incomplete local account.
       // Never sign out a DIFFERENT account that won a concurrent auth change.
       if (recoveredUid != null) {
-        if (DedaPreferences.accountPhone == phone &&
+        if (startedLocalCommit &&
+            DedaPreferences.accountPhone == phone &&
             DedaPreferences.isLoggedIn) {
-          await DedaPreferences.logout();
+          try {
+            await DedaPreferences.logout();
+          } catch (_) {
+            // The failed login remains on this screen, not HomePage.
+            DedaPreferences.isLoggedIn = false;
+          }
         }
         if (FirebaseAuth.instance.currentUser?.uid == recoveredUid) {
           try {
