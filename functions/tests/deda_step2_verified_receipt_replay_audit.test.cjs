@@ -115,5 +115,6 @@ test('baseline itself cannot be replayed',async()=>{
 });
 test('owner API refuses missing trusted server session dependencies',async()=>{
  await assert.rejects(previewReviewedReceiptForOwner({
-  store:{},auth:{},idToken:'mock',receiptId}),e=>e.code==='invalid-point-session-dependencies');
+  store:{},auth:{verifyIdToken:async()=>({uid:'untrusted',firebase:{sign_in_provider:'password'}})},
+  idToken:'mock',receiptId}),e=>e.code==='point-session-owner-sign-in-required');
 });
