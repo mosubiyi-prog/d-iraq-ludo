@@ -28,6 +28,7 @@ import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_original_backup_readback.dart';
+import 'deda_step2_level_points_restore.dart';
 import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_assets_readback.dart';
 import 'deda_weekly_firestore_direct_bridge_100406.dart' as dedaWeekly;
@@ -2234,6 +2235,26 @@ class _LoginPageState extends State<LoginPage> {
           accountKey: verifiedAccount, originalId: originalId,
           originalUid: originalUid, progress: progress,
           isCurrent: isOriginalAccount,
+        );
+      }
+      // FULL ORIGINAL LEVEL + POINTS, not a newly granted reward: replay
+      // only the old phone's exact archived task/award IDs into the existing
+      // local DedaTaskEngine key BEFORE setting a verified local login.
+      // A foreign UID, absent archive, conflicting local ledger or a stale
+      // auth session stops the entire account login, not just the restore.
+      if (dedaStep2LevelPointsRestoreEnabled) {
+        if (!dedaStep2OriginalEvidenceReadbackEnabled ||
+            !dedaLinkedOwnerCompatEnabled) {
+          throw StateError('level-restore-requires-original-evidence-proof');
+        }
+        final account = DedaPinAuth.accountKeyForPhone(phone);
+        await DedaStep2LevelPointsRestore.firebase().restoreOnVerifiedPhone(
+          accountKey: account, originalUid: originalUid,
+          isCurrent: () => mounted &&
+              FirebaseAuth.instance.currentUser?.uid == originalUid &&
+              FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+              FirebaseAuth.instance.currentUser?.email ==
+                  DedaOwnerUidContinuity.authEmail(phone),
         );
       }
       // PRIVATE QA, existing quiz-only cloud path: hydrate the current
