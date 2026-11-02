@@ -1726,6 +1726,8 @@ class _LoginPageState extends State<LoginPage> {
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
   DedaLanguage _language = DedaLanguageState.current;
+  // The private linked-owner login must not race a second login tap.
+  bool _confirmedSignInBusy = false;
 
   @override
   void initState() {
@@ -1946,10 +1948,19 @@ class _LoginPageState extends State<LoginPage> {
     String normalizedPhone, {
     String? verifiedName,
     DedaAccountType? verifiedType,
+    String? verifiedUid,
   }) async {
     if (!mounted) return;
     if ((verifiedName == null) != (verifiedType == null)) {
       throw StateError('incomplete-verified-owner-profile');
+    }
+    // The private new-phone path must still own the SAME original UID at
+    // the point local login state is written, never a previous phone's UID.
+    if (verifiedName != null &&
+        (verifiedUid == null || verifiedUid.isEmpty ||
+            FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
+            FirebaseAuth.instance.currentUser?.isAnonymous != false)) {
+      throw StateError('verified-original-uid-changed-before-login-commit');
     }
     final name = verifiedName ?? nameController.text.trim();
     if (name.length < 2) {
@@ -1972,6 +1983,13 @@ class _LoginPageState extends State<LoginPage> {
       type: type,
       verifiedCanonicalProfile: verifiedName != null,
     );
+    if (verifiedUid != null &&
+        FirebaseAuth.instance.currentUser?.uid != verifiedUid) {
+      // Do not leave the wrong profile marked logged in after a session
+      // switch during the await on SharedPreferences.
+      await DedaPreferences.logout();
+      throw StateError('verified-original-uid-changed-during-login-commit');
+    }
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -1995,6 +2013,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _signInToConfirmedAccount() async {
+    if (_confirmedSignInBusy) return;
     final phone = _normalizeIraqiPhone(phoneController.text);
     if (phone == null) {
       _showLoginMessage(
@@ -2014,11 +2033,14 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
     if (!mounted || pin == null) return;
+    setState(() => _confirmedSignInBusy = true);
+    String? recoveredUid;
     try {
       final originalId = DedaBackend.personalShareIdForPhone(phone);
       final originalUid = await DedaOwnerUidContinuity.loginLinkedOriginalUid(
         phone: phone, pin: pin, originalId: originalId,
       );
+      recoveredUid = originalUid;
       final originalProfile =
           await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
         phone: phone, originalId: originalId, expectedUid: originalUid,
@@ -2041,7 +2063,7 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != originalUid) {
-        return;
+        throw StateError('recovered-original-uid-lost-before-local-login');
       }
       await _completeVerifiedLogin(
         phone,
@@ -2049,12 +2071,31 @@ class _LoginPageState extends State<LoginPage> {
         verifiedType: originalProfile.accountType == 'placeOwner'
             ? DedaAccountType.placeOwner
             : DedaAccountType.user,
+        verifiedUid: originalUid,
       );
     } catch (_) {
+      // A downstream profile, visual-restore or disk failure must not leave
+      // an authenticated recovered UID with an incomplete local account.
+      // Never sign out a DIFFERENT account that won a concurrent auth change.
+      if (recoveredUid != null) {
+        if (DedaPreferences.accountPhone == phone &&
+            DedaPreferences.isLoggedIn) {
+          await DedaPreferences.logout();
+        }
+        if (FirebaseAuth.instance.currentUser?.uid == recoveredUid) {
+          try {
+            await FirebaseAuth.instance.signOut();
+          } catch (_) {
+            // Recovery has already failed closed; keep the user on login UI.
+          }
+        }
+      }
       _showLoginMessage(
         'تعذر تأكيد الحساب. لم يتم تغيير أو استرجاع أي رصيد.',
         'Confirmed account sign-in was not verified; no balance restored.',
       );
+    } finally {
+      if (mounted) setState(() => _confirmedSignInBusy = false);
     }
   }
 
@@ -2337,7 +2378,7 @@ class _LoginPageState extends State<LoginPage> {
                                 width: double.infinity,
                                 height: 56,
                                 child: FilledButton.icon(
-                                  onPressed: login,
+                                  onPressed: _confirmedSignInBusy ? null : login,
                                   style: FilledButton.styleFrom(
                                     backgroundColor: _dedaGreen,
                                     foregroundColor: Colors.white,
@@ -2363,7 +2404,8 @@ class _LoginPageState extends State<LoginPage> {
                                 const SizedBox(height: 8),
                                 OutlinedButton.icon(
                                   key: const ValueKey('deda-confirmed-account-login'),
-                                  onPressed: _signInToConfirmedAccount,
+                                  onPressed: _confirmedSignInBusy
+                                      ? null : _signInToConfirmedAccount,
                                   icon: const Icon(Icons.verified_user_outlined),
                                   label: Text(dedaText(
                                     'دخول الحساب المؤكّد',
