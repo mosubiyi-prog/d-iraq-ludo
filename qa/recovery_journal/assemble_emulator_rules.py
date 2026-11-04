@@ -65,6 +65,16 @@ new_tail = """              in get(/databases/$(database)/documents/deda_account
 if session_old.count(old_head) != 1 or session_old.count(old_tail) != 1:
     raise SystemExit("SAFE_STOP_SESSION_RULE_UNEXPECTED_SHAPE")
 patched_session = session_old.replace(old_head, new_head).replace(old_tail, new_tail)
+# Linked owner sign-out on one phone must NEVER delete the shared
+# original-UID session needed by other signed-in phones. The released
+# anonymous PIN client can still delete its own legacy session on logout.
+old_delete = "      allow delete: if signedIn() && request.auth.uid == uid;"
+new_delete = """      allow delete: if signedIn()
+        && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';"""
+if patched_session.count(old_delete) != 1:
+    raise SystemExit("SAFE_STOP_SESSION_DELETE_RULE_UNEXPECTED_SHAPE")
+patched_session = patched_session.replace(old_delete, new_delete)
 base = base[:session_start] + patched_session + base[session_end:]
 insert_at = base.rfind(end_marker)
 assert insert_at > 0
