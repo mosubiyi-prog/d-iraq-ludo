@@ -1,0 +1,87 @@
+# DEDA 100436 SELECTIVE CLIENT RULES CANDIDATE — NOT APPLIED / NOT DEPLOYED
+# Requires staging deda_linked_owner_session_bootstrap_CANDIDATE_NOT_DEPLOYED.rules
+# inside Firestore documents match; this patch alone MUST NOT be deployed.
+# This preserves legacy anonymous PIN proof and blocks linked-owner bypass/deletion.
+diff --git a/firestore.rules b/firestore.rules
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -617,37 +617,48 @@
+       allow delete: if signedIn() && request.auth.uid == uid;
+     }
+ 
+-    match /deda_sessions/{uid} {
+-      allow read: if isGeneralManager() || (signedIn() && request.auth.uid == uid);
+-
+-      allow create, update: if signedIn()
+-        && request.auth.uid == uid
+-        && request.resource.data.uid == uid
+-        && request.resource.data.accountKey is string
+-        && request.resource.data.installId is string
+-        && request.resource.data.keys().hasOnly([
+-          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
+-        ])
+-        && (
+-          (
+-            exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
+-            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey
+-              == request.resource.data.accountKey
+-            && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
+-            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
+-              == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin
+-          )
+-          || (
+-            exists(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey))
+-            && get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds is list
+-            && request.resource.data.installId
+-              in get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds
+-          )
+-        );
+-
+-      allow delete: if signedIn() && request.auth.uid == uid;
+-    }
+-
++    match /deda_sessions/{uid} {
++      allow read: if isGeneralManager() || (signedIn() && request.auth.uid == uid);
++
++      allow create, update: if signedIn()
++        && request.auth.uid == uid
++        && request.resource.data.uid == uid
++        && request.resource.data.accountKey is string
++        && request.resource.data.installId is string
++        && request.resource.data.keys().hasOnly([
++          'uid', 'accountKey', 'installId', 'signedInAt', 'lastSeenAt'
++        ])
++        && (
++          (
++            request.auth.token.firebase.sign_in_provider == 'anonymous'
++            && (
++              (
++                exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))
++            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.accountKey
++              == request.resource.data.accountKey
++            && exists(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey))
++            && get(/databases/$(database)/documents/deda_auth_attempts/$(uid)).data.pin
++              == get(/databases/$(database)/documents/deda_credentials/$(request.resource.data.accountKey)).data.pin
++          )
++          || (
++            exists(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey))
++            && get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds is list
++            && request.resource.data.installId
++              in get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds
++          )
++            )
++          )
++          || (
++            request.auth.token.firebase.sign_in_provider == 'password'
++            && dedaLinkedOriginalOwnerSessionBootstrap(uid, request.resource.data)
++          )
++        );
++
++      allow delete: if signedIn()
++        && request.auth.uid == uid
++        && request.auth.token.firebase.sign_in_provider == 'anonymous';
++    }
++
+     match /deda_account_profiles/{accountKey} {
+       allow get: if isGeneralManager() || hasDedaSession(accountKey);
+       allow list: if isGeneralManager();
