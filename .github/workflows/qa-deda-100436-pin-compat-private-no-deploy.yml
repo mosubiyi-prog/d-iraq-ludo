@@ -21,18 +21,23 @@ jobs:
       - name: Check Functions syntax without installing/deploying
         run: |
           node --check functions/index.js
+          node --check functions/deda_pin_auto_recovery_worker.js
           node --check functions/deda_owner_pin_verify_private_v1.js
           node --check functions/deda_pin_manual_recovery_compat_private_v1.js
           node --check functions/test/deda_owner_pin_verify_private_v1.test.js
           node --check functions/test/deda_pin_manual_recovery_compat_private_v1.test.js
-      - name: Ensure production Functions index has no new exports/imports
+      - name: Ensure custom-token verifier is not exported, and manual pilot is OFF
         shell: bash
         run: |
-          if grep -Eq 'deda_owner_pin_verify_private_v1|deda_pin_manual_recovery_compat_private_v1' functions/index.js; then
-            echo "BLOCK: private candidate is wired into existing Functions"
+          if grep -q 'deda_owner_pin_verify_private_v1' functions/index.js; then
+            echo "BLOCK: private custom-token verifier is wired"
             exit 1
           fi
-          echo "PASS: both private Functions are inert"
+          if ! grep -Fq 'const dedaPinCompatPilotEnabled = false;' functions/index.js; then
+            echo "BLOCK: private compatibility pilot is not explicitly OFF"
+            exit 1
+          fi
+          echo "PASS: verifier is inert; manual/auto compatibility pilot is OFF"
       - name: Mocked PIN verification + manual recovery compatibility tests
         run: |
           node --test functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js
