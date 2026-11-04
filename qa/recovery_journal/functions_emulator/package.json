@@ -1,0 +1,13 @@
+{
+  "name": "deda-100436-real-auth-functions-emulator-only",
+  "version": "0.0.0-private-qa",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-functions": "6.1.0",
+    "firebase-admin": "12.7.0"
+  }
+}
