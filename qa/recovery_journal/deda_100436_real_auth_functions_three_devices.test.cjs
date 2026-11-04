@@ -12,7 +12,7 @@ const {getFunctions, connectFunctionsEmulator, httpsCallable}
   = require("firebase/functions");
 const {initializeApp: adminInitialize, deleteApp: adminDelete}
   = require("firebase-admin/app");
-const {getFirestore: adminDbFor} = require("firebase-admin/firestore");
+const {getFirestore: adminDbFor, Timestamp} = require("firebase-admin/firestore");
 
 // Real Auth Emulator: independent Firebase apps model different phones.
 // Real Functions Emulator: httpsCallable carries the REAL Auth ID token.
@@ -98,6 +98,11 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
     await Promise.all([
       dbAdmin.doc("deda_credentials/" + accountKey).set({
         accountKey, pin, createdUid: originalUid, active: true,
+      }),
+      dbAdmin.doc("deda_recovery_session_grant_limits/" + originalUid).set({
+        ownerUid: originalUid, count: 0,
+        windowStartedAt: Timestamp.fromMillis(Date.now()-1000),
+        updatedAt: Timestamp.fromMillis(Date.now()-1000),
       }),
       dbAdmin.doc("deda_account_directory/" + accountKey).set({
         accountKey, createdUid: originalUid, active: true,
