@@ -2062,7 +2062,22 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    await _completeVerifiedLogin(normalizedPhone);
+    try {
+      await _completeVerifiedLogin(normalizedPhone);
+    } on StateError catch (error) {
+      if (!error.toString().contains(
+          'linked-owner-requires-verified-login-or-logout')) {
+        rethrow;
+      }
+      // The legacy name/phone route can never silently reopen a protected
+      // original UID. Keep the user's old identity untouched.
+      _showLoginMessage(
+        'الحساب المؤكّد يحتاج الدخول بالرقم والرمز من خيار لدي حساب. '
+        'لم تتغير بيانات حسابك.',
+        'Use existing-account sign-in with phone and PIN. '
+        'Your account data has not changed.',
+      );
+    }
   }
 
   void _openContact() {
