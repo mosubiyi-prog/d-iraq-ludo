@@ -10,6 +10,7 @@
 // Never use this wrapper outside a demo- local Emulator project.
 
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
+const {getApps, initializeApp} = require("firebase-admin/app");
 const candidate = require(
     "./deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js");
 
@@ -22,6 +23,11 @@ exports.dedaIssueLinkedOriginalUidDeviceGrantQa = onCall(
           !request.auth?.uid) {
         throw new HttpsError("permission-denied",
             "qa-only-emulator-auth-required");
+      }
+      // Only a demo-project emulator may create the local Admin SDK app.
+      // The real functions/index.js and deployed Firebase remain untouched.
+      if (getApps().length === 0) {
+        initializeApp({projectId: process.env.GCLOUD_PROJECT});
       }
       // Deliberate test harness bypass: no valid App Check is presented.
       // Original candidate implementation still requires request.app.appId.
