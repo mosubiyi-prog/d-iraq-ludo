@@ -7,7 +7,7 @@ const {getAuth, connectAuthEmulator, signInAnonymously,
   signInWithEmailAndPassword, linkWithCredential, EmailAuthProvider,
   getIdToken, signOut} = require("firebase/auth");
 const {getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc,
-  serverTimestamp} = require("firebase/firestore");
+  deleteDoc, serverTimestamp} = require("firebase/firestore");
 const {getFunctions, connectFunctionsEmulator, httpsCallable}
   = require("firebase/functions");
 const {initializeApp: adminInitialize, deleteApp: adminDelete}
@@ -191,6 +191,14 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
       // only ONE installId, even while 3 independent Auth tokens remain live.
       assert.ok([install("b"),install("c")].includes(saved.installId));
       console.log("QA_KNOWN_LIMIT_SINGLE_GLOBAL_INSTALL_ID");
+    });
+
+    await t.test("linked phone cannot delete shared UID session and interrupt other phones", async () => {
+      await assert.rejects(deleteDoc(sessionDoc(second,originalUid)),
+          /permission-denied/i);
+      const row=await getDoc(sessionDoc(first,originalUid));
+      assert.equal(row.exists(),true);
+      assert.equal(row.data().uid,originalUid);
     });
 
     await t.test("original/second/third remain independently authenticated and can read own profile", async () => {
