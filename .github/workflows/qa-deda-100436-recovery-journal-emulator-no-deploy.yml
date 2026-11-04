@@ -176,7 +176,9 @@ jobs:
           done
           cp qa/recovery_journal/deda_100436_flutterfire_real_emulator_test.dart "$QA_TEST_TMP"
           cp qa/recovery_journal/deda_step2_linked_owner_flutter_handoff.dart "$QA_HANDOFF_TMP"
-          sed "s#../../lib/#../lib/#g" \
+          # package: URI is required by Flutter Chrome's virtual file
+          # system. A relative ../lib/ import from test/ fails at runtime.
+          sed "s#../../lib/#package:d_iraq_ludo/#g" \
             qa/recovery_journal/deda_step2_linked_owner_firebase_port_CANDIDATE_NOT_WIRED.dart \
             > "$QA_PORT_TMP"
           trap 'rm -f "$QA_TEST_TMP" "$QA_PORT_TMP" "$QA_HANDOFF_TMP"' EXIT
