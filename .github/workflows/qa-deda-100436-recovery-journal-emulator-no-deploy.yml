@@ -110,6 +110,11 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+          dart analyze --no-fatal-warnings --no-fatal-infos \
+            qa/recovery_journal/deda_step2_recovery_journal_firestore.dart \
+            qa/recovery_journal/deda_100431_linked_owner_session_policy.dart \
+            qa/recovery_journal/deda_step2_recovery_guardian.dart
+          echo PASS_JOURNAL_DART_TRANSPORT_STATIC_ANALYSIS
           flutter test qa/recovery_journal/deda_step2_recovery_guardian_test.dart --no-pub
           echo PASS_GUARDIAN_SOURCE_TESTS_NO_APK
       - name: Finish with no deployed resource or downloaded secrets
