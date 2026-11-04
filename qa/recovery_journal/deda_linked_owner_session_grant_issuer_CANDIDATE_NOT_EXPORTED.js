@@ -99,8 +99,15 @@ async function issueLinkedOwnerGrant(request, db = getFirestore(),
       return {approved: true, reused: true, expiresAtMs: ts(old.expiresAt)};
     }
 
-    const windowStartedAt = ts(limiter?.windowStartedAt);
-    const withinHour = limit.exists && Number.isFinite(windowStartedAt) &&
+    // Never let two devices race to CREATE an absent per-UID limiter row.
+    // An audited original-owner server setup MUST pre-provision this ledger.
+    // With an existing row, the transaction updates the SAME document for
+    // every competing install, making optimistic revision checks meaningful.
+    if (!limit.exists || limiter?.ownerUid !== uid) {
+      deny("failed-precondition", "server-rate-limit-ledger-not-provisioned");
+    }
+    const windowStartedAt = ts(limiter.windowStartedAt);
+    const withinHour = Number.isFinite(windowStartedAt) &&
       nowMs >= windowStartedAt && nowMs - windowStartedAt < HOUR_MS;
     const previousCount = withinHour ? limiter.count : 0;
     if (!Number.isInteger(previousCount) ||
@@ -114,7 +121,7 @@ async function issueLinkedOwnerGrant(request, db = getFirestore(),
       purpose: "linked_uid_new_device_session_v1",
       state: "approved", issuedAt, expiresAt,
     });
-    tx.set(limitRef, {
+    tx.update(limitRef, {
       ownerUid: uid,
       windowStartedAt: withinHour ? limiter.windowStartedAt : issuedAt,
       count: previousCount + 1,
