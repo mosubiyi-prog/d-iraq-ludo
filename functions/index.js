@@ -12,6 +12,11 @@ const dedaTelegramWebhookSecret =
   defineSecret("DEDA_TELEGRAM_WEBHOOK_SECRET");
 const telegramBinding = require("./deda_telegram_bot_binding.js");
 const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
+// Explicitly OFF private PIN compatibility pilot. Do not turn on without
+// Firebase Emulator integration and owner-UID linkage verification.
+const dedaPinCompatPilotEnabled = false;
+const {completeApprovedManualPinRecovery} =
+  require("./deda_pin_manual_recovery_compat_private_v1.js");
 const {recordApprovalBellNotice} = require("./deda_owner_approval_bell.js");
 
 initializeApp();
@@ -278,6 +283,7 @@ exports.onRecoveryRequestCreated = onDocumentCreated(
           }
           const result = await autoRecoverForgottenPin(firestore, {
             requestId:event.params.requestId,nowMs:Date.now(),
+            linkedPinCompatEnabled:dedaPinCompatPilotEnabled,
           });
           if (result.outcome === "issued") return;
         }
@@ -308,6 +314,24 @@ exports.onRecoveryRequestUpdated = onDocumentUpdated(
       const requestRef = event.data.after.ref;
       const accountKey = String(after.accountKey || "").trim();
       const requesterUid = String(after.requesterUid || "").trim();
+
+      // Private pilot remains OFF. When explicitly enabled after QA, a
+      // manager-approved linked account must synchronize Firebase Auth and
+      // Firestore credentials, not update Auth password alone.
+      if (dedaPinCompatPilotEnabled) {
+        try {
+          await completeApprovedManualPinRecovery({
+            db: firestore, auth: getAuth(), Timestamp,
+            requestId: event.params.requestId,
+          });
+        } catch (_) {
+          // Keep pending lock and approval state for operator reconciliation.
+          // Never log a PIN or fall back to the unsafe legacy route.
+          console.error("DEDA_PIN_COMPAT_MANUAL_REVIEW_REQUIRED",
+              event.params.requestId);
+        }
+        return;
+      }
 
       try {
         const directory = await firestore
