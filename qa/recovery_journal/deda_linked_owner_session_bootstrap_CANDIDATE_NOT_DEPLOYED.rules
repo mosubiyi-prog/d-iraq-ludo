@@ -1,0 +1,76 @@
+// DEDA 100436 — ISOLATED FIRESTORE EMULATOR SESSION BOOTSTRAP CANDIDATE.
+// NOT DEPLOYED. Never copy this to firestore.rules without owner approval.
+// The existing anonymous PIN/trusted-install clauses remain intact.
+//
+// A NEW phone may refresh deda_sessions for the SAME original Firebase UID
+// only if a short-lived independent server-issued install grant exists.
+// Password-linked Firebase Auth alone is insufficient: a six-digit PIN can
+// be brute-forced; a future audited callable must verify the original owner,
+// rate-limit and approve a grant before this rule can ever be activated.
+//
+// No client may create, list, get, update or delete a bootstrap grant.
+// This local candidate deliberately has NO grant writer or production export.
+
+function dedaLinkedOriginalOwnerSessionBootstrap(uid, data) {
+  return signedIn()
+    && request.auth.uid == uid
+    && request.auth.token.firebase.sign_in_provider == 'password'
+    && data.accountKey is string
+    && data.accountKey.matches('^[0-9]{10,16}$')
+    && request.auth.token.email == data.accountKey + '@deda-login.invalid'
+    && !exists(/databases/$(database)/documents/admins/$(uid))
+    && data.installId is string
+    && data.installId.matches('^[0-9a-f]{48}$')
+    && data.signedInAt == request.time
+    && data.lastSeenAt == request.time
+    && (
+      !exists(/databases/$(database)/documents/deda_sessions/$(uid))
+      || get(/databases/$(database)/documents/deda_sessions/$(uid)).data.accountKey == data.accountKey
+    )
+    // Evidence must predate the replacement device's write. These records
+    // tie the Firebase Auth UID to the already-created ORIGINAL account.
+    && exists(/databases/$(database)/documents/deda_account_directory/$(data.accountKey))
+    && get(/databases/$(database)/documents/deda_account_directory/$(data.accountKey)).data.active == true
+    && get(/databases/$(database)/documents/deda_account_directory/$(data.accountKey)).data.createdUid == uid
+    && exists(/databases/$(database)/documents/deda_credentials/$(data.accountKey))
+    && get(/databases/$(database)/documents/deda_credentials/$(data.accountKey)).data.active == true
+    && get(/databases/$(database)/documents/deda_credentials/$(data.accountKey)).data.createdUid == uid
+    && exists(/databases/$(database)/documents/users/$(uid))
+    && get(/databases/$(database)/documents/users/$(uid)).data.accountKey == data.accountKey
+    && get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId is string
+    && get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId.matches('^@DEDA-[A-Z0-9]{6}$')
+    && exists(/databases/$(database)/documents/deda_share_ids/$(
+        get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    ))
+    && get(/databases/$(database)/documents/deda_share_ids/$(
+        get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    )).data.publicId == get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    && get(/databases/$(database)/documents/deda_share_ids/$(
+        get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    )).data.ownerUid == uid
+    && get(/databases/$(database)/documents/deda_share_ids/$(
+        get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    )).data.kind == 'personal'
+    && get(/databases/$(database)/documents/deda_share_ids/$(
+        get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    )).data.active == true
+    && exists(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId))
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.ownerUid == uid
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.accountKey == data.accountKey
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.installId == data.installId
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.originalId ==
+      get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.purpose == 'linked_uid_new_device_session_v1'
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.state == 'approved'
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.issuedAt is timestamp
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.expiresAt is timestamp
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.issuedAt <= request.time
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.expiresAt > request.time
+    && get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.expiresAt <=
+        get(/databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)).data.issuedAt + duration.value(5, 'm');
+}
+
+match /deda_recovery_session_bootstrap_grants/{uid}/installs/{installId} {
+  // No client grants itself permission to refresh the original UID session.
+  allow read, write: if false;
+}
