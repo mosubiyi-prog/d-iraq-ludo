@@ -4,6 +4,9 @@ import 'dart:html' as html;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
+import 'package:firebase_core_web/firebase_core_web.dart';
+import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
+import 'package:firebase_auth_web/firebase_auth_web.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -32,6 +35,11 @@ const demoOptions = FirebaseOptions(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // flutter test --platform chrome does not register the Firebase web
+  // plugins automatically in this QA runner (MethodChannelFirebase proved
+  // this). Register only the web implementations for this demo test.
+  FirebasePlatform.instance = FirebaseCoreWeb();
+  FirebaseAuthPlatform.instance = FirebaseAuthWeb();
 
   test('FlutterFire Auth + Functions + Firestore: same UID on two independent clients, no remote logout',
       () async {
