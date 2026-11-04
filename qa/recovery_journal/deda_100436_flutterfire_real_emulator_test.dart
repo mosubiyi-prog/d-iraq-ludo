@@ -35,19 +35,24 @@ void main() {
     expect(const bool.fromEnvironment('DEDA_STABILITY_AUTH_RUNTIME'), isTrue);
     expect(const bool.fromEnvironment('DEDA_PRIVATE_FIREBASE_EMULATOR_QA'), isTrue);
 
+    print('QA_FLUTTERFIRE_STEP_INITIALIZE_APP_A');
     final appA = await Firebase.initializeApp(
       name: 'deda-flutterfire-phoneA', options: demoOptions);
+    print('QA_FLUTTERFIRE_STEP_INITIALIZE_APP_B');
     final appB = await Firebase.initializeApp(options: demoOptions);
     final authA = FirebaseAuth.instanceFor(app: appA);
     final authB = FirebaseAuth.instanceFor(app: appB);
     final dbB = FirebaseFirestore.instanceFor(app: appB);
     final fnB = FirebaseFunctions.instanceFor(app: appB);
 
+    print('QA_FLUTTERFIRE_STEP_CONNECT_AUTH_A');
     await authA.useAuthEmulator('127.0.0.1', 9099);
+    print('QA_FLUTTERFIRE_STEP_CONNECT_AUTH_B');
     await authB.useAuthEmulator('127.0.0.1', 9099);
     dbB.useFirestoreEmulator('127.0.0.1', 8098);
     fnB.useFunctionsEmulator('127.0.0.1', 5001);
 
+    print('QA_FLUTTERFIRE_STEP_FIRESTORE_DENY_UNAUTH');
     // Reject unauthenticated Firestore reads BEFORE the account login.
     // Prevent a silently open or miswired rules configuration from passing.
     await expectLater(
@@ -60,6 +65,7 @@ void main() {
 
     try {
       // The original phone stays signed in while phone B authenticates.
+      print('QA_FLUTTERFIRE_STEP_AUTH_A_SIGNIN');
       final existing = await authA.signInWithEmailAndPassword(
         email: email, password: pin);
       expect(existing.user?.uid, originalUid);
