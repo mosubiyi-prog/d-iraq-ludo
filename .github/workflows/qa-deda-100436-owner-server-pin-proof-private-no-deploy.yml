@@ -1,0 +1,34 @@
+name: DEDA 100436 Owner PIN server proof — PRIVATE NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100436-owner-server-pin-proof-private-no-deploy-2026-11-05
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof-private-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate server candidate syntax
+        run: node --check functions/deda_owner_pin_verify_private_v1.js
+      - name: Validate private tests syntax
+        run: node --check functions/test/deda_owner_pin_verify_private_v1.test.js
+      - name: Assert no production function export
+        shell: bash
+        run: |
+          if grep -q "deda_owner_pin_verify_private_v1" functions/index.js; then
+            echo "Unsafe: candidate connected to functions/index.js"
+            exit 1
+          fi
+          echo "PASS: source remains unregistered and inert"
+      - name: Unit tests (mock dependencies; no Firebase writes)
+        run: node --test functions/test/deda_owner_pin_verify_private_v1.test.js
