@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {initializeTestEnvironment, assertSucceeds, assertFails}
   = require("@firebase/rules-unit-testing");
-const {doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp}
+const {doc, setDoc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp}
   = require("firebase/firestore");
 
 // Firestore Emulator ONLY. No Auth/Firestore cloud connection or real phones.
@@ -200,4 +200,7 @@ test("pre-existing old anonymous PIN attempt remains valid, no legacy regression
   }));
   assert.equal((await getDoc(ref(db, "deda_sessions/" + previousUid))).data().uid,
       previousUid);
+  // Old Play anonymous PIN logout can still delete its own session.
+  await assertSucceeds(deleteDoc(ref(db, "deda_sessions/" + previousUid)));
+  assert.equal((await getDoc(ref(db, "deda_sessions/" + previousUid))).exists(),false);
 });
