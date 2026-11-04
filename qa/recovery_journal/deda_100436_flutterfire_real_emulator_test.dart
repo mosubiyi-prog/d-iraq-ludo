@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:html' as html;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
 import 'package:firebase_core_web/firebase_core_web.dart';
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
 import 'package:firebase_auth_web/firebase_auth_web.dart';
+import 'package:cloud_firestore_web/cloud_firestore_web.dart';
+import 'package:cloud_functions_web/cloud_functions_web.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -38,7 +41,10 @@ void main() {
   // flutter test --platform chrome does not register the Firebase web
   // plugins automatically in this QA runner (MethodChannelFirebase proved
   // this). Register only the web implementations for this demo test.
-  FirebasePlatform.instance = FirebaseCoreWeb();
+  FirebaseCoreWeb.registerWith(webPluginRegistrar);
+  FirebaseAuthWeb.registerWith(webPluginRegistrar);
+  FirebaseFirestoreWeb.registerWith(webPluginRegistrar);
+  FirebaseFunctionsWeb.registerWith(webPluginRegistrar);
 
   test('FlutterFire Auth + Functions + Firestore: same UID on two independent clients, no remote logout',
       () async {
@@ -67,7 +73,6 @@ void main() {
       rethrow;
     }
     print('PASS_FLUTTERFIRE_DEFAULT_APP_INITIALIZED');
-    FirebaseAuthPlatform.instance = FirebaseAuthWeb(app: appB);
     print('QA_FLUTTERFIRE_STEP_INITIALIZE_SECONDARY_APP_A');
     final appA = await Firebase.initializeApp(
       name: 'deda-flutterfire-phoneA', options: demoOptions,
