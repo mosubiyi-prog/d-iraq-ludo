@@ -38,16 +38,33 @@ session_end = base.find("    match /deda_account_profiles/{accountKey} {", sessi
 if session_start < 0 or session_end < 0:
     raise SystemExit("SAFE_STOP_SESSION_RULE_NOT_FOUND")
 session_old = base[session_start:session_end]
+old_head = """        && (
+          (
+            exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))"""
+new_head = """        && (
+          (
+            request.auth.token.firebase.sign_in_provider == 'anonymous'
+            && (
+              (
+                exists(/databases/$(database)/documents/deda_auth_attempts/$(uid))"""
 old_tail = """              in get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds
           )
         );"""
 new_tail = """              in get(/databases/$(database)/documents/deda_account_profiles/$(request.resource.data.accountKey)).data.trustedInstallIds
           )
-          || dedaLinkedOriginalOwnerSessionBootstrap(uid, request.resource.data)
+            )
+          )
+          || (
+            request.auth.token.firebase.sign_in_provider == 'password'
+            && dedaLinkedOriginalOwnerSessionBootstrap(uid, request.resource.data)
+          )
         );"""
-if session_old.count(old_tail) != 1:
+# Linked password sessions must NOT inherit the legacy anonymous UID's
+# saved PIN attempt or trustedInstallId as an alternative to the NEW grant.
+# Old anon / Play 100340 clients keep their existing PIN + trust paths.
+if session_old.count(old_head) != 1 or session_old.count(old_tail) != 1:
     raise SystemExit("SAFE_STOP_SESSION_RULE_UNEXPECTED_SHAPE")
-patched_session = session_old.replace(old_tail, new_tail)
+patched_session = session_old.replace(old_head, new_head).replace(old_tail, new_tail)
 base = base[:session_start] + patched_session + base[session_end:]
 insert_at = base.rfind(end_marker)
 assert insert_at > 0
