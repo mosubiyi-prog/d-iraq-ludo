@@ -169,7 +169,7 @@ jobs:
             emulators:exec --project demo-deda-100436-journal-qa \
             --config "$QA_ROOT/firebase.json" \
             --only auth,functions,firestore --non-interactive \
-            'DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED=true node --test qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs && node qa/recovery_journal/deda_100436_flutterfire_emulator_seed.cjs && flutter test --platform chrome --no-pub --dart-define=DEDA_LINKED_OWNER_HANDOFF=true --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_PRIVATE_FIREBASE_EMULATOR_QA=true qa/recovery_journal/deda_100436_flutterfire_real_emulator_test.dart'
+            'node qa/recovery_journal/deda_100436_flutterfire_emulator_seed.cjs && flutter test --platform chrome --no-pub --dart-define=DEDA_LINKED_OWNER_HANDOFF=true --dart-define=DEDA_STABILITY_AUTH_RUNTIME=true --dart-define=DEDA_PRIVATE_FIREBASE_EMULATOR_QA=true qa/recovery_journal/deda_100436_flutterfire_real_emulator_test.dart && DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED=true node --test qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs'
           echo PASS_REAL_FLUTTERFIRE_AUTH_FUNCTIONS_FIRESTORE_EMULATORS_NO_APK
       - name: Finish with no deployed resource or downloaded secrets
         shell: bash
