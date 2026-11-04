@@ -5,6 +5,7 @@
 // NO deployment, rules mutation, PIN change, admin grant, or data transfer.
 // Must be approved and subjected to Auth/AppCheck/Firestore emulator QA first.
 const {timingSafeEqual} = require("node:crypto");
+const {syncMarkerMatches} = require("./deda_pin_manual_recovery_compat_private_v1.js");
 
 const WINDOW_MS = 15 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -106,13 +107,19 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
       if (!Number.isSafeInteger(nowMs) ||
           !await consumeAttempt(db, key, nowMs)) return deny();
 
-      const [directorySnap, credentialSnap] = await Promise.all([
+      const [directorySnap, credentialSnap, lockSnap] = await Promise.all([
         db.collection("deda_account_directory").doc(key).get(),
         db.collection("deda_credentials").doc(key).get(),
+        db.collection("deda_pin_recovery_locks").doc(key).get(),
       ]);
       const directory = directorySnap.exists ? directorySnap.data() : null;
       const credentials = credentialSnap.exists ? credentialSnap.data() : null;
-      if (!pinMatches(credentials?.pin, pin)) return deny();
+      // An old PIN must never pass when Firebase Auth and Firestore have
+      // diverged, or when a rotation was committed but not acknowledged.
+      // Existing linked owners need an explicitly synchronized migration;
+      // an absent or stale sync marker fails CLOSED.
+      if (lockSnap.exists || !syncMarkerMatches(credentials) ||
+          !pinMatches(credentials?.pin, pin)) return deny();
 
       const uid = directory?.createdUid;
       if (typeof uid !== "string" || uid.length < 6) return deny();
