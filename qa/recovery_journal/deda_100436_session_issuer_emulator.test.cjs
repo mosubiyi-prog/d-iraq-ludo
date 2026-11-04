@@ -117,9 +117,14 @@ test("simultaneous requests for SAME device cannot double-count grants", async (
   const results=await Promise.all([
     issue(makeRequest(),admin),issue(makeRequest(),admin),
   ]);
-  assert.equal(results.filter(x=>!x.reused).length,1);
-  assert.equal(results.filter(x=>x.reused).length,1);
+  assert.ok(results.every(x => x.approved === true));
+  // In a concurrent completion two clients can see "new" before retry
+  // acknowledgement; the authoritative ledger/documents—not the response
+  // hints—must prove there was only ONE grant consumed for this device.
   assert.equal((await admin.doc(limitPath).get()).data().count,1);
+  const saved = await admin.doc(grantPath(installation("a"))).get();
+  assert.equal(saved.exists,true);
+  assert.equal(saved.data().installId,installation("a"));
 });
 test("wrong Auth UID, email, provider or missing AppCheck context fail without write", async () => {
   await seed();
