@@ -101,7 +101,12 @@ async function issueLinkedOwnerGrant(request, db = getFirestore(),
         old.accountKey === accountKey && old.originalId === originalId &&
         old.installId === installId &&
         old.purpose === "linked_uid_new_device_session_v1" &&
-        old.state === "approved" && ts(old.issuedAt) <= nowMs &&
+        old.state === "approved" &&
+        // Two concurrent requests capture their server clocks BEFORE the
+        // transaction retries. The earlier caller can observe the winner's
+        // grant issued a few ms "in the future"; this is NOT a new grant.
+        // Only tolerate <=1s clock ordering skew, never a long-dated grant.
+        ts(old.issuedAt) <= nowMs + 1000 &&
         ts(old.expiresAt) > nowMs &&
         ts(old.expiresAt) - ts(old.issuedAt) <= 5 * 60 * 1000) {
       return {approved: true, reused: true, expiresAtMs: ts(old.expiresAt)};
