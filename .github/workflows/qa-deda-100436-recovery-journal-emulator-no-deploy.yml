@@ -62,7 +62,7 @@ jobs:
             firebase@11.10.0 \
             @firebase/rules-unit-testing@4.0.0 \
             firebase-functions@6.1.0 \
-            firebase-admin@13.0.0
+            firebase-admin@12.7.0
           echo "NODE_PATH=$RUNNER_TEMP/deda100436-journal-node/node_modules" >> "$GITHUB_ENV"
       - name: Local-only original Firestore + candidate journal rules assembly
         shell: bash
