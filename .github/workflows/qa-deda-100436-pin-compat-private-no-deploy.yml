@@ -26,6 +26,7 @@ jobs:
           node --check functions/deda_pin_manual_recovery_compat_private_v1.js
           node --check functions/test/deda_owner_pin_verify_private_v1.test.js
           node --check functions/test/deda_pin_manual_recovery_compat_private_v1.test.js
+          node --check functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
       - name: Ensure custom-token verifier is not exported, and manual pilot is OFF
         shell: bash
         run: |
@@ -40,4 +41,4 @@ jobs:
           echo "PASS: verifier is inert; manual/auto compatibility pilot is OFF"
       - name: Mocked PIN verification + manual recovery compatibility tests
         run: |
-          node --test functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js
+          node --test functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
