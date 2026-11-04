@@ -1,0 +1,88 @@
+name: DEDA 100436 Linked Owner Guardian Bridge Private QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100436-linked-owner-guardian-bridge-private-no-deploy-2026-11-04
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100436-private-guardian-bridge
+  cancel-in-progress: true
+jobs:
+  bridge-private:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce confirmed 100436 base and private-scope files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=40936af117d662f975a67cac4e21eab5f84e9ec2
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          git diff --exit-code "$BASE" HEAD -- lib/main.dart \
+            lib/deda_pin_auth.dart lib/deda_backend.dart \
+            lib/deda_auth_session_runtime.dart lib/deda_session_transition_gate.dart \
+            functions firestore.rules firebase.json storage.rules \
+            pubspec.yaml pubspec.lock android assets .firebaserc
+          git diff --name-only "$BASE" HEAD | while IFS= read -r path; do
+            case "$path" in
+              lib/deda_step2_recovery_guardian.dart|\
+              lib/deda_step2_linked_owner_flutter_handoff.dart|\
+              lib/deda_100431_linked_owner_session_policy.dart|\
+              lib/deda_step2_recovery_journal_firestore.dart|\
+              lib/deda_step2_linked_owner_firebase_port.dart|\
+              lib/deda_step2_linked_owner_guardian_bridge.dart|\
+              lib/deda_step2_linked_owner_guardian_assembly.dart|\
+              test/deda_step2_recovery_guardian_private_test.dart|\
+              test/deda_step2_linked_owner_handoff_private_test.dart|\
+              test/deda_step2_linked_owner_guardian_bridge_private_test.dart|\
+              .github/workflows/qa-deda-100436-linked-owner-guardian-bridge-private-no-deploy.yml|\
+              docs/DEDA_100436_LINKED_OWNER_GUARDIAN_BRIDGE_PRIVATE_CHECKPOINT_2026-11-04.md) ;;
+              *) echo "SAFE_STOP_UNAPPROVED_PATH:$path"; exit 8 ;;
+            esac
+          done
+          test -z "$(git diff --name-only "$BASE" HEAD -- 'خزان العمل المنعزل قيد الاكمال/')"
+          echo PASS_100436_BASE_AND_PROTECTED_FILES_UNMODIFIED
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Static analysis and private bridge unit tests — no APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze \
+            lib/deda_step2_recovery_guardian.dart \
+            lib/deda_step2_linked_owner_flutter_handoff.dart \
+            lib/deda_100431_linked_owner_session_policy.dart \
+            lib/deda_step2_recovery_journal_firestore.dart \
+            lib/deda_step2_linked_owner_firebase_port.dart \
+            lib/deda_step2_linked_owner_guardian_bridge.dart \
+            lib/deda_step2_linked_owner_guardian_assembly.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_handoff_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          flutter test --no-pub \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_handoff_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          echo PASS_DEFAULT_OFF_VERIFIED_OWNER_TO_GUARDIAN_BRIDGE
+      - name: Check UI and production QA bypass remain disconnected
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! git grep -n 'deda_step2_linked_owner_guardian_assembly' -- lib/main.dart
+          ! git grep -n 'deda_step2_linked_owner_guardian_bridge' -- lib/main.dart
+          ! git grep -n 'dedaIssueLinkedOriginalUidDeviceGrantQa' -- lib/deda_step2_linked_owner_firebase_port.dart
+          echo PASS_NO_UI_ACTIVATION_NO_APK_NO_FIREBASE_DEPLOY
