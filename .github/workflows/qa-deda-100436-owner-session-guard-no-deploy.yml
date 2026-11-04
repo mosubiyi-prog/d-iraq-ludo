@@ -38,6 +38,7 @@ jobs:
               lib/deda_step2_existing_account_signin_page.dart|\
               test/deda_owner_session_compat_private_test.dart|\
               test/deda_step2_existing_account_signin_page_private_test.dart|\
+              test/deda_owner_login_commit_guard_private_test.dart|\
               .github/workflows/qa-deda-100436-owner-session-guard-no-deploy.yml|\
               docs/DEDA_100436_OWNER_SESSION_GUARD_PRIVATE_CHECKPOINT_2026-11-05.md) ;;
               *) echo "SAFE_STOP_UNAPPROVED_PATH:$p"; exit 8 ;;
@@ -66,6 +67,7 @@ jobs:
             lib/deda_step2_linked_owner_guardian_assembly.dart \
             lib/deda_step2_existing_account_signin_page.dart \
             test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_owner_login_commit_guard_private_test.dart \
             test/deda_owner_session_compat_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \
@@ -73,7 +75,9 @@ jobs:
           dart analyze \
             lib/deda_step2_existing_account_signin_page.dart \
             test/deda_step2_existing_account_signin_page_private_test.dart \
-            test/deda_owner_session_compat_private_test.dart
+            test/deda_owner_login_commit_guard_private_test.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_owner_login_commit_guard_private_test.dart
           flutter test --no-pub \
             test/deda_step2_existing_account_signin_page_private_test.dart \
             test/deda_owner_session_compat_private_test.dart \
@@ -91,6 +95,7 @@ jobs:
           grep -Fq "deda-explicit-anonymous-session-switch-required" lib/deda_pin_auth.dart
           grep -Fq "deda-explicit-owner-account-switch-required" lib/deda_backend.dart
           grep -Fq "linked-owner-requires-verified-login-or-logout" lib/main.dart
+          grep -Fq "verified-owner-uid-changed-during-commit" lib/main.dart
           ! git grep -n 'deda_step2_existing_account_signin_page' -- lib/main.dart
           grep -Fq "DEDA_STEP2_EXISTING_ACCOUNT_ENTRY" lib/deda_step2_existing_account_signin_page.dart
           echo PASS_PRIVATE_UID_PROTECTION_DEFAULT_OFF_NO_FIREBASE_DEPLOY_NO_APK
