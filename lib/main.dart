@@ -748,6 +748,21 @@ class DedaPreferences {
   static String _profileBackgroundKey(String phoneValue) =>
       'deda_profile_background_v1_${phoneValue.replaceAll(RegExp(r'[^0-9]'), '')}';
 
+  // Canonical owner login is never authorized by local name/phone or a
+  // caller-provided UID string. The verified handoff MUST still own the same
+  // linked Firebase identity at each persistent login-commit boundary.
+  static bool _liveVerifiedOriginalOwner(
+      String normalizedPhone, String? originalUid) {
+    if (originalUid == null || originalUid.isEmpty ||
+        Firebase.apps.isEmpty) return false;
+    final user = FirebaseAuth.instance.currentUser;
+    final account = normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '');
+    return user != null &&
+        !user.isAnonymous &&
+        user.uid == originalUid &&
+        DedaLinkedOwnerSessionPolicy.emailMatches(user.email, account);
+  }
+
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -832,6 +847,10 @@ class DedaPreferences {
     bool verifiedCanonicalProfile = false,
     String? verifiedOriginalUid,
   }) async {
+    if (verifiedCanonicalProfile &&
+        !_liveVerifiedOriginalOwner(normalizedPhone, verifiedOriginalUid)) {
+      throw StateError('verified-owner-original-uid-not-current');
+    }
     final prefs = await SharedPreferences.getInstance();
     // In the private linked-owner pilot, a previously confirmed identity
     // cannot be replaced with the legacy name+phone-only login. Otherwise
@@ -902,8 +921,20 @@ class DedaPreferences {
       throw StateError('owner-login-profile-not-saved');
     }
     if (verifiedCanonicalProfile &&
+        !_liveVerifiedOriginalOwner(normalizedPhone, verifiedOriginalUid)) {
+      await prefs.setBool(_loggedInKey, false);
+      throw StateError('verified-owner-uid-changed-before-commit');
+    }
+    if (verifiedCanonicalProfile &&
         !await prefs.setBool(_loggedInKey, true)) {
       throw StateError('verified-owner-login-commit-not-saved');
+    }
+    // A session switch during the asynchronous preference write must not
+    // publish the wrong local profile as logged in.
+    if (verifiedCanonicalProfile &&
+        !_liveVerifiedOriginalOwner(normalizedPhone, verifiedOriginalUid)) {
+      await prefs.setBool(_loggedInKey, false);
+      throw StateError('verified-owner-uid-changed-during-commit');
     }
     // In-memory identity becomes visible only after the local write completes.
     userName = resolvedName;
