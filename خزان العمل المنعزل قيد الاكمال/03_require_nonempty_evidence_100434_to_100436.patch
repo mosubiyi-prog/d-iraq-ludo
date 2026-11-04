@@ -1,0 +1,68 @@
+diff --git a/lib/deda_progress_backup_coordinator.dart b/lib/deda_progress_backup_coordinator.dart
+index 497561f71f7a91a9bab46c665bc97d30f880590e..69b02b41674d3f29571d3ba3f4af3899db971e89 100644
+--- a/lib/deda_progress_backup_coordinator.dart
++++ b/lib/deda_progress_backup_coordinator.dart
+@@ -205,28 +205,41 @@
+       final bound=_bound(owner,check);bound();
+       return _capturePurchase(accountKey,owner,bound);
+     });
+-  Future<DedaProgressBackupIntent> prepare({required String accountKey,
+-    required String captureId,required bool Function() isCurrent}) =>
+-    _run(isCurrent,(check) async {
+-      if(!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
+-        throw ArgumentError('invalid-backup-capture-id');
+-      }
+-      final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
+-      final bound=_bound(owner,check);bound();
+-      final old=await journal.read(accountKey);bound();
+-      // Never replace a previous uncertain request with a newer local snapshot.
+-      if(old != null) return DedaProgressBackupIntent.decode(old,accountKey);
+-      final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
+-      final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
+-      final intent=DedaProgressBackupIntent(captureId:captureId,capture:capture,
+-        purchaseCapture:purchaseCapture,purchaseCaptureObserved:purchaseReader!=null,
+-        sourceUid:owner.user.uid,installId:owner.installId);
+-      await journal.writeOnce(accountKey,intent.encode(),bound);bound();
+-      final persisted=await journal.read(accountKey);bound();
+-      if(persisted != intent.encode()) throw const DedaProgressEvidenceConflict();
+-      return intent;
+-    });
+-
++  Future<DedaProgressBackupIntent> prepare({required String accountKey,
++    required String captureId,required bool Function() isCurrent,
++    bool requireNonEmptyEvidence = false}) =>
++    _run(isCurrent,(check) async {
++      if(!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
++        throw ArgumentError('invalid-backup-capture-id');
++      }
++      final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
++      final bound=_bound(owner,check);bound();
++      final old=await journal.read(accountKey);bound();
++      // Never replace a previous uncertain request with a newer local snapshot.
++      if(old != null) {
++        final pending = DedaProgressBackupIntent.decode(old,accountKey);
++        if(requireNonEmptyEvidence && !pending.capture.hasAnyLocalRecord) {
++          throw const DedaProgressEvidenceMissing();
++        }
++        return pending;
++      }
++      final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
++      // The cross-device recovery pilot must never store an empty archive
++      // and call it a confirmed backup. A new/blank account may use the
++      // ordinary backup lane, but cannot pass the migration readiness gate.
++      if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord) {
++        throw const DedaProgressEvidenceMissing();
++      }
++      final purchaseCapture=await _capturePurchase(accountKey,owner,bound);bound();
++      final intent=DedaProgressBackupIntent(captureId:captureId,capture:capture,
++        purchaseCapture:purchaseCapture,purchaseCaptureObserved:purchaseReader!=null,
++        sourceUid:owner.user.uid,installId:owner.installId);
++      await journal.writeOnce(accountKey,intent.encode(),bound);bound();
++      final persisted=await journal.read(accountKey);bound();
++      if(persisted != intent.encode()) throw const DedaProgressEvidenceConflict();
++      return intent;
++    });
++
+   Future<DedaProgressBackupResult> uploadPending({required String accountKey,
+     required bool Function() isCurrent}) => _run(isCurrent,(check) async {
+       final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
