@@ -1,0 +1,83 @@
+name: DEDA 100436 Owner UID and Admin Session Guard Private QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100436-owner-session-guard-staged-account-entry-no-deploy-2026-11-05
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  uid-owner-admin-private:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect version 100436 and archived twelve codes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=40936af117d662f975a67cac4e21eab5f84e9ec2
+          BRIDGE=4ec4ada9a914807babcfc199e94bf16a52cf2431
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git merge-base "$BRIDGE" HEAD)" = "$BRIDGE"
+          git diff --exit-code "$BASE" HEAD -- \
+            functions firestore.rules firebase.json storage.rules \
+            pubspec.yaml pubspec.lock android assets .firebaserc
+          git diff --exit-code "$BASE" HEAD -- \
+            'خزان العمل المنعزل قيد الاكمال/'
+          git diff --name-only "$BRIDGE" HEAD | while IFS= read -r p; do
+            case "$p" in
+              lib/deda_backend.dart|lib/deda_pin_auth.dart|lib/main.dart|\
+              test/deda_owner_session_compat_private_test.dart|\
+              .github/workflows/qa-deda-100436-owner-session-guard-no-deploy.yml|\
+              docs/DEDA_100436_OWNER_SESSION_GUARD_PRIVATE_CHECKPOINT_2026-11-05.md) ;;
+              *) echo "SAFE_STOP_UNAPPROVED_PATH:$p"; exit 8 ;;
+            esac
+          done
+          echo PASS_100436_SOURCE_AND_ORIGINAL_WORK_VAULT_UNTOUCHED
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Analyze protected session paths and test owner UID policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze \
+            lib/deda_backend.dart \
+            lib/deda_pin_auth.dart \
+            lib/main.dart \
+            lib/deda_100431_linked_owner_session_policy.dart \
+            lib/deda_step2_linked_owner_firebase_port.dart \
+            lib/deda_step2_linked_owner_guardian_bridge.dart \
+            lib/deda_step2_linked_owner_guardian_assembly.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_handoff_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          flutter test --no-pub \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_handoff_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          echo PASS_OWNER_UID_SESSION_GUARD_AND_GUARDIAN_TESTS
+      - name: Ensure new login path is not silently activated
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! git grep -n 'DedaLinkedOwnerGuardianAssembly.prepare(' -- lib/main.dart
+          ! git grep -n 'dedaIssueLinkedOriginalUidDeviceGrantQa' -- lib/deda_step2_linked_owner_firebase_port.dart
+          grep -Fq "DEDA_STEP2_LINKED_OWNER_COMPAT" lib/deda_100431_linked_owner_session_policy.dart
+          grep -Fq "deda-explicit-anonymous-session-switch-required" lib/deda_pin_auth.dart
+          grep -Fq "deda-explicit-owner-account-switch-required" lib/deda_backend.dart
+          grep -Fq "linked-owner-requires-verified-login-or-logout" lib/main.dart
+          echo PASS_PRIVATE_UID_PROTECTION_DEFAULT_OFF_NO_FIREBASE_DEPLOY_NO_APK
