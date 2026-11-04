@@ -39,7 +39,6 @@ void main() {
   // plugins automatically in this QA runner (MethodChannelFirebase proved
   // this). Register only the web implementations for this demo test.
   FirebasePlatform.instance = FirebaseCoreWeb();
-  FirebaseAuthPlatform.instance = FirebaseAuthWeb();
 
   test('FlutterFire Auth + Functions + Firestore: same UID on two independent clients, no remote logout',
       () async {
@@ -68,6 +67,7 @@ void main() {
       rethrow;
     }
     print('PASS_FLUTTERFIRE_DEFAULT_APP_INITIALIZED');
+    FirebaseAuthPlatform.instance = FirebaseAuthWeb(app: appB);
     print('QA_FLUTTERFIRE_STEP_INITIALIZE_SECONDARY_APP_A');
     final appA = await Firebase.initializeApp(
       name: 'deda-flutterfire-phoneA', options: demoOptions,
