@@ -3,6 +3,7 @@ import 'dart:html' as html;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core_platform_interface/firebase_core_platform_interface.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -41,6 +42,8 @@ void main() {
     // Initialize the default app first; the existing Auth runtime expects it.
     // Keep web-emulator initialization bounded and separately diagnosable.
     print('QA_FLUTTERFIRE_STEP_INITIALIZE_DEFAULT_APP_B');
+    print('QA_FIREBASE_CORE_PLATFORM=' +
+        FirebasePlatform.instance.runtimeType.toString());
     print('QA_CHROME_ORIGIN=' + html.window.location.origin);
     print('QA_CHROME_ONLINE=' + html.window.navigator.onLine.toString());
     FirebaseApp appB;
