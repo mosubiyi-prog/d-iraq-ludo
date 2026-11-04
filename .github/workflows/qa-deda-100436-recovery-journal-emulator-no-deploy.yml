@@ -134,11 +134,16 @@ jobs:
           node --check qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs
           export QA_ROOT
           python3 - <<'PY'
-          import json, os, pathlib
+          import json, os, pathlib, shutil
           root = pathlib.Path(os.environ["QA_ROOT"])
           rules = os.environ["DEDA_JOURNAL_EMULATOR_RULES"]
+          # Firebase CLI resolves a rules path RELATIVE TO config directory.
+          # Copy the checked candidate into this temporary QA project.
+          shutil.copyfile(rules, root/"firestore.rules")
+          assert "dedaLinkedOriginalOwnerSessionBootstrap" in (
+              root/"firestore.rules").read_text()
           (root/"firebase.json").write_text(json.dumps({
-            "firestore": {"rules": rules},
+            "firestore": {"rules": "firestore.rules"},
             "functions": {"source": "functions"},
             "emulators": {
               "firestore": {"host": "127.0.0.1", "port": 8098},
@@ -148,6 +153,9 @@ jobs:
             }
           }))
           PY
+          # No fallback to Firestore Emulator open-rules mode is acceptable.
+          test -s "$QA_ROOT/firestore.rules"
+          test "$(realpath "$QA_ROOT/firestore.rules")" != "$(realpath firestore.rules)"
           # In the Functions emulator the QA wrapper requires a DEMO project,
           # real Firebase Auth ID token and local Firestore/Auth emulators.
           # Its synthetic AppCheck context is QA-only; DO NOT count this as
