@@ -85,7 +85,7 @@ Future<String> run(FakeLoginPort fake, {
 
 void main() {
   test('default disabled: no SDK or Firestore dispatch', () async {
-    const disabled = DedaLoginHandoff(DummyPort());
+    final disabled = DedaLoginHandoff(DummyPort());
     expect(dedaLinkedFlutterHandoffEnabled, false);
     await expectLater(disabled.login(phone: account, pin: '123456',
         originalId: id, explicitUserAction: true,
