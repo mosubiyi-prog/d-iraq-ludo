@@ -10,6 +10,7 @@ import 'package:firebase_auth_platform_interface/firebase_auth_platform_interfac
 import 'package:firebase_auth_web/firebase_auth_web.dart';
 import 'package:cloud_firestore_web/cloud_firestore_web.dart';
 import 'package:cloud_functions_web/cloud_functions_web.dart';
+import 'package:shared_preferences_web/shared_preferences_web.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -41,6 +42,7 @@ void main() {
   // flutter test --platform chrome does not register the Firebase web
   // plugins automatically in this QA runner (MethodChannelFirebase proved
   // this). Register only the web implementations for this demo test.
+  SharedPreferencesPlugin.registerWith(webPluginRegistrar);
   FirebaseCoreWeb.registerWith(webPluginRegistrar);
   FirebaseAuthWeb.registerWith(webPluginRegistrar);
   FirebaseFirestoreWeb.registerWith(webPluginRegistrar);
