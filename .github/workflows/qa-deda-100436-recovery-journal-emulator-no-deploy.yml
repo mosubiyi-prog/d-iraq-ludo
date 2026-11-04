@@ -110,6 +110,12 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+          # Inspect actual installed FlutterFire web loader source in CI,
+          # never the protected application or cloud credentials.
+          echo QA_PLUGIN_REGISTER_DECLARATIONS
+          grep -nE 'registerWith|inject|load|FirebaseAuthWeb\(' "$HOME/.pub-cache/hosted/pub.dev/firebase_auth_web-5.15.3/lib/firebase_auth_web.dart" | head -55 || true
+          sed -n '1,90p' "$HOME/.pub-cache/hosted/pub.dev/firebase_auth_web-5.15.3/lib/src/interop/auth.dart"
+          grep -nE 'registerWith|inject|load|initializeApp' "$HOME/.pub-cache/hosted/pub.dev/firebase_core_web-2.24.1/lib/firebase_core_web.dart" | head -65 || true
           dart analyze --no-fatal-warnings \
             qa/recovery_journal/deda_step2_recovery_journal_firestore.dart \
             qa/recovery_journal/deda_100431_linked_owner_session_policy.dart \
