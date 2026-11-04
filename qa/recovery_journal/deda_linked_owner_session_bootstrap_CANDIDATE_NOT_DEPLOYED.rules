@@ -78,3 +78,8 @@ match /deda_recovery_session_bootstrap_grants/{uid}/installs/{installId} {
   // No client grants itself permission to refresh the original UID session.
   allow read, write: if false;
 }
+
+match /deda_recovery_session_grant_limits/{uid} {
+  // Only the audited Admin SDK issuer may change its transaction rate ledger.
+  allow read, write: if false;
+}
