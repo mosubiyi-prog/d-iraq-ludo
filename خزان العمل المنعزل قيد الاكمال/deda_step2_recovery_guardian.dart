@@ -197,7 +197,10 @@ class DedaVaultJournalRow {
 abstract class DedaVaultRecoveryJournal {
   Future<DedaVaultJournalRow?> read(
       DedaVaultVerifiedScope scope, DedaVaultCode code);
-  Future<void> reserveIfAbsent(
+  /// MUST return true only when THIS call atomically created a new row.
+  /// Return false when an existing reservation/receipt was already present.
+  /// The caller MUST NOT run the worker when this returns false.
+  Future<bool> reserveIfAbsent(
       DedaVaultVerifiedScope scope, DedaVaultCode code, String operationKey);
   Future<void> markVerified(
       DedaVaultVerifiedScope scope, DedaVaultCode code, String operationKey,
@@ -341,8 +344,8 @@ class DedaStep2RecoveryGuardian {
             stopped = true;
             break;
           }
-          await journal.reserveIfAbsent(scope, code, op);
-          _reservedByThisRun.add(op);
+          final created = await journal.reserveIfAbsent(scope, code, op);
+          if (created) _reservedByThisRun.add(op);
           await scope.checkOwner();
           saved = await journal.read(scope, code);
           await scope.checkOwner();
@@ -358,6 +361,12 @@ class DedaStep2RecoveryGuardian {
         var confirmed = await adapter.confirmByReadback(scope, op);
         await scope.checkOwner();
         if (confirmed != null && confirmed.matches(scope, code)) {
+          if (saved.state == DedaVaultJournalState.verified &&
+              saved.receiptId != confirmed.receiptId) {
+            states[code] = DedaVaultStepState.needsReview;
+            stopped = true;
+            break;
+          }
           await journal.markVerified(scope, code, op, confirmed.receiptId);
           await scope.checkOwner();
           states[code] = DedaVaultStepState.verified;
