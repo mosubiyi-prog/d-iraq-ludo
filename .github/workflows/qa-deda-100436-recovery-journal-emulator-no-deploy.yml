@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          dart analyze --no-fatal-warnings --no-fatal-infos \
+          dart analyze --no-fatal-warnings \
             qa/recovery_journal/deda_step2_recovery_journal_firestore.dart \
             qa/recovery_journal/deda_100431_linked_owner_session_policy.dart \
             qa/recovery_journal/deda_step2_recovery_guardian.dart
