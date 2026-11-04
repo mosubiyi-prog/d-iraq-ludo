@@ -1,0 +1,31 @@
+diff --git a/lib/deda_pin_auth.dart b/lib/deda_pin_auth.dart
+--- a/lib/deda_pin_auth.dart
++++ b/lib/deda_pin_auth.dart
+@@ -197,7 +197,27 @@
+       // A provider-linked owner cannot silently become a different UID.
+       throw StateError('linked-owner-session-not-verified');
+     }
+     final user = await _ensureAnonymousSession();
++    if (dedaLinkedOwnerCompatEnabled) {
++      // An implicit trusted-session refresh may refresh ONLY the already
++      // verified anonymous session's SAME account. It may not silently
++      // change an existing UID's scope to another phone account, nor make
++      // a new anonymous UID on a replacement phone look like the original.
++      final existing = await FirebaseFirestore.instance
++          .collection('deda_sessions')
++          .doc(user.uid)
++          .get(const GetOptions(source: Source.server));
++      if (!existing.exists ||
++          existing.metadata.isFromCache ||
++          existing.metadata.hasPendingWrites ||
++          existing.data()?['uid'] != user.uid ||
++          existing.data()?['accountKey'] != cleanKey) {
++        throw StateError('deda-explicit-session-account-proof-required');
++      }
++      if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
++        throw StateError('deda-trusted-session-uid-changed');
++      }
++    }
+     final install = await installId();
+     await FirebaseFirestore.instance
+         .collection('deda_sessions')
