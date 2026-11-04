@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'deda_100431_linked_owner_session_policy.dart';
+
 class DedaPinAuth {
   static const String _installIdKey = 'deda_install_id_v1';
   static const int maxLocalAttempts = 5;
@@ -37,6 +39,13 @@ class DedaPinAuth {
     if (current != null && current.isAnonymous) return current;
 
     if (current != null) {
+      // In the optional linked-owner pilot a helper may not discard the
+      // current non-anonymous UID merely to obtain an anonymous session.
+      // The user must explicitly exit/switch accounts first. Do not
+      // repurpose this method to perform a silent switch.
+      if (dedaLinkedOwnerCompatEnabled) {
+        throw StateError('deda-explicit-anonymous-session-switch-required');
+      }
       await auth.signOut();
     }
     // On weak mobile networks a first-install Firebase anonymous handshake
@@ -48,6 +57,21 @@ class DedaPinAuth {
     final user = credential.user;
     if (user == null) throw StateError('anonymous-auth-failed');
     return user;
+  }
+
+  // Never discard a verified *linked* original UID just because it is no
+  // longer anonymous. The same-UID owner is checked again against immutable
+  // account routing by backend before any privileged owner read.
+  static Future<User> _ensurePinSessionForAccount(String accountKey) async {
+    await _ensureFirebaseReady();
+    final current = FirebaseAuth.instance.currentUser;
+    if (dedaLinkedOwnerCompatEnabled && current != null &&
+        !current.isAnonymous &&
+        DedaLinkedOwnerSessionPolicy.emailMatches(
+          current.email, accountKey)) {
+      return current;
+    }
+    return _ensureAnonymousSession();
   }
 
   static Future<String> installId() async {
@@ -104,7 +128,13 @@ class DedaPinAuth {
       return true;
     }
 
-    await _ensureAnonymousSession();
+    final account = accountKeyForPhone(phone);
+    final current = FirebaseAuth.instance.currentUser;
+    if (!(dedaLinkedOwnerCompatEnabled && current != null &&
+        !current.isAnonymous &&
+        DedaLinkedOwnerSessionPolicy.emailMatches(current.email, account))) {
+      await _ensureAnonymousSession();
+    }
     final snapshot = await _directoryRef(phone)
         .get()
         .timeout(const Duration(seconds: 8));
@@ -119,7 +149,7 @@ class DedaPinAuth {
     required String accountKey,
     required String pin,
   }) async {
-    final user = await _ensureAnonymousSession();
+    final user = await _ensurePinSessionForAccount(accountKey);
     final attempt = FirebaseFirestore.instance
         .collection('deda_auth_attempts')
         .doc(user.uid);
@@ -139,7 +169,7 @@ class DedaPinAuth {
   }
 
   static Future<void> _openSession(String accountKey) async {
-    final user = await _ensureAnonymousSession();
+    final user = await _ensurePinSessionForAccount(accountKey);
     final install = await installId();
     await FirebaseFirestore.instance
         .collection('deda_sessions')
@@ -163,7 +193,38 @@ class DedaPinAuth {
     final cleanKey = accountKey.trim();
     if (cleanKey.isEmpty) throw ArgumentError('empty-account-key');
 
+    final current = FirebaseAuth.instance.currentUser;
+    if (dedaLinkedOwnerCompatEnabled && current != null &&
+        !current.isAnonymous &&
+        DedaLinkedOwnerSessionPolicy.emailMatches(
+          current.email, cleanKey)) {
+      if (await DedaLinkedOwnerSessionPolicy.verified(current, cleanKey)) {
+        return current;
+      }
+      // A provider-linked owner cannot silently become a different UID.
+      throw StateError('linked-owner-session-not-verified');
+    }
     final user = await _ensureAnonymousSession();
+    if (dedaLinkedOwnerCompatEnabled) {
+      // An implicit trusted-session refresh may refresh ONLY the already
+      // verified anonymous session's SAME account. It may not silently
+      // change an existing UID's scope to another phone account, nor make
+      // a new anonymous UID on a replacement phone look like the original.
+      final existing = await FirebaseFirestore.instance
+          .collection('deda_sessions')
+          .doc(user.uid)
+          .get(const GetOptions(source: Source.server));
+      if (!existing.exists ||
+          existing.metadata.isFromCache ||
+          existing.metadata.hasPendingWrites ||
+          existing.data()?['uid'] != user.uid ||
+          existing.data()?['accountKey'] != cleanKey) {
+        throw StateError('deda-explicit-session-account-proof-required');
+      }
+      if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+        throw StateError('deda-trusted-session-uid-changed');
+      }
+    }
     final install = await installId();
     await FirebaseFirestore.instance
         .collection('deda_sessions')
