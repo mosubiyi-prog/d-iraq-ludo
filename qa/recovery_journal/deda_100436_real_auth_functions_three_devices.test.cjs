@@ -165,6 +165,23 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
           sessionData(originalUid,install("b"))));
     });
 
+    await t.test("App Check enforcement rejects valid Auth token when App Check token is MISSING", async () => {
+      // The raw candidate callable sets enforceAppCheck:true, unlike the
+      // QA-only bypass callable used for the actual 3-phone identity tests.
+      // This tests denial of a missing token in Functions Emulator; it does
+      // NOT verify a genuine Play Integrity attestation from an Android app.
+      const guarded = httpsCallable(second.functions,
+          "dedaIssueLinkedOriginalUidDeviceGrant");
+      await assert.rejects(
+        guarded({accountKey, originalId, installId: install("b")}),
+        (error) => {
+          assert.match(String(error.code || ""),
+              /functions\/(unauthenticated|permission-denied)/);
+          return true;
+        },
+      );
+    });
+
     await t.test("REAL auth tokens reach local HTTPS Functions callable and grant each device", async () => {
       const [g2,g3]=await Promise.all([
         requestGrant(second,install("b")),
