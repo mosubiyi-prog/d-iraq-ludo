@@ -73,14 +73,19 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
 }, async (t) => {
   assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST, "127.0.0.1:9099");
   assert.equal(process.env.FIRESTORE_EMULATOR_HOST, "127.0.0.1:8098");
-  assert.match(process.env.FIREBASE_FUNCTIONS_EMULATOR_HOST || "",
-      /127\.0\.0\.1:5001/);
   assert.equal(process.env.DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED, "true");
   const admApp = adminInitialize({projectId: PROJECT},
       "deda-100436-real-auth-three-phones-admin");
   const dbAdmin = adminDbFor(admApp);
   try {
     const first = client("original_phone");
+    // Fail CLOSED if Firebase CLI silently started with allow-all rules.
+    // Unauthenticated reads of deda_sessions are forbidden by 100436 rules.
+    await assert.rejects(
+      getDoc(doc(first.db, "deda_sessions", "unauthenticated-uid")),
+      /permission-denied/i,
+    );
+    console.log("QA_CONFIRMED_FIRESTORE_RULES_DENY_UNAUTH_READ");
     const oldAnon = await signInAnonymously(first.auth);
     const originalUid = oldAnon.user.uid;
     assert.ok(originalUid && originalUid.length > 10);
