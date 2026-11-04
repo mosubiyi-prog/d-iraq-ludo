@@ -1,11 +1,12 @@
 diff --git a/lib/deda_backend.dart b/lib/deda_backend.dart
 --- a/lib/deda_backend.dart
 +++ b/lib/deda_backend.dart
-@@ -105,7 +105,13 @@
+@@ -105,8 +105,14 @@
          }
          throw StateError('linked-owner-not-verified-no-session-churn');
        }
 -      // A real admin still needs an explicit switch back to DEDA owner mode.
+-      await signOutAdmin();
 +      // Private recovery pilot: a section read MUST NOT log out another
 +      // Firebase principal. A separate, deliberate account-switch action
 +      // must sign out first; admin authorization remains independent.
@@ -13,37 +14,44 @@ diff --git a/lib/deda_backend.dart b/lib/deda_backend.dart
 +        throw StateError('deda-explicit-owner-account-switch-required');
 +      }
 +      // Preserve the existing, non-pilot compatibility path unchanged.
-       await signOutAdmin();
++      await signOutAdmin();
      }
  
-@@ -4067,7 +4073,17 @@
+     user = await DedaPinAuth.restoreTrustedSessionForAccountKey(cleanKey);
+@@ -4065,15 +4071,27 @@
+       throw ArgumentError('recovery-email-required');
+     }
  
-     final auth = FirebaseAuth.instance;
-     var current = auth.currentUser;
+-    final auth = FirebaseAuth.instance;
+-    var current = auth.currentUser;
 -    if (current == null || !current.isAnonymous) {
+-      try {
+-        await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+-      } catch (_) {}
+-      current = auth.currentUser;
+-    }
+-    if (current == null) throw StateError('deda-session-required');
++    final auth = FirebaseAuth.instance;
++    var current = auth.currentUser;
 +    if (dedaLinkedOwnerCompatEnabled &&
 +        current != null && !current.isAnonymous) {
-+      // Never force a linked owner or a logged-in admin into anonymous
++      // Never force a linked owner or logged-in admin into anonymous
 +      // credentials just to open an admin password recovery request.
-+      // An owner session is admitted only by server-verified same UID.
 +      if (!DedaLinkedOwnerSessionPolicy.emailMatches(
 +              current.email, accountKey) ||
 +          !await DedaLinkedOwnerSessionPolicy.verified(current, accountKey)) {
 +        throw StateError('deda-explicit-admin-recovery-switch-required');
 +      }
 +    } else if (current == null || !current.isAnonymous) {
-       try {
-         await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
-       } catch (_) {}
-@@ -4070,7 +4086,10 @@
-     if (current == null || !current.isAnonymous) {
-       try {
-         await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
--      } catch (_) {}
++      try {
++        await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
 +      } catch (_) {
-+        // Never treat failure to obtain a trusted DEDA session as proof.
++        // Never treat a missing trusted DEDA session as owner proof.
 +        if (dedaLinkedOwnerCompatEnabled) rethrow;
 +      }
-       current = auth.currentUser;
-     }
-     if (current == null) throw StateError('deda-session-required');
++      current = auth.currentUser;
++    }
++    if (current == null) throw StateError('deda-session-required');
+ 
+     final firestore = FirebaseFirestore.instance;
+     final accessRef =
