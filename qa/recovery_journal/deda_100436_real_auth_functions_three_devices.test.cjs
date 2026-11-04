@@ -22,7 +22,9 @@ const {getFirestore: adminDbFor} = require("firebase-admin/firestore");
 // It is NOT an AppCheck proof. Never export this wrapper in production.
 // These tests do NOT invoke the original Flutter app or published Firebase.
 
-const PROJECT = "demo-deda-100436-real-auth-functions-three-phones";
+// Match the Firebase CLI project exactly: Auth token audience, Functions
+// callable endpoint and Admin SDK Firestore all must share one demo project.
+const PROJECT = "demo-deda-100436-journal-qa";
 const accountKey = "9647712345678";
 const pin = "123456";
 const email = accountKey + "@deda-login.invalid";
