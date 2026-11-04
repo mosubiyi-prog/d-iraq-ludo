@@ -113,10 +113,14 @@ jobs:
           dart analyze --no-fatal-warnings \
             qa/recovery_journal/deda_step2_recovery_journal_firestore.dart \
             qa/recovery_journal/deda_100431_linked_owner_session_policy.dart \
-            qa/recovery_journal/deda_step2_recovery_guardian.dart
-          echo PASS_JOURNAL_DART_TRANSPORT_STATIC_ANALYSIS
+            qa/recovery_journal/deda_step2_recovery_guardian.dart \
+            qa/recovery_journal/deda_step2_linked_owner_flutter_handoff.dart \
+            qa/recovery_journal/deda_step2_linked_owner_firebase_port_CANDIDATE_NOT_WIRED.dart \
+            qa/recovery_journal/deda_step2_linked_owner_flutter_handoff_test.dart
+          echo PASS_JOURNAL_AND_OWNER_FLUTTER_ADAPTER_STATIC_ANALYSIS
           flutter test qa/recovery_journal/deda_step2_recovery_guardian_test.dart --no-pub
-          echo PASS_GUARDIAN_SOURCE_TESTS_NO_APK
+          flutter test qa/recovery_journal/deda_step2_linked_owner_flutter_handoff_test.dart --no-pub
+          echo PASS_GUARDIAN_AND_OWNER_HANDOFF_TESTS_NO_APK
       - name: Three actual Auth Emulator devices, Functions callable and Firestore — local ONLY
         shell: bash
         run: |
