@@ -7,7 +7,7 @@ const {getAuth, connectAuthEmulator, signInAnonymously,
   signInWithEmailAndPassword, linkWithCredential, EmailAuthProvider,
   getIdToken, signOut} = require("firebase/auth");
 const {getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc,
-  deleteDoc, serverTimestamp} = require("firebase/firestore");
+  updateDoc, deleteDoc, serverTimestamp} = require("firebase/firestore");
 const {getFunctions, connectFunctionsEmulator, httpsCallable}
   = require("firebase/functions");
 const {initializeApp: adminInitialize, deleteApp: adminDelete}
@@ -106,6 +106,10 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
         accountKey, sharePersonalId: originalId,
         name: "Original Owner", accountType: "user",
       }),
+      dbAdmin.doc("deda_account_profiles/" + accountKey).set({
+        accountKey, name: "Original Owner", phone: accountKey,
+        accountType: "user", trustedInstallIds: [install("a")],
+      }),
       dbAdmin.doc("deda_share_ids/" + originalId).set({
         publicId: originalId, kind: "personal",
         ownerUid: originalUid, active: true,
@@ -191,6 +195,27 @@ test("Auth+Functions+Firestore: original PIN link and three independent devices 
       // only ONE installId, even while 3 independent Auth tokens remain live.
       assert.ok([install("b"),install("c")].includes(saved.installId));
       console.log("QA_KNOWN_LIMIT_SINGLE_GLOBAL_INSTALL_ID");
+    });
+
+    await t.test("device A and B retain equal protected account READ/WRITE rights after installId changes", async () => {
+      const profile = c => doc(c.db, "deda_account_profiles", accountKey);
+      const [firstRead, secondRead] = await Promise.all([
+        getDoc(profile(first)), getDoc(profile(second)),
+      ]);
+      assert.equal(firstRead.data().accountKey,accountKey);
+      assert.equal(secondRead.data().accountKey,accountKey);
+      const lastInstall=(await dbAdmin.doc("deda_sessions/"+originalUid).get()).data().installId;
+      assert.ok([install("b"),install("c")].includes(lastInstall));
+      // Both devices update ONLY their permitted non-financial lastSeenAt.
+      await updateDoc(profile(first),{lastSeenAt: serverTimestamp()});
+      await updateDoc(profile(second),{lastSeenAt: serverTimestamp()});
+      const [afterA,afterB] = await Promise.all([
+        getDoc(profile(first)),getDoc(profile(second)),
+      ]);
+      assert.equal(afterA.data().accountKey, accountKey);
+      assert.equal(afterB.data().accountKey, accountKey);
+      assert.ok(afterA.data().lastSeenAt);
+      assert.ok(afterB.data().lastSeenAt);
     });
 
     await t.test("linked phone cannot delete shared UID session and interrupt other phones", async () => {
