@@ -58,8 +58,10 @@ function fixture({enabled = true} = {}) {
   const db = new FakeDb();
   db.put(`deda_account_directory/${account}`,
     {accountKey:account, active:true, createdUid:originalUid, authEmail:email});
+  const synced = {toMillis:()=>1770000000000};
   db.put(`deda_credentials/${account}`,
-    {accountKey:account, active:true, pin:correctPin, createdUid:originalUid});
+    {accountKey:account, active:true, pin:correctPin, createdUid:originalUid,
+      pinSyncVersion:1, updatedAt:synced, pinSyncedAt:synced});
   db.put(`users/${originalUid}`,
     {accountKey:account, sharePersonalId:originalId});
   db.put(`deda_share_ids/${originalId}`,
@@ -211,6 +213,30 @@ test("daily cap remains after 15-minute rate windows", async () => {
 test("server Auth failure never returns a client token", async () => {
   const f=fixture();
   f.auth.getUser=async ()=>{throw Error("transient-backend-error");};
+  await denied(f);
+  assert.equal(f.auth.tokens.length,0);
+});
+
+test("stale PIN sync marker rejects even otherwise valid owner and correct PIN",async()=>{
+  const f=fixture();
+  const credential=f.db.docs.get(`deda_credentials/${account}`);
+  delete credential.pinSyncVersion;
+  await denied(f);
+  assert.equal(f.auth.tokens.length,0);
+});
+test("automatic PIN-only recovery invalidates linked-owner proof until synchronized",async()=>{
+  const f=fixture();
+  const credential=f.db.docs.get(`deda_credentials/${account}`);
+  credential.pin="777888";
+  credential.updatedAt={toMillis:()=>1770000001000};
+  await denied(f,{...f.request,data:{phone:account,pin:"777888"}});
+  assert.equal(f.auth.tokens.length,0);
+});
+test("manual PIN rotation lock prevents token minting even with correct PIN",async()=>{
+  const f=fixture();
+  f.db.put(`deda_pin_recovery_locks/${account}`,{
+    originalUid,requestId:"request-in-progress",
+  });
   await denied(f);
   assert.equal(f.auth.tokens.length,0);
 });
