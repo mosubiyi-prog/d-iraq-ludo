@@ -1,0 +1,204 @@
+diff --git a/lib/main.dart b/lib/main.dart
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -15,11 +15,13 @@
+ import 'package:qr_flutter/qr_flutter.dart';
+ import 'package:url_launcher/url_launcher.dart';
+ import 'package:firebase_core/firebase_core.dart';
++import 'package:firebase_auth/firebase_auth.dart';
+ import 'package:cloud_firestore/cloud_firestore.dart';
+ import 'package:image_picker/image_picker.dart';
+ 
+ import 'admin_pages.dart';
+ import 'deda_backend.dart';
++import 'deda_100431_linked_owner_session_policy.dart';
+ import 'deda_daily_published_tasks.dart';
+ import 'deda_daily_user_task_display.dart';
+ import 'deda_social_task_preview.dart';
+@@ -716,6 +718,11 @@
+   static const String _phoneKey = 'deda_phone_v1';
+   static const String _accountTypeKey = 'deda_account_type_v1';
+   static const String _accountPhoneKey = 'deda_account_phone_v1';
++  // Private linked-owner provenance only; never stores PIN or wallet value.
++  static const String _linkedVerifiedUidKey =
++      DedaLinkedOwnerSessionPolicy.linkedUidPreferencesKey;
++  static const String _linkedVerifiedAccountKey =
++      DedaLinkedOwnerSessionPolicy.linkedAccountPreferencesKey;
+   static const String _voiceEnabledKey = 'deda_voice_enabled_v1';
+   static const String _speechRateKey = 'deda_speech_rate_v1';
+   static const String _travelModeKey = 'deda_default_travel_mode_v1';
+@@ -785,6 +792,28 @@
+         accountType == null) {
+       isLoggedIn = false;
+     }
++
++    // On a private, confirmed replacement phone, local preferences alone
++    // cannot reopen an account whose Firebase UID has changed or signed out.
++    // No network read is needed just to block a mismatched cached identity.
++    if (dedaLinkedOwnerCompatEnabled &&
++        (prefs.containsKey(_linkedVerifiedUidKey) ||
++            prefs.containsKey(_linkedVerifiedAccountKey) ||
++            prefs.containsKey(DedaLinkedOwnerSessionPolicy.protectedAccountKey(
++                phone.replaceAll(RegExp(r'[^0-9]'), ''))))) {
++      final user = Firebase.apps.isNotEmpty
++          ? FirebaseAuth.instance.currentUser : null;
++      if (!DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
++        savedOriginalUid: prefs.getString(_linkedVerifiedUidKey),
++        savedAccountKey: prefs.getString(_linkedVerifiedAccountKey),
++        localPhone: phone,
++        currentUid: user?.uid,
++        currentEmail: user?.email,
++        currentIsAnonymous: user?.isAnonymous ?? true,
++      )) {
++        isLoggedIn = false;
++      }
++    }
+   }
+ 
+   static Future<void> setLanguage(DedaLanguage language) async {
+@@ -800,45 +829,109 @@
+     required String name,
+     required String normalizedPhone,
+     required DedaAccountType type,
++    bool verifiedCanonicalProfile = false,
++    String? verifiedOriginalUid,
+   }) async {
+     final prefs = await SharedPreferences.getInstance();
++    // In the private linked-owner pilot, a previously confirmed identity
++    // cannot be replaced with the legacy name+phone-only login. Otherwise
++    // the ordinary login action would erase the saved original UID proof and
++    // reopen a local profile without the owner's Firebase credential.
++    // Production 100340 compatibility remains unchanged (pilot flag false).
++    if (!verifiedCanonicalProfile &&
++        !DedaLinkedOwnerSessionPolicy.mayUseUnverifiedLocalLogin(
++          linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
++          hasStoredOriginalUid: prefs.containsKey(_linkedVerifiedUidKey),
++          hasStoredAccountKey: prefs.containsKey(_linkedVerifiedAccountKey),
++          hasProtectedTargetAccount: prefs.containsKey(
++            DedaLinkedOwnerSessionPolicy.protectedAccountKey(
++              normalizedPhone.replaceAll(RegExp(r'[^0-9]'), ''))),
++        )) {
++      throw StateError('linked-owner-requires-verified-login-or-logout');
++    }
+     final previousPhone = prefs.getString(_phoneKey) ?? '';
+     final previousName = prefs.getString(_userNameKey) ?? '';
+-    final resolvedName =
+-        previousPhone == normalizedPhone && previousName.trim().isNotEmpty
+-            ? previousName.trim()
+-            : name.trim();
+-
+-    userName = resolvedName;
+-    phone = normalizedPhone;
+-    accountPhone = normalizedPhone;
+-    accountType = type;
+-    isLoggedIn = true;
+-    profileAvatarStyle = prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
+-    profileFrameStyle = (prefs.getInt(_profileFrameKey(normalizedPhone)) ?? 0)
+-        .clamp(0, 2)
+-        .toInt();
+-    profileBackgroundStyle =
+-        prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
+-
+-    await Future.wait([
++    // Never prefer a previous local name over a verified original-server
++    // profile during replacement-phone restoration.
++    final resolvedName = verifiedCanonicalProfile
++        ? name.trim()
++        : (previousPhone == normalizedPhone && previousName.trim().isNotEmpty
++            ? previousName.trim()
++            : name.trim());
++
++    // On a verified replacement-phone login, commit the profile fields
++    // BEFORE the persistent "logged in" flag. A process kill between writes
++    // must boot into login, not a stale hybrid of two account profiles.
++    if (verifiedCanonicalProfile) {
++      if (!await prefs.setBool(_loggedInKey, false)) {
++        throw StateError('verified-owner-login-prepare-not-saved');
++      }
++      if (dedaLinkedOwnerCompatEnabled &&
++          (verifiedOriginalUid == null || verifiedOriginalUid.isEmpty)) {
++        throw StateError('verified-owner-original-uid-required');
++      }
++      if (verifiedOriginalUid != null) {
++        final account = normalizedPhone.replaceAll(RegExp(r'[^0-9]'), '');
++        final guardKey = DedaLinkedOwnerSessionPolicy.protectedAccountKey(account);
++        final originalGuard = prefs.getString(guardKey);
++        if (verifiedOriginalUid.isEmpty ||
++            (originalGuard != null && originalGuard != verifiedOriginalUid) ||
++            !await prefs.setString(guardKey, verifiedOriginalUid) ||
++            !await prefs.setString(_linkedVerifiedUidKey, verifiedOriginalUid) ||
++            !await prefs.setString(_linkedVerifiedAccountKey, account)) {
++          throw StateError('verified-owner-provenance-not-saved');
++        }
++      }
++    } else {
++      // Ordinary legacy local login retains its historical behavior and
++      // cannot inherit a previous verified owner's UID binding.
++      if (!await prefs.remove(_linkedVerifiedUidKey) ||
++          !await prefs.remove(_linkedVerifiedAccountKey)) {
++        throw StateError('stale-owner-provenance-not-cleared');
++      }
++    }
++
++    final writes = await Future.wait([
+       prefs.setString(_userNameKey, resolvedName),
+       prefs.setString(_phoneKey, normalizedPhone),
+       prefs.setString(_accountPhoneKey, normalizedPhone),
+       prefs.setString(_accountTypeKey, type.name),
+-      prefs.setBool(_loggedInKey, true),
+-    ]);
++      if (!verifiedCanonicalProfile) prefs.setBool(_loggedInKey, true),
++    ]);
++    if (writes.any((saved) => !saved)) {
++      throw StateError('owner-login-profile-not-saved');
++    }
++    if (verifiedCanonicalProfile &&
++        !await prefs.setBool(_loggedInKey, true)) {
++      throw StateError('verified-owner-login-commit-not-saved');
++    }
++    // In-memory identity becomes visible only after the local write completes.
++    userName = resolvedName;
++    phone = normalizedPhone;
++    accountPhone = normalizedPhone;
++    accountType = type;
++    isLoggedIn = true;
++    profileAvatarStyle = prefs.getInt(_profileAvatarKey(normalizedPhone)) ?? 0;
++    profileFrameStyle = (prefs.getInt(_profileFrameKey(normalizedPhone)) ?? 0)
++        .clamp(0, 2)
++        .toInt();
++    profileBackgroundStyle =
++        prefs.getInt(_profileBackgroundKey(normalizedPhone)) ?? 0;
+     unawaited(DedaTaskEngine.initializeForCurrentAccount());
+ 
+     // Do not hold the login screen open while Firebase/network profile syncs.
+     // Local account state is already complete, so the user can enter DEDA now.
+-    unawaited(
+-      DedaBackend.syncCurrentUserProfile(
+-        name: resolvedName,
+-        phone: normalizedPhone,
+-        accountType: type.name,
+-      ).catchError((_) {}),
+-    );
++    // The recovered profile is authoritative: a stale local preference must
++    // not write it back to Firestore during the first restored login.
++    if (!verifiedCanonicalProfile) {
++      unawaited(
++        DedaBackend.syncCurrentUserProfile(
++          name: resolvedName,
++          phone: normalizedPhone,
++          accountType: type.name,
++        ).catchError((_) {}),
++      );
++    }
+   }
+ 
+   static Future<void> setAccountType(DedaAccountType type) async {
+@@ -920,6 +1013,8 @@
+     profileFrameStyle = 0;
+     profileBackgroundStyle = 0;
+     await prefs.setBool(_loggedInKey, false);
++    await prefs.remove(_linkedVerifiedUidKey);
++    await prefs.remove(_linkedVerifiedAccountKey);
+     await prefs.remove(_userNameKey);
+     await prefs.remove(_phoneKey);
+     await prefs.remove(_accountPhoneKey);
