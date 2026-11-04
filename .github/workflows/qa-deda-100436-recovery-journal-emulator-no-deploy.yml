@@ -1,0 +1,120 @@
+name: DEDA 100436 Recovery Journal Real Firestore Emulator QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100436-recovery-journal-firestore-emulator-private-qa-no-deploy-2026-11-04
+    paths:
+      - '.github/workflows/qa-deda-100436-recovery-journal-emulator-no-deploy.yml'
+      - 'qa/recovery_journal/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100436-recovery-journal-emulator-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  firebase-journal-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce exact owner-confirmed 100436 base and no application/Firebase writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=40936af117d662f975a67cac4e21eab5f84e9ec2
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          git diff --exit-code "$BASE" HEAD -- \
+            lib android assets pubspec.yaml pubspec.lock functions \
+            firestore.rules firebase.json storage.rules \
+            tools .firebaserc
+          git diff --name-only "$BASE" HEAD | while read -r path; do
+            case "$path" in
+              qa/recovery_journal/*|.github/workflows/qa-deda-100436-recovery-journal-emulator-no-deploy.yml) ;;
+              *) echo "SAFE_STOP_FILE_OUTSIDE_PRIVATE_QA_SCOPE:$path"; exit 8 ;;
+            esac
+          done
+          test ! -e qa/recovery_journal/firebase.json
+          echo PASS_EXACT_100436_BASE_NO_APP_FIREBASE_PRODUCTION_EDIT
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install temporary emulator-only node modules, no cloud account
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda100436-journal-node"
+          npm install --prefix "$RUNNER_TEMP/deda100436-journal-node" \
+            --no-save --no-audit --no-fund \
+            firebase-tools@13.35.1 \
+            firebase@11.10.0 \
+            @firebase/rules-unit-testing@4.0.0 \
+            firebase-functions@6.1.0 \
+            firebase-admin@13.0.0
+          echo "NODE_PATH=$RUNNER_TEMP/deda100436-journal-node/node_modules" >> "$GITHUB_ENV"
+      - name: Local-only original Firestore + candidate journal rules assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEDA_JOURNAL_EMULATOR_RULES="$RUNNER_TEMP/deda100436-journal-emulator.rules"
+          echo "DEDA_JOURNAL_EMULATOR_RULES=$DEDA_JOURNAL_EMULATOR_RULES" >> "$GITHUB_ENV"
+          python3 qa/recovery_journal/assemble_emulator_rules.py
+          python3 - <<'PY'
+          import json,os,pathlib
+          f=pathlib.Path(os.environ['RUNNER_TEMP'])/'deda100436-journal-firebase.json'
+          rules=os.environ['DEDA_JOURNAL_EMULATOR_RULES']
+          f.write_text(json.dumps({
+            'firestore':{'rules':rules},
+            'emulators':{'firestore':{'host':'127.0.0.1','port':8098},
+                         'ui':{'enabled':False}}}))
+          with open(os.environ['GITHUB_ENV'],'a') as e:
+            e.write('DEDA_JOURNAL_FIREBASE_CONFIG='+str(f)+'\n')
+          PY
+      - name: Actual Node JS server completion logic — no Firebase connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check qa/recovery_journal/deda_recovery_journal_completion_CANDIDATE_NOT_EXPORTED.js
+          node --check qa/recovery_journal/deda_recovery_journal_server_completion.test.cjs
+          node --test qa/recovery_journal/deda_recovery_journal_server_completion.test.cjs
+          echo PASS_DEDA_JOURNAL_SERVER_LOGIC_NO_NETWORK
+      - name: ACTUAL Firestore Emulator — 100436 baseline + candidate journal isolation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/deda100436-journal-node/node_modules/.bin/firebase" emulators:exec \
+            --project demo-deda-100436-journal-qa \
+            --config "$DEDA_JOURNAL_FIREBASE_CONFIG" \
+            --only firestore --non-interactive \
+            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs'
+          echo PASS_REAL_FIRESTORE_EMULATOR_JOURNAL_DENY_AND_ATOMIC_RACE
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Flutter Dart guardian isolated tests, no APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter test qa/recovery_journal/deda_step2_recovery_guardian_test.dart --no-pub
+          echo PASS_GUARDIAN_SOURCE_TESTS_NO_APK
+      - name: Finish with no deployed resource or downloaded secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+          echo PASS_NO_FIREBASE_DEPLOY_NO_REAL_ACCOUNT_READ_OR_WRITE_NO_APK_NO_PLAY
