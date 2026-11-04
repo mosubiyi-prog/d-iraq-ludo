@@ -1,0 +1,49 @@
+diff --git a/lib/deda_backend.dart b/lib/deda_backend.dart
+--- a/lib/deda_backend.dart
++++ b/lib/deda_backend.dart
+@@ -105,7 +105,13 @@
+         }
+         throw StateError('linked-owner-not-verified-no-session-churn');
+       }
+-      // A real admin still needs an explicit switch back to DEDA owner mode.
++      // Private recovery pilot: a section read MUST NOT log out another
++      // Firebase principal. A separate, deliberate account-switch action
++      // must sign out first; admin authorization remains independent.
++      if (dedaLinkedOwnerCompatEnabled) {
++        throw StateError('deda-explicit-owner-account-switch-required');
++      }
++      // Preserve the existing, non-pilot compatibility path unchanged.
+       await signOutAdmin();
+     }
+ 
+@@ -4067,7 +4073,17 @@
+ 
+     final auth = FirebaseAuth.instance;
+     var current = auth.currentUser;
+-    if (current == null || !current.isAnonymous) {
++    if (dedaLinkedOwnerCompatEnabled &&
++        current != null && !current.isAnonymous) {
++      // Never force a linked owner or a logged-in admin into anonymous
++      // credentials just to open an admin password recovery request.
++      // An owner session is admitted only by server-verified same UID.
++      if (!DedaLinkedOwnerSessionPolicy.emailMatches(
++              current.email, accountKey) ||
++          !await DedaLinkedOwnerSessionPolicy.verified(current, accountKey)) {
++        throw StateError('deda-explicit-admin-recovery-switch-required');
++      }
++    } else if (current == null || !current.isAnonymous) {
+       try {
+         await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+       } catch (_) {}
+@@ -4070,7 +4086,10 @@
+     if (current == null || !current.isAnonymous) {
+       try {
+         await DedaPinAuth.restoreTrustedSessionForAccountKey(accountKey);
+-      } catch (_) {}
++      } catch (_) {
++        // Never treat failure to obtain a trusted DEDA session as proof.
++        if (dedaLinkedOwnerCompatEnabled) rethrow;
++      }
+       current = auth.currentUser;
+     }
+     if (current == null) throw StateError('deda-session-required');
