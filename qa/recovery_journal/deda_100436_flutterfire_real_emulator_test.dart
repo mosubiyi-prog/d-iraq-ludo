@@ -13,9 +13,9 @@ import 'deda_step2_linked_owner_firebase_port_CANDIDATE_NOT_WIRED.dart';
 // NOT a test of real Android Play Integrity.
 const project = 'demo-deda-100436-journal-qa';
 const originalUid = 'deda-100436-flutterfire-original-uid';
-const phone = '9647712345678';
+const phone = '9647712345699';
 const pin = '123456';
-const originalId = '@DEDA-ABC123';
+const originalId = '@DEDA-FT1234';
 const email = '$phone@deda-login.invalid';
 
 const demoOptions = FirebaseOptions(
