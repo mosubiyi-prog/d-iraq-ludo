@@ -26,6 +26,11 @@ async function main() {
     const db = getFirestore(app);
     const now = Timestamp.now();
     await Promise.all([
+      db.doc("deda_recovery_session_grant_limits/" + uid).set({
+        ownerUid: uid, count: 0,
+        windowStartedAt: Timestamp.fromMillis(Date.now()-1000),
+        updatedAt: Timestamp.fromMillis(Date.now()-1000),
+      }),
       db.doc("deda_account_directory/" + accountKey).set({
         accountKey, createdUid: uid, active: true,
       }),
