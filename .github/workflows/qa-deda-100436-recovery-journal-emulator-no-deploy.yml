@@ -98,8 +98,8 @@ jobs:
             --project demo-deda-100436-journal-qa \
             --config "$DEDA_JOURNAL_FIREBASE_CONFIG" \
             --only firestore --non-interactive \
-            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs'
-          echo PASS_REAL_FIRESTORE_EMULATOR_JOURNAL_DENY_AND_ATOMIC_RACE
+            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs'
+          echo PASS_REAL_FIRESTORE_EMULATOR_JOURNAL_AND_ORIGINAL_UID_SESSION_BOOTSTRAP
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.7'
