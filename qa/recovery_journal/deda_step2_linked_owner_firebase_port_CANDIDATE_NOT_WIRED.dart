@@ -97,24 +97,23 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     final route = await db.doc('deda_share_ids/$originalId')
         .get(const GetOptions(source: Source.server));
     DedaAuthRuntime.check();
-    print('QA_PORT_PROVE_USER_ENTER');
-    final user = await db.doc('users/$uid')
-        .get(const GetOptions(source: Source.server));
-    DedaAuthRuntime.check();
+    // Do not gate initial device bootstrap on a client users/{uid} read.
+    // The server issuer verifies users/{uid}, account, UID, credentials,
+    // original ID, admin absence and existing session using Admin SDK.
+    // No session grant is issued on a missing or mismatched server user.
     if (directory.metadata.isFromCache || route.metadata.isFromCache ||
-        user.metadata.isFromCache || directory.metadata.hasPendingWrites ||
-        route.metadata.hasPendingWrites || user.metadata.hasPendingWrites ||
+        directory.metadata.hasPendingWrites ||
+        route.metadata.hasPendingWrites ||
         directory.data()?['active'] != true ||
         directory.data()?['createdUid'] != uid ||
         directory.data()?['accountKey'] != account ||
         route.data()?['publicId'] != originalId ||
         route.data()?['ownerUid'] != uid ||
         route.data()?['kind'] != 'personal' ||
-        route.data()?['active'] != true ||
-        user.data()?['accountKey'] != account ||
-        user.data()?['sharePersonalId'] != originalId) {
+        route.data()?['active'] != true) {
       throw StateError('linked-owner-original-server-evidence-missing');
     }
+    print('QA_PORT_CLIENT_PROOF_VALIDATED_SERVER_USER_PROOF_REQUIRED');
   }
 
   @override
