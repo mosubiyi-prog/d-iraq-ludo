@@ -240,3 +240,18 @@ test("manual PIN rotation lock prevents token minting even with correct PIN",asy
   await denied(f);
   assert.equal(f.auth.tokens.length,0);
 });
+
+test("after synchronized PIN rotation old PIN fails, new PIN returns the original UID",async()=>{
+  const f=fixture();
+  const credential=f.db.docs.get(`deda_credentials/${account}`);
+  credential.pin="654321";
+  credential.pinSyncVersion=1;
+  credential.updatedAt={toMillis:()=>1770000001000};
+  credential.pinSyncedAt={toMillis:()=>1770000001000};
+  await denied(f,{...f.request,data:{phone:account,pin:correctPin}});
+  assert.equal(f.auth.tokens.length,0);
+  const result=await f.fn({...f.request,data:{phone:account,pin:"654321"}});
+  assert.equal(result.originalUid,originalUid);
+  assert.equal(result.originalId,originalId);
+  assert.deepEqual(f.auth.tokens,[originalUid]);
+});
