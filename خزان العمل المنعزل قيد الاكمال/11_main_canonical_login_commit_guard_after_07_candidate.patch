@@ -1,0 +1,160 @@
+diff --git a/lib/main.dart b/lib/main.dart
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -1926,50 +1926,112 @@
+     );
+   }
+ 
+-  Future<void> _completeVerifiedLogin(String normalizedPhone) async {
+-    if (!mounted) return;
+-    final name = nameController.text.trim();
+-    if (name.length < 2) {
+-      _showLoginMessage(
+-        'أدخل الاسم الكامل أولاً.',
+-        'Enter your full name first.',
+-      );
+-      return;
+-    }
+-
+-    final savedType = DedaPreferences.accountType;
+-    final type =
+-        savedType != null && DedaPreferences.accountPhone == normalizedPhone
+-            ? savedType
+-            : (savedType ?? DedaAccountType.user);
+-
+-    await DedaPreferences.saveLogin(
+-      name: name,
+-      normalizedPhone: normalizedPhone,
+-      type: type,
+-    );
+-    if (!mounted) return;
+-    Navigator.pushAndRemoveUntil(
+-      context,
+-      MaterialPageRoute(builder: (_) => HomePage(userName: name)),
+-      (_) => false,
+-    );
+-  }
+-
+-  Future<void> login() async {
+-    final name = nameController.text.trim();
+-    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
+-    if (name.length < 2 || normalizedPhone == null) {
+-      _showLoginMessage(
+-        'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
+-        'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
+-      );
+-      return;
+-    }
+-
+-    await _completeVerifiedLogin(normalizedPhone);
+-  }
+-
++  Future<void> _completeVerifiedLogin(
++    String normalizedPhone, {
++    String? verifiedName,
++    DedaAccountType? verifiedType,
++    String? verifiedUid,
++  }) async {
++    if (!mounted) {
++      if (verifiedUid != null) {
++        throw StateError('recovery-login-page-disposed-before-commit');
++      }
++      return;
++    }
++    if ((verifiedName == null) != (verifiedType == null)) {
++      throw StateError('incomplete-verified-owner-profile');
++    }
++    // The private new-phone path must still own the SAME original UID at
++    // the point local login state is written, never a previous phone's UID.
++    if (verifiedName != null &&
++        (verifiedUid == null || verifiedUid.isEmpty ||
++            FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
++            FirebaseAuth.instance.currentUser?.isAnonymous != false ||
++            FirebaseAuth.instance.currentUser?.email !=
++                DedaOwnerUidContinuity.authEmail(normalizedPhone))) {
++      throw StateError('verified-original-uid-changed-before-login-commit');
++    }
++    final name = verifiedName ?? nameController.text.trim();
++    if (name.length < 2) {
++      _showLoginMessage(
++        'أدخل الاسم الكامل أولاً.',
++        'Enter your full name first.',
++      );
++      return;
++    }
++
++    final savedType = DedaPreferences.accountType;
++    final type = verifiedType ??
++        (savedType != null && DedaPreferences.accountPhone == normalizedPhone
++            ? savedType
++            : DedaAccountType.user);
++
++    await DedaPreferences.saveLogin(
++      name: name,
++      normalizedPhone: normalizedPhone,
++      type: type,
++      verifiedCanonicalProfile: verifiedName != null,
++      verifiedOriginalUid: verifiedUid,
++    );
++    // The verified replacement phone must load the RESTORED original points
++    // into the actual profile notifier before opening HomePage. Normal new
++    // account creation keeps the earlier nonblocking startup behavior.
++    if (verifiedUid != null && dedaStep2LevelPointsRestoreEnabled) {
++      await DedaTaskEngine.initializeForCurrentAccount();
++    }
++    if (verifiedUid != null &&
++        (FirebaseAuth.instance.currentUser?.uid != verifiedUid ||
++            FirebaseAuth.instance.currentUser?.isAnonymous != false ||
++            FirebaseAuth.instance.currentUser?.email !=
++                DedaOwnerUidContinuity.authEmail(normalizedPhone))) {
++      // Do not leave the wrong profile marked logged in after a session
++      // switch during the await on SharedPreferences.
++      await DedaPreferences.logout();
++      throw StateError('verified-original-uid-changed-during-login-commit');
++    }
++    if (!mounted) {
++      if (verifiedUid != null) {
++        if (DedaPreferences.accountPhone == normalizedPhone) {
++          await DedaPreferences.logout();
++        }
++        throw StateError('recovery-login-page-disposed-after-commit');
++      }
++      return;
++    }
++    Navigator.pushAndRemoveUntil(
++      context,
++      MaterialPageRoute(builder: (_) => HomePage(userName: name)),
++      (_) => false,
++    );
++  }
++
++  Future<void> login() async {
++    final name = nameController.text.trim();
++    final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
++    if (name.length < 2 || normalizedPhone == null) {
++      _showLoginMessage(
++        'أدخل الاسم الكامل ورقم هاتف عراقي صحيح مثل 07XXXXXXXXX',
++        'Enter your full name and a valid Iraqi mobile number such as 07XXXXXXXXX',
++      );
++      return;
++    }
++
++    try {
++      await _completeVerifiedLogin(normalizedPhone);
++    } on StateError catch (error) {
++      if (!error.toString().contains(
++          'linked-owner-requires-verified-login-or-logout')) {
++        rethrow;
++      }
++      _showLoginMessage(
++        'الحساب المؤكّد يحتاج الدخول بالرقم والرمز من زر دخول الحساب المؤكّد. '
++        'لم يتم تغيير الحساب أو فقدان بياناته.',
++        'Use confirmed account sign-in with your phone and PIN. '
++        'Your existing account data was not replaced.',
++      );
++    }
++  }
++
+   void _openContact() {
+     Navigator.push(
+       context,
