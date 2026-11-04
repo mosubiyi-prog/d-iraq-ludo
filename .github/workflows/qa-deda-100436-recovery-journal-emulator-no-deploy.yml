@@ -117,6 +117,48 @@ jobs:
           echo PASS_JOURNAL_DART_TRANSPORT_STATIC_ANALYSIS
           flutter test qa/recovery_journal/deda_step2_recovery_guardian_test.dart --no-pub
           echo PASS_GUARDIAN_SOURCE_TESTS_NO_APK
+      - name: Three actual Auth Emulator devices, Functions callable and Firestore — local ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          QA_ROOT="$RUNNER_TEMP/deda100436-auth-functions-local"
+          FUNC="$QA_ROOT/functions"
+          mkdir -p "$FUNC"
+          cp qa/recovery_journal/functions_emulator/index.js "$FUNC/index.js"
+          cp qa/recovery_journal/functions_emulator/package.json "$FUNC/package.json"
+          cp qa/recovery_journal/deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js \
+            "$FUNC/deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js"
+          # A throwaway local functions source: NOT the repository's functions/.
+          npm install --prefix "$FUNC" --no-audit --no-fund --ignore-scripts
+          node --check "$FUNC/index.js"
+          node --check qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs
+          export QA_ROOT
+          python3 - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path(os.environ["QA_ROOT"])
+          rules = os.environ["DEDA_JOURNAL_EMULATOR_RULES"]
+          (root/"firebase.json").write_text(json.dumps({
+            "firestore": {"rules": rules},
+            "functions": {"source": "functions"},
+            "emulators": {
+              "firestore": {"host": "127.0.0.1", "port": 8098},
+              "auth": {"host": "127.0.0.1", "port": 9099},
+              "functions": {"host": "127.0.0.1", "port": 5001},
+              "ui": {"enabled": False}
+            }
+          }))
+          PY
+          # In the Functions emulator the QA wrapper requires a DEMO project,
+          # real Firebase Auth ID token and local Firestore/Auth emulators.
+          # Its synthetic AppCheck context is QA-only; DO NOT count this as
+          # AppCheck security validation or a genuine device integration.
+          DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED=true \
+            "$RUNNER_TEMP/deda100436-journal-node/node_modules/.bin/firebase" \
+            emulators:exec --project demo-deda-100436-journal-qa \
+            --config "$QA_ROOT/firebase.json" \
+            --only auth,functions,firestore --non-interactive \
+            'DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED=true node --test qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs'
+          echo PASS_REAL_AUTH_FUNCTIONS_FIRESTORE_THREE_INDEPENDENT_DEVICE_EMULATORS
       - name: Finish with no deployed resource or downloaded secrets
         shell: bash
         run: |
