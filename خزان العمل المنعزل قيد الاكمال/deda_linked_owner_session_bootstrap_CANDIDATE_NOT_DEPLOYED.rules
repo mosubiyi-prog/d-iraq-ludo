@@ -1,0 +1,85 @@
+// DEDA 100436 — ISOLATED FIRESTORE EMULATOR SESSION BOOTSTRAP CANDIDATE.
+// NOT DEPLOYED. Never copy this to firestore.rules without owner approval.
+// The existing anonymous PIN/trusted-install clauses remain intact.
+//
+// A NEW phone may refresh deda_sessions for the SAME original Firebase UID
+// only if a short-lived independent server-issued install grant exists.
+// Password-linked Firebase Auth alone is insufficient: a six-digit PIN can
+// be brute-forced; a future audited callable must verify the original owner,
+// rate-limit and approve a grant before this rule can ever be activated.
+//
+// No client may create, list, get, update or delete a bootstrap grant.
+// This local candidate deliberately has NO grant writer or production export.
+
+function dedaLinkedOriginalOwnerSessionBootstrap(uid, data) {
+  // Fetch each original proof ONCE: Firestore security rules cap the number
+  // of get()/exists() calls, including legacy PIN checks from the same allow.
+  // Missing/invalid documents fail closed; no client can populate a grant.
+  let directory = get(
+    /databases/$(database)/documents/deda_account_directory/$(data.accountKey)
+  ).data;
+  let credential = get(
+    /databases/$(database)/documents/deda_credentials/$(data.accountKey)
+  ).data;
+  let owner = get(
+    /databases/$(database)/documents/users/$(uid)
+  ).data;
+  let route = get(
+    /databases/$(database)/documents/deda_share_ids/$(owner.sharePersonalId)
+  ).data;
+  let grant = get(
+    /databases/$(database)/documents/deda_recovery_session_bootstrap_grants/$(uid)/installs/$(data.installId)
+  ).data;
+
+  return signedIn()
+    && request.auth.uid == uid
+    && request.auth.token.firebase.sign_in_provider == 'password'
+    && data.accountKey is string
+    && data.accountKey.matches('^[0-9]{10,16}$')
+    && request.auth.token.email == data.accountKey + '@deda-login.invalid'
+    // An administrative principal must never be converted to a DEDA owner
+    // session implicitly. Administration auth is a separate workflow.
+    && !exists(/databases/$(database)/documents/admins/$(uid))
+    && data.installId is string
+    && data.installId.matches('^[0-9a-f]{48}$')
+    && data.signedInAt == request.time
+    && data.lastSeenAt == request.time
+    && (
+      !exists(/databases/$(database)/documents/deda_sessions/$(uid))
+      || get(/databases/$(database)/documents/deda_sessions/$(uid)).data.accountKey == data.accountKey
+    )
+    && directory.active == true
+    && directory.accountKey == data.accountKey
+    && directory.createdUid == uid
+    && credential.active == true
+    && credential.accountKey == data.accountKey
+    && credential.createdUid == uid
+    && owner.accountKey == data.accountKey
+    && owner.sharePersonalId is string
+    && owner.sharePersonalId.matches('^@DEDA-[A-Z0-9]{6}$')
+    && route.publicId == owner.sharePersonalId
+    && route.ownerUid == uid
+    && route.kind == 'personal'
+    && route.active == true
+    && grant.ownerUid == uid
+    && grant.accountKey == data.accountKey
+    && grant.originalId == owner.sharePersonalId
+    && grant.installId == data.installId
+    && grant.purpose == 'linked_uid_new_device_session_v1'
+    && grant.state == 'approved'
+    && grant.issuedAt is timestamp
+    && grant.expiresAt is timestamp
+    && grant.issuedAt <= request.time
+    && grant.expiresAt > request.time
+    && grant.expiresAt <= grant.issuedAt + duration.value(5, 'm');
+}
+
+match /deda_recovery_session_bootstrap_grants/{uid}/installs/{installId} {
+  // No client grants itself permission to refresh the original UID session.
+  allow read, write: if false;
+}
+
+match /deda_recovery_session_grant_limits/{uid} {
+  // Only the audited Admin SDK issuer may change its transaction rate ledger.
+  allow read, write: if false;
+}
