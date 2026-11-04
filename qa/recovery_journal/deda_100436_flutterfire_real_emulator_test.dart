@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:html' as html;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -38,8 +41,21 @@ void main() {
     // Initialize the default app first; the existing Auth runtime expects it.
     // Keep web-emulator initialization bounded and separately diagnosable.
     print('QA_FLUTTERFIRE_STEP_INITIALIZE_DEFAULT_APP_B');
-    final appB = await Firebase.initializeApp(options: demoOptions)
-        .timeout(const Duration(seconds: 25));
+    print('QA_CHROME_ORIGIN=' + html.window.location.origin);
+    print('QA_CHROME_ONLINE=' + html.window.navigator.onLine.toString());
+    FirebaseApp appB;
+    try {
+      appB = await Firebase.initializeApp(options: demoOptions)
+          .timeout(const Duration(seconds: 25));
+    } on TimeoutException {
+      // A failed bootstrap must expose SDK-loader evidence, not blame UID.
+      final scriptSources = html.document.querySelectorAll('script[src]')
+          .map((element) => element.attributes['src'] ?? '')
+          .where((src) => src.contains('firebase') || src.contains('gstatic'))
+          .toList();
+      print('QA_CHROME_FIREBASE_SCRIPT_SOURCES=' + scriptSources.toString());
+      rethrow;
+    }
     print('PASS_FLUTTERFIRE_DEFAULT_APP_INITIALIZED');
     print('QA_FLUTTERFIRE_STEP_INITIALIZE_SECONDARY_APP_A');
     final appA = await Firebase.initializeApp(
