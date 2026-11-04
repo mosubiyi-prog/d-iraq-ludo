@@ -9,8 +9,8 @@ const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 
 const projectId = "demo-deda-100436-journal-qa";
 const uid = "deda-100436-flutterfire-original-uid";
-const accountKey = "9647712345678";
-const originalId = "@DEDA-ABC123";
+const accountKey = "9647712345699";
+const originalId = "@DEDA-FT1234";
 const pin = "123456";
 async function main() {
   assert.equal(process.env.GCLOUD_PROJECT || process.env.GCLOUD_PROJECT_ID ||
