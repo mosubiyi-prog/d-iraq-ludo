@@ -57,6 +57,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   Future<T> inExistingOwnerLane<T>(Future<T> Function() work,
       bool Function() isCurrentIntent) {
     _enabled();
+    print('QA_PORT_OWNER_LANE_ENTER');
     return DedaAuthRuntime.run<T>(
       kind: DedaSessionTransitionKind.ownerLogin,
       origin: DedaSessionTransitionOrigin.userAction,
@@ -68,6 +69,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   @override
   Future<DedaLoginIdentity> signInOriginal(String account, String pin) async {
     _enabled();
+    print('QA_PORT_AUTH_SIGNIN_ENTER');
     final credential = await DedaAuthRuntime.controller.transition<UserCredential>(
       kind: DedaSessionTransitionKind.ownerLogin,
       action: () => auth.signInWithEmailAndPassword(
@@ -79,6 +81,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
         live.kind == DedaSessionAuthKind.authenticated &&
         signedIn.user!.email == '$account@deda-login.invalid',
     );
+    print('QA_PORT_AUTH_SIGNIN_RETURNED');
     if (credential.user == null) throw StateError('linked-owner-no-auth-user');
     return current();
   }
@@ -86,12 +89,15 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   @override
   Future<void> proveOriginal(String account, String originalId, String uid) async {
     _enabled();
+    print('QA_PORT_PROVE_DIRECTORY_ENTER');
     final directory = await db.doc('deda_account_directory/$account')
         .get(const GetOptions(source: Source.server));
     DedaAuthRuntime.check();
+    print('QA_PORT_PROVE_ROUTE_ENTER');
     final route = await db.doc('deda_share_ids/$originalId')
         .get(const GetOptions(source: Source.server));
     DedaAuthRuntime.check();
+    print('QA_PORT_PROVE_USER_ENTER');
     final user = await db.doc('users/$uid')
         .get(const GetOptions(source: Source.server));
     DedaAuthRuntime.check();
@@ -119,6 +125,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
       String installId) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    print('QA_PORT_GRANT_CALL_ENTER');
     final result = await functions.httpsCallable(
       privateEmulatorQaCallable
           ? 'dedaIssueLinkedOriginalUidDeviceGrantQa'
@@ -139,6 +146,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   Future<void> writeSession(String account, String uid, String installId) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    print('QA_PORT_WRITE_SESSION_ENTER');
     await db.doc('deda_sessions/$uid').set(<String, dynamic>{
       'uid': uid,
       'accountKey': account,
@@ -153,6 +161,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   Future<bool> readbackSession(String account, String uid) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    print('QA_PORT_READBACK_ENTER');
     final doc = await db.doc('deda_sessions/$uid')
         .get(const GetOptions(source: Source.server));
     DedaAuthRuntime.check();
