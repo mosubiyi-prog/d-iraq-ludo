@@ -1,0 +1,90 @@
+// DEDA recovery journal — CANDIDATE RULES SNIPPET, NOT DEPLOYED.
+// Review against exact latest production rules and Firebase Emulator BEFORE
+// merging into firestore.rules. Never upload this snippet by itself.
+// Intended to be placed INSIDE match /databases/{database}/documents.
+//
+// Server Admin SDK only: verified-row transitions and trusted attestations.
+// Client is permitted to create an immutable RESERVATION, NEVER verify,
+// mutate, remove, enumerate another owner's records, or create an attestation.
+//
+// This pilot covers only POST-LINK replacement-phone journal steps.
+// Original-phone PRE-LINK anonymous UID needs a DIFFERENT, approved proof
+// path; deny rather than silently treating it as linked/authorized.
+//
+// Email is Firebase Auth's internal owner-linked identifier, NOT proof of
+// email inbox ownership; account security still depends on original UID
+// linking, PIN hardening, App Check, abuse controls and server rules.
+function dedaGuardianVerifiedOriginalOwner(uid, accountKey, originalId) {
+  return request.auth != null
+    && request.auth.uid == uid
+    && request.auth.token.firebase.sign_in_provider == 'password'
+    && accountKey is string
+    && accountKey.matches('^[0-9]{10,16}$')
+    && originalId is string
+    && originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+    && request.auth.token.email == accountKey + '@deda-login.invalid'
+    && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+    && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.active == true
+    && get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data.createdUid == uid
+    && exists(/databases/$(database)/documents/users/$(uid))
+    && get(/databases/$(database)/documents/users/$(uid)).data.accountKey == accountKey
+    && get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId == originalId
+    && exists(/databases/$(database)/documents/deda_share_ids/$(originalId))
+    && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.ownerUid == uid
+    && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.kind == 'personal'
+    && get(/databases/$(database)/documents/deda_share_ids/$(originalId)).data.active == true
+    && exists(/databases/$(database)/documents/deda_sessions/$(uid))
+    && get(/databases/$(database)/documents/deda_sessions/$(uid)).data.accountKey == accountKey;
+}
+
+match /deda_recovery_journals/{uid}/steps/{stepId} {
+  allow list: if false;
+
+  // A missing step has no resource.data; first server lookup must still
+  // be permitted so the client can atomically reserve an absent step.
+  // This authorizes reads only inside the caller's own original UID subtree.
+  allow get: if request.auth != null
+    && request.auth.uid == uid
+    && exists(/databases/$(database)/documents/users/$(uid))
+    && dedaGuardianVerifiedOriginalOwner(
+      uid,
+      get(/databases/$(database)/documents/users/$(uid)).data.accountKey,
+      get(/databases/$(database)/documents/users/$(uid)).data.sharePersonalId
+    );
+
+  allow create: if dedaGuardianVerifiedOriginalOwner(
+    uid, request.resource.data.accountKey, request.resource.data.originalId
+  )
+    && request.resource.data.ownerUid == uid
+    && request.resource.data.intentId is string
+    && request.resource.data.intentId.matches('^[A-Za-z0-9_-]{20,100}$')
+    && request.resource.data.code is string
+    && request.resource.data.code in [
+      'originalBackupReadback',
+      'purchaseBackupReadback',
+      'levelPointsRestore',
+      'publishedPlaceRecovery'
+    ]
+    && stepId == request.resource.data.intentId + '_' + request.resource.data.code
+    && request.resource.data.operationKey ==
+      'deda_guardian_v1/' + uid + '/' + request.resource.data.intentId + '/' + request.resource.data.code
+    && request.resource.data.state == 'reserved'
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.keys().hasOnly([
+      'ownerUid', 'accountKey', 'originalId', 'intentId',
+      'code', 'operationKey', 'state', 'createdAt'
+    ])
+    && request.resource.data.keys().hasAll([
+      'ownerUid', 'accountKey', 'originalId', 'intentId',
+      'code', 'operationKey', 'state', 'createdAt'
+    ]);
+
+  // Even an authenticated original owner CANNOT claim an operation was
+  // verified by uploading a local result/receipt. Server attestation only.
+  allow update, delete: if false;
+}
+
+match /deda_recovery_server_attestations/{uid}/receipts/{stepId} {
+  // Only audited Admin SDK verifiers may write; denies all client access.
+  allow read, write: if false;
+}
