@@ -35,11 +35,17 @@ void main() {
     expect(const bool.fromEnvironment('DEDA_STABILITY_AUTH_RUNTIME'), isTrue);
     expect(const bool.fromEnvironment('DEDA_PRIVATE_FIREBASE_EMULATOR_QA'), isTrue);
 
-    print('QA_FLUTTERFIRE_STEP_INITIALIZE_APP_A');
+    // Initialize the default app first; the existing Auth runtime expects it.
+    // Keep web-emulator initialization bounded and separately diagnosable.
+    print('QA_FLUTTERFIRE_STEP_INITIALIZE_DEFAULT_APP_B');
+    final appB = await Firebase.initializeApp(options: demoOptions)
+        .timeout(const Duration(seconds: 25));
+    print('PASS_FLUTTERFIRE_DEFAULT_APP_INITIALIZED');
+    print('QA_FLUTTERFIRE_STEP_INITIALIZE_SECONDARY_APP_A');
     final appA = await Firebase.initializeApp(
-      name: 'deda-flutterfire-phoneA', options: demoOptions);
-    print('QA_FLUTTERFIRE_STEP_INITIALIZE_APP_B');
-    final appB = await Firebase.initializeApp(options: demoOptions);
+      name: 'deda-flutterfire-phoneA', options: demoOptions,
+    ).timeout(const Duration(seconds: 25));
+    print('PASS_FLUTTERFIRE_SECONDARY_APP_INITIALIZED');
     final authA = FirebaseAuth.instanceFor(app: appA);
     final authB = FirebaseAuth.instanceFor(app: appB);
     final dbB = FirebaseFirestore.instanceFor(app: appB);
