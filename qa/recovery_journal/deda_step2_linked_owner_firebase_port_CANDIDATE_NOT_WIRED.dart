@@ -17,7 +17,18 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     required this.auth,
     required this.db,
     required this.functions,
-  });
+    this.privateEmulatorQaCallable = false,
+  }) {
+    if (privateEmulatorQaCallable &&
+        (!const bool.fromEnvironment('DEDA_PRIVATE_FIREBASE_EMULATOR_QA') ||
+         auth.app.options.projectId != 'demo-deda-100436-journal-qa')) {
+      throw StateError('private-emulator-callable-requires-demo-project');
+    }
+  }
+
+  /// False by default. Only for the isolated demo-project integration test;
+  /// NOT a production App Check bypass and never available in lib/.
+  final bool privateEmulatorQaCallable;
 
   final FirebaseAuth auth;
   final FirebaseFirestore db;
@@ -109,7 +120,9 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
     final result = await functions.httpsCallable(
-      'dedaIssueLinkedOriginalUidDeviceGrant',
+      privateEmulatorQaCallable
+          ? 'dedaIssueLinkedOriginalUidDeviceGrantQa'
+          : 'dedaIssueLinkedOriginalUidDeviceGrant',
       options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
     ).call(<String, dynamic>{
       'accountKey': account, 'originalId': originalId, 'installId': installId,
