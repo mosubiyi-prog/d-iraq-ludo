@@ -1,5 +1,4 @@
 diff --git a/lib/deda_backend.dart b/lib/deda_backend.dart
-index b55189b53ef3fc8032b45baabf4e7410b450444e..CANDIDATE_NOT_APPLIED 100644
 --- a/lib/deda_backend.dart
 +++ b/lib/deda_backend.dart
 @@ -1354,11 +1354,16 @@
