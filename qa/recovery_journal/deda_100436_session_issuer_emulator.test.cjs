@@ -6,7 +6,7 @@ const {initializeTestEnvironment, assertFails, assertSucceeds}
     = require("@firebase/rules-unit-testing");
 const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
-const {doc, getDoc, setDoc, serverTimestamp} = require("firebase/firestore");
+const {doc, getDoc, setDoc, serverTimestamp, Timestamp} = require("firebase/firestore");
 const {__privateIssueLinkedOwnerGrantForQaOnly: issue}
     = require("./deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js");
 
@@ -36,7 +36,7 @@ const ownerDb = () => env.authenticatedContext(uid, {
 }).firestore();
 const path = (db,p) => doc(db,p);
 async function seed({adminRole = false, priorSession = false,
-    credentials = true, ownerRoute = true} = {}) {
+    credentials = true, ownerRoute = true, ledger = true} = {}) {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context => {
     const db=context.firestore();
@@ -54,6 +54,11 @@ async function seed({adminRole = false, priorSession = false,
     });
     if (adminRole) await setDoc(path(db,"admins/"+uid),{
       active:true,role:"general_manager",status:"active",
+    });
+    if (ledger) await setDoc(path(db,limitPath),{
+      ownerUid:uid, count:0,
+      windowStartedAt: Timestamp.fromMillis(Date.now()-1000),
+      updatedAt: Timestamp.fromMillis(Date.now()-1000),
     });
     if (priorSession) await setDoc(path(db,sessionPath),{
       uid,accountKey:account,installId:installation("b"),
@@ -74,6 +79,26 @@ test.before(async () => {
 test.after(async () => {
   if(app)await deleteApp(app);
   if(env)await env.cleanup();
+});
+
+test("without pre-provisioned server-only rate ledger, issuer fails closed", async () => {
+  await seed({ledger:false});
+  await assert.rejects(issue(makeRequest(),admin),
+      /server-rate-limit-ledger-not-provisioned/);
+  assert.equal((await admin.doc(limitPath).get()).exists,false);
+});
+
+test("simultaneous requests for DIFFERENT devices consume two rate allowances", async () => {
+  await seed();
+  const answers = await Promise.all([
+    issue(makeRequest(installation("a")),admin),
+    issue(makeRequest(installation("b")),admin),
+  ]);
+  assert.ok(answers.every(x=>x.approved===true));
+  assert.equal((await admin.doc(limitPath).get()).data().count,2);
+  for(const device of ["a","b"]) {
+    assert.equal((await admin.doc(grantPath(installation(device))).get()).exists,true);
+  }
 });
 
 test("real emulator: server-issued UID grant permits new-device session, not client grant write", async () => {
@@ -142,20 +167,20 @@ test("wrong Auth UID, email, provider or missing AppCheck context fail without w
   for (const request of scenarios) {
     await assert.rejects(issue(request,admin));
   }
-  assert.equal((await admin.doc(limitPath).get()).exists,false);
+  assert.equal((await admin.doc(limitPath).get()).data().count,0);
 });
 test("administrative Firebase principal is never silently owner-bootstrapped", async () => {
   await seed({adminRole:true});
   await assert.rejects(issue(makeRequest(),admin),
       /immutable-original-uid-evidence-missing/);
-  assert.equal((await admin.doc(limitPath).get()).exists,false);
+  assert.equal((await admin.doc(limitPath).get()).data().count,0);
 });
 test("missing immutable credentials or original ID route never issues grant", async () => {
   for(const opts of [{credentials:false},{ownerRoute:false}]){
     await seed(opts);
     await assert.rejects(issue(makeRequest(),admin),
         /immutable-original-uid-evidence-missing/);
-    assert.equal((await admin.doc(limitPath).get()).exists,false);
+    assert.equal((await admin.doc(limitPath).get()).data().count,0);
   }
 });
 test("issuer rejects attempt to replace a different account's active session", async () => {
@@ -165,12 +190,12 @@ test("issuer rejects attempt to replace a different account's active session", a
   });
   await assert.rejects(issue(makeRequest(),admin),
       /immutable-original-uid-evidence-missing/);
-  assert.equal((await admin.doc(limitPath).get()).exists,false);
+  assert.equal((await admin.doc(limitPath).get()).data().count,0);
 });
 test("rate limit is independent of client-controlled install ID string", async () => {
   await seed();
   const request=makeRequest("untrusted-install-id");
   await assert.rejects(issue(request,admin),
       /original-uid-owner-auth-required/);
-  assert.equal((await admin.doc(limitPath).get()).exists,false);
+  assert.equal((await admin.doc(limitPath).get()).data().count,0);
 });
