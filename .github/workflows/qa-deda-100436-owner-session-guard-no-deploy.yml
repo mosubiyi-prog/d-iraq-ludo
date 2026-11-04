@@ -76,10 +76,10 @@ jobs:
             lib/deda_step2_existing_account_signin_page.dart \
             test/deda_step2_existing_account_signin_page_private_test.dart \
             test/deda_owner_login_commit_guard_private_test.dart \
-            test/deda_owner_session_compat_private_test.dart \
-            test/deda_owner_login_commit_guard_private_test.dart
+            test/deda_owner_session_compat_private_test.dart
           flutter test --no-pub \
             test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_owner_login_commit_guard_private_test.dart \
             test/deda_owner_session_compat_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \
