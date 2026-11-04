@@ -1,0 +1,17 @@
+diff --git a/lib/deda_pin_auth.dart b/lib/deda_pin_auth.dart
+--- a/lib/deda_pin_auth.dart
++++ b/lib/deda_pin_auth.dart
+@@ -39,6 +39,13 @@
+     if (current != null && current.isAnonymous) return current;
+ 
+     if (current != null) {
++      // In the optional linked-owner pilot a helper may not discard the
++      // current non-anonymous UID merely to obtain an anonymous session.
++      // The user must explicitly exit/switch accounts first. Do not
++      // repurpose this method to perform a silent switch.
++      if (dedaLinkedOwnerCompatEnabled) {
++        throw StateError('deda-explicit-anonymous-session-switch-required');
++      }
+       await auth.signOut();
+     }
+     // On weak mobile networks a first-install Firebase anonymous handshake
