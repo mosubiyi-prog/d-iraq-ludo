@@ -3,9 +3,9 @@ index 497561f71f7a91a9bab46c665bc97d30f880590e..69b02b41674d3f29571d3ba3f4af3899
 --- a/lib/deda_progress_backup_coordinator.dart
 +++ b/lib/deda_progress_backup_coordinator.dart
 @@ -205,28 +205,41 @@
-       final bound=_bound(owner,check);bound();
        return _capturePurchase(accountKey,owner,bound);
      });
+ 
 -  Future<DedaProgressBackupIntent> prepare({required String accountKey,
 -    required String captureId,required bool Function() isCurrent}) =>
 -    _run(isCurrent,(check) async {
