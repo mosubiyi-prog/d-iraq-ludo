@@ -16,7 +16,8 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 
-const ENABLED = process.env.DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED === "true";
+const ENABLED = process.env.FUNCTIONS_EMULATOR === "true" &&
+  process.env.DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED === "true";
 const GRANT_MS = 2 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_PER_HOUR = 3;
