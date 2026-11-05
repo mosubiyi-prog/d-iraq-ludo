@@ -10,6 +10,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DedaStep2RecoveryIntentStore {
   const DedaStep2RecoveryIntentStore._();
 
+  // The login button, widget rebuilds and a resumed callback must share ONE
+  // intent creation while it is in flight. Two overlapping requests must not
+  // mint separate recovery journal IDs for the same account.
+  // This is an in-process guard; persisted values and the server journal
+  // remain authoritative across restarts and multiple installations.
+  static final Map<String, Future<String>> _inFlight = <String, Future<String>>{};
+
   static final RegExp _account = RegExp(r'^[0-9]{10,16}$');
   static final RegExp _intent =
       RegExp(r'^recover_[0-9a-f]{48}$');
@@ -21,8 +28,15 @@ class DedaStep2RecoveryIntentStore {
     return 'deda_stage2_recovery_intent_v1_$accountKey';
   }
 
-  static Future<String> getOrCreate(String accountKey) async {
+  static Future<String> getOrCreate(String accountKey) {
     final key = keyFor(accountKey);
+    final pending = _inFlight.putIfAbsent(key, () => _getOrCreateKey(key));
+    return pending.whenComplete(() {
+      if (identical(_inFlight[key], pending)) _inFlight.remove(key);
+    });
+  }
+
+  static Future<String> _getOrCreateKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final old = prefs.getString(key);
     if (old != null) {
