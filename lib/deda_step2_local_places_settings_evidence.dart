@@ -106,6 +106,11 @@ class DedaStep2LocalPlacesSettingsReader {
         : DedaStep2LocalSourceStatus.malformedUntrusted;
   }
 
+  /// Reuse the exact 100340 source validator before a replacement phone
+  /// imports any historical display-only preference.
+  static DedaStep2LocalSourceStatus inspectRawValue(
+      String key, Object? value) => _inspect(key, value);
+
   Future<DedaStep2LocalPlacesSettingsEvidence> inspectOriginalPhone({
     required String accountKey,
     required String originalId,
