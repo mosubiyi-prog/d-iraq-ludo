@@ -8,10 +8,13 @@
              .data.active == true
         && get(/databases/$(database)/documents/deda_share_ids/$(publicId))
              .data.kind == 'personal'
-        && resource.data.publicId == publicId
-        && resource.data.ownerUid ==
-           get(/databases/$(database)/documents/deda_share_ids/$(publicId))
-               .data.ownerUid;
+        // A missing social profile remains safely distinguishable from
+        // permission-denied, so old 100340 accounts do not appear corrupted.
+        && (resource == null || (
+            resource.data.publicId == publicId &&
+            resource.data.ownerUid ==
+              get(/databases/$(database)/documents/deda_share_ids/$(publicId))
+                .data.ownerUid));
       allow list, create, update, delete: if false;
     }
 
@@ -27,17 +30,19 @@
     match /deda_stage71_active_identifier/{originalId} {
       allow get: if signedIn()
         && currentUserHasShareId(originalId)
-        && resource.data.originalId == originalId
-        && resource.data.activeId is string;
+        && (resource == null || (
+          resource.data.originalId == originalId &&
+          resource.data.activeId is string));
       allow list, create, update, delete: if false;
     }
 
     match /deda_profile_ui_migration/{accountKey} {
       allow get: if sameAccount(accountKey)
-        && resource.data.accountKey == accountKey
-        && resource.data.uid == request.auth.uid
-        && currentUserHasShareId(resource.data.originalId)
-        && resource.data.kind == 'free-profile-appearance-only';
+        && (resource == null || (
+            resource.data.accountKey == accountKey &&
+            resource.data.uid == request.auth.uid &&
+            currentUserHasShareId(resource.data.originalId) &&
+            resource.data.kind == 'free-profile-appearance-only'));
       allow list, update, delete: if false;
       allow create: if sameAccount(accountKey)
         && request.resource.data.keys().hasOnly([
@@ -62,11 +67,12 @@
 
     match /deda_quiz_ui_snapshots/{ownerUid}/days/{day} {
       allow get: if signedIn() && request.auth.uid == ownerUid
-        && sameAccount(resource.data.accountKey)
-        && resource.data.uid == ownerUid
-        && resource.data.day == day
-        && currentUserHasShareId(resource.data.originalId)
-        && resource.data.kind == 'display-only-untrusted-quiz-v1';
+        && (resource == null || (
+            sameAccount(resource.data.accountKey) &&
+            resource.data.uid == ownerUid &&
+            resource.data.day == day &&
+            currentUserHasShareId(resource.data.originalId) &&
+            resource.data.kind == 'display-only-untrusted-quiz-v1'));
       allow list, update, delete: if false;
       allow create: if signedIn() && request.auth.uid == ownerUid
         && request.resource.data.keys().hasOnly([
