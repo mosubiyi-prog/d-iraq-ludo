@@ -94,6 +94,7 @@ jobs:
             lib/deda_step2_local_places_settings_evidence.dart \
             lib/deda_step2_historical_quiz_source_audit.dart \
             lib/deda_step2_global_places_settings_archive.dart \
+            lib/deda_step2_global_places_settings_restore.dart \
             lib/deda_step2_original_install_continuity_candidate.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
             lib/deda_step2_financial_source_audit.dart \
@@ -132,6 +133,7 @@ jobs:
             test/deda_step2_local_places_settings_evidence_private_test.dart \
             test/deda_step2_historical_quiz_source_audit_private_test.dart \
             test/deda_step2_global_places_settings_archive_private_test.dart \
+            test/deda_step2_global_places_settings_restore_private_test.dart \
             test/deda_step2_original_install_continuity_candidate_private_test.dart \
             test/deda_step2_legacy_ad_wallet_audit_private_test.dart \
             test/deda_step2_diamond_reconciliation_private_test.dart \
