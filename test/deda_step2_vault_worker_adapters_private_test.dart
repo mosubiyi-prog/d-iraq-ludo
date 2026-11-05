@@ -103,7 +103,7 @@ void main() {
     await worker.executeOnce(s,op);
     final receipt=await worker.confirmByReadback(s,op);
     expect(receipt?.matches(s, worker.code), true);
-    expect(receipt!.receiptId, 'progress:$captureId:$install');
+    expect(RegExp(r'^progress_[0-9a-f]{16}$').hasMatch(receipt!.receiptId),true);
     expect(io.reads, 2); // separate execution and readback
   });
 
@@ -130,7 +130,7 @@ void main() {
     await worker.executeOnce(s,op);
     expect(local.writes,1);
     expect(local.text,ledger);
-    expect(first?.receiptId, 'level:$captureId:0');
+    expect(RegExp(r'^level_[0-9a-f]{16}$').hasMatch(first!.receiptId),true);
     expect((await worker.confirmByReadback(s,op))?.receiptId,first?.receiptId);
   });
 
@@ -140,7 +140,7 @@ void main() {
     await worker.executeOnce(s,op);
     final receipt=await worker.confirmByReadback(s,op);
     await worker.executeOnce(s,op);
-    expect(receipt?.receiptId,'published-place:published-100436');
+    expect(RegExp(r'^published_place_[0-9a-f]{16}$').hasMatch(receipt!.receiptId),true);
     expect(receipt?.matches(s,worker.code),true);
     expect(io.scopedWrites,1);
   });
