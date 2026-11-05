@@ -1,3 +1,4 @@
+import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
 
@@ -12,11 +13,13 @@ class DedaLinkedGuardianLoginResult {
     required this.accountKey,
     this.originalId,
     this.recovery,
+    this.domainContinuity,
   });
   final String originalUid;
   final String accountKey;
   final String? originalId;
   final DedaVaultRecoveryResult? recovery;
+  final DedaAccountDomainContinuity? domainContinuity;
 
   /// A linked UID is not proof that all purchases or other data were restored.
   bool get fullAccountRestored => false;
@@ -26,11 +29,14 @@ class DedaLinkedOwnerGuardianBridge {
   const DedaLinkedOwnerGuardianBridge({
     required this.handoff,
     required this.guardian,
+    this.domainReadback,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
   });
 
   final DedaLoginHandoff handoff;
   final DedaStep2RecoveryGuardian guardian;
+  // Optional owner-scoped post-guardian audit. Never a financial writer.
+  final DedaStep2AccountDomainsRecoveryReadback? domainReadback;
   final bool enabled;
 
   /// Only the user's explicit "I have an account" action can start login.
@@ -136,10 +142,21 @@ class DedaLinkedOwnerGuardianBridge {
     if (!identityStillMatches()) {
       throw StateError('linked-owner-changed-after-recovery');
     }
+    // Once reviewed guardian workers finish, read existing cloud-owned
+    // records for friends, gifts, league, premium display and free settings.
+    // Keep unknown legacy data on HOLD and NEVER reissue financial rewards.
+    DedaAccountDomainContinuity? domains;
+    if (!recovery.stoppedSafely && domainReadback?.enabled == true) {
+      domains = await domainReadback!.inspect(scope);
+      if (!identityStillMatches()) {
+        throw StateError('linked-owner-changed-after-domain-readback');
+      }
+    }
     return DedaLinkedGuardianLoginResult(
       originalUid: originalUid, accountKey: accountKey,
       originalId: canonicalId,
       recovery: recovery,
+      domainContinuity: domains,
     );
   }
 }
