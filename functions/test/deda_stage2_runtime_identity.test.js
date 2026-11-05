@@ -21,6 +21,9 @@ test("every callable option retains App Check and exact scoped runtime", () => {
       enforceAppCheck:true,
       timeoutSeconds:timeout,
       serviceAccount:RUNTIME_ACCOUNT,
+      region:"us-central1",
+      minInstances:0,
+      maxInstances:2,
     });
   }
   for (const invalid of [-1,0,61,1.2,"20",null]) {
