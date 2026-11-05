@@ -116,3 +116,4 @@
            .data.sourceUid == request.auth.uid
         && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
            .data.installId == request.resource.data.installId;
+    }

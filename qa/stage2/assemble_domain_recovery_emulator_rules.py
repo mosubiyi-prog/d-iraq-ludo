@@ -23,6 +23,9 @@ if (target == source_file or not target.is_file() or
 original = target.read_text(encoding="utf-8")
 fragment = fragment_file.read_text(encoding="utf-8")
 spark_evidence = spark_evidence_file.read_text(encoding="utf-8")
+if (spark_evidence.count("{") != spark_evidence.count("}") or
+        spark_evidence.count("(") != spark_evidence.count(")")):
+    raise SystemExit("SAFE_STOP_UNBALANCED_SPARK_CANDIDATE_RULES")
 for collection in ("deda_progress_evidence", "deda_purchase_evidence"):
     if f"match /{collection}/" in original:
         raise SystemExit(f"SAFE_STOP_EXISTING_PRELINK_RULES:{collection}")
