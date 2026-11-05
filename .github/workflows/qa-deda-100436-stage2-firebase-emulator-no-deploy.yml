@@ -1,0 +1,127 @@
+name: DEDA 100436 Stage2 Original UID Two/Three Phone Firebase Emulator QA — NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100436-stage2-recovery-buildable-integration-qa-2026-11-05
+    paths:
+      - 'qa/stage2/**'
+      - 'functions/deda_linked_owner_session_grant_private_v1.js'
+      - 'functions/deda_owner_pin_verify_private_v1.js'
+      - 'functions/deda_recovery_journal_completion_private_v1.js'
+      - 'functions/deda_pin_manual_recovery_compat_private_v1.js'
+      - '.github/workflows/qa-deda-100436-stage2-firebase-emulator-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  linked-owner-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      FUNCTIONS_EMULATOR: 'true'
+      DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED: 'true'
+      DEDA_RECOVERY_JOURNAL_SERVER_ENABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify successful 100436 source and prevent any live rules or cloud changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          git cat-file -e "$base^{commit}"
+          git diff --exit-code "$base" HEAD -- firebase.json firestore.rules storage.rules .firebaserc
+          test ! -e qa/recovery_journal
+          echo 'PASS_NO_LIVE_FIREBASE_RULE_EDIT_NO_DEPLOY_NO_APK'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Reuse documented previous 100436 emulator QA WITHOUT overwriting app sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          sourceBranch=deda-100436-recovery-journal-firestore-emulator-private-qa-no-deploy-2026-11-04
+          git fetch --no-tags origin "$sourceBranch"
+          git archive FETCH_HEAD qa/recovery_journal | tar -x
+          test -s qa/recovery_journal/assemble_emulator_rules.py
+          test -s qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs
+          echo 'PASS_PREVIOUS_EMULATOR_QA_REUSED_UNCHANGED'
+      - name: Install local demo Firebase emulators and JS SDK only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-stage2-node"
+          npm install --prefix "$RUNNER_TEMP/deda-stage2-node" \
+            --no-save --no-audit --no-fund \
+            firebase-tools@13.35.1 firebase@11.10.0 \
+            @firebase/rules-unit-testing@4.0.0 \
+            firebase-functions@6.1.0 firebase-admin@12.7.0
+          echo "NODE_PATH=$RUNNER_TEMP/deda-stage2-node/node_modules" >> "$GITHUB_ENV"
+      - name: Assemble old proven and restricted candidate rules locally only
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEDA_JOURNAL_EMULATOR_RULES="$RUNNER_TEMP/deda-stage2.rules"
+          echo "DEDA_JOURNAL_EMULATOR_RULES=$DEDA_JOURNAL_EMULATOR_RULES" >> "$GITHUB_ENV"
+          python3 qa/recovery_journal/assemble_emulator_rules.py
+          test -s "$DEDA_JOURNAL_EMULATOR_RULES"
+      - name: Prepare throwaway Functions project from current integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-stage2-emulator"
+          func="$root/functions"
+          mkdir -p "$func"
+          cp qa/recovery_journal/functions_emulator/index.js "$func/index.js"
+          cp qa/recovery_journal/functions_emulator/package.json "$func/package.json"
+          cp functions/deda_linked_owner_session_grant_private_v1.js \
+            "$func/deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js"
+          npm install --prefix "$func" --no-audit --no-fund --ignore-scripts
+          cp "$DEDA_JOURNAL_EMULATOR_RULES" "$root/firestore.rules"
+          python3 - "$root" <<'PY'
+          import json,sys,pathlib
+          root=pathlib.Path(sys.argv[1])
+          (root/'firebase.json').write_text(json.dumps({
+            'firestore':{'rules':'firestore.rules'},
+            'functions':{'source':'functions'},
+            'emulators':{
+              'firestore':{'host':'127.0.0.1','port':8098},
+              'auth':{'host':'127.0.0.1','port':9099},
+              'functions':{'host':'127.0.0.1','port':5001},
+              'ui':{'enabled':False},
+            }}))
+          PY
+          # Source under test is the CURRENT stage2 branch, not a historical
+          # copy; no firebase deploy, secrets or real production account.
+          node --check "$func/index.js"
+          node --check functions/deda_linked_owner_session_grant_private_v1.js
+          node --check functions/deda_recovery_journal_completion_private_v1.js
+          node --check qa/stage2/deda_owner_pin_real_emulator_private.test.cjs
+          echo "QA_EMULATOR_ROOT=$root" >> "$GITHUB_ENV"
+      - name: Actual Firestore/Auth/Functions SDK emulator — owner PIN, three phones and denial rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$RUNNER_TEMP/deda-stage2-node/node_modules/.bin/firebase"
+          "$cli" emulators:exec \
+            --project demo-deda-100436-journal-qa \
+            --config "$QA_EMULATOR_ROOT/firebase.json" \
+            --only auth,functions,firestore --non-interactive \
+            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs qa/recovery_journal/deda_100436_session_issuer_emulator.test.cjs qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs qa/stage2/deda_owner_pin_real_emulator_private.test.cjs'
+          echo 'PASS_ACTUAL_FIREBASE_EMULATORS_NO_LIVE_USER_NO_APK'
+      - name: Confirm no source/rules mutation after QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- lib functions firestore.rules firebase.json
+          echo 'PASS_QA_ONLY_NO_DEPLOY_NO_PLAY'
