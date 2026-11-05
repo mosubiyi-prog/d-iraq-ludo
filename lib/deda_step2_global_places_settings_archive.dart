@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_step2_original_install_continuity_candidate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_step2_local_places_settings_evidence.dart';
@@ -252,6 +255,39 @@ class DedaStep2GlobalPlacesPrefsJournal
 /// Old-phone explicit backup, or new-phone readback. Both require the
 /// independently proven SAME original UID. Offline/unknown must not create.
 class DedaStep2GlobalPlacesArchive {
+  /// Candidate factory only, never invoked by main.dart. Both independent
+  /// flag gates (original old-phone evidence and global-place archive) default
+  /// OFF. Installed ID equality is continuity evidence, not hardware proof.
+  factory DedaStep2GlobalPlacesArchive.firebaseCandidate() {
+    final provenance=DedaStep2OriginalInstallContinuityCandidate.firebase();
+    return DedaStep2GlobalPlacesArchive(
+      reader:DedaStep2LocalPlacesSettingsReader(
+        const DedaStep2PreferencesPlacesSettingsIo()),
+      cloud:const DedaStep2GlobalPlaceFirestoreIo(),
+      journal:const DedaStep2GlobalPlacesPrefsJournal(),
+      currentUid:()=>FirebaseAuth.instance.currentUser?.uid,
+      proveOwner:(uid,account,original)async {
+        final user=FirebaseAuth.instance.currentUser;
+        if (user == null || user.uid!=uid ||
+            !await DedaLinkedOwnerSessionPolicy.verified(user,account)) {
+          return false;
+        }
+        final profile=await FirebaseFirestore.instance
+            .collection('users').doc(uid)
+            .get(const GetOptions(source:Source.server));
+        return !profile.metadata.isFromCache &&
+            !profile.metadata.hasPendingWrites &&
+            profile.data()?['accountKey']==account &&
+            profile.data()?['sharePersonalId']==original &&
+            FirebaseAuth.instance.currentUser?.uid==uid;
+      },
+      proveOriginalDevice:(uid,account,original)=>
+        provenance.matchesOriginalProgressInstallation(
+          accountKey:account,originalId:original,originalUid:uid,
+          isCurrent:()=>FirebaseAuth.instance.currentUser?.uid==uid),
+    );
+  }
+
   const DedaStep2GlobalPlacesArchive({
     required this.reader,required this.cloud,required this.journal,
     required this.currentUid,required this.proveOwner,
