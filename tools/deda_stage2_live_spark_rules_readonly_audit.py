@@ -142,6 +142,53 @@ def main():
             # An API permission or regional failure is UNKNOWN, not absent.
             print("LIVE_CALLABLE_" + item, "UNVERIFIABLE_HTTP_" +
                   str(response.status_code))
+    # The direct v2 GET above checks us-central1 only; a missing function
+    # there is not proof of absence in v1 or other regions. Inventory both
+    # generations using GET-only regional wildcard APIs. Print only our three
+    # exact target names and their states, never other project functions.
+    for api_version in ("v1", "v2"):
+        endpoint = ("https://cloudfunctions.googleapis.com/" + api_version +
+                    "/projects/" + PROJECT + "/locations/-/functions")
+        found = {}
+        page_token = None
+        outcome = "VERIFIED"
+        for _ in range(10):
+            params = {"pageSize": 100}
+            if page_token:
+                params["pageToken"] = page_token
+            response = session.get(endpoint, params=params, timeout=30)
+            if response.status_code != 200:
+                outcome = "UNVERIFIABLE_HTTP_" + str(response.status_code)
+                break
+            info = response.json()
+            rows = info.get("functions", [])
+            if not isinstance(rows, list):
+                outcome = "UNEXPECTED_RESPONSE"
+                break
+            for item in rows:
+                if not isinstance(item, dict):
+                    continue
+                path = item.get("name", "")
+                if not isinstance(path, str):
+                    continue
+                name = path.rsplit("/", 1)[-1]
+                if name in RECOVERY_CALLABLES:
+                    region = path.split("/locations/", 1)[-1].split("/", 1)[0]
+                    state = item.get("state") or item.get("status") or "STATE_UNKNOWN"
+                    if not isinstance(state, str):
+                        state = "STATE_UNKNOWN"
+                    found[name] = (region, state[:45])
+            page_token = info.get("nextPageToken")
+            if not page_token:
+                break
+        else:
+            outcome = "PAGE_LIMIT_REACHED"
+        print("LIVE_CALLABLE_INVENTORY_" + api_version.upper(), outcome)
+        if outcome == "VERIFIED":
+            for name in RECOVERY_CALLABLES:
+                region, state = found.get(name, ("NOT_FOUND", "NOT_FOUND"))
+                print("LIVE_CALLABLE_GLOBAL_" + api_version.upper() +
+                      "_" + name, region, state)
     # Billing status only, without leaking the linked billing-account ID.
     # If access is denied, report unknown rather than guessing Spark/Blaze.
     billing = session.get(
