@@ -17,9 +17,24 @@ const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
 const dedaPinCompatPilotEnabled = false;
 const {completeApprovedManualPinRecovery} =
   require("./deda_pin_manual_recovery_compat_private_v1.js");
+// The new callable exists only for PRIVATE QA. A production deployment
+// cannot enable its credential proof merely by supplying a client flag.
+// Emulator use requires BOTH the Functions Emulator and explicit QA opt-in.
+const {createOwnerPinVerifyCallable} =
+  require("./deda_owner_pin_verify_private_v1.js");
+const dedaOwnerPinProofEmulatorEnabled =
+  process.env.FUNCTIONS_EMULATOR === "true" &&
+  process.env.DEDA_OWNER_PIN_PROOF_EMULATOR === "1";
 const {recordApprovalBellNotice} = require("./deda_owner_approval_bell.js");
 
 initializeApp();
+
+// OFF outside an explicitly opted-in Firebase Functions Emulator. No live
+// Firebase deployment and no custom-token issuer are authorized here.
+exports.dedaVerifyExistingOwnerPin = createOwnerPinVerifyCallable({
+  onCall, HttpsError, db: getFirestore(), auth: getAuth(),
+  enabled: dedaOwnerPinProofEmulatorEnabled,
+});
 
 async function notifyTokens(tokens, title, body, type, requestId) {
   const uniqueTokens = [...new Set(tokens)].filter(Boolean).slice(0, 500);
