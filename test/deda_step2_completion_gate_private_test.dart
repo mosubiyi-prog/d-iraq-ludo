@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/deda_legacy_progress_capture.dart';
+import 'package:d_iraq_ludo/deda_legacy_purchase_evidence.dart';
+import 'package:d_iraq_ludo/deda_step2_financial_source_audit.dart';
 import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
@@ -35,6 +39,27 @@ const guardian=DedaVaultRecoveryResult(stepStates:{
   DedaVaultCode.publishedPlaceRecovery:DedaVaultStepState.verified,
 },stoppedSafely:false);
 
+DedaStep2ArchivedDiamondFinancialSource archivedFinancialSource() {
+  final p=DedaLegacyProgressCapture.decodeForAccount(
+    jsonEncode({'format':1,'accountKey':account,'records':{
+      'taskPoints':'{"points":15}',
+      'socialCoinsAndXp':'{"xp":15}',
+      'earnedDiamonds':'{"balance":63,"viewsToday":1,"day":"2026-11-05"}',
+    }}),expectedAccountKey:account);
+  final purchases=DedaLegacyPurchaseCapture.decode(
+    jsonEncode({'format':1,'accountKey':account,'originalId':original,
+      'inventory':'{"owned":[]}',
+      'frameJournals':{for(final frame in dedaLegacyPurchaseFrames) frame:null},
+    }),accountKey:account,originalId:original);
+  return DedaStep2ArchivedDiamondFinancialSource(
+    accountKey:account,originalUid:uid,originalId:original,
+    captureId:'verified_original_phone_diamonds_20261105',
+    sourceInstallId:'a'*48,
+    audit:DedaStep2FinancialSourceAudit.inspect(
+      progress:p,purchase:purchases),
+  );
+}
+
 DedaStep2DiamondReconciliation diamond({int? amount=500,
     String id=original, String owner=uid, String accountKey=account}) =>
     DedaStep2DiamondReconciliation(
@@ -44,6 +69,7 @@ DedaStep2DiamondReconciliation diamond({int? amount=500,
   pendingGiftGross:20,receivedGiftGross:100,
   localAdWallet:DedaStep2LegacyAdWalletObservation.inspect(
       '{"balance":63,"viewsToday":1,"day":"2026-11-05"}'),
+  archivedSource:archivedFinancialSource(),
   serverReceiptIds:const {'admin-gift-001'},
   warnings:const ['historical-spend-and-earned-ad-ledger-not-independently-proven'],
 );
