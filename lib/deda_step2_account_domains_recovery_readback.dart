@@ -207,7 +207,141 @@ class DedaStep2AccountDomainsRecoveryReadback {
         // Existing original worker uses one deterministic giftId per week.
         final suffix = '-' + id.substring(1);
         if (data['giftId'] != receipt.id ||
-            !RegExp(r'^deda-weekly-20\\d{2}-\\d{2}-\\d{2}-DEDA-[A-Z0-9]{6}$')
+            !RegExp(r'^deda-weekly-20\d{2}-\d{2}-\d{2}-DEDA-[A-Z0-9]{6})
+                .hasMatch(receipt.id) ||
+            !receipt.id.endsWith(suffix) ||
+            !const {'pending','received','claimed'}.contains(data['status']) ||
+            data['createdAt'] is! Timestamp) {
+          throw const DedaDomainSourceHold('weekly-prize-receipt-conflict');
+        }
+        weeklyPrizes++;
+        if (data['status'] == 'pending') {
+          weeklyPending++;
+        } else {
+          weeklyReceived++;
+        }
+      }
+    }
+    statuses['giftInbox'] = gifts.isEmpty
+        ? 'server-query-empty-historical-gifts-unknown'
+        : 'verified-existing-receipts-no-reissue';
+
+    final wallet =
+        (await _doc(scope, 'deda_diamond_gift_balances/$id')).fields;
+    if (wallet != null && wallet['publicId'] != id) {
+      throw const DedaDomainSourceHold('gift-wallet-identity-conflict');
+    }
+    final balance = wallet == null ? null :
+        _safeBalance(wallet['balance'], 'existing-gift-wallet-balance');
+    statuses['giftWallet'] = wallet == null
+        ? 'absent-unknown-not-zero'
+        : 'existing-balance-readonly-no-credit';
+    statuses['earnedDiamonds'] = 'legacy-award-ledger-not-attested';
+
+    final premium =
+        (await _doc(scope, 'deda_stage71_active_identifier/$id')).fields;
+    if (premium != null && (premium['originalId'] != id ||
+        premium['activeId'] is! String ||
+        !(RegExp(r'^@DEDA-[A-Z0-9]{4,12}$')
+            .hasMatch(premium['activeId'] as String)))) {
+      throw const DedaDomainSourceHold('premium-selection-identity-conflict');
+    }
+    statuses['premiumIdentifier'] = premium == null
+        ? 'missing-selection-ownership-unknown'
+        : 'verified-display-selection-ownership-unproven';
+
+    final leagueAccount =
+        (await _doc(scope, 'deda_weekly_direct_accounts/$id')).fields;
+    if (leagueAccount != null &&
+        (leagueAccount['publicId'] != id ||
+         leagueAccount['accountKey'] != account)) {
+      throw const DedaDomainSourceHold('weekly-account-identity-conflict');
+    }
+    final leagueControl =
+        (await _doc(scope, 'deda_weekly_direct_control/active')).fields;
+    int? weeklyXp;
+    final week = leagueControl?['weekId'];
+    if (week is String &&
+        RegExp(r'^20\d{2}-\d{2}-\d{2}$').hasMatch(week)) {
+      final row = (await _doc(
+          scope, 'deda_weekly_direct_weeks/$week/scores/$id')).fields;
+      if (row != null) {
+        if (row['weekId'] != week || row['publicId'] != id) {
+          throw const DedaDomainSourceHold('weekly-score-identity-conflict');
+        }
+        weeklyXp = _safeBalance(row['weeklyXp'], 'weekly-score');
+      }
+    } else if (week != null) {
+      throw const DedaDomainSourceHold('weekly-control-invalid');
+    }
+    statuses['weeklyPoints'] = weeklyXp == null
+        ? 'no-authoritative-week-score-yet'
+        : 'existing-week-score-readonly';
+    statuses['weeklyPrizes'] = weeklyPrizes == 0
+        ? 'historical-prize-claims-not-attested'
+        : 'existing-weekly-gift-receipts-readonly-no-reissue';
+
+    final prefs =
+        (await _doc(scope, 'deda_profile_ui_migration/$account')).fields;
+    if (prefs != null &&
+        (prefs['accountKey'] != account ||
+         prefs['originalId'] != id ||
+         prefs['uid'] != uid ||
+         prefs['kind'] != 'free-profile-appearance-only')) {
+      throw const DedaDomainSourceHold('visual-preferences-source-conflict');
+    }
+    statuses['freeAppearance'] = prefs == null
+        ? 'no-cloud-backup-legacy-unknown'
+        : 'verified-source-existing-ui-hydration-separate';
+
+    // The existing quiz archive is display-state only, not earned points.
+    // Restore only today's Iraq-local display data; earlier quiz records
+    // must be accounted for separately before full account completion.
+    final iraqNow = (nowUtc ?? DateTime.now().toUtc())
+        .toUtc().add(const Duration(hours: 3));
+    final iraqDay = '${iraqNow.year.toString().padLeft(4,'0')}-'
+        '${iraqNow.month.toString().padLeft(2,'0')}-'
+        '${iraqNow.day.toString().padLeft(2,'0')}';
+    final quiz = (await _doc(scope,
+        'deda_quiz_ui_snapshots/$uid/days/$iraqDay')).fields;
+    if (quiz != null &&
+        (quiz['kind'] != 'display-only-untrusted-quiz-v1' ||
+         quiz['uid'] != uid || quiz['accountKey'] != account ||
+         quiz['originalId'] != id || quiz['day'] != iraqDay)) {
+      throw const DedaDomainSourceHold('quiz-ui-source-owner-conflict');
+    }
+    statuses['quizUiToday'] = quiz == null
+        ? 'no-today-snapshot-historical-quiz-unknown'
+        : 'verified-source-ui-only-hydration-separate';
+
+    // A verified social/gift/league readback cannot invent missing
+    // historical task, quiz, premium ownership, local saved-place or
+    // financial records. These remain explicit HOLD categories.
+    statuses.addAll(const <String,String>{
+      'levelPoints': 'original-ledger-guardian-worker-required',
+      'dailyTasks': 'historical-claim-ledger-not-attested',
+      'trafficQuestions': 'old-phone-day-by-day-backup-not-attested',
+      'ownedFrames': 'purchase-proof-guardian-worker-required',
+      'savedPlaces': 'unverified-local-place-source',
+      'publishedPlaces': 'same-uid-published-place-worker-required',
+      'allSettings': 'free-appearance-is-not-full-settings',
+    });
+    await scope.checkOwner();
+    _check(scope);
+    return DedaAccountDomainContinuity(
+      status: Map<String,String>.unmodifiable(statuses),
+      friendRelations: relations.length, acceptedFriends: accepted,
+      giftReceipts: gifts.length, iraqDay: iraqDay,
+      weeklyPrizeReceipts: weeklyPrizes,
+      weeklyPrizePending: weeklyPending,
+      weeklyPrizeReceived: weeklyReceived,
+      existingGiftWallet: balance,
+      existingWeeklyXp: weeklyXp,
+      activeDisplayId: premium?['activeId'] as String?,
+    );
+  }
+}
+)
                 .hasMatch(receipt.id) ||
             !receipt.id.endsWith(suffix) ||
             !const {'pending','received','claimed'}.contains(data['status']) ||
