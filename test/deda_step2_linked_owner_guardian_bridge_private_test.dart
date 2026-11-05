@@ -354,6 +354,7 @@ void main() {
     expect(result.diamondContinuity!.localAdWallet.untrustedBalance,63);
     expect(result.diamondContinuity!.additionalSpendableDiamonds,0);
     expect(result.diamondContinuity!.manualLegacyBalanceReviewRequired,true);
+    expect(result.needsLegacyFinancialReview,true);
     expect(result.diamondContinuity!.archivalReviewCaseKey,
       startsWith('deda_legacy_diamond_review_v1/$uid/'));
     expect(result.completion.domains['earnedAdDiamonds'],

@@ -51,7 +51,8 @@ class DedaLinkedGuardianLoginResult {
   final String? financialReviewReason;
   bool get needsLegacyFinancialReview =>
       legacyFinancialOutcome ==
-          DedaStep2LegacyFinancialOutcome.heldForManualReview;
+          DedaStep2LegacyFinancialOutcome.heldForManualReview ||
+      diamondContinuity?.manualLegacyBalanceReviewRequired == true;
   final bool freeAppearanceHydrated, quizUiHydrated;
 
   /// Report the evidence for EACH domain, not an invented blanket success.
