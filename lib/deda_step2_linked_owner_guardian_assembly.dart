@@ -17,6 +17,8 @@ import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_vault_worker_adapters.dart';
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
+import 'deda_step2_diamond_reconciliation_readonly.dart';
+import 'deda_legacy_progress_capture.dart';
 import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 
@@ -72,6 +74,20 @@ class DedaLinkedOwnerGuardianAssembly {
       // Explicit recovery only, and OFF unless the audited source gate is
       // deliberately enabled. Never called during a normal app startup.
       assetReadback: DedaStep2AssetsReadback.firebase(),
+      // Private source-only financial observations. No account or wallet
+      // writes; the original phone's AdMob JSON remains UNTRUSTED.
+      diamondReadback: const DedaStep2DiamondReconciliationReader(
+        io: DedaFirebaseDomainSourceIo(),
+      ),
+      originalAdWalletRaw: (scope) async {
+        final stored = await original.readOriginalEvidence(
+          accountKey: scope.accountKey,
+          originalUid: scope.originalUid,
+          isCurrent: scope.isCurrentIntent,
+        );
+        scope.checkCurrent();
+        return stored.capture.raw[DedaLegacyProgressPart.earnedDiamonds];
+      },
       restoreFreeAppearance: dedaStep2VisualPrefsMigrationEnabled
         ? (scope) => DedaStep2VisualPrefsContinuity.firebase()
             .restoreReplacementPhone(

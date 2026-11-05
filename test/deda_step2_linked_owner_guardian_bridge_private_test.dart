@@ -3,6 +3,7 @@ import 'package:d_iraq_ludo/deda_step2_linked_owner_flutter_handoff.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
+import 'package:d_iraq_ludo/deda_step2_diamond_reconciliation_readonly.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
 
@@ -118,6 +119,8 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   bool guardianEnabled = true,
   DedaStep2AccountDomainsRecoveryReadback? domainReadback,
   DedaStep2AssetsReadback? assetReadback,
+  DedaStep2DiamondReconciliationReader? diamondReadback,
+  Future<String?> Function(DedaVaultVerifiedScope)? originalAdWalletRaw,
   Future<bool> Function(DedaVaultVerifiedScope)? restoreFreeAppearance,
   Future<bool> Function(DedaVaultVerifiedScope,String)? restoreQuizUi,
 }) => DedaLinkedOwnerGuardianBridge(
@@ -125,6 +128,8 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   handoff: DedaLoginHandoff(port, enabled: true),
   domainReadback: domainReadback,
   assetReadback: assetReadback,
+  diamondReadback: diamondReadback,
+  originalAdWalletRaw: originalAdWalletRaw,
   restoreFreeAppearance: restoreFreeAppearance,
   restoreQuizUi: restoreQuizUi,
   guardian: DedaStep2RecoveryGuardian(
@@ -296,6 +301,42 @@ void main() {
     expect(j.created,1);
     expect(io.queries.any((q)=>q.startsWith(
       'deda_gm_personal_diamond_wallets/')),false);
+  });
+
+  test('explicit guarded recovery inspects archived ad and gift wallet with zero credit',() async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeCloudDomainIo();
+    var archiveReads=0;
+    final bridge=make(p,j,adapters:{backup:w},
+      diamondReadback:DedaStep2DiamondReconciliationReader(
+        io:io,enabled:true),
+      originalAdWalletRaw:(scope) async {
+        archiveReads++;
+        expect(scope.originalUid,uid);
+        return '{"balance":63,"viewsToday":2,"day":"2026-11-05"}';
+      },
+    );
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.diamondContinuity,isNotNull);
+    expect(result.diamondContinuity!.receivedGiftWalletBalance,isNull);
+    expect(result.diamondContinuity!.localAdWallet.untrustedBalance,63);
+    expect(result.diamondContinuity!.additionalSpendableDiamonds,0);
+    expect(result.completion.domains['earnedAdDiamonds'],
+      DedaStep2CompletionState.missingHistoricalProof);
+    expect(result.fullAccountRestored,false);
+    expect(archiveReads,1);
+    expect(j.created,1);
+    expect(io.reads,contains('gifts:$normalId'));
+  });
+
+  test('diamond recovery fails closed if original-phone evidence callback absent',() async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeCloudDomainIo();
+    final bridge=make(p,j,adapters:{backup:w},
+      diamondReadback:DedaStep2DiamondReconciliationReader(
+        io:io,enabled:true));
+    await expectLater(login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup}),throwsStateError);
+    expect(io.reads,isEmpty);
   });
 
   test('normal login and blocked guardian read no assets',() async {

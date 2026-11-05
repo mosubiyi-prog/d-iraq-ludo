@@ -1,6 +1,7 @@
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
 import 'deda_step2_completion_gate.dart';
+import 'deda_step2_diamond_reconciliation_readonly.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
 
@@ -17,6 +18,7 @@ class DedaLinkedGuardianLoginResult {
     this.recovery,
     this.domainContinuity,
     this.assetContinuity,
+    this.diamondContinuity,
     this.freeAppearanceHydrated = false,
     this.quizUiHydrated = false,
   });
@@ -27,6 +29,8 @@ class DedaLinkedGuardianLoginResult {
   final DedaAccountDomainContinuity? domainContinuity;
   /// Authoritative old-account observations, not recreated currencies/items.
   final DedaStep2AssetsEvidence? assetContinuity;
+  /// Financial evidence is READ ONLY, never a new balance or gift claim.
+  final DedaStep2DiamondReconciliation? diamondContinuity;
   final bool freeAppearanceHydrated, quizUiHydrated;
 
   /// Report the evidence for EACH domain, not an invented blanket success.
@@ -35,6 +39,7 @@ class DedaLinkedGuardianLoginResult {
     originalUid: originalUid, originalId: originalId ?? '',
     recovery: recovery, domainReadback: domainContinuity,
     assetReadback: assetContinuity,
+    diamondReadback: diamondContinuity,
     freeAppearanceHydrated: freeAppearanceHydrated,
     quizUiHydrated: quizUiHydrated,
   );
@@ -51,6 +56,8 @@ class DedaLinkedOwnerGuardianBridge {
     required this.guardian,
     this.domainReadback,
     this.assetReadback,
+    this.diamondReadback,
+    this.originalAdWalletRaw,
     this.restoreFreeAppearance,
     this.restoreQuizUi,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
@@ -62,6 +69,10 @@ class DedaLinkedOwnerGuardianBridge {
   final DedaStep2AccountDomainsRecoveryReadback? domainReadback;
   /// Source-only wallet/paid inventory. Must never debit or grant on login.
   final DedaStep2AssetsReadback? assetReadback;
+  final DedaStep2DiamondReconciliationReader? diamondReadback;
+  /// Historical phone values are only observations; no wallet migration.
+  final Future<String?> Function(DedaVaultVerifiedScope scope)?
+      originalAdWalletRaw;
   // Existing, reviewed UI-only restoration services. They NEVER grant XP,
   // paid frames, wallet diamonds, league rewards or premium IDs.
   final Future<bool> Function(DedaVaultVerifiedScope scope)?
@@ -196,6 +207,24 @@ class DedaLinkedOwnerGuardianBridge {
       );
       await scope.checkOwner();
     }
+    DedaStep2DiamondReconciliation? diamonds;
+    if (!recovery.stoppedSafely && diamondReadback?.enabled == true) {
+      // Never read a new phone's unrelated SharedPreferences as old account
+      // evidence. The original UID archive must have been read successfully.
+      if (originalAdWalletRaw == null) {
+        throw StateError('verified-original-ad-source-reader-required');
+      }
+      await scope.checkOwner();
+      final oldRaw = await originalAdWalletRaw!(scope);
+      await scope.checkOwner();
+      diamonds = await diamondReadback!.inspect(
+        scope: scope,
+        originalPhoneAdWalletRaw: oldRaw,
+        domainReadback: domains,
+        assetReadback: assets,
+      );
+      await scope.checkOwner();
+    }
     var appearanceHydrated = false;
     var quizHydrated = false;
     if (domains != null) {
@@ -226,6 +255,7 @@ class DedaLinkedOwnerGuardianBridge {
       recovery: recovery,
       domainContinuity: domains,
       assetContinuity: assets,
+      diamondContinuity: diamonds,
       freeAppearanceHydrated: appearanceHydrated,
       quizUiHydrated: quizHydrated,
     );
