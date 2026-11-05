@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
+import 'package:d_iraq_ludo/deda_step2_diamond_reconciliation_readonly.dart';
+import 'package:d_iraq_ludo/deda_step2_legacy_ad_wallet_audit.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 
 const uid='original-owner-uid';
@@ -33,7 +35,63 @@ const guardian=DedaVaultRecoveryResult(stepStates:{
   DedaVaultCode.publishedPlaceRecovery:DedaVaultStepState.verified,
 },stoppedSafely:false);
 
+DedaStep2DiamondReconciliation diamond({int? amount=500,
+    String id=original, String owner=uid, String accountKey=account}) =>
+    DedaStep2DiamondReconciliation(
+  accountKey:accountKey,originalUid:owner,originalId:id,
+  receivedGiftWalletBalance:amount,
+  pendingGiftReceipts:1,receivedGiftReceipts:1,
+  pendingGiftGross:20,receivedGiftGross:100,
+  localAdWallet:DedaStep2LegacyAdWalletObservation.inspect(
+      '{"balance":63,"viewsToday":1,"day":"2026-11-05"}'),
+  serverReceiptIds:const {'admin-gift-001'},
+  warnings:const ['historical-spend-and-earned-ad-ledger-not-independently-proven'],
+);
+
 void main() {
+  test('matching diamond readback never enables historical money issuance',
+      () {
+    final report=DedaStep2CompletionGate.assess(
+      originalUid:uid,originalId:original,recovery:guardian,
+      domainReadback:domains(),assetReadback:assets(),
+      diamondReadback:diamond());
+    expect(report.domains['giftDiamondWallet'],
+      DedaStep2CompletionState.verifiedExistingSource);
+    expect(report.domains['earnedAdDiamonds'],
+      DedaStep2CompletionState.missingHistoricalProof);
+    expect(report.domains['diamondSpendAndAwardLedger'],
+      DedaStep2CompletionState.missingHistoricalProof);
+    expect(report.canIssueFinancialRewards,false);
+    expect(report.canPrepareFullRecoveryApk,false);
+  });
+
+  test('diamond wallet conflict is needsReview even if other readers agree',
+      () {
+    final report=DedaStep2CompletionGate.assess(
+      originalUid:uid,originalId:original,recovery:guardian,
+      domainReadback:domains(),assetReadback:assets(),
+      diamondReadback:diamond(amount:501));
+    expect(report.hasConflict,true);
+    expect(report.domains['giftDiamondWallet'],
+      DedaStep2CompletionState.needsReview);
+    expect(report.domains['diamondSpendAndAwardLedger'],
+      DedaStep2CompletionState.needsReview);
+    expect(report.canIssueFinancialRewards,false);
+  });
+
+  test('diamond UID swap invalidates paid asset proof, no restore',
+      () {
+    final report=DedaStep2CompletionGate.assess(
+      originalUid:uid,originalId:original,recovery:guardian,
+      domainReadback:domains(),assetReadback:assets(),
+      diamondReadback:diamond(owner:'foreign-owner-uid'));
+    expect(report.hasConflict,true);
+    expect(report.domains['paidFrames'],
+      DedaStep2CompletionState.needsReview);
+    expect(report.domains['acceptedPremiumIds'],
+      DedaStep2CompletionState.needsReview);
+  });
+
   test('verified records remain observations, never new money or complete cutover', () {
     final report=DedaStep2CompletionGate.assess(originalUid:uid,
       originalId:original,recovery:guardian,domainReadback:domains(),

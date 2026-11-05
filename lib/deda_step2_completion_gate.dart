@@ -1,5 +1,6 @@
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
+import 'deda_step2_diamond_reconciliation_readonly.dart';
 import 'deda_step2_recovery_guardian.dart';
 
 /// One read-only report across the existing 12-code guardian. The guardian
@@ -40,6 +41,7 @@ class DedaStep2CompletionGate {
     DedaVaultRecoveryResult? recovery,
     DedaAccountDomainContinuity? domainReadback,
     DedaStep2AssetsEvidence? assetReadback,
+    DedaStep2DiamondReconciliation? diamondReadback,
     bool freeAppearanceHydrated = false,
     bool quizUiHydrated = false,
   }) {
@@ -65,6 +67,22 @@ class DedaStep2CompletionGate {
         assetReadback.receivedGiftWalletBalance != null &&
         domainReadback!.existingGiftWallet !=
             assetReadback.receivedGiftWalletBalance;
+    // A fresh diamond inspection compares the already-existing wallet from
+    // two independent Stage2 source readers. A missing snapshot must not be
+    // promoted to zero or to a newly minted/replayed gift.
+    final diamondOwnerMismatch = diamondReadback != null &&
+        (diamondReadback.accountKey.isEmpty ||
+         diamondReadback.originalId != originalId ||
+         diamondReadback.originalUid != originalUid ||
+         (assetReadback != null &&
+          diamondReadback.accountKey != assetReadback.accountKey));
+    final diamondWalletMismatch = diamondReadback != null &&
+        ((domainReadback?.existingGiftWallet != null &&
+          diamondReadback.receivedGiftWalletBalance !=
+              domainReadback!.existingGiftWallet) ||
+         (assetReadback?.receivedGiftWalletBalance != null &&
+          diamondReadback.receivedGiftWalletBalance !=
+              assetReadback!.receivedGiftWalletBalance));
     final activeMismatch = assetReadback != null &&
         domainReadback?.activeDisplayId != null &&
         assetReadback.activeDisplayId != null &&
@@ -76,7 +94,8 @@ class DedaStep2CompletionGate {
 
     final identityState = ownerMismatch ? conflict :
         guardPassed ? observed : notRun;
-    final walletState = walletMismatch || ownerMismatch ? conflict :
+    final walletState = walletMismatch || ownerMismatch ||
+        diamondOwnerMismatch || diamondWalletMismatch ? conflict :
         domainReadback?.existingGiftWallet != null &&
                 assetReadback?.receivedGiftWalletBalance != null
             ? observed : hold;
@@ -89,7 +108,10 @@ class DedaStep2CompletionGate {
       'originalOwnerUid': identityState,
       'giftDiamondWallet': walletState,
       'earnedAdDiamonds': hold, // Legacy on-device, unsigned 100340 source.
-      'diamondSpendAndAwardLedger': hold,
+      // Gross receipts and local 100340 ads cannot establish a complete
+      // earned-minus-spent transaction ledger. Do not unlock finances.
+      'diamondSpendAndAwardLedger':
+          diamondOwnerMismatch || diamondWalletMismatch ? conflict : hold,
       'managerPersonalAndAdminSeparation': hold,
       'paidFrames': assetReadback == null ? notRun : observed,
       'paidIdCards': assetReadback == null ? notRun : observed,
@@ -114,7 +136,7 @@ class DedaStep2CompletionGate {
       'legacy100340WriteFence': hold,
       'liveFirebaseAndTwoPhoneApproval': hold,
     };
-    if (ownerMismatch) {
+    if (ownerMismatch || diamondOwnerMismatch) {
       for (final item in ['paidFrames','paidIdCards','acceptedPremiumIds']) {
         states[item] = conflict;
       }
