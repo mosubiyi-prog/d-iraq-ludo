@@ -395,8 +395,15 @@ class DedaStep2GlobalPlacesArchive {
       DedaStep2GlobalPlaceCloudRow row,
       String account,String originalId,String uid) {
     final data=row.data;
-    if (row.cached || row.pendingWrites || data == null ||
-        data.length != 8 || data['createdAt'] is! Timestamp ||
+    if (row.cached || row.pendingWrites) {
+      throw const DedaStep2GlobalPlacesHold('global-snapshot-not-server-proven');
+    }
+    if (data == null) {
+      // An authoritative absent archive can be reviewed independently,
+      // unlike a foreign, malformed, cached or changed-owner record.
+      throw const DedaStep2GlobalPlacesHold('global-archive-absent');
+    }
+    if (data.length != 8 || data['createdAt'] is! Timestamp ||
         data['format'] != 1 ||
         data['kind'] != 'untrusted-device-global-display-evidence' ||
         data['accountKey'] != account ||
