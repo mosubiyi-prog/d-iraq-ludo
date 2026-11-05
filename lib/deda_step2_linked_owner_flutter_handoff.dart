@@ -6,8 +6,11 @@ const bool dedaLinkedFlutterHandoffEnabled = bool.fromEnvironment(
 enum DedaLoginKind { absent, anonymous, linked }
 
 class DedaLoginIdentity {
-  const DedaLoginIdentity(this.uid, this.email, this.kind, this.epoch);
+  const DedaLoginIdentity(this.uid, this.email, this.kind, this.epoch,
+      {this.originalId});
   final String? uid, email;
+  // Read only from an explicit server-backed proof, never from premium ID.
+  final String? originalId;
   final DedaLoginKind kind;
   final int epoch;
 }
@@ -33,7 +36,7 @@ class DedaLoginHandoff {
   Future<String> login({
     required String phone,
     required String pin,
-    required String originalId,
+    String? originalId,
     required bool explicitUserAction,
     required bool Function() isCurrentIntent,
     bool explicitReplaceAnonymous = false,
@@ -42,7 +45,8 @@ class DedaLoginHandoff {
     final account = phone.replaceAll(RegExp(r'[^0-9]'), '');
     if (!RegExp(r'^[0-9]{10,16}$').hasMatch(account) ||
         !RegExp(r'^\d{6}$').hasMatch(pin) ||
-        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+        (originalId != null &&
+         !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId))) {
       throw ArgumentError('invalid-login-input');
     }
     if (!isCurrentIntent()) throw StateError('stale-login-intent');
@@ -66,6 +70,13 @@ class DedaLoginHandoff {
           proof.email != '$account@deda-login.invalid') {
         throw StateError('linked-original-login-not-proven');
       }
+      final serverId = proof.originalId;
+      final provenId = originalId ?? serverId;
+      if (provenId == null ||
+          !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(provenId) ||
+          (serverId != null && serverId != provenId)) {
+        throw StateError('server-original-id-not-proven');
+      }
       void checkOwner() {
         checkIntent();
         final live = port.current();
@@ -75,14 +86,14 @@ class DedaLoginHandoff {
         }
       }
       checkOwner();
-      await port.proveOriginal(account, originalId, uid);
+      await port.proveOriginal(account, provenId, uid);
       checkOwner();
       final install = await port.installId();
       checkOwner();
       if (!RegExp(r'^[0-9a-f]{48}$').hasMatch(install)) {
         throw StateError('invalid-existing-install');
       }
-      if (!await port.grantDevice(account, originalId, uid, install)) {
+      if (!await port.grantDevice(account, provenId, uid, install)) {
         throw StateError('server-device-grant-not-approved');
       }
       checkOwner();
