@@ -142,10 +142,19 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
       });
       if (!proof) return deny();
 
-      // The custom Firebase token signs in as the EXISTING original UID.
-      // It never creates a new UID, writes profile data, or grants admin role.
-      // Client MUST signInWithCustomToken, re-read canonical owner identity
-      // from SERVER, and check the login intent before committing local state.
+      // Existing linked-owner Firebase Auth password-provider sessions are
+      // the mode tested by the two-device session bootstrap rules. Return
+      // owner proof after rate-limited verification, without minting a
+      // custom token; the client still MUST prove the SAME UID using
+      // signInWithEmailAndPassword before any authorized session write.
+      if (request.data?.proofMode === "linked-password") {
+        return {
+          originalUid: proof.originalUid, originalId: proof.originalId,
+          accountKey: key,
+        };
+      }
+      // Legacy isolated test path remains unavailable until independently
+      // reviewed. Custom tokens are never exposed in linked-password mode.
       const customToken = await auth.createCustomToken(proof.originalUid);
       if (typeof customToken !== "string" || !customToken) return deny();
       return {
