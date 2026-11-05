@@ -21,6 +21,9 @@ function recoveryCallableOptions(timeoutSeconds) {
     enforceAppCheck: true,
     timeoutSeconds,
     serviceAccount: RUNTIME_ACCOUNT,
+    region: "us-central1",
+    minInstances: 0,
+    maxInstances: 2,
   };
 }
 
