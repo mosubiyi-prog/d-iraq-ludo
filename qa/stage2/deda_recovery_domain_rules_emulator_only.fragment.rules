@@ -101,3 +101,73 @@
         && request.resource.data.encoded.size() <= 60000
         && request.resource.data.createdAt == request.time;
     }
+
+    // Stage2 existing-asset READBACK ONLY — emulator-only candidate.
+    // No client may mint, accept, transfer, debit, buy, or delete assets.
+    // The original UID is preserved by linked owner login. Do not use active
+    // premium aliases or client-entered phone numbers for authorization.
+    function stage2OriginalAssetOwner(originalId) {
+      return signedIn()
+        && originalId is string
+        && exists(/databases/$(database)/documents/deda_share_ids/$(originalId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
+             .data.publicId == originalId
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
+             .data.kind == 'personal'
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
+             .data.active == true
+        && get(/databases/$(database)/documents/deda_share_ids/$(originalId))
+             .data.ownerUid == request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.accountKey ==
+           get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+             .data.accountKey
+        && (!get(/databases/$(database)/documents/users/$(request.auth.uid))
+                 .data.keys().hasAny(['sharePersonalId'])
+            || get(/databases/$(database)/documents/users/$(request.auth.uid))
+                 .data.sharePersonalId == originalId);
+    }
+
+    match /deda_stage66_card_receipts/{receiptId} {
+      allow get: if signedIn() && (resource == null || (
+        resource.data.publicId is string
+        && stage2OriginalAssetOwner(resource.data.publicId)
+        && receiptId == resource.data.publicId + '_' + resource.data.style
+        && resource.data.kind == 'card'
+        && resource.data.style in ['gold','diamond','royal','pink']
+        && resource.data.cost == 5000));
+      allow list, create, update, delete: if false;
+    }
+
+    match /deda_stage66_owned_cards/{receiptId} {
+      allow get: if signedIn() && (resource == null || (
+        resource.data.publicId is string
+        && stage2OriginalAssetOwner(resource.data.publicId)
+        && receiptId == resource.data.publicId + '_' + resource.data.style
+        && resource.data.style in ['gold','diamond','royal','pink']
+        && resource.data.receiptId == receiptId));
+      allow list, create, update, delete: if false;
+    }
+
+    match /deda_stage71_granted_registry/{identifier} {
+      // Scoped recipient query only. Unfiltered registry enumeration denied.
+      allow get, list: if signedIn()
+        && resource.data.recipientOriginalId is string
+        && stage2OriginalAssetOwner(resource.data.recipientOriginalId)
+        && resource.data.identifier == identifier
+        && resource.data.kind in ['self_used','gifted']
+        && resource.data.group in ['001','002'];
+      allow create, update, delete: if false;
+    }
+
+    match /deda_stage74_id_gift_receipts/{identifier} {
+      // A missing receipt means the allocated gift is still unaccepted.
+      allow get: if signedIn() && (resource == null || (
+        resource.data.originalId is string
+        && stage2OriginalAssetOwner(resource.data.originalId)
+        && resource.data.identifier == identifier
+        && resource.data.group in ['001','002']));
+      allow list, create, update, delete: if false;
+    }

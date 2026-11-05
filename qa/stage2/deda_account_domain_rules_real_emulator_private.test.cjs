@@ -83,6 +83,9 @@ test.before(async()=>{
   assert.doesNotMatch(originalRules,/match \/deda_friendships\//);
   assert.match(stage2Rules,/match \/deda_friendships\//);
   assert.match(stage2Rules,/match \/deda_quiz_ui_snapshots\//);
+  assert.doesNotMatch(originalRules,/match \/deda_stage66_card_receipts\//);
+  assert.match(stage2Rules,/match \/deda_stage66_card_receipts\//);
+  assert.match(stage2Rules,/match \/deda_stage71_granted_registry\//);
   baseline=await initializeTestEnvironment({
     projectId:"demo-deda-stage2-domain-base",
     firestore:{rules:originalRules},
@@ -274,3 +277,105 @@ test("public friend profile with secret fields is blocked for every client",
       doc(stranger(),"deda_social_profiles",original)));
     assert.equal(publicOnly.data().displayName,"Original Owner");
 });
+
+// Stage2 asset provenance: strictly existing server receipts and grants.
+// This test proves neither old AdMob local diamonds nor any automatic credit.
+async function seedAssetEvidence() {
+  await seed();
+  await candidate.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore(), now=Timestamp.now();
+    const paidId=original+"_gold";
+    await setDoc(doc(db,"deda_stage66_card_receipts",paidId),{
+      publicId:original,kind:"card",style:"gold",cost:5000,createdAt:now,
+    });
+    await setDoc(doc(db,"deda_stage66_owned_cards",paidId),{
+      publicId:original,style:"gold",receiptId:paidId,createdAt:now,
+    });
+    await setDoc(doc(db,"deda_stage71_granted_registry","@DEDA-AB1234"),{
+      identifier:"@DEDA-AB1234",recipientOriginalId:original,group:"001",
+      baseColor:"gold",kind:"self_used",grantedByUid:"manager",grantedAt:now,
+    });
+    await setDoc(doc(db,"deda_stage71_granted_registry","@DEDA-AC1234"),{
+      identifier:"@DEDA-AC1234",recipientOriginalId:original,group:"001",
+      baseColor:"royal",kind:"gifted",grantedByUid:"manager",grantedAt:now,
+    });
+    await setDoc(doc(db,"deda_stage74_id_gift_receipts","@DEDA-AC1234"),{
+      identifier:"@DEDA-AC1234",originalId:original,group:"001",
+      receivedAt:now,
+    });
+  });
+}
+
+test("original UID can read paired paid card and accepted premium grants only",
+  async()=>{
+    await seedAssetEvidence();
+    const db=owner(), paidId=original+"_gold";
+    const receipt=await assertSucceeds(getDoc(
+      doc(db,"deda_stage66_card_receipts",paidId)));
+    const owned=await assertSucceeds(getDoc(
+      doc(db,"deda_stage66_owned_cards",paidId)));
+    assert.equal(receipt.data().cost,5000);
+    assert.equal(owned.data().receiptId,paidId);
+    const grants=await assertSucceeds(getDocs(query(
+      collection(db,"deda_stage71_granted_registry"),
+      where("recipientOriginalId","==",original))));
+    assert.equal(grants.size,2);
+    const accepted=await assertSucceeds(getDoc(
+      doc(db,"deda_stage74_id_gift_receipts","@DEDA-AC1234")));
+    assert.equal(accepted.data().originalId,original);
+    // Absence remains UNKNOWN, never an empty inventory proof for all history.
+    const missing=await assertSucceeds(getDoc(
+      doc(db,"deda_stage66_card_receipts",original+"_pink")));
+    assert.equal(missing.exists(),false);
+  });
+
+test("foreign owner and unscoped registry cannot read another person's paid items",
+  async()=>{
+    await seedAssetEvidence();
+    const other=stranger();
+    await assertFails(getDoc(doc(other,
+      "deda_stage66_card_receipts",original+"_gold")));
+    await assertFails(getDoc(doc(other,
+      "deda_stage66_owned_cards",original+"_gold")));
+    await assertFails(getDoc(doc(other,
+      "deda_stage74_id_gift_receipts","@DEDA-AC1234")));
+    await assertFails(getDocs(query(
+      collection(other,"deda_stage71_granted_registry"),
+      where("recipientOriginalId","==",original))));
+    await assertFails(getDocs(collection(owner(),
+      "deda_stage71_granted_registry")));
+  });
+
+test("owner recovery readback cannot grant, claim, debit or rewrite receipts",
+  async()=>{
+    await seedAssetEvidence();
+    const db=owner(),paidId=original+"_gold";
+    await assertFails(updateDoc(doc(db,
+      "deda_stage66_card_receipts",paidId),{cost:1}));
+    await assertFails(setDoc(doc(db,
+      "deda_stage66_owned_cards",original+"_pink"),{
+        publicId:original,style:"pink",receiptId:original+"_pink",
+      }));
+    await assertFails(updateDoc(doc(db,
+      "deda_stage71_granted_registry","@DEDA-AC1234"),{
+        recipientOriginalId:otherId,
+      }));
+    await assertFails(setDoc(doc(db,
+      "deda_stage74_id_gift_receipts","@DEDA-AC1234"),{
+        identifier:"@DEDA-AC1234",originalId:original,group:"001",
+        receivedAt:serverTimestamp(),
+      }));
+    await assertFails(updateDoc(doc(db,
+      "deda_diamond_gift_balances",original),{balance:8000000}));
+  });
+
+test("corrupted paid receipt is denied and not silently treated as ownership",
+  async()=>{
+    await seedAssetEvidence();
+    await candidate.withSecurityRulesDisabled(async ctx=>{
+      await updateDoc(doc(ctx.firestore(),
+        "deda_stage66_card_receipts",original+"_gold"),{cost:5});
+    });
+    await assertFails(getDoc(doc(owner(),
+      "deda_stage66_card_receipts",original+"_gold")));
+  });
