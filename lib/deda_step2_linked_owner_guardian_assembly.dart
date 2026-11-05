@@ -20,6 +20,8 @@ import 'deda_step2_assets_readback.dart';
 import 'deda_step2_diamond_reconciliation_readonly.dart';
 import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
+import 'deda_step2_global_places_settings_archive.dart';
+import 'deda_step2_global_places_settings_restore.dart';
 
 /// Inert SDK wiring candidate, not called from main.dart or background code.
 /// Server Functions/rules are NOT deployed; reviewed real worker adapters
@@ -130,6 +132,17 @@ class DedaLinkedOwnerGuardianAssembly {
               isCurrent: scope.isCurrentIntent,
             )
         : null,
+      restoreGlobalPlacesSettings:
+          dedaStep2GlobalPlacesSettingsArchiveEnabled &&
+          dedaStep2GlobalPlacesSettingsRestoreEnabled
+          ? (scope) => DedaStep2GlobalPlacesReplacementRestore.firebase()
+              .restoreExplicit(
+                accountKey: scope.accountKey,
+                originalId: scope.originalId,
+                originalUid: scope.originalUid,
+                isCurrent: scope.isCurrentIntent,
+              )
+          : null,
     );
   }
 }
