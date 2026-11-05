@@ -18,7 +18,7 @@ function normalizeName(value) {
  * request document and displays its new recoveryPin to requesterUid only.
  */
 async function autoRecoverForgottenPin(firestore, {
-  requestId, nowMs=Date.now(),
+  requestId, nowMs=Date.now(), linkedPinCompatEnabled=false,
 }) {
   if (!requestId || typeof requestId !== "string") {
     return {outcome:"invalid-request-id"};
@@ -58,6 +58,14 @@ async function autoRecoverForgottenPin(firestore, {
     const directory=directorySnap.data()||{};
     const credential=credentialSnap.data()||{};
     const last=limitSnap.data()||{};
+    // Linked Firebase Auth accounts must never rotate only Firestore PIN.
+    // Under the private compatibility pilot, route such accounts to the
+    // existing manager-review path for synchronized manual rotation.
+    // Existing production behavior stays unchanged while pilot is OFF.
+    if (linkedPinCompatEnabled && typeof directory.authEmail === "string" &&
+        directory.authEmail.trim().length > 0) {
+      return {outcome:"manual-review", reason:"linked-pin-dual-sync-required"};
+    }
     const matched=directory.active === true &&
       credential.active === true &&
       credential.accountKey === key &&

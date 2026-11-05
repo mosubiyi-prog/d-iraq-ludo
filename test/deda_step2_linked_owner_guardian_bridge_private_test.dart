@@ -1,0 +1,255 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/deda_step2_linked_owner_flutter_handoff.dart';
+import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
+import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
+import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
+
+const account = '9647712345678';
+const uid = 'verified-original-uid';
+const normalId = '@DEDA-ABC123';
+const intent = 'persisted_recovery_intent_20261104';
+const install = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+class FakePort implements DedaLoginHandoffPort {
+  DedaLoginIdentity identity =
+      const DedaLoginIdentity(null, null, DedaLoginKind.absent, 0);
+  final List<String> events = <String>[];
+  bool ownerValid = true;
+  bool sessionValid = true;
+  bool grantValid = true;
+  void Function()? onOwnerProof;
+  @override
+  DedaLoginIdentity current() => identity;
+  @override
+  Future<T> inExistingOwnerLane<T>(
+      Future<T> Function() action, bool Function() isCurrentIntent) async {
+    events.add('lane');
+    if (!isCurrentIntent()) throw StateError('stale');
+    return action();
+  }
+  @override
+  Future<DedaLoginIdentity> signInOriginal(String key, String pin) async {
+    events.add('auth');
+    if (pin != '123456') throw StateError('wrong-pin');
+    identity = DedaLoginIdentity(uid, '$key@deda-login.invalid',
+        DedaLoginKind.linked, identity.epoch + 1);
+    return identity;
+  }
+  @override
+  Future<void> proveOriginal(
+      String key, String originalId, String claimedUid) async {
+    events.add('proof');
+    if (!ownerValid || key != account ||
+        originalId != normalId || claimedUid != uid) {
+      throw StateError('wrong-owner');
+    }
+    onOwnerProof?.call();
+  }
+  @override
+  Future<String> installId() async {
+    events.add('install');
+    return install;
+  }
+  @override
+  Future<bool> grantDevice(String key, String originalId,
+      String claimedUid, String installationId) async {
+    events.add('grant');
+    return grantValid;
+  }
+  @override
+  Future<void> writeSession(String key, String claimedUid,
+      String installationId) async {
+    events.add('write');
+  }
+  @override
+  Future<bool> readbackSession(String key, String claimedUid) async {
+    events.add('readback');
+    return sessionValid;
+  }
+}
+class FakeJournal implements DedaVaultRecoveryJournal {
+  final Map<String, DedaVaultJournalRow> rows = {};
+  int created = 0;
+  int completed = 0;
+  @override
+  Future<DedaVaultJournalRow?> read(
+      DedaVaultVerifiedScope scope, DedaVaultCode code) async =>
+      rows[scope.operationKey(code)];
+  @override
+  Future<bool> reserveIfAbsent(DedaVaultVerifiedScope scope,
+      DedaVaultCode code, String operationKey) async {
+    if (rows.containsKey(operationKey)) return false;
+    created++;
+    rows[operationKey] = DedaVaultJournalRow(
+        operationKey: operationKey, state: DedaVaultJournalState.reserved);
+    return true;
+  }
+  @override
+  Future<void> markVerified(DedaVaultVerifiedScope scope, DedaVaultCode code,
+      String operationKey, String receiptId) async {
+    completed++;
+    rows[operationKey] = DedaVaultJournalRow(
+        operationKey: operationKey,
+        state: DedaVaultJournalState.verified,
+        receiptId: receiptId);
+  }
+}
+class FakeWorker implements DedaVaultWorkerAdapter {
+  int calls = 0;
+  DedaVaultReceipt? receipt;
+  @override
+  DedaVaultCode get code => DedaVaultCode.originalBackupReadback;
+  @override
+  Future<void> executeOnce(DedaVaultVerifiedScope scope, String op) async {
+    calls++;
+    receipt = DedaVaultReceipt(
+      accountKey: scope.accountKey, originalUid: scope.originalUid,
+      code: code, operationKey: op, receiptId: 'server-receipt-000001');
+  }
+  @override
+  Future<DedaVaultReceipt?> confirmByReadback(
+      DedaVaultVerifiedScope scope, String op) async => receipt;
+}
+DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
+  bool enabled = true,
+  Map<DedaVaultCode, DedaVaultWorkerAdapter> adapters = const {},
+  bool guardianEnabled = true,
+}) => DedaLinkedOwnerGuardianBridge(
+  enabled: enabled,
+  handoff: DedaLoginHandoff(port, enabled: true),
+  guardian: DedaStep2RecoveryGuardian(
+    journal: journal, adapters: adapters,
+    enabledForPrivateTests: guardianEnabled,
+  ),
+);
+Future<DedaLinkedGuardianLoginResult> login(
+    DedaLinkedOwnerGuardianBridge bridge, {
+    bool explicit = true,
+    bool recover = false,
+    bool Function()? current,
+    String? recoveryIntentId,
+    Set<DedaVaultCode> selected = const {},
+    DedaVaultRecoveryTrigger trigger =
+        DedaVaultRecoveryTrigger.explicitUserRequest,
+    }) => bridge.loginAndPrepare(
+  phone: account, pin: '123456', originalId: normalId,
+  explicitUserAction: explicit,
+  isCurrentIntent: current ?? () => true,
+  explicitRecoveryRequest: recover,
+  recoveryIntentId: recoveryIntentId,
+  selectedCodes: selected,
+  trigger: trigger,
+);
+
+void main() {
+  const backup = DedaVaultCode.originalBackupReadback;
+  test('OFF by default: assembly and bridge perform zero actions', () async {
+    expect(dedaLinkedOwnerGuardianBridgeEnabled, false);
+    expect(() => DedaLinkedOwnerGuardianAssembly.prepare(), throwsStateError);
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p, j, enabled: false)), throwsStateError);
+    expect(p.events, isEmpty);
+    expect(j.created, 0);
+  });
+  test('normal verified login never starts recovery', () async {
+    final p = FakePort(), j = FakeJournal();
+    final result = await login(make(p, j));
+    expect(result.originalUid, uid);
+    expect(result.accountKey, account);
+    expect(result.recovery, isNull);
+    expect(result.fullAccountRestored, false);
+    expect(p.events, ['lane','auth','proof','install','grant','write','readback']);
+    expect(j.created, 0);
+  });
+  test('no sneaked recovery without separate explicit request', () async {
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p,j),selected:{backup}), throwsStateError);
+    expect(p.events, isEmpty);
+    expect(j.created, 0);
+  });
+  test('recovery requires persisted intent and reviewed code BEFORE Auth', () async {
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p,j),recover:true,selected:{backup}),
+        throwsStateError);
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{DedaVaultCode.socialService}),
+        throwsStateError);
+    expect(p.events, isEmpty);
+  });
+  test('explicit recovery with approved worker runs once, no full claim', () async {
+    final p = FakePort(), j = FakeJournal(), w = FakeWorker();
+    final bridge = make(p, j, adapters:{backup:w});
+    final result = await login(bridge,recover:true,
+        recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.verified);
+    expect(result.fullAccountRestored, false);
+    expect(j.created, 1);
+    expect(j.completed, 1);
+    expect(w.calls, 1);
+    await expectLater(login(bridge,recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(w.calls, 1);
+  });
+  test('without approved worker, guardian blocks without reserve', () async {
+    final p = FakePort(), j = FakeJournal();
+    final result = await login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stoppedSafely, true);
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.blocked);
+    expect(j.created, 0);
+    expect(result.fullAccountRestored, false);
+  });
+  test('verified resume does not invent a new journal operation', () async {
+    final p = FakePort(), j = FakeJournal(), w = FakeWorker();
+    final result = await login(make(p,j,adapters:{backup:w}),recover:true,
+        recoveryIntentId:intent,selected:{backup},
+        trigger:DedaVaultRecoveryTrigger.explicitlyVerifiedResume);
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.blocked);
+    expect(j.created, 0);
+    expect(w.calls, 0);
+  });
+  test('server owner rejection prevents every guardian write', () async {
+    final p = FakePort()..ownerValid=false, j = FakeJournal();
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('server session rejection prevents guardian dispatch', () async {
+    final p = FakePort(), j = FakeJournal();
+    p.onOwnerProof = () => p.sessionValid = false;
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('intent expiry after owner proof prevents every worker', () async {
+    final p = FakePort(), j = FakeJournal();
+    var alive = true;
+    p.onOwnerProof = () => alive = false;
+    await expectLater(login(make(p,j),recover:true,current:()=>alive,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('same UID with changed epoch is not eligible', () async {
+    final p = FakePort(), j = FakeJournal();
+    var proofs = 0;
+    p.onOwnerProof = () {
+      proofs++;
+      if(proofs > 1) {
+        final prev = p.identity;
+        p.identity = DedaLoginIdentity(
+            prev.uid,prev.email,prev.kind,prev.epoch+2);
+      }
+    };
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('linked account A cannot silently replace itself with B', () async {
+    final p = FakePort(), j = FakeJournal();
+    p.identity = const DedaLoginIdentity(
+        'foreign-uid','other@example.com',DedaLoginKind.linked,3);
+    await expectLater(login(make(p,j)),throwsStateError);
+    expect(p.identity.uid,'foreign-uid');
+    expect(p.events,isEmpty);
+  });
+}
