@@ -78,7 +78,7 @@ class DedaVaultPurchaseEvidenceAdapter implements DedaVaultWorkerAdapter {
     final saved = await _read(scope);
     if (saved.sourceUid != scope.originalUid ||
         saved.sourceInstallId.isEmpty ||
-        saved.financialSourceAudit.canRestoreDiamonds) return null;
+        saved.financialSourceAudit.canSettleFinancialBalances) return null;
     return _receipt(scope, code, key,
       'purchases:${saved.captureId}:${saved.sourceInstallId}');
   }
