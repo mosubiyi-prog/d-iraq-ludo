@@ -189,6 +189,29 @@ def main():
                 region, state = found.get(name, ("NOT_FOUND", "NOT_FOUND"))
                 print("LIVE_CALLABLE_GLOBAL_" + api_version.upper() +
                       "_" + name, region, state)
+    # Google Cloud testIamPermissions performs no mutation. Probe the exact
+    # capabilities needed for narrowly targeted Cloud Functions deployment;
+    # do not infer deployment rights merely from a readable function list.
+    requested = (
+        "cloudfunctions.functions.create",
+        "cloudfunctions.functions.update",
+        "cloudbuild.builds.create",
+        "iam.serviceAccounts.actAs",
+        "run.services.create",
+        "serviceusage.services.enable",
+    )
+    iam = session.post(
+        "https://cloudresourcemanager.googleapis.com/v1/projects/" +
+        PROJECT + ":testIamPermissions",
+        json={"permissions": list(requested)}, timeout=30)
+    if iam.status_code == 200:
+        allowed = set(iam.json().get("permissions", []))
+        for permission in requested:
+            print("LIVE_DEPLOY_IAM_" + permission.upper().replace(".", "_"),
+                  permission in allowed)
+    else:
+        print("LIVE_DEPLOY_IAM_CHECK",
+              "UNVERIFIABLE_HTTP_" + str(iam.status_code))
     # Billing status only, without leaking the linked billing-account ID.
     # If access is denied, report unknown rather than guessing Spark/Blaze.
     billing = session.get(
