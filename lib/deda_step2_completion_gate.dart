@@ -12,6 +12,7 @@ enum DedaStep2CompletionState {
   missingHistoricalProof,
   notRun,
   needsReview,
+  notApplicable,
 }
 
 class DedaStep2CompletionReport {
@@ -128,7 +129,12 @@ class DedaStep2CompletionGate {
       'historicalTrafficQuestions': hold,
       'friends': domainReadback == null ? notRun :
         domainReadback.friendRelations > 0 ? observed : hold,
-      'publishedPlace': publishedPlaceRestored ? restored : hold,
+      // A fresh server query with no published place is legitimately N/A,
+      // not a restoration receipt and not evidence about local drafts.
+      'publishedPlace': publishedPlaceRestored ? restored :
+          recovery?.stepStates[DedaVaultCode.publishedPlaceRecovery] ==
+                  DedaVaultStepState.notApplicable
+              ? DedaStep2CompletionState.notApplicable : hold,
       'savedPlacesAndFavorites': hold,
       'freeAppearance': freeAppearanceHydrated ? restored : hold,
       'allSettings': hold,
