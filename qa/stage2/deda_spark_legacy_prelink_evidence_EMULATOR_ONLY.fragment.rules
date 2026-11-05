@@ -1,0 +1,118 @@
+
+    // DEDA Stage2 / Spark ONLY. A historic original phone (anonymous UID)
+    // may archive its own UNTRUSTED legacy progress/purchase bytes once,
+    // BEFORE linking Email/Password on that exact original UID.
+    // These are NEVER wallet transactions, XP awards or paid entitlements.
+    // The source is client-controlled; later independent evidence matching
+    // is mandatory. NOT DEPLOYED; test in emulator first.
+    function stage2SparkOriginalAccount(accountKey) {
+      return signedIn()
+        && accountKey is string
+        && accountKey.matches('^[0-9]{10,16}$')
+        && !exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+             .data.active == true
+        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey))
+             .data.createdUid == request.auth.uid
+        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+             .data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+             .data.accountKey == accountKey
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.accountKey == accountKey;
+    }
+
+    function stage2SparkOriginalArchiveCreate(accountKey, captureId, data) {
+      return stage2SparkOriginalAccount(accountKey)
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && captureId.matches('^[A-Za-z0-9_-]{20,80}$')
+        && data.keys().hasOnly([
+          'format','kind','accountKey','sourceUid','installId','captureId',
+          'records','createdAt'
+        ])
+        && data.keys().hasAll([
+          'format','kind','accountKey','sourceUid','installId','captureId',
+          'records','createdAt'
+        ])
+        && data.format == 1
+        && data.accountKey == accountKey
+        && data.sourceUid == request.auth.uid
+        && data.captureId == captureId
+        && data.installId is string
+        && data.installId.matches('^[0-9a-f]{48}$')
+        && data.installId ==
+          get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
+            .data.installId
+        && data.createdAt == request.time;
+    }
+
+    match /deda_progress_evidence/{accountKey}/captures/{captureId} {
+      // Source-only GET works before and after linking SAME Firebase UID.
+      // Missing rows may be queried to resolve an uncertain old-phone write.
+      allow get: if stage2SparkOriginalAccount(accountKey)
+        && (resource == null || (
+          resource.data.sourceUid == request.auth.uid
+          && resource.data.accountKey == accountKey
+          && resource.data.captureId == captureId));
+      allow list, update, delete: if false;
+      allow create: if stage2SparkOriginalArchiveCreate(
+          accountKey, captureId, request.resource.data)
+        && request.resource.data.kind == 'legacy-local-evidence'
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'taskPoints','socialCoinsAndXp','earnedDiamonds'
+        ])
+        && (request.resource.data.records.taskPoints == null ||
+            (request.resource.data.records.taskPoints is string
+             && request.resource.data.records.taskPoints.size() <= 200000))
+        && (request.resource.data.records.socialCoinsAndXp == null ||
+            (request.resource.data.records.socialCoinsAndXp is string
+             && request.resource.data.records.socialCoinsAndXp.size() <= 200000))
+        && (request.resource.data.records.earnedDiamonds == null ||
+            (request.resource.data.records.earnedDiamonds is string
+             && request.resource.data.records.earnedDiamonds.size() <= 200000));
+    }
+
+    match /deda_purchase_evidence/{accountKey}/captures/{captureId} {
+      allow get: if stage2SparkOriginalAccount(accountKey)
+        && (resource == null || (
+          resource.data.sourceUid == request.auth.uid
+          && resource.data.accountKey == accountKey
+          && resource.data.captureId == captureId));
+      allow list, update, delete: if false;
+      allow create: if stage2SparkOriginalArchiveCreate(
+          accountKey, captureId, request.resource.data)
+        && request.resource.data.kind == 'legacy-purchase-evidence'
+        && request.resource.data.records is map
+        && request.resource.data.records.keys().hasOnly([
+          'originalId','progressCaptureId','localSnapshot'
+        ])
+        && request.resource.data.records.keys().hasAll([
+          'originalId','progressCaptureId','localSnapshot'
+        ])
+        && request.resource.data.records.progressCaptureId == captureId
+        && request.resource.data.records.originalId is string
+        && request.resource.data.records.originalId.matches('^@DEDA-[A-Z0-9]{6}$')
+        && request.resource.data.records.originalId ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid))
+            .data.sharePersonalId
+        && exists(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
+            .data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
+            .data.kind == 'personal'
+        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
+            .data.active == true
+        && request.resource.data.records.localSnapshot is string
+        && request.resource.data.records.localSnapshot.size() <= 200000
+        && exists(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
+        && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
+           .data.sourceUid == request.auth.uid
+        && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
+           .data.installId == request.resource.data.installId;

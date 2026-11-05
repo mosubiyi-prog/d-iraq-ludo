@@ -121,6 +121,7 @@ jobs:
           node --check qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs
           node --check qa/stage2/deda_account_domain_rules_real_emulator_private.test.cjs
           node --check qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs
+          node --check qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs
           echo "QA_EMULATOR_ROOT=$root" >> "$GITHUB_ENV"
       - name: Actual Firestore/Auth/Functions SDK emulator — owner PIN, three phones and denial rules
         shell: bash
@@ -131,7 +132,7 @@ jobs:
             --project demo-deda-100436-journal-qa \
             --config "$QA_EMULATOR_ROOT/firebase.json" \
             --only auth,functions,firestore --non-interactive \
-            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs qa/recovery_journal/deda_100436_session_issuer_emulator.test.cjs qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs qa/stage2/deda_owner_pin_real_emulator_private.test.cjs qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs qa/stage2/deda_account_domain_rules_real_emulator_private.test.cjs qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs'
+            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs qa/recovery_journal/deda_100436_session_issuer_emulator.test.cjs qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs qa/stage2/deda_owner_pin_real_emulator_private.test.cjs qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs qa/stage2/deda_account_domain_rules_real_emulator_private.test.cjs qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs'
           echo 'PASS_ACTUAL_FIREBASE_EMULATORS_NO_LIVE_USER_NO_APK'
       - name: Confirm no source/rules mutation after QA
         shell: bash
