@@ -10,6 +10,7 @@ import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
 import 'deda_step2_spark_linked_uid_readonly.dart';
 import 'deda_step2_level_points_restore.dart';
 import 'deda_step2_owner_place_local_archive.dart';
+import 'deda_step2_global_places_settings_archive.dart';
 import 'deda_step2_owner_place_backup_journal.dart';
 import 'deda_100429_local_task_traffic_evidence.dart';
 import 'deda_100432_quiz_cloud_continuity.dart';
@@ -197,6 +198,59 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     return true;
   }
 
+  /// Immutable archival of legacy global places/preferences requires explicit
+  /// attribution: the 100340 keys are device-wide, not account ownership.
+  Future<bool> _archiveLinkedOriginalGlobalData(String uid) async {
+    if (!mounted) throw StateError('global-archive-dialog-expired');
+    final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+    final consent = await showDialog<bool>(
+      context: context, barrierDismissible: false,
+      builder: (dialog) => AlertDialog(
+        title: const Text('تأكيد الأماكن والإعدادات القديمة'),
+        content: const Text('الأماكن المحفوظة والإعدادات على هذا الهاتف قد تخص '
+          'حساباً آخر. هل تؤكد أنها تخص حسابك وتوافق على حفظ أرشيف منها '
+          'داخل حسابك؟ لن تُحذف أو تُستبدل بيانات الهاتف الأصلي.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: const Text('تخطي')),
+          FilledButton(
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: const Text('أؤكد وأوافق')),
+        ],
+      ),
+    );
+    if (consent != true) return false;
+    bool current() => mounted &&
+        FirebaseAuth.instance.currentUser?.uid == uid &&
+        FirebaseAuth.instance.currentUser?.isAnonymous == false &&
+        FirebaseAuth.instance.currentUser?.email ==
+            DedaLinkedOwnerSessionPolicy.ownerEmail(account);
+    if (!current()) throw StateError('global-archive-owner-changed');
+    final archive = DedaStep2GlobalPlacesArchive.firebaseCandidate();
+    try {
+      await archive.prepareOriginal(
+        accountKey: account, originalId: widget.originalId,
+        originalUid: uid, isCurrent: current,
+        explicitlyConfirmDeviceGlobalDataBelongsToAccount: true,
+      );
+    } on DedaStep2GlobalPlacesHold catch (error) {
+      if (error.reason == 'global-source-account-attribution-not-approved') {
+        return false; // No existing entry; never forge an empty backup.
+      }
+      rethrow;
+    }
+    final saved = await archive.uploadPendingOriginal(
+      accountKey: account, originalId: widget.originalId,
+      originalUid: uid, isCurrent: current,
+    );
+    if (!current() || saved.accountKey != account ||
+        saved.originalUid != uid || saved.originalId != widget.originalId) {
+      throw StateError('global-archive-server-readback-not-confirmed');
+    }
+    return true;
+  }
+
   /// Remember the already-linked original UID on the ORIGINAL phone too.
   /// Without this, its next cold start could trust an old local profile after
   /// Firebase Auth switched to a different user. An uncertain preference
@@ -242,6 +296,16 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
             quizArchived = await _archiveLinkedOriginalQuiz(existingUser.uid);
           } catch (_) {
             quizUnconfirmed = true;
+          }
+        }
+        if (dedaStep2GlobalPlacesSettingsArchiveEnabled) {
+          try {
+            await _archiveLinkedOriginalGlobalData(existingUser.uid);
+          } catch (_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('أرشيف الأماكن والإعدادات القديمة غير مؤكد؛ '
+                'احتفظ بالهاتف الأصلي وأعد المحاولة.')));
           }
         }
         if (!mounted) return;
@@ -375,6 +439,17 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           quizSourceConfirmed = await _archiveLinkedOriginalQuiz(uid);
         } catch (_) {
           quizSourceUnconfirmed = true;
+        }
+      }
+      if (dedaStep2GlobalPlacesSettingsArchiveEnabled &&
+          widget.confirm == null) {
+        try {
+          await _archiveLinkedOriginalGlobalData(uid);
+        } catch (_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('لم يتأكد أرشيف الأماكن والإعدادات القديمة. '
+              'احتفظ بالهاتف الأصلي وأعد المحاولة.')));
         }
       }
       // Existing widget's injected confirmation path is still testable
