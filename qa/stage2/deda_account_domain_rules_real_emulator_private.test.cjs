@@ -216,3 +216,26 @@ test("owner private archive cannot be deleted or overwritten by third party",
       encoded:"forged",createdAt:serverTimestamp(),
     }));
 });
+
+test("optional legacy cloud archives: original UID can read MISSING, foreign UID cannot",
+  async()=>{
+    await seed();
+    const missing=[
+      ["deda_social_profiles",original],
+      ["deda_stage71_active_identifier",original],
+      ["deda_profile_ui_migration",account],
+      ["deda_quiz_ui_snapshots",uid,"days",day],
+    ];
+    await candidate.withSecurityRulesDisabled(async ctx=>{
+      const {deleteDoc}=require("firebase/firestore");
+      const db=ctx.firestore();
+      for(const parts of missing) await deleteDoc(doc(db,...parts));
+    });
+    const mine=owner(),other=stranger();
+    for(const parts of missing) {
+      const absent=await assertSucceeds(getDoc(doc(mine,...parts)));
+      assert.equal(absent.exists(),false,
+        "no backup must mean UNKNOWN, never account reset");
+      await assertFails(getDoc(doc(other,...parts)));
+    }
+});
