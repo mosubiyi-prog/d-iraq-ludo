@@ -80,6 +80,22 @@ def main():
     print("CHECKED_IN_SHA256", sha256(base))
     print("ACTIVE_EQUALS_CHECKED_IN", content.rstrip() == base.rstrip())
     print("ACTIVE_LINE_COUNT", len(content.splitlines()))
+    # Fail-open diagnostics; boolean-only output, no active rules or secrets.
+    patterns = {
+        "RECURSIVE_WILDCARD_MATCH":
+            r"match\s+/\{[A-Za-z0-9_]+=\*\*\}",
+        "ALLOW_TRUE_READ":
+            r"allow\s+(?:read|read,\s*write|write,\s*read)\s*:\s*if\s+true\s*;",
+        "ALLOW_TRUE_WRITE":
+            r"allow\s+(?:write|read,\s*write|write,\s*read)\s*:\s*if\s+true\s*;",
+        "ALLOW_AUTH_BROAD_READ_WRITE":
+            r"allow\s+(?:read,\s*write|write,\s*read)\s*:\s*if\s*(?:signedIn\(\)|request\.auth\s*!=\s*null)\s*;",
+    }
+    for name, pat in patterns.items():
+        print("LIVE_SECURITY_DIAGNOSTIC_" + name,
+              bool(re.search(pat, content)))
+    print("LIVE_SECURITY_DIAGNOSTIC_MATCH_COUNT",
+          len(re.findall(r"match\s+/", content)))
     for item in INVARIANT_MATCHES:
         print("LIVE_HAS_" + item.upper(), ("match /" + item + "/") in content)
     for item in REQUIRED_CANDIDATE_PATHS:
