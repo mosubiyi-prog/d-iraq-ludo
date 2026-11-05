@@ -150,7 +150,7 @@ void main() {
   });
 
   test('selected premium ID without accepted grant and receipt is held', () async {
-    final io=StrictAssetsSource(premiumIds:const {});
+    final io=StrictAssetsSource(premiumIds:const <String>{});
     await expectLater(reader(io).inspect(accountKey:account,
       originalUid:uid,originalId:original,weekId:week,
       isCurrent:()=>true), throwsA(isA<DedaStep2AssetsHold>()));
@@ -169,7 +169,7 @@ void main() {
 
   test('changed intent during premium read discards all stale evidence', () async {
     var current=true;
-    final io=StrictAssetsSource(onPremiumRead:()=>current=false);
+    final io=StrictAssetsSource(onPremiumRead:(){current=false;});
     await expectLater(reader(io).inspect(accountKey:account,
       originalUid:uid,originalId:original,weekId:week,
       isCurrent:()=>current),throwsA(isA<DedaStep2AssetsHold>()));

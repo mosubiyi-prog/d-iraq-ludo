@@ -5,7 +5,6 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_lab_frame_secure_checkout.dart';
 import 'deda_owned_frame_reader.dart';
 import 'deda_stage67_spark_secure_card_checkout.dart';
-import 'deda_stage71_free_owned_use_profile.dart';
 
 /// Step 2: source-only account asset readback. NEVER a financial migration.
 /// No APK production enablement until all 100340 legacy financial writers are
@@ -56,9 +55,54 @@ class DedaStep2FirebaseAssetsIo implements DedaStep2AssetsIo {
 
   @override
   Future<Set<String>> acceptedOwnedPremiumIds(String originalId) async {
-    final rows = await DedaStage71OwnedIdentifierService
-        .acceptedOwnedForMyStore(originalId);
-    return Set<String>.unmodifiable(rows.map((row) => row.identifier));
+    // Read the EXISTING Stage71 grant registry without importing profile UI.
+    // Using the UI service here would also import the entire main.dart page,
+    // and makes an otherwise read-only evidence worker depend on widgets.
+    final grants = await FirebaseFirestore.instance
+        .collection('deda_stage71_granted_registry')
+        .where('recipientOriginalId', isEqualTo: originalId)
+        .limit(200)
+        .get(const GetOptions(source: Source.server));
+    if (grants.metadata.isFromCache || grants.metadata.hasPendingWrites) {
+      throw const DedaStep2AssetsHold('premium-grants-not-server-proven');
+    }
+    final accepted = <String>{};
+    final allIds = <String>{};
+    for (final item in grants.docs) {
+      final record = item.data(), id = item.id;
+      if (item.metadata.isFromCache || item.metadata.hasPendingWrites ||
+          !allIds.add(id) ||
+          !RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(id) ||
+          record['identifier'] != id ||
+          record['recipientOriginalId'] != originalId ||
+          !const {'gold', 'diamond', 'royal', 'pink'}
+              .contains(record['baseColor']) ||
+          !const {'001', '002'}.contains(record['group']) ||
+          !const {'self_used', 'gifted'}.contains(record['kind']) ||
+          record['grantedAt'] is! Timestamp) {
+        throw const DedaStep2AssetsHold('premium-grant-record-conflict');
+      }
+      if (record['kind'] == 'gifted') {
+        // A manager's gift allocation without an accepted Stage74 receipt
+        // must NOT become an owned ID on a new phone.
+        final receipt = await FirebaseFirestore.instance
+            .collection('deda_stage74_id_gift_receipts').doc(id)
+            .get(const GetOptions(source: Source.server));
+        if (receipt.metadata.isFromCache || receipt.metadata.hasPendingWrites) {
+          throw const DedaStep2AssetsHold('premium-gift-not-server-proven');
+        }
+        final gift = receipt.data();
+        if (gift == null) continue; // Pending gift; no accepted entitlement.
+        if (gift['identifier'] != id ||
+            gift['originalId'] != originalId ||
+            gift['group'] != record['group'] ||
+            gift['receivedAt'] is! Timestamp) {
+          throw const DedaStep2AssetsHold('premium-gift-receipt-conflict');
+        }
+      }
+      accepted.add(id);
+    }
+    return Set<String>.unmodifiable(accepted);
   }
 }
 
