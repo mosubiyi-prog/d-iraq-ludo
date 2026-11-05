@@ -135,7 +135,9 @@ class DedaStep2LocalPlacesSettingsReader {
     for (final key in keys) {
       final value = response[key];
       // Never leak a mutable list supplied by an external mock/store.
-      raw[key] = value is List ? List<Object?>.unmodifiable(value) : value;
+      raw[key] = value is List<String>
+          ? List<String>.unmodifiable(value)
+          : value is List ? List<Object?>.unmodifiable(value) : value;
     }
     final status = <String,DedaStep2LocalSourceStatus>{
       for (final key in keys) key: _inspect(key, raw[key]),
