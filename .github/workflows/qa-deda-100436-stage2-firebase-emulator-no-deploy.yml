@@ -94,6 +94,9 @@ jobs:
           cp qa/recovery_journal/functions_emulator/package.json "$func/package.json"
           cp functions/deda_linked_owner_session_grant_private_v1.js \
             "$func/deda_linked_owner_session_grant_issuer_CANDIDATE_NOT_EXPORTED.js"
+          # The current grant imports this production-default-deny pure helper.
+          # The isolated Functions Emulator must test the exact same module.
+          cp functions/deda_stage2_live_gate.js "$func/deda_stage2_live_gate.js"
           npm install --prefix "$func" --no-audit --no-fund --ignore-scripts
           cp "$DEDA_JOURNAL_EMULATOR_RULES" "$root/firestore.rules"
           python3 - "$root" <<'PY'
