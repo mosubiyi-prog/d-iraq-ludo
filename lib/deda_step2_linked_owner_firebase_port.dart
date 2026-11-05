@@ -7,6 +7,7 @@ import 'deda_auth_session_runtime.dart';
 import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 import 'deda_pin_auth.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
+import 'deda_step2_spark_linked_uid_readonly.dart';
 
 /// DEDA 100436 private candidate; never invoked at startup.
 /// The existing DedaAuthRuntime controller is the ONLY Auth transition lane.
@@ -62,6 +63,53 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     );
   }
 
+  /// Fresh owner-scoped reads; no Functions and no client Firestore writes.
+  Future<String> _sparkOriginalUidServerProof(String account, String uid) async {
+    if (!dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        auth.currentUser?.uid != uid ||
+        auth.currentUser?.isAnonymous != false ||
+        auth.currentUser?.email != '$account@deda-login.invalid') {
+      throw StateError('spark-original-owner-auth-missing');
+    }
+    Future<DocumentSnapshot<Map<String, dynamic>>> server(String path) async {
+      final row = await db.doc(path).get(
+          const GetOptions(source: Source.server));
+      DedaAuthRuntime.check();
+      if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+          auth.currentUser?.uid != uid) {
+        throw StateError('spark-original-owner-server-evidence-missing');
+      }
+      return row;
+    }
+    final rows = await Future.wait([
+      server('deda_account_directory/$account'),
+      server('users/$uid'),
+      server('deda_sessions/$uid'),
+      server('admins/$uid'),
+    ]);
+    final sourceId = rows[1].data()?['sharePersonalId'];
+    if (sourceId is! String ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(sourceId)) {
+      throw StateError('spark-original-id-missing');
+    }
+    final route = await server('deda_share_ids/$sourceId');
+    final verified = DedaStep2SparkLinkedUidReadOnlyProof.verify(
+      accountKey: account,
+      originalUid: uid,
+      authEmail: auth.currentUser?.email,
+      anonymous: auth.currentUser?.isAnonymous ?? true,
+      directory: rows[0].data(),
+      user: rows[1].data(),
+      session: rows[2].data(),
+      route: route.data(),
+      adminDocumentExists: rows[3].exists,
+    );
+    if (auth.currentUser?.uid != uid) {
+      throw StateError('spark-owner-changed-during-proof');
+    }
+    return verified;
+  }
+
   @override
   Future<DedaLoginIdentity> signInOriginal(String account, String pin) async {
     _enabled();
@@ -74,6 +122,38 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     _provenUid = null;
     _provenOriginalId = null;
     final initial = current();
+    if (dedaStep2SparkLinkedUidReadOnlyEnabled) {
+      // Existing linked Auth account only. No anonymous-to-new-UID fallback,
+      // no Cloud Function call, no PIN written to Firestore.
+      if (initial.kind == DedaLoginKind.linked) {
+        throw StateError('existing-linked-principal-not-replaceable');
+      }
+      final credential =
+          await DedaAuthRuntime.controller.transition<UserCredential>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        action: () => auth.signInWithEmailAndPassword(
+          email: '$account@deda-login.invalid', password: pin),
+        accepts: (result, live) =>
+          result.user != null &&
+          result.user!.uid == live.uid &&
+          live.kind == DedaSessionAuthKind.authenticated &&
+          result.user!.email == '$account@deda-login.invalid',
+      );
+      final uid = credential.user?.uid;
+      if (uid == null || uid.isEmpty) {
+        throw StateError('spark-linked-auth-failed');
+      }
+      final original = await _sparkOriginalUidServerProof(account, uid);
+      _provenUid = uid;
+      _provenOriginalId = original;
+      final verified = current();
+      if (verified.uid != uid || verified.kind != DedaLoginKind.linked) {
+        throw StateError('spark-linked-auth-changed');
+      }
+      return DedaLoginIdentity(
+        verified.uid, verified.email, verified.kind, verified.epoch,
+        originalId: original);
+    }
     if (initial.kind == DedaLoginKind.absent) {
       // Only a real user action inside the shared Auth lane may prepare
       // the anonymous AppCheck-backed server-proof session.
@@ -137,6 +217,13 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   @override
   Future<void> proveOriginal(String account, String originalId, String uid) async {
     _enabled();
+    if (dedaStep2SparkLinkedUidReadOnlyEnabled) {
+      if (_provenUid != uid || _provenOriginalId != originalId ||
+          await _sparkOriginalUidServerProof(account, uid) != originalId) {
+        throw StateError('spark-original-id-not-proven');
+      }
+      return;
+    }
 
     final directory = await db.doc('deda_account_directory/$account')
         .get(const GetOptions(source: Source.server));
@@ -172,6 +259,14 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
       String installId) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    if (dedaStep2SparkLinkedUidReadOnlyEnabled) {
+      // This is read-only eligibility, NOT a grant. Existing sessions only.
+      if (_provenUid != uid || _provenOriginalId != originalId ||
+          !RegExp(r'^[0-9a-f]{48}$').hasMatch(installId)) {
+        throw StateError('spark-session-proof-required');
+      }
+      return await _sparkOriginalUidServerProof(account, uid) == originalId;
+    }
 
     final result = await functions.httpsCallable(
       'dedaIssueLinkedOriginalUidDeviceGrant',
@@ -191,6 +286,16 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   Future<void> writeSession(String account, String uid, String installId) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    if (dedaStep2SparkLinkedUidReadOnlyEnabled) {
+      // NEVER rewrite the shared original-UID session, and never add a new
+      // installation to trustedInstallIds to bypass server rules on Spark.
+      if (_provenUid != uid || _provenOriginalId == null ||
+          await _sparkOriginalUidServerProof(account, uid) !=
+              _provenOriginalId) {
+        throw StateError('spark-existing-session-not-authorized');
+      }
+      return;
+    }
 
     await db.doc('deda_sessions/$uid').set(<String, dynamic>{
       'uid': uid,
@@ -206,6 +311,12 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   Future<bool> readbackSession(String account, String uid) async {
     _enabled();
     if (current().uid != uid) throw StateError('linked-owner-uid-changed');
+    if (dedaStep2SparkLinkedUidReadOnlyEnabled &&
+        (_provenUid != uid || _provenOriginalId == null ||
+         await _sparkOriginalUidServerProof(account, uid) !=
+             _provenOriginalId)) {
+      return false;
+    }
 
     final doc = await db.doc('deda_sessions/$uid')
         .get(const GetOptions(source: Source.server));
