@@ -86,6 +86,8 @@ test.before(async()=>{
   assert.doesNotMatch(originalRules,/match \/deda_stage66_card_receipts\//);
   assert.match(stage2Rules,/match \/deda_stage66_card_receipts\//);
   assert.match(stage2Rules,/match \/deda_stage71_granted_registry\//);
+  assert.doesNotMatch(originalRules,/match \/deda_step2_global_place_archives\//);
+  assert.match(stage2Rules,/match \/deda_step2_global_place_archives\//);
   baseline=await initializeTestEnvironment({
     projectId:"demo-deda-stage2-domain-base",
     firestore:{rules:originalRules},
@@ -379,3 +381,72 @@ test("corrupted paid receipt is denied and not silently treated as ownership",
     await assertFails(getDoc(doc(owner(),
       "deda_stage66_card_receipts",original+"_gold")));
   });
+
+
+// Strict original-account identity and immutable display-only archive.
+// All rules are assembled into a TEMPORARY emulator file. Not production.
+const globalArchivePath="deda_step2_global_place_archives";
+const globalCaptureId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+function globalBody(fields={}) {
+  const encoded=JSON.stringify({
+    format:1,kind:"untrusted-device-global-display-evidence",
+    accountKey:account,originalId:original,sourceUid:uid,
+    captureId:globalCaptureId,ownerConfirmedAtOriginalPhone:true,
+    records:{
+      deda_favorites_v1:['{"name":"Original Save"}'],
+      deda_recent_v1:null,
+      deda_personal_places_v1:null,
+      deda_language_v1:"ar",
+      deda_voice_enabled_v1:true,
+      deda_speech_rate_v1:0.45,
+      deda_default_travel_mode_v1:"car",
+      deda_default_map_style_v1:"normal",
+      ["deda_profile_frame_v1_"+account]:1,
+    },
+  });
+  return {
+    format:1,kind:"untrusted-device-global-display-evidence",
+    accountKey:account,originalId:original,sourceUid:uid,
+    captureId:globalCaptureId,encoded,
+    createdAt:serverTimestamp(),
+    ...fields,
+  };
+}
+test("original UID can create once, read later on same-UID replacement",async()=>{
+  await seed();
+  const ref=doc(owner(),globalArchivePath,account);
+  await assertSucceeds(setDoc(ref,globalBody()));
+  const otherPhoneSameUid=owner();
+  const got=await assertSucceeds(getDoc(doc(
+    otherPhoneSameUid,globalArchivePath,account)));
+  assert.equal(got.data().sourceUid,uid);
+  assert.equal(got.data().captureId,globalCaptureId);
+  assert.equal(JSON.parse(got.data().encoded).records.deda_language_v1,"ar");
+  await assertFails(updateDoc(ref,{encoded:"rewritten"}));
+  await assertFails(setDoc(ref,globalBody()));
+  const {deleteDoc}=require("firebase/firestore");
+  await assertFails(deleteDoc(ref));
+});
+test("unrelated user cannot read, create or mutate global saved places",async()=>{
+  await seed();
+  const mine=owner(),other=stranger();
+  await assertSucceeds(setDoc(doc(mine,globalArchivePath,account),
+    globalBody()));
+  await assertFails(getDoc(doc(other,globalArchivePath,account)));
+  await assertFails(setDoc(doc(other,globalArchivePath,account),
+    globalBody({sourceUid:foreign})));
+  await assertFails(getDocs(collection(mine,globalArchivePath)));
+  await assertFails(getDocs(collection(other,globalArchivePath)));
+});
+test("forged source UID, recipient ID, capture key and time are denied",async()=>{
+  await seed();
+  const db=owner(),ref=doc(db,globalArchivePath,account);
+  await assertFails(setDoc(ref,globalBody({sourceUid:foreign})));
+  await assertFails(setDoc(ref,globalBody({originalId:otherId})));
+  await assertFails(setDoc(ref,globalBody({captureId:"guess"})));
+  await assertFails(setDoc(ref,globalBody({
+    createdAt:Timestamp.fromMillis(0)})));
+  const missing=await assertSucceeds(getDoc(ref));
+  assert.equal(missing.exists(),false);
+  await assertFails(getDoc(doc(stranger(),globalArchivePath,account)));
+});

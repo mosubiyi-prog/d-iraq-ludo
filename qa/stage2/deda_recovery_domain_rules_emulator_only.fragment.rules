@@ -177,3 +177,51 @@
         && resource.data.group in ['001','002']));
       allow list, create, update, delete: if false;
     }
+
+    // Candidate ONLY. The source is DEVICE-GLOBAL and owner-attributed
+    // explicitly, not proof of the source installation or paid ownership.
+    // One immutable original snapshot per canonical account; never auto-sync
+    // or reuse these records as XP/diamonds/paid entitlements.
+    match /deda_step2_global_place_archives/{accountKey} {
+      allow get: if sameAccount(accountKey)
+        && (resource == null || (
+          resource.data.keys().hasOnly([
+            'format','kind','accountKey','originalId','sourceUid',
+            'captureId','encoded','createdAt'
+          ]) &&
+          resource.data.format == 1 &&
+          resource.data.kind ==
+            'untrusted-device-global-display-evidence' &&
+          resource.data.accountKey == accountKey &&
+          resource.data.sourceUid == request.auth.uid &&
+          resource.data.originalId is string &&
+          currentUserHasShareId(resource.data.originalId) &&
+          resource.data.captureId is string &&
+          resource.data.captureId.matches('^[a-f0-9]{48}$') &&
+          resource.data.encoded is string &&
+          resource.data.encoded.size() <= 650000 &&
+          resource.data.createdAt is timestamp));
+      allow list, update, delete: if false;
+      allow create: if sameAccount(accountKey)
+        && request.resource.data.keys().hasOnly([
+          'format','kind','accountKey','originalId','sourceUid',
+          'captureId','encoded','createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'format','kind','accountKey','originalId','sourceUid',
+          'captureId','encoded','createdAt'
+        ])
+        && request.resource.data.format == 1
+        && request.resource.data.kind ==
+          'untrusted-device-global-display-evidence'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.sourceUid == request.auth.uid
+        && request.resource.data.originalId is string
+        && currentUserHasShareId(request.resource.data.originalId)
+        && request.resource.data.captureId is string
+        && request.resource.data.captureId.matches('^[a-f0-9]{48}$')
+        && request.resource.data.encoded is string
+        && request.resource.data.encoded.size() > 100
+        && request.resource.data.encoded.size() <= 650000
+        && request.resource.data.createdAt == request.time;
+    }
