@@ -1,5 +1,6 @@
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
+import 'deda_step2_completion_gate.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
 
@@ -28,8 +29,20 @@ class DedaLinkedGuardianLoginResult {
   final DedaStep2AssetsEvidence? assetContinuity;
   final bool freeAppearanceHydrated, quizUiHydrated;
 
-  /// A linked UID is not proof that all purchases or other data were restored.
-  bool get fullAccountRestored => false;
+  /// Report the evidence for EACH domain, not an invented blanket success.
+  /// No I/O, financial grant, or login side effect occurs in this getter.
+  DedaStep2CompletionReport get completion => DedaStep2CompletionGate.assess(
+    originalUid: originalUid, originalId: originalId ?? '',
+    recovery: recovery, domainReadback: domainContinuity,
+    assetReadback: assetContinuity,
+    freeAppearanceHydrated: freeAppearanceHydrated,
+    quizUiHydrated: quizUiHydrated,
+  );
+
+  /// The full-app credential, historical wallet and legacy source fences
+  /// are not attested. This deliberately cannot authorize a release.
+  bool get fullAccountRestored => completion.allDomainsRestored &&
+      completion.canPrepareFullRecoveryApk;
 }
 
 class DedaLinkedOwnerGuardianBridge {

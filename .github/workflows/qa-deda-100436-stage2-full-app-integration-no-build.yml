@@ -87,6 +87,7 @@ jobs:
             lib/deda_100432_quiz_cloud_continuity.dart \
             lib/deda_100433_owner_confirmation_ui.dart \
             lib/deda_step2_assets_readback.dart \
+            lib/deda_step2_completion_gate.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
             lib/deda_step2_financial_source_audit.dart \
             lib/deda_step2_level_points_restore.dart \
@@ -117,6 +118,7 @@ jobs:
             test/deda_step2_existing_account_signin_page_private_test.dart \
             test/deda_step2_recovery_intent_store_private_test.dart \
             test/deda_step2_assets_recovery_scoped_private_test.dart \
+            test/deda_step2_completion_gate_private_test.dart \
             test/deda_step2_account_domains_recovery_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \
