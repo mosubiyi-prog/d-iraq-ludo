@@ -13,7 +13,8 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
-const enabled = process.env.DEDA_RECOVERY_JOURNAL_SERVER_ENABLED === "true";
+const enabled = process.env.FUNCTIONS_EMULATOR === "true" &&
+  process.env.DEDA_RECOVERY_JOURNAL_SERVER_ENABLED === "true";
 const eligible = new Set([
   "originalBackupReadback",
   "purchaseBackupReadback",
