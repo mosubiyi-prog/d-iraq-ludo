@@ -87,5 +87,51 @@ test("actual Auth+Firestore Emulator validates original UID, sync, route, PIN an
     assert.equal(ledger.dayAttempts,5);
     assert.equal((await auth.getUser(uid)).uid,uid);
     assert.equal(marker.data().createdUid,uid);
+
+    // Stage 2 extra cases use the SAME established real-emulator workflow,
+    // not a second duplicate pipeline. Never touch live Firebase.
+    await db.doc("deda_owner_pin_verify_limits/"+account).delete();
+    await assert.rejects(endpoint({
+      ...request(pin,"metadata-missing"),app:null,
+    }),denied);
+    await assert.rejects(endpoint({
+      ...request(pin,"wrong-provider"),
+      auth:{uid:"wrong-provider",token:{firebase:{sign_in_provider:"password"}}},
+    }),denied);
+
+    await db.doc("deda_pin_recovery_locks/"+account).set({
+      originalUid:uid,accountKey:account,requestId:"approved-pending-stage2",
+    });
+    await assert.rejects(endpoint(request(pin,"locked-device")),denied);
+    await db.doc("deda_pin_recovery_locks/"+account).delete();
+
+    await db.doc("admins/"+uid).set({role:"admin",active:true});
+    await assert.rejects(endpoint(request(pin,"admin-cross-role")),denied);
+    await db.doc("admins/"+uid).delete();
+
+    await db.doc("deda_credentials/"+account).update({
+      createdUid:"foreign-owner-qa-uid",
+    });
+    await assert.rejects(endpoint(request(pin,"wrong-uid")),denied);
+    await db.doc("deda_credentials/"+account).update({createdUid:uid});
+
+    // Simulate a successful synchronized Auth+Firestore PIN change.
+    // The old six-digit secret MUST fail, and the new PIN must return
+    // precisely the original UID/ID without issuing a custom token.
+    await auth.updateUser(uid,{password:"654321"});
+    const rotatedAt=Timestamp.fromMillis(1770000001000);
+    await db.doc("deda_credentials/"+account).update({
+      pin:"654321",pinSyncVersion:1,
+      updatedAt:rotatedAt,pinSyncedAt:rotatedAt,
+    });
+    await assert.rejects(endpoint(request(pin,"stale-pin")),denied);
+    const rotated=await endpoint(request("654321","rotated-pin"));
+    assert.deepEqual(rotated,{originalUid:uid,originalId,accountKey:account});
+    assert.equal("customToken" in rotated,false);
+    assert.equal((await auth.getUser(uid)).uid,uid);
+    const finalLimit=(await db.doc(
+      "deda_owner_pin_verify_limits/"+account).get()).data();
+    assert.equal(finalLimit.windowAttempts,5);
+    assert.equal(finalLimit.dayAttempts,5);
   }finally{await deleteApp(app);}
 });
