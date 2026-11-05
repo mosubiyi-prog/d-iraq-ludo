@@ -1,0 +1,165 @@
+name: DEDA 100437 Recovery Sources Pre-Activation Signed APK (OWNER QA NO PLAY)
+on:
+  push:
+    branches:
+      - deda-100437-recovery-preactivation-signed-owner-qa-2026-11-06
+    paths:
+      - '.github/workflows/deda-100437-stage2-preactivation-owner-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  signed-preactivation-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      DEDA_KEYSTORE_BASE64: ${{ secrets.DEDA_KEYSTORE_BASE64 }}
+      DEDA_KEY_ALIAS: ${{ secrets.DEDA_KEY_ALIAS }}
+      DEDA_STORE_PASSWORD: ${{ secrets.DEDA_STORE_PASSWORD }}
+      DEDA_KEY_PASSWORD: ${{ secrets.DEDA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect all existing recovery code and actual production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_head=a2b2e11d0c021fda315d1c656a4fd1d0777a2d8f
+          app_original=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          git merge-base --is-ancestor "$source_head" HEAD
+          git diff --exit-code "$source_head" HEAD -- lib functions assets android pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json storage.rules
+          git diff --exit-code "$app_original" HEAD -- assets android pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json storage.rules
+          test -f lib/deda_step2_existing_account_signin_page.dart
+          test -f lib/deda_step2_linked_owner_guardian_assembly.dart
+          test -f lib/deda_step2_completion_gate.dart
+          grep -Fq 'bool get canPrepareFullRecoveryApk => false;' lib/deda_step2_completion_gate.dart
+          grep -Fq 'const bool dedaStep2ExistingAccountEntryEnabled' lib/deda_step2_existing_account_signin_page.dart
+          echo 'PASS_STAGE2_RECOVERY_SOURCE_PRESERVED_NOT_LIVE_ACTIVATED'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 39948539871
+          name: DEDA-100379-OWNER18-PRIVATE-QA
+          path: ${{ runner.temp }}/deda-original-reference
+      - name: Generate original configured Android release scaffold without changing repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-100437-stage2-app"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
+          python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
+          (cd "$project" && flutter pub get --enforce-lockfile && dart run flutter_launcher_icons)
+          echo "DEDA_SIGNED_PROJECT=$project" >> "$GITHUB_ENV"
+      - name: Install all integrated stage2 recovery Dart sources and preserve original native configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_SIGNED_PROJECT"
+          cp -a "$GITHUB_WORKSPACE/lib/." "$project/lib/"
+          cp -a "$GITHUB_WORKSPACE/test/." "$project/test/"
+          python3 - "$GITHUB_WORKSPACE/pubspec.yaml" "$project/pubspec.yaml" <<'PY'
+          from pathlib import Path
+          import re,sys
+          source=Path(sys.argv[1]).read_text()
+          target=Path(sys.argv[2])
+          original=target.read_text()
+          def section(s):
+              m=re.search(r'(?ms)^dependencies:\s*\n(.*?)(?=^(?:dev_dependencies|flutter):|\Z)',s)
+              if not m: raise SystemExit('dependency section absent')
+              return m.group(1)
+          old=section(original); new=section(source)
+          included=set(re.findall(r'(?m)^  ([a-zA-Z0-9_]+):',old))
+          missing=[]
+          for line in new.splitlines():
+              m=re.match(r'^  ([a-zA-Z0-9_]+):\s*(\S.*?)\s*$',line)
+              if m and m.group(1) not in included and m.group(2) != '':
+                  missing.append('  '+m.group(1)+': '+m.group(2))
+                  included.add(m.group(1))
+          if missing:
+              original=original.replace('dev_dependencies:', '\n'.join(missing)+'\n\ndev_dependencies:',1)
+              target.write_text(original)
+          print('Additional recovery SDK dependencies:', ','.join(missing) or 'none')
+          PY
+          cd "$project"
+          flutter pub get
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_step2_linked_owner_guardian_assembly.dart lib/deda_step2_completion_gate.dart
+          flutter test --no-pub test/deda_step2_existing_account_signin_page_private_test.dart test/deda_step2_completion_gate_private_test.dart
+          echo 'PASS_STAGE2_IMPORTED_IN_ANDROID_SCAFFOLD'
+      - name: Restore original DEDA signing certificate and create preactivation APK 100437
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_SIGNED_PROJECT"
+          cd "$project"
+          python3 "$GITHUB_WORKSPACE/tools/restore_signing_key_2026_10_02.py"
+          keytool -list -keystore android/app/deda-release.jks -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          p=Path('internal-build-inputs.json')
+          d=json.loads(p.read_text())
+          d['versionCode']=100437
+          d['completeOwnerDelivery']=False
+          d['financialRestoreEnabled']=False
+          d['stage2IntegratedRecoveryIncludedButNotActivated']=True
+          d['recoveryUserEntryEnabled']=False
+          d['liveCloudFunctionsDeployedByThisBuild']=False
+          d['purpose']='SIGNED PRE-ACTIVATION INSTALLATION QA ONLY; ACCOUNT RECOVERY NOT YET FUNCTIONAL'
+          def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+          d['sourceHashes']={str(f):sha(f) for f in Path('lib').rglob('*.dart')}
+          for name in ('pubspec.yaml','pubspec.lock'):d['sourceHashes'][name]=sha(Path(name))
+          d['platformHashes']={str(f):sha(f) for f in Path('android').rglob('*') if f.is_file() and (f.suffix in ('.kt','.kts','.xml','.properties') or f.name=='gradlew') and f.name!='local.properties'}
+          p.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          PY
+          python3 - <<'PY'
+          import json,subprocess
+          d=json.load(open('internal-build-inputs.json'))
+          cmd=['flutter','build','apk','--release','--no-pub','--build-number=100437','--dart-define=DEDA_STEP2_EXISTING_ACCOUNT_ENTRY=false']
+          cmd+=['--dart-define='+k+'='+str(v).lower() for k,v in d['flags'].items()]
+          subprocess.run(cmd,check=True)
+          PY
+      - name: Verify exact same signer, package and native metadata, then upload owner-installable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_SIGNED_PROJECT"
+          out="$RUNNER_TEMP/deda-100437-recovery-preactivation"
+          mkdir -p "$out"
+          python3 tools/app_stability/app_package/verify.py "$project" "$RUNNER_TEMP/deda-original-reference/DEDA-100379-OWNER18-PRIVATE-QA.apk" --output "$out/verification.json"
+          cp "$project/build/app/outputs/flutter-apk/app-release.apk" "$out/DEDA-100437-RECOVERY-PREACTIVATION-PHONE-QA.apk"
+          (cd "$out" && sha256sum *.apk > SHA256.txt)
+          cat > "$out/README.txt" <<'EOF'
+          DEDA 100437 signed owner QA, all currently integrated stage2 recovery Dart source files packaged.
+          This is a pre-activation install and basic UI regression test ONLY.
+          DO NOT clear data, uninstall the original app, switch phones, or expect actual account restoration.
+          Existing-account sign-in and financial recovery remain disabled for user safety.
+          Cloud Functions and Firebase Rules are NOT deployed by this workflow; Play is NOT touched.
+          Further recovery source completion, live-service activation and actual cross-device QA remain required.
+          EOF
+          echo 'PASS_SIGNED_PREACTIVATION_INSTALLATION_PACKAGE_NOT_FINISHED_RECOVERY'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100437-RECOVERY-PREACTIVATION-OWNER-QA-APK
+          path: |
+            ${{ runner.temp }}/deda-100437-recovery-preactivation/*.apk
+            ${{ runner.temp }}/deda-100437-recovery-preactivation/*.json
+            ${{ runner.temp }}/deda-100437-recovery-preactivation/*.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Destroy private signing key from runner
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/deda-100437-stage2-app/android/app/deda-release.jks"
