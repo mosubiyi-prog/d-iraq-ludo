@@ -10,10 +10,12 @@ class DedaLinkedGuardianLoginResult {
   const DedaLinkedGuardianLoginResult({
     required this.originalUid,
     required this.accountKey,
+    this.originalId,
     this.recovery,
   });
   final String originalUid;
   final String accountKey;
+  final String? originalId;
   final DedaVaultRecoveryResult? recovery;
 
   /// A linked UID is not proof that all purchases or other data were restored.
@@ -37,7 +39,7 @@ class DedaLinkedOwnerGuardianBridge {
   Future<DedaLinkedGuardianLoginResult> loginAndPrepare({
     required String phone,
     required String pin,
-    required String originalId,
+    String? originalId,
     required bool explicitUserAction,
     required bool Function() isCurrentIntent,
     bool explicitReplaceAnonymous = false,
@@ -75,6 +77,12 @@ class DedaLinkedOwnerGuardianBridge {
 
     final accountKey = phone.replaceAll(RegExp(r'[^0-9]'), '');
     final identity = handoff.port.current();
+    final canonicalId = originalId ?? identity.originalId;
+    if (canonicalId == null ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(canonicalId) ||
+        (identity.originalId != null && identity.originalId != canonicalId)) {
+      throw StateError('verified-original-id-unavailable');
+    }
     final epoch = identity.epoch;
     bool identityStillMatches() {
       if (!isCurrentIntent()) return false;
@@ -91,7 +99,8 @@ class DedaLinkedOwnerGuardianBridge {
     // A normal verified login never touches a recovery journal.
     if (!explicitRecoveryRequest) {
       return DedaLinkedGuardianLoginResult(
-        originalUid: originalUid, accountKey: accountKey);
+        originalUid: originalUid, accountKey: accountKey,
+        originalId: canonicalId);
     }
 
     // The guardian re-checks original server proof and SDK epoch on EVERY
@@ -101,13 +110,13 @@ class DedaLinkedOwnerGuardianBridge {
     final scope = DedaVaultVerifiedScope(
       accountKey: accountKey,
       originalUid: originalUid,
-      originalId: originalId,
+      originalId: canonicalId,
       intentId: recoveryIntentId!,
       isCurrentIntent: identityStillMatches,
       verifyOriginalOwnerOnServer: () async {
         if (!identityStillMatches()) return false;
         try {
-          await handoff.port.proveOriginal(accountKey, originalId, originalUid);
+          await handoff.port.proveOriginal(accountKey, canonicalId, originalUid);
           if (!identityStillMatches()) return false;
           final readback =
               await handoff.port.readbackSession(accountKey, originalUid);
@@ -129,6 +138,7 @@ class DedaLinkedOwnerGuardianBridge {
     }
     return DedaLinkedGuardianLoginResult(
       originalUid: originalUid, accountKey: accountKey,
+      originalId: canonicalId,
       recovery: recovery,
     );
   }
