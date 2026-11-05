@@ -6,6 +6,7 @@ import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
 import 'deda_step2_original_backup_readback.dart';
 import 'deda_step2_purchase_backup_readback.dart';
+import 'deda_step2_global_places_settings_archive.dart';
 
 /// Source-level bridge: existing Auth session lane -> verified original UID ->
 /// explicit recovery guardian. Not referenced by main.dart or app startup.
@@ -34,6 +35,8 @@ class DedaLinkedGuardianLoginResult {
     this.financialReviewReason,
     this.freeAppearanceHydrated = false,
     this.quizUiHydrated = false,
+    this.globalPlacesSettingsHydrated = false,
+    this.globalPlacesSettingsReviewReason,
   });
   final String originalUid;
   final String accountKey;
@@ -54,6 +57,9 @@ class DedaLinkedGuardianLoginResult {
           DedaStep2LegacyFinancialOutcome.heldForManualReview ||
       diamondContinuity?.manualLegacyBalanceReviewRequired == true;
   final bool freeAppearanceHydrated, quizUiHydrated;
+  // Free display settings and saved places are NEVER a financial receipt.
+  final bool globalPlacesSettingsHydrated;
+  final String? globalPlacesSettingsReviewReason;
 
   /// Report the evidence for EACH domain, not an invented blanket success.
   /// No I/O, financial grant, or login side effect occurs in this getter.
@@ -82,6 +88,7 @@ class DedaLinkedOwnerGuardianBridge {
     this.originalPairedFinancialSource,
     this.restoreFreeAppearance,
     this.restoreQuizUi,
+    this.restoreGlobalPlacesSettings,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
   });
 
@@ -102,6 +109,10 @@ class DedaLinkedOwnerGuardianBridge {
       restoreFreeAppearance;
   final Future<bool> Function(DedaVaultVerifiedScope scope, String iraqDay)?
       restoreQuizUi;
+  // Explicit guardian request only; sourced from verified immutable old-phone
+  // archive, and refuses to overwrite conflicting replacement-phone values.
+  final Future<bool> Function(DedaVaultVerifiedScope scope)?
+      restoreGlobalPlacesSettings;
   final bool enabled;
 
   /// Only the user's explicit "I have an account" action can start login.
@@ -315,6 +326,25 @@ class DedaLinkedOwnerGuardianBridge {
         await scope.checkOwner();
       }
     }
+    var globalPlacesSettingsHydrated = false;
+    String? globalPlacesSettingsReviewReason;
+    if (!recovery.stoppedSafely && restoreGlobalPlacesSettings != null) {
+      await scope.checkOwner();
+      try {
+        globalPlacesSettingsHydrated =
+            await restoreGlobalPlacesSettings!(scope);
+      } on DedaStep2GlobalPlacesHold catch (error) {
+        // Only a genuinely absent archive or a conflicting local choice can
+        // be held separately. Cached, tampered and foreign UID data remain
+        // fatal rather than being treated as empty settings.
+        if (!const <String>{
+          'global-archive-absent',
+          'replacement-global-existing-values-preserved',
+        }.contains(error.reason)) rethrow;
+        globalPlacesSettingsReviewReason = error.reason;
+      }
+      await scope.checkOwner();
+    }
     if (!identityStillMatches()) {
       throw StateError('linked-owner-changed-after-ui-restoration');
     }
@@ -329,6 +359,8 @@ class DedaLinkedOwnerGuardianBridge {
       financialReviewReason: financialReviewReason,
       freeAppearanceHydrated: appearanceHydrated,
       quizUiHydrated: quizHydrated,
+      globalPlacesSettingsHydrated: globalPlacesSettingsHydrated,
+      globalPlacesSettingsReviewReason: globalPlacesSettingsReviewReason,
     );
   }
 }
