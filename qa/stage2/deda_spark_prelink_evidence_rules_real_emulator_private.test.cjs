@@ -6,7 +6,8 @@ const {getAuth, connectAuthEmulator, signInAnonymously,
   linkWithCredential, EmailAuthProvider, signInWithEmailAndPassword} =
   require("firebase/auth");
 const {getFirestore, connectFirestoreEmulator, doc, setDoc,
-  getDocFromServer, updateDoc, deleteDoc, serverTimestamp} =
+  getDocFromServer, getDocsFromServer, collection, query, orderBy, limit,
+  updateDoc, deleteDoc, serverTimestamp} =
   require("firebase/firestore");
 const {initializeApp: initializeAdmin, deleteApp: deleteAdmin} =
   require("firebase-admin/app");
@@ -131,6 +132,14 @@ test("Spark original-phone prelink archive — Auth + Firestore emulator, immuta
         assert.equal(result.user.uid,uid);
         assert.deepEqual((await getDocFromServer(doc(device.db,progress)))
           .data().records,progressRecords);
+        const history=await getDocsFromServer(query(
+          collection(device.db,"deda_progress_evidence",account,"captures"),
+          orderBy("createdAt","desc"),limit(26)));
+        assert.equal(history.size,1);
+        assert.deepEqual(history.docs[0].data().records,progressRecords);
+        await assert.rejects(getDocsFromServer(query(
+          collection(device.db,"deda_progress_evidence",account,"captures"),
+          orderBy("createdAt","desc"),limit(27))),/permission-denied/i);
         assert.deepEqual((await getDocFromServer(doc(device.db,purchase)))
           .data().records,purchaseRecords);
         await assert.rejects(setDoc(doc(device.db,progress),
@@ -145,6 +154,9 @@ test("Spark original-phone prelink archive — Auth + Firestore emulator, immuta
       await signInAnonymously(outsider.auth);
       await assert.rejects(getDocFromServer(doc(outsider.db,progress)),
         /permission-denied/i);
+      await assert.rejects(getDocsFromServer(query(
+          collection(outsider.db,"deda_progress_evidence",account,"captures"),
+          orderBy("createdAt","desc"),limit(26))),/permission-denied/i);
       await assert.rejects(getDocFromServer(doc(outsider.db,purchase)),
         /permission-denied/i);
     });

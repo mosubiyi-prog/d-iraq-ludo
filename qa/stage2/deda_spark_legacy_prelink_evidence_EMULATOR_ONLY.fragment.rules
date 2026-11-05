@@ -55,7 +55,13 @@
           resource.data.sourceUid == request.auth.uid
           && resource.data.accountKey == accountKey
           && resource.data.captureId == captureId));
-      allow list, update, delete: if false;
+      // The linked replacement's existing evidence reader uses a bounded,
+      // server-only ordered query. Canonical createdUid owns THIS account
+      // subtree; clients cannot enumerate other account keys.
+      allow list: if stage2SparkOriginalAccount(accountKey)
+        && request.query.limit != null
+        && request.query.limit <= 26;
+      allow update, delete: if false;
       allow create: if stage2SparkOriginalArchiveCreate(
           accountKey, captureId, request.resource.data)
         && request.resource.data.kind == 'legacy-local-evidence'
