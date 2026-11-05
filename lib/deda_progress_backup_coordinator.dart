@@ -209,62 +209,7 @@ class DedaProgressBackupCoordinator {
     required String captureId,required bool Function() isCurrent,
     bool requireNonEmptyEvidence = false}) =>
     _run(isCurrent,(check) async {
-      if(!RegExp(r'^[A-Za-z0-9_-]{20,80}
-
-  Future<DedaProgressBackupResult> uploadPending({required String accountKey,
-    required bool Function() isCurrent}) => _run(isCurrent,(check) async {
-      final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
-      final bound=_bound(owner,check);bound();
-      final encoded=await journal.read(accountKey);bound();
-      if(encoded == null) throw const DedaProgressEvidenceMissing();
-      final intent=DedaProgressBackupIntent.decode(encoded,accountKey);
-      DedaStoredProgressEvidence evidence;
-      try {
-        // Resolve an uncertain earlier write first, including after a restart
-        // or new UID. Cache/network/security failure MUST NOT trigger a save.
-        evidence=await archive.read(accountKey:accountKey,captureId:intent.captureId,
-          isCurrent:_current(bound));bound();
-      } on DedaProgressEvidenceMissing {
-        bound();
-        if(owner.user.uid != intent.sourceUid || owner.installId != intent.installId) {
-          throw const DedaProgressBackupOriginChanged();
-        }
-        evidence=await archive.save(captureId:intent.captureId,capture:intent.capture,
-          isCurrent:_current(bound));bound();
-      }
-      if(evidence.capture.encode() != intent.capture.encode() ||
-          evidence.sourceUid != intent.sourceUid || evidence.installId != intent.installId) {
-        throw const DedaProgressEvidenceConflict();
-      }
-      DedaStoredPurchaseEvidence? purchaseEvidence;
-      final purchaseCapture=intent.purchaseCapture;
-      if(purchaseCapture!=null) {
-        final purchaseStore=purchaseArchive;
-        if(purchaseStore==null) throw StateError('purchase-archive-required-for-pending-intent');
-        DedaStoredPurchaseEvidence savedPurchase;
-        try {
-          savedPurchase=await purchaseStore.read(accountKey:accountKey,captureId:intent.captureId,isCurrent:_current(bound));bound();
-        } on DedaProgressEvidenceMissing {
-          bound();
-          if(owner.user.uid!=intent.sourceUid || owner.installId!=intent.installId) {
-            throw const DedaProgressBackupOriginChanged();
-          }
-          savedPurchase=await purchaseStore.save(captureId:intent.captureId,progressCaptureId:intent.captureId,
-            capture:purchaseCapture,isCurrent:_current(bound));bound();
-        }
-        if(savedPurchase.capture.encode()!=purchaseCapture.encode() ||
-          savedPurchase.progressCaptureId!=intent.captureId || savedPurchase.sourceUid!=intent.sourceUid ||
-          savedPurchase.installId!=intent.installId) throw const DedaProgressEvidenceConflict();
-        purchaseEvidence=savedPurchase;
-      }
-      // Only the exact pending journal entry is retired, AFTER verified server
-      // readback. Never delete the source progress keys or another pending entry.
-      final cleared=await journal.removeIfSame(accountKey,encoded,bound);bound();
-      return DedaProgressBackupResult(evidence,journalCleared:cleared,
-        purchaseEvidence:purchaseEvidence,purchaseCaptureObserved:intent.purchaseCaptureObserved);
-    });
-}
-).hasMatch(captureId)) {
+      if(!RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId)) {
         throw ArgumentError('invalid-backup-capture-id');
       }
       final owner=await archive.verifyCurrentOwner(accountKey:accountKey,isCurrent:_current(check));
@@ -279,7 +224,7 @@ class DedaProgressBackupCoordinator {
         return pending;
       }
       final capture=await reader.capture(accountKey:accountKey,isCurrent:_current(bound));bound();
-      // Cross-device recovery must never declare an empty archive ready.
+      // Cross-device recovery refuses empty old-phone backups.
       if(requireNonEmptyEvidence && !capture.hasAnyLocalRecord) {
         throw const DedaProgressEvidenceMissing();
       }
