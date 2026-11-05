@@ -30,6 +30,23 @@ INVARIANT_MATCHES = (
     "deda_share_ids",
     "deda_credentials",
 )
+RECOVERY_DOMAIN_PATHS = (
+    "deda_recovery_journals",
+    "deda_step2_global_place_archives",
+    "deda_friendships",
+    "deda_profile_ui_migration",
+    "deda_quiz_ui_snapshots",
+    "deda_diamond_gifts",
+    "deda_stage66_card_receipts",
+    "deda_stage66_owned_cards",
+    "deda_stage71_granted_registry",
+    "deda_stage74_id_gift_receipts",
+)
+RECOVERY_CALLABLES = (
+    "dedaVerifyExistingOwnerPin",
+    "dedaIssueLinkedOriginalUidDeviceGrant",
+    "dedaRecoveryJournalComplete",
+)
 
 
 def sha256(raw):
@@ -102,6 +119,29 @@ def main():
     for item in REQUIRED_CANDIDATE_PATHS:
         print("LIVE_HAS_ARCHIVE_MATCH_" + item.upper(),
               ("match /" + item + "/") in content)
+    for item in RECOVERY_DOMAIN_PATHS:
+        print("LIVE_HAS_RECOVERY_DOMAIN_" + item.upper(),
+              ("match /" + item + "/") in content)
+    # Server-side callable readiness cannot be inferred from source code or
+    # a successful emulator. GET exact function names only; no user documents,
+    # no function invocation and no source/config/environment dumping.
+    for item in RECOVERY_CALLABLES:
+        url = ("https://cloudfunctions.googleapis.com/v2/projects/" +
+               PROJECT + "/locations/us-central1/functions/" + item)
+        response = session.get(url, timeout=30)
+        if response.status_code == 200:
+            function = response.json()
+            status = function.get("state", "STATE_UNSPECIFIED")
+            if status not in ("ACTIVE", "FAILED", "DEPLOYING", "DELETING",
+                              "UNKNOWN", "STATE_UNSPECIFIED"):
+                status = "UNRECOGNIZED_STATE"
+            print("LIVE_CALLABLE_" + item, status)
+        elif response.status_code == 404:
+            print("LIVE_CALLABLE_" + item, "NOT_FOUND_US_CENTRAL1")
+        else:
+            # An API permission or regional failure is UNKNOWN, not absent.
+            print("LIVE_CALLABLE_" + item, "UNVERIFIABLE_HTTP_" +
+                  str(response.status_code))
     for item in ("deda_progress_evidence", "deda_purchase_evidence"):
         print("EMULATOR_CANDIDATE_HAS_" + item.upper(),
               candidate.count("match /" + item + "/") == 1)
