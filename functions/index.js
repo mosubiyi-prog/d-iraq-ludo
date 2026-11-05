@@ -36,6 +36,17 @@ exports.dedaVerifyExistingOwnerPin = createOwnerPinVerifyCallable({
   enabled: dedaOwnerPinProofEmulatorEnabled,
 });
 
+// Both callables reuse the previously tested original-UID grant and journal
+// contracts. Their modules separately require FUNCTIONS_EMULATOR === "true"
+// plus a deliberate QA opt-in. They are DENIED in production, even if this
+// isolated source is built; no live Firebase functions are being deployed.
+exports.dedaIssueLinkedOriginalUidDeviceGrant =
+  require("./deda_linked_owner_session_grant_private_v1.js")
+      .dedaIssueLinkedOriginalUidDeviceGrant;
+exports.dedaRecoveryJournalComplete =
+  require("./deda_recovery_journal_completion_private_v1.js")
+      .dedaRecoveryJournalComplete;
+
 async function notifyTokens(tokens, title, body, type, requestId) {
   const uniqueTokens = [...new Set(tokens)].filter(Boolean).slice(0, 500);
   if (uniqueTokens.length === 0) return;
