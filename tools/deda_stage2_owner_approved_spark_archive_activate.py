@@ -4,6 +4,7 @@ Base: exact live release on 2026-11-05; add only the emulator-tested two
 immutable evidence collection matches. Preserve every existing rule byte.
 """
 import json, os, pathlib, sys
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from tools import deda_100419_owner_approved_public_active_get_rules_only as api
 from tools import deda_stage2_preview_spark_archives_on_actual_live_rules as preview
 

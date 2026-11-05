@@ -5,6 +5,7 @@ on:
       - deda-100436-stage2-recovery-buildable-integration-qa-2026-11-05
     paths:
       - '.github/workflows/deda-100436-stage2-owner-approved-spark-archive-rules-only.yml'
+      - 'tools/deda_stage2_owner_approved_spark_archive_activate.py'
 permissions:
   contents: read
 concurrency:
