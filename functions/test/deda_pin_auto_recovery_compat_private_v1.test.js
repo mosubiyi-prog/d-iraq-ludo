@@ -102,9 +102,12 @@ test("pilot OFF preserves prior linked-account auto-worker behavior",async()=>{
   assert.notEqual(db.docs.get(`deda_credentials/${account}`).pin,oldPin);
 });
 
-test("Functions index keeps compatibility OFF and no custom-token function export",()=>{
+test("Functions index keeps compatibility OFF and PIN proof strictly emulator-only",()=>{
   const src=fs.readFileSync(path.join(__dirname,"../index.js"),"utf8");
   assert.match(src,/const dedaPinCompatPilotEnabled = false;/);
-  assert.doesNotMatch(src,/deda_owner_pin_verify_private_v1/);
+  assert.match(src,/process\.env\.FUNCTIONS_EMULATOR === "true"/);
+  assert.match(src,/process\.env\.DEDA_OWNER_PIN_PROOF_EMULATOR === "1"/);
+  assert.match(src,/enabled: dedaOwnerPinProofEmulatorEnabled/);
+  assert.doesNotMatch(src,/enabled: true/);
   assert.match(src,/completeApprovedManualPinRecovery/);
 });
