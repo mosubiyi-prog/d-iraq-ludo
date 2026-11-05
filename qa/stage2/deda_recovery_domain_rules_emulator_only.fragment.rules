@@ -22,6 +22,15 @@
       allow create, update, delete: if false;
     }
 
+    // Premium selection is an existing display choice, NOT ownership proof.
+    match /deda_stage71_active_identifier/{originalId} {
+      allow get: if signedIn()
+        && currentUserHasShareId(originalId)
+        && resource.data.originalId == originalId
+        && resource.data.activeId is string;
+      allow list, create, update, delete: if false;
+    }
+
     match /deda_profile_ui_migration/{accountKey} {
       allow get: if sameAccount(accountKey)
         && resource.data.accountKey == accountKey
