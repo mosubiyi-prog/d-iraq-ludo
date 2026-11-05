@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Owner-requested 2026-11-05 exact-live review; GET-only, never writes or deploys.
+# Independent 2026-11-05 AFTER-global-places-deploy verification; GET-only, never writes or deploys.
 """DEDA stage2: read the REAL deda-25b88 active Firestore rule release.
 
 NO modification, deploy, document reads, user data access, credentials output,
