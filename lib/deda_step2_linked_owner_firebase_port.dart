@@ -22,6 +22,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   final FirebaseAuth auth;
   final FirebaseFirestore db;
   final FirebaseFunctions functions;
+  String? _provenUid, _provenOriginalId;
 
   void _enabled() {
     if (!dedaLinkedFlutterHandoffEnabled ||
@@ -39,7 +40,9 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     if (snap.uid != current?.uid) throw StateError('auth-sdk-principal-mismatch');
     final kind = current == null ? DedaLoginKind.absent :
         current.isAnonymous ? DedaLoginKind.anonymous : DedaLoginKind.linked;
-    return DedaLoginIdentity(current?.uid, current?.email, kind, snap.epoch);
+    return DedaLoginIdentity(current?.uid, current?.email, kind, snap.epoch,
+        originalId: kind == DedaLoginKind.linked &&
+            current?.uid == _provenUid ? _provenOriginalId : null);
   }
 
   @override
@@ -58,6 +61,8 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   @override
   Future<DedaLoginIdentity> signInOriginal(String account, String pin) async {
     _enabled();
+    _provenUid = null;
+    _provenOriginalId = null;
     if (!RegExp(r'^(?:07\d{9}|9647\d{9})).hasMatch(account) ||
         !RegExp(r'^\d{6}).hasMatch(pin)) {
       throw ArgumentError('invalid-linked-owner-credentials');
@@ -118,6 +123,8 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
         live.email != '$account@deda-login.invalid') {
       throw StateError('linked-owner-after-proof-changed');
     }
+    _provenUid = expectedUid;
+    _provenOriginalId = originalId;
     return DedaLoginIdentity(
       live.uid, live.email, live.kind, live.epoch, originalId: originalId);
   }
