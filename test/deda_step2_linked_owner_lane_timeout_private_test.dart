@@ -21,7 +21,7 @@ void main() {
       },
     );
     expect(value, 7);
-    expect(gate.snapshot()['timedOut'], 0);
+    expect(gate.diagnostics['timedOut'], 0);
   });
 
   test('admin, background and excessive owner timeout override rejected', () async {
