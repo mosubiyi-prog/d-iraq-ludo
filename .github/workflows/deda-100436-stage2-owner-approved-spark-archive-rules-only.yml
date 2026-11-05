@@ -1,0 +1,136 @@
+name: DEDA 100436 OWNER APPROVED Spark Old Phone Archive Rules Only - LIVE Firebase
+on:
+  push:
+    branches:
+      - deda-100436-stage2-recovery-buildable-integration-qa-2026-11-05
+    paths:
+      - '.github/workflows/deda-100436-stage2-owner-approved-spark-archive-rules-only.yml'
+permissions:
+  contents: read
+concurrency:
+  group: deda-25b88-stage2-owner-approved-spark-archives-live
+  cancel-in-progress: false
+jobs:
+  real-production-archive-rules-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      DEDA_STAGE2_OWNER_APPROVED_RULES_ONLY: 'YES'
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_SECONDARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Protect approved 100436 and all checked-in Firebase production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DEDA_STAGE2_OWNER_APPROVED_RULES_ONLY" = YES
+          git diff --exit-code fea54d7db2e8a24a74267f04a14c9572bcb408ee HEAD -- \
+            firestore.rules firebase.json storage.rules .firebaserc
+          python3 -m py_compile \
+            tools/deda_100419_owner_approved_public_active_get_rules_only.py \
+            tools/deda_stage2_preview_spark_archives_on_actual_live_rules.py \
+            tools/deda_stage2_owner_approved_spark_archive_activate.py
+          node --check qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs
+          node --check qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs
+          echo 'PASS_ORIGINAL_APP_AND_FIREBASE_CONFIG_UNMODIFIED'
+      - name: GET ONLY current live DEDA rule release and assemble exact additive archive policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          export DEDA_EMULATOR_RULES_PATH="$RUNNER_TEMP/deda-stage2-actual-live.rules"
+          python3 tools/deda_stage2_preview_spark_archives_on_actual_live_rules.py
+          echo "DEDA_EMULATOR_RULES_PATH=$DEDA_EMULATOR_RULES_PATH" >> "$GITHUB_ENV"
+          echo 'EXACT_LIVE_ORIGINAL_RULESET_PREPARED_NO_DEPLOY_YET'
+      - name: Install isolated Auth and Firestore emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/deda-stage2-release-node" \
+            --no-save --no-audit --no-fund \
+            firebase-tools@13.35.1 firebase@11.10.0 \
+            firebase-admin@12.7.0 @firebase/rules-unit-testing@4.0.0
+          echo "NODE_PATH=$RUNNER_TEMP/deda-stage2-release-node/node_modules" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          candidate=root/'deda-stage2-actual-live.rules'
+          assert candidate.is_file() and candidate.stat().st_size > 100000
+          (root/'deda-stage2-release-emulator.json').write_text(json.dumps({
+            'firestore':{'rules':candidate.name},
+            'emulators':{
+              'auth':{'host':'127.0.0.1','port':9099},
+              'firestore':{'host':'127.0.0.1','port':8098},
+              'ui':{'enabled':False}
+            }
+          }))
+          assert (root/'deda-stage2-release-emulator.json').is_file()
+          print('PASS_FIRESTORE_RULES_FILE_RELATIVE_AND_PRESENT')
+          PY
+      - name: Mandatory SDK emulator checks original phone old UID and two replacement phones; deny spoofed writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/deda-stage2-release-node/node_modules/.bin/firebase" \
+            emulators:exec --project demo-deda-100436-journal-qa \
+            --config "$RUNNER_TEMP/deda-stage2-release-emulator.json" \
+            --only auth,firestore --non-interactive \
+            'node --test qa/stage2/deda_spark_existing_uid_auth_readonly_private.test.cjs qa/stage2/deda_spark_prelink_evidence_rules_real_emulator_private.test.cjs'
+          echo 'PASS_EXACT_REAL_LIVE_BASELINE_PLUS_ARCHIVE_RULES_EMULATOR'
+      - name: Reconfirm immutable active SHA and previous rule ID; publish tested archives only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_stage2_owner_approved_spark_archive_activate.py deploy
+      - name: Independent READ ONLY verify active release equals tested candidate byte for byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools import deda_100419_owner_approved_public_active_get_rules_only as api
+          from tools import deda_stage2_preview_spark_archives_on_actual_live_rules as preview
+          import os
+          temp=Path(os.environ['RUNNER_TEMP'])
+          report=json.loads((temp/'deda-stage2-spark-archive-deployed.json').read_text())
+          name,rules=api.read_live(api.session())
+          assert report['verified'] and report['new']==name
+          assert report['sha256']==preview.hash_text(rules)
+          assert rules==(temp/'deda-stage2-actual-live.rules').read_text()
+          print('PASS_LIVE_FIREBASE_RULES_EXACT_EMULATOR_TESTED_ARCHIVES')
+          print('NO_USER_DATA_NO_WALLET_MUTATION_NO_APK_NO_PLAY')
+          PY
+      - name: Retain rollback immutable ruleset ID and publish SHA metadata (no credentials or source)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100436-SPARK-OLD-PHONE-ARCHIVES-ROLLBACK-METADATA
+          path: |
+            ${{ runner.temp }}/deda-stage2-spark-archive-prior-release.json
+            ${{ runner.temp }}/deda-stage2-spark-archive-deployed.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Clear ephemeral live rule preview
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/deda-stage2-actual-live.rules"
