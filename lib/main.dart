@@ -23,6 +23,7 @@ import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100430_owner_uid_continuity.dart';
+import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_step2_existing_account_signin_page.dart';
 import 'deda_step2_linked_owner_guardian_assembly.dart';
 import 'deda_step2_recovery_guardian.dart';
@@ -10576,6 +10577,32 @@ class _DedaAccountHubPageState extends State<DedaAccountHubPage> {
                 ],
               ),
             ),
+            // Original-phone-only confirmation, exactly above Sign out.
+            // Private build gate is OFF unless separately authorized;
+            // a staff/admin session must never enter the owner PIN flow.
+            if (dedaLinkedOwnerCompatEnabled &&
+                Firebase.apps.isNotEmpty &&
+                (DedaPreferences.accountPhone.isNotEmpty ||
+                    DedaPreferences.phone.isNotEmpty) &&
+                (() {
+                  final phone = DedaPreferences.accountPhone.isNotEmpty
+                      ? DedaPreferences.accountPhone : DedaPreferences.phone;
+                  final user = FirebaseAuth.instance.currentUser;
+                  final account = phone.replaceAll(RegExp(r'[^0-9]'), '');
+                  return user != null &&
+                      (user.isAnonymous ||
+                       user.email ==
+                           DedaLinkedOwnerSessionPolicy.ownerEmail(account));
+                })()) ...[
+              DedaOwnerConfirmButton(
+                phone: DedaPreferences.accountPhone.isNotEmpty
+                    ? DedaPreferences.accountPhone : DedaPreferences.phone,
+                originalId: DedaBackend.personalShareIdForPhone(
+                  DedaPreferences.accountPhone.isNotEmpty
+                      ? DedaPreferences.accountPhone : DedaPreferences.phone),
+              ),
+              const SizedBox(height: 12),
+            ],
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: _logout,
