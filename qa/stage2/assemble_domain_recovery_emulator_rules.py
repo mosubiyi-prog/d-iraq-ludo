@@ -34,7 +34,7 @@ for collection in (
 
 anchor = "\n  }\n}\n"
 cut = original.rfind(anchor)
-if cut < 0 or original.count("match /databases/{database}/documents") != 1:
+if cut < 0 or original.count("\\n  match /databases/{database}/documents {") != 1:
     raise SystemExit("SAFE_STOP_UNEXPECTED_RULES_CLOSURE")
 updated = original[:cut] + "\n" + fragment.rstrip() + "\n" + original[cut:]
 target.write_text(updated, encoding="utf-8")
