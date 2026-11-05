@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_vault_worker_adapters.dart';
 import 'package:d_iraq_ludo/deda_step2_original_backup_readback.dart';
+import 'package:d_iraq_ludo/deda_step2_purchase_backup_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_level_points_restore.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_published_place_recovery.dart';
 
@@ -95,6 +96,25 @@ DedaVaultPublishedPlaceAdapter place(PlaceIo io) =>
     verifyOriginalOwner:(u,a)async=>u==uid && a==account,
   ),io);
 
+class MissingPurchaseIo implements DedaStep2PurchaseSourceIo {
+  int reads=0;
+  @override
+  Future<DedaStep2PurchaseSourceDocument> server({
+    required String accountKey, required String captureId}) async {
+    reads++;
+    return const DedaStep2PurchaseSourceDocument(null);
+  }
+}
+
+DedaVaultPurchaseEvidenceAdapter missingPurchase(
+    EvidenceIo progressIo,MissingPurchaseIo purchaseIo) =>
+    DedaVaultPurchaseEvidenceAdapter(
+      progress(progressIo),
+      DedaStep2PurchaseSourceReadback(
+        io:purchaseIo,currentUid:()=>uid,enabled:true,
+        verifyOriginalOwner:(u,a) async=>u==uid&&a==account,
+      ));
+
 void main() {
   test('original archive worker produces only a fresh server readback receipt',() async {
     final io = EvidenceIo();
@@ -161,6 +181,40 @@ void main() {
         throwsA(isA<DedaStep2PublishedPlaceHold>()));
       expect(io.scopedWrites,0);
     }
+  });
+
+  test('verified server absence of published place is optional, no write',() async {
+    final io=PlaceIo(empty:true),worker=place(io);
+    expect(await worker.preflight(scope()),
+        DedaVaultPreflightOutcome.notApplicable);
+    expect(io.scopedWrites,0);
+  });
+
+  test('cache-only place preflight fails closed rather than declaring absent',() async {
+    final io=PlaceIo(cached:true,empty:true),worker=place(io);
+    await expectLater(worker.preflight(scope()),throwsStateError);
+    expect(io.scopedWrites,0);
+  });
+
+  test('purchase source absent is held without creating a financial receipt',
+      () async {
+    final progressIo=EvidenceIo(),purchaseIo=MissingPurchaseIo();
+    final worker=missingPurchase(progressIo,purchaseIo);
+    expect(await worker.preflight(scope()),
+        DedaVaultPreflightOutcome.evidenceNeedsReview);
+    expect(purchaseIo.reads,1);
+    expect(progressIo.reads,1);
+    expect(worker.code,DedaVaultCode.purchaseBackupReadback);
+  });
+
+  test('invalid source UID is never downgraded to optional financial hold',
+      () async {
+    final progressIo=EvidenceIo()..tampered=true;
+    final purchaseIo=MissingPurchaseIo();
+    final worker=missingPurchase(progressIo,purchaseIo);
+    await expectLater(worker.preflight(scope()),
+        throwsA(isA<DedaStep2EvidenceHold>()));
+    expect(purchaseIo.reads,0);
   });
 
   test('stale intent rejects source worker before server read',() async {
