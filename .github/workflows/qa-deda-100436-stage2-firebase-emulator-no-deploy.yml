@@ -74,6 +74,7 @@ jobs:
           export DEDA_JOURNAL_EMULATOR_RULES="$RUNNER_TEMP/deda-stage2.rules"
           echo "DEDA_JOURNAL_EMULATOR_RULES=$DEDA_JOURNAL_EMULATOR_RULES" >> "$GITHUB_ENV"
           python3 qa/recovery_journal/assemble_emulator_rules.py
+          python3 qa/stage2/assemble_domain_recovery_emulator_rules.py "$DEDA_JOURNAL_EMULATOR_RULES"
           test -s "$DEDA_JOURNAL_EMULATOR_RULES"
       - name: Prepare throwaway Functions project from current integrated candidate
         shell: bash
@@ -108,6 +109,7 @@ jobs:
           node --check functions/deda_recovery_journal_completion_private_v1.js
           node --check qa/stage2/deda_owner_pin_real_emulator_private.test.cjs
           node --check qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs
+          node --check qa/stage2/deda_account_domain_rules_real_emulator_private.test.cjs
           echo "QA_EMULATOR_ROOT=$root" >> "$GITHUB_ENV"
       - name: Actual Firestore/Auth/Functions SDK emulator — owner PIN, three phones and denial rules
         shell: bash
@@ -118,7 +120,7 @@ jobs:
             --project demo-deda-100436-journal-qa \
             --config "$QA_EMULATOR_ROOT/firebase.json" \
             --only auth,functions,firestore --non-interactive \
-            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs qa/recovery_journal/deda_100436_session_issuer_emulator.test.cjs qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs qa/stage2/deda_owner_pin_real_emulator_private.test.cjs qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs'
+            'node --test qa/recovery_journal/deda_100436_journal_rules_emulator.test.cjs qa/recovery_journal/deda_100436_linked_session_bootstrap_emulator.test.cjs qa/recovery_journal/deda_100436_session_issuer_emulator.test.cjs qa/recovery_journal/deda_100436_real_auth_functions_three_devices.test.cjs qa/stage2/deda_owner_pin_real_emulator_private.test.cjs qa/stage2/deda_recovery_journal_real_attestation_private.test.cjs qa/stage2/deda_account_domain_rules_real_emulator_private.test.cjs'
           echo 'PASS_ACTUAL_FIREBASE_EMULATORS_NO_LIVE_USER_NO_APK'
       - name: Confirm no source/rules mutation after QA
         shell: bash
