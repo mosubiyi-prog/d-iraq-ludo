@@ -69,6 +69,15 @@ def main():
     credentials_data = json.loads(raw)
     if credentials_data.get("project_id") != PROJECT:
         raise RuntimeError("SAFE_STOP_WRONG_FIREBASE_PROJECT")
+    # Service account EMAIL is an IAM principal identifier, not a key,
+    # token or secret; required for the project owner to grant only the
+    # blocked deploy permissions to the CURRENT Github service account.
+    deployer_email = credentials_data.get("client_email")
+    if (not isinstance(deployer_email, str) or
+            not deployer_email.endswith(".iam.gserviceaccount.com") or
+            "@" not in deployer_email):
+        raise RuntimeError("SAFE_STOP_DEPLOYER_PRINCIPAL_NOT_VERIFIED")
+    print("DEDA_STAGE2_DEPLOYER_SA_EMAIL", deployer_email)
     creds = Credentials.from_service_account_info(
         credentials_data,
         scopes=["https://www.googleapis.com/auth/cloud-platform"],
