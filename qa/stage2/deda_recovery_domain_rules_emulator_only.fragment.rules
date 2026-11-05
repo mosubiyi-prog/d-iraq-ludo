@@ -11,6 +11,15 @@
         // A missing social profile remains safely distinguishable from
         // permission-denied, so old 100340 accounts do not appear corrupted.
         && (resource == null || (
+            // Friend lookup is public to signed-in users, but only when
+            // the document contains this exact non-secret profile schema.
+            // Any accidental phone, balance, session or admin field DENIES
+            // reading the WHOLE document (Firestore has no field ACLs).
+            resource.data.keys().hasOnly([
+              'publicId','ownerUid','displayName','avatarStyle',
+              'frameStyle','backgroundStyle','level','badges',
+              'createdAt','updatedAt'
+            ]) &&
             resource.data.publicId == publicId &&
             resource.data.ownerUid ==
               get(/databases/$(database)/documents/deda_share_ids/$(publicId))
