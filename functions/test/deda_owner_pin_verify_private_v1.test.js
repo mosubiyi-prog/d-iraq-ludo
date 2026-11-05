@@ -54,7 +54,7 @@ class FakeHttpsError extends Error {
   }
 }
 
-function fixture({enabled = true} = {}) {
+function fixture({enabled = true, allowLegacyCustomTokensForQa = false} = {}) {
   const db = new FakeDb();
   db.put(`deda_account_directory/${account}`,
     {accountKey:account, active:true, createdUid:originalUid, authEmail:email});
@@ -80,6 +80,7 @@ function fixture({enabled = true} = {}) {
   const fn = createOwnerPinVerifyCallable({
     onCall: (opts, handler) => {options = opts; return handler;},
     HttpsError: FakeHttpsError, db, auth, now: () => nowMs, enabled,
+    allowLegacyCustomTokensForQa,
   });
   const request = {
     app:{appId:"test-app"},
@@ -133,7 +134,7 @@ test("bad PIN and malformed request cannot mint tokens or expose account existen
 });
 
 test("valid linked canonical owner gets a token only for original UID and ID", async () => {
-  const f = fixture();
+  const f = fixture({allowLegacyCustomTokensForQa:true});
   const result = await f.fn(f.request);
   assert.deepEqual(result, {
     customToken:"private-test-token", originalUid, originalId, accountKey:account,
@@ -186,7 +187,7 @@ test("unlinked or disabled Firebase Auth original UID cannot get token", async (
 });
 
 test("server rate limit is per PHONE, not per anonymous replacement device", async () => {
-  const f = fixture();
+  const f = fixture({allowLegacyCustomTokensForQa:true});
   for (let i=0;i<5;i++) {
     await denied(f, {...f.request,
       auth:{...f.request.auth,uid:`device-${i}`},
@@ -242,7 +243,7 @@ test("manual PIN rotation lock prevents token minting even with correct PIN",asy
 });
 
 test("after synchronized PIN rotation old PIN fails, new PIN returns the original UID",async()=>{
-  const f=fixture();
+  const f=fixture({allowLegacyCustomTokensForQa:true});
   const credential=f.db.docs.get(`deda_credentials/${account}`);
   credential.pin="654321";
   credential.pinSyncVersion=1;
@@ -254,6 +255,16 @@ test("after synchronized PIN rotation old PIN fails, new PIN returns the origina
   assert.equal(result.originalUid,originalUid);
   assert.equal(result.originalId,originalId);
   assert.deepEqual(f.auth.tokens,[originalUid]);
+});
+
+test("production never creates a custom Auth token from PIN-only request", async()=>{
+  const f=fixture();
+  await denied(f);
+  assert.equal(f.auth.tokens.length,0);
+  const proof=await f.fn({...f.request,
+    data:{...f.request.data,proofMode:"linked-password"}});
+  assert.deepEqual(proof,{originalUid,originalId,accountKey:account});
+  assert.equal(f.auth.tokens.length,0);
 });
 
 test("linked-password proof returns original UID/ID but never creates a token", async()=>{
