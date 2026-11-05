@@ -6,6 +6,7 @@
 // Must be approved and subjected to Auth/AppCheck/Firestore emulator QA first.
 const {timingSafeEqual} = require("node:crypto");
 const {syncMarkerMatches} = require("./deda_pin_manual_recovery_compat_private_v1.js");
+const {recoveryCallableOptions} = require("./deda_stage2_runtime_identity.js");
 
 const WINDOW_MS = 15 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -90,7 +91,7 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
     // rate limit, and temporary server failures: no account enumeration.
     throw new HttpsError("permission-denied", "owner-verification-unavailable");
   };
-  return onCall({enforceAppCheck: true, timeoutSeconds: 30}, async (request) => {
+  return onCall(recoveryCallableOptions(30), async (request) => {
     if (!enabled || !request || !request.app?.appId ||
         !request.auth?.uid ||
         request.auth.token?.firebase?.sign_in_provider !== "anonymous") {
