@@ -30,8 +30,16 @@ jobs:
           test -f lib/deda_100430_owner_uid_continuity.dart
           test -f functions/deda_owner_pin_verify_private_v1.js
           grep -Fq 'const dedaPinCompatPilotEnabled = false;' functions/index.js
-          if grep -Fq 'deda_owner_pin_verify_private_v1' functions/index.js; then
-            echo "BLOCK: owner PIN custom-token callable must remain unexported"
+          if ! grep -Fq 'const dedaOwnerPinProofEmulatorEnabled =' functions/index.js; then
+            echo "BLOCK: owner proof must be explicitly emulator-only"
+            exit 1
+          fi
+          if ! grep -Fq 'process.env.FUNCTIONS_EMULATOR === "true"' functions/index.js; then
+            echo "BLOCK: emulator guard absent"
+            exit 1
+          fi
+          if ! grep -Fq 'process.env.DEDA_OWNER_PIN_PROOF_EMULATOR === "1"' functions/index.js; then
+            echo "BLOCK: explicit private opt-in absent"
             exit 1
           fi
           echo "PASS_BASELINE100436_PROTECTED_STAGE2_SOURCE_ONLY"
