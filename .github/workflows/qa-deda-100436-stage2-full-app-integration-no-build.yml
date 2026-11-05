@@ -91,6 +91,7 @@ jobs:
             lib/deda_step2_local_places_settings_evidence.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
             lib/deda_step2_financial_source_audit.dart \
+            lib/deda_step2_legacy_ad_wallet_audit.dart \
             lib/deda_step2_level_points_restore.dart \
             lib/deda_step2_linked_published_place_recovery.dart \
             lib/deda_step2_original_backup_readback.dart \
@@ -121,6 +122,7 @@ jobs:
             test/deda_step2_assets_recovery_scoped_private_test.dart \
             test/deda_step2_completion_gate_private_test.dart \
             test/deda_step2_local_places_settings_evidence_private_test.dart \
+            test/deda_step2_legacy_ad_wallet_audit_private_test.dart \
             test/deda_step2_account_domains_recovery_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \

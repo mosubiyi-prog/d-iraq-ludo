@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'deda_legacy_progress_capture.dart';
 import 'deda_legacy_purchase_evidence.dart';
+import 'deda_step2_legacy_ad_wallet_audit.dart';
 
 /// An audit of ORIGINAL-phone bytes, not a source of spendable value.
 /// A missing local value is UNKNOWN, never a zero balance.
@@ -12,9 +13,11 @@ enum DedaStep2LocalArchiveStatus {
 }
 
 class DedaStep2FinancialSourceAudit {
-  const DedaStep2FinancialSourceAudit._(this.sources);
+  const DedaStep2FinancialSourceAudit._(this.sources, this.adWallet);
 
   final Map<String, DedaStep2LocalArchiveStatus> sources;
+  /// Strict 100340 JSON shape classification, still untrusted without receipts.
+  final DedaStep2LegacyAdWalletObservation adWallet;
 
   /// None of these independently trusted facts can be established by this
   /// local archive. They require server-side reconciliation and writer fences.
@@ -73,7 +76,12 @@ class DedaStep2FinancialSourceAudit {
     if (results.length != 3 + 1 + dedaLegacyPurchaseFrames.length) {
       throw const FormatException('incomplete-financial-source-catalog');
     }
-    return DedaStep2FinancialSourceAudit._(Map.unmodifiable(results));
+    return DedaStep2FinancialSourceAudit._(
+      Map.unmodifiable(results),
+      DedaStep2LegacyAdWalletObservation.inspect(
+        progress.raw[DedaLegacyProgressPart.earnedDiamonds],
+      ),
+    );
   }
 
   List<String> get missingUnknown => List.unmodifiable([
