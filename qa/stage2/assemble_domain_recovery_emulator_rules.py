@@ -25,6 +25,7 @@ for collection in (
     "deda_social_profiles",
     "deda_profile_ui_migration",
     "deda_quiz_ui_snapshots",
+    "deda_stage71_active_identifier",
 ):
     if f"match /{collection}/" in original:
         raise SystemExit(f"SAFE_STOP_EXISTING_SOURCE_REQUIRES_RECONCILIATION:{collection}")
