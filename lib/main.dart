@@ -22,6 +22,9 @@ import 'package:image_picker/image_picker.dart';
 import 'admin_pages.dart';
 import 'deda_backend.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_100430_owner_uid_continuity.dart';
+import 'deda_step2_existing_account_signin_page.dart';
+import 'deda_step2_linked_owner_guardian_assembly.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -865,6 +868,9 @@ class DedaPreferences {
           hasProtectedTargetAccount: prefs.containsKey(
             DedaLinkedOwnerSessionPolicy.protectedAccountKey(
               normalizedPhone.replaceAll(RegExp(r'[^0-9]'), ''))),
+          hasLiveLinkedOwnerSession: Firebase.apps.isNotEmpty &&
+              FirebaseAuth.instance.currentUser != null &&
+              !FirebaseAuth.instance.currentUser!.isAnonymous,
         )) {
       throw StateError('linked-owner-requires-verified-login-or-logout');
     }
@@ -2082,6 +2088,54 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // Explicit replacement-phone entry; not shown in approved 100436.
+  // A correct UID and PIN do not imply restoration of all account domains.
+  void _openExistingAccount() {
+    if (!dedaStep2ExistingAccountEntryEnabled || !mounted) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (pageContext) => DedaExistingAccountSignInPage(
+        enabled: dedaStep2ExistingAccountEntryEnabled,
+        verifiedLogin: (phone, pin) async {
+          if (!mounted || !pageContext.mounted) {
+            throw StateError('expired-existing-account-intent');
+          }
+          final bridge = DedaLinkedOwnerGuardianAssembly.prepare();
+          final login = await bridge.loginAndPrepare(
+            phone: phone, pin: pin,
+            explicitUserAction: true,
+            explicitReplaceAnonymous: true,
+            isCurrentIntent: () => mounted && pageContext.mounted,
+          );
+          // No user login, points or wallet is made visible on partial proof.
+          if (!login.fullAccountRestored || login.originalId == null) {
+            throw StateError('deda-recovery-incomplete');
+          }
+          final profile =
+              await DedaOwnerUidContinuity.verifiedProfileForLinkedOwner(
+            phone: phone, originalId: login.originalId!,
+            expectedUid: login.originalUid,
+          );
+          if (!mounted || !pageContext.mounted) {
+            throw StateError('expired-existing-account-intent');
+          }
+          final accountType = profile.accountType == 'placeOwner'
+              ? DedaAccountType.placeOwner : DedaAccountType.user;
+          await DedaPreferences.saveLogin(
+            name: profile.name, normalizedPhone: phone,
+            type: accountType, verifiedCanonicalProfile: true,
+            verifiedOriginalUid: login.originalUid,
+          );
+          if (!mounted || !pageContext.mounted) return;
+          Navigator.of(pageContext).pushAndRemoveUntil(
+            MaterialPageRoute<void>(
+              builder: (_) => HomePage(userName: profile.name)),
+            (_) => false,
+          );
+        },
+      ),
+    ));
+  }
+
   Future<void> login() async {
     final name = nameController.text.trim();
     final normalizedPhone = _normalizeIraqiPhone(phoneController.text);
@@ -2412,6 +2466,14 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                               ),
+                              if (dedaStep2ExistingAccountEntryEnabled) ...[
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  onPressed: _openExistingAccount,
+                                  icon: const Icon(Icons.account_circle_outlined),
+                                  label: const Text('لدي حساب سابق'),
+                                ),
+                              ],
                             ],
                           ),
                         ),
