@@ -25,6 +25,8 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_100430_owner_uid_continuity.dart';
 import 'deda_step2_existing_account_signin_page.dart';
 import 'deda_step2_linked_owner_guardian_assembly.dart';
+import 'deda_step2_recovery_guardian.dart';
+import 'deda_step2_recovery_intent_store.dart';
 import 'deda_daily_published_tasks.dart';
 import 'deda_daily_user_task_display.dart';
 import 'deda_social_task_preview.dart';
@@ -2099,11 +2101,24 @@ class _LoginPageState extends State<LoginPage> {
           if (!mounted || !pageContext.mounted) {
             throw StateError('expired-existing-account-intent');
           }
+          // The checkbox on "لدي حساب" supplies independent explicit
+          // consent for restoration. A persistent intent ID is stored BEFORE
+          // any worker runs, and reused on uncertain retry/restart.
+          final accountKey = phone.replaceAll(RegExp(r'[^0-9]'), '');
+          final recoveryIntent = await DedaStep2RecoveryIntentStore
+              .getOrCreate(accountKey);
+          if (!mounted || !pageContext.mounted) {
+            throw StateError('expired-existing-account-intent');
+          }
           final bridge = DedaLinkedOwnerGuardianAssembly.prepare();
           final login = await bridge.loginAndPrepare(
             phone: phone, pin: pin,
             explicitUserAction: true,
             explicitReplaceAnonymous: true,
+            explicitRecoveryRequest: true,
+            recoveryIntentId: recoveryIntent,
+            selectedCodes: DedaVaultManifest.replacementPhoneCandidates
+                .toSet(),
             isCurrentIntent: () => mounted && pageContext.mounted,
           );
           // No user login, points or wallet is made visible on partial proof.
