@@ -140,7 +140,13 @@ class DedaStep2DiamondReconciliationReader {
     final row = await io.document(path);
     _check(scope);
     if (row.cached || row.pendingWrites) {
-      throw const DedaStep2DiamondHold('financial-document-not-server-proven');
+      // Identity/UID proof failures remain FATAL to the entire recovery.
+      // Only an already-scoped monetary wallet read may defer review while
+      // unrelated data, after independent owner verification, continues.
+      if (path.startsWith('deda_diamond_gift_balances/')) {
+        throw const DedaStep2DiamondHold('gift-wallet-not-server-proven');
+      }
+      throw const DedaStep2DiamondHold('diamond-owner-source-not-server-proven');
     }
     return row;
   }

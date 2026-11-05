@@ -279,7 +279,7 @@ class DedaLinkedOwnerGuardianBridge {
         financialReviewReason = e.reason;
       } on DedaStep2DiamondHold catch (e) {
         if (!const <String>{
-          'financial-document-not-server-proven',
+          'gift-wallet-not-server-proven',
           'diamond-domain-wallet-conflict',
           'diamond-assets-wallet-conflict',
           'gift-receipt-list-not-consistent',
