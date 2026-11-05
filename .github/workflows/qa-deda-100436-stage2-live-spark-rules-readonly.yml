@@ -1,0 +1,39 @@
+name: DEDA 100436 Stage2 REAL Firestore Spark Archive Permissions READ ONLY - NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100436-stage2-recovery-buildable-integration-qa-2026-11-05
+    paths:
+      - 'tools/deda_stage2_live_spark_rules_readonly_audit.py'
+      - '.github/workflows/qa-deda-100436-stage2-live-spark-rules-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-exact-live-firestore-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_SECONDARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify no backend deployment in this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f firestore.rules
+          test -s qa/stage2/deda_spark_legacy_prelink_evidence_EMULATOR_ONLY.fragment.rules
+          python3 -m py_compile tools/deda_stage2_live_spark_rules_readonly_audit.py
+          echo 'READ_ONLY_GATE_NO_FIREBASE_DEPLOY'
+      - name: Inspect current active release through GET-only Firebase Rules API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/deda_stage2_live_spark_rules_readonly_audit.py
