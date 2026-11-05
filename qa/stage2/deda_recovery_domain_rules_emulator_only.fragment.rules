@@ -1,0 +1,78 @@
+    // DEDA stage2 domain-continuity candidate: LOCAL EMULATOR ONLY.
+    // NEVER append to live firestore.rules without owner approval and review.
+    // Social lookup is public-to-signed-in users ONLY for active IDs.
+    match /deda_social_profiles/{publicId} {
+      allow get: if signedIn()
+        && exists(/databases/$(database)/documents/deda_share_ids/$(publicId))
+        && get(/databases/$(database)/documents/deda_share_ids/$(publicId))
+             .data.active == true
+        && get(/databases/$(database)/documents/deda_share_ids/$(publicId))
+             .data.kind == 'personal'
+        && resource.data.publicId == publicId
+        && resource.data.ownerUid ==
+           get(/databases/$(database)/documents/deda_share_ids/$(publicId))
+               .data.ownerUid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /deda_friendships/{relationId} {
+      allow get, list: if signedIn()
+        && resource.data.members is list
+        && resource.data.members.hasAny([request.auth.uid]);
+      allow create, update, delete: if false;
+    }
+
+    match /deda_profile_ui_migration/{accountKey} {
+      allow get: if sameAccount(accountKey)
+        && resource.data.accountKey == accountKey
+        && resource.data.uid == request.auth.uid
+        && currentUserHasShareId(resource.data.originalId)
+        && resource.data.kind == 'free-profile-appearance-only';
+      allow list, update, delete: if false;
+      allow create: if sameAccount(accountKey)
+        && request.resource.data.keys().hasOnly([
+           'format','kind','accountKey','originalId','uid',
+           'avatarStyle','backgroundStyle','createdAt'])
+        && request.resource.data.keys().hasAll([
+           'format','kind','accountKey','originalId','uid',
+           'avatarStyle','backgroundStyle','createdAt'])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'free-profile-appearance-only'
+        && request.resource.data.accountKey == accountKey
+        && request.resource.data.uid == request.auth.uid
+        && currentUserHasShareId(request.resource.data.originalId)
+        && request.resource.data.avatarStyle is int
+        && request.resource.data.avatarStyle >= 0
+        && request.resource.data.avatarStyle <= 5
+        && request.resource.data.backgroundStyle is int
+        && request.resource.data.backgroundStyle >= 0
+        && request.resource.data.backgroundStyle <= 5
+        && request.resource.data.createdAt == request.time;
+    }
+
+    match /deda_quiz_ui_snapshots/{ownerUid}/days/{day} {
+      allow get: if signedIn() && request.auth.uid == ownerUid
+        && sameAccount(resource.data.accountKey)
+        && resource.data.uid == ownerUid
+        && resource.data.day == day
+        && currentUserHasShareId(resource.data.originalId)
+        && resource.data.kind == 'display-only-untrusted-quiz-v1';
+      allow list, update, delete: if false;
+      allow create: if signedIn() && request.auth.uid == ownerUid
+        && request.resource.data.keys().hasOnly([
+          'format','kind','uid','accountKey','originalId','day',
+          'encoded','createdAt'])
+        && request.resource.data.keys().hasAll([
+          'format','kind','uid','accountKey','originalId','day',
+          'encoded','createdAt'])
+        && request.resource.data.format == 1
+        && request.resource.data.kind == 'display-only-untrusted-quiz-v1'
+        && request.resource.data.uid == ownerUid
+        && request.resource.data.day == day
+        && day.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')
+        && sameAccount(request.resource.data.accountKey)
+        && currentUserHasShareId(request.resource.data.originalId)
+        && request.resource.data.encoded is string
+        && request.resource.data.encoded.size() <= 60000
+        && request.resource.data.createdAt == request.time;
+    }
