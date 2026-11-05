@@ -76,6 +76,7 @@ class DedaAccountDomainContinuity {
     required this.friendRelations,
     required this.acceptedFriends,
     required this.giftReceipts,
+    required this.iraqDay,
     this.existingGiftWallet,
     this.existingWeeklyXp,
     this.activeDisplayId,
@@ -85,6 +86,7 @@ class DedaAccountDomainContinuity {
   /// Missing historical evidence must NEVER be treated as a zero balance.
   final Map<String,String> status;
   final int friendRelations, acceptedFriends, giftReceipts;
+  final String iraqDay;
   final int? existingGiftWallet, existingWeeklyXp;
   final String? activeDisplayId;
 
@@ -127,7 +129,7 @@ class DedaStep2AccountDomainsRecoveryReadback {
   }
 
   Future<DedaAccountDomainContinuity> inspect(
-      DedaVaultVerifiedScope scope) async {
+      DedaVaultVerifiedScope scope, {DateTime? nowUtc}) async {
     await scope.checkOwner();
     _check(scope);
     final uid = scope.originalUid, account = scope.accountKey,
@@ -266,6 +268,26 @@ class DedaStep2AccountDomainsRecoveryReadback {
         ? 'no-cloud-backup-legacy-unknown'
         : 'verified-source-existing-ui-hydration-separate';
 
+    // The existing quiz archive is display-state only, not earned points.
+    // Restore only today's Iraq-local display data; earlier quiz records
+    // must be accounted for separately before full account completion.
+    final iraqNow = (nowUtc ?? DateTime.now().toUtc())
+        .toUtc().add(const Duration(hours: 3));
+    final iraqDay = '${iraqNow.year.toString().padLeft(4,'0')}-'
+        '${iraqNow.month.toString().padLeft(2,'0')}-'
+        '${iraqNow.day.toString().padLeft(2,'0')}';
+    final quiz = (await _doc(scope,
+        'deda_quiz_ui_snapshots/$uid/days/$iraqDay')).fields;
+    if (quiz != null &&
+        (quiz['kind'] != 'display-only-untrusted-quiz-v1' ||
+         quiz['uid'] != uid || quiz['accountKey'] != account ||
+         quiz['originalId'] != id || quiz['day'] != iraqDay)) {
+      throw const DedaDomainSourceHold('quiz-ui-source-owner-conflict');
+    }
+    statuses['quizUiToday'] = quiz == null
+        ? 'no-today-snapshot-historical-quiz-unknown'
+        : 'verified-source-ui-only-hydration-separate';
+
     // A verified social/gift/league readback cannot invent missing
     // historical task, quiz, premium ownership, local saved-place or
     // financial records. These remain explicit HOLD categories.
@@ -283,7 +305,8 @@ class DedaStep2AccountDomainsRecoveryReadback {
     return DedaAccountDomainContinuity(
       status: Map<String,String>.unmodifiable(statuses),
       friendRelations: relations.length, acceptedFriends: accepted,
-      giftReceipts: gifts.length, existingGiftWallet: balance,
+      giftReceipts: gifts.length, iraqDay: iraqDay,
+      existingGiftWallet: balance,
       existingWeeklyXp: weeklyXp,
       activeDisplayId: premium?['activeId'] as String?,
     );
