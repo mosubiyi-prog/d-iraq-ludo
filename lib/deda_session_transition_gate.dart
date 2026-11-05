@@ -148,7 +148,19 @@ class DedaSessionTransitionGate {
     required DedaSessionAuthKind Function() currentAuthKind,
     required bool Function() isCurrent,
     required Future<T> Function(DedaSessionTransitionPermit permit) action,
+    Duration? verifiedOwnerLoginMaxWait,
   }) {
+    // Only the explicit owner-login lane may wait longer for remote PIN,
+    // original-UID and device-grant verification. Keep every other auth
+    // transition's original 12-second timeout unchanged.
+    if (verifiedOwnerLoginMaxWait != null &&
+        (kind != DedaSessionTransitionKind.ownerLogin ||
+         origin != DedaSessionTransitionOrigin.userAction ||
+         verifiedOwnerLoginMaxWait < timeout ||
+         verifiedOwnerLoginMaxWait > const Duration(seconds: 90))) {
+      return Future<T>.error(ArgumentError('invalid-verified-owner-login-timeout'));
+    }
+    final effectiveTimeout = verifiedOwnerLoginMaxWait ?? timeout;
     if (_closed) return Future<T>.error(const DedaSessionGateClosed());
     // A wrapped login may call lower-level helpers. They must share its permit,
     // not await their own in-flight future or start another transition.
@@ -190,11 +202,12 @@ class DedaSessionTransitionGate {
     _started++;
     final permit = DedaSessionTransitionPermit._(() => !_closed &&
         entry.generation == _generation && !entry.result.isCompleted && isCurrent());
-    entry.timer = Timer(timeout, () {
+    entry.timer = Timer(effectiveTimeout, () {
       if (!entry.result.isCompleted) {
         _timedOut++;
         entry.endedEarly = true;
-        entry.result.completeError(TimeoutException('session-transition-wait-expired', timeout));
+        entry.result.completeError(TimeoutException(
+            'session-transition-wait-expired', effectiveTimeout));
       }
     });
     Future<void> drive() async {

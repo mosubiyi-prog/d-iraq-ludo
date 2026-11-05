@@ -53,6 +53,10 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     return DedaAuthRuntime.run<T>(
       kind: DedaSessionTransitionKind.ownerLogin,
       origin: DedaSessionTransitionOrigin.userAction,
+      // This one verified, explicit flow needs time for independent PIN
+      // proof (30s), linked Firebase Auth, server grant (20s) and readback.
+      // The same lane still rejects overlap and stale user intent.
+      verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
       action: work,
       isCurrent: isCurrentIntent,
     );

@@ -57,7 +57,8 @@ class DedaAuthSessionController {
   }
   Future<T> run<T>({required DedaSessionTransitionKind kind,
     required DedaSessionTransitionOrigin origin,
-    required Future<T> Function() action, bool Function()? isCurrent}) async {
+    required Future<T> Function() action, bool Function()? isCurrent,
+    Duration? verifiedOwnerLoginMaxWait}) async {
     final inherited = _context;
     if (inherited != null) {
       inherited.check();
@@ -72,6 +73,7 @@ class DedaAuthSessionController {
     var succeeded=false;
     try {
     final result=await gate.run<T>(key: Object(), kind: kind, origin: origin,
+      verifiedOwnerLoginMaxWait: verifiedOwnerLoginMaxWait,
       currentAuthKind: () => current().kind, isCurrent: isCurrent ?? () => true,
       action: (permit) async {
         final context = _AuthContext(this, permit, origin, current(), parentZone);
@@ -169,8 +171,11 @@ class DedaAuthRuntime {
     _controller ??= DedaAuthSessionController(current: _current);
   static Future<T> run<T>({required DedaSessionTransitionKind kind,
     DedaSessionTransitionOrigin origin = DedaSessionTransitionOrigin.userAction,
-    required Future<T> Function() action, bool Function()? isCurrent}) => enabled
-      ? controller.run(kind: kind, origin: origin, action: action, isCurrent: isCurrent)
+    required Future<T> Function() action, bool Function()? isCurrent,
+    Duration? verifiedOwnerLoginMaxWait}) => enabled
+      ? controller.run(kind: kind, origin: origin, action: action,
+          isCurrent: isCurrent,
+          verifiedOwnerLoginMaxWait: verifiedOwnerLoginMaxWait)
       : action();
   static Future<T> wait<T>(FutureOr<T> Function() action) =>
     DedaSectionOperationContext.wait(() => enabled
