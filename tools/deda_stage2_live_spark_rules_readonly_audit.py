@@ -307,6 +307,23 @@ def main():
     else:
         print("LIVE_RUNTIME_PROJECT_NUMBER",
               "UNVERIFIABLE_HTTP_" + str(project_info.status_code))
+    # Exactly the new dedicated runtime account created by the project
+    # owner. The project-level actAs test does NOT reflect this scoped grant.
+    # This API only checks our CI identity's access; no IAM writes performed.
+    runtime = ("deda-recovery-runtime@" + PROJECT +
+               ".iam.gserviceaccount.com")
+    runtime_url = ("https://iam.googleapis.com/v1/projects/-/serviceAccounts/" +
+                   runtime + ":testIamPermissions")
+    scoped = session.post(runtime_url,
+                          json={"permissions": ["iam.serviceAccounts.actAs"]},
+                          timeout=30)
+    if scoped.status_code == 200:
+        scoped_allowed = set(scoped.json().get("permissions", []))
+        print("LIVE_RECOVERY_RUNTIME_ACTAS",
+              "iam.serviceAccounts.actAs" in scoped_allowed)
+    else:
+        print("LIVE_RECOVERY_RUNTIME_ACTAS",
+              "UNVERIFIABLE_HTTP_" + str(scoped.status_code))
     # Billing status only, without leaking the linked billing-account ID.
     # If access is denied, report unknown rather than guessing Spark/Blaze.
     billing = session.get(
