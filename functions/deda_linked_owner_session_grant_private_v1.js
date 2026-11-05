@@ -1,7 +1,7 @@
 "use strict";
 
-// DEDA WORK VAULT / PRIVATE 100436 EMULATOR-ONLY CANDIDATE.
-// NOT imported by functions/index.js, NOT deployed, NO real users or Firebase.
+// DEDA 100436 step 2 linked-original-UID bootstrap candidate.
+// Server-only rollout gate defaults OFF for production. Not deployed here.
 // This callable issues a narrowly scoped two-minute session-bootstrap grant
 // AFTER an original UID signs in through Firebase password Auth.
 //
@@ -15,9 +15,12 @@
 
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
+const {stage2LiveGateEnabled} = require("./deda_stage2_live_gate.js");
 
-const ENABLED = process.env.FUNCTIONS_EMULATOR === "true" &&
-  process.env.DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED === "true";
+const ENABLED = (
+  process.env.FUNCTIONS_EMULATOR === "true" &&
+  process.env.DEDA_LINKED_OWNER_GRANT_ISSUER_ENABLED === "true"
+) || stage2LiveGateEnabled("deviceGrant");
 const GRANT_MS = 2 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_PER_HOUR = 3;
@@ -139,8 +142,8 @@ async function issueLinkedOwnerGrant(request, db = getFirestore(),
 }
 
 // Exporting from this isolated file does not publish any Cloud Function.
-// Production requires separate owner permission, deployed rules review,
-// App Check, Auth abuse protections and a new QA signing round.
+// Production remains disabled until server-only project, rule and same-UID
+// approvals are explicitly configured. App Check and Auth limits stay required.
 exports.dedaIssueLinkedOriginalUidDeviceGrant = onCall(
   {enforceAppCheck: true, timeoutSeconds: 20},
   request => issueLinkedOwnerGrant(request));

@@ -7,6 +7,8 @@ on:
     paths:
       - 'qa/stage2/**'
       - 'functions/deda_linked_owner_session_grant_private_v1.js'
+      - 'functions/deda_stage2_live_gate.js'
+      - 'functions/test/deda_stage2_live_gate.test.js'
       - 'functions/deda_owner_pin_verify_private_v1.js'
       - 'functions/deda_recovery_journal_completion_private_v1.js'
       - 'functions/deda_pin_manual_recovery_compat_private_v1.js'

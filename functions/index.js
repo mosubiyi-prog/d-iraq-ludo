@@ -17,11 +17,12 @@ const {autoRecoverForgottenPin} = require("./deda_pin_auto_recovery_worker.js");
 const dedaPinCompatPilotEnabled = false;
 const {completeApprovedManualPinRecovery} =
   require("./deda_pin_manual_recovery_compat_private_v1.js");
-// The new callable exists only for PRIVATE QA. A production deployment
-// cannot enable its credential proof merely by supplying a client flag.
-// Emulator use requires BOTH the Functions Emulator and explicit QA opt-in.
+// Linked-owner credential proof is fail-closed. A release candidate may run
+// against real Firebase only with the independent SERVER rollout approvals;
+// normal clients and a mere deployment cannot switch it on.
 const {createOwnerPinVerifyCallable} =
   require("./deda_owner_pin_verify_private_v1.js");
+const {stage2LiveGateEnabled} = require("./deda_stage2_live_gate.js");
 const dedaOwnerPinProofEmulatorEnabled =
   process.env.FUNCTIONS_EMULATOR === "true" &&
   process.env.DEDA_OWNER_PIN_PROOF_EMULATOR === "1";
@@ -29,17 +30,17 @@ const {recordApprovalBellNotice} = require("./deda_owner_approval_bell.js");
 
 initializeApp();
 
-// OFF outside an explicitly opted-in Firebase Functions Emulator. No live
-// Firebase deployment and no custom-token issuer are authorized here.
+// Default OFF for production until the owner approves the exact project,
+// matching deployed Firestore Rules, and live same-UID regression QA.
 exports.dedaVerifyExistingOwnerPin = createOwnerPinVerifyCallable({
   onCall, HttpsError, db: getFirestore(), auth: getAuth(),
-  enabled: dedaOwnerPinProofEmulatorEnabled,
+  enabled: dedaOwnerPinProofEmulatorEnabled ||
+    stage2LiveGateEnabled("pinProof"),
 });
 
 // Both callables reuse the previously tested original-UID grant and journal
-// contracts. Their modules separately require FUNCTIONS_EMULATOR === "true"
-// plus a deliberate QA opt-in. They are DENIED in production, even if this
-// isolated source is built; no live Firebase functions are being deployed.
+// contracts. They independently check the same server-only production gate.
+// Nothing here deploys Firebase, enables credentials or changes live rules.
 exports.dedaIssueLinkedOriginalUidDeviceGrant =
   require("./deda_linked_owner_session_grant_private_v1.js")
       .dedaIssueLinkedOriginalUidDeviceGrant;

@@ -51,11 +51,14 @@ jobs:
         run: |
           set -euo pipefail
           node --check functions/index.js
+          node --check functions/deda_stage2_live_gate.js
+          node --check functions/deda_linked_owner_session_grant_private_v1.js
+          node --check functions/deda_recovery_journal_completion_private_v1.js
           node --check functions/deda_owner_pin_verify_private_v1.js
           node --check functions/deda_pin_manual_recovery_compat_private_v1.js
           node --check functions/deda_pin_auto_recovery_worker.js
           node --check functions/deda_linked_pin_reissue.js
-          node --test functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
+          node --test functions/test/deda_stage2_live_gate.test.js functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

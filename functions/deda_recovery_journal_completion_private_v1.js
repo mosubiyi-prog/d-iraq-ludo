@@ -1,6 +1,6 @@
 "use strict";
 
-// DEDA 100436 STAGE 2 — PRIVATE FIREBASE EMULATOR ONLY; never deploy.
+// DEDA 100436 STAGE 2 — server-controlled candidate. No deployment here.
 // A linked original UID may reserve a journal step, but only the Admin SDK
 // verifier re-reads canonical server evidence and issues its attestation.
 // No client-provided receipt is trusted, and NO wallet/XP/prize is awarded.
@@ -10,9 +10,12 @@
 const {createHash} = require("node:crypto");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {stage2LiveGateEnabled} = require("./deda_stage2_live_gate.js");
 
-const enabled = process.env.FUNCTIONS_EMULATOR === "true" &&
-  process.env.DEDA_RECOVERY_JOURNAL_SERVER_ENABLED === "true";
+const enabled = (
+  process.env.FUNCTIONS_EMULATOR === "true" &&
+  process.env.DEDA_RECOVERY_JOURNAL_SERVER_ENABLED === "true"
+) || stage2LiveGateEnabled("journal");
 const eligible = new Set([
   "originalBackupReadback",
   "purchaseBackupReadback",
