@@ -100,3 +100,12 @@
 - حساب النشر الاحتياطي ورمز Firebase البديل غير مهيأين. لا تعُد للفوترة؛ ليست موضوع مهمة IAM الحالية.
 - **وثيقة الإجراء الدقيق لمالك المشروع**: [إعداد صلاحيات Cloud Build وService Account User بنطاق محدد](DEDA_100436_STAGE2_IAM_DEPLOY_OWNER_ACTION_2026-11-05.md).
 - لا تغيير في بيانات المستخدمين أو Firebase عند هذا الفحص؛ لا APK، ولا نشر Cloud Functions، ولا تعديل النسخة المحمية 100436. تنتظر عمليات النشر هوية موثوقة مُخولة من مالك المشروع، وبعدها يُستأنف فحص الحارس على نفس فرع العمل.
+
+## 2026-11-05 — موافقة المالك على IAM من Cloud Shell
+
+- المالك نفذ من Cloud Shell إضافة `roles/cloudbuild.builds.editor` إلى `firebase-adminsdk-fbsvc@deda-25b88.iam.gserviceaccount.com`؛ وأظهر أمر `gcloud projects get-iam-policy` الدور ضمن عضوية الحساب.
+- المالك أنشأ حساب تشغيل منفصل `deda-recovery-runtime@deda-25b88.iam.gserviceaccount.com`؛ وظهر في Cloud Shell `Created service account`.
+- المالك نفذ `gcloud iam service-accounts add-iam-policy-binding` على الحساب الجديد ومنح `roles/iam.serviceAccountUser` إلى حساب نشر GitHub. الاستجابة `Updated IAM policy for serviceAccount` وأظهرت ربط الدور والعضوية المستهدفين.
+- **تحقق مستقل حقيقي من GitHub:** https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42106967599 نجح؛ `LIVE_DEPLOY_PRIMARY_CLOUDBUILD_BUILDS_CREATE=True`، `LIVE_DEPLOY_PRIMARY_CLOUDFUNCTIONS_FUNCTIONS_CREATE=True`. محاولة `testIamPermissions` لمورد حساب التشغيل الجديد أعادت `HTTP 403`، وهي نتيجة **غير قابلة للتحقق بهذا الحساب** وليست دليلاً على غياب `Service Account User` الذي أثبتته استجابة المالك.
+- **الخطوة القادمة داخل نفس المسار:** التحقق من سياسات حساب التشغيل والـruntime authorization بأمر قراءة فقط من حساب المالك إذا لزم، ثم تجهيز نشر مقيّد للوظائف الثلاث مع تعيين `--service-account=deda-recovery-runtime@deda-25b88.iam.gserviceaccount.com`، واختبارات الأمان والإتاحة قبل الفتح. **هذا ليس دليلاً على اكتمال الاسترجاع بعد.**
+- لا تعديل على نسخة 100436 المحمية، ولا APK، ولا إصدار Play، ولا نشر وظائف بهذه الخطوة.
