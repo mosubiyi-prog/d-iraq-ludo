@@ -212,6 +212,40 @@ def main():
     else:
         print("LIVE_DEPLOY_IAM_CHECK",
               "UNVERIFIABLE_HTTP_" + str(iam.status_code))
+    # Evaluate the primary and fallback deployment identities separately.
+    # Their permission sets can differ; never guess that a fallback token has
+    # Cloud Build or serviceAccount actAs from primary project access.
+    for label, secret_name in (("PRIMARY", SECRET_NAMES[0]),
+                               ("FALLBACK", SECRET_NAMES[1])):
+        serialized = os.environ.get(secret_name)
+        if not serialized:
+            print("LIVE_DEPLOY_IDENTITY_" + label, "NOT_CONFIGURED")
+            continue
+        try:
+            source = json.loads(serialized)
+            if source.get("project_id") != PROJECT or (
+                    source.get("type") != "service_account"):
+                print("LIVE_DEPLOY_IDENTITY_" + label, "WRONG_PROJECT")
+                continue
+            identity = Credentials.from_service_account_info(
+                source, scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            identity.refresh(Request())
+            check = requests.post(
+                "https://cloudresourcemanager.googleapis.com/v1/projects/" +
+                PROJECT + ":testIamPermissions",
+                headers={"Authorization": "Bearer " + identity.token},
+                json={"permissions": list(requested)}, timeout=30)
+            if check.status_code != 200:
+                print("LIVE_DEPLOY_IDENTITY_" + label,
+                      "UNVERIFIABLE_HTTP_" + str(check.status_code))
+                continue
+            permitted = set(check.json().get("permissions", []))
+            for permission in requested:
+                print("LIVE_DEPLOY_" + label + "_" +
+                      permission.upper().replace(".", "_"),
+                      permission in permitted)
+        except Exception:
+            print("LIVE_DEPLOY_IDENTITY_" + label, "UNVERIFIABLE")
     # Billing status only, without leaking the linked billing-account ID.
     # If access is denied, report unknown rather than guessing Spark/Blaze.
     billing = session.get(
