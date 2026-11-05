@@ -83,7 +83,9 @@ function validCanonicalProof({key, directory, credentials, projection,
 }
 
 function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
-  now = Date.now, enabled = false}) {
+  now = Date.now, enabled = false,
+  // Only unit-test injection; the production index NEVER provides this.
+  allowLegacyCustomTokensForQa = false}) {
   if (typeof onCall !== "function" || typeof HttpsError !== "function" ||
       !db || !auth) throw new TypeError("missing-server-dependencies");
   const deny = () => {
@@ -154,8 +156,10 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
           accountKey: key,
         };
       }
-      // Legacy isolated test path remains unavailable until independently
-      // reviewed. Custom tokens are never exposed in linked-password mode.
+      // Production never issues a custom Auth token merely from a six-digit
+      // legacy PIN. That would bypass the linked password provider/session
+      // flow. Only an explicitly injected private test can exercise this path.
+      if (allowLegacyCustomTokensForQa !== true) return deny();
       const customToken = await auth.createCustomToken(proof.originalUid);
       if (typeof customToken !== "string" || !customToken) return deny();
       return {
