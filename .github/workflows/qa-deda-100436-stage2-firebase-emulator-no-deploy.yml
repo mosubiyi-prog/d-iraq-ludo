@@ -76,6 +76,11 @@ jobs:
           export DEDA_JOURNAL_EMULATOR_RULES="$RUNNER_TEMP/deda-stage2.rules"
           echo "DEDA_JOURNAL_EMULATOR_RULES=$DEDA_JOURNAL_EMULATOR_RULES" >> "$GITHUB_ENV"
           python3 qa/recovery_journal/assemble_emulator_rules.py
+          # Ensure the exact candidate inspected for a later real-Firebase
+          # rollout is byte-for-byte the one passing emulator security tests.
+          cmp "$DEDA_JOURNAL_EMULATOR_RULES" \
+            qa/stage2/deda_stage2_auth_guardian_firestore_SOURCE_REVIEW_ONLY.rules
+          echo 'PASS_STAGE2_SOURCE_RULES_PREVIEW_MATCHES_EMULATOR'
           python3 qa/stage2/assemble_domain_recovery_emulator_rules.py "$DEDA_JOURNAL_EMULATOR_RULES"
           test -s "$DEDA_JOURNAL_EMULATOR_RULES"
       - name: Prepare throwaway Functions project from current integrated candidate
