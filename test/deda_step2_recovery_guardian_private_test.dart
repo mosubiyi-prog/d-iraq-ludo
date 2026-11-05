@@ -77,6 +77,20 @@ class _Worker implements DedaVaultWorkerAdapter {
       DedaVaultVerifiedScope scope, String operationKey) async => receipt;
 }
 
+/// A reviewed adapter can defer ONLY its own optional source domain.
+class _PreflightWorker extends _Worker implements DedaVaultPreflightAdapter {
+  _PreflightWorker(super.code, this.outcome);
+  final DedaVaultPreflightOutcome outcome;
+  int preflights = 0;
+  @override
+  Future<DedaVaultPreflightOutcome> preflight(
+      DedaVaultVerifiedScope scope) async {
+    preflights++;
+    await scope.checkOwner();
+    return outcome;
+  }
+}
+
 DedaVaultVerifiedScope _scope({
   bool Function()? current, Future<bool> Function()? owner,
 }) => DedaVaultVerifiedScope(
@@ -167,6 +181,63 @@ void main() {
     expect(second.stepStates[evidence], DedaVaultStepState.verified);
     expect(j.created, 1);
     expect(w.executions, 1);
+  });
+
+  test('missing paid source stays review-only while level and place proceed',
+      () async {
+    final journal=_Journal();
+    final original=_Worker(evidence);
+    final purchase=_PreflightWorker(
+      DedaVaultCode.purchaseBackupReadback,
+      DedaVaultPreflightOutcome.evidenceNeedsReview);
+    final level=_Worker(points);
+    final published=_Worker(DedaVaultCode.publishedPlaceRecovery);
+    final guardian=_guardian(journal,{
+      evidence:original,
+      purchase.code:purchase,
+      points:level,
+      published.code:published,
+    });
+    final result=await guardian.run(
+      scope:_scope(),trigger:DedaVaultRecoveryTrigger.explicitUserRequest,
+      phase:DedaVaultRecoveryPhase.verifiedReplacementPhone,
+      selectedCodes:{evidence,purchase.code,points,published.code});
+    expect(result.stoppedSafely,false);
+    expect(result.stepStates[evidence],DedaVaultStepState.verified);
+    expect(result.stepStates[purchase.code],DedaVaultStepState.needsReview);
+    expect(result.stepStates[points],DedaVaultStepState.verified);
+    expect(result.stepStates[published.code],DedaVaultStepState.verified);
+    expect(journal.created,3);
+    expect(purchase.preflights,1);
+    expect(purchase.executions,0);
+    expect(journal.rows.containsKey(_scope().operationKey(purchase.code)),false);
+    expect(result.fullAccountRestored,false);
+    expect(result.mayGrantDiamonds,false);
+  });
+
+  test('no published place is not applicable, not a fake verified receipt',
+      () async {
+    final journal=_Journal();
+    final absent=_PreflightWorker(
+      DedaVaultCode.publishedPlaceRecovery,
+      DedaVaultPreflightOutcome.notApplicable);
+    final original=_Worker(evidence);
+    final level=_Worker(points);
+    final guardian=_guardian(journal,{
+      evidence:original,points:level,absent.code:absent});
+    for (var n=0;n<2;n++) {
+      final result=await guardian.run(
+        scope:_scope(),trigger:DedaVaultRecoveryTrigger.explicitUserRequest,
+        phase:DedaVaultRecoveryPhase.verifiedReplacementPhone,
+        selectedCodes:{evidence,points,absent.code});
+      expect(result.stoppedSafely,false);
+      expect(result.stepStates[absent.code],DedaVaultStepState.notApplicable);
+      expect(result.fullAccountRestored,false);
+    }
+    expect(journal.created,2);
+    expect(absent.preflights,2);
+    expect(absent.executions,0);
+    expect(journal.rows.containsKey(_scope().operationKey(absent.code)),false);
   });
 
   test('existing uncertain reservation is never re-executed', () async {
