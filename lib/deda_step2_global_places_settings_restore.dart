@@ -107,19 +107,23 @@ class DedaStep2GlobalPlacesReplacementRestore {
         check();
         final raw = records[key];
         if (raw == null) continue;
-        if (DedaStep2LocalPlacesSettingsReader.inspectRawValue(key, raw) !=
+        // JSON decoding returns List<dynamic>, while SharedPreferences
+        // string-list validators require a typed List<String>.
+        final value = raw is List && raw.every((v) => v is String)
+            ? List<String>.unmodifiable(raw.cast<String>()) : raw;
+        if (DedaStep2LocalPlacesSettingsReader.inspectRawValue(key, value) !=
             DedaStep2LocalSourceStatus.capturedUntrusted) {
           throw const DedaStep2GlobalPlacesHold(
               'replacement-global-source-invalid');
         }
         final current = await local.read(key);
         check();
-        if (current != null && !_same(current, raw)) {
+        if (current != null && !_same(current, value)) {
           throw const DedaStep2GlobalPlacesHold(
               'replacement-global-existing-values-preserved');
         }
         if (current == null) {
-          absent[key] = raw is List ? List<String>.unmodifiable(raw.cast<String>()) : raw;
+          absent[key] = value;
         }
       }
       // Write-if-missing. Partial process kills are idempotent: a retry
