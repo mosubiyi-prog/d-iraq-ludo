@@ -350,7 +350,7 @@ class DedaStep2GlobalPlacesArchive {
   }) async {
     await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     final old=await journal.read(accountKey);
-    _check(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     if (old != null) {
       final parsed=jsonDecode(old);
       if (parsed is! Map || parsed['captureId'] is! String) {
@@ -376,6 +376,7 @@ class DedaStep2GlobalPlacesArchive {
     if (await journal.read(accountKey) != prepared.encoded) {
       throw const DedaStep2GlobalPlacesHold('global-journal-not-durable');
     }
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     return prepared;
   }
 
@@ -417,7 +418,7 @@ class DedaStep2GlobalPlacesArchive {
   }) async {
     await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     final pending=await journal.read(accountKey);
-    _check(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     if (pending == null) {
       throw const DedaStep2GlobalPlacesHold('global-pending-intent-absent');
     }
@@ -429,17 +430,17 @@ class DedaStep2GlobalPlacesArchive {
       encoded:pending,accountKey:accountKey,originalId:originalId,
       originalUid:originalUid,captureId:parsed['captureId'] as String);
     final before=await cloud.read(accountKey);
-    _check(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     if (before.cached || before.pendingWrites) {
       throw const DedaStep2GlobalPlacesHold('global-cloud-uncertain');
     }
     if (before.data == null) {
       await cloud.createOnce(accountKey,_body(source));
-      _check(accountKey,originalId,originalUid,isCurrent);
+      await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     }
     final confirmed=_verifyCloud(await cloud.read(accountKey),
       accountKey,originalId,originalUid);
-    _check(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     if (confirmed.encoded != pending) {
       throw const DedaStep2GlobalPlacesHold(
         'global-source-different-from-pending');
@@ -447,7 +448,7 @@ class DedaStep2GlobalPlacesArchive {
     if (!await journal.clearIfSame(accountKey,pending)) {
       throw const DedaStep2GlobalPlacesHold('global-journal-remains-uncertain');
     }
-    _check(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     return confirmed;
   }
 

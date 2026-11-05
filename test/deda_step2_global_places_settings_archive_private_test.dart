@@ -37,6 +37,16 @@ class Cloud implements DedaStep2GlobalPlaceCloudIo {
     });
   }
 }
+class FlippedCloud extends Cloud {
+  FlippedCloud(this.onFirstRead);
+  final void Function() onFirstRead;
+  @override
+  Future<DedaStep2GlobalPlaceCloudRow> read(String key) async {
+    final existing=await super.read(key);
+    if (reads==1) onFirstRead();
+    return existing;
+  }
+}
 class Journal implements DedaStep2GlobalPlacesPendingJournal {
   String? entry;
   int written=0,cleared=0;
@@ -157,6 +167,20 @@ void main(){
     await expectLater(prepare(replacement),
       throwsA(isA<DedaStep2GlobalPlacesHold>()));
     expect(cloud.creates,1);
+  });
+  test('original-install provenance lost while cloud read: never create',() async {
+    var original=true;
+    final cloud=FlippedCloud((){original=false;});
+    final journal=Journal();
+    final local=Local({'deda_favorites_v1':['{"name":"old original"}']});
+    final systemOld=system(local,cloud,journal,
+        originalDevice:(_,__,___)async=>original);
+    final intent=await prepare(systemOld);
+    await expectLater(send(systemOld),
+        throwsA(isA<DedaStep2GlobalPlacesHold>()));
+    expect(cloud.creates,0);
+    expect(journal.entry,intent.encoded);
+    expect(local.reads,1);
   });
   test('old snapshot cannot overwrite a different prior archive',() async {
     final cloud=Cloud(),journal=Journal();
