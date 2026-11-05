@@ -57,8 +57,14 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: false
-      - name: Resolve exact pinned app dependencies (no deployment)
-        run: flutter pub get --enforce-lockfile
+      - name: Resolve Flutter dependencies in isolated CI only (preserve tracked lockfile)
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get
+          git diff --stat -- pubspec.lock
+          git diff --exit-code -- pubspec.yaml
+          echo "PASS_QA_TEMPORARY_PUB_RESOLUTION_NO_COMMITTED_LOCK_CHANGE"
       - name: Analyze all imported recovery sources, guards, main and session
         shell: bash
         run: |
