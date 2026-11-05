@@ -6,23 +6,21 @@
     // The source is client-controlled; later independent evidence matching
     // is mandatory. NOT DEPLOYED; test in emulator first.
     function stage2SparkOriginalAccount(accountKey) {
+      // Cache each canonical document ONCE. Firestore access-call limits
+      // apply to purchase sidecars as well as initial archive creation.
+      let directory = get(/databases/$(database)/documents/deda_account_directory/$(accountKey)).data;
+      let session = get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid)).data;
+      let owner = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return signedIn()
         && accountKey is string
         && accountKey.matches('^[0-9]{10,16}$')
         && !exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-        && exists(/databases/$(database)/documents/deda_account_directory/$(accountKey))
-        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey))
-             .data.active == true
-        && get(/databases/$(database)/documents/deda_account_directory/$(accountKey))
-             .data.createdUid == request.auth.uid
-        && exists(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-             .data.uid == request.auth.uid
-        && get(/databases/$(database)/documents/deda_sessions/$(request.auth.uid))
-             .data.accountKey == accountKey
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.accountKey == accountKey;
+        && directory.active == true
+        && directory.accountKey == accountKey
+        && directory.createdUid == request.auth.uid
+        && session.uid == request.auth.uid
+        && session.accountKey == accountKey
+        && owner.accountKey == accountKey;
     }
 
     function stage2SparkOriginalArchiveCreate(accountKey, captureId, data) {
@@ -79,6 +77,20 @@
              && request.resource.data.records.earnedDiamonds.size() <= 200000));
     }
 
+    function stage2SparkPurchasePairedEvidence(accountKey, captureId, data) {
+      let route = get(/databases/$(database)/documents/deda_share_ids/$(data.records.originalId)).data;
+      let original = get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId)).data;
+      return data.records.originalId ==
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.sharePersonalId
+        && route.ownerUid == request.auth.uid
+        && route.kind == 'personal'
+        && route.active == true
+        && original.sourceUid == request.auth.uid
+        && original.accountKey == accountKey
+        && original.captureId == captureId
+        && original.installId == data.installId;
+    }
+
     match /deda_purchase_evidence/{accountKey}/captures/{captureId} {
       allow get: if stage2SparkOriginalAccount(accountKey)
         && (resource == null || (
@@ -99,21 +111,8 @@
         && request.resource.data.records.progressCaptureId == captureId
         && request.resource.data.records.originalId is string
         && request.resource.data.records.originalId.matches('^@DEDA-[A-Z0-9]{6}$')
-        && request.resource.data.records.originalId ==
-          get(/databases/$(database)/documents/users/$(request.auth.uid))
-            .data.sharePersonalId
-        && exists(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
-            .data.ownerUid == request.auth.uid
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
-            .data.kind == 'personal'
-        && get(/databases/$(database)/documents/deda_share_ids/$(request.resource.data.records.originalId))
-            .data.active == true
         && request.resource.data.records.localSnapshot is string
         && request.resource.data.records.localSnapshot.size() <= 200000
-        && exists(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
-        && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
-           .data.sourceUid == request.auth.uid
-        && get(/databases/$(database)/documents/deda_progress_evidence/$(accountKey)/captures/$(captureId))
-           .data.installId == request.resource.data.installId;
+        && stage2SparkPurchasePairedEvidence(
+          accountKey, captureId, request.resource.data);
     }
