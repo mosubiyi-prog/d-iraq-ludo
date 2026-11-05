@@ -14,12 +14,15 @@ class DedaLinkedGuardianLoginResult {
     this.originalId,
     this.recovery,
     this.domainContinuity,
+    this.freeAppearanceHydrated = false,
+    this.quizUiHydrated = false,
   });
   final String originalUid;
   final String accountKey;
   final String? originalId;
   final DedaVaultRecoveryResult? recovery;
   final DedaAccountDomainContinuity? domainContinuity;
+  final bool freeAppearanceHydrated, quizUiHydrated;
 
   /// A linked UID is not proof that all purchases or other data were restored.
   bool get fullAccountRestored => false;
@@ -30,6 +33,8 @@ class DedaLinkedOwnerGuardianBridge {
     required this.handoff,
     required this.guardian,
     this.domainReadback,
+    this.restoreFreeAppearance,
+    this.restoreQuizUi,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
   });
 
@@ -37,6 +42,12 @@ class DedaLinkedOwnerGuardianBridge {
   final DedaStep2RecoveryGuardian guardian;
   // Optional owner-scoped post-guardian audit. Never a financial writer.
   final DedaStep2AccountDomainsRecoveryReadback? domainReadback;
+  // Existing, reviewed UI-only restoration services. They NEVER grant XP,
+  // paid frames, wallet diamonds, league rewards or premium IDs.
+  final Future<bool> Function(DedaVaultVerifiedScope scope)?
+      restoreFreeAppearance;
+  final Future<bool> Function(DedaVaultVerifiedScope scope, String iraqDay)?
+      restoreQuizUi;
   final bool enabled;
 
   /// Only the user's explicit "I have an account" action can start login.
@@ -152,11 +163,37 @@ class DedaLinkedOwnerGuardianBridge {
         throw StateError('linked-owner-changed-after-domain-readback');
       }
     }
+    var appearanceHydrated = false;
+    var quizHydrated = false;
+    if (domains != null) {
+      // Only verified SERVER archives may hydrate missing FREE UI values.
+      // The underlying existing implementations refuse overwriting a
+      // different local selection and reread the original UID at each step.
+      if (restoreFreeAppearance != null &&
+          domains.status['freeAppearance'] ==
+              'verified-source-existing-ui-hydration-separate') {
+        await scope.checkOwner();
+        appearanceHydrated = await restoreFreeAppearance!(scope);
+        await scope.checkOwner();
+      }
+      if (restoreQuizUi != null &&
+          domains.status['quizUiToday'] ==
+              'verified-source-ui-only-hydration-separate') {
+        await scope.checkOwner();
+        quizHydrated = await restoreQuizUi!(scope, domains.iraqDay);
+        await scope.checkOwner();
+      }
+    }
+    if (!identityStillMatches()) {
+      throw StateError('linked-owner-changed-after-ui-restoration');
+    }
     return DedaLinkedGuardianLoginResult(
       originalUid: originalUid, accountKey: accountKey,
       originalId: canonicalId,
       recovery: recovery,
       domainContinuity: domains,
+      freeAppearanceHydrated: appearanceHydrated,
+      quizUiHydrated: quizHydrated,
     );
   }
 }
