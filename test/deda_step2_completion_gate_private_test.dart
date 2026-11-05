@@ -179,6 +179,21 @@ void main() {
     expect(report.allDomainsRestored,false);
   });
 
+  test('authoritatively empty published place is N/A, not restored', () {
+    const noPlace=DedaVaultRecoveryResult(
+      stepStates:{
+        DedaVaultCode.originalBackupReadback:DedaVaultStepState.verified,
+        DedaVaultCode.publishedPlaceRecovery:DedaVaultStepState.notApplicable,
+      },stoppedSafely:false,
+    );
+    final report=DedaStep2CompletionGate.assess(
+      originalUid:uid,originalId:original,recovery:noPlace);
+    expect(report.domains['publishedPlace'],
+      DedaStep2CompletionState.notApplicable);
+    expect(report.allDomainsRestored,false);
+    expect(report.canPrepareFullRecoveryApk,false);
+  });
+
   test('missing cloud source means pending, never empty, zero or a grant', () {
     final r=DedaStep2CompletionGate.assess(
       originalUid:uid,originalId:original);
