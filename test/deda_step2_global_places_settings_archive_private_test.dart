@@ -56,7 +56,7 @@ class Journal implements DedaStep2GlobalPlacesPendingJournal {
   }
 }
 DedaStep2GlobalPlacesArchive system(Local local,Cloud cloud,Journal journal,{
-  bool Function()? current,bool enabled=true,
+  String? Function()? current,bool enabled=true,
   Future<bool> Function(String,String,String)? proof,
 }) => DedaStep2GlobalPlacesArchive(
   reader:DedaStep2LocalPlacesSettingsReader(local),
