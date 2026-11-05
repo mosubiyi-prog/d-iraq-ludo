@@ -142,6 +142,18 @@ def main():
             # An API permission or regional failure is UNKNOWN, not absent.
             print("LIVE_CALLABLE_" + item, "UNVERIFIABLE_HTTP_" +
                   str(response.status_code))
+    # Billing status only, without leaking the linked billing-account ID.
+    # If access is denied, report unknown rather than guessing Spark/Blaze.
+    billing = session.get(
+        "https://cloudbilling.googleapis.com/v1/projects/" +
+        PROJECT + "/billingInfo", timeout=30)
+    if billing.status_code == 200:
+        value = billing.json().get("billingEnabled")
+        print("LIVE_PROJECT_BILLING_ENABLED",
+              value if isinstance(value, bool) else "UNKNOWN")
+    else:
+        print("LIVE_PROJECT_BILLING_ENABLED",
+              "UNVERIFIABLE_HTTP_" + str(billing.status_code))
     for item in ("deda_progress_evidence", "deda_purchase_evidence"):
         print("EMULATOR_CANDIDATE_HAS_" + item.upper(),
               candidate.count("match /" + item + "/") == 1)
