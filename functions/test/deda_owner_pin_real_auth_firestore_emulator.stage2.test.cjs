@@ -39,6 +39,9 @@ const denied = async (handler, req) =>
 async function seed({pin=correctPin, stamp=true, lock=false,
   admin=false, active=true, ownerUid=originalUid, resetAttempts=true}={}) {
   const t = Timestamp.fromMillis(now);
+  // Preserve the real password-provider compatibility invariant in test
+  // fixtures: an accepted server PIN must also be the Auth provider PIN.
+  await auth.updateUser(originalUid,{password:pin});
   await Promise.all([
     db.doc("deda_account_directory/"+account).set({
       accountKey:account, createdUid:originalUid, active, authEmail:email,
