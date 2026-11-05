@@ -31,6 +31,34 @@ jobs:
           test -s qa/stage2/deda_spark_legacy_prelink_evidence_EMULATOR_ONLY.fragment.rules
           python3 -m py_compile tools/deda_stage2_live_spark_rules_readonly_audit.py
           echo 'READ_ONLY_GATE_NO_FIREBASE_DEPLOY'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check alternative Firebase CI token can LIST recovery Functions only
+        shell: bash
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FIREBASE_TOKEN:-}" ]; then
+            echo 'RECOVERY_FIREBASE_TOKEN=NOT_CONFIGURED'
+          elif timeout 130 npx --yes firebase-tools@13.35.1 functions:list \
+            --project deda-25b88 --token "$FIREBASE_TOKEN" --non-interactive \
+            > "$RUNNER_TEMP/recovery-functions-list.txt" \
+            2> "$RUNNER_TEMP/recovery-functions-list-error.txt"; then
+            echo 'RECOVERY_FIREBASE_TOKEN=LIST_ALLOWED'
+            python3 - <<'PY'
+          from pathlib import Path
+          import os
+          text=Path(os.environ['RUNNER_TEMP']+'/recovery-functions-list.txt').read_text()
+          for name in ('dedaVerifyExistingOwnerPin',
+                       'dedaIssueLinkedOriginalUidDeviceGrant',
+                       'dedaRecoveryJournalComplete'):
+              print('TOKEN_LISTED_'+name, name in text)
+          PY
+          else
+            echo 'RECOVERY_FIREBASE_TOKEN=LIST_UNAVAILABLE'
+          fi
       - name: Inspect current active release through GET-only Firebase Rules API
         shell: bash
         run: |
