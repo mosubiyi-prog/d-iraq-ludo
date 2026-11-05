@@ -58,7 +58,46 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   @override
   Future<DedaLoginIdentity> signInOriginal(String account, String pin) async {
     _enabled();
-
+    if (!RegExp(r'^(?:07\\d{9}|9647\\d{9})$').hasMatch(account) ||
+        !RegExp(r'^\\d{6}$').hasMatch(pin)) {
+      throw ArgumentError('invalid-linked-owner-credentials');
+    }
+    // AppCheck-enforced proof is available only with an anonymous Firebase
+    // session. Prepare it inside the SAME user-initiated Auth transition lane;
+    // NEVER replace an existing linked account or admin session.
+    final initial = current();
+    if (initial.kind == DedaLoginKind.absent) {
+      await DedaAuthRuntime.controller.transition<UserCredential>(
+        kind: DedaSessionTransitionKind.anonymousPreparation,
+        action: auth.signInAnonymously,
+        accepts: (result, live) => result.user != null &&
+            result.user!.uid == live.uid &&
+            live.kind == DedaSessionAuthKind.anonymous,
+      );
+    } else if (initial.kind != DedaLoginKind.anonymous) {
+      throw StateError('existing-linked-principal-not-replaceable');
+    }
+    final proofResponse = await functions.httpsCallable(
+      'dedaVerifyExistingOwnerPin',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+    ).call(<String, dynamic>{
+      'phone': account, 'pin': pin, 'proofMode': 'linked-password',
+    });
+    DedaAuthRuntime.check();
+    final data = proofResponse.data;
+    if (data is! Map ||
+        data['accountKey'] != account ||
+        data['originalUid'] is! String ||
+        (data['originalUid'] as String).length < 6 ||
+        data['originalId'] is! String ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}$')
+            .hasMatch(data['originalId'] as String)) {
+      throw StateError('linked-owner-server-proof-unavailable');
+    }
+    final expectedUid = data['originalUid'] as String;
+    final originalId = data['originalId'] as String;
+    // This provider login must retain the ORIGINAL UID returned by Admin SDK.
+    // Correct phone/PIN on a second Firebase account must NEVER be enough.
     final credential = await DedaAuthRuntime.controller.transition<UserCredential>(
       kind: DedaSessionTransitionKind.ownerLogin,
       action: () => auth.signInWithEmailAndPassword(
@@ -66,13 +105,21 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
       ),
       accepts: (signedIn, live) =>
         signedIn.user != null &&
+        signedIn.user!.uid == expectedUid &&
         signedIn.user!.uid == live.uid &&
         live.kind == DedaSessionAuthKind.authenticated &&
         signedIn.user!.email == '$account@deda-login.invalid',
     );
-
-    if (credential.user == null) throw StateError('linked-owner-no-auth-user');
-    return current();
+    if (credential.user?.uid != expectedUid) {
+      throw StateError('linked-owner-original-uid-mismatch');
+    }
+    final live = current();
+    if (live.uid != expectedUid || live.kind != DedaLoginKind.linked ||
+        live.email != '$account@deda-login.invalid') {
+      throw StateError('linked-owner-after-proof-changed');
+    }
+    return DedaLoginIdentity(
+      live.uid, live.email, live.kind, live.epoch, originalId: originalId);
   }
 
   @override
