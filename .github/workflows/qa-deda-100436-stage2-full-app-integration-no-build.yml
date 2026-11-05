@@ -105,6 +105,7 @@ jobs:
             lib/deda_step2_linked_owner_guardian_assembly.dart \
             lib/deda_step2_vault_worker_adapters.dart \
             lib/deda_step2_existing_account_signin_page.dart \
+            lib/deda_step2_account_domains_recovery_readback.dart \
             lib/deda_step2_recovery_intent_store.dart
       - name: Unit and widget regression on complete app source
         shell: bash
@@ -116,6 +117,7 @@ jobs:
             test/deda_step2_existing_account_signin_page_private_test.dart \
             test/deda_step2_recovery_intent_store_private_test.dart \
             test/deda_step2_assets_recovery_scoped_private_test.dart \
+            test/deda_step2_account_domains_recovery_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
