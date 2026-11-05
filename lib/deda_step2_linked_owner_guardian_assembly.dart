@@ -15,6 +15,7 @@ import 'deda_step2_linked_published_place_recovery.dart';
 import 'deda_step2_original_backup_readback.dart';
 import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_vault_worker_adapters.dart';
+import 'deda_step2_account_domains_recovery_readback.dart';
 
 /// Inert SDK wiring candidate, not called from main.dart or background code.
 /// Server Functions/rules are NOT deployed; reviewed real worker adapters
@@ -62,6 +63,9 @@ class DedaLinkedOwnerGuardianAssembly {
     return DedaLinkedOwnerGuardianBridge(
       handoff: DedaLoginHandoff(port),
       guardian: guardian,
+      domainReadback: const DedaStep2AccountDomainsRecoveryReadback(
+        io: DedaFirebaseDomainSourceIo(),
+      ),
     );
   }
 }
