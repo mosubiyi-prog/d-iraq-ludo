@@ -74,8 +74,8 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as fd:
             fd.write('DEDA_STAGE2_FIREBASE_CONFIG='+str(out)+'\n')
           PY
-          test -s "$DEDA_STAGE2_FIREBASE_CONFIG"
-          test "$DEDA_STAGE2_FIREBASE_CONFIG" != "$(realpath firebase.json)"
+          test -s "$RUNNER_TEMP/deda-stage2-pin-emulator.json"
+          test "$(realpath "$RUNNER_TEMP/deda-stage2-pin-emulator.json")" != "$(realpath firebase.json)"
       - name: Run true Auth + Firestore Emulator server-side original UID proof
         shell: bash
         run: |
