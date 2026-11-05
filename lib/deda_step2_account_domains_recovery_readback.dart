@@ -77,6 +77,9 @@ class DedaAccountDomainContinuity {
     required this.acceptedFriends,
     required this.giftReceipts,
     required this.iraqDay,
+    this.weeklyPrizeReceipts = 0,
+    this.weeklyPrizePending = 0,
+    this.weeklyPrizeReceived = 0,
     this.existingGiftWallet,
     this.existingWeeklyXp,
     this.activeDisplayId,
@@ -86,6 +89,8 @@ class DedaAccountDomainContinuity {
   /// Missing historical evidence must NEVER be treated as a zero balance.
   final Map<String,String> status;
   final int friendRelations, acceptedFriends, giftReceipts;
+  /// Weeklies already in Hadaya; never credits or claims another time.
+  final int weeklyPrizeReceipts, weeklyPrizePending, weeklyPrizeReceived;
   final String iraqDay;
   final int? existingGiftWallet, existingWeeklyXp;
   final String? activeDisplayId;
@@ -189,6 +194,7 @@ class DedaStep2AccountDomainsRecoveryReadback {
     final gifts = await io.receivedGifts(id);
     _check(scope);
     final giftIds = <String>{};
+    var weeklyPrizes = 0, weeklyPending = 0, weeklyReceived = 0;
     for (final receipt in gifts) {
       final data = receipt.fields;
       if (receipt.cached || receipt.pendingWrites ||
@@ -196,6 +202,24 @@ class DedaStep2AccountDomainsRecoveryReadback {
           data?['targetPublicId'] != id ||
           data?['amount'] is! int || (data!['amount'] as int) <= 0) {
         throw const DedaDomainSourceHold('gift-receipt-source-conflict');
+      }
+      if (data['sourceType'] == 'weekly_league') {
+        // Existing original worker uses one deterministic giftId per week.
+        final suffix = '-' + id.substring(1);
+        if (data['giftId'] != receipt.id ||
+            !RegExp(r'^deda-weekly-20\\d{2}-\\d{2}-\\d{2}-DEDA-[A-Z0-9]{6}$')
+                .hasMatch(receipt.id) ||
+            !receipt.id.endsWith(suffix) ||
+            !const {'pending','received','claimed'}.contains(data['status']) ||
+            data['createdAt'] is! Timestamp) {
+          throw const DedaDomainSourceHold('weekly-prize-receipt-conflict');
+        }
+        weeklyPrizes++;
+        if (data['status'] == 'pending') {
+          weeklyPending++;
+        } else {
+          weeklyReceived++;
+        }
       }
     }
     statuses['giftInbox'] = gifts.isEmpty
@@ -253,7 +277,9 @@ class DedaStep2AccountDomainsRecoveryReadback {
     statuses['weeklyPoints'] = weeklyXp == null
         ? 'no-authoritative-week-score-yet'
         : 'existing-week-score-readonly';
-    statuses['weeklyPrizes'] = 'historical-prize-claims-not-attested';
+    statuses['weeklyPrizes'] = weeklyPrizes == 0
+        ? 'historical-prize-claims-not-attested'
+        : 'existing-weekly-gift-receipts-readonly-no-reissue';
 
     final prefs =
         (await _doc(scope, 'deda_profile_ui_migration/$account')).fields;
@@ -306,6 +332,9 @@ class DedaStep2AccountDomainsRecoveryReadback {
       status: Map<String,String>.unmodifiable(statuses),
       friendRelations: relations.length, acceptedFriends: accepted,
       giftReceipts: gifts.length, iraqDay: iraqDay,
+      weeklyPrizeReceipts: weeklyPrizes,
+      weeklyPrizePending: weeklyPending,
+      weeklyPrizeReceived: weeklyReceived,
       existingGiftWallet: balance,
       existingWeeklyXp: weeklyXp,
       activeDisplayId: premium?['activeId'] as String?,

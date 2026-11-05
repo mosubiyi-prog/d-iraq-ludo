@@ -81,6 +81,20 @@ void main() {
     expect(report.domains['currentLeaguePoints'],DedaStep2CompletionState.needsReview);
   });
 
+  test('weekly settlement receipt cannot become a second claim', () {
+    final recorded=DedaAccountDomainContinuity(
+      status:const {},friendRelations:0,acceptedFriends:0,
+      giftReceipts:1,iraqDay:'2026-11-05',
+      weeklyPrizeReceipts:1,weeklyPrizeReceived:1);
+    final report=DedaStep2CompletionGate.assess(
+      originalUid:uid,originalId:original,
+      recovery:guardian,domainReadback:recorded);
+    expect(report.domains['historicalLeaguePrizeClaims'],
+      DedaStep2CompletionState.verifiedExistingSource);
+    expect(report.canIssueFinancialRewards,false);
+    expect(report.allDomainsRestored,false);
+  });
+
   test('missing cloud source means pending, never empty, zero or a grant', () {
     final r=DedaStep2CompletionGate.assess(
       originalUid:uid,originalId:original);

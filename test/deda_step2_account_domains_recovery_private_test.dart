@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 
@@ -7,8 +8,10 @@ const account='07712345678', uid='original-uid-100436',
 
 class FakeDomains implements DedaDomainSourceIo {
   FakeDomains({this.crossOwner=false,this.cached=false,
-    this.badFriend=false,this.badGift=false,this.emptyCloud=false});
-  final bool crossOwner,cached,badFriend,badGift,emptyCloud;
+    this.badFriend=false,this.badGift=false,this.emptyCloud=false,
+    this.weeklyGift=false,this.badWeeklyGift=false});
+  final bool crossOwner,cached,badFriend,badGift,emptyCloud,
+      weeklyGift,badWeeklyGift;
   final List<String> reads=<String>[];
   int writes=0;
 
@@ -93,6 +96,12 @@ class FakeDomains implements DedaDomainSourceIo {
         'targetPublicId':badGift?'@DEDA-OTHER1':original,
         'amount':100,'status':'claimed',
       },id:'gift-001'),
+      if (weeklyGift) DedaDomainServerRow({
+        'giftId':'deda-weekly-2026-10-31-DEDA-ABC123',
+        'targetPublicId':badWeeklyGift?'@DEDA-OTHER1':original,
+        'sourceType':'weekly_league','amount':150,
+        'status':'received','createdAt':Timestamp.now(),
+      },id:'deda-weekly-2026-10-31-DEDA-ABC123'),
     ];
   }
 }
@@ -131,6 +140,28 @@ void main() {
     expect(io.reads.where((p)=>p.startsWith(
       'deda_gm_personal_diamond_wallets/')),isEmpty);
   });
+  test('weekly Hadaya readback preserves already-settled receipt',() async {
+    final io=FakeDomains(weeklyGift:true);
+    final out=await DedaStep2AccountDomainsRecoveryReadback(
+      io:io,enabled:true).inspect(scope());
+    expect(out.giftReceipts,2);
+    expect(out.weeklyPrizeReceipts,1);
+    expect(out.weeklyPrizeReceived,1);
+    expect(out.weeklyPrizePending,0);
+    expect(out.status['weeklyPrizes'],
+      'existing-weekly-gift-receipts-readonly-no-reissue');
+    expect(out.canIssueGiftOrWeeklyPrize,false);
+    expect(io.writes,0);
+  });
+
+  test('wrong weekly prize recipient is a secure hold, not re-award',() async {
+    final io=FakeDomains(weeklyGift:true,badWeeklyGift:true);
+    await expectLater(DedaStep2AccountDomainsRecoveryReadback(
+      io:io,enabled:true).inspect(scope()),
+      throwsA(isA<DedaDomainSourceHold>()));
+    expect(io.writes,0);
+  });
+
   test('empty cloud gift/friends is unknown, never zero reconstructed balances',
       () async {
     final io=FakeDomains(emptyCloud:true);

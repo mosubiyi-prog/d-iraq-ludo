@@ -97,7 +97,8 @@ class DedaStep2CompletionGate {
       'activePremiumId': activeState,
       'giftInboxAndHadaya': domainReadback == null ? notRun :
         domainReadback.giftReceipts > 0 ? observed : hold,
-      'historicalLeaguePrizeClaims': hold,
+      'historicalLeaguePrizeClaims': domainReadback != null &&
+        domainReadback.weeklyPrizeReceipts > 0 ? observed : hold,
       'currentLeaguePoints': weeklyMismatch ? conflict :
         domainReadback?.existingWeeklyXp != null ? observed : hold,
       'levelPoints': levelRestored ? restored : hold,
