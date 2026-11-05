@@ -349,7 +349,8 @@ class DedaStep2RecoveryGuardian {
         // them; every other error still fails closed as before.
         if (adapter is DedaVaultPreflightAdapter) {
           await scope.checkOwner();
-          final outcome = await adapter.preflight(scope);
+          final outcome = await (adapter as DedaVaultPreflightAdapter)
+              .preflight(scope);
           await scope.checkOwner();
           if (outcome == DedaVaultPreflightOutcome.notApplicable) {
             states[code] = DedaVaultStepState.notApplicable;
