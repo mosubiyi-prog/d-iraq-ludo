@@ -255,6 +255,7 @@ class DedaStep2GlobalPlacesArchive {
   const DedaStep2GlobalPlacesArchive({
     required this.reader,required this.cloud,required this.journal,
     required this.currentUid,required this.proveOwner,
+    required this.proveOriginalDevice,
     this.enabled = dedaStep2GlobalPlacesSettingsArchiveEnabled,
   });
   final DedaStep2LocalPlacesSettingsReader reader;
@@ -263,6 +264,11 @@ class DedaStep2GlobalPlacesArchive {
   final String? Function() currentUid;
   final Future<bool> Function(String uid,String account,String originalId)
       proveOwner;
+  /// MUST validate that this is the original installation, not merely a
+  /// different handset that can sign in with the same original UID.
+  /// No SDK-backed implementation is supplied until verified install proof.
+  final Future<bool> Function(String uid,String account,String originalId)
+      proveOriginalDevice;
   final bool enabled;
 
   void _check(String account,String originalId,String uid,
@@ -283,6 +289,16 @@ class DedaStep2GlobalPlacesArchive {
     _check(account,originalId,uid,current);
   }
 
+  Future<void> _originalPhone(String account,String originalId,String uid,
+      bool Function() current) async {
+    await _owner(account,originalId,uid,current);
+    if (!await proveOriginalDevice(uid,account,originalId)) {
+      throw const DedaStep2GlobalPlacesHold(
+          'global-original-installation-not-proven');
+    }
+    _check(account,originalId,uid,current);
+  }
+
   static String newCaptureId() {
     final rng=Random.secure();
     return List.generate(24,(_)=>rng.nextInt(256))
@@ -296,7 +312,7 @@ class DedaStep2GlobalPlacesArchive {
     required String originalUid,required bool Function() isCurrent,
     required bool explicitlyConfirmDeviceGlobalDataBelongsToAccount,
   }) async {
-    await _owner(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     final old=await journal.read(accountKey);
     _check(accountKey,originalId,originalUid,isCurrent);
     if (old != null) {
@@ -314,7 +330,7 @@ class DedaStep2GlobalPlacesArchive {
     }
     final captured=await reader.inspectOriginalPhone(
       accountKey:accountKey,originalId:originalId,isCurrent:isCurrent);
-    await _owner(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     final prepared=DedaStep2GlobalPlacesSnapshot.fromOriginal(
       captured:captured,originalUid:originalUid,
       captureId:newCaptureId(),
@@ -363,7 +379,7 @@ class DedaStep2GlobalPlacesArchive {
     required String accountKey,required String originalId,
     required String originalUid,required bool Function() isCurrent,
   }) async {
-    await _owner(accountKey,originalId,originalUid,isCurrent);
+    await _originalPhone(accountKey,originalId,originalUid,isCurrent);
     final pending=await journal.read(accountKey);
     _check(accountKey,originalId,originalUid,isCurrent);
     if (pending == null) {

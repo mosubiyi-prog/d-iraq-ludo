@@ -58,11 +58,13 @@ class Journal implements DedaStep2GlobalPlacesPendingJournal {
 DedaStep2GlobalPlacesArchive system(Local local,Cloud cloud,Journal journal,{
   String? Function()? current,bool enabled=true,
   Future<bool> Function(String,String,String)? proof,
+  Future<bool> Function(String,String,String)? originalDevice,
 }) => DedaStep2GlobalPlacesArchive(
   reader:DedaStep2LocalPlacesSettingsReader(local),
   cloud:cloud,journal:journal,
   currentUid:current??()=>uid,
   proveOwner:proof??(_,__,___)async=>true,
+  proveOriginalDevice:originalDevice??(_,__,___)async=>true,
   enabled:enabled,
 );
 Future<DedaStep2GlobalPlacesSnapshot> prepare(DedaStep2GlobalPlacesArchive s,{
@@ -129,6 +131,32 @@ void main(){
       await expectLater(prepare(s),throwsA(isA<DedaStep2GlobalPlacesHold>()));
     }
     expect(local.reads,0);
+  });
+  test('new phone with same UID cannot spoof original handset data',() async {
+    final local=Local({'deda_favorites_v1':['{"name":"another phone"}']});
+    final cloud=Cloud(),journal=Journal();
+    final s=system(local,cloud,journal,
+        originalDevice:(_,__,___)async=>false);
+    await expectLater(prepare(s),throwsA(isA<DedaStep2GlobalPlacesHold>()));
+    expect(local.reads,0);
+    expect(cloud.creates,0);
+    expect(journal.entry,isNull);
+  });
+  test('same-UID new phone may inspect but never upload as original',() async {
+    final cloud=Cloud(),journal=Journal();
+    final old=system(Local({'deda_recent_v1':['{"name":"old"}']}),
+      cloud,journal);
+    await prepare(old);
+    await send(old);
+    final replacement=system(Local(),cloud,Journal(),
+      originalDevice:(_,__,___)async=>false);
+    final result=await replacement.inspectReplacement(
+      accountKey:account,originalId:original,originalUid:uid,
+      isCurrent:()=>true);
+    expect(result.canAutoImportIntoAnotherDevice,false);
+    await expectLater(prepare(replacement),
+      throwsA(isA<DedaStep2GlobalPlacesHold>()));
+    expect(cloud.creates,1);
   });
   test('old snapshot cannot overwrite a different prior archive',() async {
     final cloud=Cloud(),journal=Journal();
