@@ -97,6 +97,7 @@ jobs:
           # The current grant imports this production-default-deny pure helper.
           # The isolated Functions Emulator must test the exact same module.
           cp functions/deda_stage2_live_gate.js "$func/deda_stage2_live_gate.js"
+          cp functions/deda_stage2_runtime_identity.js "$func/deda_stage2_runtime_identity.js"
           npm install --prefix "$func" --no-audit --no-fund --ignore-scripts
           cp "$DEDA_JOURNAL_EMULATOR_RULES" "$root/firestore.rules"
           python3 - "$root" <<'PY'
