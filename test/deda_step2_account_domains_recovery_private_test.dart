@@ -120,67 +120,7 @@ void main() {
     expect(out.activeDisplayId,'@DEDA-QA1234');
     expect(out.status['quizUiToday'],
         'verified-source-ui-only-hydration-separate');
-    expect(RegExp(r'^20\\d{2}-\\d{2}-\\d{2}
-    expect(out.status['friends'],'verified-existing-uid-relations');
-    expect(out.status['giftInbox'],'verified-existing-receipts-no-reissue');
-    expect(out.status['earnedDiamonds'],'legacy-award-ledger-not-attested');
-    expect(out.canCreditDiamonds,false);
-    expect(out.canIssueGiftOrWeeklyPrize,false);
-    expect(out.fullAccountRestored,false);
-    expect(io.writes,0);
-    expect(io.reads.where((p)=>p.startsWith(
-      'deda_gm_personal_diamond_wallets/')),isEmpty);
-  });
-  test('empty cloud gift/friends is unknown, never zero reconstructed balances',
-      () async {
-    final io=FakeDomains(emptyCloud:true);
-    final out=await DedaStep2AccountDomainsRecoveryReadback(
-      io:io,enabled:true).inspect(scope());
-    expect(out.friendRelations,0);
-    expect(out.giftReceipts,0);
-    expect(out.existingGiftWallet,isNull);
-    expect(out.status['giftWallet'],'absent-unknown-not-zero');
-    expect(out.status['friends'],'server-query-empty-legacy-unknown');
-    expect(out.fullAccountRestored,false);
-  });
-  test('foreign original ID UID is rejected before protected data reads',
-      () async {
-    final io=FakeDomains(crossOwner:true);
-    await expectLater(DedaStep2AccountDomainsRecoveryReadback(
-      io:io,enabled:true).inspect(scope()),
-      throwsA(isA<DedaDomainSourceHold>()));
-    expect(io.reads.any((s)=>s.startsWith('query:')),false);
-  });
-  test('wrong friend or gift owner never becomes verified data',
-      () async {
-    for(final io in <FakeDomains>[FakeDomains(badFriend:true),
-                                FakeDomains(badGift:true)]) {
-      await expectLater(DedaStep2AccountDomainsRecoveryReadback(
-        io:io,enabled:true).inspect(scope()),
-        throwsA(isA<DedaDomainSourceHold>()));
-      expect(io.writes,0);
-    }
-  });
-  test('changed session or cached server data causes secure hold',() async {
-    for(final arg in <FakeDomains>[
-      FakeDomains(cached:true),FakeDomains()
-    ]) {
-      final verified=DedaStep2AccountDomainsRecoveryReadback(io:arg,
-        enabled:true);
-      await expectLater(verified.inspect(arg.cached?scope():
-          scope(current:()=>false)),throwsA(anything));
-      expect(arg.writes,0);
-    }
-  });
-  test('explicit guard OFF blocks all account queries',() async {
-    final io=FakeDomains();
-    await expectLater(DedaStep2AccountDomainsRecoveryReadback(
-      io:io,enabled:false).inspect(scope()),
-      throwsA(isA<DedaDomainSourceHold>()));
-    expect(io.reads,isEmpty);
-  });
-}
-).hasMatch(out.iraqDay),true);
+    expect(RegExp(r'^20\d{2}-\d{2}-\d{2}$').hasMatch(out.iraqDay),true);
     expect(out.status['friends'],'verified-existing-uid-relations');
     expect(out.status['giftInbox'],'verified-existing-receipts-no-reissue');
     expect(out.status['earnedDiamonds'],'legacy-award-ledger-not-attested');
