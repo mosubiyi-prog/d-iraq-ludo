@@ -12,6 +12,7 @@ import 'package:d_iraq_ludo/deda_step2_original_backup_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
+import 'package:d_iraq_ludo/deda_step2_global_places_settings_archive.dart';
 
 const account = '9647712345678';
 const uid = 'verified-original-uid';
@@ -130,6 +131,7 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
       DedaVaultVerifiedScope)? originalPairedFinancialSource,
   Future<bool> Function(DedaVaultVerifiedScope)? restoreFreeAppearance,
   Future<bool> Function(DedaVaultVerifiedScope,String)? restoreQuizUi,
+  Future<bool> Function(DedaVaultVerifiedScope)? restoreGlobalPlacesSettings,
 }) => DedaLinkedOwnerGuardianBridge(
   enabled: enabled,
   handoff: DedaLoginHandoff(port, enabled: true),
@@ -139,6 +141,7 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   originalPairedFinancialSource: originalPairedFinancialSource,
   restoreFreeAppearance: restoreFreeAppearance,
   restoreQuizUi: restoreQuizUi,
+  restoreGlobalPlacesSettings: restoreGlobalPlacesSettings,
   guardian: DedaStep2RecoveryGuardian(
     journal: journal, adapters: adapters,
     enabledForPrivateTests: guardianEnabled,
@@ -496,6 +499,64 @@ void main() {
     expect(result.domainContinuity,isNull);
     expect(hydrated,0);
     expect(io.reads,isEmpty);
+  });
+
+  test('explicit recovery restores immutable old global display data only',() async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker();
+    var globalCalls=0;
+    final bridge=make(p,j,adapters:{backup:w},
+      restoreGlobalPlacesSettings:(scope) async {
+        expect(scope.originalUid,uid);
+        expect(scope.originalId,normalId);
+        globalCalls++;
+        return true;
+      });
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.globalPlacesSettingsHydrated,true);
+    expect(result.globalPlacesSettingsReviewReason,isNull);
+    expect(globalCalls,1);
+    expect(result.fullAccountRestored,false);
+    expect(j.created,1);
+  });
+
+  test('missing historical global archive is held, independent recovery continues',
+      () async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker();
+    final bridge=make(p,j,adapters:{backup:w},
+      restoreGlobalPlacesSettings:(scope) async {
+        throw const DedaStep2GlobalPlacesHold('global-archive-absent');
+      });
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.globalPlacesSettingsHydrated,false);
+    expect(result.globalPlacesSettingsReviewReason,'global-archive-absent');
+    expect(result.recovery!.stepStates[backup],DedaVaultStepState.verified);
+    expect(result.fullAccountRestored,false);
+  });
+
+  test('foreign/tampered global archive is fatal rather than treated as empty',
+      () async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker();
+    final bridge=make(p,j,adapters:{backup:w},
+      restoreGlobalPlacesSettings:(scope) async {
+        throw const DedaStep2GlobalPlacesHold(
+          'global-snapshot-not-server-proven');
+      });
+    await expectLater(login(bridge,recover:true,
+        recoveryIntentId:intent,selected:{backup}),
+      throwsA(isA<DedaStep2GlobalPlacesHold>()));
+  });
+
+  test('normal login cannot run global archive restoration',() async {
+    final p=FakePort(),j=FakeJournal();
+    var called=0;
+    final bridge=make(p,j,
+      restoreGlobalPlacesSettings:(scope) async {called++; return true;});
+    final result=await login(bridge);
+    expect(result.globalPlacesSettingsHydrated,false);
+    expect(called,0);
+    expect(j.created,0);
   });
 
   test('OFF by default: assembly and bridge perform zero actions', () async {
