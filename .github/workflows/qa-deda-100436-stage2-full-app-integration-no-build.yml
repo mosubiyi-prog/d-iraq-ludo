@@ -1,0 +1,104 @@
+name: DEDA 100436 Stage 2 Full App Source Integration QA — NO DEPLOY NO APK
+
+on:
+  push:
+    branches:
+      - deda-100436-stage2-recovery-buildable-integration-qa-2026-11-05
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-app-source-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Protect pinned 100436 app reference and production service data
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          git cat-file -e "$baseline^{commit}"
+          git diff --exit-code "$baseline" HEAD -- assets android pubspec.yaml pubspec.lock firebase.json firestore.rules storage.rules
+          git diff --exit-code "$baseline" HEAD -- lib/admin_pages.dart lib/deda_weekly_prize_plan.dart
+          test -f lib/deda_step2_recovery_guardian.dart
+          test -f lib/deda_100430_owner_uid_continuity.dart
+          test -f functions/deda_owner_pin_verify_private_v1.js
+          grep -Fq 'const dedaPinCompatPilotEnabled = false;' functions/index.js
+          if grep -Fq 'deda_owner_pin_verify_private_v1' functions/index.js; then
+            echo "BLOCK: owner PIN custom-token callable must remain unexported"
+            exit 1
+          fi
+          echo "PASS_BASELINE100436_PROTECTED_STAGE2_SOURCE_ONLY"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify Functions and recovery worker scripts on actual Node 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/index.js
+          node --check functions/deda_owner_pin_verify_private_v1.js
+          node --check functions/deda_pin_manual_recovery_compat_private_v1.js
+          node --check functions/deda_pin_auto_recovery_worker.js
+          node --check functions/deda_linked_pin_reissue.js
+          node --test functions/test/deda_owner_pin_verify_private_v1.test.js functions/test/deda_pin_manual_recovery_compat_private_v1.test.js functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Resolve exact pinned app dependencies (no deployment)
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze all imported recovery sources, guards, main and session
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart analyze --no-fatal-warnings \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            lib/deda_progress_backup_coordinator.dart \
+            lib/deda_100429_local_task_traffic_evidence.dart \
+            lib/deda_100430_owner_uid_continuity.dart \
+            lib/deda_100430_quiz_ui_hydration.dart \
+            lib/deda_100431_linked_owner_session_policy.dart \
+            lib/deda_100432_quiz_cloud_continuity.dart \
+            lib/deda_100433_owner_confirmation_ui.dart \
+            lib/deda_step2_assets_readback.dart \
+            lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
+            lib/deda_step2_financial_source_audit.dart \
+            lib/deda_step2_level_points_restore.dart \
+            lib/deda_step2_linked_published_place_recovery.dart \
+            lib/deda_step2_original_backup_readback.dart \
+            lib/deda_step2_original_source_continuity.dart \
+            lib/deda_step2_owner_place_backup_journal.dart \
+            lib/deda_step2_owner_place_local_archive.dart \
+            lib/deda_step2_purchase_backup_readback.dart \
+            lib/deda_step2_visual_prefs_continuity.dart \
+            lib/deda_step2_recovery_guardian.dart \
+            lib/deda_step2_recovery_journal_firestore.dart \
+            lib/deda_step2_linked_owner_flutter_handoff.dart \
+            lib/deda_step2_linked_owner_firebase_port.dart \
+            lib/deda_step2_linked_owner_guardian_bridge.dart \
+            lib/deda_step2_linked_owner_guardian_assembly.dart \
+            lib/deda_step2_existing_account_signin_page.dart
+      - name: Unit and widget regression on complete app source
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter test --no-pub \
+            test/deda_owner_login_commit_guard_private_test.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart \
+            test/deda_step2_linked_owner_handoff_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart
+          echo 'PASS_STAGE2_NO_SIGNED_APK_UNTIL_ALL_SOURCES_INTEGRATED'
