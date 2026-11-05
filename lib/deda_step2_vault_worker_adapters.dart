@@ -63,12 +63,35 @@ class DedaVaultOriginalEvidenceAdapter implements DedaVaultWorkerAdapter {
   }
 }
 
-class DedaVaultPurchaseEvidenceAdapter implements DedaVaultWorkerAdapter {
+class DedaVaultPurchaseEvidenceAdapter
+    implements DedaVaultWorkerAdapter, DedaVaultPreflightAdapter {
   const DedaVaultPurchaseEvidenceAdapter(this.progress, this.reader);
   final DedaStep2OriginalBackupReadback progress;
   final DedaStep2PurchaseSourceReadback reader;
   @override
   DedaVaultCode get code => DedaVaultCode.purchaseBackupReadback;
+
+  @override
+  Future<DedaVaultPreflightOutcome> preflight(
+      DedaVaultVerifiedScope scope) async {
+    // On a 100340 handset, purchase archives may not exist or may contain
+    // malformed local bytes. Do not reserve a financial receipt and block
+    // independent level/place restoration when proof is missing.
+    // Identity/provenance/UID mismatches and permission errors stay fatal.
+    await scope.checkOwner();
+    try {
+      await _read(scope);
+      await scope.checkOwner();
+      return DedaVaultPreflightOutcome.applicable;
+    } on DedaStep2PurchaseSourceHold catch (error) {
+      if (!const <String>{
+        'purchase-source-missing-or-not-from-server',
+        'invalid-original-purchase-archive',
+      }.contains(error.reason)) rethrow;
+      await scope.checkOwner();
+      return DedaVaultPreflightOutcome.evidenceNeedsReview;
+    }
+  }
 
   Future<DedaStep2PurchaseSourceEvidence> _read(
       DedaVaultVerifiedScope scope) async {
@@ -134,12 +157,33 @@ class DedaVaultLevelPointsAdapter implements DedaVaultWorkerAdapter {
   }
 }
 
-class DedaVaultPublishedPlaceAdapter implements DedaVaultWorkerAdapter {
+class DedaVaultPublishedPlaceAdapter
+    implements DedaVaultWorkerAdapter, DedaVaultPreflightAdapter {
   const DedaVaultPublishedPlaceAdapter(this.place, this.io);
   final DedaStep2LinkedPublishedPlaceRecovery place;
   final DedaStep2LinkedPlaceIo io;
   @override
   DedaVaultCode get code => DedaVaultCode.publishedPlaceRecovery;
+
+  @override
+  Future<DedaVaultPreflightOutcome> preflight(
+      DedaVaultVerifiedScope scope) async {
+    await scope.checkOwner();
+    final result = await io.publishedForAccount(scope.accountKey);
+    await scope.checkOwner();
+    // A fresh authoritative EMPTY query only means this user has no
+    // *published* place to restore. It says nothing about unpublished
+    // drafts, saved places or the rest of the account's recovery status.
+    if (result.fromCache || result.pendingWrites ||
+        result.documents.any((row) => row.fromCache || row.pendingWrites)) {
+      throw StateError('published-place-preflight-not-from-server');
+    }
+    if (result.documents.isEmpty) {
+      return DedaVaultPreflightOutcome.notApplicable;
+    }
+    // Nonempty records still require all existing approval and UID checks.
+    return DedaVaultPreflightOutcome.applicable;
+  }
 
   @override
   Future<void> executeOnce(DedaVaultVerifiedScope scope, String key) async {
