@@ -129,7 +129,7 @@ void main() {
     expect(r.archivalReviewCaseKey,
       'deda_legacy_diamond_review_v1/$ownerUid/original_diamond_capture_id_20261105');
     expect(r.manualLegacyBalanceReviewRequired,true);
-    expect(r.missingOldPhoneValues,isEmpty);
+    expect(r.missingOldPhoneValues,contains('purchase.FRAME_03'));
     expect(r.receivedGiftGross,80);
     expect(r.pendingGiftGross,10);
     expect(r.receivedGiftReceipts,2);
