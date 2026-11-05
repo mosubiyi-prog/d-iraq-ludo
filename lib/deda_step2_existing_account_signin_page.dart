@@ -35,12 +35,14 @@ class _DedaExistingAccountSignInPageState
   final _phone = TextEditingController();
   final _pin = TextEditingController();
   bool _busy = false;
+  bool _explicitRecoveryConsent = false;
   String? _error;
 
   bool get _valid =>
       RegExp(r'^07\d{9}$').hasMatch(_phone.text.trim()) &&
       RegExp(r'^\d{6}$').hasMatch(_pin.text) &&
-      !_busy && widget.enabled && widget.verifiedLogin != null;
+      !_busy && _explicitRecoveryConsent &&
+      widget.enabled && widget.verifiedLogin != null;
 
   Future<void> _submit() async {
     if (!_valid) return;
@@ -114,10 +116,24 @@ class _DedaExistingAccountSignInPageState
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
+              CheckboxListTile(
+                value: _explicitRecoveryConsent,
+                onChanged: _busy || !widget.enabled
+                    ? null
+                    : (value) => setState(
+                        () => _explicitRecoveryConsent = value == true),
+                title: const Text('أطلب استرجاع حسابي السابق وبياناته'),
+                subtitle: const Text(
+                  'لا يتم نقل أو تصفير أي بيانات قبل التحقق من مصدرها '
+                  'على الخادم. احتفظ بالهاتف القديم لحين نجاح الفحص.'),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+              const SizedBox(height: 12),
               FilledButton(
                 onPressed: _valid ? _submit : null,
-                child: Text(_busy ? 'جارٍ التحقق...' : 'الدخول إلى حسابي'),
+                child: Text(_busy ? 'جارٍ فحص الاسترجاع...' :
+                    'التحقق واسترجاع حسابي'),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
