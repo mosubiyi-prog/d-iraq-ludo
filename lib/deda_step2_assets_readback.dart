@@ -192,9 +192,10 @@ class DedaStep2AssetsReadback {
       giftBalance = _amount(gift['balance'], 'gift-wallet');
     }
 
+    // Firestore Rules grant the GM wallet ONLY to a verified general manager.
+    // Ordinary owners must NEVER query this restricted document: permission-
+    // denied is not proof that their personal account/assets disappeared.
     final gateway = await _read('admin_entry_access/$accountKey',
-      originalUid, isCurrent);
-    final gm = await _read('deda_gm_personal_diamond_wallets/$accountKey',
       originalUid, isCurrent);
     final manager = gateway?['active'] == true &&
         gateway?['status'] == 'active' &&
@@ -202,14 +203,10 @@ class DedaStep2AssetsReadback {
         gateway?['allowedRole'] == 'general_manager';
     int? managerBalance;
     if (manager) {
-      if (gm == null || gm['accountKey'] != accountKey ||
-          gm['initialBalance'] != 1000000) {
-        throw const DedaStep2AssetsHold('manager-wallet-unverified');
-      }
-      managerBalance = _amount(gm['balance'], 'manager-wallet');
-    } else if (gm != null) {
-      // Do not disclose a manager wallet on an ordinary account.
-      throw const DedaStep2AssetsHold('orphan-manager-wallet');
+      // A verified GM account uses its own separate admin recovery policy.
+      // Do not grant the ordinary user restore pipeline GM-wallet access.
+      throw const DedaStep2AssetsHold(
+          'general-manager-recovery-needs-separate-admin-proof');
     }
 
     final active = await _read('deda_stage71_active_identifier/$originalId',
