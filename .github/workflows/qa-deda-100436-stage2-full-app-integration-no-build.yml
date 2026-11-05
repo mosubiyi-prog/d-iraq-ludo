@@ -115,6 +115,7 @@ jobs:
             test/deda_owner_session_compat_private_test.dart \
             test/deda_step2_existing_account_signin_page_private_test.dart \
             test/deda_step2_recovery_intent_store_private_test.dart \
+            test/deda_step2_assets_recovery_scoped_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart \
             test/deda_step2_linked_owner_handoff_private_test.dart \
             test/deda_step2_recovery_guardian_private_test.dart \
