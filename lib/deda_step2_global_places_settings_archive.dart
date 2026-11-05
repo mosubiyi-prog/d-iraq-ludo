@@ -64,7 +64,7 @@ class DedaStep2GlobalPlacesSnapshot {
     } on FormatException {
       throw const DedaStep2GlobalPlacesHold('malformed-global-source');
     }
-    if (object is! Map || object.length != 7 ||
+    if (object is! Map || object.length != 8 ||
         object['format'] != 1 ||
         object['kind'] != 'untrusted-device-global-display-evidence' ||
         object['accountKey'] != account || object['originalId'] != original ||
