@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_flutter_handoff.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
+import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
 
@@ -114,9 +115,15 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   bool enabled = true,
   Map<DedaVaultCode, DedaVaultWorkerAdapter> adapters = const {},
   bool guardianEnabled = true,
+  DedaStep2AccountDomainsRecoveryReadback? domainReadback,
+  Future<bool> Function(DedaVaultVerifiedScope)? restoreFreeAppearance,
+  Future<bool> Function(DedaVaultVerifiedScope,String)? restoreQuizUi,
 }) => DedaLinkedOwnerGuardianBridge(
   enabled: enabled,
   handoff: DedaLoginHandoff(port, enabled: true),
+  domainReadback: domainReadback,
+  restoreFreeAppearance: restoreFreeAppearance,
+  restoreQuizUi: restoreQuizUi,
   guardian: DedaStep2RecoveryGuardian(
     journal: journal, adapters: adapters,
     enabledForPrivateTests: guardianEnabled,
@@ -141,8 +148,214 @@ Future<DedaLinkedGuardianLoginResult> login(
   trigger: trigger,
 );
 
+
+class FakeCloudDomainIo implements DedaDomainSourceIo {
+  final List<String> reads = <String>[];
+  @override
+  Future<DedaDomainServerRow> document(String path) async {
+    reads.add(path);
+    final values=<String,Map<String,dynamic>>{
+      'deda_share_ids/$normalId': {
+        'publicId':normalId,'ownerUid':uid,'kind':'personal','active':true,
+      },
+      'users/$uid': {'accountKey':account,'sharePersonalId':normalId},
+      'deda_account_profiles/$account': {
+        'accountKey':account,'accountType':'user',
+      },
+      'deda_profile_ui_migration/$account': {
+        'accountKey':account,'originalId':normalId,'uid':uid,
+        'kind':'free-profile-appearance-only',
+      },
+    };
+    if(path.startsWith('deda_quiz_ui_snapshots/$uid/days/')) {
+      return DedaDomainServerRow({
+        'kind':'display-only-untrusted-quiz-v1',
+        'uid':uid,'accountKey':account,'originalId':normalId,
+        'day':path.split('/').last,
+      });
+    }
+    if(path.startsWith('deda_gm_personal_diamond_wallets/')) {
+      throw StateError('forbidden-manager-wallet-query');
+    }
+    return DedaDomainServerRow(values[path]);
+  }
+  @override
+  Future<List<DedaDomainServerRow>> friendships(String uid) async {
+    reads.add('friendships:$uid');
+    return <DedaDomainServerRow>[];
+  }
+  @override
+  Future<List<DedaDomainServerRow>> receivedGifts(String id) async {
+    reads.add('gifts:$id');
+    return <DedaDomainServerRow>[];
+  }
+}
+
 void main() {
   const backup = DedaVaultCode.originalBackupReadback;
+
+  test('guarded recovery audits canonical domains and hydrates free UI only',() async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker();
+    final io=FakeCloudDomainIo();
+    var appearance=0,quiz=0;
+    final bridge=make(p,j,adapters:{backup:w},
+      domainReadback:DedaStep2AccountDomainsRecoveryReadback(
+        io:io,enabled:true),
+      restoreFreeAppearance:(scope) async {
+        appearance++;
+        expect(scope.originalUid,uid);
+        return true;
+      },
+      restoreQuizUi:(scope,day) async {
+        quiz++;
+        expect(RegExp(r'^20\\d{2}-\\d{2}-\\d{2} () async {
+    expect(dedaLinkedOwnerGuardianBridgeEnabled, false);
+    expect(() => DedaLinkedOwnerGuardianAssembly.prepare(), throwsStateError);
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p, j, enabled: false)), throwsStateError);
+    expect(p.events, isEmpty);
+    expect(j.created, 0);
+  });
+  test('normal verified login never starts recovery', () async {
+    final p = FakePort(), j = FakeJournal();
+    final result = await login(make(p, j));
+    expect(result.originalUid, uid);
+    expect(result.accountKey, account);
+    expect(result.recovery, isNull);
+    expect(result.fullAccountRestored, false);
+    expect(p.events, ['lane','auth','proof','install','grant','write','readback']);
+    expect(j.created, 0);
+  });
+  test('no sneaked recovery without separate explicit request', () async {
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p,j),selected:{backup}), throwsStateError);
+    expect(p.events, isEmpty);
+    expect(j.created, 0);
+  });
+  test('recovery requires persisted intent and reviewed code BEFORE Auth', () async {
+    final p = FakePort(), j = FakeJournal();
+    await expectLater(login(make(p,j),recover:true,selected:{backup}),
+        throwsStateError);
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{DedaVaultCode.socialService}),
+        throwsStateError);
+    expect(p.events, isEmpty);
+  });
+  test('explicit recovery with approved worker runs once, no full claim', () async {
+    final p = FakePort(), j = FakeJournal(), w = FakeWorker();
+    final bridge = make(p, j, adapters:{backup:w});
+    final result = await login(bridge,recover:true,
+        recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.verified);
+    expect(result.fullAccountRestored, false);
+    expect(j.created, 1);
+    expect(j.completed, 1);
+    expect(w.calls, 1);
+    await expectLater(login(bridge,recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(w.calls, 1);
+  });
+  test('without approved worker, guardian blocks without reserve', () async {
+    final p = FakePort(), j = FakeJournal();
+    final result = await login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stoppedSafely, true);
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.blocked);
+    expect(j.created, 0);
+    expect(result.fullAccountRestored, false);
+  });
+  test('verified resume does not invent a new journal operation', () async {
+    final p = FakePort(), j = FakeJournal(), w = FakeWorker();
+    final result = await login(make(p,j,adapters:{backup:w}),recover:true,
+        recoveryIntentId:intent,selected:{backup},
+        trigger:DedaVaultRecoveryTrigger.explicitlyVerifiedResume);
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.blocked);
+    expect(j.created, 0);
+    expect(w.calls, 0);
+  });
+  test('server owner rejection prevents every guardian write', () async {
+    final p = FakePort()..ownerValid=false, j = FakeJournal();
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('server session rejection prevents guardian dispatch', () async {
+    final p = FakePort(), j = FakeJournal();
+    p.onOwnerProof = () => p.sessionValid = false;
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('intent expiry after owner proof prevents every worker', () async {
+    final p = FakePort(), j = FakeJournal();
+    var alive = true;
+    p.onOwnerProof = () => alive = false;
+    await expectLater(login(make(p,j),recover:true,current:()=>alive,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('same UID with changed epoch is not eligible', () async {
+    final p = FakePort(), j = FakeJournal();
+    var proofs = 0;
+    p.onOwnerProof = () {
+      proofs++;
+      if(proofs > 1) {
+        final prev = p.identity;
+        p.identity = DedaLoginIdentity(
+            prev.uid,prev.email,prev.kind,prev.epoch+2);
+      }
+    };
+    await expectLater(login(make(p,j),recover:true,
+        recoveryIntentId:intent,selected:{backup}), throwsStateError);
+    expect(j.created, 0);
+  });
+  test('linked account A cannot silently replace itself with B', () async {
+    final p = FakePort(), j = FakeJournal();
+    p.identity = const DedaLoginIdentity(
+        'foreign-uid','other@example.com',DedaLoginKind.linked,3);
+    await expectLater(login(make(p,j)),throwsStateError);
+    expect(p.identity.uid,'foreign-uid');
+    expect(p.events,isEmpty);
+  });
+}
+).hasMatch(day),true);
+        return true;
+      },
+    );
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stepStates[backup],DedaVaultStepState.verified);
+    expect(result.domainContinuity,isNotNull);
+    expect(result.domainContinuity!.existingGiftWallet,isNull);
+    expect(result.domainContinuity!.status['giftWallet'],
+      'absent-unknown-not-zero');
+    expect(result.freeAppearanceHydrated,true);
+    expect(result.quizUiHydrated,true);
+    expect(result.fullAccountRestored,false);
+    expect(appearance,1);
+    expect(quiz,1);
+    expect(io.reads.any((v)=>v.startsWith(
+      'deda_gm_personal_diamond_wallets/')),false);
+  });
+
+  test('blocked guardian never invokes domain audit or free UI restores',() async {
+    final p=FakePort(),j=FakeJournal(),io=FakeCloudDomainIo();
+    var hydrated=0;
+    final bridge=make(p,j,
+      domainReadback:DedaStep2AccountDomainsRecoveryReadback(
+        io:io,enabled:true),
+      restoreFreeAppearance:(scope) async {
+        hydrated++;
+        return true;
+      });
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stoppedSafely,true);
+    expect(result.domainContinuity,isNull);
+    expect(hydrated,0);
+    expect(io.reads,isEmpty);
+  });
+
   test('OFF by default: assembly and bridge perform zero actions', () async {
     expect(dedaLinkedOwnerGuardianBridgeEnabled, false);
     expect(() => DedaLinkedOwnerGuardianAssembly.prepare(), throwsStateError);
