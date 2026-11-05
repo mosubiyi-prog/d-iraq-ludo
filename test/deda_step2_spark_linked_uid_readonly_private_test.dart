@@ -30,6 +30,26 @@ void main() {
   test('public APK default OFF: no implicit old-account recovery', () {
     expect(dedaStep2SparkLinkedUidReadOnlyEnabled,false);
   });
+  test('Spark legacy old-phone link requires explicit archive before UID linking',
+      () {
+    void approve({
+      bool spark = true,
+      bool compat = true,
+      bool checkpoint = true,
+      bool callback = true,
+    }) => DedaStep2SparkLegacyPrelinkPolicy.requireEvidenceBeforeLink(
+      sparkPilotEnabled: spark,
+      linkedOwnerCompatEnabled: compat,
+      prelinkCheckpointEnabled: checkpoint,
+      hasArchiveCallback: callback,
+    );
+    expect(approve, returnsNormally);
+    expect(() => approve(checkpoint: false), throwsStateError);
+    expect(() => approve(callback: false), throwsStateError);
+    expect(() => approve(compat: false), throwsStateError);
+    expect(() => approve(spark: false, compat: false,
+        checkpoint: false, callback: false), returnsNormally);
+  });
   test('original Firebase UID with existing session is eligible for read only',
       () {
     expect(owner(), originalId);

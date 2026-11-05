@@ -7,6 +7,7 @@ import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_pin_auth.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
+import 'deda_step2_spark_linked_uid_readonly.dart';
 import 'deda_step2_level_points_restore.dart';
 import 'deda_step2_owner_place_local_archive.dart';
 import 'deda_step2_owner_place_backup_journal.dart';
@@ -284,6 +285,15 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
     if (pin == null || !mounted) return;
     setState(() => _running = true);
     try {
+      // The Spark-only old-account migration must archive original phone
+      // evidence BEFORE linkWithCredential. Never convert an anonymous UID
+      // into a linked provider account while the only copy is local.
+      DedaStep2SparkLegacyPrelinkPolicy.requireEvidenceBeforeLink(
+        sparkPilotEnabled: dedaStep2SparkLinkedUidReadOnlyEnabled,
+        linkedOwnerCompatEnabled: dedaLinkedOwnerCompatEnabled,
+        prelinkCheckpointEnabled: dedaStep2PreLinkEvidenceCheckpointEnabled,
+        hasArchiveCallback: widget.confirm == null,
+      );
       // The existing original phone MUST have a complete task/award ledger
       // before credential linking. The pre-link checkpoint archives its exact
       // bytes while the original anonymous UID is still authoritative.

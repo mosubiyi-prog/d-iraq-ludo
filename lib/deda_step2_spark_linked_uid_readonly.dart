@@ -9,6 +9,29 @@
 const bool dedaStep2SparkLinkedUidReadOnlyEnabled = bool.fromEnvironment(
   'DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY', defaultValue: false);
 
+/// Fail-closed preflight for linking legacy 100340 anonymous UID to
+/// Email/Password on the ORIGINAL phone under the Spark-only pilot.
+/// Linking before source archival may permanently lose the anonymous-only
+/// writer needed to back up local purchases, progress and quizzes. The
+/// verified pre-link checkpoint is a prerequisite, NOT restoration proof.
+class DedaStep2SparkLegacyPrelinkPolicy {
+  const DedaStep2SparkLegacyPrelinkPolicy._();
+
+  static void requireEvidenceBeforeLink({
+    required bool sparkPilotEnabled,
+    required bool linkedOwnerCompatEnabled,
+    required bool prelinkCheckpointEnabled,
+    required bool hasArchiveCallback,
+  }) {
+    if (!sparkPilotEnabled) return; // Preserve original 100340 behavior.
+    if (!linkedOwnerCompatEnabled ||
+        !prelinkCheckpointEnabled ||
+        !hasArchiveCallback) {
+      throw StateError('spark-legacy-account-requires-old-phone-archive');
+    }
+  }
+}
+
 class DedaStep2SparkLinkedUidReadOnlyProof {
   const DedaStep2SparkLinkedUidReadOnlyProof._();
 

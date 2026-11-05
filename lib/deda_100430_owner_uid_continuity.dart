@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'deda_pin_auth.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
+import 'deda_step2_spark_linked_uid_readonly.dart';
 
 /// DEDA 100430 — OPTIONAL owner UID continuity via Firebase Auth, using
 /// Firebase's existing Email/Password backend (no SMS, Cloud Functions or
@@ -85,6 +88,15 @@ class DedaOwnerUidContinuity {
     Future<void> Function(String accountKey, String originalUid)?
         beforeLinkedIdentityTransition,
   }) async {
+    // Under Spark, never link an older anonymous UID until its ORIGINAL
+    // phone has an approved purchase/progress archival checkpoint. This
+    // must run before any sign-in or credential transition side effect.
+    DedaStep2SparkLegacyPrelinkPolicy.requireEvidenceBeforeLink(
+      sparkPilotEnabled: dedaStep2SparkLinkedUidReadOnlyEnabled,
+      linkedOwnerCompatEnabled: dedaLinkedOwnerCompatEnabled,
+      prelinkCheckpointEnabled: dedaStep2PreLinkEvidenceCheckpointEnabled,
+      hasArchiveCallback: beforeLinkedIdentityTransition != null,
+    );
     if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
     final accountKey = _account(phone);
     _pin(pin);
