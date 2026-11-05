@@ -246,6 +246,58 @@ def main():
                       permission in permitted)
         except Exception:
             print("LIVE_DEPLOY_IDENTITY_" + label, "UNVERIFIABLE")
+    # Can this already-authorized CI identity actually repair missing roles?
+    # ResourceManager IAM test endpoint is read-only even though it is POST.
+    # Do NOT grant, patch, download IAM bindings or print service principals.
+    repair = ("resourcemanager.projects.getIamPolicy",
+              "resourcemanager.projects.setIamPolicy")
+    policy_check = session.post(
+        "https://cloudresourcemanager.googleapis.com/v1/projects/" +
+        PROJECT + ":testIamPermissions",
+        json={"permissions": list(repair)}, timeout=30)
+    if policy_check.status_code == 200:
+        result = set(policy_check.json().get("permissions", []))
+        for item in repair:
+            print("LIVE_SELF_REPAIR_" + item.upper().replace(".", "_"),
+                  item in result)
+    else:
+        print("LIVE_SELF_REPAIR_PROJECT_POLICY",
+              "UNVERIFIABLE_HTTP_" + str(policy_check.status_code))
+    # actAs may be scoped to a specific Functions runtime service account:
+    # lack of project-wide actAs is not conclusive. Test exact default
+    # service accounts if their project number can be read.
+    project_info = session.get(
+        "https://cloudresourcemanager.googleapis.com/v1/projects/" +
+        PROJECT, timeout=30)
+    if project_info.status_code == 200:
+        number = str(project_info.json().get("projectNumber", ""))
+        if number.isdigit():
+            targets = (
+                ("APPENGINE", PROJECT + "@appspot.gserviceaccount.com"),
+                ("COMPUTE", number + "-compute@developer.gserviceaccount.com"),
+            )
+            for label, principal in targets:
+                resource = "projects/-/serviceAccounts/" + principal
+                check = session.post(
+                    "https://iam.googleapis.com/v1/" + resource +
+                    ":testIamPermissions",
+                    json={"permissions": [
+                        "iam.serviceAccounts.actAs",
+                        "iam.serviceAccounts.setIamPolicy"]}, timeout=30)
+                if check.status_code == 200:
+                    allowed = set(check.json().get("permissions", []))
+                    print("LIVE_RUNTIME_" + label + "_ACTAS",
+                          "iam.serviceAccounts.actAs" in allowed)
+                    print("LIVE_RUNTIME_" + label + "_SET_IAM_POLICY",
+                          "iam.serviceAccounts.setIamPolicy" in allowed)
+                else:
+                    print("LIVE_RUNTIME_" + label + "_IAM",
+                          "UNVERIFIABLE_HTTP_" + str(check.status_code))
+        else:
+            print("LIVE_RUNTIME_PROJECT_NUMBER", "NOT_READABLE")
+    else:
+        print("LIVE_RUNTIME_PROJECT_NUMBER",
+              "UNVERIFIABLE_HTTP_" + str(project_info.status_code))
     # Billing status only, without leaking the linked billing-account ID.
     # If access is denied, report unknown rather than guessing Spark/Blaze.
     billing = session.get(
