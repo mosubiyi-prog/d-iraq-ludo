@@ -39,6 +39,26 @@ void main() {
     expect(submitted, 0);
   });
 
+  testWidgets('phone and PIN cannot submit without explicit recovery consent',
+      (tester) async {
+    var submitted = false;
+    await tester.pumpWidget(MaterialApp(home: DedaExistingAccountSignInPage(
+      enabled: true,
+      verifiedLogin: (phone, pin) async { submitted = true; },
+    )));
+    await tester.enterText(find.byType(TextField).at(0), '07712345678');
+    await tester.enterText(find.byType(TextField).at(1), '123456');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(
+      find.byType(FilledButton)).onPressed, isNull);
+    expect(submitted, false);
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pump();
+    expect(tester.widget<FilledButton>(
+      find.byType(FilledButton)).onPressed, isNotNull);
+  });
+
   testWidgets('explicit valid submit calls only the supplied safe delegate',
       (tester) async {
     String? submittedPhone;
@@ -52,6 +72,9 @@ void main() {
     )));
     await tester.enterText(find.byType(TextField).at(0), '07712345678');
     await tester.enterText(find.byType(TextField).at(1), '123456');
+    await tester.pump();
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
     await tester.pump();
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
@@ -69,6 +92,9 @@ void main() {
     )));
     await tester.enterText(find.byType(TextField).at(0), '07712345678');
     await tester.enterText(find.byType(TextField).at(1), '123456');
+    await tester.pump();
+    await tester.ensureVisible(find.byType(CheckboxListTile));
+    await tester.tap(find.byType(CheckboxListTile));
     await tester.pump();
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
