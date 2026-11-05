@@ -4,6 +4,7 @@ import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_diamond_reconciliation_readonly.dart';
+import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
 
