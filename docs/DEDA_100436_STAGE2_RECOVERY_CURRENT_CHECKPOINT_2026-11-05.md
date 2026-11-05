@@ -70,3 +70,13 @@
 - **لم يحصل نشر إنتاجي:** التطوير حتى هذا التاريخ Additive Preview + CI، وليس Firebase deployment. لا تغيّر `firestore.rules` بالمستودع ولا مرجع 100436 ولا قواعد Firebase الحقيقية.
 - **حدود الإثبات:** النجاح يثبت انضباط match لأرشيف الأماكن داخل المحاكي، وليس إثبات مصدر هاتف قديم غير قابل للتلاعب أو استرجاع كل المجالات. قبل أي نشر يلزم إعادة تأكيد SHA الحي والاعتماد الصريح للتغيير الحي، ثم قراءة الخادم بعد النشر وتجربة هاتفين.
 - لا APK/AAB، لا Play. فتح الحارس أو full-account cutover ما زال يحتاج تغطية بقية مجالات الاسترجاع.
+
+## 2026-11-05 — تفعيل صلاحيات أرشيف الأماكن الحقيقي ✅
+
+- **الإجراء المكتمل:** نشر إضافة واحدة فقط في قواعد Firestore الإنتاجية للمشروع `deda-25b88` تخص `match /deda_step2_global_place_archives/{accountKey}`. لا مساس بالقواعد السابقة، ولا كتابة بيانات حسابات أو رصيد أو أصدقاء.
+- قبل النشر: active ruleset `projects/deda-25b88/rulesets/f7b8aedb-0d91-4277-99ff-ee94dedbe1a9`، SHA256 `9f237713945c454dcfe474a33aa6ca748ef1e7a534ac92ef6f9928e1001f923c`.
+- بعد النشر: active ruleset `projects/deda-25b88/rulesets/3c7f9f3a-74d6-4e17-9e3e-1b923bcdd09f`، SHA256 `345040e09314c67f3aa3d5f6b7fee49102e775bc2c37395058807b9b189fbbda`.
+- **الدليل:** GitHub Actions `42096805454` — **success**. اجتاز Git diff لحماية 100436 وبيئة Auth/Firestore Emulator وفحص UID الغريب ومنع المسح والكتابة فوق الأرشيف، ثم نشر الإضافة وفحص قواعد الإنتاج byte-for-byte بعد النشر. https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42096805454
+- **تأكيد مستقل بعد النشر:** GET-only Firebase Rules audit `42097067355` أثبت `LIVE_HAS_ARCHIVE_MATCH_DEDA_STEP2_GLOBAL_PLACE_ARCHIVES True` والبصمة الجديدة نفسها. https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42097067355
+- **التراجع الآمن:** محفوظ Artifact ID `13446409105` باسم `DEDA-100436-GLOBAL-PLACES-ROLLBACK-METADATA`؛ يتضمن مرجع ruleset السابق وبصمته ومرجع الجديد، بدون أسرار أو حسابات مستخدمين.
+- **حدود الإنجاز:** صلاحيات أرشيف الأماكن *مفعلة حقيقة*؛ لكن الاسترجاع الكامل ليس مفعلًا ولا مختبراً بين هاتفين حقيقيين. ثلاث Cloud Functions التي فُحصت سابقًا غير منشورة في `us-central1` وبوابة `canPrepareFullRecoveryApk` ما زالت false. لا APK/AAB ولا Play بهذه الخطوة. النسخة المحمية `fea54d7db2e8a24a74267f04a14c9572bcb408ee` لم تتغير.
