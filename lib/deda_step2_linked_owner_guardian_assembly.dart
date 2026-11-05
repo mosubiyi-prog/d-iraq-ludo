@@ -10,6 +10,11 @@ import 'deda_step2_linked_owner_firebase_port.dart';
 import 'deda_step2_linked_owner_guardian_bridge.dart';
 import 'deda_step2_recovery_guardian.dart';
 import 'deda_step2_recovery_journal_firestore.dart';
+import 'deda_step2_level_points_restore.dart';
+import 'deda_step2_linked_published_place_recovery.dart';
+import 'deda_step2_original_backup_readback.dart';
+import 'deda_step2_purchase_backup_readback.dart';
+import 'deda_step2_vault_worker_adapters.dart';
 
 /// Inert SDK wiring candidate, not called from main.dart or background code.
 /// Server Functions/rules are NOT deployed; reviewed real worker adapters
@@ -34,9 +39,26 @@ class DedaLinkedOwnerGuardianAssembly {
       auth: auth, db: db, functions: functions);
     final journal = DedaStep2FirestoreRecoveryJournal(
       auth: auth, firestore: db, functions: functions);
+    // Each adapter wraps the EXISTING owner-scoped source code.
+    // A readback receipt never grants diamonds, paid frames, gifts or XP.
+    final original = DedaStep2OriginalBackupReadback.firebase();
+    final purchase = DedaStep2PurchaseSourceReadback.firebase();
+    final level = DedaStep2LevelPointsRestore.firebase();
+    const levelLocal = DedaStep2PrefsLevelLocalIo();
+    final place = DedaStep2LinkedPublishedPlaceRecovery.firebase();
+    const placeIo = DedaStep2FirebaseLinkedPlaceIo();
     final guardian = DedaStep2RecoveryGuardian(
       journal: journal,
-      adapters: const <DedaVaultCode, DedaVaultWorkerAdapter>{});
+      adapters: <DedaVaultCode, DedaVaultWorkerAdapter>{
+        DedaVaultCode.originalBackupReadback:
+          DedaVaultOriginalEvidenceAdapter(original),
+        DedaVaultCode.purchaseBackupReadback:
+          DedaVaultPurchaseEvidenceAdapter(original, purchase),
+        DedaVaultCode.levelPointsRestore:
+          DedaVaultLevelPointsAdapter(level, original, levelLocal),
+        DedaVaultCode.publishedPlaceRecovery:
+          DedaVaultPublishedPlaceAdapter(place, placeIo),
+      });
     return DedaLinkedOwnerGuardianBridge(
       handoff: DedaLoginHandoff(port),
       guardian: guardian,
