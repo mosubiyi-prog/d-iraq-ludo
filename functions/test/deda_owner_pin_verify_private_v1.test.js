@@ -255,3 +255,27 @@ test("after synchronized PIN rotation old PIN fails, new PIN returns the origina
   assert.equal(result.originalId,originalId);
   assert.deepEqual(f.auth.tokens,[originalUid]);
 });
+
+test("linked-password proof returns original UID/ID but never creates a token", async()=>{
+  const f=fixture();
+  const result=await f.fn({...f.request,
+    data:{...f.request.data,proofMode:"linked-password"}});
+  assert.deepEqual(result,{originalUid,originalId,accountKey:account});
+  assert.equal(f.auth.tokens.length,0);
+  assert.deepEqual(f.db.writes,[`deda_owner_pin_verify_limits/${account}`]);
+});
+
+test("linked-password proof rejects old PIN after canonical rotation",async()=>{
+  const f=fixture();
+  const cred=f.db.docs.get(`deda_credentials/${account}`);
+  cred.pin="654321";
+  cred.updatedAt={toMillis:()=>1770000001000};
+  cred.pinSyncedAt={toMillis:()=>1770000001000};
+  await denied(f,{...f.request,data:{phone:account,pin:correctPin,
+    proofMode:"linked-password"}});
+  assert.equal(f.auth.tokens.length,0);
+  const proof=await f.fn({...f.request,data:{phone:account,pin:"654321",
+    proofMode:"linked-password"}});
+  assert.deepEqual(proof,{originalUid,originalId,accountKey:account});
+  assert.equal(f.auth.tokens.length,0);
+});
