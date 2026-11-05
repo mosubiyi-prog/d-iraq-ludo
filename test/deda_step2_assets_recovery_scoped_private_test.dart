@@ -7,8 +7,12 @@ const original='@DEDA-ABC123';
 const week='2026-11-01';
 
 class StrictAssetsSource implements DedaStep2AssetsIo {
-  StrictAssetsSource({this.manager=false});
-  final bool manager;
+  StrictAssetsSource({this.manager=false, this.partialCard=false,
+      this.forgedCard=false, this.cachedCard=false, this.missingWallet=false,
+      this.premiumIds=const {'@DEDA-QA1234'}, this.onPremiumRead});
+  final bool manager, partialCard, forgedCard, cachedCard, missingWallet;
+  final Set<String> premiumIds;
+  final void Function()? onPremiumRead;
   final List<String> queried=<String>[];
 
   @override
@@ -35,7 +39,24 @@ class StrictAssetsSource implements DedaStep2AssetsIo {
           : null);
     }
     if (path=='deda_diamond_gift_balances/$original') {
-      return const DedaStep2CloudDocument({'publicId':original,'balance':300});
+      return DedaStep2CloudDocument(missingWallet ? null :
+        const {'publicId':original,'balance':300});
+    }
+    if (path=='deda_stage66_card_receipts/${original}_gold') {
+      return DedaStep2CloudDocument({
+        'publicId':original,'kind':'card','style':'gold',
+        'cost':forgedCard ? 1 : 5000,
+      }, isFromCache:cachedCard);
+    }
+    if (path=='deda_stage66_owned_cards/${original}_gold') {
+      return DedaStep2CloudDocument(partialCard ? null : {
+        'publicId':original,'style':'gold',
+        'receiptId':'${original}_gold',
+      });
+    }
+    if (path.startsWith('deda_stage66_card_receipts/') ||
+        path.startsWith('deda_stage66_owned_cards/')) {
+      return const DedaStep2CloudDocument(null);
     }
     if (path=='deda_stage71_active_identifier/$original') {
       return const DedaStep2CloudDocument({
@@ -60,6 +81,12 @@ class StrictAssetsSource implements DedaStep2AssetsIo {
     expect(originalId,original);
     return <String>{};
   }
+  @override
+  Future<Set<String>> acceptedOwnedPremiumIds(String originalId) async {
+    expect(originalId,original);
+    onPremiumRead?.call();
+    return premiumIds;
+  }
 }
 
 DedaStep2AssetsReadback reader(StrictAssetsSource io) =>
@@ -77,6 +104,11 @@ void main() {
     expect(record.receivedGiftWalletBalance,300);
     expect(record.currentWeeklyXp,120);
     expect(record.activeDisplayId,'@DEDA-QA1234');
+    expect(record.verifiedPaidCardStyles, {'gold'});
+    expect(record.verifiedAcceptedPremiumIds, {'@DEDA-QA1234'});
+    expect(record.serverSources['premiumIdentifier'],
+      'active-id-accepted-grant-and-receipt-verified-readonly');
+    expect(record.canActivatePremiumId,false);
     expect(record.managerPersonalBalance,isNull);
     expect(record.fullAccountRestored,false);
     expect(record.canRestoreDiamonds,false);
@@ -103,5 +135,43 @@ void main() {
       originalUid:uid,weekId:week,isCurrent:()=>true),
       throwsA(isA<DedaStep2AssetsHold>()));
     expect(io.queried,isEmpty);
+  });
+
+  test('partial/forged/cached paid card pairs never prove ownership', () async {
+    for (final io in [
+      StrictAssetsSource(partialCard:true),
+      StrictAssetsSource(forgedCard:true),
+      StrictAssetsSource(cachedCard:true),
+    ]) {
+      await expectLater(reader(io).inspect(accountKey:account,
+        originalUid:uid,originalId:original,weekId:week,
+        isCurrent:()=>true), throwsA(isA<DedaStep2AssetsHold>()));
+    }
+  });
+
+  test('selected premium ID without accepted grant and receipt is held', () async {
+    final io=StrictAssetsSource(premiumIds:const {});
+    await expectLater(reader(io).inspect(accountKey:account,
+      originalUid:uid,originalId:original,weekId:week,
+      isCurrent:()=>true), throwsA(isA<DedaStep2AssetsHold>()));
+  });
+
+  test('missing gift wallet is unknown and no new diamonds are issued', () async {
+    final io=StrictAssetsSource(missingWallet:true);
+    final result=await reader(io).inspect(accountKey:account,
+      originalUid:uid,originalId:original,isCurrent:()=>true);
+    expect(result.receivedGiftWalletBalance,isNull);
+    expect(result.currentWeeklyXp,isNull);
+    expect(result.serverSources['receivedGiftWallet'],
+      'wallet-absent-unknown-not-zero');
+    expect(result.canRestoreDiamonds,false);
+  });
+
+  test('changed intent during premium read discards all stale evidence', () async {
+    var current=true;
+    final io=StrictAssetsSource(onPremiumRead:()=>current=false);
+    await expectLater(reader(io).inspect(accountKey:account,
+      originalUid:uid,originalId:original,weekId:week,
+      isCurrent:()=>current),throwsA(isA<DedaStep2AssetsHold>()));
   });
 }

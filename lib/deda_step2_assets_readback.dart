@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_lab_frame_secure_checkout.dart';
 import 'deda_owned_frame_reader.dart';
+import 'deda_stage67_spark_secure_card_checkout.dart';
+import 'deda_stage71_free_owned_use_profile.dart';
 
 /// Step 2: source-only account asset readback. NEVER a financial migration.
 /// No APK production enablement until all 100340 legacy financial writers are
@@ -30,6 +32,8 @@ abstract class DedaStep2AssetsIo {
   Future<DedaStep2CloudDocument> server(String path);
   /// Strict 13-frame receipt+ownership reader, NEVER purchase/claim.
   Future<Set<String>> ownedFrameIds(String originalId);
+  /// Already accepted Stage71 grants; gifted IDs require Stage74 receipt.
+  Future<Set<String>> acceptedOwnedPremiumIds(String originalId);
 }
 
 class DedaStep2FirebaseAssetsIo implements DedaStep2AssetsIo {
@@ -49,6 +53,13 @@ class DedaStep2FirebaseAssetsIo implements DedaStep2AssetsIo {
         DedaFirebaseOwnedFrameReadIo(),
         frameIds: DedaLabFrameSecureCheckout.paidFrameIds,
       ).owned(originalId);
+
+  @override
+  Future<Set<String>> acceptedOwnedPremiumIds(String originalId) async {
+    final rows = await DedaStage71OwnedIdentifierService
+        .acceptedOwnedForMyStore(originalId);
+    return Set<String>.unmodifiable(rows.map((row) => row.identifier));
+  }
 }
 
 /// Readback is indexed by the IMMUTABLE personal ID, never active premium ID.
@@ -62,6 +73,8 @@ class DedaStep2AssetsEvidence {
     required this.accountName,
     required this.accountType,
     required this.verifiedPaidFrameIds,
+    required this.verifiedPaidCardStyles,
+    required this.verifiedAcceptedPremiumIds,
     required this.receivedGiftWalletBalance,
     required this.managerPersonalBalance,
     required this.activeDisplayId,
@@ -72,6 +85,8 @@ class DedaStep2AssetsEvidence {
   final String accountKey, originalId, originalUid;
   final String accountName, accountType;
   final Set<String> verifiedPaidFrameIds;
+  /// Receipt-backed only; missing historical local items remain unknown.
+  final Set<String> verifiedPaidCardStyles, verifiedAcceptedPremiumIds;
   final int? receivedGiftWalletBalance, managerPersonalBalance;
   final String? activeDisplayId;
   final int? currentWeeklyXp;
@@ -142,12 +157,13 @@ class DedaStep2AssetsReadback {
     required String accountKey,
     required String originalId,
     required String originalUid,
-    required String weekId,
+    String? weekId,
     required bool Function() isCurrent,
   }) async {
     if (!RegExp(r'^[0-9]{10,16}$').hasMatch(accountKey) ||
         !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId) ||
-        !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(weekId)) {
+        (weekId != null &&
+          !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(weekId))) {
       throw const DedaStep2AssetsHold('invalid-original-asset-scope');
     }
     _check(originalUid, isCurrent);
@@ -178,6 +194,41 @@ class DedaStep2AssetsReadback {
     final catalog = DedaLabFrameSecureCheckout.paidFrameIds;
     if (!catalog.containsAll(frames)) {
       throw const DedaStep2AssetsHold('unknown-paid-frame-id');
+    }
+
+    // Stage66 has FOUR paid ID cards, separate from the 13 LAB frames.
+    // Verify both existing server records. No purchase, debit, or new grant.
+    final paidCards = <String>{};
+    final styles = DedaStage67SparkCardCheckout.styles.toList()..sort();
+    for (final style in styles) {
+      final receiptId =
+          DedaStage67SparkCardCheckout.receiptId(originalId, style);
+      final receipt = await _read('deda_stage66_card_receipts/$receiptId',
+          originalUid, isCurrent);
+      final owned = await _read('deda_stage66_owned_cards/$receiptId',
+          originalUid, isCurrent);
+      if (receipt == null && owned == null) continue;
+      if (receipt?['publicId'] != originalId ||
+          receipt?['kind'] != 'card' ||
+          receipt?['style'] != style ||
+          receipt?['cost'] != DedaStage67SparkCardCheckout.priceDiamonds ||
+          owned?['publicId'] != originalId ||
+          owned?['style'] != style ||
+          owned?['receiptId'] != receiptId) {
+        throw const DedaStep2AssetsHold('paid-card-receipt-ownership-conflict');
+      }
+      paidCards.add(style);
+    }
+
+    // Reuse existing accepted-grant reader with original UID verification and
+    // Stage74 received-gift receipt requirement; never infer from activeId.
+    _check(originalUid, isCurrent);
+    final acceptedPremium = await io.acceptedOwnedPremiumIds(originalId);
+    _check(originalUid, isCurrent);
+    if (acceptedPremium.length > 200 ||
+        acceptedPremium.any((id) =>
+          !RegExp(r'^@DEDA-[A-Z0-9]{4,12}$').hasMatch(id))) {
+      throw const DedaStep2AssetsHold('premium-grant-source-invalid');
     }
 
     final gift = await _read('deda_diamond_gift_balances/$originalId',
@@ -220,6 +271,9 @@ class DedaStep2AssetsReadback {
         throw const DedaStep2AssetsHold('premium-selection-not-ownership');
       }
       activeId = active['activeId'] as String;
+      if (activeId != originalId && !acceptedPremium.contains(activeId)) {
+        throw const DedaStep2AssetsHold('active-premium-id-not-owned');
+      }
     }
 
     final leagueOwner = await _read('deda_weekly_direct_accounts/$originalId',
@@ -229,7 +283,7 @@ class DedaStep2AssetsReadback {
          leagueOwner['accountKey'] != accountKey)) {
       throw const DedaStep2AssetsHold('weekly-league-owner-conflict');
     }
-    final week = await _read(
+    final week = weekId == null ? null : await _read(
       'deda_weekly_direct_weeks/$weekId/scores/$originalId',
       originalUid, isCurrent);
     int? weeklyXp;
@@ -244,12 +298,15 @@ class DedaStep2AssetsReadback {
     final domains = Map<String,String>.unmodifiable({
       'profile': 'server-profile-verified',
       'paidFrames': 'strict-receipt-and-ownership-pairs-verified',
+      'paidIdCards': 'stage66-receipt-and-ownership-pairs-readonly-legacy-unknown',
       'receivedGiftWallet': gift == null ?
         'wallet-absent-unknown-not-zero' : 'existing-wallet-readonly',
       'managerPersonalWallet': manager ?
         'separate-manager-wallet-readonly' : 'not-a-manager',
       'premiumIdentifier': active == null ?
-        'active-selection-unverified' : 'display-selection-only-no-ownership',
+        'active-selection-unverified' : activeId == originalId ?
+        'original-id-selection-readonly' :
+        'active-id-accepted-grant-and-receipt-verified-readonly',
       'weeklyLeague': week == null ?
         'week-score-unverified' : 'score-readonly-no-repeat-award',
       'earnedDiamonds': 'legacy-100340-financial-baseline-not-attested',
@@ -258,7 +315,7 @@ class DedaStep2AssetsReadback {
       'dailyTasks': 'completion-claim-history-not-attested',
       'trafficQuestions': 'old-phone-quiz-archive-not-attested',
       'receivedGiftsAndHadaya': 'all-type-gift-receipts-not-attested',
-      'premiumGrants': 'stage71-and-other-grants-not-fully-attested',
+      'premiumGrants': 'stage71-accepted-only-server-read-legacy-unknown',
       'friends': 'social-relations-not-attested',
       'savedPlaces': 'private-local-places-not-attested',
       'publishedPlaces': 'uid-place-ownership-not-attested',
@@ -270,6 +327,8 @@ class DedaStep2AssetsReadback {
       accountName: (profile['name'] as String).trim(),
       accountType: profile['accountType'] as String,
       verifiedPaidFrameIds: Set<String>.unmodifiable(frames),
+      verifiedPaidCardStyles: Set<String>.unmodifiable(paidCards),
+      verifiedAcceptedPremiumIds: Set<String>.unmodifiable(acceptedPremium),
       receivedGiftWalletBalance: giftBalance,
       managerPersonalBalance: managerBalance,
       activeDisplayId: activeId,
