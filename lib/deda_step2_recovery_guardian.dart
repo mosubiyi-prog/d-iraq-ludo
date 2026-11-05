@@ -29,6 +29,18 @@ enum DedaVaultRecoveryTrigger { explicitUserRequest, explicitlyVerifiedResume }
 enum DedaVaultWorkerMode { ownerActionOnly, separateServerProcess, adapterEligible, reviewOnly }
 enum DedaVaultStepState {
   notRequested, blocked, blockedByDependency, verified, needsReview,
+  notApplicable,
+}
+
+/// Per-domain, server-verified eligibility. A missing historical source may
+/// be HELD for review while independent domains proceed. It is NEVER proof
+/// of an empty balance, no paid property, or a successful restoration.
+enum DedaVaultPreflightOutcome { applicable, notApplicable, evidenceNeedsReview }
+
+/// Optional adapter contract, called before reserving any journal operation.
+/// This is a READ-ONLY server check after owner proof, never a grant or write.
+abstract class DedaVaultPreflightAdapter {
+  Future<DedaVaultPreflightOutcome> preflight(DedaVaultVerifiedScope scope);
 }
 
 /// The twelve ORIGINAL archived codes, stable names for a future journal.
@@ -328,6 +340,28 @@ class DedaStep2RecoveryGuardian {
           states[code] = DedaVaultStepState.blocked;
           stopped = true;
           break;
+        }
+
+        // Some independent domains legitimately have no applicable record,
+        // while incomplete OLD paid evidence must remain on HOLD. Neither
+        // case may create a journal reservation or replay a paid operation.
+        // Only a reviewed adapter's server-only preflight can distinguish
+        // them; every other error still fails closed as before.
+        if (adapter is DedaVaultPreflightAdapter) {
+          await scope.checkOwner();
+          final outcome = await adapter.preflight(scope);
+          await scope.checkOwner();
+          if (outcome == DedaVaultPreflightOutcome.notApplicable) {
+            states[code] = DedaVaultStepState.notApplicable;
+            continue;
+          }
+          if (outcome == DedaVaultPreflightOutcome.evidenceNeedsReview) {
+            states[code] = DedaVaultStepState.needsReview;
+            // Review this domain separately. Its unpaid, unrelated
+            // successors may still run under the verified original owner.
+            // Do not create an "empty" wallet or assert full completion.
+            continue;
+          }
         }
 
         // A proof failure or changed intent aborts the WHOLE run. Verify
