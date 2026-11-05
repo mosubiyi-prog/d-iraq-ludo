@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_flutter_handoff.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
+import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
 
@@ -116,12 +117,14 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   Map<DedaVaultCode, DedaVaultWorkerAdapter> adapters = const {},
   bool guardianEnabled = true,
   DedaStep2AccountDomainsRecoveryReadback? domainReadback,
+  DedaStep2AssetsReadback? assetReadback,
   Future<bool> Function(DedaVaultVerifiedScope)? restoreFreeAppearance,
   Future<bool> Function(DedaVaultVerifiedScope,String)? restoreQuizUi,
 }) => DedaLinkedOwnerGuardianBridge(
   enabled: enabled,
   handoff: DedaLoginHandoff(port, enabled: true),
   domainReadback: domainReadback,
+  assetReadback: assetReadback,
   restoreFreeAppearance: restoreFreeAppearance,
   restoreQuizUi: restoreQuizUi,
   guardian: DedaStep2RecoveryGuardian(
@@ -191,6 +194,55 @@ class FakeCloudDomainIo implements DedaDomainSourceIo {
   }
 }
 
+class FakeOriginalAssetIo implements DedaStep2AssetsIo {
+  final List<String> queries = <String>[];
+  bool errorOnAssets = false;
+  @override
+  Future<DedaStep2CloudDocument> server(String path) async {
+    queries.add(path);
+    if (errorOnAssets) throw StateError('assets-must-not-run');
+    if (path=='deda_share_ids/$normalId') {
+      return const DedaStep2CloudDocument({
+        'publicId':normalId,'ownerUid':uid,
+        'kind':'personal','active':true,
+      });
+    }
+    if (path=='deda_account_profiles/$account') {
+      return const DedaStep2CloudDocument({
+        'accountKey':account,'name':'Linked Original',
+        'accountType':'user',
+      });
+    }
+    if (path=='deda_diamond_gift_balances/$normalId') {
+      return const DedaStep2CloudDocument({
+        'publicId':normalId,'balance':750,
+      });
+    }
+    if (path=='deda_stage71_active_identifier/$normalId') {
+      return const DedaStep2CloudDocument({
+        'originalId':normalId,'activeId':normalId,
+      });
+    }
+    if (path.startsWith('deda_gm_personal_diamond_wallets/')) {
+      throw StateError('forbidden-gm-personal-wallet');
+    }
+    return const DedaStep2CloudDocument(null);
+  }
+  @override
+  Future<Set<String>> ownedFrameIds(String id) async {
+    queries.add('frames:$id'); return <String>{};
+  }
+  @override
+  Future<Set<String>> acceptedOwnedPremiumIds(String id) async {
+    queries.add('accepted:$id'); return <String>{};
+  }
+}
+
+DedaStep2AssetsReadback fakeOriginalAssetReadback(FakeOriginalAssetIo io) =>
+  DedaStep2AssetsReadback(io:io,enabled:true,
+    currentUid:()=>uid,
+    verifyOriginalOwner:(u,a)async=>u==uid && a==account);
+
 void main() {
   const backup = DedaVaultCode.originalBackupReadback;
 
@@ -227,6 +279,36 @@ void main() {
     expect(quiz,1);
     expect(io.reads.any((v)=>v.startsWith(
       'deda_gm_personal_diamond_wallets/')),false);
+  });
+
+  test('explicit recovery reads verified diamonds/cards once, no grant or debit',() async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeOriginalAssetIo();
+    final bridge=make(p,j,adapters:{backup:w},
+      assetReadback:fakeOriginalAssetReadback(io));
+    final value=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(value.assetContinuity,isNotNull);
+    expect(value.assetContinuity!.receivedGiftWalletBalance,750);
+    expect(value.assetContinuity!.verifiedPaidCardStyles,isEmpty);
+    expect(value.assetContinuity!.verifiedAcceptedPremiumIds,isEmpty);
+    expect(value.fullAccountRestored,false);
+    expect(value.assetContinuity!.canRestoreDiamonds,false);
+    expect(j.created,1);
+    expect(io.queries.any((q)=>q.startsWith(
+      'deda_gm_personal_diamond_wallets/')),false);
+  });
+
+  test('normal login and blocked guardian read no assets',() async {
+    final p=FakePort(),j=FakeJournal(),io=FakeOriginalAssetIo()
+      ..errorOnAssets=true;
+    final bridge=make(p,j,
+      assetReadback:fakeOriginalAssetReadback(io));
+    final ordinary=await login(bridge);
+    expect(ordinary.assetContinuity,isNull);
+    expect(io.queries,isEmpty);
+    await expectLater(login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup}),throwsStateError);
+    expect(io.queries,isEmpty);
   });
 
   test('blocked guardian never invokes domain audit or free UI restores',() async {

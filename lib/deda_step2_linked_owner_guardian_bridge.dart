@@ -1,4 +1,5 @@
 import 'deda_step2_account_domains_recovery_readback.dart';
+import 'deda_step2_assets_readback.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
 
@@ -14,6 +15,7 @@ class DedaLinkedGuardianLoginResult {
     this.originalId,
     this.recovery,
     this.domainContinuity,
+    this.assetContinuity,
     this.freeAppearanceHydrated = false,
     this.quizUiHydrated = false,
   });
@@ -22,6 +24,8 @@ class DedaLinkedGuardianLoginResult {
   final String? originalId;
   final DedaVaultRecoveryResult? recovery;
   final DedaAccountDomainContinuity? domainContinuity;
+  /// Authoritative old-account observations, not recreated currencies/items.
+  final DedaStep2AssetsEvidence? assetContinuity;
   final bool freeAppearanceHydrated, quizUiHydrated;
 
   /// A linked UID is not proof that all purchases or other data were restored.
@@ -33,6 +37,7 @@ class DedaLinkedOwnerGuardianBridge {
     required this.handoff,
     required this.guardian,
     this.domainReadback,
+    this.assetReadback,
     this.restoreFreeAppearance,
     this.restoreQuizUi,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
@@ -42,6 +47,8 @@ class DedaLinkedOwnerGuardianBridge {
   final DedaStep2RecoveryGuardian guardian;
   // Optional owner-scoped post-guardian audit. Never a financial writer.
   final DedaStep2AccountDomainsRecoveryReadback? domainReadback;
+  /// Source-only wallet/paid inventory. Must never debit or grant on login.
+  final DedaStep2AssetsReadback? assetReadback;
   // Existing, reviewed UI-only restoration services. They NEVER grant XP,
   // paid frames, wallet diamonds, league rewards or premium IDs.
   final Future<bool> Function(DedaVaultVerifiedScope scope)?
@@ -163,6 +170,19 @@ class DedaLinkedOwnerGuardianBridge {
         throw StateError('linked-owner-changed-after-domain-readback');
       }
     }
+    DedaStep2AssetsEvidence? assets;
+    if (!recovery.stoppedSafely && assetReadback?.enabled == true) {
+      // Same verified original UID and stable intent as the guardian.
+      // No new transaction, no server wallet mutation, no local import.
+      await scope.checkOwner();
+      assets = await assetReadback!.inspect(
+        accountKey: scope.accountKey,
+        originalId: scope.originalId,
+        originalUid: scope.originalUid,
+        isCurrent: scope.isCurrentIntent,
+      );
+      await scope.checkOwner();
+    }
     var appearanceHydrated = false;
     var quizHydrated = false;
     if (domains != null) {
@@ -192,6 +212,7 @@ class DedaLinkedOwnerGuardianBridge {
       originalId: canonicalId,
       recovery: recovery,
       domainContinuity: domains,
+      assetContinuity: assets,
       freeAppearanceHydrated: appearanceHydrated,
       quizUiHydrated: quizHydrated,
     );

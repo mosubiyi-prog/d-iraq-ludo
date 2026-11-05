@@ -16,6 +16,7 @@ import 'deda_step2_original_backup_readback.dart';
 import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_vault_worker_adapters.dart';
 import 'deda_step2_account_domains_recovery_readback.dart';
+import 'deda_step2_assets_readback.dart';
 import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 
@@ -68,6 +69,9 @@ class DedaLinkedOwnerGuardianAssembly {
       domainReadback: const DedaStep2AccountDomainsRecoveryReadback(
         io: DedaFirebaseDomainSourceIo(),
       ),
+      // Explicit recovery only, and OFF unless the audited source gate is
+      // deliberately enabled. Never called during a normal app startup.
+      assetReadback: DedaStep2AssetsReadback.firebase(),
       restoreFreeAppearance: dedaStep2VisualPrefsMigrationEnabled
         ? (scope) => DedaStep2VisualPrefsContinuity.firebase()
             .restoreReplacementPhone(
