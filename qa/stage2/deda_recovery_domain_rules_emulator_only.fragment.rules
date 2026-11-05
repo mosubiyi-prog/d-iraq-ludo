@@ -153,12 +153,18 @@
 
     match /deda_stage71_granted_registry/{identifier} {
       // Scoped recipient query only. Unfiltered registry enumeration denied.
-      allow get, list: if signedIn()
+      // A get may check the immutable document ID and grant schema.
+      allow get: if signedIn()
         && resource.data.recipientOriginalId is string
         && stage2OriginalAssetOwner(resource.data.recipientOriginalId)
         && resource.data.identifier == identifier
         && resource.data.kind in ['self_used','gifted']
         && resource.data.group in ['001','002'];
+      // Query rules cannot require a document-ID comparison or unqueried
+      // kind/group fields: only the recipient filter is query-provable.
+      // Dart source readback strictly validates every returned record.
+      allow list: if signedIn()
+        && stage2OriginalAssetOwner(resource.data.recipientOriginalId);
       allow create, update, delete: if false;
     }
 
