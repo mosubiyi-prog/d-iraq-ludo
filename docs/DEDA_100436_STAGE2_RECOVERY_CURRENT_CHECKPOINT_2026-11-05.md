@@ -62,3 +62,11 @@
 - **قرار ما قبل البناء:** لا تُفتح بوابة `fullAccountRestored` و`canPrepareFullRecoveryApk` لتجاوز غياب الأدلة. لا APK/AAB ولا Play ولا تشغيل إنتاجي، ولا تغيّر مرجع 100436 المحمي؛ أبقِ الفرع الحالي نقطة استئناف. لم تُنفّذ تغييرات Firebase حيّة بهذه الجولة.
 
 **ملاحظة تنفيذية:** فحوص GET-only لم تطلع على وثائق المستخدمين الخاصة ولا تغير قواعد Firebase. وجود مسار match لا يكفي لتأكيد السماح الفعلي؛ يلزم اختبار SDK/Auth/AppCheck على القواعد نفسها قبل النشر.
+
+## أرشيف الأماكن — مرشح الصلاحيات الحية فقط (2026-11-05 مساءً)
+- **محفوظ فعلياً على نفس فرع التجهيز:** `qa/stage2/deda_stage2_global_places_live_additive_candidate.fragment.rules`، ومعه `tools/deda_stage2_preview_global_places_actual_live_rules.py`، واختبار `qa/stage2/deda_global_places_actual_rules_candidate_private.test.cjs`، وworkflow `qa-deda-100436-global-places-live-candidate-emulator-no-deploy.yml`.
+- القاعدة الأصلية الحية `deda-25b88` SHA256 `9f237713945c454dcfe474a33aa6ca748ef1e7a534ac92ef6f9928e1001f923c` تُجلب GET-only ويُرفض تغييرها عن هذه البصمة؛ الإضافة تخص match `deda_step2_global_place_archives` وحده ولا تمس قواعد الخادم الأصلية الأخرى.
+- **نتيجة CI:** https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42096067451، نجاح مقارنة القواعد الحية وإضافتها مؤقتاً، ثم Firebase Emulator SDK لاختبار صاحب الحساب الأصلي/هوية أخرى: إنشاء وحيد وقراءة صاحب الحساب، منع enumerate/overwrite/delete ورفض UID الغريب.
+- **لم يحصل نشر إنتاجي:** التطوير حتى هذا التاريخ Additive Preview + CI، وليس Firebase deployment. لا تغيّر `firestore.rules` بالمستودع ولا مرجع 100436 ولا قواعد Firebase الحقيقية.
+- **حدود الإثبات:** النجاح يثبت انضباط match لأرشيف الأماكن داخل المحاكي، وليس إثبات مصدر هاتف قديم غير قابل للتلاعب أو استرجاع كل المجالات. قبل أي نشر يلزم إعادة تأكيد SHA الحي والاعتماد الصريح للتغيير الحي، ثم قراءة الخادم بعد النشر وتجربة هاتفين.
+- لا APK/AAB، لا Play. فتح الحارس أو full-account cutover ما زال يحتاج تغطية بقية مجالات الاسترجاع.
