@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'deda_legacy_progress_capture.dart';
 import 'deda_step2_level_points_restore.dart';
 import 'deda_step2_linked_published_place_recovery.dart';
@@ -8,6 +10,20 @@ import 'deda_step2_recovery_guardian.dart';
 /// Reviewed wrappers around the four existing adapter-eligible archive codes.
 /// No wallet, gift, league reward, premium ID, or Firebase Auth writes here.
 /// Every receipt is produced by a FRESH authoritative readback.
+// A stable, bounded operation label, not an authorization hash. The server
+// still verifies the canonical account/UID/source independently. This pair
+// of independent 32-bit checksums keeps long capture IDs below Firestore's
+// receipt format limit without exposing purchase or balance values.
+String _receiptId(String label, String provenance) {
+  var a = 0x811c9dc5, b = 0x9e3779b9;
+  for (final byte in utf8.encode(provenance)) {
+    a = ((a ^ byte) * 16777619) & 0xffffffff;
+    b = ((b ^ byte) * 2246822519) & 0xffffffff;
+  }
+  return '${label}_${a.toRadixString(16).padLeft(8, '0')}'
+      '${b.toRadixString(16).padLeft(8, '0')}';
+}
+
 DedaVaultReceipt _receipt(
     DedaVaultVerifiedScope scope, DedaVaultCode code, String operationKey,
     String receiptId) {
@@ -43,7 +59,7 @@ class DedaVaultOriginalEvidenceAdapter implements DedaVaultWorkerAdapter {
         saved.capture.accountKey != scope.accountKey ||
         saved.sourceInstallId.isEmpty) return null;
     return _receipt(scope, code, key,
-      'progress:${saved.captureId}:${saved.sourceInstallId}');
+      _receiptId('progress', '${saved.captureId}|${saved.sourceInstallId}'));
   }
 }
 
@@ -80,7 +96,7 @@ class DedaVaultPurchaseEvidenceAdapter implements DedaVaultWorkerAdapter {
         saved.sourceInstallId.isEmpty ||
         saved.financialSourceAudit.canSettleFinancialBalances) return null;
     return _receipt(scope, code, key,
-      'purchases:${saved.captureId}:${saved.sourceInstallId}');
+      _receiptId('purchases', '${saved.captureId}|${saved.sourceInstallId}'));
   }
 }
 
@@ -114,7 +130,7 @@ class DedaVaultLevelPointsAdapter implements DedaVaultWorkerAdapter {
     scope.checkCurrent();
     if (present != expected.raw) return null;
     return _receipt(scope, code, key,
-      'level:${source.captureId}:${expected.earnedPoints}');
+      _receiptId('level', '${source.captureId}|${expected.earnedPoints}'));
   }
 }
 
@@ -152,6 +168,6 @@ class DedaVaultPublishedPlaceAdapter implements DedaVaultWorkerAdapter {
     if (localId != row.id || row.id.trim().isEmpty || row.id.contains('/')) {
       return null;
     }
-    return _receipt(scope, code, key, 'published-place:${row.id}');
+    return _receipt(scope, code, key, _receiptId('published_place', row.id));
   }
 }
