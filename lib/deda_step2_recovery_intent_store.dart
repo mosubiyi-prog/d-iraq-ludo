@@ -28,7 +28,7 @@ class DedaStep2RecoveryIntentStore {
     return 'deda_stage2_recovery_intent_v1_$accountKey';
   }
 
-  static Future<String> getOrCreate(String accountKey) {
+  static Future<String> getOrCreate(String accountKey) async {
     final key = keyFor(accountKey);
     final pending = _inFlight.putIfAbsent(key, () => _getOrCreateKey(key));
     return pending.whenComplete(() {
