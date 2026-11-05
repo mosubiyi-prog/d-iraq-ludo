@@ -11,6 +11,7 @@ const {createHash} = require("node:crypto");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {stage2LiveGateEnabled} = require("./deda_stage2_live_gate.js");
+const {recoveryCallableOptions} = require("./deda_stage2_runtime_identity.js");
 
 const enabled = (
   process.env.FUNCTIONS_EMULATOR === "true" &&
@@ -408,6 +409,6 @@ async function verifiedCompletion(request, db = getFirestore()) {
 // Export is local to this FILE. It will NOT become a deployed Cloud Function
 // unless someone explicitly wires it into functions/index.js and deploys.
 exports.dedaRecoveryJournalComplete = onCall(
-    {enforceAppCheck: true, timeoutSeconds: 30},
+    recoveryCallableOptions(30),
     (request) => verifiedCompletion(request));
 exports.__privateVerifiedCompletionForQaOnly = verifiedCompletion;
