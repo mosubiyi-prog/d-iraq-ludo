@@ -74,7 +74,7 @@ void main() {
       '{"balance":20,"viewsToday":1,"day":"2026-10-31","extra":1}',
       '{"balance":20,"viewsToday":1}',
       '[]',
-      ' ' * 30001,
+      List<String>.filled(30001, ' ').join(),
     ]) {
       final observation=auditFrom(raw).adWallet;
       expect(observation.status,
