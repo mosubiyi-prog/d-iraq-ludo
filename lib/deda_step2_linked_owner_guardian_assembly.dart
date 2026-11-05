@@ -16,6 +16,8 @@ import 'deda_step2_original_backup_readback.dart';
 import 'deda_step2_purchase_backup_readback.dart';
 import 'deda_step2_vault_worker_adapters.dart';
 import 'deda_step2_account_domains_recovery_readback.dart';
+import 'deda_100432_quiz_cloud_continuity.dart';
+import 'deda_step2_visual_prefs_continuity.dart';
 
 /// Inert SDK wiring candidate, not called from main.dart or background code.
 /// Server Functions/rules are NOT deployed; reviewed real worker adapters
@@ -66,6 +68,25 @@ class DedaLinkedOwnerGuardianAssembly {
       domainReadback: const DedaStep2AccountDomainsRecoveryReadback(
         io: DedaFirebaseDomainSourceIo(),
       ),
+      restoreFreeAppearance: dedaStep2VisualPrefsMigrationEnabled
+        ? (scope) => DedaStep2VisualPrefsContinuity.firebase()
+            .restoreReplacementPhone(
+              accountKey: scope.accountKey,
+              originalId: scope.originalId,
+              originalUid: scope.originalUid,
+              isCurrent: scope.isCurrentIntent,
+            )
+        : null,
+      restoreQuizUi: dedaQuizCloudSyncEnabled
+        ? (scope, iraqDay) => DedaQuizCloudContinuity.firebase()
+            .restoreNewPhoneQuiz(
+              uid: scope.originalUid,
+              accountKey: scope.accountKey,
+              originalId: scope.originalId,
+              iraqDay: iraqDay,
+              isCurrent: scope.isCurrentIntent,
+            )
+        : null,
     );
   }
 }
