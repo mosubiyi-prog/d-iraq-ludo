@@ -56,6 +56,9 @@ async function seed() {
         giftId:"gift-readback",targetPublicId:original,
         sourceType:"admin",amount:100,status:"claimed",
       },
+      ["deda_stage71_active_identifier/"+original]:{
+        originalId:original,activeId:"@DEDA-QA1234",
+      },
       ["deda_profile_ui_migration/"+account]:{
         format:1,kind:"free-profile-appearance-only",
         accountKey:account,originalId:original,uid,
@@ -111,6 +114,9 @@ test("baseline source has no friend/profile/quiz rules; candidate owner can read
     const prefs=await assertSucceeds(getDoc(
       doc(db,"deda_profile_ui_migration",account)));
     assert.equal(prefs.data().originalId,original);
+    const selection=await assertSucceeds(getDoc(
+      doc(db,"deda_stage71_active_identifier",original)));
+    assert.equal(selection.data().activeId,"@DEDA-QA1234");
     const quiz=await assertSucceeds(getDoc(
       doc(db,"deda_quiz_ui_snapshots",uid,"days",day)));
     assert.equal(quiz.data().uid,uid);
@@ -141,6 +147,8 @@ test("foreign UID cannot read private friends, quiz, free appearance or gifts",
       collection(db,"deda_friendships"),
       where("members","array-contains",uid))));
     await assertFails(getDoc(doc(db,"deda_profile_ui_migration",account)));
+    await assertFails(getDoc(
+      doc(db,"deda_stage71_active_identifier",original)));
     await assertFails(getDoc(
       doc(db,"deda_quiz_ui_snapshots",uid,"days",day)));
     await assertFails(getDocs(query(
