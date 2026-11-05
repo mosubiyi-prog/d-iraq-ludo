@@ -18,7 +18,6 @@ import 'deda_step2_vault_worker_adapters.dart';
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
 import 'deda_step2_diamond_reconciliation_readonly.dart';
-import 'deda_legacy_progress_capture.dart';
 import 'deda_100432_quiz_cloud_continuity.dart';
 import 'deda_step2_visual_prefs_continuity.dart';
 
@@ -79,14 +78,38 @@ class DedaLinkedOwnerGuardianAssembly {
       diamondReadback: const DedaStep2DiamondReconciliationReader(
         io: DedaFirebaseDomainSourceIo(),
       ),
-      originalAdWalletRaw: (scope) async {
-        final stored = await original.readOriginalEvidence(
+      originalPairedFinancialSource: (scope) async {
+        // Exactly the archived old-phone pair; not SharedPreferences of the
+        // replacement device. This existing readback verifies same UID,
+        // captureId and original installation, and returns only source data.
+        await scope.checkOwner();
+        final progress = await original.readOriginalEvidence(
           accountKey: scope.accountKey,
           originalUid: scope.originalUid,
           isCurrent: scope.isCurrentIntent,
         );
-        scope.checkCurrent();
-        return stored.capture.raw[DedaLegacyProgressPart.earnedDiamonds];
+        await scope.checkOwner();
+        final purchaseSnapshot = await purchase.inspectPairedWithProgress(
+          accountKey: scope.accountKey,
+          originalId: scope.originalId,
+          originalUid: scope.originalUid,
+          progress: progress,
+          isCurrent: scope.isCurrentIntent,
+        );
+        await scope.checkOwner();
+        if (purchaseSnapshot.captureId != progress.captureId ||
+            purchaseSnapshot.sourceUid != progress.sourceUid ||
+            purchaseSnapshot.sourceInstallId != progress.sourceInstallId) {
+          throw StateError('old-phone-financial-archives-not-paired');
+        }
+        return DedaStep2ArchivedDiamondFinancialSource(
+          accountKey: scope.accountKey,
+          originalUid: scope.originalUid,
+          originalId: scope.originalId,
+          captureId: progress.captureId,
+          sourceInstallId: progress.sourceInstallId,
+          audit: purchaseSnapshot.financialSourceAudit,
+        );
       },
       restoreFreeAppearance: dedaStep2VisualPrefsMigrationEnabled
         ? (scope) => DedaStep2VisualPrefsContinuity.firebase()

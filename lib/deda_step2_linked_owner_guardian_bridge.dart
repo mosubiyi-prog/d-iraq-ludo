@@ -57,7 +57,7 @@ class DedaLinkedOwnerGuardianBridge {
     this.domainReadback,
     this.assetReadback,
     this.diamondReadback,
-    this.originalAdWalletRaw,
+    this.originalPairedFinancialSource,
     this.restoreFreeAppearance,
     this.restoreQuizUi,
     this.enabled = dedaLinkedOwnerGuardianBridgeEnabled,
@@ -70,9 +70,10 @@ class DedaLinkedOwnerGuardianBridge {
   /// Source-only wallet/paid inventory. Must never debit or grant on login.
   final DedaStep2AssetsReadback? assetReadback;
   final DedaStep2DiamondReconciliationReader? diamondReadback;
-  /// Historical phone values are only observations; no wallet migration.
-  final Future<String?> Function(DedaVaultVerifiedScope scope)?
-      originalAdWalletRaw;
+  /// The SAME old-phone progress capture and purchase evidence must be
+  /// paired, owner-scoped and server-verified before any diamond audit.
+  final Future<DedaStep2ArchivedDiamondFinancialSource> Function(
+      DedaVaultVerifiedScope scope)? originalPairedFinancialSource;
   // Existing, reviewed UI-only restoration services. They NEVER grant XP,
   // paid frames, wallet diamonds, league rewards or premium IDs.
   final Future<bool> Function(DedaVaultVerifiedScope scope)?
@@ -211,15 +212,16 @@ class DedaLinkedOwnerGuardianBridge {
     if (!recovery.stoppedSafely && diamondReadback?.enabled == true) {
       // Never read a new phone's unrelated SharedPreferences as old account
       // evidence. The original UID archive must have been read successfully.
-      if (originalAdWalletRaw == null) {
-        throw StateError('verified-original-ad-source-reader-required');
+      if (originalPairedFinancialSource == null) {
+        throw StateError('verified-original-financial-archive-required');
       }
       await scope.checkOwner();
-      final oldRaw = await originalAdWalletRaw!(scope);
+      final source = await originalPairedFinancialSource!(scope);
       await scope.checkOwner();
+      source.validate(scope);
       diamonds = await diamondReadback!.inspect(
         scope: scope,
-        originalPhoneAdWalletRaw: oldRaw,
+        archivedSource: source,
         domainReadback: domains,
         assetReadback: assets,
       );

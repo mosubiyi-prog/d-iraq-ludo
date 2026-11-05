@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/deda_legacy_progress_capture.dart';
+import 'package:d_iraq_ludo/deda_legacy_purchase_evidence.dart';
+import 'package:d_iraq_ludo/deda_step2_financial_source_audit.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_diamond_reconciliation_readonly.dart';
@@ -75,12 +80,43 @@ DedaVaultVerifiedScope scope({
 DedaStep2DiamondReconciliationReader reader(MemoryServerSources src) =>
   DedaStep2DiamondReconciliationReader(io:src,enabled:true);
 
+DedaStep2ArchivedDiamondFinancialSource oldPhone({
+  String? adRaw = '{"balance":63,"viewsToday":2,"day":"2026-11-05"}',
+  String uid = ownerUid,
+  String key = account,
+  String id = original,
+  String capture = 'original_diamond_capture_id_20261105',
+  String installId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+}) {
+  final progress=DedaLegacyProgressCapture.decodeForAccount(
+    jsonEncode({'format':1,'accountKey':account,
+      'records':{
+        'taskPoints':'{"points":150}',
+        'socialCoinsAndXp':'{"xp":150}',
+        'earnedDiamonds':adRaw,
+      }}), expectedAccountKey:account,
+  );
+  final purchase=DedaLegacyPurchaseCapture.decode(
+    jsonEncode({'format':1,'accountKey':account,'originalId':original,
+      'inventory':'{"owned":[]}',
+      'frameJournals':{
+        for(final frame in dedaLegacyPurchaseFrames) frame:null,
+      }}),accountKey:account,originalId:original,
+  );
+  return DedaStep2ArchivedDiamondFinancialSource(
+    accountKey:key,originalUid:uid,originalId:id,captureId:capture,
+    sourceInstallId:installId,
+    audit:DedaStep2FinancialSourceAudit.inspect(
+      progress:progress,purchase:purchase),
+  );
+}
+
 void main() {
   test('OFF by default; no implicit public APK financial migration', () {
     expect(dedaStep2DiamondReconciliationReadOnlyEnabled,false);
     expect(() async => await DedaStep2DiamondReconciliationReader(
       io:MemoryServerSources()).inspect(
-        scope:scope(),originalPhoneAdWalletRaw:null),throwsA(
+        scope:scope(),archivedSource:oldPhone(adRaw:null)),throwsA(
           isA<DedaStep2DiamondHold>()));
   });
 
@@ -88,8 +124,12 @@ void main() {
       () async {
     final src=MemoryServerSources();
     final r=await reader(src).inspect(scope:scope(),
-      originalPhoneAdWalletRaw:'{"balance":63,"viewsToday":2,"day":"2026-11-05"}');
+      archivedSource:oldPhone());
     expect(r.receivedGiftWalletBalance,20);
+    expect(r.archivalReviewCaseKey,
+      'deda_legacy_diamond_review_v1/$ownerUid/original_diamond_capture_id_20261105');
+    expect(r.manualLegacyBalanceReviewRequired,true);
+    expect(r.missingOldPhoneValues,isEmpty);
     expect(r.receivedGiftGross,80);
     expect(r.pendingGiftGross,10);
     expect(r.receivedGiftReceipts,2);
@@ -113,8 +153,9 @@ void main() {
 
   test('missing source is UNKNOWN, never reset balance to zero', () async {
     final report=await reader(MemoryServerSources(hasWallet:false))
-        .inspect(scope:scope(),originalPhoneAdWalletRaw:null);
+        .inspect(scope:scope(),archivedSource:oldPhone(adRaw:null));
     expect(report.receivedGiftWalletBalance,isNull);
+    expect(report.missingOldPhoneValues,isNotEmpty);
     expect(report.localAdWallet.status,
         DedaStep2LegacyAdWalletStatus.missingUnknown);
     expect(report.warnings,
@@ -122,12 +163,42 @@ void main() {
     expect(report.importedOldPhoneAdDiamonds,0);
   });
 
+  test('old phone account swap and invalid installation fail before wallet reads',
+      () async {
+    final src=MemoryServerSources();
+    for(final invalid in [
+      oldPhone(uid:'foreign-owner-uid'),
+      oldPhone(key:'9647700000000'),
+      oldPhone(id:'@DEDA-FOREIG'),
+      oldPhone(capture:'short'),
+      oldPhone(installId:'not-a-verified-install'),
+    ]) {
+      await expectLater(reader(src).inspect(
+        scope:scope(),archivedSource:invalid),
+        throwsA(isA<DedaStep2DiamondHold>()));
+    }
+    expect(src.visited,isEmpty);
+  });
+
+  test('same old-phone evidence yields same review key without duplicate payout',
+      () async {
+    final src=MemoryServerSources();
+    final a=await reader(src).inspect(
+      scope:scope(),archivedSource:oldPhone());
+    final b=await reader(src).inspect(
+      scope:scope(),archivedSource:oldPhone());
+    expect(a.archivalReviewCaseKey,b.archivalReviewCaseKey);
+    expect(a.additionalSpendableDiamonds,0);
+    expect(b.additionalSpendableDiamonds,0);
+    expect(a.canRestoreSpendableBalance,false);
+  });
+
   test('repeated gift ID across server query is rejected before any credit',
       () async {
     final src=MemoryServerSources();
     src.gifts = [src.gifts.first,src.gifts.first];
     await expectLater(reader(src).inspect(
-      scope:scope(),originalPhoneAdWalletRaw:null),
+      scope:scope(),archivedSource:oldPhone(adRaw:null)),
       throwsA(isA<DedaStep2DiamondHold>()));
   });
 
@@ -145,7 +216,7 @@ void main() {
         ...src.gifts.first.fields!,...change,
       },id:'admin-gift-1')];
       await expectLater(reader(src).inspect(
-        scope:scope(),originalPhoneAdWalletRaw:null),
+        scope:scope(),archivedSource:oldPhone(adRaw:null)),
         throwsA(isA<DedaStep2DiamondHold>()));
     }
   });
@@ -157,7 +228,7 @@ void main() {
       status:const {},friendRelations:0,acceptedFriends:0,giftReceipts:3,
       iraqDay:'2026-11-05',existingGiftWallet:25);
     await expectLater(reader(src).inspect(scope:scope(),
-      originalPhoneAdWalletRaw:null,domainReadback:domain),
+      archivedSource:oldPhone(adRaw:null),domainReadback:domain),
       throwsA(isA<DedaStep2DiamondHold>()));
   });
 
@@ -172,7 +243,7 @@ void main() {
       activeDisplayId:null,currentWeeklyXp:null,serverSources:{},
     );
     await expectLater(reader(MemoryServerSources()).inspect(
-      scope:scope(),originalPhoneAdWalletRaw:null,assetReadback:assets),
+      scope:scope(),archivedSource:oldPhone(adRaw:null),assetReadback:assets),
       throwsA(isA<DedaStep2DiamondHold>()));
   });
 
@@ -180,7 +251,7 @@ void main() {
       () async {
     final src=MemoryServerSources()..cached=true;
     await expectLater(reader(src).inspect(
-      scope:scope(),originalPhoneAdWalletRaw:null),
+      scope:scope(),archivedSource:oldPhone(adRaw:null)),
       throwsA(isA<DedaStep2DiamondHold>()));
   });
 
@@ -189,11 +260,11 @@ void main() {
     final src=MemoryServerSources();
     await expectLater(reader(src).inspect(
       scope:scope(owner:() async => false),
-      originalPhoneAdWalletRaw:null),throwsStateError);
+      archivedSource:oldPhone(adRaw:null)),throwsStateError);
     expect(src.visited,isEmpty);
     await expectLater(reader(src).inspect(
       scope:scope(current:() => false),
-      originalPhoneAdWalletRaw:null),throwsStateError);
+      archivedSource:oldPhone(adRaw:null)),throwsStateError);
     expect(src.visited,isEmpty);
   });
 
@@ -203,7 +274,7 @@ void main() {
       status:const {},friendRelations:0,acceptedFriends:0,giftReceipts:2,
       iraqDay:'2026-11-05');
     await expectLater(reader(MemoryServerSources()).inspect(
-      scope:scope(),originalPhoneAdWalletRaw:null,domainReadback:r),
+      scope:scope(),archivedSource:oldPhone(adRaw:null),domainReadback:r),
       throwsA(isA<DedaStep2DiamondHold>()));
   });
 }

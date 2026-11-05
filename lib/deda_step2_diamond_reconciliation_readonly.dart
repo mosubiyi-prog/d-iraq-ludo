@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'deda_step2_account_domains_recovery_readback.dart';
 import 'deda_step2_assets_readback.dart';
+import 'deda_step2_financial_source_audit.dart';
 import 'deda_step2_legacy_ad_wallet_audit.dart';
 import 'deda_step2_recovery_guardian.dart';
 
@@ -21,6 +22,44 @@ class DedaStep2DiamondHold implements Exception {
   String toString() => 'DedaStep2DiamondHold($reason)';
 }
 
+/// Exactly ONE original-phone financial evidence case: an immutable progress
+/// capture paired with its purchase sidecar, with SAME UID/install/captureId.
+/// This is an identity-bound archival observation, NOT independent proof that
+/// locally stored AdMob diamonds were earned or not already spent.
+/// The caseKey is a stable label for later owner review; it is NOT a signed
+/// authorisation, nor a server-side uniqueness/settlement guarantee.
+class DedaStep2ArchivedDiamondFinancialSource {
+  const DedaStep2ArchivedDiamondFinancialSource({
+    required this.accountKey,
+    required this.originalUid,
+    required this.originalId,
+    required this.captureId,
+    required this.sourceInstallId,
+    required this.audit,
+  });
+
+  final String accountKey, originalUid, originalId;
+  final String captureId, sourceInstallId;
+  final DedaStep2FinancialSourceAudit audit;
+
+  String get caseKey =>
+      'deda_legacy_diamond_review_v1/$originalUid/$captureId';
+
+  void validate(DedaVaultVerifiedScope scope) {
+    if (scope.accountKey != accountKey ||
+        scope.originalUid != originalUid ||
+        scope.originalId != originalId ||
+        !RegExp(r'^[A-Za-z0-9_-]{20,80}$').hasMatch(captureId) ||
+        !RegExp(r'^[0-9a-f]{48}$').hasMatch(sourceInstallId) ||
+        audit.sources.length !=
+            3 + 1 + 13 || // Three progress records, inventory, 13 journals.
+        audit.sources.containsKey('progress.earnedDiamonds') == false ||
+        audit.sources.containsKey('purchase.inventory') == false) {
+      throw const DedaStep2DiamondHold('paired-old-phone-archive-not-proven');
+    }
+  }
+}
+
 /// A current wallet readback and immutable preexisting receipt inventory.
 /// Gross received gift receipts are diagnostic ONLY: the wallet may already
 /// include them and past purchases may have spent part of those amounts.
@@ -35,6 +74,7 @@ class DedaStep2DiamondReconciliation {
     required this.receivedGiftGross,
     required this.pendingGiftGross,
     required this.localAdWallet,
+    required this.archivedSource,
     required this.serverReceiptIds,
     required this.warnings,
   });
@@ -43,11 +83,22 @@ class DedaStep2DiamondReconciliation {
   final int pendingGiftReceipts, receivedGiftReceipts;
   final int receivedGiftGross, pendingGiftGross;
   final DedaStep2LegacyAdWalletObservation localAdWallet;
+  /// Original-phone progress + purchase archives have one stable scope.
+  final DedaStep2ArchivedDiamondFinancialSource archivedSource;
   final Set<String> serverReceiptIds;
   final List<String> warnings;
 
   // Never sum receivedGiftGross into an existing gift wallet; it is already
   // credited at claim time under the original server rule transaction.
+  /// Local archives can be consulted for manual review and never deleted
+  /// merely because the server wallet exists or a receipt is absent.
+  String get archivalReviewCaseKey => archivedSource.caseKey;
+  bool get manualLegacyBalanceReviewRequired => true;
+  List<String> get missingOldPhoneValues =>
+      archivedSource.audit.missingUnknown;
+  List<String> get malformedOldPhoneValues =>
+      archivedSource.audit.malformedUntrusted;
+
   int get additionalGiftDiamondsToCredit => 0;
   int get importedOldPhoneAdDiamonds => 0;
   int get additionalSpendableDiamonds => 0;
@@ -96,13 +147,16 @@ class DedaStep2DiamondReconciliationReader {
 
   Future<DedaStep2DiamondReconciliation> inspect({
     required DedaVaultVerifiedScope scope,
-    required String? originalPhoneAdWalletRaw,
+    required DedaStep2ArchivedDiamondFinancialSource archivedSource,
     DedaAccountDomainContinuity? domainReadback,
     DedaStep2AssetsEvidence? assetReadback,
   }) async {
     _check(scope);
     await scope.checkOwner();
     _check(scope);
+    // Fail before reading any wallets if original progress/purchase provenance
+    // wasn't paired and preserved from the same old phone installation.
+    archivedSource.validate(scope);
 
     final id = scope.originalId, uid = scope.originalUid;
     final account = scope.accountKey;
@@ -178,12 +232,17 @@ class DedaStep2DiamondReconciliationReader {
     // Gross receipts CANNOT be compared to current gift balance as if
     // there were no past frame/card purchases, Telegram rewards or debits.
     // The legacy AdMob observation remains untrusted, even if its JSON parses.
-    final local = DedaStep2LegacyAdWalletObservation.inspect(
-        originalPhoneAdWalletRaw);
+    final local = archivedSource.audit.adWallet;
     final warnings = <String>[
       if (wallet == null) 'missing-gift-wallet-is-unknown-not-zero',
       'received-receipts-are-already-accounted-for-no-second-credit',
       'historical-spend-and-earned-ad-ledger-not-independently-proven',
+      'old-phone-progress-and-purchase-archived-readonly',
+      'unverified-local-values-require-one-manual-review-case',
+      if (archivedSource.audit.missingUnknown.isNotEmpty)
+        'missing-old-phone-values-remain-unknown',
+      if (archivedSource.audit.malformedUntrusted.isNotEmpty)
+        'malformed-old-phone-values-preserved-for-review',
       if (local.status == DedaStep2LegacyAdWalletStatus.missingUnknown)
         'legacy-ad-wallet-not-present-unknown-not-zero',
       if (local.status ==
@@ -202,6 +261,7 @@ class DedaStep2DiamondReconciliationReader {
       pendingGiftGross: pendingGross,
       receivedGiftGross: receivedGross,
       localAdWallet: local,
+      archivedSource: archivedSource,
       serverReceiptIds: Set.unmodifiable(ids),
       warnings: List.unmodifiable(warnings),
     );

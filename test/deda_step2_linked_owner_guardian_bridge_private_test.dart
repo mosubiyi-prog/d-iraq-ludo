@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:d_iraq_ludo/deda_legacy_progress_capture.dart';
+import 'package:d_iraq_ludo/deda_legacy_purchase_evidence.dart';
+import 'package:d_iraq_ludo/deda_step2_financial_source_audit.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_flutter_handoff.dart';
 import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
@@ -121,7 +125,8 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   DedaStep2AccountDomainsRecoveryReadback? domainReadback,
   DedaStep2AssetsReadback? assetReadback,
   DedaStep2DiamondReconciliationReader? diamondReadback,
-  Future<String?> Function(DedaVaultVerifiedScope)? originalAdWalletRaw,
+  Future<DedaStep2ArchivedDiamondFinancialSource> Function(
+      DedaVaultVerifiedScope)? originalPairedFinancialSource,
   Future<bool> Function(DedaVaultVerifiedScope)? restoreFreeAppearance,
   Future<bool> Function(DedaVaultVerifiedScope,String)? restoreQuizUi,
 }) => DedaLinkedOwnerGuardianBridge(
@@ -130,7 +135,7 @@ DedaLinkedOwnerGuardianBridge make(FakePort port, FakeJournal journal, {
   domainReadback: domainReadback,
   assetReadback: assetReadback,
   diamondReadback: diamondReadback,
-  originalAdWalletRaw: originalAdWalletRaw,
+  originalPairedFinancialSource: originalPairedFinancialSource,
   restoreFreeAppearance: restoreFreeAppearance,
   restoreQuizUi: restoreQuizUi,
   guardian: DedaStep2RecoveryGuardian(
@@ -249,6 +254,31 @@ DedaStep2AssetsReadback fakeOriginalAssetReadback(FakeOriginalAssetIo io) =>
     currentUid:()=>uid,
     verifyOriginalOwner:(u,a)async=>u==uid && a==account);
 
+DedaStep2ArchivedDiamondFinancialSource pairedOldPhoneArchive(
+    DedaVaultVerifiedScope scope) {
+  final progress=DedaLegacyProgressCapture.decodeForAccount(jsonEncode({
+    'format':1,'accountKey':account,
+    'records':{
+      'taskPoints':'{"points":20}',
+      'socialCoinsAndXp':'{"xp":20}',
+      'earnedDiamonds':'{"balance":63,"viewsToday":2,"day":"2026-11-05"}',
+    },
+  }),expectedAccountKey:account);
+  final purchase=DedaLegacyPurchaseCapture.decode(jsonEncode({
+    'format':1,'accountKey':account,'originalId':normalId,
+    'inventory':'{"owned":[]}',
+    'frameJournals':{for(final frame in dedaLegacyPurchaseFrames) frame:null},
+  }),accountKey:account,originalId:normalId);
+  return DedaStep2ArchivedDiamondFinancialSource(
+    accountKey:scope.accountKey,originalUid:scope.originalUid,
+    originalId:scope.originalId,
+    captureId:'verified_old_phone_diamond_capture_20261105',
+    sourceInstallId:install,
+    audit:DedaStep2FinancialSourceAudit.inspect(
+      progress:progress,purchase:purchase),
+  );
+}
+
 void main() {
   const backup = DedaVaultCode.originalBackupReadback;
 
@@ -310,10 +340,10 @@ void main() {
     final bridge=make(p,j,adapters:{backup:w},
       diamondReadback:DedaStep2DiamondReconciliationReader(
         io:io,enabled:true),
-      originalAdWalletRaw:(scope) async {
+      originalPairedFinancialSource:(scope) async {
         archiveReads++;
         expect(scope.originalUid,uid);
-        return '{"balance":63,"viewsToday":2,"day":"2026-11-05"}';
+        return pairedOldPhoneArchive(scope);
       },
     );
     final result=await login(bridge,recover:true,
@@ -322,6 +352,9 @@ void main() {
     expect(result.diamondContinuity!.receivedGiftWalletBalance,isNull);
     expect(result.diamondContinuity!.localAdWallet.untrustedBalance,63);
     expect(result.diamondContinuity!.additionalSpendableDiamonds,0);
+    expect(result.diamondContinuity!.manualLegacyBalanceReviewRequired,true);
+    expect(result.diamondContinuity!.archivalReviewCaseKey,
+      startsWith('deda_legacy_diamond_review_v1/$uid/'));
     expect(result.completion.domains['earnedAdDiamonds'],
       DedaStep2CompletionState.missingHistoricalProof);
     expect(result.fullAccountRestored,false);
