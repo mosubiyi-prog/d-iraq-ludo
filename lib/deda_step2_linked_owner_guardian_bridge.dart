@@ -4,11 +4,22 @@ import 'deda_step2_completion_gate.dart';
 import 'deda_step2_diamond_reconciliation_readonly.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_recovery_guardian.dart';
+import 'deda_step2_original_backup_readback.dart';
+import 'deda_step2_purchase_backup_readback.dart';
 
 /// Source-level bridge: existing Auth session lane -> verified original UID ->
 /// explicit recovery guardian. Not referenced by main.dart or app startup.
 const bool dedaLinkedOwnerGuardianBridgeEnabled = bool.fromEnvironment(
   'DEDA_LINKED_OWNER_GUARDIAN_BRIDGE', defaultValue: false);
+
+/// This is a RESULT state, not a persisted monetary claim, refund queue,
+/// financial authorisation or "restored" flag. Ordinary account domains may
+/// continue while unsupported old AdMob evidence remains on the old phone.
+enum DedaStep2LegacyFinancialOutcome {
+  notRequested,
+  matchedExistingSourcesReadOnly,
+  heldForManualReview,
+}
 
 class DedaLinkedGuardianLoginResult {
   const DedaLinkedGuardianLoginResult({
@@ -19,6 +30,8 @@ class DedaLinkedGuardianLoginResult {
     this.domainContinuity,
     this.assetContinuity,
     this.diamondContinuity,
+    this.legacyFinancialOutcome = DedaStep2LegacyFinancialOutcome.notRequested,
+    this.financialReviewReason,
     this.freeAppearanceHydrated = false,
     this.quizUiHydrated = false,
   });
@@ -31,6 +44,14 @@ class DedaLinkedGuardianLoginResult {
   final DedaStep2AssetsEvidence? assetContinuity;
   /// Financial evidence is READ ONLY, never a new balance or gift claim.
   final DedaStep2DiamondReconciliation? diamondContinuity;
+  /// HOLD does not block safe UI-only recovery. It still forbids money
+  /// migration, paid grants and a full-account restored claim.
+  final DedaStep2LegacyFinancialOutcome legacyFinancialOutcome;
+  /// Exact technical status code, never a balance, PIN or old-phone payload.
+  final String? financialReviewReason;
+  bool get needsLegacyFinancialReview =>
+      legacyFinancialOutcome ==
+          DedaStep2LegacyFinancialOutcome.heldForManualReview;
   final bool freeAppearanceHydrated, quizUiHydrated;
 
   /// Report the evidence for EACH domain, not an invented blanket success.
@@ -209,23 +230,68 @@ class DedaLinkedOwnerGuardianBridge {
       await scope.checkOwner();
     }
     DedaStep2DiamondReconciliation? diamonds;
+    var legacyFinancialOutcome = DedaStep2LegacyFinancialOutcome.notRequested;
+    String? financialReviewReason;
     if (!recovery.stoppedSafely && diamondReadback?.enabled == true) {
-      // Never read a new phone's unrelated SharedPreferences as old account
-      // evidence. The original UID archive must have been read successfully.
+      // A missing historical local source must never be turned into "zero"
+      // or a fabricated diamond grant. It must ALSO not stop unrelated,
+      // owner-verified free UI and quiz restoration on the same recovery.
+      // This narrow HOLD catches only absent/uncertain financial evidence;
+      // any owner, UID, route, auth, intent or unknown error is fatal.
       if (originalPairedFinancialSource == null) {
         throw StateError('verified-original-financial-archive-required');
       }
-      await scope.checkOwner();
-      final source = await originalPairedFinancialSource!(scope);
-      await scope.checkOwner();
-      source.validate(scope);
-      diamonds = await diamondReadback!.inspect(
-        scope: scope,
-        archivedSource: source,
-        domainReadback: domains,
-        assetReadback: assets,
-      );
-      await scope.checkOwner();
+      try {
+        await scope.checkOwner();
+        final source = await originalPairedFinancialSource!(scope);
+        await scope.checkOwner();
+        source.validate(scope);
+        diamonds = await diamondReadback!.inspect(
+          scope: scope,
+          archivedSource: source,
+          domainReadback: domains,
+          assetReadback: assets,
+        );
+        await scope.checkOwner();
+        legacyFinancialOutcome =
+            DedaStep2LegacyFinancialOutcome.matchedExistingSourcesReadOnly;
+        // Successfully reading sources still does NOT make unsigned historical
+        // earnings and spending independently verifiable or repayable.
+        financialReviewReason =
+            'unsigned-legacy-earn-and-spend-history-unresolved';
+      } on DedaStep2EvidenceHold catch (e) {
+        if (!const <String>{
+          'no-unambiguous-server-backup',
+          'no-original-phone-values',
+        }.contains(e.reason)) rethrow;
+        await scope.checkOwner();
+        legacyFinancialOutcome =
+            DedaStep2LegacyFinancialOutcome.heldForManualReview;
+        financialReviewReason = e.reason;
+      } on DedaStep2PurchaseSourceHold catch (e) {
+        if (!const <String>{
+          'purchase-source-missing-or-not-from-server',
+          'invalid-original-purchase-archive',
+        }.contains(e.reason)) rethrow;
+        await scope.checkOwner();
+        legacyFinancialOutcome =
+            DedaStep2LegacyFinancialOutcome.heldForManualReview;
+        financialReviewReason = e.reason;
+      } on DedaStep2DiamondHold catch (e) {
+        if (!const <String>{
+          'financial-document-not-server-proven',
+          'diamond-domain-wallet-conflict',
+          'diamond-assets-wallet-conflict',
+          'gift-receipt-list-not-consistent',
+          'unknown-gift-status',
+          'invalid-gift-balance',
+          'invalid-receipt-amount',
+        }.contains(e.reason)) rethrow;
+        await scope.checkOwner();
+        legacyFinancialOutcome =
+            DedaStep2LegacyFinancialOutcome.heldForManualReview;
+        financialReviewReason = e.reason;
+      }
     }
     var appearanceHydrated = false;
     var quizHydrated = false;
@@ -258,6 +324,8 @@ class DedaLinkedOwnerGuardianBridge {
       domainContinuity: domains,
       assetContinuity: assets,
       diamondContinuity: diamonds,
+      legacyFinancialOutcome: legacyFinancialOutcome,
+      financialReviewReason: financialReviewReason,
       freeAppearanceHydrated: appearanceHydrated,
       quizUiHydrated: quizHydrated,
     );

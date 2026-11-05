@@ -8,6 +8,7 @@ import 'package:d_iraq_ludo/deda_step2_recovery_guardian.dart';
 import 'package:d_iraq_ludo/deda_step2_account_domains_recovery_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_assets_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_diamond_reconciliation_readonly.dart';
+import 'package:d_iraq_ludo/deda_step2_original_backup_readback.dart';
 import 'package:d_iraq_ludo/deda_step2_completion_gate.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_bridge.dart';
 import 'package:d_iraq_ludo/deda_step2_linked_owner_guardian_assembly.dart';
@@ -361,6 +362,98 @@ void main() {
     expect(archiveReads,1);
     expect(j.created,1);
     expect(io.reads,contains('gifts:$normalId'));
+  });
+
+  test('missing old financial archive stays HOLD while free UI and quiz still restore',
+      () async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeCloudDomainIo();
+    var archiveRead=0,appearance=0,quiz=0;
+    final bridge=make(p,j,adapters:{backup:w},
+      domainReadback:DedaStep2AccountDomainsRecoveryReadback(
+        io:io,enabled:true),
+      diamondReadback:DedaStep2DiamondReconciliationReader(
+        io:io,enabled:true),
+      originalPairedFinancialSource:(scope) async {
+        archiveRead++;
+        throw const DedaStep2EvidenceHold('no-unambiguous-server-backup');
+      },
+      restoreFreeAppearance:(scope) async {
+        appearance++;
+        expect(scope.originalUid,uid);
+        return true;
+      },
+      restoreQuizUi:(scope,day) async {
+        quiz++;
+        expect(day.length,10);
+        return true;
+      },
+    );
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.recovery!.stepStates[backup],DedaVaultStepState.verified);
+    expect(result.legacyFinancialOutcome,
+      DedaStep2LegacyFinancialOutcome.heldForManualReview);
+    expect(result.financialReviewReason,'no-unambiguous-server-backup');
+    expect(result.diamondContinuity,isNull);
+    expect(result.needsLegacyFinancialReview,true);
+    expect(result.freeAppearanceHydrated,true);
+    expect(result.quizUiHydrated,true);
+    expect(result.completion.canIssueFinancialRewards,false);
+    expect(result.fullAccountRestored,false);
+    expect(archiveRead,1);
+    expect(appearance,1);
+    expect(quiz,1);
+  });
+
+  test('server financial wallet conflict is HOLD, free UI still resumes',
+      () async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeCloudDomainIo();
+    var appearance=0;
+    // Same canonical UID but a contradictory canonical wallet source is
+    // not silently reconciled by choosing the higher value.
+    final bridge=make(p,j,adapters:{backup:w},
+      domainReadback:DedaStep2AccountDomainsRecoveryReadback(
+        io:io,enabled:true),
+      diamondReadback:DedaStep2DiamondReconciliationReader(
+        io:io,enabled:true),
+      originalPairedFinancialSource:(scope) async {
+        throw const DedaStep2DiamondHold('diamond-domain-wallet-conflict');
+      },
+      restoreFreeAppearance:(scope) async {
+        appearance++; return true;
+      },
+    );
+    final result=await login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup});
+    expect(result.legacyFinancialOutcome,
+      DedaStep2LegacyFinancialOutcome.heldForManualReview);
+    expect(result.financialReviewReason,'diamond-domain-wallet-conflict');
+    expect(result.diamondContinuity,isNull);
+    expect(result.freeAppearanceHydrated,true);
+    expect(result.fullAccountRestored,false);
+    expect(appearance,1);
+  });
+
+  test('foreign owner or tampered financial UID still blocks entire recovery',
+      () async {
+    final p=FakePort(),j=FakeJournal(),w=FakeWorker(),io=FakeCloudDomainIo();
+    var uiRestores=0;
+    final bridge=make(p,j,adapters:{backup:w},
+      domainReadback:DedaStep2AccountDomainsRecoveryReadback(
+        io:io,enabled:true),
+      diamondReadback:DedaStep2DiamondReconciliationReader(
+        io:io,enabled:true),
+      originalPairedFinancialSource:(scope) async {
+        throw const DedaStep2DiamondHold('diamond-owner-uid-conflict');
+      },
+      restoreFreeAppearance:(scope) async {
+        uiRestores++;return true;
+      },
+    );
+    await expectLater(login(bridge,recover:true,
+      recoveryIntentId:intent,selected:{backup}),
+      throwsA(isA<DedaStep2DiamondHold>()));
+    expect(uiRestores,0);
   });
 
   test('diamond recovery fails closed if original-phone evidence callback absent',() async {
