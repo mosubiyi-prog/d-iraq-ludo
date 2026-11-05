@@ -217,11 +217,10 @@ test("owner private archive cannot be deleted or overwritten by third party",
     }));
 });
 
-test("optional legacy cloud archives: original UID can read MISSING, foreign UID cannot",
+test("missing PRIVATE archives: original UID reads unknown, foreign UID denied",
   async()=>{
     await seed();
     const missing=[
-      ["deda_social_profiles",original],
       ["deda_stage71_active_identifier",original],
       ["deda_profile_ui_migration",account],
       ["deda_quiz_ui_snapshots",uid,"days",day],
@@ -238,4 +237,40 @@ test("optional legacy cloud archives: original UID can read MISSING, foreign UID
         "no backup must mean UNKNOWN, never account reset");
       await assertFails(getDoc(doc(other,...parts)));
     }
+});
+
+test("public friend lookup remains readable but only for active personal IDs",
+  async()=>{
+    await seed();
+    const mine=owner(),other=stranger();
+    const existing=await assertSucceeds(getDoc(
+      doc(other,"deda_social_profiles",original)));
+    assert.equal(existing.data().displayName,"Original Owner");
+    await candidate.withSecurityRulesDisabled(async ctx=>{
+      const {deleteDoc}=require("firebase/firestore");
+      await deleteDoc(doc(ctx.firestore(),"deda_social_profiles",original));
+    });
+    const missing=await assertSucceeds(getDoc(
+      doc(other,"deda_social_profiles",original)));
+    assert.equal(missing.exists(),false,
+      "optional public friend display missing is not an account reset");
+    await assertFails(getDoc(doc(other,"deda_social_profiles",otherId)));
+    await assertSucceeds(getDoc(doc(mine,"deda_social_profiles",original)));
+});
+
+test("public friend profile with secret fields is blocked for every client",
+  async()=>{
+    await seed();
+    await candidate.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),"deda_social_profiles",original),{
+        publicId:original, ownerUid:uid, displayName:"Original Owner",
+        phone:"07700000000", privateGiftBalance:999999,
+      });
+    });
+    await assertFails(getDoc(doc(stranger(),"deda_social_profiles",original)));
+    await assertFails(getDoc(doc(owner(),"deda_social_profiles",original)));
+    await seed();
+    const publicOnly=await assertSucceeds(getDoc(
+      doc(stranger(),"deda_social_profiles",original)));
+    assert.equal(publicOnly.data().displayName,"Original Owner");
 });
