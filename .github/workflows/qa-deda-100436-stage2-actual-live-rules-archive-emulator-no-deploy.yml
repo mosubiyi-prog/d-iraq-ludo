@@ -66,11 +66,20 @@ jobs:
           import json,os,pathlib
           root=pathlib.Path(os.environ['RUNNER_TEMP'])
           (root/'deda-stage2-live-firebase.json').write_text(json.dumps({
-             'firestore':{'rules':os.environ['DEDA_EMULATOR_RULES_PATH']},
+             'firestore':{'rules':pathlib.Path(os.environ['DEDA_EMULATOR_RULES_PATH']).name},
              'emulators':{'auth':{'host':'127.0.0.1','port':9099},
                           'firestore':{'host':'127.0.0.1','port':8098},
                           'ui':{'enabled':False}}
           }))
+          PY
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          conf=json.loads((root/'deda-stage2-live-firebase.json').read_text())
+          resolved=root/conf['firestore']['rules']
+          assert resolved.is_file() and resolved.stat().st_size > 100000
+          assert resolved.resolve()==pathlib.Path(os.environ['DEDA_EMULATOR_RULES_PATH']).resolve()
+          print('PASS_FIRESTORE_EMULATOR_REAL_RULES_FILE_RESOLVED')
           PY
       - name: Actual LIVE rules plus additive archive candidate — three phone read-only compatibility tests
         shell: bash
