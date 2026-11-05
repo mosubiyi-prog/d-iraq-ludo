@@ -78,9 +78,10 @@ class DedaLinkedOwnerSessionPolicy {
     required bool hasStoredOriginalUid,
     required bool hasStoredAccountKey,
     bool hasProtectedTargetAccount = false,
+    bool hasLiveLinkedOwnerSession = false,
   }) => !linkedOwnerPilotEnabled ||
       (!hasStoredOriginalUid && !hasStoredAccountKey &&
-          !hasProtectedTargetAccount);
+          !hasProtectedTargetAccount && !hasLiveLinkedOwnerSession);
 
   /// A previously confirmed replacement phone must NEVER resume its cached
   /// display profile when Firebase Auth has a different UID, provider/email,
