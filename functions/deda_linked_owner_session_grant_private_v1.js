@@ -16,6 +16,7 @@
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {stage2LiveGateEnabled} = require("./deda_stage2_live_gate.js");
+const {recoveryCallableOptions} = require("./deda_stage2_runtime_identity.js");
 
 const ENABLED = (
   process.env.FUNCTIONS_EMULATOR === "true" &&
@@ -145,6 +146,6 @@ async function issueLinkedOwnerGrant(request, db = getFirestore(),
 // Production remains disabled until server-only project, rule and same-UID
 // approvals are explicitly configured. App Check and Auth limits stay required.
 exports.dedaIssueLinkedOriginalUidDeviceGrant = onCall(
-  {enforceAppCheck: true, timeoutSeconds: 20},
+  recoveryCallableOptions(20),
   request => issueLinkedOwnerGrant(request));
 exports.__privateIssueLinkedOwnerGrantForQaOnly = issueLinkedOwnerGrant;
