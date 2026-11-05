@@ -88,8 +88,11 @@ class DedaStep2HistoricalQuizSourceAudit {
     }
     if (key.contains('_seen_v1_') || key.contains('_daily_ids_v1_')) {
       final max=key.contains('_seen_v1_') ? 100 : 5;
-      return value is List<String> && value.length <= max &&
-          value.every((v) => v.isNotEmpty && v.length <= 100)
+      return value is List<String> &&
+          (key.contains('_seen_v1_') ? value.length <= max :
+              value.length == 5) &&
+          value.every((v) => v.isNotEmpty && v.length <= 100) &&
+          value.toSet().length == value.length
         ? DedaStep2HistoricalQuizKeyState.capturedUntrusted
         : DedaStep2HistoricalQuizKeyState.malformedUntrusted;
     }
@@ -150,6 +153,25 @@ class DedaStep2HistoricalQuizSourceAudit {
     final sorted=selected.toList()..sort();
     final first=await io.readKeys(List<String>.unmodifiable(sorted));
     check();
+    // Freeze the first read immediately: retaining a mutable List reference
+    // would miss an in-place update during the second local read.
+    if (first.length != sorted.length ||
+        sorted.any((key) => !first.containsKey(key))) {
+      throw const DedaStep2HistoricalQuizHold('quiz-first-read-incomplete');
+    }
+    final frozen=<String,Object?>{}, firstBytes=<String,String>{};
+    for(final key in sorted) {
+      final observed=first[key];
+      final safe=observed is List<String>
+          ? List<String>.unmodifiable(observed) : observed;
+      frozen[key]=safe;
+      try {
+        firstBytes[key]=jsonEncode(safe);
+      } catch (_) {
+        throw const DedaStep2HistoricalQuizHold(
+            'quiz-unsupported-native-value-preserve-on-phone');
+      }
+    }
     final after=await io.existingKeys();
     check();
     // A newly added or removed day during capture must not produce a
@@ -160,29 +182,24 @@ class DedaStep2HistoricalQuizSourceAudit {
     }
     final again=await io.readKeys(List<String>.unmodifiable(sorted));
     check();
-    if (first.length != sorted.length || again.length != sorted.length ||
-        sorted.any((key) => !first.containsKey(key) ||
-          !again.containsKey(key))) {
+    if (again.length != sorted.length ||
+        sorted.any((key) => !again.containsKey(key))) {
       throw const DedaStep2HistoricalQuizHold('quiz-historical-read-incomplete');
     }
     final raw=<String,Object?>{}, state=<String,DedaStep2HistoricalQuizKeyState>{};
     for(final key in sorted) {
-      final a=first[key],b=again[key];
-      // Original quiz store writes only strings, bools or string lists.
-      // Unexpected types are PRESERVED as raw evidence where JSON-capable,
-      // but remain malformed and never become a completed quiz.
-      String? left,right;
+      // Preserve old raw values; never correct or replay completed quizzes.
+      String right;
       try {
-        left=jsonEncode(a);
-        right=jsonEncode(b);
+        right=jsonEncode(again[key]);
       } catch (_) {
         throw const DedaStep2HistoricalQuizHold(
             'quiz-unsupported-native-value-preserve-on-phone');
       }
-      if (left != right) {
+      if (firstBytes[key] != right) {
         throw const DedaStep2HistoricalQuizHold('quiz-value-changed-mid-read');
       }
-      raw[key]=a is List<String> ? List<String>.unmodifiable(a) : a;
+      raw[key]=frozen[key];
       state[key]=_status(key,raw[key]);
     }
     final text=jsonEncode(raw);

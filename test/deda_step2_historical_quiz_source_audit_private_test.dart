@@ -50,8 +50,8 @@ void main() {
     expect(out.hasIncompleteDays,true);
     expect(out.containsMalformedValues,false);
     expect(out.rawByKey.keys,contains(seenKey(account)));
-    expect(out.rawByKey.keys,never(contains(seenKey(other))));
-    expect(f.inspected,never(contains(seenKey(other))));
+    expect(out.rawByKey.keys,isNot(contains(seenKey(other))));
+    expect(f.inspected,isNot(contains(seenKey(other))));
     expect(out.canRestoreClaimedQuizRewards,false);
     expect(out.canAwardXpOrDiamonds,false);
     expect(out.canReplaceTheCurrentPhoneState,false);
@@ -95,12 +95,21 @@ void main() {
   });
   test('changed quiz evidence during two local reads is not accepted',() async {
     final key=dayKey('progress',account,'2026-10-31');
-    final f=FakeHistory({key:'{"old":1}'},
-      onSecondRead:(){ /* captured state changed by an in-flight quiz */ });
-    // Trigger a value change just before the second comparison by
-    // overriding the second response on the mock in the next test.
-    final out=await inspect(f);
-    expect(out.rawByKey[key],'{"old":1}');
+    final source=<String,Object?>{key:'{"old":1}'};
+    final f=FakeHistory(source,onSecondRead:(){
+      source[key]='{"new":1}';
+    });
+    await expectLater(inspect(f),
+      throwsA(isA<DedaStep2HistoricalQuizHold>()));
+    expect(source[key],'{"new":1}');
+  });
+  test('mutating a string-list in place between reads is detected',() async {
+    final seen=['Q1'];
+    final f=FakeHistory({seenKey(account):seen},onSecondRead:(){
+      seen.add('Q2');
+    });
+    await expectLater(inspect(f),
+      throwsA(isA<DedaStep2HistoricalQuizHold>()));
   });
   test('freeze lists and maps; archive can never rewrite original quiz',() async {
     final seen=['Q1'];
