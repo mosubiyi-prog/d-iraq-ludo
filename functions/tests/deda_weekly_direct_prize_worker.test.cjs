@@ -24,6 +24,11 @@ before(async()=>{
   if(!process.env.FIRESTORE_EMULATOR_HOST) throw Error('NO_EMULATOR');
   app=initializeApp({projectId:'demo-deda-100405-worker'});
   db=getFirestore(app);
+  // Historical default amounts are preserved for archived tests. New weeks
+  // without a saved plan use the new owner-approved 250/200/150/100 plan.
+  await db.collection('deda_weekly_direct_prize_plans').doc(week).set({
+    weekId:week,amounts:[150,100,50,10,10,10,10,10,10,10],
+  });
   for(const id of [first,second]){
     await db.collection('deda_share_ids').doc(id).set({kind:'personal',active:true});
   }
