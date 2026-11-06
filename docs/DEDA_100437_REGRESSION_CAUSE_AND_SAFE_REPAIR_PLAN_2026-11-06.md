@@ -1,27 +1,62 @@
-# DEDA 100437 regression: confirmed build-process root cause and safe repair checkpoint
-Date: 2026-11-06 (Iraq); status: PLAN ONLY — NO APP SOURCE EDITS / NO APK / NO DEPLOY.
+# DEDA — توثيق سبب رجوع النسخة 100437 وخطة الإصلاح الآمن
 
-## Owner report
-Owner reports signed 100437 unexpectedly resembles a version nearly 100 releases earlier, whereas signed 100436 displayed the intended recent app features. Phone video exhibits older UI (restaurants rather than weekly leaderboard). Any later video supplied by owner must be inspected and observations added before implementation.
+**التاريخ:** 6 تشرين الثاني 2026 — توقيت العراق  
+**حالة العمل:** وثيقة تشخيص وخطة عمل فقط، وليست إصلاحاً منفّذاً.  
+**مهم جداً:** لم يُعدّل كود التطبيق، ولم يُبنَ APK جديد، ولم تُغيَّر إعدادات Firebase، ولم يُنشر شيء في Google Play بسبب هذا التوثيق.
 
-## Verified facts and evidence
-1. Last known good installation baseline: signed **100436** via workflow `.github/workflows/deda-100436-exact-100420-signed-private-apk-no-play.yml`, reference commit `fea54d7db2e8a24a74267f04a14c9572bcb408ee`. This workflow applies the full app-specific ordered bind chain (including weekly stages 13–28, 100397–100410, 100411, 100413, 100414, 100418), plus separate QA gates.
-2. Faulty signed **100437**: GitHub Actions run 42122430760 (success), source `80f5c03e4a25677b448b1593f843995c6d81b356`, workflow `.github/workflows/deda-100437-stage2-preactivation-owner-apk.yml`.
-3. 100437 first executes `tools/app_stability/app_package/prepare.py --variant candidate` and then runs `cp -a "$GITHUB_WORKSPACE/lib/." "$project/lib/"`. This overwrites generated and patched Dart files with the repository's raw `lib` tree, while omitting the complete ordered 100436 league / ID / friends / admin bind pipeline. The shipped Dart `lib/main.dart` raw source does not contain Arabic string `المتصدرون` or `الدوري`. Hence a green build verifies successful compilation/signing, not functional parity with 100436.
-4. `prepare.py` records a prior internal stage version 100387 before later modifications, which is NOT equivalent to retaining all signed-100436 patch stages. The new build number 100437 cannot prove it includes newer features.
-5. The 100437 workflow explicitly sets `DEDA_STEP2_EXISTING_ACCOUNT_ENTRY=false`, `financialRestoreEnabled=false`, and documents that account recovery is not yet functional and no Firebase functions/rules or Play changes are deployed. Therefore it is not a completed recovery release.
-6. This regression is independent of Firebase billing. Do not infer that all cloud/local user data has been deleted from UI regression alone.
+## 1. شنو المشكلة اللي واجهتنا؟
 
-## Approved safe repair approach (document now, implement only after owner's video review and explicit continuation)
-1. Freeze signed 100436 as immutable, verifiable UI/feature baseline; no edits or destructive operations to its branch/source.
-2. Build from the **exact 100436 fully patched output / exact reproducible ordered workflow**, not from only the raw repository sources. Avoid `cp -a lib` over built source, or any copy that silently undoes feature patches.
-3. Carefully integrate stage-two account recovery code into the 100436-complete application with compatibility review for UID, linked-owner/session/admin, Firebase backend, wallets, league, profile, friends, special IDs, prizes, tasks, and saved places; preserve original signer/package/user data, and do not activate unfinished recovery interfaces.
-4. Introduce automated regression gates *before* build or artifact upload: assert leaderboard tile and freeze/countdown, weekly league points/prizes, premium ID/old-ID semantics, friend copy/ID, admin functions and permissions, daily tasks, quiz, wallet/profile and other existing 100436 UX, on the **final assembled sources**. Compare final assembled source hashes/feature manifest with approved 100436 output and ensure new recovery code is actually integrated.
-5. Add a **fail-closed gate** that blocks APK when baseline parity isn't demonstrated; compiler/unsigned tests alone do not pass. Run app smoke tests and signed artifact checks on final APK; verify exact sign certificate, applicationId, increasing versionCode and in-place install safety.
-6. Separately gate real account recovery: retain existing account and financial recovery disabled until supporting cloud functions, rules, billing/deployment prerequisites and end-to-end two-phone restore tests are ready. Do not claim recovery finished or ready merely because APK builds.
-7. Only after all parity gates pass and the owner approves, generate new APK number >100437 for phone QA. Never publish to Play as part of this plan. Do not erase app data, uninstall old app, switch phones or modify users' production financial data during investigative QA.
+النسخة **100436** كانت تعرض واجهات ومزايا التطبيق الحديثة، وبعدها نزلت النسخة **100437** فظهرت واجهة قديمة كأن التطبيق رجع قرابة 100 نسخة للوراء. بالفيديو اللي راجعناه رجعت بطاقة **«مطاعم»** بدل **«المتصدرون»**؛ وهذا مؤشر قوي على تراجع كود الواجهة، مو إثبات على حذف بيانات الحسابات من الخادم.
 
-## Current stop point
-- Diagnosis completed; regression repair plan saved, **no code or Firebase deployment authorized or performed here**.
-- Await the owner's promised additional video, inspect it, update diagnosis and implementation tests accordingly.
-- When resuming, inspect complete workflow source and build logs, then implement on an isolated branch with explicit parity validation against 100436 and no modifications to protected 100436.
+هذه **مشكلة حقيقية بطريقة تجهيز النسخة**، وليست تصرّفاً طبيعياً عند تحديث التطبيق، ولا سببها فوترة Firebase.
+
+## 2. شنو السبب التقني اللي ثبتناه؟
+
+- **100436:** بُنيت من تسلسل كامل لخطوات تركيب المزايا والترقيعات المتفق عليها، ومنها الدوري، الآيدي المميز، الأصدقاء، استجابة الإدارة، المهام والجوائز. مرجع سير البناء هو:
+  `.github/workflows/deda-100436-exact-100420-signed-private-apk-no-play.yml`
+  وعند الالتزام بهذا المسار تخرج الملفات النهائية بعد تطبيق تعديلات 100397 إلى 100418 والمراحل السابقة.
+- **100437:** تم تشغيل أداة تجهيز أساسية اسمها `prepare.py` ثم نسخ مجلد `lib` الخام من المستودع فوق ملفات التطبيق المجهزة. الأمر داخل سير البناء:
+  `cp -a "$GITHUB_WORKSPACE/lib/." "$project/lib/"`
+- النتيجة: الملفات المنسوخة طمست تعديلات أضيفت أثناء بناء النسخة الصحيحة، ولم تُشغّل سلسلة تركيب مزايا 100436 كاملة. وفحص `lib/main.dart` الخام في 100437 لا يحتوي نص **«المتصدرون»** أو **«الدوري»**.
+- أداة `prepare.py` تسجل مرجع مرحلة أقدم برقم **100387**، وهذا **لا يعني** أن جميع إضافات 100436 موجودة فيها. كتابة رقم تحديث جديد **100437** لا تعني تلقائياً أن كل الوظائف السابقة وصلت إليه.
+
+**الخلاصة:** السبب المثبت هو **خلل في طريقة تركيب APK، واستخدام ملفات خام/قديمة فوق النسخة المركبة**، وليس فقدان جميع الأكواد من GitHub.
+
+## 3. ليش GitHub قال البناء ناجح؟
+
+لأن فحص 100437 أكد التجميع والتوقيع وبعض اختبارات كود الاسترجاع، لكنه **لم يثبت مطابقة واجهات ووظائف التطبيق للنسخة 100436**. إذن كلمة «نجاح» تعني أن الملف انبنى، **مو أنه يحتوي كل الميزات القديمة والجديدة**. لازم نضيف فحصاً يمنع هذا النوع من النجاح المضلّل.
+
+**سجل بناء 100437:** [GitHub Actions — 42122430760](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42122430760)  
+**مرجع كود البناء المعطوب:** `80f5c03e4a25677b448b1593f843995c6d81b356`  
+**مرجع بناء 100436:** `fea54d7db2e8a24a74267f04a14c9572bcb408ee`
+
+## 4. هل ضاعت شغلتنا أو بيانات المستخدمين؟
+
+**الأكواد:** مقارنة المستودع تبين أن ملفات الاسترجاع محفوظة، لكنها لم تُركّب بصورة صحيحة مع كامل التطبيق السابق.  
+**بيانات الناس:** مجرد رجوع شكل الواجهة لا يثبت ضياع رصيد أو حسابات أو بيانات محفوظة. لا يجوز نؤكد سلامة كل البيانات أيضاً من الفيديو فقط، ولازم نفحصها دون مخاطرة.  
+**تنبيه حماية:** لا نحذف التطبيق من الهاتف، ولا نمسح بياناته، ولا نبدّل الهاتف لأغراض اختبار الاسترجاع قبل اكتمال الضمانات اللازمة.
+
+## 5. الخطة الثابتة للإصلاح — حتى ما تتكرر للمرة الثالثة
+
+1. **حماية المرجع:** نبقي النسخة **100436** ومرجع بنائها بدون أي تعديل أو حذف. هي الأساس الذي نقارن به الإصدار التالي.
+2. **إعادة التركيب بالطريقة الصحيحة:** نستخدم **نفس سلسلة خطوات بناء 100436 بالكامل وبترتيبها المعتمد**؛ لا نكتفي بملفات `lib` الخام، ولا نستعمل أي أمر نسخ يستبدل الميزات المركبة بأكواد أقدم.
+3. **دمج الاسترجاع فوق التطبيق الكامل:** نراجع ونضيف أكواد استرجاع الحساب إلى التطبيق المكتمل، مع الانتباه لتوافق رقم المستخدم الأصلي `UID`، الجلسة، الإدارة، الصلاحيات، الماسات، الأصدقاء، الآيدي المميز، الدوري، الجوائز، المهام، الأماكن والملف الشخصي. لا نفعّل واجهة استرجاع ناقصة.
+4. **فحص منع الرجوع (إلزامي):** قبل بناء APK نفحص أن **النسخة النهائية المركبة فعلاً** ما زالت تحتوي على المتصدرين، عداد الدوري وتجميده، النقاط والجوائز، تبديل الآيدي المميز، نسخ آيدي الأصدقاء، وظائف الإدارة وصلاحياتها، المهام اليومية، الأسئلة، رصيد الماسات، والأماكن. نفحص أيضاً أن ملفات الاسترجاع متصلة بالتطبيق وليس مجرد موجودة بالمستودع.
+5. **حارس يمنع النسخة الناقصة:** أي فشل بفحص ميزة أساسية من 100436 يوقف بناء أو تسليم ملف APK؛ لا نعتبر نجاح الترجمة والتوقيع وحده دليلاً على اكتمال التطبيق.
+6. **فحص التثبيت بأمان:** بعد اجتياز الفحوص نتأكد من **نفس اسم الحزمة وشهادة التوقيع** ورقم بناء أعلى من **100437** وقابلية التحديث على الهاتف دون حذف البيانات، ثم نفحص الواجهة عملياً.
+7. **فصل جاهزية الاسترجاع عن شكل التطبيق:** نسخة 100437 بُنيت وواجهة «لدي حساب» فيها **معطلة**، والاسترجاع المالي **معطل**، ولم ينشر هذا البناء وظائف Firebase أو قواعده. لذلك لا نعلن «الاسترجاع مكتمل» إلا بعد استيفاء المتطلبات الخادمية والاختبار الحقيقي بين هاتفين وحماية جميع البيانات.
+8. **لا نشر ولا مخاطرة من دون إذن صاحب المشروع:** أي إصدار جديد للفحص فقط بعد نجاح المقارنة وموافقة صاحب المشروع؛ ولا نشر على سوق Play، ولا مسح بيانات، ولا تعديل أرصدة المستخدمين أثناء التحقيق.
+
+## 6. شنو صار فعلياً وشنو بعد؟
+
+**المنجز الآن:** حددنا سبب التراجع من ملفات GitHub وسجل البناء، وثبّتنا خطة الإصلاح بهذه الوثيقة داخل **فرع منفصل**.  
+**غير المنجز بعد:** لم نطبق الإصلاح على كود التطبيق، ولم نبنِ نسخة جديدة، ولم نختبر النتيجة على الهاتف.  
+**الخطوة التالية:** نراجع **الفيديو الإضافي الذي وعد صاحب المشروع بإرساله** ونضيف أي ملاحظات ثابتة إلى قائمة فحوص منع التراجع قبل البدء بالتعديل.
+
+## 7. روابط الأدلة
+
+- [طريقة بناء 100436 التي حافظت على الوظائف](https://github.com/mosubiyi-prog/d-iraq-ludo/blob/fea54d7db2e8a24a74267f04a14c9572bcb408ee/.github/workflows/deda-100436-exact-100420-signed-private-apk-no-play.yml)
+- [طريقة بناء 100437 التي سببت رجوع أجزاء من التطبيق](https://github.com/mosubiyi-prog/d-iraq-ludo/blob/80f5c03e4a25677b448b1593f843995c6d81b356/.github/workflows/deda-100437-stage2-preactivation-owner-apk.yml)
+- [نتيجة البناء الناجح تقنياً وغير الكافي وظيفياً](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42122430760)
+
+**الاتفاق:** نعالج **سبب التراجع من جذوره**، ولا نغامر بمزايا النسخة 100436، ولا نخلط إصلاح الواجهة مع تفعيل خدمات الاسترجاع قبل تحقق شروطها.
