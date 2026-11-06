@@ -130,6 +130,34 @@ LEGACY_GUARD = """
     }
 """
 
+OWNER_CONFIRM_WIDGET = """
+            // Optional original-phone confirmation, strictly behind private
+            // linked-owner feature switch; never visible on the old 100436 UI.
+            if (dedaLinkedOwnerCompatEnabled &&
+                Firebase.apps.isNotEmpty &&
+                (DedaPreferences.accountPhone.isNotEmpty ||
+                    DedaPreferences.phone.isNotEmpty) &&
+                (() {
+                  final phone = DedaPreferences.accountPhone.isNotEmpty
+                      ? DedaPreferences.accountPhone : DedaPreferences.phone;
+                  final user = FirebaseAuth.instance.currentUser;
+                  final account = phone.replaceAll(RegExp(r'[^0-9]'), '');
+                  return user != null &&
+                      (user.isAnonymous ||
+                       user.email ==
+                           DedaLinkedOwnerSessionPolicy.ownerEmail(account));
+                })()) ...[
+              DedaOwnerConfirmButton(
+                phone: DedaPreferences.accountPhone.isNotEmpty
+                    ? DedaPreferences.accountPhone : DedaPreferences.phone,
+                originalId: DedaBackend.personalShareIdForPhone(
+                  DedaPreferences.accountPhone.isNotEmpty
+                      ? DedaPreferences.accountPhone : DedaPreferences.phone),
+              ),
+              const SizedBox(height: 12),
+            ],
+"""
+
 VERIFIED_EARLY_BRANCH = """
     if (verifiedCanonicalProfile) {
       await _saveVerifiedLinkedOwnerLogin(
@@ -172,13 +200,10 @@ def resolve_block(ours, base, theirs):
         # The explicit guard is installed inside saveLogin above.
         return ours
     if "Original-phone-only confirmation" in theirs:
-        anchor = ("            const SizedBox(height: 20),\n"
-                  "            OutlinedButton.icon(")
-        first = theirs.index("            // Original-phone-only confirmation")
-        ending = theirs.index(anchor, first)
-        addition = theirs[first:ending]
-        return once(ours, anchor, addition + anchor,
-                    "owner confirm button before existing logout")
+        # The original account-page layout diverged from raw stage2 too far
+        # for local diff3 placement. Preserve ALL of 100436 UI here; append
+        # a guarded confirmation tile later at the unique logout anchor.
+        return ours
     return None
 
 
@@ -215,4 +240,20 @@ def reconcile_main(candidate):
         method[header_end:]
     )
     source = source[:first] + method + VERIFIED_METHOD + source[last:]
+    # Add the new account confirmation UI OUTSIDE the original app's
+    # independent place-management description and inside the account hub.
+    # Reject unknown layouts instead of using generic source replacements.
+    hub = source.index("class _DedaAccountHubPageState")
+    next_class = source.find("\\nclass ", hub + 12)
+    if next_class < 0:
+        next_class = len(source)
+    account_page = source[hub:next_class]
+    if account_page.count("onPressed: _logout") != 1:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 account hub logout not unique")
+    logout = source.index("onPressed: _logout", hub, next_class)
+    anchor = "            const SizedBox(height: 20),"
+    before = source.rfind(anchor, hub, logout)
+    if before < 0 or logout - before > 600:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 account hub insertion point changed")
+    source = source[:before] + OWNER_CONFIRM_WIDGET + source[before:]
     return source.encode("utf-8"), resolved
