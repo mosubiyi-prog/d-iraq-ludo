@@ -207,8 +207,16 @@ def resolve_block(ours, base, theirs):
     return None
 
 
-def reconcile_main(candidate):
+def reconcile_main(candidate, assembled_100436):
+    """Keep exact 100436 account transaction and account-hub layout.
+
+    Conflict resolution here does not replace old login/account UI with a
+    possibly incomplete raw Stage2 source. The signed assembled versions
+    of those two methods remain the sole baseline; Stage2 adds separate,
+    feature-flagged entry and verified-UID persistence.
+    """
     source = candidate.decode("utf-8")
+    trusted = assembled_100436.decode("utf-8")
     resolved = 0
 
     def do_merge(match):
@@ -226,34 +234,57 @@ def reconcile_main(candidate):
     if resolved != 9:
         raise ValueError("UNSAFE_MAIN_100436_STAGE2 expected 9 reviewed "
                          "overlaps, got " + str(resolved))
-    first = source.index(LOGIN_METHOD)
-    last = source.index(AFTER_LOGIN, first)
-    method = source[first:last]
-    if ("verifiedCanonicalProfile = false" not in method or
-            "String? verifiedOriginalUid" not in method):
-        raise ValueError("UNSAFE_MAIN_100436_STAGE2 verified login signature missing")
-    header_end = method.index("}) async {") + len("}) async {")
-    if "DedaAuthRuntime.run<void>(" not in method:
-        raise ValueError("UNSAFE_MAIN_100436_STAGE2 baseline session lane missing")
-    method = (
-        method[:header_end] + VERIFIED_EARLY_BRANCH + LEGACY_GUARD +
-        method[header_end:]
+
+    # Always restore the ENTIRE known-good 100436 login method, not an
+    # incompletely merged region with different try/finally and backup flow.
+    original_a = trusted.index(LOGIN_METHOD)
+    original_b = trusted.index(AFTER_LOGIN, original_a)
+    original_method = trusted[original_a:original_b]
+    if ("DedaAuthRuntime.run<void>(" not in original_method or
+            "verifiedCanonicalProfile" in original_method):
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 expected original 100436 transaction")
+    header = "  }) async {"
+    if original_method.count(header) < 1:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 100436 method signature drift")
+    new_header = (
+        "    bool verifiedCanonicalProfile = false,\\n"
+        "    String? verifiedOriginalUid,\\n"
+        + header
     )
-    source = source[:first] + method + VERIFIED_METHOD + source[last:]
-    # Add the new account confirmation UI OUTSIDE the original app's
-    # independent place-management description and inside the account hub.
-    # Reject unknown layouts instead of using generic source replacements.
-    hub = source.index("class _DedaAccountHubPageState")
-    next_class = source.find("\\nclass ", hub + 12)
-    if next_class < 0:
-        next_class = len(source)
-    account_page = source[hub:next_class]
-    if account_page.count("onPressed: _logout") != 1:
-        raise ValueError("UNSAFE_MAIN_100436_STAGE2 account hub logout not unique")
-    logout = source.index("onPressed: _logout", hub, next_class)
-    anchor = "            const SizedBox(height: 20),"
-    before = source.rfind(anchor, hub, logout)
-    if before < 0 or logout - before > 600:
-        raise ValueError("UNSAFE_MAIN_100436_STAGE2 account hub insertion point changed")
-    source = source[:before] + OWNER_CONFIRM_WIDGET + source[before:]
+    original_method = once(original_method, header, new_header,
+                           "100436 saveLogin signature")
+    original_method = once(
+        original_method, new_header,
+        new_header + VERIFIED_EARLY_BRANCH + LEGACY_GUARD,
+        "verified-only account path before the unchanged legacy body",
+    )
+    modified_a = source.index(LOGIN_METHOD)
+    modified_b = source.index(AFTER_LOGIN, modified_a)
+    source = (
+        source[:modified_a] + original_method + VERIFIED_METHOD +
+        source[modified_b:]
+    )
+
+    # The existing 100436 account hub contains more management/place UI
+    # than the raw Stage2 source. Restore the whole class, then add one
+    # separately gated confirmation widget at its existing logout button.
+    tag = "class _DedaAccountHubPageState"
+    trusted_start = trusted.index(tag)
+    trusted_end = trusted.find("\\nclass ", trusted_start + 12)
+    if trusted_end < 0:
+        trusted_end = len(trusted)
+    safe_hub = trusted[trusted_start:trusted_end]
+    if safe_hub.count("onPressed: _logout") != 1:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 original hub logout not unique")
+    logout = safe_hub.index("onPressed: _logout")
+    widget_anchor = "            const SizedBox(height: 20),"
+    insert_at = safe_hub.rfind(widget_anchor, 0, logout)
+    if insert_at < 0 or logout - insert_at > 600:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 owner widget insertion drift")
+    safe_hub = safe_hub[:insert_at] + OWNER_CONFIRM_WIDGET + safe_hub[insert_at:]
+    new_start = source.index(tag)
+    new_end = source.find("\\nclass ", new_start + 12)
+    if new_end < 0:
+        new_end = len(source)
+    source = source[:new_start] + safe_hub + source[new_end:]
     return source.encode("utf-8"), resolved
