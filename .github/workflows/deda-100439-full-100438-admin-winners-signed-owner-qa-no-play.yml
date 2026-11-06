@@ -298,6 +298,22 @@ jobs:
           if baseline['versionCode']!=100438:stop('baseline version unverified')
           if baseline['certificateSha256']!='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a':stop('wrong baseline certificate')
           if baseline['completeOwnerDelivery'] is not False or baseline['financialRestoreEnabled'] is not False:stop('unsafe baseline restore')
+          # The source assembler copies all 36 Stage2 modules additively,
+          # but its intermediate manifest records only the six reconciled
+          # core files. The SIGNED 100438 build expanded this to ALL files.
+          # Rebuild the equivalent full list from actual on-disk files,
+          # while verifying every intermediate hash rather than weakening
+          # the signed reference safety check.
+          recorded=dict(actual['sourceHashes'])
+          dart_files=list((project/'lib').glob('*.dart'))
+          full={str(p.relative_to(project)):hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in dart_files}
+          for rel in ('pubspec.yaml','pubspec.lock'):
+            full[rel]=hashlib.sha256((project/rel).read_bytes()).hexdigest()
+          for rel,expected in recorded.items():
+            if rel not in full or full[rel]!=expected:
+              stop('intermediate assembled source hash altered:'+rel)
+          actual['sourceHashes']=full
           old=baseline['sourceHashes']; new=actual['sourceHashes']
           oldpaths=set(old); newpaths=set(new)
           deleted=oldpaths-newpaths
