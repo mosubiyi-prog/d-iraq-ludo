@@ -12,6 +12,7 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
+from reconcile_stage2_auth_conflicts import reconcile
 
 REPO = Path(__file__).resolve().parents[3]
 RAW_100436_COMMIT = "fea54d7db2e8a24a74267f04a14c9572bcb408ee"
@@ -120,30 +121,35 @@ def integrate(project):
                  str(ours), str(ancestor), str(theirs)],
                 capture_output=True,
             )
-            if merge.returncode != 0:
-                # git merge-file returns the NUMBER of conflicts (1..127),
-                # not just 1. 128+ or negative indicates a tool failure.
-                if merge.returncode < 0 or merge.returncode >= 128:
-                    stop("git merge-file tool failed: " + relative +
-                         " exit=" + str(merge.returncode))
-                # Report only conflicting context, no entire source files.
-                preview = merge.stdout.decode("utf-8", errors="replace").splitlines()
+            if merge.returncode < 0 or merge.returncode >= 128:
+                stop("git merge-file tool failed: " + relative +
+                     " exit=" + str(merge.returncode))
+            proposal, resolved = reconcile(relative, merge.stdout)
+            if resolved:
+                print("REVIEWED_AUTH_CONFLICTS_RESOLVED " + relative +
+                      " resolved_blocks=" + str(resolved))
+            if b"<<<<<<< " in proposal or b">>>>>>> " in proposal:
+                preview = proposal.decode("utf-8", errors="replace").splitlines()
                 markers = [i for i, line in enumerate(preview)
                            if line.startswith("<<<<<<< ")]
                 print("REVIEW_REQUIRED " + relative +
-                      " conflict_blocks=" + str(len(markers)))
+                      " remaining_conflict_blocks=" + str(len(markers)))
                 for i in markers[:12]:
-                    end = next((j for j in range(i + 1, min(i + 100, len(preview)))
-                                if preview[j].startswith(">>>>>>> ")),
-                               min(i + 35, len(preview) - 1))
-                    excerpt = preview[i:min(end + 1, i + 80)]
+                    end_marker = next((
+                        j for j in range(i + 1, min(i + 100, len(preview)))
+                        if preview[j].startswith(">>>>>>> ")
+                    ), min(i + 35, len(preview) - 1))
+                    excerpt = preview[i:min(end_marker + 1, i + 80)]
                     print("CONFLICT_SNIPPET_" + relative + "\\n" +
                           "\\n".join(excerpt))
                 conflicts.append(relative)
                 continue
+            if merge.returncode != 0 and not resolved:
+                stop("UNEXPECTED_UNCONFLICTED_RESULT_AFTER_NONZERO_MERGE " +
+                     relative)
             destination = temp / (str(index) + "-proposed.dart")
-            destination.write_bytes(merge.stdout)
-            if merge.stdout == ours.read_bytes():
+            destination.write_bytes(proposal)
+            if proposal == ours.read_bytes():
                 # The signed 100436 build may already include the exact
                 # Stage2 transition signatures from an earlier safe stage.
                 # This is not proof of recovery; report it for audit.
@@ -157,11 +163,11 @@ def integrate(project):
                     "alreadyPresentMustBeReviewed": True,
                 }
                 continue
-            output = merge.stdout.decode("utf-8")
+            output = proposal.decode("utf-8")
             for token in REQUIRED_FEATURES.get(relative, ()):
                 if token not in output:
                     stop("lost prior 100436 or new recovery feature: " + relative + " :: " + token)
-            temporary_results[relative] = merge.stdout
+            temporary_results[relative] = proposal
             evidence["coreHashes"][relative] = {
                 "before": old_hashes[relative],
                 "after": digest(destination),
