@@ -8,8 +8,12 @@ on:
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'lib/deda_step2_spark_linked_uid_readonly.dart'
       - 'lib/deda_step2_linked_owner_firebase_port.dart'
+      - 'lib/deda_step1_google_settings_link_100439.dart'
+      - 'tools/app_stability/app_package/bind_google_account_settings_100439.py'
       - 'test/deda_google_original_uid_link_private_test.dart'
       - 'test/deda_step2_spark_linked_uid_readonly_private_test.dart'
+      - 'test/deda_owner_session_compat_private_test.dart'
+      - 'test/deda_google_settings_card_private_test.dart'
       - '.github/workflows/deda-google-original-uid-guarded-qa-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -38,3 +42,46 @@ jobs:
         run: dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart lib/deda_100431_linked_owner_session_policy.dart lib/deda_step2_spark_linked_uid_readonly.dart lib/deda_step2_linked_owner_firebase_port.dart test/deda_google_original_uid_link_private_test.dart test/deda_step2_spark_linked_uid_readonly_private_test.dart
       - name: Run original UID and linked-provider negative regression checks
         run: flutter test --no-pub test/deda_google_original_uid_link_private_test.dart test/deda_owner_session_compat_private_test.dart test/deda_step2_spark_linked_uid_readonly_private_test.dart
+      - name: Validate settings integration in a disposable source directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import runpy
+          import shutil
+          import tempfile
+          from pathlib import Path
+          from hashlib import sha256
+          binder=runpy.run_path('tools/app_stability/app_package/bind_google_account_settings_100439.py')['bind']
+          with tempfile.TemporaryDirectory(prefix='deda-google-private-') as tmp:
+            project=Path(tmp)
+            (project/'lib').mkdir()
+            for name in ('lib/main.dart','lib/deda_backend.dart','pubspec.yaml'):
+              shutil.copy2(name, project/name)
+            (project/'deda-stage2-core-merge-proof.json').write_text('{}')
+            (project/'internal-build-inputs.json').write_text(json.dumps({
+              'financialRestoreEnabled':False,
+              'weekly100439AdminWinnersPrizeReport':{'singlePanelNoDuplicate':True},
+              'sourceHashes':{},
+            }))
+            before=(project/'lib/main.dart').read_text()
+            backend=(project/'lib/deda_backend.dart').read_text()
+            binder(project)
+            after=(project/'lib/main.dart').read_text()
+            assert before.count("dedaText('الصوت والملاحة', 'Voice & navigation')")==1
+            assert after.count('DedaGoogleSettingsLinkCard(')==1
+            assert after.index('DedaGoogleSettingsLinkCard(') < after.index("dedaText('الصوت والملاحة', 'Voice & navigation')")
+            assert 'currentHasOriginalGoogleProvider: user != null' in after
+            assert backend != (project/'lib/deda_backend.dart').read_text()
+            assert 'userProviderIdentityMatches(user, cleanKey)' in (project/'lib/deda_backend.dart').read_text()
+            assert 'google_sign_in: 6.3.0' in (project/'pubspec.yaml').read_text()
+            assert (project/'lib/deda_step1_google_settings_link_100439.dart').is_file()
+          print('PASS_DISPOSABLE_GOOGLE_SETTINGS_ONE_FIELD_ABOVE_VOICE')
+          PY
+      - name: Resolve Google account-chooser dependency in CI checkout ONLY
+        run: flutter pub add google_sign_in:6.3.0
+      - name: Analyze Google settings card without building or deploying
+        run: dart analyze --no-fatal-warnings lib/deda_step1_google_settings_link_100439.dart test/deda_google_settings_card_private_test.dart
+      - name: Verify card remains hidden until approved
+        run: flutter test --no-pub test/deda_google_settings_card_private_test.dart
