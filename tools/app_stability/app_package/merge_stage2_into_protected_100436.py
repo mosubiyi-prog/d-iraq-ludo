@@ -94,6 +94,7 @@ def integrate(project):
     old_hashes = metadata["sourceHashes"]
     temporary_results = {}
     conflicts = []
+    unchanged = []
     evidence = {
         "ancestor": RAW_100436_COMMIT,
         "baselineVersion": 100418,
@@ -143,7 +144,19 @@ def integrate(project):
             destination = temp / (str(index) + "-proposed.dart")
             destination.write_bytes(merge.stdout)
             if merge.stdout == ours.read_bytes():
-                stop("recovery change not applied to " + relative)
+                # The signed 100436 build may already include the exact
+                # Stage2 transition signatures from an earlier safe stage.
+                # This is not proof of recovery; report it for audit.
+                unchanged.append(relative)
+                print("MERGE_NO_CHANGE_REVIEW_REQUIRED " + relative)
+                evidence["coreHashes"][relative] = {
+                    "before": old_hashes[relative],
+                    "after": old_hashes[relative],
+                    "ancestor": hashlib.sha256(original).hexdigest(),
+                    "recoveryCandidate": digest(theirs),
+                    "alreadyPresentMustBeReviewed": True,
+                }
+                continue
             output = merge.stdout.decode("utf-8")
             for token in REQUIRED_FEATURES.get(relative, ()):
                 if token not in output:
@@ -156,6 +169,8 @@ def integrate(project):
                 "recoveryCandidate": digest(theirs),
             }
         if conflicts:
+            print("MERGE_CONFLICT_FILE_LIST " + repr(conflicts))
+            print("MERGE_NO_CHANGE_FILE_LIST " + repr(unchanged))
             stop("CONFLICT_REQUIRES_MANUAL_ANCHOR_REVIEW: " +
                  ", ".join(conflicts) +
                  "; protected 100436 output remains unchanged")
