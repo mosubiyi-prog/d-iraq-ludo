@@ -1,0 +1,72 @@
+name: DEDA 100438 Stage2 Recovery Callables Source Safety Tests NO FIREBASE DEPLOY
+on:
+  push:
+    branches:
+      - deda-100438-stage2-core-threeway-merge-qa-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100438-stage2-server-functions-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-only-backend-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Keep exactly protected Firebase and account source; no production mutations
+        run: |
+          set -euo pipefail
+          stable=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          stage2=80f5c03e4a25677b448b1593f843995c6d81b356
+          git cat-file -e "$stable^{commit}"
+          git diff --exit-code "$stage2" HEAD -- functions/ firestore.rules storage.rules firebase.json .firebaserc
+          echo 'PASS_FIREBASE_SOURCE_UNMODIFIED_NO_DEPLOY'
+      - name: Node 20 syntax check of all guarded recovery callables and index
+        run: |
+          set -euo pipefail
+          for f in \
+            functions/index.js \
+            functions/deda_stage2_live_gate.js \
+            functions/deda_stage2_runtime_identity.js \
+            functions/deda_owner_pin_verify_private_v1.js \
+            functions/deda_linked_owner_session_grant_private_v1.js \
+            functions/deda_recovery_journal_completion_private_v1.js \
+            functions/deda_pin_manual_recovery_compat_private_v1.js \
+            functions/deda_pin_auto_recovery_worker.js \
+            functions/deda_linked_pin_reissue.js; do
+            node --check "$f"
+          done
+      - name: Run complete five Stage2 backend pure tests without touching production
+        run: |
+          set -euo pipefail
+          node --test \
+            functions/test/deda_stage2_runtime_identity.test.js \
+            functions/test/deda_stage2_live_gate.test.js \
+            functions/test/deda_owner_pin_verify_private_v1.test.js \
+            functions/test/deda_pin_manual_recovery_compat_private_v1.test.js \
+            functions/test/deda_pin_auto_recovery_compat_private_v1.test.js
+      - name: Verify functions remain default DENY and cannot be enabled by app flag alone
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const {stage2LiveGateEnabled} = require('./functions/deda_stage2_live_gate');
+          for (const feature of ['pinProof','deviceGrant','journal']) {
+            assert.equal(stage2LiveGateEnabled(feature, {}), false);
+            assert.equal(stage2LiveGateEnabled(feature, {
+              GOOGLE_CLOUD_PROJECT:'deda-25b88',
+              DEDA_STAGE2_LIVE_TARGET_PROJECT:'deda-25b88',
+              DEDA_STAGE2_LIVE_PIN_PROOF:'1',
+              DEDA_STAGE2_LIVE_DEVICE_GRANT:'1',
+              DEDA_STAGE2_LIVE_JOURNAL:'1',
+            }), false);
+          }
+          console.log('PASS_ALL_THREE_LOCKED_DEFAULT_DENY');
+          NODE
+          echo 'SERVER_SOURCE_TESTS_PASS_DOES_NOT_MEAN_LIVE_RECOVERY_AVAILABLE'
