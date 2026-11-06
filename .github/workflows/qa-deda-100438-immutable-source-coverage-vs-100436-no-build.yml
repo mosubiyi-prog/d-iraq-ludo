@@ -1,0 +1,93 @@
+name: DEDA 100438 freeze ALL 100436 feature files via signed-artifact source audit (NO BUILD)
+on:
+  push:
+    branches:
+      - deda-100438-full-100436-plus-stage2-signed-owner-qa-no-play-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100438-immutable-source-coverage-vs-100436-no-build.yml'
+      - 'tools/app_stability/app_package/guard_100438_frozen_feature_fingerprint.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  signed-source-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch original signed 100436 owner reference metadata — no binaries executed
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 41498505941
+          name: DEDA-100436-EXACT-100420-PHONE-TABLET-QA-APK
+          path: ${{ runner.temp }}/original-100436
+      - name: Fetch signed 100438 owner QA metadata — no APK installed
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: mosubiyi-prog/d-iraq-ludo
+          run-id: 42220064782
+          name: DEDA-100438-FULL-100436-PLUS-STAGE2-SIGNED-OWNER-QA-APK
+          path: ${{ runner.temp }}/full-100438
+      - name: Audit every compiled Dart and native input hash against FROZEN agreed sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          script=tools/app_stability/app_package/guard_100438_frozen_feature_fingerprint.py
+          python3 -m py_compile "$script"
+          python3 "$script" \
+            "$RUNNER_TEMP/original-100436/verification.json" \
+            "$RUNNER_TEMP/full-100438/verification.json" \
+            --report "$RUNNER_TEMP/deda-100438-frozen-source-audit.json"
+          echo 'PASS_100436_TO_100438_NO_REMOVED_FILES_ALL_ORIGINAL_FEATURE_STAGES_PRESENT'
+      - name: Negative regression tests must FAIL even if a signed release says success
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,subprocess,sys,tempfile
+          from pathlib import Path
+          script=Path('tools/app_stability/app_package/guard_100438_frozen_feature_fingerprint.py')
+          old=Path(os.environ['RUNNER_TEMP'])/'original-100436/verification.json'
+          new=Path(os.environ['RUNNER_TEMP'])/'full-100438/verification.json'
+          data=json.loads(new.read_text())
+          for label,transform in [
+              ('LOST_FRIENDS_FILE',lambda d:d['sourceHashes'].pop('lib/deda_friend_id_copy_100411.dart')),
+              ('SILENT_CHANGE_TO_CORE_LOGIN',lambda d:d['sourceHashes'].__setitem__('lib/main.dart','0'*64)),
+              ('MISSING_LEADERBOARD_HOME_ROUTE',lambda d:d['weeklyStage13'].__setitem__('bothHomeRoutes',1)),
+              ('WRONG_SIGNING_CERTIFICATE',lambda d:d.__setitem__('certificateSha256','0'*64)),
+              ('UNAPPROVED_FINANCIAL_RESTORE',lambda d:d.__setitem__('financialRestoreEnabled',True)),
+          ]:
+              test=json.loads(json.dumps(data))
+              transform(test)
+              with tempfile.NamedTemporaryFile('w',suffix='.json',delete=False) as f:
+                  json.dump(test,f)
+                  candidate=f.name
+              try:
+                  proc=subprocess.run([sys.executable,str(script),str(old),candidate],
+                      capture_output=True,text=True)
+                  assert proc.returncode!=0 and 'BLOCK_DEDA_SILENT_FEATURE_REGRESSION' in proc.stderr,(
+                      'MISSED_REGRESSION:'+label)
+                  print('PASS_EXPECTED_BLOCK',label)
+              finally:
+                  Path(candidate).unlink(missing_ok=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100438-ALL-ORIGINAL-FEATURE-SOURCE-FINGERPRINT-REPORT
+          path: ${{ runner.temp }}/deda-100438-frozen-source-audit.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: State exact coverage limits
+        run: |
+          echo 'SOURCE_INTEGRITY_VERIFIED_EVERY_FILE_AGAINST_IMMUTABLE_SIGNED_QA_REFERENCES'
+          echo 'NOT_A_FULL_PHONE_FUNCTIONAL_QA; MODIFIED_METHODS_AND_ADMIN_NEED_UI_TEST'
+          echo 'NOT_LIVE_ACCOUNT_RESTORE; NO_PLAY_NO_FIREBASE_NO_APK_BUILD'
