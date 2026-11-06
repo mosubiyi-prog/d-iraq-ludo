@@ -14,6 +14,7 @@ on:
       - 'test/deda_step2_spark_linked_uid_readonly_private_test.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'test/deda_google_settings_card_private_test.dart'
+      - 'test/deda_google_guardian_contract_private_test.dart'
       - '.github/workflows/deda-google-original-uid-guarded-qa-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -43,7 +44,7 @@ jobs:
       - name: Analyze linked-original UID and Google-only guards
         run: dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart lib/deda_100431_linked_owner_session_policy.dart lib/deda_step2_spark_linked_uid_readonly.dart lib/deda_step2_linked_owner_firebase_port.dart test/deda_google_original_uid_link_private_test.dart test/deda_step2_spark_linked_uid_readonly_private_test.dart
       - name: Run original UID and linked-provider negative regression checks
-        run: flutter test --no-pub test/deda_google_original_uid_link_private_test.dart test/deda_owner_session_compat_private_test.dart test/deda_step2_spark_linked_uid_readonly_private_test.dart
+        run: flutter test --no-pub test/deda_google_original_uid_link_private_test.dart test/deda_owner_session_compat_private_test.dart test/deda_step2_spark_linked_uid_readonly_private_test.dart test/deda_google_guardian_contract_private_test.dart test/deda_step2_recovery_guardian_private_test.dart
       - name: Validate settings integration in a disposable source directory
         shell: bash
         run: |
