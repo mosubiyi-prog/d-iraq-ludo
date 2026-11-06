@@ -9,12 +9,14 @@ String owner({
   String key = account, String ownerUid = uid,
   String? email = '$account@deda-login.invalid',
   bool anonymous = false, bool admin = false,
+  bool verifiedGoogle = false,
   Map<String,dynamic>? directory,
   Map<String,dynamic>? user,
   Map<String,dynamic>? route,
   Map<String,dynamic>? session,
 }) => DedaStep2SparkLinkedUidReadOnlyProof.verify(
   accountKey:key, originalUid:ownerUid, authEmail:email,
+  verifiedGoogleLinkedOriginal:verifiedGoogle,
   anonymous:anonymous, adminDocumentExists:admin,
   directory:directory ?? {
     'active':true,'accountKey':account,'createdUid':uid,
@@ -53,6 +55,14 @@ void main() {
   test('original Firebase UID with existing session is eligible for read only',
       () {
     expect(owner(), originalId);
+  });
+  test('Google email still needs proven original UID and legacy provider', () {
+    expect(owner(email:'owner@gmail.com',verifiedGoogle:true),originalId);
+    expect(()=>owner(email:'owner@gmail.com'),throwsStateError);
+    expect(()=>owner(email:'owner@gmail.com',verifiedGoogle:true,
+        ownerUid:'new-uid'),throwsStateError);
+    expect(()=>owner(email:'owner@gmail.com',verifiedGoogle:true,
+        admin:true),throwsStateError);
   });
   test('anonymous, different UID, email, account and staff are DENIED', () {
     expect(()=>owner(anonymous:true),throwsStateError);
