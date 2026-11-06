@@ -1,0 +1,37 @@
+name: DEDA 100438 Compare Existing Firebase Credentials READ ONLY (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100438-stage2-core-threeway-merge-qa-2026-11-06
+    paths:
+      - 'tools/app_stability/app_package/audit_100438_alt_deploy_identity_readonly.py'
+      - '.github/workflows/qa-deda-100438-stage2-fallback-iam-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-existing-iam-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FIREBASE_SA_FALLBACK: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare approved preexisting identities, GET metadata and IAM test only
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/app_stability/app_package/audit_100438_alt_deploy_identity_readonly.py
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/app_stability/app_package/audit_100438_alt_deploy_identity_readonly.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100438-FIREBASE-ALTERNATE-CREDENTIALS-READONLY
+          path: ${{ runner.temp }}/deda-100438-stage2-credential-readonly.json
+          if-no-files-found: error
+          retention-days: 15
