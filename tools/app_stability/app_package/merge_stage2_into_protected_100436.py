@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from reconcile_stage2_auth_conflicts import reconcile
+from reconcile_stage2_main_conflicts import reconcile_main
 
 REPO = Path(__file__).resolve().parents[3]
 RAW_100436_COMMIT = "fea54d7db2e8a24a74267f04a14c9572bcb408ee"
@@ -124,7 +125,10 @@ def integrate(project):
             if merge.returncode < 0 or merge.returncode >= 128:
                 stop("git merge-file tool failed: " + relative +
                      " exit=" + str(merge.returncode))
-            proposal, resolved = reconcile(relative, merge.stdout)
+            if relative == "lib/main.dart":
+                proposal, resolved = reconcile_main(merge.stdout)
+            else:
+                proposal, resolved = reconcile(relative, merge.stdout)
             if resolved:
                 print("REVIEWED_AUTH_CONFLICTS_RESOLVED " + relative +
                       " resolved_blocks=" + str(resolved))
