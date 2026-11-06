@@ -47,6 +47,24 @@ jobs:
           path: ${{ runner.temp }}/deda-100438-stage2-cloud-readonly.json
           if-no-files-found: error
           retention-days: 15
+      - name: Fail closed when LIVE prerequisites are missing - a successful read-only audit is NOT deployment readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,sys
+          from pathlib import Path
+          file=Path(os.environ["RUNNER_TEMP"])/"deda-100438-stage2-cloud-readonly.json"
+          result=json.loads(file.read_text())
+          blockers=result.get("blockers")
+          if blockers:
+              print("BLOCK_STAGE2_LIVE_RECOVERY_DEPLOY_PREREQUISITES")
+              for item in blockers:
+                  print("REQUIRED_UNVERIFIED_OR_MISSING",item)
+              print("SOURCE_INTEGRATION_GREEN_DOES_NOT_MEAN_RECOVERY_LIVE")
+              sys.exit(1)
+          print("PREREQUISITES_OBSERVABLE_ONLY_NOT_FULL_RECOVERY_APPROVAL")
+          PY
       - name: Explicitly label limitations, no claim of ready recovery
         shell: bash
         run: |
