@@ -154,7 +154,11 @@ class _DedaGoogleSettingsLinkCardState
             key: const ValueKey('deda-google-link-settings-action'),
             contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16, vertical: 5),
-            leading: const Icon(Icons.account_circle_outlined, color: green),
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFFE8F2E8),
+              child: Text('G', style: TextStyle(
+                fontSize: 23, fontWeight: FontWeight.w800, color: green)),
+            ),
             title: Text(_t('ربط الحساب بجوجل', 'Link with Google')),
             subtitle: Text(_verified
                 ? _t('مرتبط ومؤكد', 'Linked and verified')
