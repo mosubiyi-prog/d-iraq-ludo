@@ -112,7 +112,7 @@ class DedaWeeklyPrizeReader {
       frozen:{
         for(final d in reviews.docs) if(d.data()['frozen']==true) d.id
       },
-      plan: prize.exists ? prize.data()?['amounts'] as List<dynamic>? : null,
+      plan: prize.exists ? (prize.data()?['amounts'] as List<dynamic>?) : null,
     );
   }
 }
