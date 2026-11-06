@@ -1,0 +1,37 @@
+name: DEDA isolated Google original UID guarded QA - no deploy
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - 'lib/deda_100430_owner_uid_continuity.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_google_original_uid_link_private_test.dart'
+      - '.github/workflows/deda-google-original-uid-guarded-qa-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-original-uid-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Keep the original 100439 signing build and cloud deployment untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 6bd4b423cdc8aab028958665e7aa7b99c8370007 HEAD -- android assets firestore.rules firebase.json storage.rules pubspec.yaml pubspec.lock
+          grep -q "'DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK', defaultValue: false" lib/deda_100430_owner_uid_continuity.dart
+          echo PASS_ONLY_ISOLATED_GOOGLE_OWNER_LINK_NO_SIGNED_APK_NO_FIREBASE_DEPLOY
+      - name: Resolve dependencies without modifying the protected lock
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze linked-original UID and Google-only guards
+        run: dart analyze --no-fatal-warnings lib/deda_100430_owner_uid_continuity.dart lib/deda_100431_linked_owner_session_policy.dart test/deda_google_original_uid_link_private_test.dart
+      - name: Run original UID and linked-provider negative regression checks
+        run: flutter test --no-pub test/deda_google_original_uid_link_private_test.dart test/deda_owner_session_compat_private_test.dart
