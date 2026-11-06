@@ -124,6 +124,30 @@ jobs:
           flutter pub get --enforce-lockfile
           dart analyze --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_weekly_leaderboard_page.dart lib/deda_friend_id_copy_100411.dart lib/deda_step2_completion_gate.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_step2_linked_owner_guardian_assembly.dart
           echo 'PASS_SOURCE_ANALYSIS_NOT_A_FINISHED_RESTORE'
+      - name: Run account, linked UID, recovery and wallet no-grant tests on FINAL assembled app
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          mkdir -p "$project/test"
+          for testname in \
+            deda_owner_login_commit_guard_private_test.dart \
+            deda_owner_session_compat_private_test.dart \
+            deda_step2_existing_account_signin_page_private_test.dart \
+            deda_step2_completion_gate_private_test.dart \
+            deda_step2_recovery_guardian_private_test.dart \
+            deda_step2_linked_owner_guardian_bridge_private_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$testname" "$project/test/$testname"
+          done
+          cd "$project"
+          flutter test --no-pub \
+            test/deda_owner_login_commit_guard_private_test.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_step2_completion_gate_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          echo 'PASS_ASSEMBLED_APP_OWNER_AND_FINANCIAL_INVARIANT_TESTS'
       - name: Verify signed baseline hash proof after merged Dart analysis
         shell: bash
         run: |
