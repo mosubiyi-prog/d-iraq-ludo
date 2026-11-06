@@ -132,10 +132,11 @@ LEGACY_GUARD = """
 
 VERIFIED_EARLY_BRANCH = """
     if (verifiedCanonicalProfile) {
-      return _saveVerifiedLinkedOwnerLogin(
+      await _saveVerifiedLinkedOwnerLogin(
         name: name, normalizedPhone: normalizedPhone,
         type: type, verifiedOriginalUid: verifiedOriginalUid,
       );
+      return;
     }
 """
 
@@ -144,9 +145,7 @@ def resolve_block(ours, base, theirs):
     if ("import 'deda_verified_active_id_store.dart';" in ours and
             "import 'deda_100431_linked_owner_session_policy.dart';" in theirs):
         # Keep both old unified ID and new linked-owner imports.
-        return ours + theirs.replace(
-            "import 'deda_daily_published_tasks.dart';\n"
-            "import 'deda_daily_user_task_display.dart';\n", "")
+        return ours + theirs
     if "On a private, confirmed replacement phone" in theirs:
         return ours + theirs
     if ("if (verifiedCanonicalProfile &&" in theirs and
