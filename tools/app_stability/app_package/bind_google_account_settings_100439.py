@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Safely add exactly one Google-link field ABOVE voice/navigation settings.
+
+Apply only to an independently assembled full 100439 source; never replace
+the signed 100439 main.dart, Android assets, Firebase rules or wallet.
+No build, Firebase deployment, login or financial writes are performed.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+MODULE = "lib/deda_step1_google_settings_link_100439.dart"
+MAIN = "lib/main.dart"
+PUBSPEC = "pubspec.yaml"
+IMPORT = "import 'deda_100433_owner_confirmation_ui.dart';"
+SETTINGS_ANCHOR = """                  _sectionTitle(
+                      dedaText('الصوت والملاحة', 'Voice & navigation')),"""
+INSERT = """                  if (dedaStep1GoogleOwnerLinkEnabled) ...[
+                    DedaGoogleSettingsLinkCard(
+                      phone: DedaPreferences.accountPhone.trim().isNotEmpty
+                          ? DedaPreferences.accountPhone
+                          : DedaPreferences.phone,
+                      originalId: DedaBackend.personalShareIdForPhone(
+                        DedaPreferences.accountPhone.trim().isNotEmpty
+                            ? DedaPreferences.accountPhone
+                            : DedaPreferences.phone),
+                      isArabic: DedaLanguageState.isArabic,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+"""
+GOOGLE_PIN = "  google_sign_in: 6.3.0"
+
+
+def abort(why):
+    raise SystemExit("BLOCK_GOOGLE_OWNER_SETTINGS:" + why)
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def exactly_once(text, old, replacement, label):
+    if text.count(old) != 1:
+        abort(label + " expected 1 anchor, got " + str(text.count(old)))
+    return text.replace(old, replacement, 1)
+
+
+def bind(project):
+    project = Path(project).resolve()
+    if project == ROOT or ROOT in project.parents:
+        abort("must not modify repository or signed reference")
+    manifest = project / "internal-build-inputs.json"
+    if not manifest.is_file() or not (project / "deda-stage2-core-merge-proof.json").is_file():
+        abort("missing verified full Stage2 assembly")
+    meta = json.loads(manifest.read_text())
+    if not meta.get("weekly100439AdminWinnersPrizeReport", {}).get("singlePanelNoDuplicate"):
+        abort("100439 manager winners baseline missing")
+    if meta.get("financialRestoreEnabled") is not False:
+        abort("financial restoration must remain disabled")
+    main = project / MAIN
+    module = project / MODULE
+    if module.exists():
+        abort("duplicate Google settings module")
+    if not (ROOT / MODULE).is_file():
+        abort("reviewed card source missing")
+    old = main.read_text()
+    if "DedaGoogleSettingsLinkCard(" in old:
+        abort("Google settings card already exists")
+
+    new = exactly_once(old, IMPORT,
+        IMPORT + "\nimport 'deda_step1_google_settings_link_100439.dart';",
+        "Google settings import")
+    new = exactly_once(new, SETTINGS_ANCHOR,
+        INSERT + SETTINGS_ANCHOR, "settings location above voice")
+    if new.count("DedaGoogleSettingsLinkCard(") != 1:
+        abort("not exactly one Google settings card")
+
+    dependency = project / PUBSPEC
+    old_pub = dependency.read_text()
+    if "google_sign_in:" in old_pub:
+        abort("Google package already configured; review required")
+    new_pub = exactly_once(old_pub,
+        "  google_mobile_ads: 9.1.0",
+        "  google_mobile_ads: 9.1.0\n" + GOOGLE_PIN,
+        "Google package dependency")
+    main.write_text(new)
+    module.write_bytes((ROOT / MODULE).read_bytes())
+    dependency.write_text(new_pub)
+    hashes = meta.setdefault("sourceHashes", {})
+    for path in (MAIN, MODULE, PUBSPEC):
+        hashes[path] = digest(project / path)
+    meta["googleOriginalUidSettings"] = {
+        "position": "top_of_settings_above_voice_navigation",
+        "fields": 1,
+        "defaultOff": True,
+        "requiresOriginalUid": True,
+        "requiresGoogleOAuthConfiguration": True,
+        "noNewUserOrDataMerge": True,
+        "financialRestoreEnabled": False,
+        "googlePackageLockUpdateRequiredInIsolatedWorkspace": True,
+        "noFirebaseOrPlayDeploy": True,
+    }
+    manifest.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
+    print("PASS_GOOGLE_LINK_FIELD_ABOVE_VOICE_ONLY_IN_FULL_ASSEMBLED_100439")
+    print("PASS_ORIGINAL_100439_REPO_ASSETS_FIREBASE_AND_SIGNING_UNCHANGED")
+    return meta["googleOriginalUidSettings"]
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("project", type=Path)
+    args = parser.parse_args()
+    bind(args.project)
