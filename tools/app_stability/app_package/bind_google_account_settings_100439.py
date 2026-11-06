@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 MODULE = "lib/deda_step1_google_settings_link_100439.dart"
 MAIN = "lib/main.dart"
+BACKEND = "lib/deda_backend.dart"
 PUBSPEC = "pubspec.yaml"
 IMPORT = "import 'deda_100433_owner_confirmation_ui.dart';"
 SETTINGS_ANCHOR = """                  _sectionTitle(
@@ -75,9 +76,24 @@ def bind(project):
         "Google settings import")
     new = exactly_once(new, SETTINGS_ANCHOR,
         INSERT + SETTINGS_ANCHOR, "settings location above voice")
+    new = exactly_once(new,
+        "        currentEmail: user?.email,",
+        """        currentEmail: user?.email,
+        currentHasOriginalGoogleProvider: user != null &&
+            user.providerData.any((p) => p.providerId == 'google.com') &&
+            DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+                user, prefs.getString(_linkedVerifiedAccountKey) ?? ''),""",
+        "Google-linked owner cold-start preservation")
     if new.count("DedaGoogleSettingsLinkCard(") != 1:
         abort("not exactly one Google settings card")
 
+    backend_path = project / BACKEND
+    backend_old = backend_path.read_text()
+    backend_new = exactly_once(
+        backend_old,
+        "DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)",
+        "DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)",
+        "protect original user vs admin in backend after Google linking")
     dependency = project / PUBSPEC
     old_pub = dependency.read_text()
     if "google_sign_in:" in old_pub:
@@ -87,10 +103,11 @@ def bind(project):
         "  google_mobile_ads: 9.1.0\n" + GOOGLE_PIN,
         "Google package dependency")
     main.write_text(new)
+    backend_path.write_text(backend_new)
     module.write_bytes((ROOT / MODULE).read_bytes())
     dependency.write_text(new_pub)
     hashes = meta.setdefault("sourceHashes", {})
-    for path in (MAIN, MODULE, PUBSPEC):
+    for path in (MAIN, BACKEND, MODULE, PUBSPEC):
         hashes[path] = digest(project / path)
     meta["googleOriginalUidSettings"] = {
         "position": "top_of_settings_above_voice_navigation",
