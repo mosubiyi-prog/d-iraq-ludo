@@ -310,9 +310,20 @@ jobs:
                 for p in dart_files}
           for rel in ('pubspec.yaml','pubspec.lock'):
             full[rel]=hashlib.sha256((project/rel).read_bytes()).hexdigest()
+          # The original 100436 source hashes for the SIX merged core Dart
+          # files are deliberately left as BEFORE-hashes. The immutable
+          # diff3 proof stores verified AFTER-hashes. Validate BOTH sides.
+          mergeProof=json.loads((project/'deda-stage2-core-merge-proof.json').read_text())
+          core=mergeProof['coreHashes']
+          if len(core)!=6:stop('six merged core source proofs missing')
           for rel,expected in recorded.items():
-            if rel not in full or full[rel]!=expected:
-              stop('intermediate assembled source hash altered:'+rel)
+            if rel not in full:
+              stop('assembled source vanished:'+rel)
+            if rel in core:
+              if expected!=core[rel]['before'] or full[rel]!=core[rel]['after']:
+                stop('Stage2 protected pre/post core hash mismatch:'+rel)
+            elif full[rel]!=expected:
+              stop('unchanged or approved panel source hash mismatch:'+rel)
           actual['sourceHashes']=full
           old=baseline['sourceHashes']; new=actual['sourceHashes']
           oldpaths=set(old); newpaths=set(new)
