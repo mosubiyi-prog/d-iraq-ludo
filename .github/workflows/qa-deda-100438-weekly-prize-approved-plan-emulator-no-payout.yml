@@ -1,0 +1,59 @@
+name: DEDA 100438 Weekly Hadaya Correct-Plan Emulator Only (NO REAL PAYOUT)
+on:
+  push:
+    branches:
+      - deda-100438-weekly-payout-candidate-no-live-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100438-weekly-prize-approved-plan-emulator-no-payout.yml'
+      - 'functions/deda_weekly_direct_prize_plan.js'
+      - 'functions/deda_weekly_direct_prize_worker.cjs'
+      - 'functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strict-local-only-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Block all production dependencies and changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test -z "${FIREBASE_TOKEN:-}"
+          git diff --exit-code a4a373c6ce6cb8d8bd393bc5301eaf87a910f7c3 HEAD -- \
+            functions/index.js firestore.rules storage.rules firebase.json .firebaserc \
+            .github/workflows/deda-weekly-100405-awards-OWNER-HELD-SCHEDULE.yml
+          node --check functions/deda_weekly_direct_prize_plan.js
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          echo 'PASS_PRODUCTION_INDEX_RULES_SCHEDULE_UNCHANGED'
+      - name: Pure plan tests before emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+      - name: Run BOTH original and approved-new-prizes worker tests on Firestore EMULATOR
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-audit --no-fund
+          npm install --prefix tests/firestore-rules --no-audit --no-fund --no-save firebase-tools@14
+          export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --project demo-deda-100405-worker --only firestore \
+            'node --test functions/tests/deda_weekly_direct_prize_worker.test.cjs functions/tests/deda_weekly_direct_prize_custom_plan_100438.test.cjs'
+          echo 'PASS_EMULATOR_HADAYA_UPDATED_PLAN_AND_IDEMPOTENT_PENDING_GIFT'
+      - name: Explicit limitations, no live payout activation
+        shell: bash
+        run: |
+          echo 'NO_GITHUB_SCHEDULE_ACTIVATED_NO_GIFTS_IN_PRODUCTION_NO_FIREBASE_DEPLOY'
+          echo 'LIVE_OWNER_APPROVAL_AND_SAME_WEEK_PLAN_READBACK_STILL_REQUIRED'
