@@ -38,17 +38,23 @@ void main() {
   test('only same UID, linked email and account may resume stored profile', () {
     bool check({String? savedUid = uid, String? savedAccount = account,
       String phone = '+9647712345678', String? currentUid = uid,
-      String? email = '$account@deda-login.invalid', bool anonymous = false}) =>
+      String? email = '$account@deda-login.invalid', bool anonymous = false,
+      bool linkedGoogle = false}) =>
       DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
         savedOriginalUid: savedUid,
         savedAccountKey: savedAccount,
         localPhone: phone,
         currentUid: currentUid,
         currentEmail: email,
+        currentHasOriginalGoogleProvider: linkedGoogle,
         currentIsAnonymous: anonymous,
       );
     expect(check(), true);
     expect(check(currentUid: 'foreign-uid'), false);
+    expect(check(email: 'owner@gmail.com', linkedGoogle: true), true);
+    expect(check(email: 'owner@gmail.com'), false);
+    expect(check(currentUid: 'foreign-uid', email: 'owner@gmail.com',
+        linkedGoogle: true), false);
     expect(check(email: 'admin@example.com'), false);
     expect(check(anonymous: true), false);
     expect(check(savedUid: null), false);
