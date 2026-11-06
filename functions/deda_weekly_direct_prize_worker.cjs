@@ -1,6 +1,9 @@
 'use strict';
 
 const {plan,weekStart,WEEK_MS,PRIZES}=require('./deda_weekly_direct_prize_plan.js');
+// Owner-approved current and future weekly baseline; the GM can increase
+// individual places only by saving a valid per-week Firestore plan.
+const APPROVED_DEFAULT=Object.freeze([250,200,150,100,100,100,100,100,100,100]);
 
 /**
  * Real eventual server-side settlement. Uses EXISTING هداياي pending gifts.
@@ -31,12 +34,17 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
     if(d.data().frozen===true) frozen.set(d.id,true);
   }
   // The app reads the manager-approved amount list from this exact
-  // Firestore document. Missing document uses legacy minimum; malformed
+  // Firestore document. Missing document uses the owner-approved future baseline; malformed
   // saved document FAILS CLOSED rather than silently dropping increases.
   const prizePlanRef=db.collection('deda_weekly_direct_prize_plans').doc(weekId);
   const prizePlanSnapshot=await prizePlanRef.get();
   const approvedAmounts=prizePlanSnapshot.exists
-    ? prizePlanSnapshot.data()?.amounts : PRIZES;
+    ? prizePlanSnapshot.data()?.amounts : APPROVED_DEFAULT;
+  const controlRef=db.collection('deda_weekly_direct_control').doc('active');
+  const controlSnapshot=await controlRef.get();
+  if(controlSnapshot.exists && controlSnapshot.data()?.paused===true) {
+    throw Error('WEEKLY_LEAGUE_PAUSED_NO_PAYOUT');
+  }
   const expected=plan({
     weekId,atMs:nowMs,records,freezes:frozen,approvedAmounts,
   });
@@ -57,13 +65,16 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
     const owner=db.collection('deda_share_ids').doc(winner.publicId);
     const outcome=await db.runTransaction(async tx=>{
       // All transaction reads before writes. Retry safely on Firestore conflicts.
-      const [prior,score,reviewNow,personal,planNow]=await Promise.all([
+      const [prior,score,reviewNow,personal,planNow,controlNow]=await Promise.all([
         tx.get(gift),tx.get(source),tx.get(review),tx.get(owner),
-        tx.get(prizePlanRef),
+        tx.get(prizePlanRef),tx.get(controlRef),
       ]);
+      if(controlNow.exists && controlNow.data()?.paused===true) {
+        throw Error('WEEKLY_LEAGUE_PAUSED_DURING_SETTLEMENT_STOP');
+      }
       // This transaction must use exactly the same plan as the initial
       // read. If another admin event modified the plan in between, STOP.
-      const latestAmounts=planNow.exists ? planNow.data()?.amounts : PRIZES;
+      const latestAmounts=planNow.exists ? planNow.data()?.amounts : APPROVED_DEFAULT;
       if (JSON.stringify(latestAmounts)!==JSON.stringify(approvedAmounts)) {
         throw Error('WEEKLY_PRIZE_PLAN_CHANGED_DURING_SETTLEMENT_STOP');
       }
