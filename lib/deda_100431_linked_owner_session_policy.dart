@@ -118,6 +118,7 @@ class DedaLinkedOwnerSessionPolicy {
     required String localPhone,
     required String? currentUid,
     required String? currentEmail,
+    bool currentHasOriginalGoogleProvider = false,
     required bool currentIsAnonymous,
   }) {
     final localAccount = localPhone.replaceAll(RegExp(r'[^0-9]'), '');
@@ -127,7 +128,8 @@ class DedaLinkedOwnerSessionPolicy {
         savedAccountKey == localAccount &&
         currentUid == savedOriginalUid &&
         !currentIsAnonymous &&
-        emailMatches(currentEmail, savedAccountKey);
+        (emailMatches(currentEmail, savedAccountKey) ||
+            currentHasOriginalGoogleProvider);
   }
 
   static bool ownerDocumentsMatch({
