@@ -28,7 +28,7 @@ jobs:
           node --check functions/deda_weekly_direct_prize_worker.cjs
           node --check functions/deda_weekly_direct_prize_plan.js
           echo 'PASS_NO_LIVE_PAYOUT_ENV_NO_FIRESTORE_WRITE'
-      - name: Read only: live week plan, scores and recipient personal IDs; simulate exact approved amounts
+      - name: 'Read only - current league plan, scores and recipients'
         run: |
           set -euo pipefail
           npm install --prefix functions --no-audit --no-fund
