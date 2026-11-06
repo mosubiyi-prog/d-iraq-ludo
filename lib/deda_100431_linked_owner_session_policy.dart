@@ -69,6 +69,31 @@ class DedaLinkedOwnerSessionPolicy {
       RegExp(r'^[0-9]{8,16}$').hasMatch(accountKey) &&
       email == ownerEmail(accountKey);
 
+
+  /// A Google sign-in is NOT owner proof by itself. If Firebase changes the
+  /// primary email after linking Google, require the ORIGINAL synthetic
+  /// password provider on that same Firebase principal as well.
+  static bool providerIdentityMatches({
+    required String accountKey,
+    required String? primaryEmail,
+    Iterable<({String providerId, String? email})> providers = const [],
+  }) {
+    if (emailMatches(primaryEmail, accountKey)) return true;
+    final linked = providers.toList(growable: false);
+    final originalPassword = linked.any((p) =>
+        p.providerId == 'password' && emailMatches(p.email, accountKey));
+    final google = linked.any((p) => p.providerId == 'google.com');
+    return originalPassword && google;
+  }
+
+  static bool userProviderIdentityMatches(User? user, String accountKey) =>
+      user != null && providerIdentityMatches(
+        accountKey: accountKey,
+        primaryEmail: user.email,
+        providers: user.providerData.map((p) =>
+            (providerId: p.providerId, email: p.email)),
+      );
+
   /// Only a confirmed Firebase login may resume a previously linked account
   /// on this installation. Reject even a PARTIAL saved proof: an interrupted
   /// disk write must not downgrade account authentication to typed phone/name.
@@ -139,7 +164,7 @@ class DedaLinkedOwnerSessionPolicy {
   /// An absent snapshot, slow network or stale login fails closed.
   static Future<bool> verified(User? user, String accountKey) async {
     if (!dedaLinkedOwnerCompatEnabled || user == null ||
-        user.isAnonymous || !emailMatches(user.email, accountKey)) {
+        user.isAnonymous || !userProviderIdentityMatches(user, accountKey)) {
       return false;
     }
     final uid = user.uid;
