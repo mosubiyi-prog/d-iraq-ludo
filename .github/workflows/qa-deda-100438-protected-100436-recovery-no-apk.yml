@@ -1,0 +1,125 @@
+name: DEDA 100438 preserve FULL 100436 + staged recovery parity QA (NO APK NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100438-protected-100436-recovery-regression-qa-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100438-protected-100436-recovery-no-apk.yml'
+      - 'tools/app_stability/app_package/guard_100436_parity_before_recovery.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reconstruct-and-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lock old owner baseline and protect all user data
+        shell: bash
+        run: |
+          set -euo pipefail
+          signed_reference=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          stage2_source=80f5c03e4a25677b448b1593f843995c6d81b356
+          git cat-file -e "$signed_reference^{commit}"
+          git merge-base --is-ancestor "$stage2_source" HEAD
+          git diff --exit-code "$stage2_source" HEAD -- lib assets android functions pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json storage.rules
+          test -f lib/deda_step2_completion_gate.dart
+          test -f tools/app_stability/app_package/guard_100436_parity_before_recovery.py
+          echo 'PASS_OWNER100436_SOURCE_AND_FIREBASE_UNMODIFIED'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Reconstruct EXACT same ordered signed 100436 app source, not raw lib
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-100438-protected-source"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
+          python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$project"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$project"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$project"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100410_unified_active_id.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100413_owner_id_admin_response.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100414_last_three.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100418_legacy340_friend_active_compat.py "$project"
+          echo "DEDA_PROTECTED_STAGE2_PROJECT=$project" >> "$GITHUB_ENV"
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project"
+          echo 'PASS_EXACT_ORDERED_100436_RECONSTRUCTION_NO_RAW_OVERWRITE'
+      - name: Safely stage ONLY new recovery modules; never overwrite old UI, backend, league, ID, admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          shopt -s nullglob
+          count=0
+          for source in "$GITHUB_WORKSPACE"/lib/deda_step2_*.dart "$GITHUB_WORKSPACE"/lib/deda_100429*.dart "$GITHUB_WORKSPACE"/lib/deda_100430*.dart "$GITHUB_WORKSPACE"/lib/deda_100431*.dart "$GITHUB_WORKSPACE"/lib/deda_100432*.dart "$GITHUB_WORKSPACE"/lib/deda_100433*.dart; do
+            target="$project/lib/$(basename "$source")"
+            if test -e "$target"; then
+              echo "BLOCK_RECOVERY_MODULE_WOULD_OVERWRITE_BASELINE: $target"
+              exit 1
+            fi
+            cp "$source" "$target"
+            count=$((count + 1))
+          done
+          test "$count" -ge 30
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          echo "PASS_ADDITIVE_RECOVERY_FILES_COUNT=$count"
+      - name: Analyze assembled baseline and non-activated recovery sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_PROTECTED_STAGE2_PROJECT"
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_weekly_leaderboard_page.dart lib/deda_friend_id_copy_100411.dart lib/deda_step2_completion_gate.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_step2_linked_owner_guardian_assembly.dart
+          echo 'PASS_SOURCE_ANALYSIS_NOT_A_FINISHED_RESTORE'
+      - name: Negative regression test - RAW lib overwrite must be blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          cp "$project/lib/main.dart" "$RUNNER_TEMP/deda-100436-good-main.dart"
+          cp "$GITHUB_WORKSPACE/lib/main.dart" "$project/lib/main.dart"
+          if python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery; then
+            echo 'FAIL_REGRESSION_GATE_ACCEPTED_RAW_OLD_MAIN'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/deda-100436-good-main.dart" "$project/lib/main.dart"
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          echo 'PASS_REGRESSION_DETECTED_AND_BASELINE_RESTORED'
+      - name: State accurate limit of this stage (NO APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'bool get canPrepareFullRecoveryApk => false;' lib/deda_step2_completion_gate.dart
+          echo 'PASS_STAGE_ONLY: 100436 UI and source checked with additive recovery modules'
+          echo 'NOT_COMPLETE: recovery still needs safe core integration, cloud approval, financial proof and two-phone QA'
+          echo 'NO APK / NO FIREBASE DEPLOY / NO PLAY'
