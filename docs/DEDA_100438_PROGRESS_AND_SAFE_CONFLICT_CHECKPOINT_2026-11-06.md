@@ -21,6 +21,7 @@
 - [فحص دمج الملفات مع مصدر 100436 — ناجح](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42209140264)
 - [فحص الحساب وحماية البيانات — ناجح](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42209436437)
 - [فحص الدوري والإدارة والأصدقاء والمهام — ناجح](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42209854082)
+- [فحص حارس مسار المتصدرين وإعادة جميع الاختبارات — ناجح](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/42210228700)
 
 ## ثانياً: شنو باقي حتى يصير الاسترجاع كاملاً فعلاً؟
 
