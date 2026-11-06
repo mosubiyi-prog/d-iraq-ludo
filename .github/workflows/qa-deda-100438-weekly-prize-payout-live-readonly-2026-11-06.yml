@@ -122,6 +122,75 @@ jobs:
           print(json.dumps(report,sort_keys=True,ensure_ascii=False))
           print('PASS_READONLY_LEAGUE_PRIZE_PLAN_AUDIT_NO_WRITES_NO_DEPLOY')
           PY
+      - name: Count real score and registered personal IDs without exposing users or writing gifts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from urllib.parse import quote
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'; week='2026-10-31'
+          result={'mode':'READ_ONLY_AGGREGATES_NO_USER_IDS_LOGGED',
+                  'weekId':week,'scoreRead':'unknown','sourceRows':0,
+                  'wellFormedTaskScores':0,'badTaskScores':0,
+                  'activePersonalRecipientId':0,'inactiveOrDifferentIdType':0,
+                  'missingRecipientId':0,'recipientReadUnknown':0}
+          try:
+            obj=json.loads(os.environ.get('DEDA_READONLY_SA',''))
+            if obj.get('project_id')!=p or obj.get('type')!='service_account':
+              raise ValueError('incorrect project')
+            creds=service_account.Credentials.from_service_account_info(
+              obj,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            session=AuthorizedSession(creds)
+          except Exception:
+            result['scoreRead']='NO_APPROVED_IDENTITY'
+            print(json.dumps(result,sort_keys=True));raise SystemExit(0)
+          base=f'https://firestore.googleapis.com/v1/projects/{p}/databases/(default)/documents'
+          try:
+            res=session.get(base+'/deda_weekly_direct_weeks/'+week+'/scores',
+              params={'pageSize':100},timeout=25)
+            result['scoreRead']='HTTP_'+str(res.status_code)
+            if res.status_code==200:
+              body=res.json()
+              docs=body.get('documents',[])
+              result['sourceRows']=len(docs)
+              result['moreThan100Rows']=bool(body.get('nextPageToken'))
+              for doc in docs:
+                id=doc.get('name','').split('/')[-1]
+                f=doc.get('fields',{})
+                try:
+                  xp=int(f.get('weeklyXp',{})['integerValue'])
+                  done=int(f.get('completedTasks',{})['integerValue'])
+                  valid=(re.fullmatch(r'@DEDA-[A-Z0-9]{4,12}',id) is not None
+                    and f.get('publicId',{}).get('stringValue')==id
+                    and f.get('weekId',{}).get('stringValue')==week
+                    and 1<=done<=56 and xp==20*done
+                    and bool(f.get('displayName',{}).get('stringValue','').strip())
+                    and bool(f.get('updatedAt',{}).get('timestampValue')))
+                except Exception:valid=False
+                if not valid:
+                  result['badTaskScores']+=1
+                  continue
+                result['wellFormedTaskScores']+=1
+                key=quote(id,safe='')
+                owner=session.get(base+'/deda_share_ids/'+key,timeout=20)
+                if owner.status_code==404:
+                  result['missingRecipientId']+=1
+                elif owner.status_code!=200:
+                  result['recipientReadUnknown']+=1
+                else:
+                  row=owner.json().get('fields',{})
+                  if row.get('kind',{}).get('stringValue')=='personal' and (
+                      row.get('active',{}).get('booleanValue') is True):
+                    result['activePersonalRecipientId']+=1
+                  else:result['inactiveOrDifferentIdType']+=1
+          except Exception as ex:
+            result['safeReadErrorType']=type(ex).__name__
+          print(json.dumps(result,sort_keys=True))
+          print('READ_ONLY_RECIPIENT_AGGREGATE_NO_PII_NO_PAYOUT')
+          PY
       - name: End without payout, deploying functions or modifying accounts
         run: |
           echo 'NO_WEEKLY_GIFTS_CREATED_NO_WALLET_CHANGES_NO_APPROVAL_VARIABLE_CHANGES'
