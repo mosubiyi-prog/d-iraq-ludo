@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_pin_auth.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
@@ -19,6 +20,10 @@ import 'deda_step2_spark_linked_uid_readonly.dart';
 /// Do not enable before owner-approved 100340 compatibility/device tests.
 /// The six-digit legacy PIN remains low entropy even though Firebase Auth
 /// imposes its own sign-in abuse controls. No claim of full protection.
+/// Isolated development only. Never enable in public or signed 100439 builds.
+const bool dedaStep1GoogleOwnerLinkEnabled = bool.fromEnvironment(
+  'DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK', defaultValue: false);
+
 class DedaOwnerUidContinuity {
   const DedaOwnerUidContinuity._();
 
@@ -147,6 +152,98 @@ class DedaOwnerUidContinuity {
     return originalUid;
   }
 
+
+  /// Link an explicit Google credential to the EXISTING original Firebase UID.
+  /// Never sign into a new Google principal from this flow.
+  static void requireSameUidGoogleLink({
+    required bool featureEnabled,
+    required bool ownerCompatEnabled,
+    required String? originalUid,
+    required String? liveUid,
+    required bool anonymous,
+    required String providerId,
+    required bool adminDocumentExists,
+  }) {
+    if (!featureEnabled || !ownerCompatEnabled ||
+        originalUid == null || originalUid.isEmpty ||
+        liveUid != originalUid || anonymous ||
+        providerId != 'google.com' || adminDocumentExists) {
+      throw StateError('google-original-uid-only-link-denied');
+    }
+  }
+
+  static Future<String> linkGoogleToConfirmedOriginalUid({
+    required String phone,
+    required String originalId,
+    required AuthCredential googleCredential,
+  }) async {
+    if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
+    final accountKey = _account(phone);
+    _original(originalId);
+    final auth = FirebaseAuth.instance;
+    final original = auth.currentUser;
+    requireSameUidGoogleLink(
+      featureEnabled: dedaStep1GoogleOwnerLinkEnabled,
+      ownerCompatEnabled: dedaLinkedOwnerCompatEnabled,
+      originalUid: original?.uid,
+      liveUid: auth.currentUser?.uid,
+      anonymous: original?.isAnonymous ?? true,
+      providerId: googleCredential.providerId,
+      adminDocumentExists: false,
+    );
+    final uid = original!.uid;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString(DedaLinkedOwnerSessionPolicy.linkedUidPreferencesKey)
+          != uid ||
+        prefs.getString(DedaLinkedOwnerSessionPolicy.linkedAccountPreferencesKey)
+          != accountKey ||
+        prefs.getString(
+          DedaLinkedOwnerSessionPolicy.protectedAccountKey(accountKey)) != uid) {
+      throw StateError('google-original-phone-provenance-not-confirmed');
+    }
+    if (auth.currentUser?.uid != uid ||
+        !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          auth.currentUser, accountKey) ||
+        !await DedaLinkedOwnerSessionPolicy.verified(original, accountKey)) {
+      throw StateError('google-original-account-not-verified');
+    }
+    await _verifyOriginalUid(
+      accountKey: accountKey, originalId: originalId, uid: uid);
+    final adminRow = await FirebaseFirestore.instance
+        .collection('admins').doc(uid)
+        .get(const GetOptions(source: Source.server));
+    requireSameUidGoogleLink(
+      featureEnabled: dedaStep1GoogleOwnerLinkEnabled,
+      ownerCompatEnabled: dedaLinkedOwnerCompatEnabled,
+      originalUid: uid,
+      liveUid: auth.currentUser?.uid,
+      anonymous: auth.currentUser?.isAnonymous ?? true,
+      providerId: googleCredential.providerId,
+      adminDocumentExists: adminRow.exists,
+    );
+    if (auth.currentUser!.providerData.any(
+        (p) => p.providerId == 'google.com')) {
+      throw StateError('google-provider-already-linked-to-original');
+    }
+    // Firebase will reject an already-bound Google credential. Never merge.
+    final linked = await auth.currentUser!.linkWithCredential(googleCredential);
+    if (linked.user?.uid != uid || auth.currentUser?.uid != uid ||
+        auth.currentUser?.isAnonymous != false) {
+      throw StateError('google-link-must-preserve-original-uid');
+    }
+    await _verifyOriginalUid(
+      accountKey: accountKey, originalId: originalId, uid: uid);
+    final after = auth.currentUser;
+    if (after?.uid != uid ||
+        !after!.providerData.any((p) => p.providerId == 'google.com') ||
+        !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          after, accountKey)) {
+      throw StateError('google-link-not-verified-after-original-uid-check');
+    }
+    // Not a wallet, level, purchases or other account-data recovery grant.
+    return uid;
+  }
+
   /// Use only the original server-authoritative account profile to display
   /// the identity on a replacement phone. A typed name or old local cache
   /// must never silently replace the recovered account name.
@@ -196,7 +293,9 @@ class DedaOwnerUidContinuity {
     _original(originalId);
     final current = FirebaseAuth.instance.currentUser;
     if (current == null || current.uid != expectedUid ||
-        current.isAnonymous || current.email != authEmail(phone)) {
+        current.isAnonymous ||
+        !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          current, accountKey)) {
       throw StateError('linked-owner-profile-session-mismatch');
     }
     await _verifyOriginalUid(
