@@ -73,3 +73,26 @@ test('invalid custom plan fails closed instead of reverting silently to low old 
     ()=>settleWeek(db,other,early,{dryRun:true}),/INVALID_WEEK_PRIZE_PLAN_STOP/
   );
 });
+
+test('subsequent week with no special GM plan inherits the approved 250/200/150/100, NOT 150/100/50/10',async()=>{
+  const future='2026-11-21';
+  const start=weekStart(future);
+  const doc=db.collection('deda_weekly_direct_weeks').doc(future).collection('scores').doc(ONE);
+  await doc.set({
+    weekId:future,publicId:ONE,displayName:'Verified future winner',
+    weeklyXp:60,completedTasks:3,updatedAt:Timestamp.fromMillis(start+1),
+  });
+  const result=await settleWeek(db,future,start+WEEK_MS,{dryRun:true});
+  assert.equal(result.eligible,1);
+  assert.equal(result.diamonds,250);
+});
+test('administrator pause blocks all weekly payouts, even pending eligible prizes',async()=>{
+  const future='2026-11-21';
+  const ctrl=db.collection('deda_weekly_direct_control').doc('active');
+  await ctrl.set({paused:true,weekId:future});
+  await assert.rejects(
+    ()=>settleWeek(db,future,weekStart(future)+WEEK_MS,{dryRun:true}),
+    /WEEKLY_LEAGUE_PAUSED_NO_PAYOUT/
+  );
+  await ctrl.set({paused:false,weekId:future});
+});
