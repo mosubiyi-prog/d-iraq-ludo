@@ -39,6 +39,7 @@ class DedaStep2SparkLinkedUidReadOnlyProof {
     required String accountKey,
     required String originalUid,
     required String? authEmail,
+    bool verifiedGoogleLinkedOriginal = false,
     required bool anonymous,
     required Map<String, dynamic>? directory,
     required Map<String, dynamic>? user,
@@ -50,7 +51,8 @@ class DedaStep2SparkLinkedUidReadOnlyProof {
     if (!RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(accountKey) ||
         originalUid.length < 6 ||
         anonymous ||
-        authEmail != '$accountKey@deda-login.invalid' ||
+        (authEmail != '$accountKey@deda-login.invalid' &&
+            !verifiedGoogleLinkedOriginal) ||
         adminDocumentExists ||
         directory?['accountKey'] != accountKey ||
         directory?['active'] != true ||
