@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'deda_pin_auth.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
+import 'deda_auth_session_runtime.dart';
 import 'deda_step2_before_uid_link_evidence_checkpoint.dart';
 import 'deda_step2_spark_linked_uid_readonly.dart';
 
@@ -178,10 +179,14 @@ class DedaOwnerUidContinuity {
     required AuthCredential googleCredential,
   }) async {
     if (Firebase.apps.isEmpty) throw StateError('firebase-not-ready');
+    if (!DedaAuthRuntime.enabled) {
+      throw StateError('google-link-requires-shared-auth-transition-guardian');
+    }
     final accountKey = _account(phone);
     _original(originalId);
     final auth = FirebaseAuth.instance;
     final original = auth.currentUser;
+    final authSnapshot = DedaAuthRuntime.capture();
     requireSameUidGoogleLink(
       featureEnabled: dedaStep1GoogleOwnerLinkEnabled,
       ownerCompatEnabled: dedaLinkedOwnerCompatEnabled,
@@ -225,8 +230,21 @@ class DedaOwnerUidContinuity {
         (p) => p.providerId == 'google.com')) {
       throw StateError('google-provider-already-linked-to-original');
     }
-    // Firebase will reject an already-bound Google credential. Never merge.
-    final linked = await auth.currentUser!.linkWithCredential(googleCredential);
+    // The existing session transition guardian serializes the credential
+    // change with admin, owner and logout actions. Never sign into the
+    // Google principal or overwrite the original Firebase UID.
+    DedaAuthRuntime.checkSnapshot(authSnapshot);
+    final linked = await DedaAuthRuntime.run<UserCredential>(
+      kind: DedaSessionTransitionKind.credentialChange,
+      origin: DedaSessionTransitionOrigin.userAction,
+      action: () async {
+        if (auth.currentUser?.uid != uid) {
+          throw StateError('google-owner-changed-before-credential-link');
+        }
+        return auth.currentUser!.linkWithCredential(googleCredential);
+      },
+    );
+    DedaAuthRuntime.checkSnapshot(authSnapshot);
     if (linked.user?.uid != uid || auth.currentUser?.uid != uid ||
         auth.currentUser?.isAnonymous != false) {
       throw StateError('google-link-must-preserve-original-uid');
