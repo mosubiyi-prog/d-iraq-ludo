@@ -1,0 +1,128 @@
+name: DEDA 100438 Current Week Prize Plan & Hadaya Settlement READ ONLY - NO PAYOUT
+on:
+  push:
+    branches:
+      - deda-100438-weekly-prize-readonly-review-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100438-weekly-prize-payout-live-readonly-2026-11-06.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit-without-any-production-mutation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_READONLY_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm payout source safety and schedule are NOT activated on default branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_weekly_direct_prize_plan.js
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const {PRIZES,ORIGIN,WEEK_MS}=require('./functions/deda_weekly_direct_prize_plan.js');
+          const worker=fs.readFileSync('functions/deda_weekly_direct_prize_worker.cjs','utf8');
+          const schedule=fs.readFileSync('.github/workflows/deda-weekly-100405-awards-OWNER-HELD-SCHEDULE.yml','utf8');
+          const app=fs.readFileSync('lib/deda_weekly_prize_plan_100408.dart','utf8');
+          console.log('SERVER_OLD_PRIZES='+JSON.stringify(PRIZES));
+          console.log('CURRENT_APP_HAS_EDITABLE_FIRESTORE_PRIZE_PLAN='+app.includes("deda_weekly_direct_prize_plans"));
+          console.log('PAYOUT_WORKER_READS_EDITABLE_PRIZE_PLAN='+worker.includes("deda_weekly_direct_prize_plans"));
+          console.log('SCHEDULE_HAS_OWNER_APPROVAL_FLAG='+schedule.includes("DEDA_100405_WEEKLY_SETTLEMENT_OWNER_APPROVED"));
+          console.log('PAYMENT_GATE_DEFAULT_OFF='+worker.includes("DEDA_LEAGUE_ACTUALLY_PAY!=='APPROVED_BY_OWNER'"));
+          if(!app.includes('deda_weekly_direct_prize_plans')||
+             !schedule.includes('DEDA_100405_WEEKLY_SETTLEMENT_OWNER_APPROVED')||
+             !worker.includes("DEDA_LEAGUE_ACTUALLY_PAY!=='APPROVED_BY_OWNER'")) process.exit(1);
+          console.log('SOURCE_STATIC_PAYOUT_PLAN_REQUIRES_RECONCILIATION_BEFORE_ANY_RELEASE');
+          NODE
+          if git cat-file -e "origin/main:.github/workflows/deda-weekly-100405-awards-OWNER-HELD-SCHEDULE.yml" >/dev/null 2>&1; then
+            echo 'SCHEDULE_ON_DEFAULT_BRANCH=true'
+          else
+            echo 'SCHEDULE_ON_DEFAULT_BRANCH=false'
+            echo 'NO_AUTOMATIC_GITHUB_SCHEDULE_CAN_RUN_FROM_THIS_ISOLATED_BRANCH'
+          fi
+      - name: Read current prize plan and league controls metadata on actual project without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 - <<'PY'
+          import json,os
+          from datetime import datetime,timezone,timedelta
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import AuthorizedSession
+          p='deda-25b88'
+          report={'project':p,'mode':'READ_ONLY_NO_GIFTS_OR_BALANCE_WRITES',
+                  'currentWeekId':'unknown','currentPlan':'unknown',
+                  'planRead':'unknown','controlsRead':'unknown',
+                  'paused':'unknown','sourceCodePayoutUsesEditedPlan':False,
+                  'ownerApprovedLiveSettlement':False}
+          origin=datetime(2026,10,31,3,tzinfo=timezone.utc)
+          now=datetime.now(timezone.utc)
+          index=max(0,int((now-origin).total_seconds()//604800))
+          week=origin+timedelta(days=7*index)
+          report['currentWeekId']=(week+timedelta(hours=3)).strftime('%Y-%m-%d')
+          raw=os.environ.get('DEDA_READONLY_SA','')
+          try:
+            obj=json.loads(raw)
+            if (obj.get('type')!='service_account' or
+                obj.get('project_id')!=p or
+                obj.get('client_email')!='firebase-adminsdk-fbsvc@deda-25b88.iam.gserviceaccount.com'):
+              raise ValueError('not owner-approved project identity')
+            creds=service_account.Credentials.from_service_account_info(
+              obj,scopes=['https://www.googleapis.com/auth/cloud-platform'])
+            session=AuthorizedSession(creds)
+            report['identity']='approved_project_identity'
+          except Exception:
+            report['identity']='missing_or_wrong'
+            session=None
+          def read(path):
+            if session is None:return 'NO_APPROVED_IDENTITY',{}
+            try:
+              response=session.get(
+                f'https://firestore.googleapis.com/v1/projects/{p}/databases/(default)/documents/{path}',timeout=25)
+              if response.status_code!=200:return 'HTTP_'+str(response.status_code),{}
+              return 'OK',response.json()
+            except Exception:return 'TRANSPORT_ERROR',{}
+          code,doc=read('deda_weekly_direct_prize_plans/'+report['currentWeekId'])
+          report['planRead']=code
+          if code=='OK':
+            fields=doc.get('fields',{})
+            rawvalues=fields.get('amounts',{}).get('arrayValue',{}).get('values',[])
+            amounts=[]
+            for field in rawvalues:
+              try:amounts.append(int(field['integerValue']))
+              except Exception:amounts.append(None)
+            if len(amounts)==10 and all(isinstance(x,int) for x in amounts):
+              report['currentPlan']=amounts
+              report['plannedIf10RealWinners']=sum(amounts)
+            else:report['currentPlan']='invalid_plan_shape'
+          if code=='HTTP_404':
+            report['currentPlan']='no_saved_plan_display_falls_back_to_original_minimum'
+          code,doc=read('deda_weekly_direct_control/active')
+          report['controlsRead']=code
+          if code=='OK':
+            fields=doc.get('fields',{})
+            report['paused']=fields.get('paused',{}).get('booleanValue','unknown')
+            report['controlWeekMatches']=fields.get('weekId',{}).get('stringValue')==report['currentWeekId']
+          # Never read/share user IDs, financial balances, gifts or a winner's private records.
+          print(json.dumps(report,sort_keys=True,ensure_ascii=False))
+          print('PASS_READONLY_LEAGUE_PRIZE_PLAN_AUDIT_NO_WRITES_NO_DEPLOY')
+          PY
+      - name: End without payout, deploying functions or modifying accounts
+        run: |
+          echo 'NO_WEEKLY_GIFTS_CREATED_NO_WALLET_CHANGES_NO_APPROVAL_VARIABLE_CHANGES'
+          echo 'CODE_AND_SCHEDULE_REQUIRE_OWNER_REVIEW_BEFORE_PRODUCTION_SETTLEMENT'
