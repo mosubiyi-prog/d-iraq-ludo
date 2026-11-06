@@ -1,0 +1,45 @@
+name: DEDA 100439 original signing SHA-1 for Google Auth - READ ONLY
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - '.github/workflows/deda-google-auth-original-signer-fingerprint-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  release-signature-from-approved-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Download pinned signed 100439 reference artifact - no secret keys
+        uses: actions/download-artifact@v4
+        with:
+          repository: ${{ github.repository }}
+          run-id: 42243854530
+          name: DEDA-100439-FULL-100438-ADMIN-WINNERS-SIGNED-OWNER-QA-APK
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/deda-100439-original-reference
+      - name: Verify exact APK SHA-256 and extract public signing certificate fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/deda-100439-original-reference"
+          apk="$root/DEDA-100439-FULL-100438-PLUS-ADMIN-WINNERS-OWNER-PHONE-TABLET-QA.apk"
+          test -s "$apk"
+          digest="$(sha256sum "$apk" | awk '{print $1}')"
+          test "$digest" = "e568d450ec23b6d9b007dda24eb2b92a67e7af1bd6585fb31e0972953df19168"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
+          test -n "$signer"
+          info="$("$signer" verify --print-certs "$apk")"
+          sha1="$(printf '%s\n' "$info" | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' | tr 'A-F' 'a-f')"
+          sha256="$(printf '%s\n' "$info" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'A-F' 'a-f')"
+          test "${#sha1}" = 40
+          test "$sha256" = "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a"
+          echo "PASS_APPROVED_100439_SAME_RELEASE_SIGNATURE_NO_SIGNING_SECRETS"
+          echo "FIREBASE_ANDROID_GOOGLE_RELEASE_SHA1=$sha1"
+          echo "FIREBASE_ANDROID_GOOGLE_RELEASE_SHA256=$sha256"
+          echo "FIREBASE_APP_PACKAGE=com.diraq.ludo.d_iraq_ludo"
+          echo "FIREBASE_PROJECT_ID=deda-25b88"
