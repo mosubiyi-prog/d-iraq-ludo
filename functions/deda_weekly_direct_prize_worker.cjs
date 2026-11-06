@@ -1,6 +1,6 @@
 'use strict';
 
-const {plan,weekStart,WEEK_MS}=require('./deda_weekly_direct_prize_plan.js');
+const {plan,weekStart,WEEK_MS,PRIZES}=require('./deda_weekly_direct_prize_plan.js');
 
 /**
  * Real eventual server-side settlement. Uses EXISTING هداياي pending gifts.
@@ -30,7 +30,16 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
   for(const d of reviews.docs) {
     if(d.data().frozen===true) frozen.set(d.id,true);
   }
-  const expected=plan({weekId,atMs:nowMs,records,freezes:frozen});
+  // The app reads the manager-approved amount list from this exact
+  // Firestore document. Missing document uses legacy minimum; malformed
+  // saved document FAILS CLOSED rather than silently dropping increases.
+  const prizePlanRef=db.collection('deda_weekly_direct_prize_plans').doc(weekId);
+  const prizePlanSnapshot=await prizePlanRef.get();
+  const approvedAmounts=prizePlanSnapshot.exists
+    ? prizePlanSnapshot.data()?.amounts : PRIZES;
+  const expected=plan({
+    weekId,atMs:nowMs,records,freezes:frozen,approvedAmounts,
+  });
   if(dryRun) return Object.freeze({
     dryRun:true,weekId,eligible:expected.winners.length,
     diamonds:expected.totalDiamonds,
@@ -48,9 +57,16 @@ async function settleWeek(db,weekId,nowMs,{dryRun=true,clockTimestamp}={}) {
     const owner=db.collection('deda_share_ids').doc(winner.publicId);
     const outcome=await db.runTransaction(async tx=>{
       // All transaction reads before writes. Retry safely on Firestore conflicts.
-      const [prior,score,reviewNow,personal]=await Promise.all([
+      const [prior,score,reviewNow,personal,planNow]=await Promise.all([
         tx.get(gift),tx.get(source),tx.get(review),tx.get(owner),
+        tx.get(prizePlanRef),
       ]);
+      // This transaction must use exactly the same plan as the initial
+      // read. If another admin event modified the plan in between, STOP.
+      const latestAmounts=planNow.exists ? planNow.data()?.amounts : PRIZES;
+      if (JSON.stringify(latestAmounts)!==JSON.stringify(approvedAmounts)) {
+        throw Error('WEEKLY_PRIZE_PLAN_CHANGED_DURING_SETTLEMENT_STOP');
+      }
       if(prior.exists) {
         const old=prior.data();
         if(old?.targetPublicId!==winner.publicId ||
