@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const {initializeApp,deleteApp}=require('firebase-admin/app');
 const {getFirestore,Timestamp}=require('firebase-admin/firestore');
 const {settleWeek}=require('../deda_weekly_direct_prize_worker.cjs');
+const {releaseOneClosedWeek}=require('../deda_weekly_payout_approved_runner_100438.cjs');
 const {weekStart,WEEK_MS}=require('../deda_weekly_direct_prize_plan.js');
 
 const WEEK='2026-11-07';
@@ -94,5 +95,40 @@ test('administrator pause blocks all weekly payouts, even pending eligible prize
     ()=>settleWeek(db,future,weekStart(future)+WEEK_MS,{dryRun:true}),
     /WEEKLY_LEAGUE_PAUSED_NO_PAYOUT/
   );
+  await ctrl.set({paused:false,weekId:future});
+});
+
+test('approved Saturday 06 runner does full frozen-week preflight, one pending gift and idempotent retry',async()=>{
+  const future='2026-11-21',now=weekStart(future)+WEEK_MS;
+  const ctrl=db.collection('deda_weekly_direct_control').doc('active');
+  await ctrl.set({paused:false,weekId:future});
+  const pre=await releaseOneClosedWeek(db,now,{pay:false});
+  assert.equal(pre.weekId,future);
+  assert.equal(pre.verifiedWinners,1);
+  assert.equal(pre.plannedDiamonds,250);
+  assert.equal(pre.created,0);
+  const first=await releaseOneClosedWeek(db,now,{pay:true,clockTimestamp:()=>Timestamp.now()});
+  assert.equal(first.created,1);
+  const giftId='deda-weekly-'+future+'-'+ONE.slice(1);
+  const prize=await gifts().doc(giftId).get();
+  assert.equal(prize.exists,true);
+  assert.equal(prize.data().amount,250);
+  assert.equal(prize.data().status,'pending');
+  const again=await releaseOneClosedWeek(db,now+30000,{
+    pay:true,clockTimestamp:()=>Timestamp.now()
+  });
+  assert.equal(again.created,0);
+  assert.equal(again.alreadyPresent,1);
+  assert.equal((await gifts().doc(giftId).get()).data().amount,250);
+});
+
+test('scheduled runner blocks premature Saturday and paused-league payout',async()=>{
+  const future='2026-11-21',close=weekStart(future)+WEEK_MS;
+  const ctrl=db.collection('deda_weekly_direct_control').doc('active');
+  await assert.rejects(()=>releaseOneClosedWeek(db,close-1,{pay:false}),
+    /ONLY_LATEST_CLOSED_WEEK_36_HOUR_WINDOW|NO_FINISHED_WEEK_NO_PAYMENT/);
+  await ctrl.set({paused:true,weekId:future});
+  await assert.rejects(()=>releaseOneClosedWeek(db,close,{pay:true,
+    clockTimestamp:()=>Timestamp.now()}),/LEAGUE_PAUSED_OR_UNKNOWN/);
   await ctrl.set({paused:false,weekId:future});
 });
