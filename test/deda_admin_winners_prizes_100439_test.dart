@@ -108,10 +108,23 @@ void main() {
     expect(r.rows.map((e) => e.originalId).toSet().length, 10);
   });
 
-  for (final width in [320.0, 390.0, 600.0]) {
-    testWidgets('one compact four-column winners/prizes table at width $width',
+  // Portrait small phones + landscape phones + portrait/landscape tablets.
+  // Same four columns as the owner's reference, never duplicate cards.
+  const screens = <String, Size>{
+    'small phone portrait': Size(320, 568),
+    'phone portrait': Size(390, 844),
+    'large phone portrait': Size(600, 960),
+    'phone landscape': Size(640, 360),
+    'wide phone landscape': Size(844, 390),
+    'tablet portrait': Size(800, 1280),
+    'tablet landscape': Size(1280, 800),
+    'compact tablet landscape': Size(1024, 600),
+  };
+  for (final entry in screens.entries) {
+    final size = entry.value;
+    testWidgets('one compact four-column report on ${entry.key} ${size.width}x${size.height}',
         (tester) async {
-      tester.view.physicalSize = Size(width, 800);
+      tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -141,8 +154,20 @@ void main() {
         'بانتظار الاستلام']) {
         expect(find.text(label), findsOneWidget);
       }
-      expect(find.byKey(const ValueKey('deda-winner-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('deda-winner-2')), findsOneWidget);
+      // TableRow is NOT a Widget, so its key is not found by find.byKey.
+      // Check the two actual separate rank cells and visible table structure.
+      expect(find.text('🥇 1'), findsOneWidget);
+      expect(find.text('🥈 2'), findsOneWidget);
+      final table = tester.widget<Table>(
+        find.byKey(const Key('deda-admin-winners-prizes-table')));
+      expect(table.children.length, 3); // header + exactly two winners
+      expect(table.children.every((row) => row.children.length == 4), true);
+      final names = <String>[];
+      for (final row in table.children.skip(1)) {
+        final user = (row.children[1] as Padding).child as Column;
+        names.add((user.children.first as Text).data!);
+      }
+      expect(names, ['هناء', 'سالم حسن']);
       expect(tester.takeException(), isNull);
     });
   }
