@@ -7,6 +7,8 @@ on:
       - '.github/workflows/qa-deda-100438-stage2-core-threeway-no-apk.yml'
       - 'tools/app_stability/app_package/guard_100436_parity_before_recovery.py'
       - 'tools/app_stability/app_package/merge_stage2_into_protected_100436.py'
+      - 'tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py'
+      - 'tools/app_stability/app_package/reconcile_stage2_main_conflicts.py'
   workflow_dispatch:
 permissions:
   contents: read
