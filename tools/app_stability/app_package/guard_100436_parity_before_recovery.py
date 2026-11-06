@@ -80,8 +80,14 @@ def guard(project, check_recovery=False):
     # shortcut, even if a newer versionCode compiles and signs normally.
     if m["weeklyStage13"].get("bothHomeRoutes") != 2:
         stop("one of the TWO official leaderboard home routes disappeared")
-    if "المتصدرون" not in (base / "lib/main.dart").read_text():
-        stop("weekly leaderboard home title missing; possible 100437 rollback")
+    main = (base / "lib/main.dart").read_text()
+    # 100436 renders the title INSIDE DedaLeaderboardHomeCard; the home page
+    # contains two widget invocations rather than the Arabic literal.
+    # Check actual UI routing, not a translated text that's in another file.
+    if main.count("DedaLeaderboardHomeCard(") != 2:
+        stop("both official leaderboard home cards are not mounted")
+    if "categoryCard(restaurant)" in main:
+        stop("old 100437 restaurants home shortcut unexpectedly returned")
     source_hashes = m.get("sourceHashes")
     if not isinstance(source_hashes, dict):
         stop("missing source hash chain")
