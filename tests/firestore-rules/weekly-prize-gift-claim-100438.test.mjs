@@ -23,7 +23,7 @@ before(async()=>{
   assert.ok(process.env.FIRESTORE_EMULATOR_HOST,"NO_EMULATOR_PRODUCTION_FORBIDDEN");
   env=await initializeTestEnvironment({
     projectId:PROJECT,
-    firestore:{rules:readFileSync("firestore.rules","utf8")}
+    firestore:{rules:readFileSync(process.env.DEDA_LIVE_RULES_PATH || "firestore.rules","utf8")}
   });
   await env.withSecurityRulesDisabled(async ctx=>{
     const db=ctx.firestore();
