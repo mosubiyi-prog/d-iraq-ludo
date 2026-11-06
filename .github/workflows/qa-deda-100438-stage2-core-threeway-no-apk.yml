@@ -148,6 +148,30 @@ jobs:
             test/deda_step2_recovery_guardian_private_test.dart \
             test/deda_step2_linked_owner_guardian_bridge_private_test.dart
           echo 'PASS_ASSEMBLED_APP_OWNER_AND_FINANCIAL_INVARIANT_TESTS'
+      - name: Test protected 100436 leaderboard, admin scores, premium ID, friends and tasks
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          mkdir -p "$project/test"
+          for testname in \
+            deda_weekly_100404_league_clock_test.dart \
+            deda_weekly_leaderboard_earned_points_test.dart \
+            deda_100410_unified_active_id_test.dart \
+            deda_100411_friend_copy_test.dart \
+            deda_admin_league_live_widgets_test.dart \
+            deda_daily_task_slots_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$testname" "$project/test/$testname"
+          done
+          cd "$project"
+          flutter test --no-pub \
+            test/deda_weekly_100404_league_clock_test.dart \
+            test/deda_weekly_leaderboard_earned_points_test.dart \
+            test/deda_100410_unified_active_id_test.dart \
+            test/deda_100411_friend_copy_test.dart \
+            test/deda_admin_league_live_widgets_test.dart \
+            test/deda_daily_task_slots_test.dart
+          echo 'PASS_PROTECTED_100436_LEAGUE_ADMIN_ID_FRIEND_TASKS'
       - name: Verify signed baseline hash proof after merged Dart analysis
         shell: bash
         run: |
