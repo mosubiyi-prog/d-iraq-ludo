@@ -28,16 +28,16 @@ jobs:
           set -euo pipefail
           root="$RUNNER_TEMP/deda-100439-original-reference"
           apk="$root/DEDA-100439-FULL-100438-PLUS-ADMIN-WINNERS-OWNER-PHONE-TABLET-QA.apk"
-          test -s "$apk"
+          if ! test -s "$apk"; then echo "BLOCK_APPROVED_APK_NOT_FOUND"; find "$root" -maxdepth 2 -type f -printf "%f\\n"; exit 2; fi
           digest="$(sha256sum "$apk" | awk '{print $1}')"
-          test "$digest" = "e568d450ec23b6d9b007dda24eb2b92a67e7af1bd6585fb31e0972953df19168"
+          if [[ "$digest" != "e568d450ec23b6d9b007dda24eb2b92a67e7af1bd6585fb31e0972953df19168" ]]; then echo "BLOCK_APPROVED_APK_DIGEST_MISMATCH"; exit 2; fi
           signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)"
-          test -n "$signer"
-          info="$("$signer" verify --print-certs "$apk")"
+          if [[ -z "$signer" ]]; then echo "BLOCK_ANDROID_APKSIGNER_NOT_FOUND"; exit 2; fi
+          if ! info="$("$signer" verify --print-certs "$apk" 2>&1)"; then echo "BLOCK_APPROVED_APK_SIGNATURE_VERIFICATION_FAILED"; printf "%s\\n" "$info" | tail -8; exit 2; fi
           sha1="$(printf '%s\n' "$info" | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' | tr 'A-F' 'a-f')"
           sha256="$(printf '%s\n' "$info" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'A-F' 'a-f')"
-          test "${#sha1}" = 40
-          test "$sha256" = "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a"
+          if [[ "${#sha1}" != 40 ]]; then echo "BLOCK_CERT_SHA1_UNREADABLE"; printf "%s\\n" "$info" | grep -i "certificate SHA" | head -5; exit 2; fi
+          if [[ "$sha256" != "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a" ]]; then echo "BLOCK_SIGNER_CERT_SHA256_MISMATCH"; exit 2; fi
           echo "PASS_APPROVED_100439_SAME_RELEASE_SIGNATURE_NO_SIGNING_SECRETS"
           echo "FIREBASE_ANDROID_GOOGLE_RELEASE_SHA1=$sha1"
           echo "FIREBASE_ANDROID_GOOGLE_RELEASE_SHA256=$sha256"
