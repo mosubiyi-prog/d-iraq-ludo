@@ -1,0 +1,54 @@
+name: DEDA 100438 Stage2 LIVE Firebase Prerequisites READ ONLY (NO DEPLOY)
+on:
+  push:
+    branches:
+      - deda-100438-stage2-core-threeway-merge-qa-2026-11-06
+    paths:
+      - 'tools/app_stability/app_package/audit_100438_stage2_cloud_readonly.py'
+      - '.github/workflows/qa-deda-100438-stage2-cloud-prerequisites-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strictly-readonly-firebase-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify strictly read-only operations and approved target
+        shell: bash
+        run: |
+          set -euo pipefail
+          script=tools/app_stability/app_package/audit_100438_stage2_cloud_readonly.py
+          python3 -m py_compile "$script"
+          grep -Fq 'PROJECT = "deda-25b88"' "$script"
+          grep -Fq 'No function calls, no Firestore documents, no modifications' "$script"
+          if grep -En '(auth\.put\(|auth\.patch\(|auth\.delete\(|functions:deploy|firebase deploy|gcloud services enable)' "$script"; then
+            echo 'BLOCK_MUTATING_PRECHECK_OPERATION'
+            exit 1
+          fi
+          echo 'PASS_READ_ONLY_SCRIPT_PROTECTED'
+      - name: Audit billing, Cloud Build API, IAM and EXACT three recovery callable identities - NO WRITES
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet google-auth requests
+          python3 tools/app_stability/app_package/audit_100438_stage2_cloud_readonly.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100438-STAGE2-LIVE-READONLY-PREFLIGHT
+          path: ${{ runner.temp }}/deda-100438-stage2-cloud-readonly.json
+          if-no-files-found: error
+          retention-days: 15
+      - name: Explicitly label limitations, no claim of ready recovery
+        shell: bash
+        run: |
+          echo 'PASS_READONLY_FIREBASE_PREREQUISITES_OBSERVED_NO_MUTATION'
+          echo 'NOT_RELEASE_APPROVAL_NOT_ACCOUNT_RESTORE_NOT_LIVE_ROLLOUT'
