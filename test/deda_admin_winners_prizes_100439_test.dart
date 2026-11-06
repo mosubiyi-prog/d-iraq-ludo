@@ -128,7 +128,7 @@ void main() {
           padding: const EdgeInsets.all(16),
           child: DedaAdminLeagueWinnersPrizes(
             isArabic: true,
-            currentTimeForTest: DateTime.utc(2026, 11, 7, 3, 1),
+            testNow: DateTime.utc(2026, 11, 7, 3, 1),
             testLoad: (_) async => live,
           ),
         )),
@@ -152,7 +152,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(body: DedaAdminLeagueWinnersPrizes(
         isArabic: true,
-        currentTimeForTest: DateTime.utc(2026, 11, 7, 2, 59),
+        testNow: DateTime.utc(2026, 11, 7, 2, 59),
         testLoad: (_) async => report(),
       )),
     ));
