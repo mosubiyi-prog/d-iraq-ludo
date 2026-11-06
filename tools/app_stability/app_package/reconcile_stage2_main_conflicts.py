@@ -180,7 +180,7 @@ def resolve_block(ours, base, theirs):
         # read its own prefs rather than capture a nonexistent local.
         guarded = once(
             theirs, "    if (dedaLinkedOwnerCompatEnabled &&",
-            "    final prefs = await SharedPreferences.getInstance();\\n"
+            "    final prefs = await SharedPreferences.getInstance();\n"
             "    if (dedaLinkedOwnerCompatEnabled &&",
             "linked owner boot preferences scope",
         )
@@ -256,8 +256,8 @@ def reconcile_main(candidate, assembled_100436):
     if original_method.count(header) < 1:
         raise ValueError("UNSAFE_MAIN_100436_STAGE2 100436 method signature drift")
     new_header = (
-        "    bool verifiedCanonicalProfile = false,\\n"
-        "    String? verifiedOriginalUid,\\n"
+        "    bool verifiedCanonicalProfile = false,\n"
+        "    String? verifiedOriginalUid,\n"
         + header
     )
     original_method = once(original_method, header, new_header,
@@ -279,7 +279,7 @@ def reconcile_main(candidate, assembled_100436):
     # separately gated confirmation widget at its existing logout button.
     tag = "class _DedaAccountHubPageState"
     trusted_start = trusted.index(tag)
-    trusted_end = trusted.find("\\nclass ", trusted_start + 12)
+    trusted_end = trusted.find("\nclass ", trusted_start + 12)
     if trusted_end < 0:
         trusted_end = len(trusted)
     safe_hub = trusted[trusted_start:trusted_end]
@@ -292,7 +292,7 @@ def reconcile_main(candidate, assembled_100436):
         raise ValueError("UNSAFE_MAIN_100436_STAGE2 owner widget insertion drift")
     safe_hub = safe_hub[:insert_at] + OWNER_CONFIRM_WIDGET + safe_hub[insert_at:]
     new_start = source.index(tag)
-    new_end = source.find("\\nclass ", new_start + 12)
+    new_end = source.find("\nclass ", new_start + 12)
     if new_end < 0:
         new_end = len(source)
     source = source[:new_start] + safe_hub + source[new_end:]
