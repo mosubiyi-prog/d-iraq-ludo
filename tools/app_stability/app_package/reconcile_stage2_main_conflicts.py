@@ -175,7 +175,16 @@ def resolve_block(ours, base, theirs):
         # Keep both old unified ID and new linked-owner imports.
         return ours + theirs
     if "On a private, confirmed replacement phone" in theirs:
-        return ours + theirs
+        # 100436's DedaPreferences.load() scopes its original 'prefs'
+        # inside an AuthRuntime callback. Stage2's added boot guard must
+        # read its own prefs rather than capture a nonexistent local.
+        guarded = once(
+            theirs, "    if (dedaLinkedOwnerCompatEnabled &&",
+            "    final prefs = await SharedPreferences.getInstance();\\n"
+            "    if (dedaLinkedOwnerCompatEnabled &&",
+            "linked owner boot preferences scope",
+        )
+        return ours + guarded
     if ("if (verifiedCanonicalProfile &&" in theirs and
             "DedaAuthRuntime.run<void>(" in ours):
         return ours
@@ -230,7 +239,24 @@ def reconcile_main(candidate, assembled_100436):
 
     source = MARKER.sub(do_merge, source)
     if "<<<<<<< " in source or ">>>>>>> " in source:
-        return source.encode("utf-8"), resolved
+        # The linked-UID login entry was added to the raw Stage2 LoginPage,
+    # but the 100436 PIN page has its own extensive login method. Copy ONLY
+    # the separately gated entry handler from the reviewed Stage2 source.
+    from pathlib import Path
+    raw = (Path(__file__).resolve().parents[3] / "lib/main.dart").read_text()
+    begin = raw.index("  void _openExistingAccount() {")
+    finish = raw.index("  Future<void> login() async {", begin)
+    handler = raw[begin:finish]
+    if (handler.count("DedaLinkedOwnerGuardianAssembly.prepare()") != 1 or
+            handler.count("DedaPreferences.saveLogin(") != 1 or
+            "if (!login.fullAccountRestored" not in handler):
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 unexpected owner login handler")
+    login_page = source.index("class _LoginPageState")
+    login_action = source.index("  Future<void> login() async {", login_page)
+    if "_openExistingAccount()" in source[login_page:login_action]:
+        raise ValueError("UNSAFE_MAIN_100436_STAGE2 duplicate owner login handler")
+    source = source[:login_action] + handler + source[login_action:]
+    return source.encode("utf-8"), resolved
     if resolved != 9:
         raise ValueError("UNSAFE_MAIN_100436_STAGE2 expected 9 reviewed "
                          "overlaps, got " + str(resolved))
