@@ -1,0 +1,92 @@
+name: DEDA owner-approved weekly Hadaya prizes - Saturday 06 Baghdad - NO PLAY
+on:
+  schedule:
+    # Saturday Baghdad 06:00, 06:15, 06:30, 06:45. GitHub cron best effort.
+    - cron: '0,15,30,45 3 * * 6'
+    # Sunday Baghdad 06:30 fallback only for most recently closed week.
+    - cron: '30 3 * * 0'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deda-weekly-100438-owner-approved-hadaya-settlement-main.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-100438-exactly-once-owner-approved-production
+  cancel-in-progress: false
+jobs:
+  verify-schedule-installation-no-production-writes:
+    if: github.event_name != 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DEDA_FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_LEAGUE_WEEK: '2026-10-31'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mosubiyi-prog/d-iraq-ludo
+          ref: '3664e27440b989b167822cfddd3be6b0fb612f96'
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require audited payout source pinned to tested SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '3664e27440b989b167822cfddd3be6b0fb612f96'
+          node --check functions/deda_weekly_prize_live_dryrun_readonly_100438.cjs
+          node --check functions/deda_weekly_payout_approved_runner_100438.cjs
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          node --check functions/deda_weekly_direct_prize_plan.js
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+      - name: Read-only current league plan and recipient validation, no rewards issued
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-audit --no-fund
+          node functions/deda_weekly_prize_live_dryrun_readonly_100438.cjs
+          echo 'SUCCESS_SCHEDULE_INSTALLED_AND_LIVE_DATA_DRYRUN_VERIFIED_NO_GIFTS_CREATED'
+
+  pay-only-the-most-recently-closed-week-after-06:
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEDA_OWNER_PAYOUT_APPROVAL: APPROVED_2026_11_06
+      DEDA_FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mosubiyi-prog/d-iraq-ludo
+          ref: '3664e27440b989b167822cfddd3be6b0fb612f96'
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Security gate - only tested exact release code and exact recipient/week logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '3664e27440b989b167822cfddd3be6b0fb612f96'
+          test "$GITHUB_EVENT_NAME" = 'schedule'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_REPOSITORY" = 'mosubiyi-prog/d-iraq-ludo'
+          node --check functions/deda_weekly_payout_approved_runner_100438.cjs
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+          echo 'PASS_EXACT_TESTED_OWNER_APPROVED_PAYOUT_WORKER'
+      - name: Create only verified pending weekly Hadaya gifts - guarded and idempotent
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix functions --no-audit --no-fund
+          node functions/deda_weekly_payout_approved_runner_100438.cjs
+          echo 'WEEKLY_OWNER_APPROVED_HADAYA_PENDING_GIFTS_COMMITTED_OR_ALREADY_PRESENT'
+      - name: Preserve owner audit and keep DEDA phone/Firebase rules unchanged
+        shell: bash
+        run: |
+          echo 'NO_APK_NO_PLAY_NO_RULES_DEPLOY_NO_CLOUD_FUNCTIONS_NO_DIRECT_BALANCE_CREDIT'
+          echo 'ONLY_PENDING_GIFTS_IF_PAYOUT_GATES_PASSED'
