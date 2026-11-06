@@ -38,7 +38,7 @@ function safeMs(value) {
   throw Error("INVALID_RECEIPT_TIME");
 }
 
-function plan({weekId, atMs, records, freezes = new Map()}) {
+function plan({weekId, atMs, records, freezes = new Map(), approvedAmounts = PRIZES}) {
   const start = weekStart(weekId);
   if (!Number.isSafeInteger(atMs) || atMs < start + WEEK_MS) {
     throw Error("AWARDS_BEFORE_NEXT_SATURDAY_06");
@@ -47,6 +47,13 @@ function plan({weekId, atMs, records, freezes = new Map()}) {
     throw Error("INVALID_WEEKLY_SOURCE_SIZE");
   }
   if (!(freezes instanceof Map)) throw Error("INVALID_REVIEW_SOURCE");
+  // Callers must use the exact Firestore-approved week plan, never device
+  // input or the immutable historical minimum when the GM raised prizes.
+  if (!Array.isArray(approvedAmounts) || approvedAmounts.length !== 10 ||
+      !approvedAmounts.every((n, i) => Number.isSafeInteger(n) &&
+        n >= PRIZES[i] && n <= 1000000)) {
+    throw Error("INVALID_WEEK_PRIZE_PLAN_STOP");
+  }
   const names = new Set();
   const eligible = records.map((entry) => {
     if (!entry || typeof entry !== "object") throw Error("INVALID_SCORE_ROW");
@@ -76,7 +83,7 @@ function plan({weekId, atMs, records, freezes = new Map()}) {
       // The original place is held; no reallocation without an owner decision.
       continue;
     }
-    const amount=PRIZES[index];
+    const amount=approvedAmounts[index];
     winners.push(Object.freeze({
       place:index + 1,
       publicId:row.publicId,
