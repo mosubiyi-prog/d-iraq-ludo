@@ -1,0 +1,249 @@
+name: DEDA 100439 GM Winners + Hadaya report on protected FULL 100438 (NO APK)
+on:
+  push:
+    branches:
+      - deda-100438-admin-winners-prizes-linked-no-apk-2026-11-06
+    paths:
+      - '.github/workflows/qa-deda-100439-admin-winners-prizes-full-100438-no-apk.yml'
+      - 'tools/app_stability/app_package/guard_100436_parity_before_recovery.py'
+      - 'tools/app_stability/app_package/merge_stage2_into_protected_100436.py'
+      - 'tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py'
+      - 'tools/app_stability/app_package/reconcile_stage2_main_conflicts.py'
+      - 'lib/deda_admin_league_winners_prizes_100439.dart'
+      - 'tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py'
+      - 'test/deda_admin_winners_prizes_100439_test.dart'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reconstruct-and-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Lock old owner baseline and protect all user data
+        shell: bash
+        run: |
+          set -euo pipefail
+          signed_reference=fea54d7db2e8a24a74267f04a14c9572bcb408ee
+          stage2_source=80f5c03e4a25677b448b1593f843995c6d81b356
+          git cat-file -e "$signed_reference^{commit}"
+          git merge-base --is-ancestor "$stage2_source" HEAD
+          # The ONLY user-app source difference on this branch is a NEW
+          # read-only report module. No raw old 100436 file can replace one
+          # of the protected assembled files.
+          git diff --exit-code "$stage2_source" HEAD -- assets android pubspec.yaml pubspec.lock google-services.json firestore.rules firebase.json storage.rules
+          test "$(git diff --name-only "$stage2_source" HEAD -- lib)" = "lib/deda_admin_league_winners_prizes_100439.dart"
+          echo 'PASS_ONLY_ADDITIVE_ADMIN_REPORT_TEMPLATE'
+          test -f lib/deda_step2_completion_gate.dart
+          test -f tools/app_stability/app_package/guard_100436_parity_before_recovery.py
+          echo 'PASS_OWNER100436_SOURCE_AND_FIREBASE_UNMODIFIED'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Reconstruct EXACT same ordered signed 100436 app source, not raw lib
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-100438-protected-source"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
+          python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
+          python3 tools/app_stability/app_package/bind_weekly_stage13.py "$project"
+          python3 tools/app_stability/app_package/bind_active_id_boot_prewarm_stage14.py "$project"
+          python3 tools/app_stability/app_package/bind_active_id_measured_startup_stage16.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_private_trial_stage17.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_full_qa_stage18.py "$project"
+          python3 tools/app_stability/app_package/verify_rank_card_tap_stage19.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_admin_league_stage27.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_tasks_cta_stage28.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100397_owner_real_scores.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100398_after_level_xp.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100399_community_bridge.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100400_safe_score_retry.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100402_firestore_direct.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100403_first_open_gate.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100404_inline_clock_and_freeze.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100405_admin_live_read_only.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100406_league_display_fixes.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100407_full_avatar_shared_identity.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100408_seven_owner_points.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100409_single_verified_identity.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100410_unified_active_id.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100411_friend_copy_share.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100413_owner_id_admin_response.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100414_last_three.py "$project"
+          python3 tools/app_stability/app_package/bind_weekly_100418_legacy340_friend_active_compat.py "$project"
+          echo "DEDA_PROTECTED_STAGE2_PROJECT=$project" >> "$GITHUB_ENV"
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project"
+          echo 'PASS_EXACT_ORDERED_100436_RECONSTRUCTION_NO_RAW_OVERWRITE'
+      - name: Safely stage ONLY new recovery modules; never overwrite old UI, backend, league, ID, admin
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          shopt -s nullglob
+          count=0
+          for source in "$GITHUB_WORKSPACE"/lib/deda_step2_*.dart "$GITHUB_WORKSPACE"/lib/deda_100429*.dart "$GITHUB_WORKSPACE"/lib/deda_100430*.dart "$GITHUB_WORKSPACE"/lib/deda_100431*.dart "$GITHUB_WORKSPACE"/lib/deda_100432*.dart "$GITHUB_WORKSPACE"/lib/deda_100433*.dart; do
+            target="$project/lib/$(basename "$source")"
+            if test -e "$target"; then
+              echo "BLOCK_RECOVERY_MODULE_WOULD_OVERWRITE_BASELINE: $target"
+              exit 1
+            fi
+            cp "$source" "$target"
+            count=$((count + 1))
+          done
+          test "$count" -ge 30
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          echo "PASS_ADDITIVE_RECOVERY_FILES_COUNT=$count"
+      - name: Negative regression test - RAW lib overwrite must be blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          cp "$project/lib/main.dart" "$RUNNER_TEMP/deda-100436-good-main.dart"
+          cp "$GITHUB_WORKSPACE/lib/main.dart" "$project/lib/main.dart"
+          if python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery; then
+            echo 'FAIL_REGRESSION_GATE_ACCEPTED_RAW_OLD_MAIN'
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/deda-100436-good-main.dart" "$project/lib/main.dart"
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          echo 'PASS_REGRESSION_DETECTED_AND_BASELINE_RESTORED'
+      - name: Three-way merge Stage2 core changes on top of complete assembled 100436 - fail on conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$DEDA_PROTECTED_STAGE2_PROJECT"
+          echo 'PASS_OR_BLOCK_3WAY_RESTORE_CORE_SAFETY_GATE'
+      - name: Verify full 100436+Stage2 baseline then add exactly ONE report panel to assembled source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$DEDA_PROTECTED_STAGE2_PROJECT" --verify-only
+          python3 - <<'PY'
+          import hashlib,os,subprocess,sys
+          from pathlib import Path
+          project=Path(os.environ["DEDA_PROTECTED_STAGE2_PROJECT"])
+          lib=project/"lib"
+          def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+          before={str(p.relative_to(project)):digest(p) for p in lib.glob("*.dart")}
+          subprocess.run([sys.executable,
+            "tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py",
+            str(project)],check=True)
+          after={str(p.relative_to(project)):digest(p) for p in lib.glob("*.dart")}
+          changed={p for p in before.keys() & after.keys() if before[p]!=after[p]}
+          added=set(after)-set(before)
+          deleted=set(before)-set(after)
+          assert changed=={"lib/deda_admin_league_page.dart"},changed
+          assert added=={"lib/deda_admin_league_winners_prizes.dart"},added
+          assert not deleted,deleted
+          page=(lib/"deda_admin_league_page.dart").read_text()
+          assert page.count("DedaAdminLeagueWinnersPrizes(isArabic: isArabic)")==1
+          assert page.count("سجل الفائزين والجوائز")==1
+          assert "DedaAdminLeagueLiveArchive(isArabic: isArabic)" in page
+          assert "DedaAdminLeagueRewardStatus(isArabic: isArabic)" in page
+          print('PASS_EXACTLY_ONE_REPORT_PANEL_NO_SOURCE_LOSS_NO_DUPLICATE')
+          PY
+      - name: Analyze combined assembled 100436 and conservatively merged recovery source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_PROTECTED_STAGE2_PROJECT"
+          flutter pub get --enforce-lockfile
+          dart analyze --no-fatal-warnings lib/main.dart lib/admin_pages.dart lib/deda_admin_league_page.dart lib/deda_admin_league_winners_prizes.dart lib/deda_weekly_leaderboard_page.dart lib/deda_friend_id_copy_100411.dart lib/deda_step2_completion_gate.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_step2_linked_owner_guardian_assembly.dart
+          echo 'PASS_SOURCE_ANALYSIS_NOT_A_FINISHED_RESTORE'
+      - name: Run account, linked UID, recovery and wallet no-grant tests on FINAL assembled app
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          mkdir -p "$project/test"
+          for testname in \
+            deda_owner_login_commit_guard_private_test.dart \
+            deda_owner_session_compat_private_test.dart \
+            deda_step2_existing_account_signin_page_private_test.dart \
+            deda_step2_completion_gate_private_test.dart \
+            deda_step2_recovery_guardian_private_test.dart \
+            deda_step2_linked_owner_guardian_bridge_private_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$testname" "$project/test/$testname"
+          done
+          cd "$project"
+          flutter test --no-pub \
+            test/deda_owner_login_commit_guard_private_test.dart \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_step2_existing_account_signin_page_private_test.dart \
+            test/deda_step2_completion_gate_private_test.dart \
+            test/deda_step2_recovery_guardian_private_test.dart \
+            test/deda_step2_linked_owner_guardian_bridge_private_test.dart
+          echo 'PASS_ASSEMBLED_APP_OWNER_AND_FINANCIAL_INVARIANT_TESTS'
+      - name: Test protected 100436 leaderboard, admin scores, premium ID, friends and tasks
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          mkdir -p "$project/test"
+          for testname in \
+            deda_weekly_100404_league_clock_test.dart \
+            deda_weekly_leaderboard_earned_points_test.dart \
+            deda_100410_unified_active_id_test.dart \
+            deda_100411_friend_copy_test.dart \
+            deda_admin_league_live_widgets_test.dart \
+            deda_daily_task_slots_test.dart; do
+            cp "$GITHUB_WORKSPACE/test/$testname" "$project/test/$testname"
+          done
+          cd "$project"
+          flutter test --no-pub \
+            test/deda_weekly_100404_league_clock_test.dart \
+            test/deda_weekly_leaderboard_earned_points_test.dart \
+            test/deda_100410_unified_active_id_test.dart \
+            test/deda_100411_friend_copy_test.dart \
+            test/deda_admin_league_live_widgets_test.dart \
+            test/deda_daily_task_slots_test.dart
+          echo 'PASS_PROTECTED_100436_LEAGUE_ADMIN_ID_FRIEND_TASKS'
+      - name: Test real winner projection and compact mobile 4-column prize table at 320/390/600 pixels
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$DEDA_PROTECTED_STAGE2_PROJECT"
+          mkdir -p "$project/test"
+          cp "$GITHUB_WORKSPACE/test/deda_admin_winners_prizes_100439_test.dart" "$project/test/"
+          cd "$project"
+          flutter test --no-pub test/deda_admin_winners_prizes_100439_test.dart
+          echo 'PASS_RANKS_GIFTS_FROZEN_TEN_WINNERS_AND_MOBILE_TABLE'
+      - name: Audit post-report manifest and all assembled unchanged 100436+Stage2 source protections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          project=Path(os.environ['DEDA_PROTECTED_STAGE2_PROJECT'])
+          meta=json.loads((project/'internal-build-inputs.json').read_text())
+          x=meta.get('weekly100439AdminWinnersPrizeReport')
+          assert x and x['singlePanelNoDuplicate'] and x['readOnly']
+          for f in ['lib/deda_admin_league_page.dart',
+                    'lib/deda_admin_league_winners_prizes.dart']:
+            actual=hashlib.sha256((project/f).read_bytes()).hexdigest()
+            assert meta['sourceHashes'][f]==actual,f
+          assert meta['weeklyStage13']['bothHomeRoutes']==2
+          assert meta['weekly100418Legacy340OwnerOnlyAuthReadCandidate']
+          assert meta['financialRestoreEnabled'] is False
+          print('PASS_FINAL_100439_GM_REPORT_HASHES_AND_FULL_BASELINE')
+          PY
+      - name: State accurate limit of this stage (NO APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'bool get canPrepareFullRecoveryApk => false;' lib/deda_step2_completion_gate.dart
+          echo 'PASS_100439_STAGE_ONLY: six Stage2 merges and single GM winners prize report QA complete'
+          echo 'NOT_COMPLETE: recovery still needs complete app QA, cloud approval, financial proof and two-phone QA'
+          echo 'NO APK / NO FIREBASE DEPLOY / NO PLAY'
