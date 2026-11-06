@@ -118,11 +118,23 @@ def _pin(ours, base, theirs):
                 "final install = await DedaAuthRuntime.wait(() => installId());",
                 "pin trusted session install",
             )
-        if "await FirebaseFirestore.instance" in result:
+        if "final existing = await FirebaseFirestore.instance" in result:
             result = once(
-                result, "await FirebaseFirestore.instance",
-                "await DedaAuthRuntime.wait(() => FirebaseFirestore.instance",
-                "pin trusted session firestore",
+                result, "final existing = await FirebaseFirestore.instance",
+                "final existing = await DedaAuthRuntime.wait("
+                "() => FirebaseFirestore.instance",
+                "pin trusted pre-link server session read",
+            )
+            result = once(
+                result, ".get(const GetOptions(source: Source.server));",
+                ".get(const GetOptions(source: Source.server)));",
+                "pin trusted read balanced wait",
+            )
+        if "    await FirebaseFirestore.instance" in result:
+            result = once(
+                result, "    await FirebaseFirestore.instance",
+                "    await DedaAuthRuntime.wait(() => FirebaseFirestore.instance",
+                "pin trusted session firestore write",
             )
         return result
     return None
