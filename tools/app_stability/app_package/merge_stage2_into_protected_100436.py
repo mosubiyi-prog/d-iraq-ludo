@@ -120,8 +120,11 @@ def integrate(project):
                 capture_output=True,
             )
             if merge.returncode != 0:
-                if merge.returncode != 1:
-                    stop("git merge-file failed: " + relative)
+                # git merge-file returns the NUMBER of conflicts (1..127),
+                # not just 1. 128+ or negative indicates a tool failure.
+                if merge.returncode < 0 or merge.returncode >= 128:
+                    stop("git merge-file tool failed: " + relative +
+                         " exit=" + str(merge.returncode))
                 # Report only conflicting context, no entire source files.
                 preview = merge.stdout.decode("utf-8", errors="replace").splitlines()
                 markers = [i for i, line in enumerate(preview)
