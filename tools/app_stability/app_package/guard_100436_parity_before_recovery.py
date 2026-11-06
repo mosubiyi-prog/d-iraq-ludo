@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 REQUIRED_HISTORY = {
-    "weeklyStage13": ("originalApp",),
+    "weeklyStage13": ("originalApp", "restaurantQuickShortcutOnlyRemoved", "ownerRoyalV2NoScroll"),
     "weekly100404InlineClock": ("weekStartsSaturday06Baghdad", "freezesSaturday00Through06", "fullLeaderboardAlwaysVisible"),
     "weekly100406DisplayFixes": ("countDaysHoursInSameCard", "immutableOriginalScoreKey"),
     "weekly100408OwnerSevenPoints": (),
@@ -75,6 +75,13 @@ def guard(project, check_recovery=False):
         for key in keys:
             if record_section.get(key) is not True:
                 stop("missing or disabled 100436 feature: " + section + "." + key)
+    # Catch the specific 100437 visual regression: the official two home
+    # routes must lead to the weekly leaderboard, never the old restaurants
+    # shortcut, even if a newer versionCode compiles and signs normally.
+    if m["weeklyStage13"].get("bothHomeRoutes") != 2:
+        stop("one of the TWO official leaderboard home routes disappeared")
+    if "المتصدرون" not in (base / "lib/main.dart").read_text():
+        stop("weekly leaderboard home title missing; possible 100437 rollback")
     source_hashes = m.get("sourceHashes")
     if not isinstance(source_hashes, dict):
         stop("missing source hash chain")
