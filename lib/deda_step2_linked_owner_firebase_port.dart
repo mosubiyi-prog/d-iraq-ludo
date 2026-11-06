@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'deda_auth_session_runtime.dart';
 import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 import 'deda_pin_auth.dart';
+import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_step2_linked_owner_flutter_handoff.dart';
 import 'deda_step2_spark_linked_uid_readonly.dart';
 
@@ -68,7 +69,8 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     if (!dedaStep2SparkLinkedUidReadOnlyEnabled ||
         auth.currentUser?.uid != uid ||
         auth.currentUser?.isAnonymous != false ||
-        auth.currentUser?.email != '$account@deda-login.invalid') {
+        !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          auth.currentUser, account)) {
       throw StateError('spark-original-owner-auth-missing');
     }
     Future<DocumentSnapshot<Map<String, dynamic>>> server(String path) async {
@@ -97,6 +99,10 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
       accountKey: account,
       originalUid: uid,
       authEmail: auth.currentUser?.email,
+      verifiedGoogleLinkedOriginal:
+          DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+            auth.currentUser, account) &&
+          auth.currentUser?.email != '$account@deda-login.invalid',
       anonymous: auth.currentUser?.isAnonymous ?? true,
       directory: rows[0].data(),
       user: rows[1].data(),
@@ -137,7 +143,8 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
           result.user != null &&
           result.user!.uid == live.uid &&
           live.kind == DedaSessionAuthKind.authenticated &&
-          result.user!.email == '$account@deda-login.invalid',
+          DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+            result.user, account),
       );
       final uid = credential.user?.uid;
       if (uid == null || uid.isEmpty) {
@@ -198,14 +205,16 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
         signedIn.user!.uid == expectedUid &&
         signedIn.user!.uid == live.uid &&
         live.kind == DedaSessionAuthKind.authenticated &&
-        signedIn.user!.email == '$account@deda-login.invalid',
+        DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          signedIn.user, account),
     );
     if (credential.user?.uid != expectedUid) {
       throw StateError('linked-owner-original-uid-mismatch');
     }
     final live = current();
     if (live.uid != expectedUid || live.kind != DedaLoginKind.linked ||
-        live.email != '$account@deda-login.invalid') {
+        !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          auth.currentUser, account)) {
       throw StateError('linked-owner-after-proof-changed');
     }
     _provenUid = expectedUid;
