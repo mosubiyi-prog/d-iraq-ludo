@@ -126,7 +126,7 @@ def integrate(project):
                 stop("git merge-file tool failed: " + relative +
                      " exit=" + str(merge.returncode))
             if relative == "lib/main.dart":
-                proposal, resolved = reconcile_main(merge.stdout)
+                proposal, resolved = reconcile_main(merge.stdout, ours.read_bytes())
             else:
                 proposal, resolved = reconcile(relative, merge.stdout)
             if resolved:
