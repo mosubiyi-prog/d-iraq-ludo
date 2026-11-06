@@ -15,6 +15,8 @@ on:
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'test/deda_google_settings_card_private_test.dart'
       - 'test/deda_google_guardian_contract_private_test.dart'
+      - 'tools/deda_google_auth_readiness_100439.py'
+      - 'tools/test_deda_google_auth_readiness_100439.py'
       - '.github/workflows/deda-google-original-uid-guarded-qa-no-deploy.yml'
   workflow_dispatch:
 permissions:
@@ -39,6 +41,10 @@ jobs:
           git diff --quiet 6bd4b423cdc8aab028958665e7aa7b99c8370007 HEAD -- android assets firestore.rules firebase.json storage.rules pubspec.yaml pubspec.lock
           grep -q "'DEDA_STEP1_GOOGLE_ORIGINAL_UID_LINK', defaultValue: false" lib/deda_100430_owner_uid_continuity.dart
           echo PASS_ONLY_ISOLATED_GOOGLE_OWNER_LINK_NO_SIGNED_APK_NO_FIREBASE_DEPLOY
+      - name: Test Google OAuth configuration readiness checker
+        run: python3 -m unittest discover -s tools -p test_deda_google_auth_readiness_100439.py
+      - name: Report actual Google OAuth configuration readiness without changing Firebase
+        run: python3 tools/deda_google_auth_readiness_100439.py --report-only
       - name: Resolve raw staging dependencies in disposable runner only
         run: flutter pub get
       - name: Analyze linked-original UID and Google-only guards
