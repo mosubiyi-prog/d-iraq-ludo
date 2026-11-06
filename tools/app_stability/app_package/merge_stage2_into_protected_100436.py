@@ -93,6 +93,7 @@ def integrate(project):
     metadata = json.loads((project / "internal-build-inputs.json").read_text())
     old_hashes = metadata["sourceHashes"]
     temporary_results = {}
+    conflicts = []
     evidence = {
         "ancestor": RAW_100436_COMMIT,
         "baselineVersion": 100418,
@@ -119,8 +120,23 @@ def integrate(project):
                 capture_output=True,
             )
             if merge.returncode != 0:
-                stop("CONFLICT_REQUIRES_REVIEW: " + relative +
-                     "; protected 100436 output remains unchanged")
+                if merge.returncode != 1:
+                    stop("git merge-file failed: " + relative)
+                # Report only conflicting context, no entire source files.
+                preview = merge.stdout.decode("utf-8", errors="replace").splitlines()
+                markers = [i for i, line in enumerate(preview)
+                           if line.startswith("<<<<<<< ")]
+                print("REVIEW_REQUIRED " + relative +
+                      " conflict_blocks=" + str(len(markers)))
+                for i in markers[:12]:
+                    end = next((j for j in range(i + 1, min(i + 100, len(preview)))
+                                if preview[j].startswith(">>>>>>> ")),
+                               min(i + 35, len(preview) - 1))
+                    excerpt = preview[i:min(end + 1, i + 80)]
+                    print("CONFLICT_SNIPPET_" + relative + "\\n" +
+                          "\\n".join(excerpt))
+                conflicts.append(relative)
+                continue
             destination = temp / (str(index) + "-proposed.dart")
             destination.write_bytes(merge.stdout)
             if merge.stdout == ours.read_bytes():
@@ -136,6 +152,10 @@ def integrate(project):
                 "ancestor": hashlib.sha256(original).hexdigest(),
                 "recoveryCandidate": digest(theirs),
             }
+        if conflicts:
+            stop("CONFLICT_REQUIRES_MANUAL_ANCHOR_REVIEW: " +
+                 ", ".join(conflicts) +
+                 "; protected 100436 output remains unchanged")
         for relative, proposal in temporary_results.items():
             (project / relative).write_bytes(proposal)
     verify_project(project, evidence)
