@@ -165,14 +165,23 @@ class DedaLinkedOwnerGuardianBridge {
         (identity.originalId != null && identity.originalId != canonicalId)) {
       throw StateError('verified-original-id-unavailable');
     }
+    // The original PIN provider or the linked Google identity is admitted
+    // ONLY after the existing handoff's original UID/account server proof.
+    // Never authorize recovery from an arbitrary Google email alone.
+    if (!identity.matchesOwnerProvider(accountKey) ||
+        identity.uid != originalUid) {
+      throw StateError('guardian-original-provider-not-proven');
+    }
     final epoch = identity.epoch;
+    final startingEmail = identity.email;
     bool identityStillMatches() {
       if (!isCurrentIntent()) return false;
       final current = handoff.port.current();
       return current.uid == originalUid &&
           current.epoch == epoch &&
-          current.kind == DedaLoginKind.linked &&
-          current.email == '$accountKey@deda-login.invalid';
+          current.matchesOwnerProvider(accountKey) &&
+          current.email == startingEmail &&
+          current.originalId == canonicalId;
     }
     if (!identityStillMatches()) {
       throw StateError('linked-owner-changed-after-login');
