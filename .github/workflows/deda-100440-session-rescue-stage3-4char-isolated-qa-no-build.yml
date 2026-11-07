@@ -1,0 +1,113 @@
+name: DEDA 100440 Stage3 session rescue + four-char premium ID isolated QA NO BUILD
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'lib/deda_session_recovery_coordinator.dart'
+      - 'lib/deda_session_rescue_stage3_bridge.dart'
+      - 'test/deda_session_recovery_coordinator_private_test.dart'
+      - 'test/deda_session_rescue_stage3_4char_private_test.dart'
+      - 'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py'
+      - '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100440-stage3-four-character-owner-review
+  cancel-in-progress: false
+
+jobs:
+  test-isolated-and-disposable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prove 100440 original source, wallet, rules and entry untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base='958ed9a3c9cce0f207e98d8956e8b659e1ff7246'
+          changed=set(subprocess.check_output(
+              ['git','diff','--name-only',base,'HEAD'],text=True).splitlines())
+          permitted={
+            'docs/DEDA_100440_OWNER_LOCKED_SESSION_RESCUE_PLAN_2026-11-07.md',
+            'docs/DEDA_100440_SESSION_RESCUE_STAGE2_QA_STOP_2026-11-07.md',
+            'lib/deda_session_recovery_coordinator.dart',
+            'lib/deda_session_rescue_stage3_bridge.dart',
+            'test/deda_session_recovery_coordinator_private_test.dart',
+            'test/deda_session_rescue_stage3_4char_private_test.dart',
+            'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py',
+            '.github/workflows/deda-100440-session-rescue-stage2-isolated-qa-no-build.yml',
+            '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml',
+          }
+          assert changed.issubset(permitted),(changed-permitted)
+          protected={'lib/main.dart','lib/deda_backend.dart','pubspec.yaml',
+                     'pubspec.lock','firestore.rules','firebase.json',
+                     'google-services.json','android','assets'}
+          assert not changed.intersection(protected)
+          print('PASS_STAGE3_PROTECTED_100440_NO_SOURCE_OVERWRITE')
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Install ephemeral packages
+        run: flutter pub get
+      - name: Format isolated Dart candidate in disposable runner only
+        run: dart format lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+      - name: Analyze coordinator, exact owner proof, four-letter alias and bridge
+        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+      - name: Run stage2 regressions and stage3 four-char UID security tests
+        run: flutter test --no-pub test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+      - name: Verify source-only binder on disposable clone; do not build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/app_stability/app_package/bind_session_rescue_stage3_100441.py
+          python3 - <<'PY'
+          import json,shutil,tempfile
+          from pathlib import Path
+          from tools.app_stability.app_package.bind_session_rescue_stage3_100441 import bind
+          with tempfile.TemporaryDirectory(prefix='deda-stage3-no-live-') as td:
+              root=Path(td)
+              (root/'lib').mkdir()
+              for name in ['main.dart','deda_step1_google_settings_link_100439.dart']:
+                  shutil.copy2(Path('lib')/name,root/'lib'/name)
+              (root/'internal-build-inputs.json').write_text(json.dumps({}))
+              main_before=(root/'lib/main.dart').read_bytes()
+              google_before=(root/'lib/deda_step1_google_settings_link_100439.dart').read_bytes()
+              bind(root)
+              main=(root/'lib/main.dart').read_text()
+              google=(root/'lib/deda_step1_google_settings_link_100439.dart').read_text()
+              assert main.count('DedaSessionRescueStage3Bridge.runForPhone')==1 or main.count('DedaSessionRescueStage3Bridge')>=2
+              assert main.count('mayRecheckAdminGateway')==1
+              assert 'if (_adminEntryVisible) ...[' in main
+              assert 'DedaSessionRescueStage3Bridge.updates.addListener' in google
+              assert 'DedaSessionRescueStage3Bridge.updates.removeListener' in google
+              assert 'linkGoogleToConfirmedOriginalUid' in google
+              assert (root/'lib/deda_session_recovery_coordinator.dart').is_file()
+              assert (root/'lib/deda_session_rescue_stage3_bridge.dart').is_file()
+              meta=json.loads((root/'internal-build-inputs.json').read_text())
+              assert meta['sessionRescueStage3']['activePremiumIdMinLength']==4
+              assert meta['sessionRescueStage3']['immutableOriginalIdLength']==6
+              try:
+                  bind(root)
+                  raise AssertionError('duplicate binder unexpectedly passed')
+              except ValueError as ex:
+                  assert 'BLOCK_STAGE3_DUPLICATE_BIND' in str(ex)
+              assert main_before!= (root/'lib/main.dart').read_bytes()
+              assert google_before!= (root/'lib/deda_step1_google_settings_link_100439.dart').read_bytes()
+          print('PASS_STAGE3_DISPOSABLE_GOOGLE_ADMIN_HOME_4CHAR_BIND')
+          PY
+      - name: No production application, gifts, Firebase rules, APK, AAB or Play touched
+        run: |
+          echo PASS_STAGE3_ALL_ISOLATED_TESTS_NO_RUNTIME_OR_PRODUCTION_DEPLOY
+          echo NO_APK_NO_AAB_NO_PLAY_NO_FIREBASE_RULES_NO_LIVE_DATA_WRITES
