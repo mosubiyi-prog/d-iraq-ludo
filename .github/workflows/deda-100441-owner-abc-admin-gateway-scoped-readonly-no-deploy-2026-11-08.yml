@@ -31,8 +31,10 @@ jobs:
           set -euo pipefail
           git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
-            functions/ firestore.rules storage.rules firebase.json \
-            .firebaserc android/ assets/ pubspec.yaml pubspec.lock
+            functions/index.js functions/deda_owner_pin_verify_private_v1.js \
+            functions/deda_linked_owner_session_grant_private_v1.js \
+            functions/deda_stage2_live_gate.js firestore.rules storage.rules \
+            firebase.json .firebaserc android/ assets/ pubspec.yaml pubspec.lock
           python3 -m py_compile tools/deda_100441_admin_gateway_vs_owner_uid_abc_readonly_2026_11_08.py
           echo PASS_PRODUCTION_SOURCE_UNCHANGED
       - uses: actions/setup-python@v5
