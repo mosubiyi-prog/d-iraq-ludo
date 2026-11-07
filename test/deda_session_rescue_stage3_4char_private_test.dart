@@ -79,6 +79,15 @@ void main() {
         }), isNull);
   });
 
+  test('Spark 100440 friend lookup accepts 4-letter premium input', () {
+    expect(DedaStage51FriendSearch.enabled, isTrue,
+        reason: 'Private signed 100440 Spark flag is enabled');
+    expect(DedaStage51FriendSearch.acceptsInput(premiumFour), isTrue);
+    expect(DedaStage51FriendSearch.acceptsInput(original), isTrue);
+    expect(DedaSocialService.looksLikePersonalId(premiumFour), isFalse,
+        reason: 'Alias is resolved to canonical original on server');
+  });
+
   test('4-character friend alias maps ONLY to immutable original route', () {
     final proof = DedaStage51FriendAliasProof.parse(
       <String, dynamic>{
