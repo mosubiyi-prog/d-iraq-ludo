@@ -9,6 +9,7 @@ class DedaMissingOwnerEntryPolicy {
     required DedaRescueStatus status,
     required bool rescueEnabled,
     required bool verifiedExistingEntryEnabled,
+    required bool verifiedLinkedUidOnlyEnabled,
     required bool firebaseReady,
     required String? liveUid,
     required String accountKey,
@@ -16,6 +17,7 @@ class DedaMissingOwnerEntryPolicy {
   }) =>
       rescueEnabled &&
       verifiedExistingEntryEnabled &&
+      verifiedLinkedUidOnlyEnabled &&
       firebaseReady &&
       liveUid == null &&
       status == DedaRescueStatus.signedOut &&
@@ -31,6 +33,7 @@ class DedaMissingOwnerEntryPolicy {
     required DedaRescueStatus status,
     required bool rescueEnabled,
     required bool verifiedExistingEntryEnabled,
+    required bool verifiedLinkedUidOnlyEnabled,
     required bool firebaseReady,
     required String? liveUid,
     required String accountKey,
@@ -42,6 +45,7 @@ class DedaMissingOwnerEntryPolicy {
         status: status,
         rescueEnabled: rescueEnabled,
         verifiedExistingEntryEnabled: verifiedExistingEntryEnabled,
+        verifiedLinkedUidOnlyEnabled: verifiedLinkedUidOnlyEnabled,
         firebaseReady: firebaseReady,
         liveUid: liveUid,
         accountKey: accountKey,
