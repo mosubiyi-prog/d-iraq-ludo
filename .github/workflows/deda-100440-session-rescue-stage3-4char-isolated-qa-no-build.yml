@@ -6,11 +6,14 @@ on:
     paths:
       - 'lib/deda_session_recovery_coordinator.dart'
       - 'lib/deda_session_rescue_stage3_core.dart'
+      - 'lib/deda_session_missing_owner_entry_100441.dart'
       - 'lib/deda_session_rescue_stage3_bridge.dart'
       - 'test/deda_session_recovery_coordinator_private_test.dart'
       - 'test/deda_session_rescue_stage3_4char_private_test.dart'
+      - 'test/deda_session_missing_owner_entry_100441_test.dart'
       - 'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py'
       - 'tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py'
+      - 'tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py'
       - '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml'
   workflow_dispatch:
 
@@ -44,14 +47,18 @@ jobs:
             'docs/DEDA_100440_SESSION_RESCUE_STAGE3_4CHAR_QA_STOP_2026-11-07.md',
             'docs/DEDA_100440_STAGE4_OWNER_DIAMONDS_READONLY_AUDIT_2026-11-07.md',
             'docs/DEDA_100440_STAGE4_STEP1_SESSION_RESCUE_FINAL_COMPAT_AUDIT_2026-11-07.md',
+            'docs/DEDA_100440_STAGE4_STEP1A_FRIENDS_RETRY_OWNER_CHECKPOINT_2026-11-07.md',
             '.github/workflows/deda-100440-friends-retry-baseline-source-inspection-no-build.yml',
             'lib/deda_session_recovery_coordinator.dart',
             'lib/deda_session_rescue_stage3_core.dart',
+            'lib/deda_session_missing_owner_entry_100441.dart',
             'lib/deda_session_rescue_stage3_bridge.dart',
             'test/deda_session_recovery_coordinator_private_test.dart',
             'test/deda_session_rescue_stage3_4char_private_test.dart',
+            'test/deda_session_missing_owner_entry_100441_test.dart',
             'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py',
             'tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py',
+            'tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py',
             '.github/workflows/deda-100440-session-rescue-stage2-isolated-qa-no-build.yml',
             '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml',
           }
@@ -70,11 +77,11 @@ jobs:
       - name: Install ephemeral packages
         run: flutter pub get
       - name: Format isolated Dart candidate in disposable runner only
-        run: dart format lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+        run: dart format lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart lib/deda_session_missing_owner_entry_100441.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart test/deda_session_missing_owner_entry_100441_test.dart
       - name: Analyze coordinator, exact owner proof, four-letter alias and bridge
-        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart lib/deda_session_missing_owner_entry_100441.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart test/deda_session_missing_owner_entry_100441_test.dart
       - name: Run stage2 regressions and stage3 four-char UID security tests
-        run: flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+        run: flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart test/deda_session_missing_owner_entry_100441_test.dart
       - name: Verify source-only binder on disposable clone; do not build APK
         shell: bash
         run: |
@@ -170,6 +177,7 @@ jobs:
           python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
           python3 tools/app_stability/app_package/bind_session_rescue_stage3_100441.py "$project"
           python3 tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py "$project"
+          python3 tools/app_stability/app_package/bind_session_missing_owner_entry_100441.py "$project"
           DEDA_STAGE3_PROJECT="$project" python3 - <<'PY'
           import os,json
           from pathlib import Path
@@ -190,6 +198,16 @@ jobs:
           assert 'onPressed: _prepare' not in friend
           assert 'DedaSocialService.watchRelations(verified.uid)' in friend
           assert 'final verifiedCount = snapshot.data!' in friend
+          assert 'dedaPromptOriginalAccountForMissingSession(context)' in friend
+          assert 'DedaMissingOwnerEntryPolicy.canOffer' in main
+          assert 'DedaMissingOwnerEntryPolicy.mayOpenAfterConsent' in main
+          assert 'openExistingOriginalAfterExplicitConsent' in main
+          assert 'if (widget.openExistingOriginalAfterExplicitConsent)' in main
+          assert 'if (dedaSessionRescueStage3Enabled && Firebase.apps.isNotEmpty' in main
+          assert "_sessionRescueStatus == DedaRescueStatus.signedOut" in main
+          assert 'DedaRescueStatus.signedOut' in main
+          assert (p/'lib/deda_session_missing_owner_entry_100441.dart').is_file()
+          print('PASS_MISSING_OWNER_EXPLICIT_REENTRY_NO_UID_CREATION_NO_AUTO_LOGIN')
           assert 'signInAnonymously(' not in friend and 'signOut(' not in friend
           print('PASS_FRIEND_RETRY_TOUCH_RESTART_SAME_UID_STREAM_ERROR_NOT_EMPTY')
           assert 'DedaSessionRescueStage3Bridge.updates.addListener' in google
@@ -213,6 +231,7 @@ jobs:
               lib/deda_session_recovery_coordinator.dart \
               lib/deda_session_rescue_stage3_core.dart \
               lib/deda_session_rescue_stage3_bridge.dart \
+              lib/deda_session_missing_owner_entry_100441.dart \
               lib/deda_step1_google_settings_link_100439.dart
           )
           echo PASS_FULL_ASSEMBLED_STAGE3_DART_ANALYSIS_NO_APK_NO_DEPLOY
