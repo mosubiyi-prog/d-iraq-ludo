@@ -1,0 +1,49 @@
+name: DEDA 100441 STEP1 original UID A B evidence LIVE READONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'tools/deda_100441_step1_original_uid_evidence_readonly_2026_11_08.py'
+      - '.github/workflows/deda-100441-step1-original-uid-live-readonly-2026-11-08.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100441-step1-uid-proof-readonly
+  cancel-in-progress: false
+jobs:
+  verify-identity-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove 100440 reference and Firebase source not modified
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            firestore.rules storage.rules firebase.json .firebaserc functions/ \
+            android/ assets/ pubspec.yaml pubspec.lock
+          python3 -m py_compile tools/deda_100441_step1_original_uid_evidence_readonly_2026_11_08.py
+          echo PASS_PROTECTED_100440_AND_FIREBASE_SOURCE_UNMODIFIED
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install audited read-only SDKs
+        run: |
+          python3 -m pip install --quiet firebase-admin==6.9.0 google-cloud-firestore==2.21.0
+      - name: Read only named owner IDs and bounded friendship existence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100441_step1_original_uid_evidence_readonly_2026_11_08.py
+      - name: Confirm no writes, deployment or installer
+        run: |
+          echo STEP1_NO_AUTH_CHANGE_NO_FIREBASE_WRITES_NO_APK_NO_AAB_NO_PLAY
