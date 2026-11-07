@@ -6,9 +6,9 @@
  * It must never run until the owner independently authorizes the server
  * funding operation and the matching debit-only rules have been reviewed.
  *
- * The additional 99m increases ONLY an already-verified general manager's
- * administrative GIFT wallet, never personal gems or any recipient account.
- * It preserves prior spending: balance_new = balance_old + 99m, not 100m.
+ * Set the verified existing general manager ADMIN gift wallet to an EXACT
+ * 100m available balance, never personal gems or any recipient account.
+ * Credit only the shortfall once (100m - the real pre-existing balance).
  * A server-only approval document + one immutable audit receipt are mandatory.
  */
 const OLD_CAP = 1_000_000;
@@ -73,7 +73,11 @@ async function allocateApprovedManagerCompensation(db, {uid, now = new Date()} =
 
     if (audit) {
       // Idempotency: do not refund spent credit if the same job is retried.
-      if (audit.adminUid !== uid || audit.addDiamonds !== ADDITION ||
+      if (audit.adminUid !== uid ||
+          audit.capIncreaseDiamonds !== ADDITION ||
+          !Number.isSafeInteger(audit.addDiamonds) ||
+          audit.addDiamonds !== NEW_CAP - audit.balanceBefore ||
+          audit.balanceAfter !== NEW_CAP ||
           audit.toCapDiamonds !== NEW_CAP ||
           wallet.initialBalance !== NEW_CAP ||
           !Number.isSafeInteger(wallet.balance) ||
@@ -85,7 +89,8 @@ async function allocateApprovedManagerCompensation(db, {uid, now = new Date()} =
     }
 
     validateBalance(wallet);
-    const newBalance = wallet.balance + ADDITION;
+    const newBalance = NEW_CAP;
+    const credited = NEW_CAP - wallet.balance;
     tx.update(walletRef, {
       initialBalance: NEW_CAP,
       balance: newBalance,
@@ -99,11 +104,12 @@ async function allocateApprovedManagerCompensation(db, {uid, now = new Date()} =
       toCapDiamonds: NEW_CAP,
       balanceBefore: wallet.balance,
       balanceAfter: newBalance,
-      addDiamonds: ADDITION,
+      addDiamonds: credited,
+      capIncreaseDiamonds: ADDITION,
       approvedBy: approval.approvedBy,
       createdAt: now,
     });
-    return Object.freeze({alreadyAllocated: false, diamondsAdded: ADDITION,
+    return Object.freeze({alreadyAllocated: false, diamondsAdded: credited,
       balance: newBalance, capDiamonds: NEW_CAP, serverProofOnly: true});
   });
 }
