@@ -24,7 +24,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
   final FirebaseAuth auth;
   final FirebaseFirestore db;
   final FirebaseFunctions functions;
-  String? _provenUid, _provenOriginalId;
+  String? _provenUid, _provenOriginalId, _provenAccountKey;
 
   void _enabled() {
     if (!dedaLinkedFlutterHandoffEnabled ||
@@ -42,9 +42,14 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     if (snap.uid != current?.uid) throw StateError('auth-sdk-principal-mismatch');
     final kind = current == null ? DedaLoginKind.absent :
         current.isAnonymous ? DedaLoginKind.anonymous : DedaLoginKind.linked;
+    final sameProvenOwner = kind == DedaLoginKind.linked &&
+        current?.uid == _provenUid && _provenOriginalId != null &&
+        _provenAccountKey != null &&
+        DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+            current, _provenAccountKey!);
     return DedaLoginIdentity(current?.uid, current?.email, kind, snap.epoch,
-        originalId: kind == DedaLoginKind.linked &&
-            current?.uid == _provenUid ? _provenOriginalId : null);
+        originalId: sameProvenOwner ? _provenOriginalId : null,
+        verifiedOriginalOwnerProvider: sameProvenOwner);
   }
 
   @override
@@ -127,6 +132,7 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     }
     _provenUid = null;
     _provenOriginalId = null;
+    _provenAccountKey = null;
     final initial = current();
     if (dedaStep2SparkLinkedUidReadOnlyEnabled) {
       // Existing linked Auth account only. No anonymous-to-new-UID fallback,
@@ -153,13 +159,12 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
       final original = await _sparkOriginalUidServerProof(account, uid);
       _provenUid = uid;
       _provenOriginalId = original;
+      _provenAccountKey = account;
       final verified = current();
       if (verified.uid != uid || verified.kind != DedaLoginKind.linked) {
         throw StateError('spark-linked-auth-changed');
       }
-      return DedaLoginIdentity(
-        verified.uid, verified.email, verified.kind, verified.epoch,
-        originalId: original);
+      return verified;
     }
     if (initial.kind == DedaLoginKind.absent) {
       // Only a real user action inside the shared Auth lane may prepare
@@ -219,8 +224,16 @@ class DedaLinkedOwnerFirebasePortCandidate implements DedaLoginHandoffPort {
     }
     _provenUid = expectedUid;
     _provenOriginalId = originalId;
-    return DedaLoginIdentity(
-      live.uid, live.email, live.kind, live.epoch, originalId: originalId);
+    _provenAccountKey = account;
+    // Re-evaluate SDK provider identity only AFTER the original UID and
+    // canonical account have passed the server ownership proof.
+    final confirmed = current();
+    if (confirmed.uid != expectedUid ||
+        !confirmed.verifiedOriginalOwnerProvider ||
+        confirmed.originalId != originalId) {
+      throw StateError('linked-owner-provider-proof-not-stable');
+    }
+    return confirmed;
   }
 
   @override
