@@ -74,9 +74,40 @@ def main():
                  s.to_dict().get("status")=="active"]
         print("GM_ROLE_RECORD_COUNT",len(records))
         print("ACTIVE_GM_ROLE_COUNT",len(actives))
-        if len(actives)!=1:
-            return stop("NO_UNIQUE_ACTIVE_MANAGER_CANNOT_ROUTE_FUNDS")
-        manager=actives[0]
+        # Historical original ID of the owner's DEDA account, NOT a premium
+        # display alias, email, phone, or guessed currently signed-in UID.
+        original_id="@DEDA-AQPYXJ"
+        original=store.collection("deda_share_ids").document(original_id).get()
+        od=original.to_dict() or {} if original.exists else {}
+        candidates=[]
+        for manager in actives:
+            uid_check=manager.id
+            person=store.collection("users").document(uid_check).get()
+            person_data=person.to_dict() or {} if person.exists else {}
+            key_check=person_data.get("accountKey")
+            entry_ok=False
+            if isinstance(key_check,str) and key_check:
+                entry=store.collection("admin_entry_access").document(key_check).get()
+                ea=entry.to_dict() or {} if entry.exists else {}
+                entry_ok=(entry.exists and ea.get("accountKey")==key_check
+                          and ea.get("active") is True and
+                          ea.get("status")=="active" and
+                          ea.get("allowedRole")=="general_manager" and
+                          ea.get("accessType")=="general_manager_gateway")
+            identifier_ok=(original.exists and od.get("kind")=="personal"
+                           and od.get("ownerUid")==uid_check
+                           and od.get("active") is True
+                           and person_data.get("sharePersonalId")==original_id)
+            wallet_check=store.collection("deda_admin_diamond_wallets").document(uid_check).get()
+            print("GM_CANDIDATE",len(candidates)+1,
+                "originalOwnerMatch",identifier_ok,
+                "entryVerified",entry_ok,
+                "walletExists",wallet_check.exists)
+            if identifier_ok and entry_ok:
+                candidates.append(manager)
+        if len(candidates)!=1:
+            return stop("OWNER_ORIGINAL_ID_NOT_UNIQUELY_VERIFIED_NO_FUNDS_ROUTED")
+        manager=candidates[0]
         uid=manager.id
         wallet=store.collection("deda_admin_diamond_wallets").document(uid).get()
         d=wallet.to_dict() if wallet.exists else None
