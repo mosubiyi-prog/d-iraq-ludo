@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_session_recovery_coordinator.dart';
-import 'package:d_iraq_ludo/deda_session_rescue_stage3_bridge.dart';
+import 'package:d_iraq_ludo/deda_session_rescue_stage3_core.dart';
 import 'package:d_iraq_ludo/deda_qa32_spark_public_identifier_directory.dart';
 import 'package:d_iraq_ludo/deda_stage51_verified_friend_alias_search.dart';
 import 'package:d_iraq_ludo/deda_social_service.dart';
