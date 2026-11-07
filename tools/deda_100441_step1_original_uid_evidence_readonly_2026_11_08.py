@@ -150,6 +150,46 @@ def main() -> int:
             report("SOCIAL_PROFILE_OWNED_BY_UID_A", None)
             report("SOCIAL_PROFILE_OWNED_BY_UID_B", None)
 
+        # An older social registration can reference a THIRD UID. Prove it
+        # exists before treating it as an actual Firebase identity, and never
+        # assume that it has permission to own the original public route.
+        c = social.get("ownerUid") if social_exists else None
+        c_is_distinct = (
+            isinstance(c, str) and len(c) > 5 and c not in {a, b}
+            and social.get("publicId") == original
+        )
+        report("SOCIAL_PROFILE_REFERENCES_DISTINCT_UID_C", c_is_distinct)
+        if c_is_distinct:
+            c_user_exists, c_user, c_user_created = read_doc(
+                client, "users", c, ["accountKey", "sharePersonalId"])
+            report("UID_C_HAS_USER_DOCUMENT", c_user_exists)
+            report("UID_C_HAS_SAME_PHONE_ACCOUNT",
+                   c_user_exists and c_user.get("accountKey") == account)
+            report("UID_C_CLAIMS_ORIGINAL_ID",
+                   c_user_exists and c_user.get("sharePersonalId") == original)
+            c_session_exists, c_session, _ = read_doc(
+                client, "deda_sessions", c, ["uid", "accountKey"])
+            report("UID_C_HAS_VALID_SESSION",
+                   c_session_exists and c_session.get("uid") == c
+                   and c_session.get("accountKey") == account)
+            report("UID_C_HAS_AT_LEAST_ONE_FRIENDSHIP",
+                   maybe_friend_membership(client, c))
+            try:
+                c_app = initialize_app(
+                    credentials.Certificate(creds),
+                    {"projectId": PROJECT},
+                    name="deda-step1-readonly-C",
+                )
+                c_auth = auth.get_user(c, app=c_app)
+                report("UID_C_FIREBASE_AUTH_EXISTS", True)
+                report("UID_C_HAS_LINKED_EMAIL_OR_PROVIDER",
+                       bool(c_auth.email or c_auth.phone_number or c_auth.provider_data))
+                report("UID_C_AUTH_DISABLED", bool(c_auth.disabled))
+            except Exception:
+                report("UID_C_FIREBASE_AUTH_EXISTS", None)
+                report("UID_C_HAS_LINKED_EMAIL_OR_PROVIDER", None)
+                report("UID_C_AUTH_DISABLED", None)
+
         active_exists, active, active_created = read_doc(
             client, "deda_stage71_active_identifier", original,
             ["originalId", "activeId"])
