@@ -34,6 +34,10 @@ jobs:
           print('FRIEND_MARKERS_START')
           for i,l in markers[:140]: print(str(i+1)+': '+l[:180])
           print('FRIEND_MARKERS_END')
+          print('DEDA_FRIEND_TARGET_START')
+          for i in list(range(31732-1,31890))+list(range(32560-1,32692)):
+              if i<len(lines):print('DEDA_FRIEND_SOURCE '+str(i+1)+': '+lines[i])
+          print('DEDA_FRIEND_TARGET_END')
           for i,l in markers:
               if re.search(r'class _DedaFriends|class DedaFriends|class _DedaSocialHub|_loadFriends|watchRelations|ensurePersonalSession|[إا]عادة المحاولة',l,re.I):
                   start=max(0,i-12);end=min(len(lines),i+25)
