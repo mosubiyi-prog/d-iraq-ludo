@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     env:
-      DEDA_SERVICE_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
-      DEDA_FALLBACK_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0, persist-credentials: false}
