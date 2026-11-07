@@ -62,15 +62,17 @@ function fixture({balance=900000, approved=true, role="general_manager"} = {}) {
   db.put("deda_diamond_gift_balances/@DEDA-ABC123",{balance:75});
   return db;
 }
-test("100m is a cap, not 100m newly minted: only 99m added with old spending intact", async()=>{
+test("verified admin gift wallet ends with exactly 100m, crediting only the remaining shortfall", async()=>{
   const db=fixture();
   const result=await allocate(db,{uid:UID,now});
-  assert.equal(result.diamondsAdded,99_000_000);
-  assert.equal(result.balance,99_900_000);
+  assert.equal(result.diamondsAdded,99_100_000);
+  assert.equal(result.balance,100_000_000);
   assert.equal(db.get(walletPath).initialBalance,100_000_000);
-  assert.equal(db.get(walletPath).balance,99_900_000);
+  assert.equal(db.get(walletPath).balance,100_000_000);
   assert.equal(db.get(auditPath).balanceBefore,900000);
-  assert.equal(db.get(auditPath).balanceAfter,99_900_000);
+  assert.equal(db.get(auditPath).balanceAfter,100_000_000);
+  assert.equal(db.get(auditPath).addDiamonds,99_100_000);
+  assert.equal(db.get(auditPath).capIncreaseDiamonds,99_000_000);
   assert.deepEqual(db.writes.map(x=>x.path),[walletPath,auditPath]);
   assert.equal(db.get("deda_diamond_gift_balances/@DEDA-ABC123").balance,75);
 });
