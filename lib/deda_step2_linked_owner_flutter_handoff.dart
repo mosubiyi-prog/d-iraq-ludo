@@ -7,12 +7,21 @@ enum DedaLoginKind { absent, anonymous, linked }
 
 class DedaLoginIdentity {
   const DedaLoginIdentity(this.uid, this.email, this.kind, this.epoch,
-      {this.originalId});
+      {this.originalId, this.verifiedOriginalOwnerProvider = false});
   final String? uid, email;
   // Read only from an explicit server-backed proof, never from premium ID.
   final String? originalId;
+  // True only when the SDK Firebase port has checked the ORIGINAL linked
+  // password+Google provider on this very same server-proven UID/account.
+  // A Google email or an unverified Google sign-in alone cannot set it.
+  final bool verifiedOriginalOwnerProvider;
   final DedaLoginKind kind;
   final int epoch;
+
+  bool matchesOwnerProvider(String accountKey) =>
+      kind == DedaLoginKind.linked &&
+      (email == '$accountKey@deda-login.invalid' ||
+          verifiedOriginalOwnerProvider);
 }
 
 abstract class DedaLoginHandoffPort {
@@ -66,8 +75,8 @@ class DedaLoginHandoff {
       final proof = await port.signInOriginal(account, pin);
       checkIntent();
       final uid = proof.uid;
-      if (uid == null || uid.isEmpty || proof.kind != DedaLoginKind.linked ||
-          proof.email != '$account@deda-login.invalid') {
+      if (uid == null || uid.isEmpty ||
+          !proof.matchesOwnerProvider(account)) {
         throw StateError('linked-original-login-not-proven');
       }
       final serverId = proof.originalId;
@@ -81,7 +90,8 @@ class DedaLoginHandoff {
         checkIntent();
         final live = port.current();
         if (live.uid != uid || live.epoch != proof.epoch ||
-            live.kind != DedaLoginKind.linked || live.email != proof.email) {
+            !live.matchesOwnerProvider(account) ||
+            live.email != proof.email) {
           throw StateError('linked-owner-uid-changed');
         }
       }
