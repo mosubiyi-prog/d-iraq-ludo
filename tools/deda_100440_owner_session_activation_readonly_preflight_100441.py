@@ -80,6 +80,9 @@ def main() -> int:
         owner_session = (
             session_doc.exists and session.get("uid") == uid and
             session.get("accountKey") == key)
+        checkpoint("SESSION_DOCUMENT_EXISTS", session_doc.exists)
+        checkpoint("SESSION_UID_MATCHES_ORIGINAL", session.get("uid") == uid)
+        checkpoint("SESSION_ACCOUNT_KEY_MATCHES", session.get("accountKey") == key)
         checkpoint("EXISTING_OWNER_SESSION", owner_session)
 
         directory_ok = False
@@ -97,6 +100,9 @@ def main() -> int:
                 entry.get("active") is True and entry.get("status") == "active" and
                 entry.get("allowedRole") == "general_manager" and
                 entry.get("accessType") == "general_manager_gateway")
+        checkpoint("DIRECTORY_DOCUMENT_EXISTS", bool(valid_key and directory_doc.exists))
+        checkpoint("DIRECTORY_ORIGINAL_UID_MATCHES", bool(valid_key and directory.get("createdUid") == uid))
+        checkpoint("DIRECTORY_ACCOUNT_KEY_MATCHES", bool(valid_key and directory.get("accountKey") == key))
         checkpoint("SERVER_DIRECTORY_SAME_UID", directory_ok)
         checkpoint("EXISTING_ADMIN_GATEWAY", entry_ok)
 
@@ -112,6 +118,10 @@ def main() -> int:
 
         linked_auth = False
         auth_check_available = False
+        has_auth_email = False
+        provider_password = False
+        provider_google = False
+        account_disabled = False
         try:
             app = firebase_admin.initialize_app(
                 firebase_credentials.Certificate(info),
@@ -120,6 +130,11 @@ def main() -> int:
             )
             firebase_record = auth.get_user(uid, app=app)
             auth_check_available = True
+            has_auth_email = bool(firebase_record.email)
+            provider_ids = {x.provider_id for x in (firebase_record.provider_data or [])}
+            provider_password = 'password' in provider_ids or has_auth_email
+            provider_google = 'google.com' in provider_ids
+            account_disabled = bool(firebase_record.disabled)
             linked_auth = (
                 not firebase_record.disabled and valid_key and
                 firebase_record.email == f"{key}@deda-login.invalid"
@@ -128,6 +143,10 @@ def main() -> int:
             # Don't print exceptions: some SDK failures include user identifiers.
             pass
         checkpoint("AUTH_RECORD_READ_AVAILABLE", auth_check_available)
+        checkpoint("ORIGINAL_UID_AUTH_EMAIL_PRESENT", has_auth_email)
+        checkpoint("ORIGINAL_UID_AUTH_PASSWORD_STYLE", provider_password)
+        checkpoint("ORIGINAL_UID_AUTH_GOOGLE_PROVIDER", provider_google)
+        checkpoint("ORIGINAL_UID_AUTH_DISABLED", account_disabled)
         checkpoint("ORIGINAL_UID_AUTH_EMAIL_CANONICAL", linked_auth)
 
         eligible = bool(
