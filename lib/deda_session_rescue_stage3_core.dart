@@ -63,12 +63,107 @@ class DedaRescueStage3Controller {
     required String originalId,
   }) {
     final before = port.capture();
-    if (before == null || before.uid == null || before.uid!.isEmpty ||
-        !RegExp(r'^[0-9]{8,16}$').hasMatch(accountKey) ||
+    if (before == null) {
+      // No guardian/Firebase snapshot: never infer sign-out or create UID.
+      return Future.value(DedaRescueStage3Result(
+        status: DedaRescueStatus.firebaseNotReady,
+        uid: null, originalId: originalId,
+      ));
+    }
+    if (before.uid == null || before.uid!.isEmpty) {
+      // Distinguish genuinely absent SDK principal from denied owner proof.
+      // This ONLY enables a user-initiated existing-account entry prompt.
+      return Future.value(DedaRescueStage3Result(
+        status: DedaRescueStatus.signedOut,
+        uid: null, originalId: originalId,
+      ));
+    }
+    if (!RegExp(r'^[0-9]{8,16}
+    final key = before.uid! + '|' + before.epoch.toString() +
+        '|' + before.anonymous.toString() + '|' + accountKey + '|' + originalId;
+    final active = _active;
+    if (active != null) {
+      if (_key == key) return active;
+      return Future.value(DedaRescueStage3Result(
+        status: DedaRescueStatus.temporarilyBusy,
+        uid: before.uid, originalId: originalId,
+      ));
+    }
+    final work = _run(before, accountKey, originalId);
+    _key = key;
+    _active = work;
+    unawaited(work.then<void>((_) {
+      if (identical(_active, work)) {
+        _active = null;
+        _key = null;
+      }
+    }, onError: (Object _, StackTrace __) {
+      if (identical(_active, work)) {
+        _active = null;
+        _key = null;
+      }
+    }));
+    return work;
+  }
+
+  Future<DedaRescueStage3Result> _run(
+      DedaRescueSnapshot before, String accountKey, String originalId) async {
+    var status = DedaRescueStatus.ownerProofRequired;
+    try {
+      final proof = await port.verifyOwner(accountKey, originalId);
+      status = proof.status;
+    } catch (_) {
+      status = DedaRescueStatus.temporarilyOffline;
+    }
+    if (!_still(before)) {
+      return DedaRescueStage3Result(
+        status: DedaRescueStatus.uidChanged,
+        uid: before.uid, originalId: originalId,
+      );
+    }
+    String? display;
+    if (status == DedaRescueStatus.ready) {
+      try {
+        final verified = await port.readVerifiedOwnerDisplay(
+            before.uid!, originalId);
+        if (!_still(before)) {
+          return DedaRescueStage3Result(
+            status: DedaRescueStatus.uidChanged,
+            uid: before.uid, originalId: originalId,
+          );
+        }
+        if (verified == originalId || verified != null &&
+            _display.hasMatch(verified)) {
+          display = verified;
+        }
+      } catch (_) {
+        // A failed alias read never invalidates an already verified OWNER,
+        // but it cannot claim an old or new visible ID is authoritative.
+      }
+      if (!_still(before)) {
+        return DedaRescueStage3Result(
+          status: DedaRescueStatus.uidChanged,
+          uid: before.uid, originalId: originalId,
+        );
+      }
+      port.notifyVerifiedOwnerViews();
+    }
+    final result = DedaRescueStage3Result(
+      status: status,
+      uid: before.uid,
+      originalId: originalId,
+      verifiedDisplayId: display,
+    );
+    if (_still(before)) updates.value = result;
+    return result;
+  }
+}
+
+).hasMatch(accountKey) ||
         !_original.hasMatch(originalId)) {
       return Future.value(DedaRescueStage3Result(
         status: DedaRescueStatus.ownerProofRequired,
-        uid: before?.uid, originalId: originalId,
+        uid: before.uid, originalId: originalId,
       ));
     }
     final key = before.uid! + '|' + before.epoch.toString() +
