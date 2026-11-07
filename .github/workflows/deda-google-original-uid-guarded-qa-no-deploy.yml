@@ -16,6 +16,7 @@ on:
       - 'test/deda_google_settings_card_private_test.dart'
       - 'test/deda_google_guardian_contract_private_test.dart'
       - 'tools/deda_google_auth_readiness_100439.py'
+      - 'config/deda_google_auth_100439/google-services.json'
       - 'tools/test_deda_google_auth_readiness_100439.py'
       - '.github/workflows/deda-google-original-uid-guarded-qa-no-deploy.yml'
   workflow_dispatch:
@@ -45,6 +46,8 @@ jobs:
         run: python3 -m unittest discover -s tools -p test_deda_google_auth_readiness_100439.py
       - name: Report actual Google OAuth configuration readiness without changing Firebase
         run: python3 tools/deda_google_auth_readiness_100439.py --report-only
+      - name: Verify approved new Google OAuth config separately from protected original
+        run: python3 tools/deda_google_auth_readiness_100439.py --config config/deda_google_auth_100439/google-services.json
       - name: Resolve raw staging dependencies in disposable runner only
         run: flutter pub get
       - name: Analyze linked-original UID and Google-only guards
@@ -66,6 +69,8 @@ jobs:
           with tempfile.TemporaryDirectory(prefix='deda-google-private-') as tmp:
             project=Path(tmp)
             (project/'lib').mkdir()
+            (project/'android/app').mkdir(parents=True)
+            shutil.copy2('google-services.json', project/'android/app/google-services.json')
             for name in ('lib/main.dart','lib/deda_backend.dart','pubspec.yaml'):
               shutil.copy2(name, project/name)
             (project/'deda-stage2-core-merge-proof.json').write_text('{}')
@@ -85,6 +90,11 @@ jobs:
             assert backend != (project/'lib/deda_backend.dart').read_text()
             assert 'userProviderIdentityMatches(user, cleanKey)' in (project/'lib/deda_backend.dart').read_text()
             assert 'google_sign_in: 6.3.0' in (project/'pubspec.yaml').read_text()
+            google = json.loads((project/'android/app/google-services.json').read_text())
+            assert any(p['client_type']==1 and p['android_info']['certificate_hash']=='f5d7e13309be6f7af76798a60d72bac880005c58' for p in google['client'][0]['oauth_client'])
+            assert any(p['client_type']==3 for p in google['client'][0]['oauth_client'])
+            assert json.loads(Path('google-services.json').read_text())['client'][0].get('oauth_client',[]) == []
+            assert json.loads((project/'internal-build-inputs.json').read_text())['googleOriginalUidSettings']['googleOAuthReleaseConfigVerified']
             assert (project/'lib/deda_step1_google_settings_link_100439.dart').is_file()
           print('PASS_DISPOSABLE_GOOGLE_SETTINGS_ONE_FIELD_ABOVE_VOICE')
           PY
