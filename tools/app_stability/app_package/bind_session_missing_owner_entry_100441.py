@@ -8,6 +8,7 @@ PIN guardian, store PIN, clear preferences, auto-login or create an anonymous UI
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -153,7 +154,10 @@ def bind(project: Path) -> None:
         helper + "class LoginPage extends StatefulWidget {",
         "one shared consent-only original login entry")
 
-    friends_start = main.index("class _DedaFriendsPageState extends State<DedaFriendsPage> {")
+    friend_decl = re.search(r'class\s+_DedaFriendsPageState\b[^{]{0,300}\{', main)
+    if friend_decl is None:
+        raise ValueError("BLOCK_MISSING_OWNER_FRIEND_STATE_NOT_FOUND")
+    friends_start = friend_decl.start()
     friends_end = main.index("class _DedaFriendCompactCard", friends_start)
     friends = main[friends_start:friends_end]
     # The next block appears ONLY in the error branch introduced by point 1.
