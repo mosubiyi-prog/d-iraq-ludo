@@ -57,6 +57,7 @@ void main() {
       DedaRescueStatus status = DedaRescueStatus.signedOut,
       bool rescueEnabled = true,
       bool entryEnabled = true,
+      bool linkedOnly = true,
       bool firebaseReady = true,
       String? uid,
       String a = key,
@@ -65,6 +66,7 @@ void main() {
       status: status,
       rescueEnabled: rescueEnabled,
       verifiedExistingEntryEnabled: entryEnabled,
+      verifiedLinkedUidOnlyEnabled: linkedOnly,
       firebaseReady: firebaseReady,
       liveUid: uid,
       accountKey: a,
@@ -73,6 +75,7 @@ void main() {
     expect(offer(), isTrue);
     expect(offer(rescueEnabled: false), isFalse);
     expect(offer(entryEnabled: false), isFalse);
+    expect(offer(linkedOnly: false), isFalse);
     expect(offer(firebaseReady: false), isFalse);
     expect(offer(uid: 'administrator-uid'), isFalse);
     expect(offer(uid: 'linked-uid'), isFalse);
@@ -95,6 +98,7 @@ void main() {
         status: status,
         rescueEnabled: true,
         verifiedExistingEntryEnabled: true,
+        verifiedLinkedUidOnlyEnabled: true,
         firebaseReady: true,
         liveUid: uid,
         accountKey: key,
