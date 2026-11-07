@@ -1,0 +1,125 @@
+name: DEDA 100439 isolated 100m GM compensation + Google recovery source QA NO APK
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - 'tools/app_stability/app_package/bind_gm_compensation_100m_100439.py'
+      - 'tools/deda_gm_admin_compensation_100m_server_only_100439.js'
+      - 'tools/deda_gm_admin_compensation_100m_rules_candidate_100439.py'
+      - 'test/deda_gm_admin_compensation_100m_server_only_100439.test.js'
+      - 'test/test_deda_gm_admin_compensation_100m_100439.py'
+      - '.github/workflows/deda-gm-compensation-100m-google-recovery-no-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-only-zero-write-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove the signed reference and protected production rules are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 6bd4b423cdc8aab028958665e7aa7b99c8370007 HEAD -- android assets firestore.rules firebase.json storage.rules google-services.json pubspec.yaml pubspec.lock
+          test -f tools/app_stability/app_package/bind_google_account_settings_100439.py
+          test -f tools/app_stability/app_package/bind_smart_second_stage_account_100439.py
+          echo 'PASS_SAME_PROTECTED_100439_SOURCE_NO_PRODUCTION_CHANGE'
+      - name: Test owner-only 99m funding receipt, denial, idempotency and no user-wallet writes
+        run: node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
+      - name: Test exact 100m source binder and debit-only Firestore rules preview
+        run: python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
+      - name: Prove nothing was built or deployed
+        run: |
+          echo 'PASS_NO_APK_NO_AAB_NO_FIREBASE_DEPLOY_NO_ADMIN_BALANCE_CHANGED'
+  verify-entire-app-source-together-with-google-and-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Reconstruct protected Flutter SOURCE only, never run flutter build
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$RUNNER_TEMP/deda-100439-google-100m-source-only"
+          flutter create --platforms=android --org com.diraq.ludo --project-name d_iraq_ludo "$project"
+          python3 tools/app_stability/app_package/prepare.py "$project" --variant candidate
+          for script in \
+            bind_weekly_stage13.py \
+            bind_active_id_boot_prewarm_stage14.py \
+            bind_active_id_measured_startup_stage16.py \
+            bind_weekly_private_trial_stage17.py \
+            bind_weekly_full_qa_stage18.py \
+            verify_rank_card_tap_stage19.py \
+            bind_weekly_admin_league_stage27.py \
+            bind_weekly_tasks_cta_stage28.py \
+            bind_weekly_100397_owner_real_scores.py \
+            bind_weekly_100398_after_level_xp.py \
+            bind_weekly_100399_community_bridge.py \
+            bind_weekly_100400_safe_score_retry.py \
+            bind_weekly_100402_firestore_direct.py \
+            bind_weekly_100403_first_open_gate.py \
+            bind_weekly_100404_inline_clock_and_freeze.py \
+            bind_weekly_100405_admin_live_read_only.py \
+            bind_weekly_100406_league_display_fixes.py \
+            bind_weekly_100407_full_avatar_shared_identity.py \
+            bind_weekly_100408_seven_owner_points.py \
+            bind_weekly_100409_single_verified_identity.py \
+            bind_weekly_100410_unified_active_id.py \
+            bind_weekly_100411_friend_copy_share.py \
+            bind_weekly_100413_owner_id_admin_response.py \
+            bind_weekly_100414_last_three.py \
+            bind_weekly_100418_legacy340_friend_active_compat.py; do
+            python3 "tools/app_stability/app_package/$script" "$project"
+          done
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project"
+          shopt -s nullglob
+          count=0
+          for source in "$GITHUB_WORKSPACE"/lib/deda_step2_*.dart "$GITHUB_WORKSPACE"/lib/deda_100429*.dart "$GITHUB_WORKSPACE"/lib/deda_100430*.dart "$GITHUB_WORKSPACE"/lib/deda_100431*.dart "$GITHUB_WORKSPACE"/lib/deda_100432*.dart "$GITHUB_WORKSPACE"/lib/deda_100433*.dart; do
+            target="$project/lib/$(basename "$source")"
+            test ! -e "$target" || { echo "BLOCK_SOURCE_OVERWRITE:$target"; exit 1; }
+            cp "$source" "$target"
+            count=$((count+1))
+          done
+          test "$count" -ge 30
+          python3 tools/app_stability/app_package/guard_100436_parity_before_recovery.py "$project" --staged-recovery
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project"
+          python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project" --verify-only
+          python3 tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py "$project"
+          python3 tools/app_stability/app_package/bind_google_account_settings_100439.py "$project"
+          python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
+          python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
+          echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
+          echo 'PASS_FULL_100439_GOOGLE_SMART_ACCOUNT_AND_100M_ADMIN_SOURCE_ASSEMBLED'
+      - name: Analyze entire assembled entry, guardian, and admin backend without building APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_SOURCE_ONLY_PROJECT"
+          flutter pub get
+          dart analyze --no-fatal-warnings \
+            lib/main.dart lib/deda_backend.dart lib/admin_pages.dart \
+            lib/deda_admin_league_page.dart \
+            lib/deda_step1_google_settings_link_100439.dart \
+            lib/deda_step2_google_replacement_login_100439.dart \
+            lib/deda_step2_smart_second_stage_account_page_100439.dart
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path("internal-build-inputs.json").read_text())
+          assert d["financialRestoreEnabled"] is False
+          assert d["generalManagerCompensation100m"]["targetAdminPoolDiamonds"]==100000000
+          assert d["generalManagerCompensation100m"]["defaultNotFunded"]
+          assert d["generalManagerCompensation100m"]["personalManagerWalletUnchanged"]
+          assert d["smartSecondStageAccount"]["defaultOff"]
+          print("PASS_FULL_SOURCE_100M_ADMIN_AND_GOOGLE_WITHOUT_LIVE_CREDIT")
+          PY
