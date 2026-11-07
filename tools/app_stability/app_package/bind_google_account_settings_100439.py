@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 MODULE = "lib/deda_step1_google_settings_link_100439.dart"
 REPLACEMENT = "lib/deda_step2_google_replacement_login_100439.dart"
+PROGRESS = "lib/deda_google_recovery_progress_100439.dart"
 MAIN = "lib/main.dart"
 BACKEND = "lib/deda_backend.dart"
 PUBSPEC = "pubspec.yaml"
@@ -86,6 +87,11 @@ def bind(project):
     main = project / MAIN
     module = project / MODULE
     replacement = project / REPLACEMENT
+    progress = project / PROGRESS
+    if not (ROOT / PROGRESS).is_file():
+        abort("reviewed progress policy missing")
+    if progress.exists() and digest(progress) != digest(ROOT / PROGRESS):
+        abort("recovery progress policy does not match reviewed module")
     if not (ROOT / REPLACEMENT).is_file():
         abort("reviewed Google replacement-phone source missing")
     if replacement.exists() and digest(replacement) != digest(ROOT / REPLACEMENT):
@@ -117,7 +123,7 @@ def bind(project):
         verifiedLogin: (phone, pin) async {""",
         """        enabled: dedaStep2ExistingAccountEntryEnabled,
         googleEnabled: dedaStep2GoogleReplacementLoginEnabled,
-        verifiedGoogleLogin: () async {
+        verifiedGoogleLogin: (reportProgress) async {
           if (!mounted || !pageContext.mounted) {
             throw StateError('expired-google-existing-account-intent');
           }
@@ -125,10 +131,13 @@ def bind(project):
               await DedaGoogleReplacementLogin.verifyOnNewPhone(
             explicitUserAction: true,
             isCurrentIntent: () => mounted && pageContext.mounted,
+            onProgress: reportProgress,
           );
-          // Identity proof only. Never save a profile, debit wallet,
-          // unlock the full recovery UI or launch HomePage on this receipt.
-          return verified != null;
+          // Identity proof only. Never claim 100% or show the green tick.
+          // A separate live guardian completion receipt is required.
+          return verified == null
+              ? DedaGoogleRecoveryOutcome.cancelled
+              : DedaGoogleRecoveryOutcome.identityVerifiedOnly;
         },
         verifiedLogin: (phone, pin) async {""",
         "replacement phone explicit Google button")
@@ -155,11 +164,13 @@ def bind(project):
     module.write_bytes((ROOT / MODULE).read_bytes())
     if not replacement.exists():
         replacement.write_bytes((ROOT / REPLACEMENT).read_bytes())
+    if not progress.exists():
+        progress.write_bytes((ROOT / PROGRESS).read_bytes())
     dependency.write_text(new_pub)
     target_config.write_bytes(staged_config.read_bytes())
     meta["googleConfigSha256"] = digest(target_config)
     hashes = meta.setdefault("sourceHashes", {})
-    for path in (MAIN, BACKEND, MODULE, REPLACEMENT, PUBSPEC, ANDROID_CONFIG):
+    for path in (MAIN, BACKEND, MODULE, REPLACEMENT, PROGRESS, PUBSPEC, ANDROID_CONFIG):
         hashes[path] = digest(project / path)
     meta["googleOriginalUidSettings"] = {
         "position": "top_of_settings_above_voice_navigation",
@@ -172,6 +183,9 @@ def bind(project):
         "googleReplacementLoginOptInOnly": True,
         "noCreateGoogleProviderPreflight": True,
         "googleLoginNeverCommitsProfileOrWallet": True,
+        "googleProgressDrivenByVerifiedOperations": True,
+        "googleFailureFreezesRedAndEnablesRetry": True,
+        "noCheckmarkOr100WithoutFullAccountGuardian": True,
         "noNewUserOrDataMerge": True,
         "financialRestoreEnabled": False,
         "googlePackageLockUpdateRequiredInIsolatedWorkspace": True,
