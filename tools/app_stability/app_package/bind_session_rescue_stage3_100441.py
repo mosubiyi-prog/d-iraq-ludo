@@ -56,6 +56,18 @@ def bind(project: Path) -> None:
         main,
         "  Widget _sectionTitle(String text) {",
         """  Future<void> _refreshAdminEntryVisibility() async {
+    // Rescue feature ON: an absent principal must not be turned into a
+    // different anonymous UID by a legacy admin-entry readiness helper.
+    if (dedaSessionRescueStage3Enabled && Firebase.apps.isNotEmpty &&
+        FirebaseAuth.instance.currentUser == null) {
+      if (mounted) {
+        setState(() {
+          _adminEntryVisible = false;
+          _sessionRescueStatus = DedaRescueStatus.signedOut;
+        });
+      }
+      return;
+    }
     await _refreshAdminEntryVisibilityOriginal();
     if (!mounted || _adminEntryVisible ||
         !dedaSessionRescueStage3Enabled) return;
@@ -108,11 +120,19 @@ def bind(project: Path) -> None:
         "      _initializeShareIdentity();",
         """      // Preserve the initial location-share initialization, then
       // inspect the same owner's Firebase session (never in parallel).
-      unawaited(_initializeShareIdentity().then((_) async {
-        if (!mounted || !dedaSessionRescueStage3Enabled) return;
-        await DedaSessionRescueStage3Bridge
-            .runForPhone(DedaPreferences.phone);
-      }));""",
+      if (dedaSessionRescueStage3Enabled && Firebase.apps.isNotEmpty &&
+          FirebaseAuth.instance.currentUser == null) {
+        // Do not let the legacy share-session helper create an anonymous
+        // substitute for the missing original UID. Inspection only.
+        unawaited(DedaSessionRescueStage3Bridge
+            .runForPhone(DedaPreferences.phone).then((_) {}));
+      } else {
+        unawaited(_initializeShareIdentity().then((_) async {
+          if (!mounted || !dedaSessionRescueStage3Enabled) return;
+          await DedaSessionRescueStage3Bridge
+              .runForPhone(DedaPreferences.phone);
+        }));
+      }""",
         "home single initializer safe sequential rescue",
     )
     google = replace_once(
