@@ -101,21 +101,19 @@ def bind(project: Path) -> None:
                   if (_adminEntryVisible) ...[""",
         "network retry UI without showing admin access",
     )
+    # 100414 adds more work into Home's post-frame callback. Replace only
+    # the unique initializer call; preserve its other owner-read watchers.
     main = replace_once(
         main,
-        """    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeShareIdentity();
-    });""",
-        """    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Never race the existing home identity initialization with a second
-      // session-inspection lane. Start rescue after its original Future settles.
+        "      _initializeShareIdentity();",
+        """      // Preserve the initial location-share initialization, then
+      // inspect the same owner's Firebase session (never in parallel).
       unawaited(_initializeShareIdentity().then((_) async {
         if (!mounted || !dedaSessionRescueStage3Enabled) return;
         await DedaSessionRescueStage3Bridge
             .runForPhone(DedaPreferences.phone);
-      }));
-    });""",
-        "home initial guarded rescue",
+      }));""",
+        "home single initializer safe sequential rescue",
     )
     google = replace_once(
         google,
