@@ -33,9 +33,9 @@ def bind(project: Path) -> None:
         raise ValueError("BLOCK_FRIENDS_RETRY_DUPLICATE")
     if "DedaSessionRescueStage3Bridge.runForPhone" not in whole:
         raise ValueError("BLOCK_FRIENDS_RETRY_STAGE3_NOT_PRESENT")
-    target = re.search(r'class\\s+_DedaFriendsPageState\\b[^\\{]{0,300}\\{', whole)
+    target = re.search(r'class\s+_DedaFriendsPageState\b[^{]{0,300}\{', whole)
     if target is None:
-        matches = re.findall(r'class\\s+[^\\n\\{]{0,110}(?:Friend|Social)[^\\n\\{]*', whole)
+        matches = re.findall(r'class\s+[^\n{]{0,110}(?:Friend|Social)[^\n{]*', whole)
         print('DEDA_FRIENDS_ASSEMBLED_CLASSES', matches[:45])
         raise ValueError('BLOCK_FRIENDS_RETRY_FRIENDS_STATE_NOT_FOUND')
     start = target.start()
