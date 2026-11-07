@@ -17,7 +17,11 @@ MAIN = "lib/main.dart"
 IMPORT = "import 'deda_step2_existing_account_signin_page.dart';"
 ENTRY = "  void _openExistingAccount() {\n"
 NEXT = "\n  Future<void> login() async {"
-GUARD_LOGIN = "      await _completeVerifiedLogin(normalizedPhone);"
+# Exact statement and method scope are required; indentation varies between
+# the raw staging file and the protected fully assembled login guardian.
+GUARD_LOGIN = re.compile(
+    r"(?m)^(?P<indent>[ ]+)await _completeVerifiedLogin\(normalizedPhone\);$"
+)
 
 ORIGINAL_EXISTING = re.compile(
     r"  void _openExistingAccount\(\) \{\n"
@@ -182,16 +186,25 @@ def bind(project):
         "\nimport 'deda_google_recovery_progress_100439.dart';" +
         "\nimport 'deda_step2_smart_second_stage_account_page_100439.dart';",
         "additive second page and new PIN creator imports")
-    # The assembled 100439 login guard may do additional verified work
-    # between "try" and this one final completion call. Insert only at the
-    # unique commit point, never replace the surrounding guardian.
-    current = exactly_once(current, GUARD_LOGIN,
-        """      if (dedaSmartSecondStageAccountEnabled &&
-          dedaStep2ExistingAccountEntryEnabled) {
-        _openSmartSecondAccountStage(name, normalizedPhone);
-        return;
-      }
-""" + GUARD_LOGIN, "first page remains same: redirect after validation ONLY")
+    # Preserve the full protected login method and all preceding guardian
+    # checks. Match its unique verified-commit statement, even when the
+    # assembled 100439 version has different indentation than raw main.dart.
+    commits = list(GUARD_LOGIN.finditer(current))
+    if len(commits) != 1 or commits[0].start() < current.index(NEXT):
+        abort("first-page verified login commit not unique within login method; "
+              "raw_token_count=" +
+              str(current.count("_completeVerifiedLogin(normalizedPhone);")))
+    commit = commits[0]
+    indent = commit.group("indent")
+    before = commit.group(0)
+    guarded = (
+        indent + "if (dedaSmartSecondStageAccountEnabled &&\n" +
+        indent + "    dedaStep2ExistingAccountEntryEnabled) {\n" +
+        indent + "  _openSmartSecondAccountStage(name, normalizedPhone);\n" +
+        indent + "  return;\n" +
+        indent + "}\n" + before
+    )
+    current = current[:commit.start()] + guarded + current[commit.end():]
     if current.count("DedaSmartSecondStageAccountPage(") != 1 or (
             current.count("_buildExistingAccountForm(") != 3):
         abort("smart second account and shared existing guard not exactly once")
