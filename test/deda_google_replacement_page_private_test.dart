@@ -4,6 +4,28 @@ import 'package:d_iraq_ludo/deda_step2_existing_account_signin_page.dart';
 import 'package:d_iraq_ludo/deda_google_recovery_progress_100439.dart';
 
 void main() {
+  testWidgets('old account form embeds on second screen with same phone/PIN',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Material(
+      child: SingleChildScrollView(child: DedaExistingAccountSignInPage(
+        enabled: true, embedded: true, initialPhone: '+9647701234567',
+        googleEnabled: true,
+        verifiedLogin: (_, __) async {},
+        verifiedGoogleLogin: (_) async =>
+            DedaGoogleRecoveryOutcome.cancelled,
+      )),
+    )));
+    expect(find.text('لدي حساب'), findsNothing);
+    expect(find.text('تسجيل الدخول بحسابك السابق'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField).first)
+        .controller!.text, '07701234567');
+    expect(find.byKey(const ValueKey('deda-existing-owner-google-login')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('deda-google-smart-progress')),
+        findsOneWidget);
+    expect(find.byType(Scaffold), findsNothing);
+  });
+
   testWidgets('replacement Google button stays absent by default',
       (tester) async {
     await tester.pumpWidget(MaterialApp(home: DedaExistingAccountSignInPage(
