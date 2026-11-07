@@ -1,0 +1,99 @@
+name: DEDA 100439 OWNER APPROVED GM 100m ADMIN Gift Debit Rules ONLY NO APK
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - '.github/workflows/deda-100439-owner-approved-gm100m-admin-gift-rules-only.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-25b88-100439-admin-gift-100m-owner-rules-only
+  cancel-in-progress: false
+jobs:
+  qa-and-activate-only-admin-gift-debit-limit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_OWNER_APPROVED_GM100M_ADMIN_RULES: 'YES'
+      FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Protect all signed original 100439 app/Firebase sources and ordinary wallets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DEDA_OWNER_APPROVED_GM100M_ADMIN_RULES" = YES
+          git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
+            lib android assets functions firestore.rules firebase.json \
+            storage.rules google-services.json pubspec.yaml pubspec.lock
+          node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
+          python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
+          echo 'PASS_PROTECTED_GOOGLE_RECOVERY_APP_AND_USER_WALLETS'
+      - name: Snapshot exact ACTIVE production Firestore rules + prepare only GM wallet debit diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q google-auth requests
+          python3 tools/deda_100439_gm_100m_owner_rules_release.py prepare
+          echo "DEDA_GM_RULES_CANDIDATE_PATH=$RUNNER_TEMP/deda-100439-gm-100m-test/firestore.rules" >> "$GITHUB_ENV"
+      - name: Install isolated Firebase Firestore emulator and rules testing SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix tests/firestore-rules --no-save --no-package-lock \
+            --ignore-scripts --no-audit --no-fund \
+            firebase-tools@14 firebase@12.3.0 @firebase/rules-unit-testing@5.0.0
+      - name: Emulator test original full gift lifecycle using exact ACTIVE rules plus one change
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/deda-100439-gm-100m-test"
+          "$GITHUB_WORKSPACE/tests/firestore-rules/node_modules/.bin/firebase" \
+            emulators:exec --only firestore --non-interactive \
+            --project demo-deda-admin-gift-manual-claim --config firebase.json \
+            'node --test "$GITHUB_WORKSPACE/tests/firestore-rules/admin-gift-manual-claim.test.mjs"'
+          echo 'PASS_OLD_1M_GIFT_CLAIM_AND_WALLET_SECURITY'
+      - name: Emulator test new 100m grant, correct recipient, and no unauthorized mint
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/deda-100439-gm-100m-test"
+          "$GITHUB_WORKSPACE/tests/firestore-rules/node_modules/.bin/firebase" \
+            emulators:exec --only firestore --non-interactive \
+            --project demo-deda-100439-gm-100m --config firebase.json \
+            'node --test "$GITHUB_WORKSPACE/tests/firestore-rules/deda-gm-100m-admin-debit-live-candidate-100439.test.mjs"'
+          echo 'PASS_100M_DEBIT_CLIENT_CANNOT_MINT_AND_GIFT_CLAIM_ONCE'
+      - name: Revalidate exact live ruleset SHA, then publish ONLY emulator-tested GM wallet clause
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100439_gm_100m_owner_rules_release.py deploy
+      - name: Independently re-read and verify production rule release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100439_gm_100m_owner_rules_release.py verify
+          echo 'PASS_FIREBASE_RULES_LIVE_ONLY_ADMIN_GIFT_DEBIT_UPDATED'
+          echo 'NO_USER_DATA_WRITES_NO_99M_ALLOCATION_NO_APK_NO_PLAY'
+      - name: Preserve rollback metadata ONLY, never credentials or full production rules
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DEDA-100439-GM100M-ADMIN-WALLET-RULES-ROLLBACK-METADATA
+          path: |
+            ${{ runner.temp }}/deda-100439-gm-100m-test/previous-release.json
+            ${{ runner.temp }}/deda-100439-gm-100m-test/deployment.json
+          if-no-files-found: ignore
+          retention-days: 30
