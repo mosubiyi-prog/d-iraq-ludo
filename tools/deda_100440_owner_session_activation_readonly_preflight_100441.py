@@ -121,13 +121,12 @@ def main() -> int:
                        alt_session.get("accountKey") == key and alt_session.get("uid") == alternate)
             checkpoint("DIRECTORY_UID_HAS_ADMIN_DOCUMENT", alt_admin_doc.exists)
             try:
-                if not firebase_admin._apps:
-                    firebase_admin.initialize_app(
-                        firebase_credentials.Certificate(info),
-                        {"projectId": PROJECT},
-                        name="owner-alt-readonly-qa",
-                    )
-                alternate_auth = auth.get_user(alternate, app=firebase_admin.get_app("owner-alt-readonly-qa"))
+                alternate_app = firebase_admin.initialize_app(
+                    firebase_credentials.Certificate(info),
+                    {"projectId": PROJECT},
+                    name="owner-alt-readonly-qa",
+                )
+                alternate_auth = auth.get_user(alternate, app=alternate_app)
                 checkpoint("DIRECTORY_UID_AUTH_RECORD_PRESENT", True)
                 checkpoint("DIRECTORY_UID_AUTH_HAS_EMAIL", bool(alternate_auth.email))
                 checkpoint("DIRECTORY_UID_AUTH_EMAIL_CANONICAL", alternate_auth.email == f"{key}@deda-login.invalid")
