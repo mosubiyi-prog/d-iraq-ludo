@@ -139,3 +139,48 @@ jobs:
         run: flutter test --no-pub test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart test/deda_google_recovery_progress_policy_private_test.dart test/deda_smart_second_stage_account_private_test.dart
       - name: Verify card remains hidden until approved
         run: flutter test --no-pub test/deda_google_settings_card_private_test.dart
+      - name: Analyze complete wired first and smart second account screens in disposable CI checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import runpy
+          import shutil
+          import subprocess
+          import tempfile
+          from pathlib import Path
+          google_bind=runpy.run_path('tools/app_stability/app_package/bind_google_account_settings_100439.py')['bind']
+          smart_bind=runpy.run_path('tools/app_stability/app_package/bind_smart_second_stage_account_100439.py')['bind']
+          with tempfile.TemporaryDirectory(prefix='deda-smart-final-') as temp:
+            project=Path(temp)
+            (project/'lib').mkdir()
+            (project/'android/app').mkdir(parents=True)
+            shutil.copy2('google-services.json', project/'android/app/google-services.json')
+            for name in ('lib/main.dart','lib/deda_backend.dart'):
+              shutil.copy2(name, project/name)
+            # pub add in CI mutated the checkout; the copy still needs the
+            # exact protected no-Google baseline expected by the binder.
+            (project/'pubspec.yaml').write_bytes(subprocess.check_output(
+                ['git', 'show', 'HEAD:pubspec.yaml']))
+            (project/'deda-stage2-core-merge-proof.json').write_text('{}')
+            (project/'internal-build-inputs.json').write_text(json.dumps({
+              'financialRestoreEnabled': False,
+              'weekly100439AdminWinnersPrizeReport': {'singlePanelNoDuplicate': True},
+              'sourceHashes': {},
+            }))
+            google_bind(project)
+            smart_bind(project)
+            final=(project/'lib/main.dart').read_text()
+            assert "if (dedaSmartSecondStageAccountEnabled &&" in final
+            assert "DedaExistingAccountSignInPage(" in final
+            assert "verifiedGoogleLogin: (reportProgress) async {" in final
+            assert "await DedaPinAuth.createAccount(" in final
+            assert "if (!login.fullAccountRestored || login.originalId == null)" in final
+            # The repository commit and signed 100439 are never altered:
+            # only this ephemeral Actions checkout receives analysis inputs.
+            shutil.copy2(project/'lib/main.dart','lib/main.dart')
+            shutil.copy2(project/'lib/deda_backend.dart','lib/deda_backend.dart')
+          print('PASS_DISPOSABLE_SMART_SECOND_STAGE_WIRED_SOURCE_BEFORE_ANALYZE')
+          PY
+          dart analyze --no-fatal-warnings lib/main.dart lib/deda_backend.dart
