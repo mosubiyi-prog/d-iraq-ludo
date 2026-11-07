@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely add exactly one Google-link field ABOVE voice/navigation settings.
+"""Safely add exactly one Google-link field IMMEDIATELY ABOVE logout.
 
 Apply only to an independently assembled full 100439 source; never replace
 the signed 100439 main.dart, Android assets, Firebase rules or wallet.
@@ -20,21 +20,21 @@ PUBSPEC = "pubspec.yaml"
 GOOGLE_CONFIG = "config/deda_google_auth_100439/google-services.json"
 ANDROID_CONFIG = "android/app/google-services.json"
 IMPORT = "import 'deda_100433_owner_confirmation_ui.dart';"
-SETTINGS_ANCHOR = """                  _sectionTitle(
-                      dedaText('الصوت والملاحة', 'Voice & navigation')),"""
-INSERT = """                  if (dedaStep1GoogleOwnerLinkEnabled) ...[
-                    DedaGoogleSettingsLinkCard(
-                      phone: DedaPreferences.accountPhone.trim().isNotEmpty
-                          ? DedaPreferences.accountPhone
-                          : DedaPreferences.phone,
-                      originalId: DedaBackend.personalShareIdForPhone(
-                        DedaPreferences.accountPhone.trim().isNotEmpty
-                            ? DedaPreferences.accountPhone
-                            : DedaPreferences.phone),
-                      isArabic: DedaLanguageState.isArabic,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+SETTINGS_ANCHOR = """            OutlinedButton.icon(
+              onPressed: _logout,"""
+INSERT = """            if (dedaStep1GoogleOwnerLinkEnabled) ...[
+              DedaGoogleSettingsLinkCard(
+                phone: DedaPreferences.accountPhone.trim().isNotEmpty
+                    ? DedaPreferences.accountPhone
+                    : DedaPreferences.phone,
+                originalId: DedaBackend.personalShareIdForPhone(
+                  DedaPreferences.accountPhone.trim().isNotEmpty
+                      ? DedaPreferences.accountPhone
+                      : DedaPreferences.phone),
+                isArabic: DedaLanguageState.isArabic,
+              ),
+              const SizedBox(height: 8),
+            ],
 """
 GOOGLE_PIN = "  google_sign_in: 6.3.0"
 
@@ -110,7 +110,7 @@ def bind(project):
         + "\nimport 'deda_google_recovery_progress_100439.dart';",
         "Google settings import")
     new = exactly_once(new, SETTINGS_ANCHOR,
-        INSERT + SETTINGS_ANCHOR, "settings location above voice")
+        INSERT + SETTINGS_ANCHOR, "profile location directly above logout")
     new = exactly_once(new,
         "        currentEmail: user?.email,",
         """        currentEmail: user?.email,
@@ -174,7 +174,7 @@ def bind(project):
     for path in (MAIN, BACKEND, MODULE, REPLACEMENT, PROGRESS, PUBSPEC, ANDROID_CONFIG):
         hashes[path] = digest(project / path)
     meta["googleOriginalUidSettings"] = {
-        "position": "top_of_settings_above_voice_navigation",
+        "position": "profile_directly_above_logout",
         "fields": 1,
         "defaultOff": True,
         "requiresOriginalUid": True,
@@ -193,7 +193,7 @@ def bind(project):
         "noFirebaseOrPlayDeploy": True,
     }
     manifest.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n")
-    print("PASS_GOOGLE_LINK_FIELD_ABOVE_VOICE_ONLY_IN_FULL_ASSEMBLED_100439")
+    print("PASS_GOOGLE_LINK_FIELD_DIRECTLY_ABOVE_LOGOUT_IN_FULL_ASSEMBLED_100439")
     print("PASS_ORIGINAL_100439_REPO_ASSETS_FIREBASE_AND_SIGNING_UNCHANGED")
     return meta["googleOriginalUidSettings"]
 
