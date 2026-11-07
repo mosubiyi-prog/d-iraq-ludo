@@ -25,10 +25,12 @@ NOTE = """    // DEDA_100439_GM_ADMIN_COMPENSATION_100M_CANDIDATE_NO_DEPLOY
 
 
 def candidate(source):
-    if source.count(START) != 1 or source.count(END) != 1:
+    if source.count(START) != 1:
         raise ValueError("BLOCK_GM_COMPENSATION_WALLET_RULE_BOUNDARIES")
     first = source.index(START)
-    last = source.index(END, first)
+    last = source.find(END, first + len(START))
+    if last < 0:
+        raise ValueError("BLOCK_GM_COMPENSATION_WALLET_CLOSING_BRACE_MISSING")
     section = source[first:last]
     if section.count(OLD) != 1:
         raise ValueError("BLOCK_GM_COMPENSATION_ORIGINAL_RULES_CHANGED")
