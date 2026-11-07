@@ -14,9 +14,10 @@ from pathlib import Path
 APP_PACKAGE = "com.diraq.ludo.d_iraq_ludo"
 PROJECT_ID = "deda-25b88"
 SOURCE_CERT_SHA256 = "a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a"
+SOURCE_CERT_SHA1 = "f5d7e13309be6f7af76798a60d72bac880005c58"
 
 
-def review(config, expected_sha1=None):
+def review(config, expected_sha1=SOURCE_CERT_SHA1):
     issues = []
     if config.get("project_info", {}).get("project_id") != PROJECT_ID:
         issues.append("FIREBASE_PROJECT_ID_MISMATCH")
@@ -48,7 +49,7 @@ def review(config, expected_sha1=None):
         fingerprint = expected_sha1.lower().replace(":", "")
         if not re.fullmatch(r"[0-9a-f]{40}", fingerprint):
             issues.append("INVALID_EXPECTED_CERT_SHA1")
-        elif not any(row["android_info"]["certificate_hash"].lower() ==
+        elif android and not any(row["android_info"]["certificate_hash"].lower() ==
                      fingerprint for row in android):
             issues.append("RELEASE_SIGNER_SHA1_NOT_REGISTERED")
     return issues
@@ -57,7 +58,7 @@ def review(config, expected_sha1=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=Path("google-services.json"))
-    parser.add_argument("--release-sha1", default=None,
+    parser.add_argument("--release-sha1", default=SOURCE_CERT_SHA1,
                         help="Public SHA-1 certificate fingerprint, not a key/password")
     parser.add_argument("--report-only", action="store_true")
     args = parser.parse_args()
@@ -71,6 +72,7 @@ def main():
         "package": APP_PACKAGE,
         "project": PROJECT_ID,
         "signed100439CertSha256Expected": SOURCE_CERT_SHA256,
+        "signed100439CertSha1Expected": SOURCE_CERT_SHA1,
         "issues": issues,
         "stillRequires": [
             "Firebase Authentication Google provider enabled on correct project",
