@@ -277,8 +277,8 @@ class DedaFirebaseRescuePort implements DedaRescuePort {
     const server = GetOptions(source: Source.server);
     final rows = await Future.wait([
       db.collection('deda_account_directory').doc(accountKey).get(server),
-      db.collection('deda_sessions').doc(expected.uid).get(server),
-      db.collection('users').doc(expected.uid).get(server),
+      db.collection('deda_sessions').doc(expected.uid!).get(server),
+      db.collection('users').doc(expected.uid!).get(server),
     ]);
     _requireUnchanged(expected);
     if (rows.any((row) =>
