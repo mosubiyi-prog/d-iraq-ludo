@@ -113,8 +113,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('deda-second-stage-confirm-create')));
     await tester.pumpAndSettle();
     expect(attempts, 1);
-    await tester.ensureVisible(find.byKey(
-        const ValueKey('deda-second-stage-error')));
+    await tester.drag(
+        find.byKey(const ValueKey('deda-smart-second-stage')),
+        const Offset(0, -260));
     await tester.pumpAndSettle();
     expect(find.textContaining('هذا الرقم عنده حساب ديدا سابق'),
         findsOneWidget);
