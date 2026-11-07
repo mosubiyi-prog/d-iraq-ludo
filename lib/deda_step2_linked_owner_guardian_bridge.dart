@@ -181,7 +181,7 @@ class DedaLinkedOwnerGuardianBridge {
           current.epoch == epoch &&
           current.matchesOwnerProvider(accountKey) &&
           current.email == startingEmail &&
-          current.originalId == canonicalId;
+          current.originalId == identity.originalId;
     }
     if (!identityStillMatches()) {
       throw StateError('linked-owner-changed-after-login');
