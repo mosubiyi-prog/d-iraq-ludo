@@ -213,36 +213,7 @@ class DedaGoogleReplacementLogin {
           }
           final originalId = user?['sharePersonalId'];
           if (originalId is! String ||
-              !RegExp(r'^@DEDA-[A-Z0-9]{6}
-          final confirmed = DedaGoogleReplacementProof
-              .requireOriginalServerIdentity(
-            expectedUid: existingUid, currentUid: uid,
-            currentEmail: auth.currentUser?.email,
-            providers: auth.currentUser!.providerData.map((p) =>
-                (providerId: p.providerId, email: p.email)),
-            anonymous: auth.currentUser!.isAnonymous,
-            user: user, directory: rows[0], session: rows[1],
-            route: rows[2], adminDocumentExists: rows[3] != null,
-          );
-          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
-            throw StateError('google-original-owner-changed-after-readback');
-          }
-          return confirmed;
-        },
-      );
-    } catch (_) {
-      // A failed identity proof must not leave a wrong login visible in DEDA.
-      // Never delete or merge a Firebase Auth account or touch user data.
-      final current = auth.currentUser;
-      if (current != null && !current.isAnonymous &&
-          current.uid != prior?.uid) {
-        try { await auth.signOut(); } catch (_) { /* Fail visibly below. */ }
-      }
-      rethrow;
-    }
-  }
-}
-).hasMatch(originalId)) {
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
             throw StateError('google-original-share-id-not-proven');
           }
           final rows = await Future.wait([
@@ -273,7 +244,7 @@ class DedaGoogleReplacementLogin {
       final current = auth.currentUser;
       if (current != null && !current.isAnonymous &&
           current.uid != prior?.uid) {
-        try { await auth.signOut(); } catch (_) { /* Fail visibly below. */ }
+        try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
       }
       rethrow;
     }
