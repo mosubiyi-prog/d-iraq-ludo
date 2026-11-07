@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_auth_session_runtime.dart';
+import 'deda_google_recovery_progress_100439.dart';
 import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 import 'deda_step2_spark_linked_uid_readonly.dart';
 
@@ -146,6 +147,7 @@ class DedaGoogleReplacementLogin {
   static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
     required bool explicitUserAction,
     required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
   }) async {
     if (!explicitUserAction || !isCurrentIntent() ||
         !dedaStep2GoogleReplacementLoginEnabled ||
@@ -162,16 +164,23 @@ class DedaGoogleReplacementLogin {
     // Collect the Google consent before acquiring the shared auth lane.
     final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
     if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
     final tokens = await selected.authentication;
     final idToken = tokens.idToken;
     if (idToken == null || idToken.isEmpty ||
         !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
       throw StateError('google-consent-or-existing-session-changed');
     }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
     final existingUid = await _existingUid(idToken);
     if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
       throw StateError('google-owner-intent-expired');
     }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
     final credential = GoogleAuthProvider.credential(
         idToken: idToken, accessToken: tokens.accessToken);
     try {
@@ -195,6 +204,7 @@ class DedaGoogleReplacementLogin {
                 live.kind == DedaSessionAuthKind.authenticated,
           );
           final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
           Future<Map<String, dynamic>?> server(String path) async {
             final row = await FirebaseFirestore.instance.doc(path).get(
                 const GetOptions(source: Source.server));
@@ -211,6 +221,7 @@ class DedaGoogleReplacementLogin {
               !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
             throw StateError('google-uid-has-no-original-deda-account');
           }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
           final originalId = user?['sharePersonalId'];
           if (originalId is! String ||
               !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
@@ -222,6 +233,7 @@ class DedaGoogleReplacementLogin {
             server('deda_share_ids/$originalId'),
             server('admins/$uid'),
           ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
           final confirmed = DedaGoogleReplacementProof
               .requireOriginalServerIdentity(
             expectedUid: existingUid, currentUid: uid,
@@ -235,6 +247,8 @@ class DedaGoogleReplacementLogin {
           if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
             throw StateError('google-original-owner-changed-after-readback');
           }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
           return confirmed;
         },
       );
