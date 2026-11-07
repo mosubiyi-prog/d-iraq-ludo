@@ -159,7 +159,12 @@ async function main() {
   await admin.app().delete();
 }
 main().catch(e=>{
-  // No credential, UID, accountKey, phone, or raw Firestore error in logs.
-  console.error("SAFE_STOP_GM100M_ALLOCATION",e.code||"unknown");
+  // Only local static denial labels may be shown, never credentials,
+  // Firebase SDK errors, account UIDs, accountKeys or PII.
+  const safe=typeof e?.message==="string" &&
+    (e.message.startsWith("SAFE_STOP_GM100M_OWNER_ALLOCATION_") ||
+     e.message.startsWith("gm-compensation-100m-denied:"))
+    ? e.message : (e?.code||"unknown");
+  console.error("SAFE_STOP_GM100M_ALLOCATION",safe);
   process.exitCode=2;
 });
