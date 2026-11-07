@@ -48,6 +48,9 @@ class GoogleReadinessTests(unittest.TestCase):
     def test_both_correct_clients_ready_for_local_config_only(self):
         self.assertEqual(mod.review(config(), expected_sha1=SHA1), [])
 
+    def test_default_config_must_match_original_100439_release_signer(self):
+        self.assertIn("RELEASE_SIGNER_SHA1_NOT_REGISTERED", mod.review(config()))
+
     def test_release_signer_sha1_must_match(self):
         self.assertIn("RELEASE_SIGNER_SHA1_NOT_REGISTERED",
                       mod.review(config(), expected_sha1="b" * 40))
