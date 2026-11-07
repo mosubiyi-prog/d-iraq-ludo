@@ -17,7 +17,7 @@ MAIN = "lib/main.dart"
 IMPORT = "import 'deda_step2_existing_account_signin_page.dart';"
 ENTRY = "  void _openExistingAccount() {\n"
 NEXT = "\n  Future<void> login() async {"
-GUARD_LOGIN = "    try {\n      await _completeVerifiedLogin(normalizedPhone);"
+GUARD_LOGIN = "      await _completeVerifiedLogin(normalizedPhone);"
 
 ORIGINAL_EXISTING = re.compile(
     r"  void _openExistingAccount\(\) \{\n"
@@ -182,12 +182,15 @@ def bind(project):
         "\nimport 'deda_google_recovery_progress_100439.dart';" +
         "\nimport 'deda_step2_smart_second_stage_account_page_100439.dart';",
         "additive second page and new PIN creator imports")
+    # The assembled 100439 login guard may do additional verified work
+    # between "try" and this one final completion call. Insert only at the
+    # unique commit point, never replace the surrounding guardian.
     current = exactly_once(current, GUARD_LOGIN,
-        """    if (dedaSmartSecondStageAccountEnabled &&
-        dedaStep2ExistingAccountEntryEnabled) {
-      _openSmartSecondAccountStage(name, normalizedPhone);
-      return;
-    }
+        """      if (dedaSmartSecondStageAccountEnabled &&
+          dedaStep2ExistingAccountEntryEnabled) {
+        _openSmartSecondAccountStage(name, normalizedPhone);
+        return;
+      }
 """ + GUARD_LOGIN, "first page remains same: redirect after validation ONLY")
     if current.count("DedaSmartSecondStageAccountPage(") != 1 or (
             current.count("_buildExistingAccountForm(") != 3):
