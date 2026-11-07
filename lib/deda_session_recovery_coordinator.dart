@@ -225,6 +225,38 @@ class DedaSessionRecoveryCoordinator {
   }
 }
 
+/// Pure strict legacy source compatibility (no new identity authority).
+/// Caller-computed original route must be confirmed by all server records.
+class DedaRescueLegacyCanonicalProof {
+  const DedaRescueLegacyCanonicalProof._();
+
+  static bool authentic({
+    required String uid,
+    required String accountKey,
+    required String expectedOriginalId,
+    required Map<String, dynamic>? directory,
+    required Map<String, dynamic>? session,
+    required Map<String, dynamic>? profile,
+    required Map<String, dynamic>? route,
+  }) {
+    return RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(expectedOriginalId) &&
+        profile?['sharePersonalId'] == null &&
+        directory?['accountKey'] == accountKey &&
+        directory?['active'] == true &&
+        directory?['createdUid'] == uid &&
+        session?['uid'] == uid &&
+        session?['accountKey'] == accountKey &&
+        profile?['accountKey'] == accountKey &&
+        DedaQa32ManagerOriginalOwnerProof.authentic(
+          expectedOriginal: expectedOriginalId,
+          authUid: uid,
+          account: profile ?? const <String, dynamic>{},
+          session: session ?? const <String, dynamic>{},
+          route: route ?? const <String, dynamic>{},
+        );
+  }
+}
+
 /// SDK read-only adapter. The existing DedaAuthRuntime inspection permit
 /// owns this entire logical operation. No second auth guardian is created.
 class DedaFirebaseRescuePort implements DedaRescuePort {
@@ -326,21 +358,15 @@ class DedaFirebaseRescuePort implements DedaRescuePort {
       projection: projection,
       route: route.data(),
     );
-    final legacy = !valid &&
-        projection?['sharePersonalId'] == null &&
-        expectedOriginalId == originalId &&
-        directory?['accountKey'] == accountKey &&
-        directory?['active'] == true &&
-        directory?['createdUid'] == expected.uid &&
-        session?['uid'] == expected.uid &&
-        session?['accountKey'] == accountKey &&
-        projection?['accountKey'] == accountKey &&
-        DedaQa32ManagerOriginalOwnerProof.authentic(
-          expectedOriginal: originalId,
-          authUid: expected.uid!,
-          account: projection ?? const <String, dynamic>{},
-          session: session ?? const <String, dynamic>{},
-          route: route.data() ?? const <String, dynamic>{},
+    final legacy = !valid && expectedOriginalId == originalId &&
+        DedaRescueLegacyCanonicalProof.authentic(
+          uid: expected.uid!,
+          accountKey: accountKey,
+          expectedOriginalId: originalId,
+          directory: directory,
+          session: session,
+          profile: projection,
+          route: route.data(),
         );
     return valid || legacy
         ? DedaRescueEvidence.verified
