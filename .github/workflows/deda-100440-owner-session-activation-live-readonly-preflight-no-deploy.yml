@@ -1,0 +1,53 @@
+name: DEDA 100440 exact owner session activation LIVE READONLY - NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'tools/deda_100440_owner_session_activation_readonly_preflight_100441.py'
+      - '.github/workflows/deda-100440-owner-session-activation-live-readonly-preflight-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100440-owner-session-live-readonly
+  cancel-in-progress: false
+
+jobs:
+  read-only-owner-eligibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prove no deploy, account write, or protected source change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            lib/main.dart lib/deda_backend.dart firestore.rules storage.rules \
+            firebase.json .firebaserc functions/ android/ pubspec.yaml pubspec.lock
+          python3 -m py_compile \
+            tools/deda_100440_owner_session_activation_readonly_preflight_100441.py
+          echo PASS_100440_PROTECTED_SOURCE_UNCHANGED_NO_DEPLOY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install read-only Firebase admin and Firestore SDK
+        run: |
+          python3 -m pip install --quiet \
+            firebase-admin==6.9.0 google-cloud-firestore==2.21.0
+      - name: Inspect only previously authorized manager original UID without identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100440_owner_session_activation_readonly_preflight_100441.py
+      - name: Report safe hold until account and server proofs are confirmed
+        run: |
+          echo READ_ONLY_NO_FIREBASE_WRITES_NO_AUTH_CHANGES_NO_APK_NO_PLAY
+          echo NO_GOOGLE_LINK_NO_DIAMOND_OR_WEEKLY_GIFT_CHANGES
