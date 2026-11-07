@@ -15,6 +15,8 @@ MODULE = "lib/deda_step1_google_settings_link_100439.dart"
 MAIN = "lib/main.dart"
 BACKEND = "lib/deda_backend.dart"
 PUBSPEC = "pubspec.yaml"
+GOOGLE_CONFIG = "config/deda_google_auth_100439/google-services.json"
+ANDROID_CONFIG = "android/app/google-services.json"
 IMPORT = "import 'deda_100433_owner_confirmation_ui.dart';"
 SETTINGS_ANCHOR = """                  _sectionTitle(
                       dedaText('الصوت والملاحة', 'Voice & navigation')),"""
@@ -61,6 +63,25 @@ def bind(project):
         abort("100439 manager winners baseline missing")
     if meta.get("financialRestoreEnabled") is not False:
         abort("financial restoration must remain disabled")
+    # Copy the owner-approved Google OAuth config into the disposable Android
+    # build only; preserve the checked-in 100439 original and release signing.
+    staged_config = ROOT / GOOGLE_CONFIG
+    target_config = project / ANDROID_CONFIG
+    original_config = ROOT / "google-services.json"
+    if not staged_config.is_file() or not target_config.is_file():
+        abort("reviewed OAuth config or generated Android app config missing")
+    if digest(target_config) != digest(original_config):
+        abort("Android config does not match protected 100439 build input")
+    try:
+        oauth = json.loads(staged_config.read_text())
+        oauth_issues = __import__("runpy").run_path(
+            str(ROOT / "tools/deda_google_auth_readiness_100439.py")
+        )["review"](oauth)
+    except (OSError, ValueError, KeyError):
+        abort("invalid Google OAuth configuration")
+    if oauth_issues:
+        abort("Google OAuth release configuration not verified: " + ",".join(oauth_issues))
+
     main = project / MAIN
     module = project / MODULE
     if module.exists():
@@ -106,8 +127,10 @@ def bind(project):
     backend_path.write_text(backend_new)
     module.write_bytes((ROOT / MODULE).read_bytes())
     dependency.write_text(new_pub)
+    target_config.write_bytes(staged_config.read_bytes())
+    meta["googleConfigSha256"] = digest(target_config)
     hashes = meta.setdefault("sourceHashes", {})
-    for path in (MAIN, BACKEND, MODULE, PUBSPEC):
+    for path in (MAIN, BACKEND, MODULE, PUBSPEC, ANDROID_CONFIG):
         hashes[path] = digest(project / path)
     meta["googleOriginalUidSettings"] = {
         "position": "top_of_settings_above_voice_navigation",
@@ -115,6 +138,8 @@ def bind(project):
         "defaultOff": True,
         "requiresOriginalUid": True,
         "requiresGoogleOAuthConfiguration": True,
+        "googleOAuthReleaseConfigVerified": True,
+        "googleConfigStagedOnlyInIsolatedAndroidApp": True,
         "noNewUserOrDataMerge": True,
         "financialRestoreEnabled": False,
         "googlePackageLockUpdateRequiredInIsolatedWorkspace": True,
