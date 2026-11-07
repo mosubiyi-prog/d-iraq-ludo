@@ -10,7 +10,9 @@ import argparse
 from pathlib import Path
 
 START = "    match /deda_admin_diamond_wallets/{adminUid} {"
-END = "\n    // Only the owner of the stable personal DEDA ID can claim"
+# Both legacy repository and active production rules close the wallet match
+# with the same four-space brace, although surrounding match order differs.
+END = "\n    }"
 OLD = """        && resource.data.initialBalance == 1000000
         && request.resource.data.initialBalance == 1000000"""
 NEW = """        && resource.data.initialBalance in [1000000, 100000000]
