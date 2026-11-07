@@ -106,7 +106,8 @@ def bind(project):
 
     new = exactly_once(old, IMPORT,
         IMPORT + "\nimport 'deda_step1_google_settings_link_100439.dart';"
-        + "\nimport 'deda_step2_google_replacement_login_100439.dart';",
+        + "\nimport 'deda_step2_google_replacement_login_100439.dart';"
+        + "\nimport 'deda_google_recovery_progress_100439.dart';",
         "Google settings import")
     new = exactly_once(new, SETTINGS_ANCHOR,
         INSERT + SETTINGS_ANCHOR, "settings location above voice")
