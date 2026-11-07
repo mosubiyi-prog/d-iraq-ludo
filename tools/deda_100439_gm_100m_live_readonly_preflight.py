@@ -81,17 +81,41 @@ def main():
         od=original.to_dict() or {} if original.exists else {}
         candidates=[]
         print("GM_ORIGINAL_SHARE_DOCUMENT_EXISTS",original.exists)
+        original_uid=od.get("ownerUid","") if original.exists else ""
+        verified_person=None
+        if isinstance(original_uid,str) and original_uid:
+            verified_person=store.collection("users").document(original_uid).get()
+        owner_user=verified_person.to_dict() or {} if verified_person and verified_person.exists else {}
+        owner_key=owner_user.get("accountKey")
+        owner_session=None
+        if isinstance(original_uid,str) and original_uid:
+            owner_session=store.collection("deda_sessions").document(original_uid).get()
+        owner_state=owner_session.to_dict() or {} if owner_session and owner_session.exists else {}
+        print("ORIGINAL_OWNER_USER_EXISTS",bool(verified_person and verified_person.exists))
+        print("ORIGINAL_OWNER_SESSION_EXISTS",bool(owner_session and owner_session.exists))
+        print("ORIGINAL_OWNER_KEY_CONSISTENT",
+            isinstance(owner_key,str) and len(owner_key)>8 and
+            owner_state.get("accountKey")==owner_key)
+        def digits(value):
+            return "".join(x for x in str(value or "") if x.isdigit())
         for ordinal, manager in enumerate(actives,1):
             uid_check=manager.id
             adm=manager.to_dict() or {}
             person=store.collection("users").document(uid_check).get()
             person_data=person.to_dict() or {} if person.exists else {}
+            phone_match=(isinstance(owner_key,str) and len(digits(owner_key))>=10
+                         and len(digits(adm.get("phone")) )>=10
+                         and digits(adm.get("phone"))[-10:]==digits(owner_key)[-10:])
             print("GM_STRUCTURE",ordinal,
                   "adminKeys",sorted(adm.keys())[:30],
                   "userExists",person.exists,
                   "userKeys",sorted(person_data.keys())[:30],
                   "historicalAdminIdMatch",
-                  any(v=="salm_h_ad" for v in adm.values() if isinstance(v,str)))
+                  any(v=="salm_h_ad" for v in adm.values() if isinstance(v,str)),
+                  "adminPhoneMatchesOriginalOwner",phone_match,
+                  "createdByOriginalOwner",adm.get("createdByUid")==original_uid,
+                  "adminSeenFlag",bool(adm.get("lastSeenAt")),
+                  "adminLoginFlag",bool(adm.get("lastLoginAt")))
             key_check=person_data.get("accountKey")
             entry_ok=False
             if isinstance(key_check,str) and key_check:
