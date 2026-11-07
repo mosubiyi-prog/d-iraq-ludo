@@ -38,7 +38,8 @@ def bind(project: Path) -> None:
     main = once(main,
         "import 'deda_session_rescue_stage3_bridge.dart';",
         "import 'deda_session_rescue_stage3_bridge.dart';\n"
-        "import 'deda_session_missing_owner_entry_100441.dart';",
+        "import 'deda_session_missing_owner_entry_100441.dart';\n"
+        "import 'deda_step2_spark_linked_uid_readonly.dart';",
         "policy import")
 
     login_start = main.index("class LoginPage extends StatefulWidget {")
@@ -72,6 +73,7 @@ def bind(project: Path) -> None:
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !dedaSessionRescueStage3Enabled ||
             !dedaStep2ExistingAccountEntryEnabled ||
+            !dedaStep2SparkLinkedUidReadOnlyEnabled ||
             Firebase.apps.isEmpty ||
             FirebaseAuth.instance.currentUser != null) return;
         // The EXISTING verified PIN / canonical UID / server checkpoint
@@ -96,6 +98,7 @@ def bind(project: Path) -> None:
     status: DedaRescueStatus.signedOut,
     rescueEnabled: dedaSessionRescueStage3Enabled,
     verifiedExistingEntryEnabled: dedaStep2ExistingAccountEntryEnabled,
+    verifiedLinkedUidOnlyEnabled: dedaStep2SparkLinkedUidReadOnlyEnabled,
     firebaseReady: Firebase.apps.isNotEmpty,
     liveUid: Firebase.apps.isEmpty
         ? null : FirebaseAuth.instance.currentUser?.uid,
@@ -135,6 +138,7 @@ def bind(project: Path) -> None:
     status: DedaRescueStatus.signedOut,
     rescueEnabled: dedaSessionRescueStage3Enabled,
     verifiedExistingEntryEnabled: dedaStep2ExistingAccountEntryEnabled,
+    verifiedLinkedUidOnlyEnabled: dedaStep2SparkLinkedUidReadOnlyEnabled,
     firebaseReady: Firebase.apps.isNotEmpty,
     liveUid: Firebase.apps.isEmpty
         ? null : FirebaseAuth.instance.currentUser?.uid,
@@ -178,6 +182,7 @@ def bind(project: Path) -> None:
                         ),
                         if (dedaSessionRescueStage3Enabled &&
                             dedaStep2ExistingAccountEntryEnabled &&
+                            dedaStep2SparkLinkedUidReadOnlyEnabled &&
                             Firebase.apps.isNotEmpty &&
                             FirebaseAuth.instance.currentUser == null) ...[
                           const SizedBox(height: 8),
@@ -207,6 +212,7 @@ def bind(project: Path) -> None:
                       _sessionRescueStatus == DedaRescueStatus.signedOut &&
                       dedaSessionRescueStage3Enabled &&
                       dedaStep2ExistingAccountEntryEnabled &&
+                      dedaStep2SparkLinkedUidReadOnlyEnabled &&
                       Firebase.apps.isNotEmpty &&
                       FirebaseAuth.instance.currentUser == null) ...[
                     ListTile(
