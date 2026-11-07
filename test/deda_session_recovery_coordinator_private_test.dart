@@ -39,6 +39,7 @@ class FakeRescuePort implements DedaRescuePort {
   Future<DedaRescueEvidence> verifyOriginalOwner(
     DedaRescueSnapshot expected,
     String accountKey,
+    {String? expectedOriginalId}
   ) async {
     reads++;
     expect(accountKey, anyOf(originalAccount, anotherAccount));
