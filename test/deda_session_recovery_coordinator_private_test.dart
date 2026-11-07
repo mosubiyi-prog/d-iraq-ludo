@@ -42,9 +42,8 @@ class FakeRescuePort implements DedaRescuePort {
   ) async {
     reads++;
     expect(accountKey, anyOf(originalAccount, anotherAccount));
-    return readBehavior == null
-        ? DedaRescueEvidence.verified
-        : readBehavior!(reads);
+    if (readBehavior == null) return DedaRescueEvidence.verified;
+    return await readBehavior!(reads);
   }
 
   @override
