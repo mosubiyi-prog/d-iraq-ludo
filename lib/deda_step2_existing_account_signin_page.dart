@@ -12,10 +12,16 @@ typedef DedaVerifiedExistingAccountLogin = Future<void> Function(
   String pin,
 );
 
+// This callback only proves existing Google/DEDA identity. A true result
+// MUST NOT be interpreted as permission to hydrate financial account data.
+typedef DedaVerifiedExistingGoogleLogin = Future<bool> Function();
+
 class DedaExistingAccountSignInPage extends StatefulWidget {
   const DedaExistingAccountSignInPage({
     super.key,
     this.verifiedLogin,
+    this.verifiedGoogleLogin,
+    this.googleEnabled = false,
     this.enabled = dedaStep2ExistingAccountEntryEnabled,
   });
 
@@ -23,6 +29,8 @@ class DedaExistingAccountSignInPage extends StatefulWidget {
   /// resolve original ID securely and commit the canonical recovered profile.
   /// It is NOT installed by the 100436 development candidate.
   final DedaVerifiedExistingAccountLogin? verifiedLogin;
+  final DedaVerifiedExistingGoogleLogin? verifiedGoogleLogin;
+  final bool googleEnabled;
   final bool enabled;
 
   @override
@@ -43,6 +51,35 @@ class _DedaExistingAccountSignInPageState
       RegExp(r'^\d{6}$').hasMatch(_pin.text) &&
       !_busy && _explicitRecoveryConsent &&
       widget.enabled && widget.verifiedLogin != null;
+
+  bool get _googleValid => !_busy && _explicitRecoveryConsent &&
+      widget.enabled && widget.googleEnabled &&
+      widget.verifiedGoogleLogin != null;
+
+  Future<void> _submitGoogle() async {
+    if (!_googleValid) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final matched = await widget.verifiedGoogleLogin!();
+      if (matched && mounted) {
+        setState(() => _error =
+            'تم التحقق من هوية حساب ديدا الأصلية. '
+            'استرجاع البيانات والممتلكات لم يكتمل بعد؛ '
+            'احتفظ بهاتفك القديم.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error =
+            'تعذّر إثبات حساب جوجل الأصلي. لم تُسترجع '
+            'أي بيانات ولم تُمنح ماسات.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _submit() async {
     if (!_valid) return;
@@ -135,11 +172,25 @@ class _DedaExistingAccountSignInPageState
                 child: Text(_busy ? 'جارٍ فحص الاسترجاع...' :
                     'التحقق واسترجاع حسابي'),
               ),
+              if (widget.googleEnabled &&
+                  widget.verifiedGoogleLogin != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('deda-existing-owner-google-login'),
+                  onPressed: _googleValid ? _submitGoogle : null,
+                  icon: const Icon(Icons.account_circle_outlined),
+                  label: Text(_busy
+                      ? 'جارٍ التحقق من حساب جوجل...'
+                      : 'التحقق بحساب جوجل المرتبط'),
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(_error!, textAlign: TextAlign.center),
               ],
-              if (!widget.enabled || widget.verifiedLogin == null) ...[
+              if (!widget.enabled ||
+                  (widget.verifiedLogin == null &&
+                      widget.verifiedGoogleLogin == null)) ...[
                 const SizedBox(height: 12),
                 const Text(
                   'الدخول بالحساب السابق غير مفعّل في هذه النسخة.',
