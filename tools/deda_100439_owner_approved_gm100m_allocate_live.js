@@ -3,12 +3,11 @@
 /**
  * Owner approved November 7, 2026: one 100m TOTAL administrative gift budget,
  * preserving previously spent diamonds and existing individual manager wallets.
- * Funding selected currently-used manager login = existingBalance + 99m.
+ * Funding selected currently-used manager login = exactly 100m available.
  * This is a one-time server-only GitHub Actions job, NOT a callable/mobile API.
- * The two extant "general_manager" admin records share one adminId; select
+ * The two extant "general_manager" admin records need not share one adminId; select
  * ONLY the uniquely recently used account, and fail closed on any ambiguity.
  */
-const {createHash} = require("node:crypto");
 const admin = require("firebase-admin");
 const {allocateApprovedManagerCompensation,OLD_CAP,NEW_CAP,ADDITION} =
   require("./deda_gm_admin_compensation_100m_server_only_100439.js");
@@ -36,18 +35,16 @@ function hoursSince(value,now) {
 function only2(list) {
   if(list.length!==2)stop("EXACTLY_TWO_CURRENT_ADMIN_SESSIONS_REQUIRED");
   const [a,b]=list.map(s=>s.data());
-  // Internal adminIds are different credentials; do NOT demand equality.
-  // Instead ensure both entries demonstrably belong to the same historical
-  // administrative issuer and same display identity; refuse all others.
-  if(typeof a.adminId!=="string" || a.adminId.length<4 ||
-     typeof b.adminId!=="string" || b.adminId.length<4)
-    stop("ADMIN_LOGIN_IDENTIFIER_INVALID");
-  if(typeof a.createdByUid!=="string" || a.createdByUid.length<4 ||
-     a.createdByUid!==b.createdByUid)
-    stop("MANAGER_ACCOUNTS_HAVE_DIFFERENT_CREATORS");
-  if(typeof a.displayName!=="string" || a.displayName.length<2 ||
-     a.displayName!==b.displayName)
-    stop("MANAGER_ACCOUNTS_HAVE_DIFFERENT_DISPLAY_OWNERS");
+  // Separate manager authentication documents can have different creators,
+  // names and login IDs. Validate exact GM roles and actual existing wallets,
+  // then uniquely select the account used by the owner recently. Never fund
+  // an unidentifiable third account or a new wallet.
+  for (const d of [a,b]) {
+    if(d.active!==true || d.status!=="active" ||
+       d.role!=="general_manager" ||
+       typeof d.adminId!=="string" || d.adminId.length<4)
+      stop("EXISTING_ADMIN_ACCOUNT_NOT_VERIFIED");
+  }
 }
 function checkOldWallet(snap,uid) {
   const d=snap.exists?snap.data()||{}:{};
@@ -99,7 +96,8 @@ async function main() {
   console.log("PREALLOC_OWNER_ADMIN_ID_CHECK", "one-current-login-one-stale-login");
   console.log("PREALLOC_SELECTED_GM_WALLET_OLD_BALANCE",before.balance);
   console.log("PREALLOC_OTHER_ADMIN_WALLET_OLD_BALANCE",untouched.balance);
-  console.log("PREALLOC_ADDITIONAL_99M_DIAMONDS_OWNER_APPROVED",ADDITION);
+  console.log("PREALLOC_TARGET_ADMIN_POOL_DIAMONDS",NEW_CAP);
+  console.log("PREALLOC_SHORTFALL_ONLY",NEW_CAP-before.balance);
 
   // Approval and immutable receipt are server-only collections. No app user
   // can create or modify either doc under existing live Firestore rules.
@@ -156,8 +154,11 @@ async function main() {
   const unchanged=otherAgain.data()||{};
   if(!audit.exists || updated.initialBalance!==NEW_CAP ||
      updated.balance!==result.balance || updated.adminUid!==chosen.id ||
-     entry.addDiamonds!==ADDITION || entry.toCapDiamonds!==NEW_CAP ||
-     entry.balanceAfter!==updated.balance ||
+     entry.addDiamonds!==NEW_CAP-before.balance ||
+     entry.capIncreaseDiamonds!==ADDITION ||
+     entry.toCapDiamonds!==NEW_CAP ||
+     entry.balanceAfter!==NEW_CAP ||
+     updated.balance!==NEW_CAP ||
      unchanged.balance!==untouched.balance ||
      unchanged.initialBalance!==OLD_CAP)
     stop("CRITICAL_FUNDING_READBACK_OR_OTHER_WALLET_MISMATCH");
