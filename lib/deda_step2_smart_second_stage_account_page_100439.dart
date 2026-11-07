@@ -60,8 +60,8 @@ class _DedaSmartSecondStageAccountPageState
   bool get _readyForCreation =>
       !_creating && _choice == DedaSmartAccountChoice.newAccount &&
       _savedPinConsent && _name.text.trim().length >= 2 &&
-      RegExp(r'^\d{6}.hasMatch(_pin) &&
-      RegExp(r'^\+9647\d{9}.hasMatch(widget.initialPhone);
+      RegExp(r'^\d{6}$').hasMatch(_pin) &&
+      RegExp(r'^\+9647\d{9}$').hasMatch(widget.initialPhone);
 
   void _select(DedaSmartAccountChoice choice) {
     if (_creating) return;
