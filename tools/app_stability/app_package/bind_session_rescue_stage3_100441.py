@@ -172,6 +172,7 @@ def bind(project: Path) -> None:
 
     for file_name in (
         "deda_session_recovery_coordinator.dart",
+        "deda_session_rescue_stage3_core.dart",
         "deda_session_rescue_stage3_bridge.dart",
     ):
         source = ROOT / "lib" / file_name
@@ -183,6 +184,7 @@ def bind(project: Path) -> None:
     google_path.write_text(google)
     for file_name in (
         "deda_session_recovery_coordinator.dart",
+        "deda_session_rescue_stage3_core.dart",
         "deda_session_rescue_stage3_bridge.dart",
     ):
         shutil.copy2(ROOT / "lib" / file_name, project / "lib" / file_name)
