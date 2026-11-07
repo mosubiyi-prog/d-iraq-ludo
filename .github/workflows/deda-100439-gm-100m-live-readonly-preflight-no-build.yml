@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/deda-100439-gm-100m-live-readonly-preflight-no-build.yml'
       - 'tools/deda_100439_gm_100m_live_readonly_preflight.py'
+      - 'tools/deda_gm_admin_compensation_100m_rules_candidate_100439.py'
   workflow_dispatch:
 permissions:
   contents: read
