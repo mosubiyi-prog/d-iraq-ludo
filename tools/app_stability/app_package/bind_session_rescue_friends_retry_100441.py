@@ -58,48 +58,41 @@ def bind(project: Path) -> None:
         "friend state",
     )
 
-    original = """  @override
+    # Leave the assembled owner initialization body BIT FOR BIT as it is.
+    # Rename it and wrap with a bounded, visible retry rather than replacing
+    # previously reviewed account/session rules from other build stages.
+    friends = once(
+        friends,
+        "  Future<void> _prepare() async {",
+        "  Future<void> _prepareOriginal() async {",
+        "preserve original friends session initializer",
+    )
+    friends = once(
+        friends,
+        """  @override
   void initState() {
-    super.initState();
-    _prepare();
-  }
-
-  Future<void> _prepare() async {
-    try {
-      final session = await dedaEnsurePersonalSocialSession();
-      if (!mounted) return;
-      setState(() {
-        _session = session;
-        _error = null;
-      });
-    } catch (error) {
-      if (mounted) setState(() => _error = error);
-    }
-  }
-"""
-    improved = """  @override
+    super.initState();""",
+        """  @override
   void initState() {
     super.initState();
     if (dedaSessionRescueStage3Enabled) {
       DedaSessionRescueStage3Bridge.updates.addListener(_onRescueReady);
-    }
-    unawaited(_prepare());
-  }
-
-  void _onRescueReady() {
-    if (!mounted || _loadingFriends || !dedaSessionRescueStage3Enabled) {
-      return;
-    }
-    final report = DedaSessionRescueStage3Bridge.updates.value;
+    }""",
+        "one readiness listener on friends init",
+    )
+    before_original = "  Future<void> _prepareOriginal() async {"
+    wrapper = """  void _onRescueReady() {
+    if (!mounted || _loadingFriends || !dedaSessionRescueStage3Enabled) return;
+    final proof = DedaSessionRescueStage3Bridge.updates.value;
     final viewer = FirebaseAuth.instance.currentUser;
-    final original = DedaBackend.personalShareIdForPhone(
+    final expectedOriginal = DedaBackend.personalShareIdForPhone(
       DedaPreferences.phone,
     );
-    if (report?.status != DedaRescueStatus.ready ||
-        viewer == null || report?.uid != viewer.uid ||
-        report?.originalId != original) return;
-    // A successful SAME-UID owner proof reopens the original friends reader.
-    // Do not invoke the rescue again from its own readiness event.
+    if (proof?.status != DedaRescueStatus.ready ||
+        viewer == null || proof?.uid != viewer.uid ||
+        proof?.originalId != expectedOriginal) return;
+    // The already verified SAME-UID event reloads only the existing friend
+    // reader. Do not call the rescue again from its own event.
     unawaited(_prepare(ownerProofAlreadyReady: true));
   }
 
@@ -117,8 +110,8 @@ def bind(project: Path) -> None:
     final generation = ++_friendsGeneration;
     final startUid = Firebase.apps.isEmpty
         ? null : FirebaseAuth.instance.currentUser?.uid;
-    // Show feedback synchronously on tap, even when the prior Firebase
-    // handshake is still failing. Stale 0 friends is never our error UI.
+    // The tap MUST produce immediate visual feedback. Clear old error and
+    // stream so the same terminal StreamBuilder failure isn't replayed.
     setState(() {
       _loadingFriends = true;
       _session = null;
@@ -126,40 +119,43 @@ def bind(project: Path) -> None:
       _error = null;
     });
     try {
-      // The rescuer MUST NOT create an anonymous replacement UID. A missing
-      // principal needs the existing explicit DEDA account confirmation.
       if (dedaSessionRescueStage3Enabled && startUid == null) {
         throw StateError('deda-friends-original-session-required');
       }
       if (dedaSessionRescueStage3Enabled && !ownerProofAlreadyReady) {
-        final rescue = await DedaSessionRescueStage3Bridge.runForPhone(
+        final recovery = await DedaSessionRescueStage3Bridge.runForPhone(
           DedaPreferences.phone,
         );
-        if (rescue?.status == DedaRescueStatus.uidChanged ||
-            rescue?.status == DedaRescueStatus.signedOut) {
+        if (recovery?.status == DedaRescueStatus.uidChanged ||
+            recovery?.status == DedaRescueStatus.signedOut) {
           throw StateError('deda-friends-owner-session-changed');
         }
       }
       if (!mounted || generation != _friendsGeneration) return;
       if (dedaSessionRescueStage3Enabled &&
           FirebaseAuth.instance.currentUser?.uid != startUid) {
-        throw StateError('deda-friends-auth-changed-during-retry');
+        throw StateError('deda-friends-auth-changed-before-original-read');
       }
-      final verified = await dedaEnsurePersonalSocialSession();
+      await _prepareOriginal();
       if (!mounted || generation != _friendsGeneration) return;
+      // The original initializer may catch an auth/network failure itself.
+      // Treat null _session as ERROR, never an empty friend list.
+      final verified = _session;
+      if (verified == null) {
+        throw _error ?? StateError('deda-friends-session-not-ready');
+      }
       final liveUid = FirebaseAuth.instance.currentUser?.uid;
       if (liveUid != verified.uid ||
           (dedaSessionRescueStage3Enabled && liveUid != startUid)) {
-        throw StateError('deda-friends-verified-owner-changed');
+        throw StateError('deda-friends-owner-uid-changed');
       }
-      // Creating this new stream forces a genuine Firestore re-subscription
-      // only for this retry, not on every widget rebuild.
-      final stream = DedaSocialService.watchRelations(verified.uid);
-      setState(() {
-        _session = verified;
-        _relationsStream = stream;
-        _error = null;
-      });
+      final latest = DedaSocialService.watchRelations(verified.uid);
+      if (mounted && generation == _friendsGeneration) {
+        setState(() {
+          _relationsStream = latest;
+          _error = null;
+        });
+      }
     } catch (error) {
       if (mounted && generation == _friendsGeneration) {
         setState(() {
@@ -174,8 +170,12 @@ def bind(project: Path) -> None:
       }
     }
   }
+
 """
-    friends = once(friends, original, improved, "friends retry button load")
+    friends = once(
+        friends, before_original, wrapper + before_original,
+        "wrap original friends loader, not replace",
+    )
 
     original_error_ui = """      body: session == null
           ? Center(
@@ -191,7 +191,7 @@ def bind(project: Path) -> None:
               stream: DedaSocialService.watchRelations(session.uid),
               builder: (context, snapshot) {
                 final friends ="""
-    improved_error_ui = """      body: session == null
+    improved_error_ui = """      body: _loadingFriends || session == null
           ? Center(
               child: _loadingFriends || _error == null
                   ? Column(
