@@ -27,6 +27,10 @@ class FakePort implements DedaLoginHandoffPort {
   bool ownerValid = true;
   bool sessionValid = true;
   bool grantValid = true;
+  // Simulated SDK provider state: not a Firebase Auth substitute.
+  // Real port asserts original UID, password provider and server documents.
+  bool googlePrimaryEmail = false;
+  bool verifiedOriginalProvider = false;
   void Function()? onOwnerProof;
   @override
   DedaLoginIdentity current() => identity;
@@ -41,8 +45,11 @@ class FakePort implements DedaLoginHandoffPort {
   Future<DedaLoginIdentity> signInOriginal(String key, String pin) async {
     events.add('auth');
     if (pin != '123456') throw StateError('wrong-pin');
-    identity = DedaLoginIdentity(uid, '$key@deda-login.invalid',
-        DedaLoginKind.linked, identity.epoch + 1);
+    identity = DedaLoginIdentity(
+        uid, googlePrimaryEmail ? 'linked-owner@gmail.com'
+                                : '$key@deda-login.invalid',
+        DedaLoginKind.linked, identity.epoch + 1,
+        verifiedOriginalOwnerProvider: verifiedOriginalProvider);
     return identity;
   }
   @override
@@ -577,6 +584,64 @@ void main() {
     expect(p.events, ['lane','auth','proof','install','grant','write','readback']);
     expect(j.created, 0);
   });
+  test('verified same-UID Google provider reaches the guardian, not wallet', () async {
+    final p = FakePort()
+      ..googlePrimaryEmail = true
+      ..verifiedOriginalProvider = true;
+    final journal = FakeJournal(), worker = FakeWorker();
+    final bridge = make(p, journal, adapters: {backup: worker});
+    final result = await login(bridge, recover: true,
+        recoveryIntentId: intent, selected: {backup});
+    expect(result.originalUid, uid);
+    expect(result.originalId, normalId);
+    expect(result.recovery!.stepStates[backup], DedaVaultStepState.verified);
+    expect(result.fullAccountRestored, false);
+    expect(result.completion.canIssueFinancialRewards, false);
+    expect(journal.created, 1);
+    expect(worker.calls, 1);
+  });
+
+  test('Google email alone never proves original UID or starts guardian', () async {
+    final p = FakePort()..googlePrimaryEmail = true;
+    final journal = FakeJournal(), worker = FakeWorker();
+    await expectLater(login(make(p, journal, adapters: {backup: worker}),
+        recover: true, recoveryIntentId: intent, selected: {backup}),
+        throwsStateError);
+    expect(journal.created, 0);
+    expect(worker.calls, 0);
+    expect(p.events, ['lane', 'auth']);
+  });
+
+  test('Google owner with wrong server proof is rejected before recovery', () async {
+    final p = FakePort()
+      ..googlePrimaryEmail = true
+      ..verifiedOriginalProvider = true
+      ..ownerValid = false;
+    final journal = FakeJournal(), worker = FakeWorker();
+    await expectLater(login(make(p, journal, adapters: {backup: worker}),
+        recover: true, recoveryIntentId: intent, selected: {backup}),
+        throwsStateError);
+    expect(journal.created, 0);
+    expect(worker.calls, 0);
+  });
+
+  test('Google provider lost after authentication aborts same-UID recovery', () async {
+    final p = FakePort()
+      ..googlePrimaryEmail = true
+      ..verifiedOriginalProvider = true;
+    final journal = FakeJournal(), worker = FakeWorker();
+    p.onOwnerProof = () {
+      final previous = p.identity;
+      p.identity = DedaLoginIdentity(
+          previous.uid, previous.email, previous.kind, previous.epoch);
+    };
+    await expectLater(login(make(p, journal, adapters: {backup: worker}),
+        recover: true, recoveryIntentId: intent, selected: {backup}),
+        throwsStateError);
+    expect(journal.created, 0);
+    expect(worker.calls, 0);
+  });
+
   test('no sneaked recovery without separate explicit request', () async {
     final p = FakePort(), j = FakeJournal();
     await expectLater(login(make(p,j),selected:{backup}), throwsStateError);
