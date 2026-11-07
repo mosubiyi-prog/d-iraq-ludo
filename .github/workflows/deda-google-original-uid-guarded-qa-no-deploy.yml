@@ -13,8 +13,10 @@ on:
       - 'lib/deda_step1_google_settings_link_100439.dart'
       - 'lib/deda_step2_google_replacement_login_100439.dart'
       - 'lib/deda_google_recovery_progress_100439.dart'
+      - 'lib/deda_step2_smart_second_stage_account_page_100439.dart'
       - 'lib/deda_step2_existing_account_signin_page.dart'
       - 'tools/app_stability/app_package/bind_google_account_settings_100439.py'
+      - 'tools/app_stability/app_package/bind_smart_second_stage_account_100439.py'
       - 'test/deda_google_original_uid_link_private_test.dart'
       - 'test/deda_step2_spark_linked_uid_readonly_private_test.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
@@ -22,6 +24,7 @@ on:
       - 'test/deda_google_replacement_existing_uid_private_test.dart'
       - 'test/deda_google_replacement_page_private_test.dart'
       - 'test/deda_google_recovery_progress_policy_private_test.dart'
+      - 'test/deda_smart_second_stage_account_private_test.dart'
       - 'test/deda_google_guardian_contract_private_test.dart'
       - 'test/deda_step2_linked_owner_guardian_bridge_private_test.dart'
       - 'tools/deda_google_auth_readiness_100439.py'
@@ -75,6 +78,7 @@ jobs:
           from pathlib import Path
           from hashlib import sha256
           binder=runpy.run_path('tools/app_stability/app_package/bind_google_account_settings_100439.py')['bind']
+          smart_binder=runpy.run_path('tools/app_stability/app_package/bind_smart_second_stage_account_100439.py')['bind']
           with tempfile.TemporaryDirectory(prefix='deda-google-private-') as tmp:
             project=Path(tmp)
             (project/'lib').mkdir()
@@ -110,6 +114,19 @@ jobs:
             assert 'googleProgressDrivenByVerifiedOperations' in (project/'internal-build-inputs.json').read_text()
             assert after.count('verifiedGoogleLogin: (reportProgress) async {')==1
             assert after.count('googleEnabled: dedaStep2GoogleReplacementLoginEnabled')==1
+            smart_binder(project)
+            final=(project/'lib/main.dart').read_text()
+            assert (project/'lib/deda_step2_smart_second_stage_account_page_100439.dart').is_file()
+            assert final.count('DedaSmartSecondStageAccountPage(')==1
+            assert final.count('_buildExistingAccountForm(')==3
+            assert final.count('verifiedGoogleLogin: (reportProgress) async {')==1
+            assert final.count('if (!login.fullAccountRestored || login.originalId == null)')==1
+            assert 'if (dedaSmartSecondStageAccountEnabled &&' in final
+            assert final.count('await _completeVerifiedLogin(normalizedPhone);')==1
+            assert "import 'deda_pin_auth.dart';" in final
+            assert "import 'deda_step2_smart_second_stage_account_page_100439.dart';" in final
+            assert (project/'internal-build-inputs.json').is_file()
+            assert json.loads((project/'internal-build-inputs.json').read_text())['smartSecondStageAccount']['defaultOff']
           print('PASS_DISPOSABLE_GOOGLE_SETTINGS_ONE_FIELD_ABOVE_VOICE')
           PY
       - name: Resolve Google account-chooser dependency in CI checkout ONLY
@@ -117,8 +134,8 @@ jobs:
       - name: Analyze Google settings card without building or deploying
         run: dart analyze --no-fatal-warnings lib/deda_step1_google_settings_link_100439.dart test/deda_google_settings_card_private_test.dart
       - name: Analyze replacement-phone Google no-create verifier in isolation
-        run: dart analyze --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_google_recovery_progress_100439.dart test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart test/deda_google_recovery_progress_policy_private_test.dart
+        run: dart analyze --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart lib/deda_step2_existing_account_signin_page.dart lib/deda_google_recovery_progress_100439.dart lib/deda_step2_smart_second_stage_account_page_100439.dart test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart test/deda_google_recovery_progress_policy_private_test.dart test/deda_smart_second_stage_account_private_test.dart
       - name: Test no-create Google preflight and original UID invariants
-        run: flutter test --no-pub test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart test/deda_google_recovery_progress_policy_private_test.dart
+        run: flutter test --no-pub test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart test/deda_google_recovery_progress_policy_private_test.dart test/deda_smart_second_stage_account_private_test.dart
       - name: Verify card remains hidden until approved
         run: flutter test --no-pub test/deda_google_settings_card_private_test.dart
