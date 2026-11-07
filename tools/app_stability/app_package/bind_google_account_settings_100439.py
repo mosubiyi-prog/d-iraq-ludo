@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE = "lib/deda_step1_google_settings_link_100439.dart"
+REPLACEMENT = "lib/deda_step2_google_replacement_login_100439.dart"
 MAIN = "lib/main.dart"
 BACKEND = "lib/deda_backend.dart"
 PUBSPEC = "pubspec.yaml"
@@ -84,6 +85,11 @@ def bind(project):
 
     main = project / MAIN
     module = project / MODULE
+    replacement = project / REPLACEMENT
+    if not (ROOT / REPLACEMENT).is_file():
+        abort("reviewed Google replacement-phone source missing")
+    if replacement.exists() and digest(replacement) != digest(ROOT / REPLACEMENT):
+        abort("replacement phone source does not match reviewed isolated module")
     if module.exists():
         abort("duplicate Google settings module")
     if not (ROOT / MODULE).is_file():
@@ -93,7 +99,8 @@ def bind(project):
         abort("Google settings card already exists")
 
     new = exactly_once(old, IMPORT,
-        IMPORT + "\nimport 'deda_step1_google_settings_link_100439.dart';",
+        IMPORT + "\nimport 'deda_step1_google_settings_link_100439.dart';"
+        + "\nimport 'deda_step2_google_replacement_login_100439.dart';",
         "Google settings import")
     new = exactly_once(new, SETTINGS_ANCHOR,
         INSERT + SETTINGS_ANCHOR, "settings location above voice")
@@ -105,6 +112,26 @@ def bind(project):
             DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
                 user, prefs.getString(_linkedVerifiedAccountKey) ?? ''),""",
         "Google-linked owner cold-start preservation")
+    new = exactly_once(new,
+        """        enabled: dedaStep2ExistingAccountEntryEnabled,
+        verifiedLogin: (phone, pin) async {""",
+        """        enabled: dedaStep2ExistingAccountEntryEnabled,
+        googleEnabled: dedaStep2GoogleReplacementLoginEnabled,
+        verifiedGoogleLogin: () async {
+          if (!mounted || !pageContext.mounted) {
+            throw StateError('expired-google-existing-account-intent');
+          }
+          final verified =
+              await DedaGoogleReplacementLogin.verifyOnNewPhone(
+            explicitUserAction: true,
+            isCurrentIntent: () => mounted && pageContext.mounted,
+          );
+          // Identity proof only. Never save a profile, debit wallet,
+          // unlock the full recovery UI or launch HomePage on this receipt.
+          return verified != null;
+        },
+        verifiedLogin: (phone, pin) async {""",
+        "replacement phone explicit Google button")
     if new.count("DedaGoogleSettingsLinkCard(") != 1:
         abort("not exactly one Google settings card")
 
@@ -126,11 +153,13 @@ def bind(project):
     main.write_text(new)
     backend_path.write_text(backend_new)
     module.write_bytes((ROOT / MODULE).read_bytes())
+    if not replacement.exists():
+        replacement.write_bytes((ROOT / REPLACEMENT).read_bytes())
     dependency.write_text(new_pub)
     target_config.write_bytes(staged_config.read_bytes())
     meta["googleConfigSha256"] = digest(target_config)
     hashes = meta.setdefault("sourceHashes", {})
-    for path in (MAIN, BACKEND, MODULE, PUBSPEC, ANDROID_CONFIG):
+    for path in (MAIN, BACKEND, MODULE, REPLACEMENT, PUBSPEC, ANDROID_CONFIG):
         hashes[path] = digest(project / path)
     meta["googleOriginalUidSettings"] = {
         "position": "top_of_settings_above_voice_navigation",
@@ -140,6 +169,9 @@ def bind(project):
         "requiresGoogleOAuthConfiguration": True,
         "googleOAuthReleaseConfigVerified": True,
         "googleConfigStagedOnlyInIsolatedAndroidApp": True,
+        "googleReplacementLoginOptInOnly": True,
+        "noCreateGoogleProviderPreflight": True,
+        "googleLoginNeverCommitsProfileOrWallet": True,
         "noNewUserOrDataMerge": True,
         "financialRestoreEnabled": False,
         "googlePackageLockUpdateRequiredInIsolatedWorkspace": True,
