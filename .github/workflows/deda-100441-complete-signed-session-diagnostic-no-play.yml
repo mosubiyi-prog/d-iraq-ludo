@@ -181,14 +181,26 @@ jobs:
             test/deda_google_recovery_progress_policy_private_test.dart \
             test/deda_google_settings_card_private_test.dart \
             test/deda_smart_second_stage_account_private_test.dart
-          for t in deda_session_recovery_coordinator_private_test.dart deda_session_rescue_stage3_4char_private_test.dart deda_session_missing_owner_entry_100441_test.dart; do
+          # Stage3 candidate has unassembled source contracts; test those
+          # untouched, not against a different 100418 assembled search adapter.
+          (
+            cd "$GITHUB_WORKSPACE"
+            flutter pub get
+            flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true \
+              test/deda_session_recovery_coordinator_private_test.dart \
+              test/deda_session_rescue_stage3_4char_private_test.dart \
+              test/deda_session_missing_owner_entry_100441_test.dart
+          )
+          # Full 100440 assembly intentionally accepts four-char premium IDs
+          # as SEARCH INPUT; it never treats them as account/UID ownership.
+          for t in deda_session_recovery_coordinator_private_test.dart deda_session_missing_owner_entry_100441_test.dart deda_100441_assembled_friend_alias_search_test.dart; do
             cp "$GITHUB_WORKSPACE/test/$t" "test/$t"
           done
           flutter test --no-pub --dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true \
             test/deda_session_recovery_coordinator_private_test.dart \
-            test/deda_session_rescue_stage3_4char_private_test.dart \
-            test/deda_session_missing_owner_entry_100441_test.dart
-          echo 'PASS_100441_COMPLETE_100440_FEATURE_PARITY_AND_34_RESCUE_TESTS'
+            test/deda_session_missing_owner_entry_100441_test.dart \
+            test/deda_100441_assembled_friend_alias_search_test.dart
+          echo 'PASS_100441_34_SOURCE_RESCUE_TESTS_AND_23_ASSEMBLED_SEARCH_SECURITY_TESTS'
       - name: Protect agreed Google settings location and record exact signed inputs
         shell: bash
         run: |
