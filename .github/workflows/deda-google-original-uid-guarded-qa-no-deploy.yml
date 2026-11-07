@@ -12,12 +12,14 @@ on:
       - 'lib/deda_step2_linked_owner_guardian_bridge.dart'
       - 'lib/deda_step1_google_settings_link_100439.dart'
       - 'lib/deda_step2_google_replacement_login_100439.dart'
+      - 'lib/deda_step2_existing_account_signin_page.dart'
       - 'tools/app_stability/app_package/bind_google_account_settings_100439.py'
       - 'test/deda_google_original_uid_link_private_test.dart'
       - 'test/deda_step2_spark_linked_uid_readonly_private_test.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'test/deda_google_settings_card_private_test.dart'
       - 'test/deda_google_replacement_existing_uid_private_test.dart'
+      - 'test/deda_google_replacement_page_private_test.dart'
       - 'test/deda_google_guardian_contract_private_test.dart'
       - 'test/deda_step2_linked_owner_guardian_bridge_private_test.dart'
       - 'tools/deda_google_auth_readiness_100439.py'
@@ -101,6 +103,9 @@ jobs:
             assert json.loads(Path('google-services.json').read_text())['client'][0].get('oauth_client',[]) == []
             assert json.loads((project/'internal-build-inputs.json').read_text())['googleOriginalUidSettings']['googleOAuthReleaseConfigVerified']
             assert (project/'lib/deda_step1_google_settings_link_100439.dart').is_file()
+            assert (project/'lib/deda_step2_google_replacement_login_100439.dart').is_file()
+            assert after.count('verifiedGoogleLogin: () async {')==1
+            assert after.count('googleEnabled: dedaStep2GoogleReplacementLoginEnabled')==1
           print('PASS_DISPOSABLE_GOOGLE_SETTINGS_ONE_FIELD_ABOVE_VOICE')
           PY
       - name: Resolve Google account-chooser dependency in CI checkout ONLY
@@ -108,8 +113,8 @@ jobs:
       - name: Analyze Google settings card without building or deploying
         run: dart analyze --no-fatal-warnings lib/deda_step1_google_settings_link_100439.dart test/deda_google_settings_card_private_test.dart
       - name: Analyze replacement-phone Google no-create verifier in isolation
-        run: dart analyze --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart test/deda_google_replacement_existing_uid_private_test.dart
+        run: dart analyze --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart lib/deda_step2_existing_account_signin_page.dart test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart
       - name: Test no-create Google preflight and original UID invariants
-        run: flutter test --no-pub test/deda_google_replacement_existing_uid_private_test.dart
+        run: flutter test --no-pub test/deda_google_replacement_existing_uid_private_test.dart test/deda_google_replacement_page_private_test.dart
       - name: Verify card remains hidden until approved
         run: flutter test --no-pub test/deda_google_settings_card_private_test.dart
