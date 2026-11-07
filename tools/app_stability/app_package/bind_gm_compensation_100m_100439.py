@@ -39,6 +39,12 @@ NEW_READ = """      // Never display a fabricated 100m or conceal a corrupted wa
         throw StateError('admin-compensation-wallet-server-proof-failed');
       }
       return balance;"""
+# The original Stage2 session guardian wraps the same server transaction,
+# causing Dart's formatter to render this exact legacy read on a new line.
+OLD_READ_PROTECTED_ASSEMBLED = """      final balance = ((snapshot.data()?['balance'] as num?)?.toInt() ?? 0)
+          .clamp(0, generalManagerDiamondGiftBudget)
+          .toInt();
+      return balance;"""
 OLD_GRANT = "if (amount <= 0 || amount > generalManagerDiamondGiftBudget) {"
 NEW_GRANT = "if (amount <= 0 || amount > generalManagerSingleDiamondGiftLimit) {"
 OLD_DEBIT = """        final currentAdmin =
@@ -100,14 +106,15 @@ def bind(project):
             "grantDiamondGift({" not in original):
         fail("approved gift wallet implementation missing")
     current = original
-    for label, before, after in [
-        ("manager-only admin cap", OLD_CAP, NEW_CAP),
-        ("legacy client create unchanged", OLD_CREATE, NEW_CREATE),
-        ("server balance strict read", OLD_READ, NEW_READ),
-        ("single gift cap retained", OLD_GRANT, NEW_GRANT),
-        ("server balance strict debit", OLD_DEBIT, NEW_DEBIT),
-    ]:
-        current = once(current, before, after, label)
+    current = once(current, OLD_CAP, NEW_CAP, "manager-only admin cap")
+    current = once(current, OLD_CREATE, NEW_CREATE, "legacy client create unchanged")
+    candidates = [old for old in (OLD_READ, OLD_READ_PROTECTED_ASSEMBLED)
+                  if current.count(old) == 1]
+    if len(candidates) != 1:
+        fail("server balance strict read must match one reviewed format")
+    current = once(current, candidates[0], NEW_READ, "server balance strict read")
+    current = once(current, OLD_GRANT, NEW_GRANT, "single gift cap retained")
+    current = once(current, OLD_DEBIT, NEW_DEBIT, "server balance strict debit")
     if current == original or current.count("generalManagerDiamondGiftBudget = 100000000;") != 1:
         fail("admin 100m capacity not staged exactly once")
     backend.write_text(current, encoding="utf-8")
