@@ -1,0 +1,46 @@
+name: DEDA 100441 A B C owner vs admin gateway targeted READONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'tools/deda_100441_admin_gateway_vs_owner_uid_abc_readonly_2026_11_08.py'
+      - '.github/workflows/deda-100441-owner-abc-admin-gateway-scoped-readonly-no-deploy-2026-11-08.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: deda-100441-owner-abc-admin-gateway-readonly
+  cancel-in-progress: false
+
+jobs:
+  read-only-owner-admin-boundary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Enforce protected production source unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            functions/ firestore.rules storage.rules firebase.json \
+            .firebaserc android/ assets/ pubspec.yaml pubspec.lock
+          python3 -m py_compile tools/deda_100441_admin_gateway_vs_owner_uid_abc_readonly_2026_11_08.py
+          echo PASS_PRODUCTION_SOURCE_UNCHANGED
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Firestore reader only
+        run: python3 -m pip install --quiet google-cloud-firestore==2.21.0
+      - name: Audit only 1 exact DEDA phone account and A B C UID scopes
+        run: python3 tools/deda_100441_admin_gateway_vs_owner_uid_abc_readonly_2026_11_08.py
+      - name: No privilege edit, PIN login, UID migration, deploy or APK
+        run: echo PASS_NO_ADMIN_GRANTS_NO_AUTH_NO_FIREBASE_WRITES_NO_APK_NO_PLAY
