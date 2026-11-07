@@ -1,0 +1,44 @@
+name: DEDA 100440 Friends retry baseline read-only inspection - NO BUILD
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - '.github/workflows/deda-100440-friends-retry-baseline-source-inspection-no-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-pinned-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect only original friend UI code from pinned baseline archive
+        run: |
+          python3 - <<'PY'
+          import tarfile,re
+          from pathlib import Path
+          archive=Path('tools/app_stability/100380-baseline.tar.gz')
+          assert archive.exists()
+          with tarfile.open(archive,'r:gz') as tar:
+              names=[m for m in tar.getmembers() if m.name.endswith('/lib/main.dart') or m.name=='lib/main.dart']
+              print('PINNED_SOURCE_ENTRY_COUNT',len(names))
+              assert len(names)==1
+              code=tar.extractfile(names[0]).read().decode('utf-8')
+          lines=code.splitlines()
+          markers=[(i,l.strip()) for i,l in enumerate(lines) if re.search(r'class _DedaFriend|class DedaFriend|class _DedaSocial|_friendsError|_loadFriends|watchRelations|ensurePersonalSession|_startFriends|_retryFriends|[إا]عادة المحاولة|فشل|Retry',l,re.I)]
+          print('PINNED_SOURCE_LINES',len(lines))
+          print('FRIEND_MARKERS_START')
+          for i,l in markers[:140]: print(str(i+1)+': '+l[:180])
+          print('FRIEND_MARKERS_END')
+          for i,l in markers:
+              if re.search(r'class _DedaFriends|class DedaFriends|class _DedaSocialHub|_loadFriends|watchRelations|ensurePersonalSession|[إا]عادة المحاولة',l,re.I):
+                  start=max(0,i-12);end=min(len(lines),i+25)
+                  print('FRIEND_CONTEXT',start+1,end)
+                  for j in range(start,end):print(str(j+1)+': '+lines[j])
+          PY
+      - name: Confirm inspection has no writes or build
+        run: echo PASS_ONLY_ARCHIVE_SOURCE_INSPECTION_NO_APK_NO_FIREBASE
