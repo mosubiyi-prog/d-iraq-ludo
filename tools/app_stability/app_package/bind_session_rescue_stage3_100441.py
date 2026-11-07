@@ -44,49 +44,37 @@ def bind(project: Path) -> None:
         "  DedaRescueStatus? _sessionRescueStatus;\n",
         "settings rescue state",
     )
-    old_check = """    var allowed = false;
-    try {
-      allowed = await DedaBackend.currentDedaAccountCanSeeAdminEntry(
-        phone: phone,
-      );
-    } catch (_) {
-      allowed = false;
+    # PRESERVE the entire existing administration guard verbatim. It may
+    # differ between protected 100436 and 100440 assembly variants.
+    main = replace_once(
+        main,
+        "  Future<void> _refreshAdminEntryVisibility() async {",
+        "  Future<void> _refreshAdminEntryVisibilityOriginal() async {",
+        "retain original admin check and permissions",
+    )
+    main = replace_once(
+        main,
+        "  Widget _sectionTitle(String text) {",
+        """  Future<void> _refreshAdminEntryVisibility() async {
+    await _refreshAdminEntryVisibilityOriginal();
+    if (!mounted || _adminEntryVisible ||
+        !dedaSessionRescueStage3Enabled) return;
+    final phone = DedaPreferences.accountPhone.trim().isNotEmpty
+        ? DedaPreferences.accountPhone
+        : DedaPreferences.phone;
+    final rescue = await DedaSessionRescueStage3Bridge.runForPhone(phone);
+    if (!mounted) return;
+    setState(() => _sessionRescueStatus = rescue?.status);
+    // This is not authorization: repeat the EXACT original server-controlled
+    // gateway check ONLY when the same owner UID was re-proven.
+    if (rescue?.mayRecheckAdminGateway == true) {
+      await _refreshAdminEntryVisibilityOriginal();
     }
+  }
 
-    if (!mounted) return;
-    setState(() => _adminEntryVisible = allowed);"""
-    new_check = """    var allowed = false;
-    DedaRescueStage3Result? rescue;
-    // Keep the already-shipped gateway check and all its security rules.
-    try {
-      allowed = await DedaBackend.currentDedaAccountCanSeeAdminEntry(
-        phone: phone,
-      );
-    } catch (_) {
-      allowed = false;
-    }
-    if (!mounted) return;
-    if (!allowed && dedaSessionRescueStage3Enabled) {
-      // Only retry AFTER SAME UID original-account evidence. This does not
-      // grant an admin role or bypass admin_entry_access.
-      rescue = await DedaSessionRescueStage3Bridge.runForPhone(phone);
-      if (!mounted) return;
-      if (rescue?.mayRecheckAdminGateway == true) {
-        try {
-          allowed = await DedaBackend.currentDedaAccountCanSeeAdminEntry(
-            phone: phone,
-          );
-        } catch (_) {
-          allowed = false;
-        }
-      }
-    }
-    if (!mounted) return;
-    setState(() {
-      _adminEntryVisible = allowed;
-      _sessionRescueStatus = rescue?.status;
-    });"""
-    main = replace_once(main, old_check, new_check, "admin entry guarded retry")
+  Widget _sectionTitle(String text) {""",
+        "wrapper around original admin entry gate",
+    )
     main = replace_once(
         main,
         """                  // Fail closed: ordinary users see no administration
