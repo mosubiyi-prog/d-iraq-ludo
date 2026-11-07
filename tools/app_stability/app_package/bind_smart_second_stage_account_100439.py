@@ -179,6 +179,7 @@ def bind(project):
     current = current[:start] + _build_methods(args) + current[end:]
     current = exactly_once(current, IMPORT, IMPORT +
         "\nimport 'deda_pin_auth.dart';" +
+        "\nimport 'deda_google_recovery_progress_100439.dart';" +
         "\nimport 'deda_step2_smart_second_stage_account_page_100439.dart';",
         "additive second page and new PIN creator imports")
     current = exactly_once(current, GUARD_LOGIN,
