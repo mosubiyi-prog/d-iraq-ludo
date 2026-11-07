@@ -15,6 +15,13 @@ DedaSmartSecondStageAccountPage makePage({
       (_) => const Text('حارس الاسترجاع الأصلي', key: ValueKey('existing-guardian')),
 );
 
+Future<void> scrollToAccountConfirmation(WidgetTester tester) async {
+  await tester.drag(
+      find.byKey(const ValueKey('deda-smart-second-stage')),
+      const Offset(0, -340));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   test('second-stage mode is OFF until explicit private approval', () {
     expect(dedaSmartSecondStageAccountEnabled, isFalse);
@@ -30,6 +37,7 @@ void main() {
     expect(find.byKey(const ValueKey('deda-second-stage-name')),
         findsOneWidget);
     expect(find.text('+9647701234567'), findsOneWidget);
+    await scrollToAccountConfirmation(tester);
     final pin = tester.widget<SelectableText>(
         find.byKey(const ValueKey('deda-second-stage-new-pin'))).data!;
     expect(pin, matches(RegExp(r'^\d{6}$')));
@@ -68,6 +76,7 @@ void main() {
         sentName = name; sentPhone = phone; sentPin = pin;
       },
     )));
+    await scrollToAccountConfirmation(tester);
     final pin = tester.widget<SelectableText>(
         find.byKey(const ValueKey('deda-second-stage-new-pin'))).data!;
     await tester.ensureVisible(find.byKey(
@@ -94,6 +103,7 @@ void main() {
         throw StateError('existing-owner-number');
       },
     )));
+    await scrollToAccountConfirmation(tester);
     await tester.ensureVisible(find.byKey(
         const ValueKey('deda-second-stage-pin-saved')));
     await tester.tap(find.byKey(const ValueKey('deda-second-stage-pin-saved')));
@@ -103,6 +113,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('deda-second-stage-confirm-create')));
     await tester.pumpAndSettle();
     expect(attempts, 1);
+    await tester.ensureVisible(find.byKey(
+        const ValueKey('deda-second-stage-error')));
+    await tester.pumpAndSettle();
     expect(find.textContaining('هذا الرقم عنده حساب ديدا سابق'),
         findsOneWidget);
     expect(find.byKey(const ValueKey('deda-second-stage-error')),
@@ -114,6 +127,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: makePage(
       create: (_, __, ___) async {},
     )));
+    await scrollToAccountConfirmation(tester);
     await tester.ensureVisible(find.byKey(
         const ValueKey('deda-second-stage-pin-saved')));
     await tester.tap(find.byKey(const ValueKey('deda-second-stage-pin-saved')));
@@ -137,6 +151,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: makePage(
       phone: '+964770', create: (_, __, ___) async { attempts++; },
     )));
+    await scrollToAccountConfirmation(tester);
     await tester.ensureVisible(find.byKey(
         const ValueKey('deda-second-stage-pin-saved')));
     await tester.tap(find.byKey(const ValueKey('deda-second-stage-pin-saved')));
