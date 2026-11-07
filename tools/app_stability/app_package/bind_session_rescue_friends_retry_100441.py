@@ -8,6 +8,7 @@ The old wallet, leagues, gifts, manager auth, accounts and 100440 remain intact.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -32,7 +33,12 @@ def bind(project: Path) -> None:
         raise ValueError("BLOCK_FRIENDS_RETRY_DUPLICATE")
     if "DedaSessionRescueStage3Bridge.runForPhone" not in whole:
         raise ValueError("BLOCK_FRIENDS_RETRY_STAGE3_NOT_PRESENT")
-    start = whole.index("class _DedaFriendsPageState extends State<DedaFriendsPage> {")
+    target = re.search(r'class\\s+_DedaFriendsPageState\\b[^\\{]{0,300}\\{', whole)
+    if target is None:
+        matches = re.findall(r'class\\s+[^\\n\\{]{0,110}(?:Friend|Social)[^\\n\\{]*', whole)
+        print('DEDA_FRIENDS_ASSEMBLED_CLASSES', matches[:45])
+        raise ValueError('BLOCK_FRIENDS_RETRY_FRIENDS_STATE_NOT_FOUND')
+    start = target.start()
     end = whole.index("class _DedaFriendCompactCard", start)
     friends = whole[start:end]
 
