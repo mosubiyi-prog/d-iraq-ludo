@@ -51,6 +51,18 @@ def main():
         try:
             revised=candidate(live)
         except Exception:
+            # Scoped clause-only diagnosis. Never print other live rules or data.
+            match="match /deda_admin_diamond_wallets/{adminUid}"
+            print("LIVE_ADMIN_GIFT_MATCH_COUNT",live.count(match))
+            if live.count(match)==1:
+                start=live.index(match)
+                next_at=live.find("\\n    match /",start+len(match))
+                if next_at<0:next_at=len(live)
+                block=live[start:next_at]
+                print("LIVE_ADMIN_GIFT_MATCH_SNIPPET_BEGIN")
+                for line in block.splitlines()[:85]:
+                    print("LIVE_RULE_GM",line[:200])
+                print("LIVE_ADMIN_GIFT_MATCH_SNIPPET_END")
             return stop("LIVE_WALLET_RULE_FORMAT_NOT_MATCHED_TO_SAFE_CANDIDATE")
         print("PASS_GM100M_ONLY_WALLET_DEBIT_RULES_REVIEW_CANDIDATE",hashlib.sha256(
             revised.encode()).hexdigest())
