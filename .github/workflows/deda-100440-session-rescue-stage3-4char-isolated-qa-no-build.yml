@@ -10,6 +10,7 @@ on:
       - 'test/deda_session_recovery_coordinator_private_test.dart'
       - 'test/deda_session_rescue_stage3_4char_private_test.dart'
       - 'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py'
+      - 'tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py'
       - '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml'
   workflow_dispatch:
 
@@ -40,12 +41,17 @@ jobs:
           permitted={
             'docs/DEDA_100440_OWNER_LOCKED_SESSION_RESCUE_PLAN_2026-11-07.md',
             'docs/DEDA_100440_SESSION_RESCUE_STAGE2_QA_STOP_2026-11-07.md',
+            'docs/DEDA_100440_SESSION_RESCUE_STAGE3_4CHAR_QA_STOP_2026-11-07.md',
+            'docs/DEDA_100440_STAGE4_OWNER_DIAMONDS_READONLY_AUDIT_2026-11-07.md',
+            'docs/DEDA_100440_STAGE4_STEP1_SESSION_RESCUE_FINAL_COMPAT_AUDIT_2026-11-07.md',
+            '.github/workflows/deda-100440-friends-retry-baseline-source-inspection-no-build.yml',
             'lib/deda_session_recovery_coordinator.dart',
             'lib/deda_session_rescue_stage3_core.dart',
             'lib/deda_session_rescue_stage3_bridge.dart',
             'test/deda_session_recovery_coordinator_private_test.dart',
             'test/deda_session_rescue_stage3_4char_private_test.dart',
             'tools/app_stability/app_package/bind_session_rescue_stage3_100441.py',
+            'tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py',
             '.github/workflows/deda-100440-session-rescue-stage2-isolated-qa-no-build.yml',
             '.github/workflows/deda-100440-session-rescue-stage3-4char-isolated-qa-no-build.yml',
           }
@@ -163,6 +169,7 @@ jobs:
           python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
           python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
           python3 tools/app_stability/app_package/bind_session_rescue_stage3_100441.py "$project"
+          python3 tools/app_stability/app_package/bind_session_rescue_friends_retry_100441.py "$project"
           DEDA_STAGE3_PROJECT="$project" python3 - <<'PY'
           import os,json
           from pathlib import Path
@@ -172,6 +179,19 @@ jobs:
           assert main.count('DedaSessionRescueStage3Bridge.runForPhone') >= 1
           assert main.count('mayRecheckAdminGateway')==1
           assert main.count('DedaGoogleSettingsLinkCard(')==1
+          friend=main[main.index('class _DedaFriendsPageState'):main.index('class _DedaFriendCompactCard')]
+          assert friend.count('DEDA_100441_FRIENDS_RETRY_FIX')==1
+          assert '_onRescueReady' in friend
+          assert 'DedaSessionRescueStage3Bridge.updates.addListener(_onRescueReady)' in friend
+          assert 'DedaSessionRescueStage3Bridge.updates.removeListener(_onRescueReady)' in friend
+          assert 'stream: _relationsStream,' in friend
+          assert 'if (snapshot.hasError)' in friend
+          assert 'if (!snapshot.hasData)' in friend
+          assert 'onPressed: _prepare' not in friend
+          assert 'DedaSocialService.watchRelations(verified.uid)' in friend
+          assert 'final verifiedCount = snapshot.data!' in friend
+          assert 'signInAnonymously(' not in friend and 'signOut(' not in friend
+          print('PASS_FRIEND_RETRY_TOUCH_RESTART_SAME_UID_STREAM_ERROR_NOT_EMPTY')
           assert 'DedaSessionRescueStage3Bridge.updates.addListener' in google
           assert 'DedaSessionRescueStage3Bridge.updates.removeListener' in google
           assert 'linkGoogleToConfirmedOriginalUid' in google
