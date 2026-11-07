@@ -1,0 +1,72 @@
+name: DEDA 100441 SPLIT OWNER independent proof private safety QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'functions/deda_100441_owner_split_identity_challenge_review_private_v1.js'
+      - 'functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js'
+      - '.github/workflows/deda-100441-split-owner-independent-proof-private-qa-no-deploy-2026-11-08.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100441-split-owner-proof-private-no-deploy
+  cancel-in-progress: false
+
+jobs:
+  offline-security-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ensure no protected DEDA source or deployed Firebase code changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            functions/index.js functions/deda_owner_pin_verify_private_v1.js \
+            functions/deda_linked_owner_session_grant_private_v1.js \
+            functions/deda_stage2_live_gate.js firestore.rules storage.rules \
+            firebase.json .firebaserc android assets pubspec.yaml pubspec.lock
+          echo PASS_PROTECTED_100440_PRODUCTION_FUNCTIONS_AND_FIREBASE_UNCHANGED
+      - name: Verify isolated review gate is never a callable or Auth token issuer
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_100441_owner_split_identity_challenge_review_private_v1.js
+          node --check functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const path='functions/deda_100441_owner_split_identity_challenge_review_private_v1.js';
+          const code=fs.readFileSync(path,'utf8');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          assert.equal(index.includes('deda_100441_owner_split_identity_challenge_review_private_v1'),false);
+          for(const bad of ['createCustomToken(', 'signInAnonymously(', 'updateUser(',
+            'linkWithCredential(', 'signInWithCustomToken(', 'tx.set(', 'tx.update(',
+            'firebase-admin', 'firebase-functions']) assert.equal(code.includes(bad),false,bad);
+          assert.match(code,/loginPermitted:false/);
+          console.log('PASS_PRIVATE_REVIEW_ONLY_ZERO_AUTH_TOKENS_WRITES_OR_DEPLOY');
+          NODE
+      - name: Run prior 31 and new owner challenge regression tests with synthetic UIDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js \
+            functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js \
+            functions/test/deda_owner_pin_verify_private_v1.test.js \
+            functions/test/deda_stage2_live_gate.test.js
+          echo PASS_OWNER_CHALLENGE_NO_REAL_PHONE_PIN_UID_OR_FIREBASE_CALLS
+      - name: Safe stop — no Firebase deployment, credentials or APK build
+        run: echo PASS_OFFLINE_REVIEW_GATE_NOT_A_SESSION_RECOVERY_NOT_A_FIREBASE_DEPLOY
