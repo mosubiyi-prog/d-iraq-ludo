@@ -5,6 +5,7 @@ on:
       - deda-100440-session-rescue-isolated-owner-review-2026-11-07
     paths:
       - 'lib/deda_session_recovery_coordinator.dart'
+      - 'lib/deda_session_rescue_stage3_core.dart'
       - 'lib/deda_session_rescue_stage3_bridge.dart'
       - 'test/deda_session_recovery_coordinator_private_test.dart'
       - 'test/deda_session_rescue_stage3_4char_private_test.dart'
