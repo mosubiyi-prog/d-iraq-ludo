@@ -100,6 +100,46 @@ def main() -> int:
                 entry.get("active") is True and entry.get("status") == "active" and
                 entry.get("allowedRole") == "general_manager" and
                 entry.get("accessType") == "general_manager_gateway")
+        # A premium ID is a DISPLAY ALIAS keyed by the immutable original ID.
+        # Validate the deployed live route without printing any identifiers.
+        # Document creation times help distinguish old account registration
+        # from later Stage71 alias activation, but are not a full audit trail.
+        active_doc = client.collection("deda_stage71_active_identifier").document(original_id).get()
+        active = active_doc.to_dict() or {}
+        selection = active.get("activeId")
+        premium_selected = (active_doc.exists and active.get("originalId") == original_id
+                            and isinstance(selection, str) and selection != original_id
+                            and re.fullmatch(r"@DEDA-[A-Z0-9]{4,12}", selection) is not None)
+        checkpoint("PREMIUM_ALIAS_CURRENTLY_SELECTED", premium_selected)
+        if premium_selected:
+            public = client.collection("deda_public_active_aliases").document(original_id).get()
+            public_data = public.to_dict() or {}
+            mapped = client.collection("deda_public_alias_routes").document(selection).get()
+            mapped_data = mapped.to_dict() or {}
+            checkpoint("PREMIUM_PUBLIC_ALIAS_SAME_ORIGINAL",
+                       public.exists and public_data.get("originalId") == original_id
+                       and public_data.get("activeId") == selection)
+            checkpoint("PREMIUM_PUBLIC_ROUTE_SAME_ORIGINAL",
+                       mapped.exists and mapped_data.get("originalId") == original_id)
+            checkpoint("DIRECTORY_CREATED_BEFORE_ACTIVE_ID_RECORD", bool(
+                valid_key and directory_doc.exists and directory_doc.create_time
+                and active_doc.create_time and
+                directory_doc.create_time < active_doc.create_time))
+            checkpoint("ORIGINAL_PERSONAL_ROUTE_CREATED_BEFORE_ACTIVE_ID_RECORD", bool(
+                route_doc.create_time and active_doc.create_time and
+                route_doc.create_time < active_doc.create_time))
+        if valid_key:
+            try:
+                # Request only two nonsecret fields; never fetch the stored PIN.
+                original_credential = client.collection("deda_credentials").document(key).get(
+                    field_paths=["accountKey", "createdUid"])
+                original_credential_data = original_credential.to_dict() or {}
+                checkpoint("PHONE_DIRECTORY_CREATOR_MATCHES_ACCOUNT_CREATION",
+                           original_credential.exists and
+                           original_credential_data.get("accountKey") == key and
+                           original_credential_data.get("createdUid") == directory.get("createdUid"))
+            except Exception:
+                print("OWNER_SESSION_READONLY_PHONE_CREATOR_UNVERIFIABLE")
         # Exact second UID from the existing directory, only if the original
         # owner route cannot be mapped to this same UID. Never disclose it.
         alternate = directory.get("createdUid") if valid_key else None
