@@ -1,0 +1,148 @@
+name: DEDA 2026-11-07 OWNER APPROVED MISSED WEEK GIFTS ONE TIME NO APK
+on:
+  push:
+    branches:
+      - deda-2026-11-07-weekly-hadaya-owner-one-time-recovery
+    paths:
+      - .github/workflows/deda-2026-11-07-owner-approved-missed-hadaya-once.yml
+permissions:
+  contents: read
+concurrency:
+  group: deda-weekly-100438-exactly-once-owner-approved-production
+  cancel-in-progress: false
+jobs:
+  pay-closed-week-2026-10-31-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEDA_FIREBASE_SERVICE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_OWNER_APPROVED_WEEKLY_RECOVERY: APPROVED_2026_11_07_MANUAL_CATCHUP
+    steps:
+      - name: Load immutable tested DEDA payout source; no app changes
+        uses: actions/checkout@v4
+        with:
+          repository: mosubiyi-prog/d-iraq-ludo
+          ref: 3664e27440b989b167822cfddd3be6b0fb612f96
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify specific owner-authorized missed league week payout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF" = "refs/heads/deda-2026-11-07-weekly-hadaya-owner-one-time-recovery"
+          test "$GITHUB_REPOSITORY" = "mosubiyi-prog/d-iraq-ludo"
+          test "$DEDA_OWNER_APPROVED_WEEKLY_RECOVERY" = "APPROVED_2026_11_07_MANUAL_CATCHUP"
+          test "$(git rev-parse HEAD)" = 3664e27440b989b167822cfddd3be6b0fb612f96
+          node --check functions/deda_weekly_payout_approved_runner_100438.cjs
+          node --check functions/deda_weekly_direct_prize_worker.cjs
+          node --check functions/deda_weekly_direct_prize_plan.js
+          node --test functions/tests/deda_weekly_direct_prize_plan.test.cjs
+          echo "PASS_ORIGINAL_TESTED_PAYOUT_SOURCE_NO_APK_NO_OTHER_SECTIONS"
+      - name: Load trusted Firebase Admin SDK without modifying repo
+        run: npm install --prefix functions --no-audit --no-fund
+      - name: Check live week, freeze, recipient IDs and existing gifts then pay only two approved winners
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'JS'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const {createRequire}=require("module");
+          const path=require("path");
+          const moduleRequire=createRequire(path.resolve("functions/package.json"));
+          const {initializeApp,cert,deleteApp}=moduleRequire("firebase-admin/app");
+          const {getFirestore,FieldValue}=moduleRequire("firebase-admin/firestore");
+          const {releaseOneClosedWeek}=require("./functions/deda_weekly_payout_approved_runner_100438.cjs");
+          const {plan,weekStart,WEEK_MS}=require("./functions/deda_weekly_direct_prize_plan.js");
+          const EXPECTED_WEEK="2026-10-31";
+          const PROJECT="deda-25b88";
+          const CUTOFF=weekStart(EXPECTED_WEEK)+WEEK_MS;
+          async function main() {
+            assert.equal(process.env.GITHUB_EVENT_NAME,"push");
+            assert.equal(process.env.GITHUB_REF,
+              "refs/heads/deda-2026-11-07-weekly-hadaya-owner-one-time-recovery");
+            assert.equal(process.env.GITHUB_REPOSITORY,"mosubiyi-prog/d-iraq-ludo");
+            assert.equal(process.env.DEDA_OWNER_APPROVED_WEEKLY_RECOVERY,
+              "APPROVED_2026_11_07_MANUAL_CATCHUP");
+            assert(Date.now()>=CUTOFF && Date.now()<CUTOFF+36*3600000,
+              "ONLY_THIS_MISSED_WEEK_WITHIN_36_HOURS");
+            const key=JSON.parse(process.env.DEDA_FIREBASE_SERVICE_KEY||"null");
+            assert.equal(key?.type,"service_account","NO_SERVICE_ACCOUNT");
+            assert.equal(key.project_id,PROJECT,"WRONG_FIREBASE_PROJECT");
+            assert.equal(key.client_email,
+              "firebase-adminsdk-fbsvc@deda-25b88.iam.gserviceaccount.com",
+              "UNAPPROVED_ACCOUNT");
+            const app=initializeApp({credential:cert(key),projectId:PROJECT});
+            try {
+              const db=getFirestore(app);
+              const probe=await releaseOneClosedWeek(db,Date.now(),{pay:false});
+              assert.equal(probe.weekId,EXPECTED_WEEK,"NOT_CORRECT_WEEK");
+              assert.equal(probe.verifiedWinners,2,
+                "LIVE_WINNER_COUNT_DIFFERENT_FROM_APPROVED_FRIDAY_CENSUS");
+              assert.equal(probe.plannedDiamonds,450,
+                "LIVE_PRIZE_PLAN_DIFFERENT_FROM_APPROVED_450");
+              const amountsSnapshot=await db.collection("deda_weekly_direct_prize_plans")
+                .doc(EXPECTED_WEEK).get();
+              assert(amountsSnapshot.exists,"OWNER_PRIZE_PLAN_MISSING");
+              const amounts=amountsSnapshot.data().amounts;
+              assert.equal(amounts[0],250,"OWNER_FIRST_PRIZE_CHANGED");
+              assert.equal(amounts[1],200,"OWNER_SECOND_PRIZE_CHANGED");
+              console.log("PASS_LIVE_PREFLIGHT_WEEK",EXPECTED_WEEK,
+                "winners",probe.verifiedWinners,
+                "total",probe.plannedDiamonds,
+                "previousGiftCount",probe.existingGifts);
+              const sent=await releaseOneClosedWeek(db,Date.now(),{
+                pay:true,clockTimestamp:()=>FieldValue.serverTimestamp()});
+              assert.equal(sent.weekId,EXPECTED_WEEK);
+              assert.equal(sent.verifiedWinners,2);
+              assert.equal(sent.plannedDiamonds,450);
+              assert.equal(sent.held,0,"FROZEN_WINNER_DURING_PAYOUT");
+              assert.equal(sent.invalid,0,"INVALID_WINNER_DURING_PAYOUT");
+              assert.equal(sent.created+sent.alreadyPresent,2,
+                "MISSING_RECIPIENT_GIFT");
+              console.log("LIVE_SETTLEMENT_COMMIT",
+                JSON.stringify({weekId:EXPECTED_WEEK,created:sent.created,
+                  alreadyPresent:sent.alreadyPresent,held:sent.held,
+                  invalid:sent.invalid,plannedDiamonds:sent.plannedDiamonds}));
+              const docs=await db.collection("deda_weekly_direct_weeks")
+                .doc(EXPECTED_WEEK).collection("scores").limit(100).get();
+              const frozenDocs=await db.collection("deda_weekly_direct_reviews")
+                .doc(EXPECTED_WEEK).collection("users").limit(100).get();
+              const frozen=new Map(frozenDocs.docs.filter(d=>d.data().frozen===true)
+                .map(d=>[d.id,true]));
+              const winners=plan({weekId:EXPECTED_WEEK,atMs:Date.now(),
+                records:docs.docs.map(d=>({id:d.id,data:d.data()})),
+                freezes:frozen,approvedAmounts:amounts}).winners;
+              assert.equal(winners.length,2,"GIFT_RECIPIENT_SET_CHANGED");
+              const saved=await Promise.all(winners.map(w=>
+                db.collection("deda_diamond_gifts").doc(w.giftId).get()));
+              let total=0;
+              for(let i=0;i<winners.length;i++){
+                const record=saved[i].data(),winner=winners[i];
+                assert(saved[i].exists,"WEEKLY_GIFT_NOT_PERSISTED");
+                assert.equal(record.sourceType,"weekly_league");
+                assert.equal(record.targetPublicId,winner.publicId);
+                assert.equal(record.giftId,winner.giftId);
+                assert.equal(record.amount,winner.amount);
+                assert(["pending","received"].includes(record.status),
+                  "WEEKLY_GIFT_WRONG_STATUS");
+                total+=record.amount;
+              }
+              assert.equal(total,450);
+              console.log("SUCCESS_WEEKLY_2026_10_31_TWO_GIFTS_PERSISTED",
+                "count",saved.length,"total",total,
+                "status","pending_or_received",
+                "no_duplicate_ids",true);
+              console.log("PASS_NO_MANAGER_WALLET_WRITES_NO_SCORE_WRITES_NO_APK_NO_PLAY");
+            } finally {await deleteApp(app);}
+          }
+          main().catch(e=>{
+            const m=String(e?.message||"unknown");
+            console.error("BLOCK_OR_FAIL_ONE_TIME_WEEKLY_PAYOUT",
+              m.replace(/@DEDA-[A-Z0-9]+/g,"[redacted]").slice(0,170));
+            process.exitCode=1;
+          });
+          JS
