@@ -26,6 +26,8 @@ class DedaExistingAccountSignInPage extends StatefulWidget {
     this.verifiedLogin,
     this.verifiedGoogleLogin,
     this.googleEnabled = false,
+    this.embedded = false,
+    this.initialPhone,
     this.enabled = dedaStep2ExistingAccountEntryEnabled,
   });
 
@@ -35,6 +37,8 @@ class DedaExistingAccountSignInPage extends StatefulWidget {
   final DedaVerifiedExistingAccountLogin? verifiedLogin;
   final DedaVerifiedExistingGoogleLogin? verifiedGoogleLogin;
   final bool googleEnabled;
+  final bool embedded;
+  final String? initialPhone;
   final bool enabled;
 
   @override
@@ -46,6 +50,14 @@ class _DedaExistingAccountSignInPageState
     extends State<DedaExistingAccountSignInPage> {
   final _phone = TextEditingController();
   final _pin = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final value = widget.initialPhone?.trim() ?? '';
+    _phone.text = value.startsWith('+964')
+        ? '0${value.substring(4)}' : value;
+  }
   bool _busy = false;
   bool _explicitRecoveryConsent = false;
   String? _error;
@@ -226,18 +238,14 @@ class _DedaExistingAccountSignInPageState
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_busy,
-    child: Scaffold(
-    appBar: AppBar(title: const Text('لدي حساب')),
-    body: SafeArea(
+  Widget _existingForm() => SafeArea(
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
           child: ListView(
             shrinkWrap: true,
-            padding: const EdgeInsets.all(20),
+            physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
+            padding: widget.embedded ? EdgeInsets.zero : const EdgeInsets.all(20),
             children: [
               const Text('تسجيل الدخول بحسابك السابق',
                   textAlign: TextAlign.center,
@@ -323,7 +331,16 @@ class _DedaExistingAccountSignInPageState
           ),
         ),
       ),
-    ),
-    ),
+    );
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: widget.embedded
+        ? _existingForm()
+        : Scaffold(
+            appBar: AppBar(title: const Text('لدي حساب')),
+            body: _existingForm(),
+          ),
   );
 }
