@@ -205,7 +205,8 @@ jobs:
           assert page.index('DedaGoogleSettingsLinkCard(')<page.index(
             "dedaText('الصوت والملاحة', 'Voice & navigation')")
           assert page.count('DedaSmartSecondStageAccountPage(')==1
-          assert page.count('DedaAdminLeagueWinnersPrizes(isArabic: isArabic)')==1
+          league=(root/'lib/deda_admin_league_page.dart').read_text()
+          assert league.count('DedaAdminLeagueWinnersPrizes(isArabic: isArabic)')==1
           assert (root/'lib/deda_step2_completion_gate.dart').is_file()
           # No fake completion of historical restored finances or lost assets.
           assert 'bool get canPrepareFullRecoveryApk => false;' in (
