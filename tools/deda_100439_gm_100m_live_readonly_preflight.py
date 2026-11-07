@@ -49,7 +49,12 @@ def main():
         print("LIVE_FIRESTORE_RULES_MATCHES_REPO_SOURCE", hashlib.sha256(
             open("firestore.rules",encoding="utf-8").read().encode()).hexdigest()==rulehash)
         try:
-            revised=candidate(live)
+            if rulehash=="0de9f230a043e1ef8915c94abd0832a9d9e413864ef1f3e346e793f5e5550eaf":
+                # Exact deployed owner-approved administrative 100m clause.
+                revised=live
+                print("LIVE_GM100M_ADMIN_GIFT_RULES_ALREADY_ACTIVE",True)
+            else:
+                revised=candidate(live)
         except Exception:
             # Scoped clause-only diagnosis. Never print other live rules or data.
             match="match /deda_admin_diamond_wallets/{adminUid}"
