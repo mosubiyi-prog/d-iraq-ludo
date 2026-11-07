@@ -115,7 +115,13 @@ def main():
                   "adminPhoneMatchesOriginalOwner",phone_match,
                   "createdByOriginalOwner",adm.get("createdByUid")==original_uid,
                   "adminSeenFlag",bool(adm.get("lastSeenAt")),
-                  "adminLoginFlag",bool(adm.get("lastLoginAt")))
+                  "adminLoginFlag",bool(adm.get("lastLoginAt")),
+                  "lastSeenAgeHours",int((__import__("time").time()-
+                     adm["lastSeenAt"].timestamp())/3600)
+                     if hasattr(adm.get("lastSeenAt"),"timestamp") else "unknown",
+                  "lastLoginAgeHours",int((__import__("time").time()-
+                     adm["lastLoginAt"].timestamp())/3600)
+                     if hasattr(adm.get("lastLoginAt"),"timestamp") else "unknown")
             key_check=person_data.get("accountKey")
             entry_ok=False
             if isinstance(key_check,str) and key_check:
