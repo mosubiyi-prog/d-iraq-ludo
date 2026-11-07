@@ -113,6 +113,16 @@ jobs:
           print("VERIFIED_COMPLETION_CALLS", source.count("_completeVerifiedLogin(normalizedPhone);"))
           PY
           python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
+          DEDA_DIAGNOSTIC_SOURCE="$project/lib/deda_backend.dart" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          source = Path(os.environ["DEDA_DIAGNOSTIC_SOURCE"]).read_text()
+          key = "  static Future<int> ensureGeneralManagerDiamondGiftWallet() async {"
+          marker = source.find(key)
+          print("ADMIN_WALLET_READ_SOURCE_BEGIN")
+          print(source[marker:marker+2300] if marker >= 0 else "MISSING_METHOD")
+          print("ADMIN_WALLET_READ_SOURCE_END")
+          PY
           python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
           echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
           echo 'PASS_FULL_100439_GOOGLE_SMART_ACCOUNT_AND_100M_ADMIN_SOURCE_ASSEMBLED'
