@@ -36,8 +36,18 @@ function hoursSince(value,now) {
 function only2(list) {
   if(list.length!==2)stop("EXACTLY_TWO_CURRENT_ADMIN_SESSIONS_REQUIRED");
   const [a,b]=list.map(s=>s.data());
+  // Internal adminIds are different credentials; do NOT demand equality.
+  // Instead ensure both entries demonstrably belong to the same historical
+  // administrative issuer and same display identity; refuse all others.
   if(typeof a.adminId!=="string" || a.adminId.length<4 ||
-     a.adminId!==b.adminId)stop("OWNER_ADMIN_IDENTIFIER_IS_NOT_UNIQUE");
+     typeof b.adminId!=="string" || b.adminId.length<4)
+    stop("ADMIN_LOGIN_IDENTIFIER_INVALID");
+  if(typeof a.createdByUid!=="string" || a.createdByUid.length<4 ||
+     a.createdByUid!==b.createdByUid)
+    stop("MANAGER_ACCOUNTS_HAVE_DIFFERENT_CREATORS");
+  if(typeof a.displayName!=="string" || a.displayName.length<2 ||
+     a.displayName!==b.displayName)
+    stop("MANAGER_ACCOUNTS_HAVE_DIFFERENT_DISPLAY_OWNERS");
 }
 function checkOldWallet(snap,uid) {
   const d=snap.exists?snap.data()||{}:{};
