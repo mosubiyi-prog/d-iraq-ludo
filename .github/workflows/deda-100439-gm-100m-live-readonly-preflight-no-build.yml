@@ -1,0 +1,43 @@
+name: DEDA 100439 GM 100m LIVE Wallet Preflight READ ONLY NO APK
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - '.github/workflows/deda-100439-gm-100m-live-readonly-preflight-no-build.yml'
+      - 'tools/deda_100439_gm_100m_live_readonly_preflight.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-100439-gm-100m-readonly-preflight
+  cancel-in-progress: false
+jobs:
+  inspect-real-manager-gift-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      DEDA_SERVICE_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Protect signed 100439, Google and Firestore source
+        run: |
+          set -euo pipefail
+          git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
+            android assets lib firestore.rules firebase.json storage.rules \
+            google-services.json functions
+          echo 'PASS_PROTECTED_APP_GOOGLE_RECOVERY_FUNCTIONS_FIREBASE_NOT_CHANGED'
+      - name: Source-only compensation QA before touching production
+        run: |
+          node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
+          python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
+      - name: Read only exact ACTIVE Firestore rules and manager admin wallet
+        run: |
+          python3 -m pip install -q google-auth google-cloud-firestore requests
+          python3 tools/deda_100439_gm_100m_live_readonly_preflight.py
+      - name: No actual Firestore or wallet writes, build or deployment
+        run: echo 'PASS_NO_WRITE_NO_CREDIT_NO_APK_NO_PLAY'
