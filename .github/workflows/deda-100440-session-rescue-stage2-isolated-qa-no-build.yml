@@ -1,0 +1,66 @@
+name: DEDA 100440 isolated session rescue stage2 QA - NO APK NO PLAY
+on:
+  push:
+    branches:
+      - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+    paths:
+      - 'lib/deda_session_recovery_coordinator.dart'
+      - 'test/deda_session_recovery_coordinator_private_test.dart'
+      - '.github/workflows/deda-100440-session-rescue-stage2-isolated-qa-no-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100440-session-rescue-isolated-stage2
+  cancel-in-progress: false
+
+jobs:
+  read-only-unit-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prove original signed 100440 source and backend files not changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e '958ed9a3c9cce0f207e98d8956e8b659e1ff7246^{commit}'
+          python3 - <<'PY'
+          import subprocess
+          base='958ed9a3c9cce0f207e98d8956e8b659e1ff7246'
+          changed=subprocess.check_output(
+              ['git','diff','--name-only',base,'HEAD'],text=True).splitlines()
+          allowed={
+            'docs/DEDA_100440_OWNER_LOCKED_SESSION_RESCUE_PLAN_2026-11-07.md',
+            'lib/deda_session_recovery_coordinator.dart',
+            'test/deda_session_recovery_coordinator_private_test.dart',
+            '.github/workflows/deda-100440-session-rescue-stage2-isolated-qa-no-build.yml',
+          }
+          assert set(changed).issubset(allowed), 'PROTECTED_100440_CODE_CHANGED'
+          assert 'lib/main.dart' not in changed
+          assert 'lib/deda_backend.dart' not in changed
+          assert 'firestore.rules' not in changed
+          assert 'pubspec.yaml' not in changed
+          print('PASS_STAGE2_ONLY_ISOLATED_FILES_PRESERVED_100440_SOURCE')
+          PY
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: false
+      - name: Install source-only test dependencies
+        run: flutter pub get
+      - name: Format isolated Dart modules in disposable runner only
+        run: dart format lib/deda_session_recovery_coordinator.dart test/deda_session_recovery_coordinator_private_test.dart
+      - name: Analyze isolated coordinator and private fake-transport tests
+        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart test/deda_session_recovery_coordinator_private_test.dart
+      - name: Run actual Dart/Flutter negative safety tests with fake Firebase port
+        run: flutter test --no-pub test/deda_session_recovery_coordinator_private_test.dart
+      - name: Verify this workflow made no deployment or APK
+        run: |
+          echo PASS_ONLY_SOURCE_AND_FAKE_TRANSPORT_TESTS_NO_LIVE_FIREBASE
+          echo NO_APK_NO_AAB_NO_PLAY_NO_FIREBASE_RULES_DEPLOY_NO_PRODUCTION_WRITES
