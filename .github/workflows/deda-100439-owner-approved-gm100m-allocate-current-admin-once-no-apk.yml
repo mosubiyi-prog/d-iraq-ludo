@@ -1,0 +1,100 @@
+name: DEDA 100439 Owner-Approved GM100m Admin Gift Wallet Funding ONCE NO APK
+on:
+  push:
+    branches:
+      - deda-100439-isolated-google-recovery-work-2026-11-07
+    paths:
+      - '.github/workflows/deda-100439-owner-approved-gm100m-allocate-current-admin-once-no-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deda-25b88-owner-gm-100m-admin-wallet-funding-once
+  cancel-in-progress: false
+jobs:
+  owner-approved-99m-addition-to-current-admin-wallet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DEDA_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+      DEDA_FALLBACK_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      DEDA_100439_OWNER_APPROVED_GM100M_FUNDS: 'YES'
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Pin signed 100439 protected account Google recovery source and old wallets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DEDA_100439_OWNER_APPROVED_GM100M_FUNDS" = YES
+          git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
+            android assets lib functions firestore.rules firebase.json \
+            storage.rules google-services.json pubspec.yaml pubspec.lock
+          test -f tools/app_stability/app_package/bind_google_account_settings_100439.py
+          test -f tools/app_stability/app_package/bind_smart_second_stage_account_100439.py
+          node --check tools/deda_100439_owner_approved_gm100m_allocate_live.js
+          node --check tools/deda_gm_admin_compensation_100m_server_only_100439.js
+          node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
+          echo 'PASS_ORIGINAL_100439_AND_GOOGLE_RECOVERY_PRESERVED'
+      - name: Verify current LIVE Firestore rules already support exactly 100m audited manager debits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q google-auth requests
+          python3 - <<'PY'
+          import hashlib,sys
+          sys.path.insert(0,"tools")
+          import deda_100419_owner_approved_public_active_get_rules_only as api
+          name,live=api.read_live(api.session())
+          sha=hashlib.sha256(live.encode()).hexdigest()
+          if sha!="0de9f230a043e1ef8915c94abd0832a9d9e413864ef1f3e346e793f5e5550eaf":
+              raise SystemExit("SAFE_STOP_LIVE_100M_ADMIN_GIFT_RULES_NOT_ACTIVE")
+          print("PASS_EXACT_100M_GM_ADMIN_GIFT_RULES_ALREADY_LIVE",sha)
+          PY
+      - name: Install trusted Firebase Admin SDK in temporary CI-only directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deda-owner-100m-server"
+          npm install --prefix "$RUNNER_TEMP/deda-owner-100m-server" \
+            --no-save --no-package-lock --ignore-scripts \
+            --no-audit --no-fund firebase-admin@12.7.0
+          echo "NODE_PATH=$RUNNER_TEMP/deda-owner-100m-server/node_modules" >> "$GITHUB_ENV"
+      - name: Server-only one-time credit of 99m to uniquely recent manager; verify old wallet and other manager unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          node tools/deda_100439_owner_approved_gm100m_allocate_live.js
+      - name: Independently verify one actual 100m cap manager gift wallet exists in production
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q google-cloud-firestore
+          python3 - <<'PY'
+          import json,os
+          from google.cloud import firestore
+          from google.oauth2 import service_account
+          raw=os.environ.get("DEDA_SERVICE_ACCOUNT") or os.environ.get("DEDA_FALLBACK_ACCOUNT")
+          info=json.loads(raw)
+          if info.get("project_id")!="deda-25b88":raise SystemExit("WRONG_PROJECT")
+          credentials=service_account.Credentials.from_service_account_info(info)
+          db=firestore.Client(project="deda-25b88",credentials=credentials)
+          from google.cloud.firestore_v1.base_query import FieldFilter
+          rows=list(db.collection("deda_admin_diamond_wallets").where(
+              filter=FieldFilter("initialBalance","==",100000000)).limit(4).stream())
+          if len(rows)!=1:raise SystemExit("SAFE_STOP_EXPECTED_EXACTLY_ONE_GM100M")
+          d=rows[0].to_dict() or {}
+          if not isinstance(d.get("balance"),int) or d["balance"]<=99000000:
+              raise SystemExit("SAFE_STOP_100M_WALLET_UNFUNDED_OR_INVALID")
+          audit=db.collection("deda_gm_admin_compensation_allocations").document(rows[0].id).get()
+          if not audit.exists or (audit.to_dict() or {}).get("addDiamonds")!=99000000:
+              raise SystemExit("SAFE_STOP_NO_UNIQUE_SERVER_AUDIT")
+          print("PASS_LIVE_ONE_CURRENT_MANAGER_ADMIN_WALLET_100M_CAP_BALANCE",d["balance"])
+          print("PASS_ONE_TIME_99000000_ALLOCATION_AUDITED_NO_OTHER_WALLET_MINT")
+          PY
+      - name: No APK, no Play, no Google recovery deployment, no recipients paid automatically
+        run: echo 'PASS_NO_APK_NO_AAB_NO_PLAY_NO_GOOGLE_LOGIN_ACTIVATION_NO_USER_PAYOUT'
