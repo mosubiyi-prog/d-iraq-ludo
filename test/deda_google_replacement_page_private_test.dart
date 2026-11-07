@@ -47,7 +47,7 @@ void main() {
         find.byKey(const ValueKey('deda-existing-owner-google-login')));
     await tester.pumpAndSettle();
     expect(calls, 1);
-    expect(find.textContaining('استرجاع البيانات والممتلكات لم يكتمل بعد'),
+    expect(find.textContaining('استرجاع الممتلكات لم يكتمل'),
         findsOneWidget);
     expect(find.text('85%'), findsOneWidget);
     expect(find.byKey(const ValueKey('deda-google-recovery-complete')),
@@ -74,8 +74,11 @@ void main() {
         find.byKey(const ValueKey('deda-existing-owner-google-login')));
     await tester.pumpAndSettle();
     expect(calls, 1);
-    expect(find.textContaining('لم تُسترجع أي بيانات'), findsOneWidget);
+    expect(find.textContaining('توقف التحقق'), findsOneWidget);
     expect(find.text('25%'), findsOneWidget);
+    expect(tester.widget<LinearProgressIndicator>(
+      find.byKey(const ValueKey('deda-google-smart-progress'))).color,
+      const Color(0xFFB3261E));
     expect(find.byKey(const ValueKey('deda-google-retry')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('deda-google-recovery-complete')),
