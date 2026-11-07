@@ -4,6 +4,8 @@ on:
     branches:
       - deda-100439-isolated-google-recovery-work-2026-11-07
     paths:
+      - 'tools/app_stability/app_package/bind_google_account_settings_100439.py'
+      - 'tools/app_stability/app_package/bind_smart_second_stage_account_100439.py'
       - 'tools/app_stability/app_package/bind_gm_compensation_100m_100439.py'
       - 'tools/deda_gm_admin_compensation_100m_server_only_100439.js'
       - 'tools/deda_gm_admin_compensation_100m_rules_candidate_100439.py'
