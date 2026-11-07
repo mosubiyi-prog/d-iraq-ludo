@@ -80,10 +80,18 @@ def main():
         original=store.collection("deda_share_ids").document(original_id).get()
         od=original.to_dict() or {} if original.exists else {}
         candidates=[]
-        for manager in actives:
+        print("GM_ORIGINAL_SHARE_DOCUMENT_EXISTS",original.exists)
+        for ordinal, manager in enumerate(actives,1):
             uid_check=manager.id
+            adm=manager.to_dict() or {}
             person=store.collection("users").document(uid_check).get()
             person_data=person.to_dict() or {} if person.exists else {}
+            print("GM_STRUCTURE",ordinal,
+                  "adminKeys",sorted(adm.keys())[:30],
+                  "userExists",person.exists,
+                  "userKeys",sorted(person_data.keys())[:30],
+                  "historicalAdminIdMatch",
+                  any(v=="salm_h_ad" for v in adm.values() if isinstance(v,str)))
             key_check=person_data.get("accountKey")
             entry_ok=False
             if isinstance(key_check,str) and key_check:
@@ -99,10 +107,13 @@ def main():
                            and od.get("active") is True
                            and person_data.get("sharePersonalId")==original_id)
             wallet_check=store.collection("deda_admin_diamond_wallets").document(uid_check).get()
-            print("GM_CANDIDATE",len(candidates)+1,
+            wa=wallet_check.to_dict() or {} if wallet_check.exists else {}
+            print("GM_CANDIDATE",ordinal,
                 "originalOwnerMatch",identifier_ok,
                 "entryVerified",entry_ok,
-                "walletExists",wallet_check.exists)
+                "walletExists",wallet_check.exists,
+                "walletBalance",wa.get("balance","none"),
+                "walletInitial",wa.get("initialBalance","none"))
             if identifier_ok and entry_ok:
                 candidates.append(manager)
         if len(candidates)!=1:
