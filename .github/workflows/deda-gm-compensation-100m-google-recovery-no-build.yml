@@ -100,6 +100,18 @@ jobs:
           python3 tools/app_stability/app_package/merge_stage2_into_protected_100436.py "$project" --verify-only
           python3 tools/app_stability/app_package/bind_admin_league_winners_prizes_100439.py "$project"
           python3 tools/app_stability/app_package/bind_google_account_settings_100439.py "$project"
+          # SOURCE-ONLY diagnostic of the preserved original login method.
+          # No auth token, phone/account value or runtime data is read.
+          DEDA_DIAGNOSTIC_SOURCE="$project/lib/main.dart" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          source = Path(os.environ["DEDA_DIAGNOSTIC_SOURCE"]).read_text()
+          begin = source.index("  Future<void> login() async {")
+          print("SOURCE_ONLY_LOGIN_ENTRY_BEGIN")
+          print(source[begin:begin+5000])
+          print("SOURCE_ONLY_LOGIN_ENTRY_END")
+          print("VERIFIED_COMPLETION_CALLS", source.count("_completeVerifiedLogin(normalizedPhone);"))
+          PY
           python3 tools/app_stability/app_package/bind_smart_second_stage_account_100439.py "$project"
           python3 tools/app_stability/app_package/bind_gm_compensation_100m_100439.py "$project"
           echo "DEDA_SOURCE_ONLY_PROJECT=$project" >> "$GITHUB_ENV"
