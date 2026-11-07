@@ -100,6 +100,39 @@ def main() -> int:
                 entry.get("active") is True and entry.get("status") == "active" and
                 entry.get("allowedRole") == "general_manager" and
                 entry.get("accessType") == "general_manager_gateway")
+        # Exact second UID from the existing directory, only if the original
+        # owner route cannot be mapped to this same UID. Never disclose it.
+        alternate = directory.get("createdUid") if valid_key else None
+        alternate_valid = (
+            isinstance(alternate, str) and len(alternate) >= 6 and alternate != uid
+        )
+        checkpoint("ACCOUNT_DIRECTORY_POINTS_TO_DIFFERENT_UID", alternate_valid)
+        if alternate_valid:
+            alt_user_doc = client.collection("users").document(alternate).get()
+            alt_user = alt_user_doc.to_dict() or {}
+            alt_session_doc = client.collection("deda_sessions").document(alternate).get()
+            alt_session = alt_session_doc.to_dict() or {}
+            alt_admin_doc = client.collection("admins").document(alternate).get()
+            checkpoint("DIRECTORY_UID_HAS_USER_DOCUMENT", alt_user_doc.exists)
+            checkpoint("DIRECTORY_UID_USER_SAME_ACCOUNT", alt_user.get("accountKey") == key)
+            checkpoint("DIRECTORY_UID_USER_CLAIMS_ORIGINAL_ID", alt_user.get("sharePersonalId") == original_id)
+            checkpoint("DIRECTORY_UID_HAS_SESSION_DOCUMENT", alt_session_doc.exists)
+            checkpoint("DIRECTORY_UID_SESSION_MATCHES_ACCOUNT",
+                       alt_session.get("accountKey") == key and alt_session.get("uid") == alternate)
+            checkpoint("DIRECTORY_UID_HAS_ADMIN_DOCUMENT", alt_admin_doc.exists)
+            try:
+                if not firebase_admin._apps:
+                    firebase_admin.initialize_app(
+                        firebase_credentials.Certificate(info),
+                        {"projectId": PROJECT},
+                        name="owner-alt-readonly-qa",
+                    )
+                alternate_auth = auth.get_user(alternate, app=firebase_admin.get_app("owner-alt-readonly-qa"))
+                checkpoint("DIRECTORY_UID_AUTH_RECORD_PRESENT", True)
+                checkpoint("DIRECTORY_UID_AUTH_HAS_EMAIL", bool(alternate_auth.email))
+                checkpoint("DIRECTORY_UID_AUTH_EMAIL_CANONICAL", alternate_auth.email == f"{key}@deda-login.invalid")
+            except Exception:
+                checkpoint("DIRECTORY_UID_AUTH_RECORD_PRESENT", False)
         checkpoint("DIRECTORY_DOCUMENT_EXISTS", bool(valid_key and directory_doc.exists))
         checkpoint("DIRECTORY_ORIGINAL_UID_MATCHES", bool(valid_key and directory.get("createdUid") == uid))
         checkpoint("DIRECTORY_ACCOUNT_KEY_MATCHES", bool(valid_key and directory.get("accountKey") == key))
