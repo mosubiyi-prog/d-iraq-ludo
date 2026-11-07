@@ -41,6 +41,7 @@ jobs:
             'docs/DEDA_100440_OWNER_LOCKED_SESSION_RESCUE_PLAN_2026-11-07.md',
             'docs/DEDA_100440_SESSION_RESCUE_STAGE2_QA_STOP_2026-11-07.md',
             'lib/deda_session_recovery_coordinator.dart',
+            'lib/deda_session_rescue_stage3_core.dart',
             'lib/deda_session_rescue_stage3_bridge.dart',
             'test/deda_session_recovery_coordinator_private_test.dart',
             'test/deda_session_rescue_stage3_4char_private_test.dart',
@@ -63,9 +64,9 @@ jobs:
       - name: Install ephemeral packages
         run: flutter pub get
       - name: Format isolated Dart candidate in disposable runner only
-        run: dart format lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+        run: dart format lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
       - name: Analyze coordinator, exact owner proof, four-letter alias and bridge
-        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
+        run: dart analyze --no-fatal-warnings lib/deda_session_recovery_coordinator.dart lib/deda_session_rescue_stage3_core.dart lib/deda_session_rescue_stage3_bridge.dart test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
       - name: Run stage2 regressions and stage3 four-char UID security tests
         run: flutter test --no-pub test/deda_session_recovery_coordinator_private_test.dart test/deda_session_rescue_stage3_4char_private_test.dart
       - name: Verify source-only binder on disposable clone; do not build APK
@@ -96,6 +97,7 @@ jobs:
               assert 'linkGoogleToConfirmedOriginalUid' in google
               assert (root/'lib/deda_session_recovery_coordinator.dart').is_file()
               assert (root/'lib/deda_session_rescue_stage3_bridge.dart').is_file()
+              assert (root/'lib/deda_session_rescue_stage3_core.dart').is_file()
               meta=json.loads((root/'internal-build-inputs.json').read_text())
               assert meta['sessionRescueStage3']['activePremiumIdMinLength']==4
               assert meta['sessionRescueStage3']['immutableOriginalIdLength']==6
