@@ -119,13 +119,13 @@ def bind(project: Path) -> None:
       _initializeShareIdentity();
     });""",
         """    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeShareIdentity();
-      // One guarded owner-read probe on home entry; no login mutation,
-      // no account rotation and no continuous polling.
-      if (dedaSessionRescueStage3Enabled) {
-        unawaited(DedaSessionRescueStage3Bridge
-            .runForPhone(DedaPreferences.phone).then((_) {}));
-      }
+      // Never race the existing home identity initialization with a second
+      // session-inspection lane. Start rescue after its original Future settles.
+      unawaited(_initializeShareIdentity().then((_) async {
+        if (!mounted || !dedaSessionRescueStage3Enabled) return;
+        await DedaSessionRescueStage3Bridge
+            .runForPhone(DedaPreferences.phone);
+      }));
     });""",
         "home initial guarded rescue",
     )
