@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_auth_session_runtime.dart';
+import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
 import 'deda_step2_spark_linked_uid_readonly.dart';
 
 /// ONLY for an explicitly approved private build. The signed 100439 APK,
@@ -173,7 +174,6 @@ class DedaGoogleReplacementLogin {
     }
     final credential = GoogleAuthProvider.credential(
         idToken: idToken, accessToken: tokens.accessToken);
-    var signedUid = <String>[];
     try {
       return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
         kind: DedaSessionTransitionKind.ownerLogin,
@@ -194,7 +194,6 @@ class DedaGoogleReplacementLogin {
                 result.user?.uid == existingUid && live.uid == existingUid &&
                 live.kind == DedaSessionAuthKind.authenticated,
           );
-          signedUid.add(result.user!.uid);
           final uid = result.user!.uid;
           Future<Map<String, dynamic>?> server(String path) async {
             final row = await FirebaseFirestore.instance.doc(path).get(
@@ -212,10 +211,44 @@ class DedaGoogleReplacementLogin {
               !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
             throw StateError('google-uid-has-no-original-deda-account');
           }
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed identity proof must not leave a wrong login visible in DEDA.
+      // Never delete or merge a Firebase Auth account or touch user data.
+      final current = auth.currentUser;
+      if (current != null && !current.isAnonymous &&
+          current.uid != prior?.uid) {
+        try { await auth.signOut(); } catch (_) { /* Fail visibly below. */ }
+      }
+      rethrow;
+    }
+  }
+}
+).hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
           final rows = await Future.wait([
             server('deda_account_directory/$account'),
             server('deda_sessions/$uid'),
-            server('deda_share_ids/${user?['sharePersonalId']}'),
+            server('deda_share_ids/$originalId'),
             server('admins/$uid'),
           ]);
           final confirmed = DedaGoogleReplacementProof
