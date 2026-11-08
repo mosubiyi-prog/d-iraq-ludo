@@ -42,6 +42,7 @@ jobs:
             "functions/deda_100441_server_canonical_uid_read_adapter_PRIVATE_NOT_EXPORTED.js",
             "functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js",
             "functions/test/deda_100441_server_canonical_uid_actual_auth_firestore_EMULATOR_ONLY.test.js",
+            "qa/stage2/deda_100441_server_auth_firestore_EMULATORS_ONLY.json",
             ".github/workflows/deda-100441-server-canonical-uid-read-adapter-private-qa-no-deploy-2026-11-08.yml",
             "docs/DEDA_100441_SERVER_CANONICAL_UID_READ_ADAPTER_PRIVATE_QA_CHECKPOINT_2026-11-08.md",
           }
@@ -101,6 +102,7 @@ jobs:
           export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
           export GCLOUD_PROJECT=demo-deda-100441-server-auth-read-integration
           tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --config qa/stage2/deda_100441_server_auth_firestore_EMULATORS_ONLY.json \
             --project demo-deda-100441-server-auth-read-integration \
             --only auth,firestore \
             'node --test functions/test/deda_100441_server_canonical_uid_actual_auth_firestore_EMULATOR_ONLY.test.js'
