@@ -1,0 +1,127 @@
+name: DEDA 100441 STAGE8 INDEPENDENT ANDROID GOOGLE UID LAB NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100441-stage8-isolated-android-google-uid-device-lab-no-deploy-2026-11-08
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-stage8-isolated-android-uid-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa-isolation-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+
+      - name: Reject ANY DEDA production source edit, legacy Auth change or Android release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base="a8d24e911a9b734e4467cccf86a832c4a597b86f"
+          stop="3850c93b7a18e11613a951a32dc520701717a263"
+          changes=set(subprocess.check_output(
+            ["git","diff","--name-only",base,"HEAD"],text=True
+          ).splitlines())
+          allowed={
+            "qa/stage8_uid_device_lab/lib/lab_guard.dart",
+            "qa/stage8_uid_device_lab/lib/main.dart",
+            "qa/stage8_uid_device_lab/pubspec.yaml",
+            "qa/stage8_uid_device_lab/test/lab_guard_test.dart",
+            "qa/stage8_uid_device_lab/tools/preflight_qa_config.py",
+            "qa/stage8_uid_device_lab/tools/test_preflight_qa_config.py",
+            "qa/stage8_uid_device_lab/tools/prepare_qa_android_apk_EXPLICIT_OPT_IN.sh",
+            "qa/stage8_uid_device_lab/README.md",
+            ".github/workflows/deda-100441-stage8-isolated-android-google-uid-device-lab-no-deploy-2026-11-08.yml",
+            "docs/DEDA_100441_STAGE8_ISOLATED_ANDROID_GOOGLE_UID_QA_LAB_CHECKPOINT_2026-11-08.md",
+          }
+          assert changes and changes<=allowed, "FORBIDDEN_EDIT:"+str(changes-allowed)
+          subprocess.check_call(["git","merge-base","--is-ancestor",stop,"HEAD"])
+          print("PASS_STAGE8_ADD_ONLY_SEPARATE_ANDROID_LAB")
+          PY
+          git diff --quiet a8d24e911a9b734e4467cccf86a832c4a597b86f -- \
+            lib/ android/ assets/ pubspec.yaml pubspec.lock google-services.json \
+            config/ firebase.json firestore.rules storage.rules functions/ \
+            test/ tools/
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          test ! -f build/app/outputs/bundle/release/app-release.aab
+          echo PASS_NO_DEDA_PRODUCTION_SOURCE_FIREBASE_OR_APK_CHANGE
+
+      - name: Test Python QA project and package guard with synthetic IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s \
+            qa/stage8_uid_device_lab/tools \
+            -p 'test_preflight_qa_config.py' -v
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path("qa/stage8_uid_device_lab/tools/prepare_qa_android_apk_EXPLICIT_OPT_IN.sh")
+          script=path.read_text()
+          assert "DEDA_STAGE8_OWNER_APPROVED_QA_BUILD" in script
+          assert 'YES_STAGE8_QA_ONLY' in script
+          assert 'com.deda.qa' in script and 'com.deda.qa.uiddevice' in script
+          assert "preflight_qa_config.py" in script
+          assert "flutter build apk --debug" in script
+          assert 'flutter build appbundle' not in script
+          assert 'flutter install' not in script
+          assert 'firebase deploy' not in script
+          print("PASS_QA_BUILD_REQUIRES_EXPLICIT_APPROVAL_AND_OUTSIDE_REPO_CONFIG")
+          PY
+          bash -n qa/stage8_uid_device_lab/tools/prepare_qa_android_apk_EXPLICIT_OPT_IN.sh
+
+  isolated-flutter-android-project:
+    needs: qa-isolation-scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "21"}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: false
+
+      - name: Generate DIFFERENT Android app in runner TEMP, never DEDA production package
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/deda-stage8-uid-lab"
+          flutter create --platforms=android --org com.deda.qa \
+            --project-name uiddevice "$dir"
+          cp qa/stage8_uid_device_lab/pubspec.yaml "$dir/pubspec.yaml"
+          cp qa/stage8_uid_device_lab/lib/*.dart "$dir/lib/"
+          mkdir -p "$dir/test"
+          cp qa/stage8_uid_device_lab/test/*.dart "$dir/test/"
+          test ! -e "$dir/google-services.json"
+          test ! -e "$dir/android/app/google-services.json"
+          grep -qE 'applicationId[[:space:]]*=?[[:space:]]*"com\.deda\.qa\.uiddevice"' \
+            "$dir"/android/app/build.gradle*
+          test ! -e "$dir/lib/deda_pin_auth.dart"
+          test ! -e "$dir/lib/deda_backend.dart"
+          echo "DEDA_STAGE8_LAB_DIR=$dir" >> "$GITHUB_ENV"
+          echo PASS_DIFFERENT_APPLICATION_ID_NO_PRODUCTION_FIREBASE_JSON
+
+      - name: Analyze + test QA client with NO Firebase config, no device, no APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEDA_STAGE8_LAB_DIR"
+          flutter pub get
+          dart analyze --fatal-infos lib/ test/
+          flutter test --no-pub
+          test ! -f build/app/outputs/flutter-apk/app-debug.apk
+          test ! -f build/app/outputs/flutter-apk/app-release.apk
+          echo PASS_STAGE8_FLUTTER_QA_CLIENT_GUARD_NO_ANDROID_APK_OR_REAL_GOOGLE_SIGN_IN
