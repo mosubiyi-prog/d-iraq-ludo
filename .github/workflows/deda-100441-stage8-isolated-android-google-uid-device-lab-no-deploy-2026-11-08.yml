@@ -172,6 +172,26 @@ jobs:
           test ! -f "$dir/google-services.json"
           cd "$dir"
           flutter pub get
+          # Patch only the disposable runner's QA file_picker Gradle module.
+          # Its compileSdk is hardcoded to 34, conflicting with AndroidX 36.
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          cache = Path(os.environ.get('PUB_CACHE', str(Path.home() / '.pub-cache')))
+          matches = sorted(cache.glob('hosted/pub.dev/file_picker-*/android/build.gradle*'))
+          assert matches, 'QA_FILE_PICKER_PLUGIN_GRADLE_NOT_FOUND'
+          changed = False
+          for file in matches:
+              old = file.read_text()
+              new = re.sub(r'(compileSdk(?:Version)?\s*=?\s*)(?:34|35)(?=\s|$)',
+                           r'\g<1>36', old)
+              if new != old:
+                  file.write_text(new)
+                  changed = True
+          assert changed, 'QA_FILE_PICKER_COMPILE_SDK_PATCH_NOT_APPLIED'
+          print('PASS_QA_TEMP_FILE_PICKER_COMPILE_SDK_36')
+          PY
           flutter test --no-pub
           flutter build apk --debug
           apk="$dir/build/app/outputs/flutter-apk/app-debug.apk"
