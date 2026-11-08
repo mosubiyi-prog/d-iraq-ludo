@@ -49,6 +49,17 @@ trap 'rm -rf "$workdir"' EXIT
 flutter create --platforms=android \
   --org com.deda.qa --project-name uiddevice "$workdir/uiddevice"
 app="$workdir/uiddevice"
+# QA-only file picker requires Android SDK 36. This applies to the TEMP
+# generated lab, never the original DEDA source, targetSdk or minSdk.
+python3 - "$app/android/app" <<'PY'
+from pathlib import Path
+import sys
+gradle = next(Path(sys.argv[1]).glob('build.gradle*'))
+source = gradle.read_text()
+assert 'compileSdk = flutter.compileSdkVersion' in source
+gradle.write_text(source.replace('compileSdk = flutter.compileSdkVersion',
+                                 'compileSdk = 36'))
+PY
 cp "$source_dir/pubspec.yaml" "$app/pubspec.yaml"
 cp "$source_dir/lib/"*.dart "$app/lib/"
 mkdir -p "$app/test"
