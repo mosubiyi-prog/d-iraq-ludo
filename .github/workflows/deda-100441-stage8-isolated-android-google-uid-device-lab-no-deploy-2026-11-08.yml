@@ -126,3 +126,51 @@ jobs:
           test ! -f build/app/outputs/flutter-apk/app-debug.apk
           test ! -f build/app/outputs/flutter-apk/app-release.apk
           echo PASS_STAGE8_FLUTTER_QA_CLIENT_GUARD_NO_ANDROID_APK_OR_REAL_GOOGLE_SIGN_IN
+
+  # Owner-approved BUILD COMPILATION CHECK ONLY: no OAuth inputs, no keystore,
+  # no config and therefore the in-app login button MUST remain disabled.
+  # Deliberately NOT the owner-tested Google APK. Never publish to Play.
+  qa-android-compile-smoke:
+    needs: qa-isolation-scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "21"}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: false
+      - name: Compile isolated Android QA debug APK without Firebase credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/deda-qa-build-smoke"
+          flutter create --platforms=android --org com.deda.qa --project-name uiddevice "$dir"
+          cp qa/stage8_uid_device_lab/pubspec.yaml "$dir/pubspec.yaml"
+          cp qa/stage8_uid_device_lab/lib/*.dart "$dir/lib/"
+          mkdir -p "$dir/test"
+          rm -f "$dir/test/widget_test.dart"
+          cp qa/stage8_uid_device_lab/test/*.dart "$dir/test/"
+          grep -qE 'applicationId[[:space:]]*=?[[:space:]]*"com\.deda\.qa\.uiddevice"' "$dir"/android/app/build.gradle*
+          test ! -f "$dir/android/app/google-services.json"
+          test ! -f "$dir/google-services.json"
+          cd "$dir"
+          flutter pub get
+          flutter test --no-pub
+          flutter build apk --debug
+          apk="$dir/build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$apk"
+          aapt dump badging "$apk" | grep -F "package: name='com.deda.qa.uiddevice'"
+          echo "PASS_ISOLATED_BUILD_SMOKE_NO_FIREBASE_CONFIG_NO_PRODUCTION_NO_PLAY"
+          cp "$apk" "$RUNNER_TEMP/DEDA-UID-LAB-SMOKE-NO-GOOGLE-SIGNIN.apk"
+      - name: Upload nonfunctional QA build smoke artifact for engineering verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: QA-ANDROID-COMPILE-ONLY-GOOGLE-DISABLED
+          path: ${{ runner.temp }}/DEDA-UID-LAB-SMOKE-NO-GOOGLE-SIGNIN.apk
+          retention-days: 3
+          if-no-files-found: error
