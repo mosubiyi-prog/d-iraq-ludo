@@ -145,7 +145,7 @@ class _DedaUidQaLabState extends State<DedaUidQaLab> {
                     const SizedBox(height: 14),
                     Text('الحماية: ${config.denial}',
                         key: const ValueKey('qa-guard')),
-                    Text('الحالة: ${status}',
+                    Text('الحالة: $status',
                         key: const ValueKey('qa-status')),
                     if (fingerprint != null) ...[
                       const SizedBox(height: 16),
