@@ -210,3 +210,31 @@ jobs:
           path: ${{ runner.temp }}/DEDA-UID-LAB-SMOKE-NO-GOOGLE-SIGNIN.apk
           retention-days: 3
           if-no-files-found: error
+
+  # Tooling only: package the official Android SDK apksigner into a short-lived
+  # artifact for offline local signing. No signing keys, user configs or APKs.
+  qa-public-apksigner-tool:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Package Android SDK apksigner for local owner-approved signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$sdk_root"
+          tool="$(find "$sdk_root/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$tool"
+          jar="$(dirname "$tool")/lib/apksigner.jar"
+          test -s "$jar"
+          mkdir -p "$RUNNER_TEMP/qa-apksigner"
+          cp "$jar" "$RUNNER_TEMP/qa-apksigner/apksigner.jar"
+          sha256sum "$RUNNER_TEMP/qa-apksigner/apksigner.jar" > "$RUNNER_TEMP/qa-apksigner/SHA256SUMS"
+          java -cp "$jar" com.android.apksigner.ApkSignerTool version
+          echo PASS_PUBLIC_APKSIGNER_TOOL_NO_KEY_NO_FIREBASE_CONFIG
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QA-OFFLINE-ANDROID-APKSIGNER-TOOL-ONLY
+          path: ${{ runner.temp }}/qa-apksigner/
+          retention-days: 3
+          if-no-files-found: error
