@@ -72,6 +72,27 @@ The validator checks that none of the QA project/app/API/OAuth IDs match
 the root repository's original production google-services.json. It never
 prints Firebase keys.
 
+## QA test signature guard — approved on 2026-11-09
+
+The owner approved preparation/build of an isolated QA test APK only. The
+registered QA Android SHA-1 is `D7:7C:C5:49:40:B4:1D:BF:56:74:45:98:7A:1D:C9:EF:24:12:EB:39`.
+The separately backed-up QA debug keystore has alias `androiddebugkey`.
+It is **not** the DEDA production signing key.
+
+The build script now requires the **operator-local** environment variable
+`DEDA_STAGE8_QA_SIGNING_KEYSTORE` to point at the dedicated QA key file
+**outside this Git repository**. It verifies the key SHA-1 before building,
+re-signs the generated Android **debug** APK with the QA key, then uses
+`apksigner verify --print-certs` to reject any mismatched output.
+The debug-key passwords are used only locally; never put this keystore,
+a QA Firebase config JSON, Google tokens, or production secrets in GitHub.
+
+The current development environment does not have the Flutter SDK; QA CI
+passes source/guard tests but does **not** produce a signed APK. Do not
+describe a test APK as built until an approved Flutter/Android SDK runner
+has executed the script with the separate QA configuration and signing key,
+and the resulting APK has passed signing verification.
+
 ## Owner-approved test APK procedure — NOT EXECUTED
 
 Only after an explicit separate QA build approval and after the distinct
@@ -79,6 +100,7 @@ QA Firebase project has been provisioned, from the repository root:
 
 ```bash
 DEDA_STAGE8_OWNER_APPROVED_QA_BUILD=YES_STAGE8_QA_ONLY \
+DEDA_STAGE8_QA_SIGNING_KEYSTORE=/outside/repo/deda-uid-qa-debug.keystore \
   bash qa/stage8_uid_device_lab/tools/prepare_qa_android_apk_EXPLICIT_OPT_IN.sh \
   /outside/repo/your-qa-config.json /outside/repo/qa-output
 ```
