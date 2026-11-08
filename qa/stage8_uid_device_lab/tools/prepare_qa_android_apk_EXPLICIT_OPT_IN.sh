@@ -20,6 +20,23 @@ python3 "$source_dir/tools/preflight_qa_config.py" \
   --config "$config" --repo-root "$repo" \
   --android-package com.deda.qa.uiddevice
 
+# A QA APK must use the EXACT dedicated test signing key enrolled in QA Firebase.
+# Do not commit or send the keystore to GitHub. The file is operator-local.
+if [[ -z "${DEDA_STAGE8_QA_SIGNING_KEYSTORE:-}" ]]; then
+  echo "SAFE_STOP: dedicated QA signing keystore is required"; exit 7
+fi
+qa_signing_key="$(realpath -e "$DEDA_STAGE8_QA_SIGNING_KEYSTORE")"
+case "$qa_signing_key/" in
+  "$repo/"*) echo "SAFE_STOP: QA signing key must stay outside the repo"; exit 8;;
+esac
+qa_storepass="${DEDA_STAGE8_QA_STOREPASS:-android}"
+qa_keypass="${DEDA_STAGE8_QA_KEYPASS:-android}"
+expected_sha1="D7:7C:C5:49:40:B4:1D:BF:56:74:45:98:7A:1D:C9:EF:24:12:EB:39"
+actual_sha1="$(keytool -list -v -keystore "$qa_signing_key" -alias androiddebugkey -storepass "$qa_storepass" 2>/dev/null | awk -F'SHA1: ' 'NF>1 {print $2; exit}')"
+if [[ "$actual_sha1" != "$expected_sha1" ]]; then
+  echo "SAFE_STOP: signing certificate does not match Firebase QA SHA-1"; exit 9
+fi
+
 # QA build output and config MUST NOT be in the source repository.
 mkdir -p "$outdir"
 outdir="$(cd "$outdir" && pwd -P)"
@@ -67,7 +84,27 @@ PY
 )
 apk="$app/build/app/outputs/flutter-apk/app-debug.apk"
 test -s "$apk"
+# Flutter's default debug key can differ by machine. Re-sign the built DEBUG
+# APK using only the registered QA lab certificate, then verify before release.
+sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+apksigner_bin="$(command -v apksigner || true)"
+if [[ -z "$apksigner_bin" && -n "$sdk_root" && -d "$sdk_root/build-tools" ]]; then
+  apksigner_bin="$(find "$sdk_root/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+fi
+if [[ -z "$apksigner_bin" ]]; then
+  echo "SAFE_STOP: Android SDK apksigner unavailable"; exit 10
+fi
+signed_apk="$workdir/QA-only-signed.apk"
+"$apksigner_bin" sign --ks "$qa_signing_key" \
+  --ks-key-alias androiddebugkey \
+  --ks-pass "pass:$qa_storepass" --key-pass "pass:$qa_keypass" \
+  --out "$signed_apk" "$apk"
+"$apksigner_bin" verify --verbose --print-certs "$signed_apk" > "$workdir/qa-signature-verify.txt"
+verified_sha1="$(awk -F': ' '/Signer #1 certificate SHA-1 digest:/ {print toupper($2); exit}' "$workdir/qa-signature-verify.txt")"
+if [[ "$verified_sha1" != "${expected_sha1//:/}" ]]; then
+  echo "SAFE_STOP: signed APK certificate does not match registered QA SHA-1"; exit 11
+fi
 dest="$outdir/DEDA-UID-QA-LAB-ONLY-DEBUG.apk"
-cp "$apk" "$dest"
+cp "$signed_apk" "$dest"
 sha256sum "$dest"
-echo "PASS_QA_APK_DEBUG_ONLY_NO_PRODUCTION_FIREBASE_NO_APP_INSTALL_NO_PLAY"
+echo "PASS_QA_APK_DEBUG_SIGNED_WITH_VERIFIED_QA_CERT_NO_PRODUCTION_NO_PLAY"
