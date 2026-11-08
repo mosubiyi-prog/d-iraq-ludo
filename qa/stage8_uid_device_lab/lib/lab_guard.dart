@@ -31,6 +31,68 @@ class LabQaConfig {
     packageName: qaAndroidPackage,
   );
 
+
+  // Read a selected Android Firebase QA config on-device at runtime.
+  // No config/key is kept in source control, and no production fallback.
+  static LabQaConfig fromGoogleServicesJson(String source) {
+    Map<String, dynamic> object(Object? value) {
+      if (value is! Map) throw const FormatException('QA_EXPECTED_OBJECT');
+      return value.map((key, val) => MapEntry(key.toString(), val));
+    }
+
+    List<dynamic> array(Object? value) {
+      if (value is! List) throw const FormatException('QA_EXPECTED_ARRAY');
+      return value;
+    }
+
+    String requiredString(Object? value) {
+      if (value is! String || value.isEmpty) {
+        throw const FormatException('QA_MISSING_VALUE');
+      }
+      return value;
+    }
+
+    final root = object(jsonDecode(source));
+    final project = object(root['project_info']);
+    final qaClients = array(root['client']).map(object);
+    final client = qaClients.firstWhere(
+      (value) => object(object(value['client_info'])['android_client_info'])
+          ['package_name'] == qaAndroidPackage,
+      orElse: () => throw const FormatException('QA_ANDROID_CLIENT_MISSING'),
+    );
+    final clientInfo = object(client['client_info']);
+    final oauthClients = array(client['oauth_client']).map(object).toList();
+    final web = oauthClients.firstWhere(
+      (entry) => entry['client_type'] == 3,
+      orElse: () => throw const FormatException('QA_WEB_OAUTH_MISSING'),
+    );
+    final androidOauthValid = oauthClients.any((entry) {
+      if (entry['client_type'] != 1 || entry['android_info'] is! Map) {
+        return false;
+      }
+      final info = object(entry['android_info']);
+      return info['package_name'] == qaAndroidPackage &&
+          info['certificate_hash'] ==
+              'd77cc54940b41dbf567445987a1dc9ef2412eb39';
+    });
+    if (!androidOauthValid) {
+      throw const FormatException('QA_ANDROID_SHA1_NOT_REGISTERED');
+    }
+    final keys = array(client['api_key']).map(object);
+    if (keys.isEmpty) throw const FormatException('QA_API_KEY_MISSING');
+    final config = LabQaConfig(
+      projectId: requiredString(project['project_id']),
+      firebaseAppId: requiredString(clientInfo['mobilesdk_app_id']),
+      messagingSenderId: requiredString(project['project_number']),
+      apiKey: requiredString(keys.first['current_key']),
+      googleWebClientId: requiredString(web['client_id']),
+    );
+    if (!config.isAllowed) {
+      throw FormatException('QA_GUARD_REJECTED_${config.denial}');
+    }
+    return config;
+  }
+
   final String projectId;
   final String firebaseAppId;
   final String messagingSenderId;
