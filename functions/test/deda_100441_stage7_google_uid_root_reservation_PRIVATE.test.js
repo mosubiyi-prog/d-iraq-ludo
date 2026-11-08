@@ -67,8 +67,12 @@ async function run(t){
   for(const x of t.calls.writes) {
     assert(/^(deda_google_uid_reservations_private_v1|deda_google_subject_index_private_v1)\//
       .test(x.path));
-    assert(!/phone|pin|accountKey|originalId|diamonds|gifts|admin|wallet/
+    // phoneClaimed:false is an explicit DENIAL, not a phone value.
+    // Reject raw phone values, PIN, account linkage and financial fields.
+    assert.equal(x.v.phoneClaimed === undefined || x.v.phoneClaimed === false,true);
+    assert(!/phoneNumber|phoneValue|pin|accountKey|originalId|diamonds|gifts|admin|wallet/
       .test(JSON.stringify(x.v)));
+    assert(!JSON.stringify(x.v).includes("07111111111"));
   }
   return response.classification;
 }
