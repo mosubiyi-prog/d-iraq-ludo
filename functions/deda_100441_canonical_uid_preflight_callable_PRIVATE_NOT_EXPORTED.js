@@ -66,7 +66,13 @@ async function consumeAccountScopedLimit(db, accountKey, key, nowMs) {
     return await db.runTransaction(async tx => {
       const snapshot = await tx.get(ref);
       const old = snapshot.exists ? snapshot.data() : null;
-      if (snapshot.exists && (!old || typeof old !== "object")) return false;
+      if (snapshot.exists && (!old || typeof old !== "object" ||
+          old.version !== 1 ||
+          !Number.isSafeInteger(old.windowStartMs) ||
+          !Number.isSafeInteger(old.dayBucket) ||
+          !validCount(old.windowCount) || !validCount(old.dayCount) ||
+          !validCount(old.lastAttemptMs) ||
+          nowMs < old.lastAttemptMs)) return false;
       const windowStartMs = old?.windowStartMs;
       const currentWindow = windowStartMs != null &&
         Number.isSafeInteger(windowStartMs) && nowMs >= windowStartMs &&
