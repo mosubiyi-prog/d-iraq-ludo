@@ -104,6 +104,7 @@ jobs:
           cp qa/stage8_uid_device_lab/pubspec.yaml "$dir/pubspec.yaml"
           cp qa/stage8_uid_device_lab/lib/*.dart "$dir/lib/"
           mkdir -p "$dir/test"
+          rm -f "$dir/test/widget_test.dart"
           cp qa/stage8_uid_device_lab/test/*.dart "$dir/test/"
           test ! -e "$dir/google-services.json"
           test ! -e "$dir/android/app/google-services.json"
