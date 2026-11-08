@@ -164,7 +164,11 @@ jobs:
           flutter build apk --debug
           apk="$dir/build/app/outputs/flutter-apk/app-debug.apk"
           test -s "$apk"
-          aapt dump badging "$apk" | grep -F "package: name='com.deda.qa.uiddevice'"
+          android_sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$android_sdk"
+          aapt_bin="$(find "$android_sdk/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -x "$aapt_bin"
+          "$aapt_bin" dump badging "$apk" | grep -F "package: name='com.deda.qa.uiddevice'"
           echo "PASS_ISOLATED_BUILD_SMOKE_NO_FIREBASE_CONFIG_NO_PRODUCTION_NO_PLAY"
           cp "$apk" "$RUNNER_TEMP/DEDA-UID-LAB-SMOKE-NO-GOOGLE-SIGNIN.apk"
       - name: Upload nonfunctional QA build smoke artifact for engineering verification
