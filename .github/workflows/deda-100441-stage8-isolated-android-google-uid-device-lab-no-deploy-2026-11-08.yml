@@ -150,6 +150,18 @@ jobs:
           set -euo pipefail
           dir="$RUNNER_TEMP/deda-qa-build-smoke"
           flutter create --platforms=android --org com.deda.qa --project-name uiddevice "$dir"
+          # Compile SDK 36 is required by the QA-only file chooser's AndroidX AAR.
+          # Do not change targetSdk or minSdk and never touch DEDA production.
+          python3 - "$dir/android/app" <<'PY'
+          from pathlib import Path
+          import sys
+          folder = Path(sys.argv[1])
+          gradle = next(folder.glob("build.gradle*"))
+          data = gradle.read_text()
+          assert 'compileSdk = flutter.compileSdkVersion' in data
+          gradle.write_text(data.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36'))
+          print('PASS_QA_TEMP_ANDROID_COMPILE_SDK_36')
+          PY
           cp qa/stage8_uid_device_lab/pubspec.yaml "$dir/pubspec.yaml"
           cp qa/stage8_uid_device_lab/lib/*.dart "$dir/lib/"
           mkdir -p "$dir/test"
