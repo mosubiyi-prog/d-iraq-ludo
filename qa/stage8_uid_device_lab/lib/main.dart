@@ -1,6 +1,9 @@
 // Completely separate Android application com.deda.qa.uiddevice.
 // No DEDA production imports, Firestore, phone, PIN, wallet or admin access.
 // This pilot is NOT wired into the real DEDA app. Config MUST pass lab_guard.
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -16,12 +19,50 @@ class DedaUidQaLab extends StatefulWidget {
 }
 
 class _DedaUidQaLabState extends State<DedaUidQaLab> {
-  static const config = LabQaConfig.compiled;
+  LabQaConfig? selectedConfig;
+  LabQaConfig get config => selectedConfig ?? LabQaConfig.compiled;
   static const firebaseAppName = 'deda-uid-lab-qa-only';
   bool busy = false;
   bool initialized = false;
   String status = 'QA_IDLE_NO_AUTH';
   String? fingerprint;
+
+  Future<void> selectLocalQaConfig() async {
+    if (busy || initialized) return;
+    setState(() {
+      busy = true;
+      status = 'QA_LOCAL_CONFIG_SELECTION';
+    });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const <String>['json'],
+        withData: true,
+      );
+      if (result == null) {
+        if (mounted) setState(() => status = 'QA_CONFIG_SELECTION_CANCELLED');
+        return;
+      }
+      final bytes = result.files.single.bytes;
+      if (bytes == null) throw const FormatException('QA_CONFIG_NOT_READABLE');
+      final loaded = LabQaConfig.fromGoogleServicesJson(utf8.decode(bytes));
+      if (mounted) {
+        setState(() {
+          selectedConfig = loaded;
+          status = 'QA_CONFIG_VERIFIED_READY_FOR_GOOGLE';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          selectedConfig = null;
+          status = 'QA_CONFIG_REJECTED_USE_CORRECT_QA_JSON';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   GoogleSignIn googleClient() => GoogleSignIn(
         scopes: const <String>['email'],
@@ -156,6 +197,14 @@ class _DedaUidQaLabState extends State<DedaUidQaLab> {
                       ),
                     ],
                     const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: !busy && !initialized
+                          ? selectLocalQaConfig
+                          : null,
+                      icon: const Icon(Icons.file_open_outlined),
+                      label: const Text('اختيار ملف Firebase QA من الجهاز'),
+                    ),
+                    const SizedBox(height: 8),
                     ElevatedButton.icon(
                       onPressed: !busy && config.isAllowed
                           ? signInTestGoogle
