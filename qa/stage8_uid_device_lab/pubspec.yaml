@@ -1,0 +1,23 @@
+name: deda_uid_device_lab
+description: Isolated QA-only DEDA Google UID continuity Android test client; NOT the production app.
+publish_to: none
+version: 0.0.1+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.3
+  google_sign_in: ^6.3.0
+  crypto: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
