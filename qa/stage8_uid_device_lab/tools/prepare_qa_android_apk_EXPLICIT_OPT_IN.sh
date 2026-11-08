@@ -35,6 +35,7 @@ app="$workdir/uiddevice"
 cp "$source_dir/pubspec.yaml" "$app/pubspec.yaml"
 cp "$source_dir/lib/"*.dart "$app/lib/"
 mkdir -p "$app/test"
+rm -f "$app/test/widget_test.dart"
 cp "$source_dir/test/"*.dart "$app/test/"
 
 # Check the ACTUAL generated Android package, not a client-supplied label.
