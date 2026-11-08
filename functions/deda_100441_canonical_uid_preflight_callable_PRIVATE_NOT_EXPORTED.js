@@ -175,6 +175,13 @@ function createPrivateCanonicalUidPreflightCallable({
         return deny();
       }
 
+      // Invalid/revoked providers and unavailable evidence fail closed.
+      // Canonical, split and absent account all use one generic review reply.
+      if (["UNVERIFIED_AUTH_SESSION", "NO_INDEPENDENT_DURABLE_AUTH",
+        "SERVER_EVIDENCE_UNAVAILABLE"].includes(checked.classification)) {
+        return deny();
+      }
+
       // Intentionally identical response for canonical, split, incomplete,
       // unrelated or missing accounts. Still NOT an owner verification.
       return publicReviewStatus();
