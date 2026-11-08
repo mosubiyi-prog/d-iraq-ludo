@@ -1,0 +1,66 @@
+name: DEDA 100441 canonical UID anti-split PRIVATE QA NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100441-canonical-uid-anti-split-private-qa-no-deploy-2026-11-08
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100441-anti-split-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  private-policy-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Confirm isolated change surface and immutable STOP point
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          base = "3850c93b7a18e11613a951a32dc520701717a263"
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          changed = set(subprocess.check_output(
+              ["git", "diff", "--name-only", base, head],
+              text=True,
+          ).splitlines())
+          permitted = {
+              "functions/deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED.js",
+              "functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js",
+              ".github/workflows/deda-100441-canonical-uid-anti-split-private-qa-no-deploy-2026-11-08.yml",
+              "docs/DEDA_100441_CANONICAL_UID_ANTI_SPLIT_PRIVATE_QA_CHECKPOINT_2026-11-08.md",
+          }
+          assert changed and changed <= permitted, f"UNEXPECTED_CHANGED_PATHS: {sorted(changed-permitted)}"
+          protected = {
+              "lib/main.dart", "lib/deda_pin_auth.dart", "lib/deda_backend.dart",
+              "firestore.rules", "firebase.json", "functions/index.js",
+          }
+          assert not (protected & changed), "PROTECTED_PRODUCTION_SOURCE_CHANGED"
+          print("PASS_STOP_3850C93_AND_100440_100441_PRODUCTION_SOURCE_UNMODIFIED")
+          print("PASS_NO_FIREBASE_WRITES_NO_APK_NO_PLAY_NO_DEPLOY")
+          PY
+
+      - name: Node version
+        run: node --version
+
+      - name: Run synthetic isolated UID continuity cases
+        run: node --test functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js
+
+      - name: Verify preflight module is not imported by production Functions entry
+        shell: bash
+        run: |
+          if grep -F 'deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED' functions/index.js; then
+            echo 'FAIL_PRIVATE_PREFLIGHT_WIRED_TO_PRODUCTION'
+            exit 1
+          fi
+          echo 'PASS_POLICY_NOT_EXPORTED_NO_PRODUCTION_CHANGE'
