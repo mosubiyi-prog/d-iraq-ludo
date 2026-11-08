@@ -22,7 +22,7 @@ void main() {
   });
 
   test('production Firebase project ID is explicitly prohibited', () {
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: LabQaConfig.productionProjectId,
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: qa.messagingSenderId,
@@ -34,7 +34,7 @@ void main() {
   });
 
   test('production Android app ID cannot be used for lab', () {
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: qa.projectId,
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: qa.messagingSenderId,
@@ -48,7 +48,7 @@ void main() {
 
   test('no Firebase config, demo or unexpected project always safe-stop', () {
     expect(LabQaConfig.compiled.isAllowed, isFalse);
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: 'demo-deda-emulator',
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: qa.messagingSenderId,
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('Firebase app sender project mismatch blocks login', () {
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: qa.projectId,
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: '111111111111',
@@ -70,7 +70,7 @@ void main() {
   });
 
   test('missing or invalid Google OAuth client ID blocks login', () {
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: qa.projectId,
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: qa.messagingSenderId,
@@ -81,7 +81,7 @@ void main() {
   });
 
   test('missing Firebase API key blocks login', () {
-    const p = LabQaConfig(
+    final p = LabQaConfig(
       projectId: qa.projectId,
       firebaseAppId: qa.firebaseAppId,
       messagingSenderId: qa.messagingSenderId,
