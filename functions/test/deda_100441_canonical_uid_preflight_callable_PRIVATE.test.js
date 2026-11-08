@@ -263,7 +263,7 @@ test("malformed and unexpected client fields including PIN and UID deny before A
 });
 
 test("missing or unsafe server-only HMAC limiter key fails closed", async () => {
-  for (const k of [undefined,null,"short-key",Buffer.alloc(4)]) {
+  for (const k of [null,"","short-key",Buffer.alloc(4)]) {
     const t = harness({limiterKey:k});
     await rejected(() => t.callable(t.request));
     assert.equal(t.state.authChecks.length,0);
@@ -330,6 +330,15 @@ test("corrupt ledger and missing Firestore permissions fail closed", async () =>
   assert.equal(failed.state.writes.length,0);
 });
 
+test("backward server clock never resets a previous attempt ledger", async () => {
+  let tick=NOW;
+  const t=harness({now:()=>tick});
+  publicIsSafe(await t.callable(t.request));
+  tick=NOW-60000;
+  await rejected(()=>t.callable(t.request));
+  assert.equal(t.state.writes.length,1);
+});
+
 test("existing admin principal is not treated as owner permissions", async () => {
   const t = harness();
   t.state.rows.set("admins/"+UID,{role:"general_manager",active:true});
@@ -362,6 +371,9 @@ test("one account/day bucket is isolated from another synthetic account", async 
   const t2 = harness();
   t2.state.limits = t.state.limits;
   t2.request.data.accountKey = ACCOUNT_B;
-  publicIsSafe(await t2.callable(t2.request));
+  // The second phone's account does not match its linked Auth provider,
+  // so access fails, but the account-scoped anti-abuse attempt is still
+  // counted in a distinct opaque ledger.
+  await rejected(()=>t2.callable(t2.request));
   assert.equal(t.state.limits.size,2);
 });
