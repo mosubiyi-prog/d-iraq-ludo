@@ -41,6 +41,28 @@ initializes Firebase Auth before the guard and a tester's explicit tap.
 No QA project, Android SHA fingerprints, OAuth clients or private
 credentials were provisioned by this stage; those steps cannot be inferred.
 
+
+## On-device QA configuration without uploading keys to GitHub
+
+The owner has registered the QA Android app and enabled Google Sign-In.
+For a separately signed test APK, the app can read a **user-selected**
+`google-services.json` from the device's Downloads folder. Tap
+**«اختيار ملف Firebase QA من الجهاز»** first, select the QA JSON file,
+then use the Google test button.
+
+The app verifies the project prefix, different Android package, sender ID,
+OAuth Web client and the registered QA Android signing SHA-1:
+`D7:7C:C5:49:40:B4:1D:BF:56:74:45:98:7A:1D:C9:EF:24:12:EB:39`.
+A production file (`deda-25b88`), wrong signature, or missing OAuth
+is rejected before Firebase is initialized. The file is used in memory only,
+never uploaded to GitHub, and cannot grant any DEDA production access.
+
+This is a QA-only alternative to compile-time config. It requires an Android
+APK actually signed by the matching local QA keystore, not the ephemeral
+GitHub Actions debug key. CI's compilation-only APK **must not** be presented
+as the Google sign-in acceptance APK; only local QA re-signing and signature
+verification can make it ready for device testing.
+
 ## External configuration contract
 
 Create a JSON file OUTSIDE this repository, with these keys (placeholders,
