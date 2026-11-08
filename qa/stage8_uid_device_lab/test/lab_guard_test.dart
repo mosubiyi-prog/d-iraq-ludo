@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:deda_uid_device_lab/lab_guard.dart';
 import 'package:deda_uid_device_lab/main.dart';
 import 'package:flutter/material.dart';
@@ -12,7 +13,71 @@ const qa = LabQaConfig(
       '123456789012-synthetic-qa-only.apps.googleusercontent.com',
 );
 
+
+Map<String, dynamic> syntheticQaFile({
+  String projectId = 'deda-qa-uid-lab-dev123',
+  String certificateHash = 'd77cc54940b41dbf567445987a1dc9ef2412eb39',
+}) => {
+      'project_info': {
+        'project_number': '123456789012',
+        'project_id': projectId,
+      },
+      'client': [
+        {
+          'client_info': {
+            'mobilesdk_app_id': '1:123456789012:android:deadbeef123456',
+            'android_client_info': {
+              'package_name': 'com.deda.qa.uiddevice'
+            },
+          },
+          'oauth_client': [
+            {
+              'client_id': '123456789012-androidqa.apps.googleusercontent.com',
+              'client_type': 1,
+              'android_info': {
+                'package_name': 'com.deda.qa.uiddevice',
+                'certificate_hash': certificateHash,
+              }
+            },
+            {
+              'client_id': '123456789012-webqa.apps.googleusercontent.com',
+              'client_type': 3,
+            }
+          ],
+          'api_key': [
+            {'current_key': 'FakeQAApiKeyOnlyForLocalUnitTests0000'}
+          ],
+        }
+      ],
+    };
+
 void main() {
+  test('local Android QA JSON loads only with registered test SHA1 and Web OAuth', () {
+    final config = LabQaConfig.fromGoogleServicesJson(jsonEncode(syntheticQaFile()));
+    expect(config.isAllowed, isTrue);
+    expect(config.projectId, 'deda-qa-uid-lab-dev123');
+    expect(config.googleWebClientId,
+        '123456789012-webqa.apps.googleusercontent.com');
+  });
+
+  test('on-device QA file rejects production project', () {
+    expect(
+      () => LabQaConfig.fromGoogleServicesJson(
+        jsonEncode(syntheticQaFile(projectId: 'deda-25b88')),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('on-device QA file rejects signing certificate mismatch', () {
+    expect(
+      () => LabQaConfig.fromGoogleServicesJson(
+        jsonEncode(syntheticQaFile(certificateHash: '0000')),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   test('separate QA project + app/package IDs pass pure offline guard', () {
     expect(qa.isAllowed, isTrue);
     expect(qa.denial, 'OK_QA_ONLY');
