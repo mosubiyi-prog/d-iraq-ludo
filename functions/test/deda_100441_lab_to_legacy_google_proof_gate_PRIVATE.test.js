@@ -115,13 +115,28 @@ test("actual QA outcome alone cannot link old owner", () => {
   mustDeny(r);
 });
 
-test("unverified or wrong QA project cannot be substituted", () => {
-  for(const l of [null, {}, {twoDeviceSameUid:true,firebaseProjectId:"deda-25b88"},
-    {firebaseProjectId:"deda-qa-uid-lab-20261108",twoDeviceSameUid:false}]) {
-    const r = inspect({labEvidence:l});
-    assert.equal(r.classification, "LAB_PROOF_MISSING_OR_DIFFERENT_PROJECT");
+test("missing QA lab does not block separate trusted legacy review; STILL no login", () => {
+  for (const absent of [undefined, null]) {
+    const r = inspect({labEvidence:absent});
+    assert.equal(r.classification,
+      "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
     mustDeny(r);
   }
+});
+
+test("invalid or cross-project QA lab evidence is rejected, never trusted", () => {
+  for(const l of [{}, {twoDeviceSameUid:true,firebaseProjectId:"deda-25b88"},
+    {firebaseProjectId:"deda-qa-uid-lab-20261108",twoDeviceSameUid:false}]) {
+    const r = inspect({labEvidence:l});
+    assert.equal(r.classification, "LAB_PROOF_UNVERIFIED_OR_DIFFERENT_PROJECT");
+    mustDeny(r);
+  }
+});
+
+test("no QA lab and no independently verified production Google remains blocked", () => {
+  const r=inspect({labEvidence:null,verifiedProductionGoogle:null});
+  assert.equal(r.classification, "NO_VERIFIED_PRODUCTION_GOOGLE_AUTH");
+  mustDeny(r);
 });
 
 test("QA Firebase credential must never be treated as production auth", () => {
@@ -246,6 +261,20 @@ test("NEW Google ID verified via OIDC can only become manual review candidate", 
   const r=manualCase();
   assert.equal(r.classification,
     "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+  mustDeny(r);
+});
+test("new trusted Google proof can reach HOLD for owner review without QA lab", () => {
+  for (const absent of [null, undefined]) {
+    const r=manualCase({labEvidence:absent});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+  }
+});
+test("new Google without QA lab or old-account factor remains blocked", () => {
+  const r=manualCase({labEvidence:null,independentProof:null});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
   mustDeny(r);
 });
 test("new Google missing independent legacy factor is blocked", () => {
