@@ -95,8 +95,8 @@ function inspectLegacyGoogleOwnerBridge({
         oidc.issuer !== "https://accounts.google.com" ||
         oidc.audience !== serverConfiguredRecoveryOAuthAudience ||
         oidc.audienceVerified !== true ||
+        oidc.oauthClientProjectId !== PRODUCTION_PROJECT ||
         oidc.nonceVerified !== true ||
-        oidc.freshAndUnexpired === false ||
         oidc.freshAndUnexpired !== true ||
         oidc.subjectVerified !== true ||
         oidc.providerId !== "google.com" ||
