@@ -1,7 +1,7 @@
 "use strict";
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {generateKeyPairSync,sign,createPublicKey}=require("node:crypto");
+const {generateKeyPairSync,sign}=require("node:crypto");
 const {inspectSignedToken,getOfficialGoogleJwks,
   verifyProspectiveGoogleForLegacyReview}=require(
   "../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js"
@@ -14,7 +14,7 @@ const config={projectId:"deda-25b88",source:"trusted_server_configuration",
 const challenge={source:"trusted_server_nonce_store",status:"issued",
   createdAtMs:nowMs-10000,productionOAuthAudience:audience,nonce};
 const {privateKey,publicKey}=generateKeyPairSync("rsa",{modulusLength:2048});
-const jwk=createPublicKey(publicKey).export({format:"jwk"});
+const jwk=publicKey.export({format:"jwk"});
 const jwks={keys:[{...jwk,kid:"synthetic_google_rsa_1",alg:"RS256",use:"sig"}]};
 const b64=x=>Buffer.from(JSON.stringify(x),"utf8").toString("base64url");
 const standardClaims={
