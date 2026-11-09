@@ -5,7 +5,9 @@ on:
       - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
     paths:
       - 'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js'
+      - 'functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js'
       - 'functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js'
+      - 'functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js'
       - 'docs/DEDA_100441_STEP1_GOOGLE_LAB_TO_LEGACY_OWNER_GATE_QA_2026-11-09.md'
       - '.github/workflows/deda-100441-step1-legacy-google-proof-gate-private-qa-no-deploy.yml'
   workflow_dispatch:
@@ -46,6 +48,8 @@ jobs:
           set -euo pipefail
           node --check functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js
           node --check functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js
+          node --check functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js
+          node --check functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js
           node - <<'NODE'
           const fs=require('node:fs');
           const assert=require('node:assert/strict');
@@ -53,6 +57,14 @@ jobs:
             'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js','utf8');
           const index=fs.readFileSync('functions/index.js','utf8');
           assert.equal(index.includes('deda_100441_lab_to_legacy_google_proof_gate'),false);
+          assert.equal(index.includes('deda_100441_legacy_google_oidc_verifier'),false);
+          const verifier=fs.readFileSync(
+            'functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js','utf8');
+          assert.match(verifier,/https:\/\/www\.googleapis\.com\/oauth2\/v3\/certs/);
+          assert.match(verifier,/verify\("RSA-SHA256"/);
+          for(const marker of ['createCustomToken(', 'signInWithCredential(',
+            'signInWithCustomToken(', 'linkWithCredential(', 'firebase-admin',
+            'firebase-functions']) assert.equal(verifier.includes(marker),false,marker);
           assert.match(code,/QA_PROJECT = "deda-qa-uid-lab-20261108"/);
           assert.match(code,/PRODUCTION_PROJECT = "deda-25b88"/);
           for(const marker of ['createCustomToken(', 'signInWithCredential(',
@@ -66,6 +78,7 @@ jobs:
           set -euo pipefail
           node --test \
             functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js \
+            functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js \
             functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js \
             functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js \
             functions/test/deda_owner_pin_verify_private_v1.test.js
