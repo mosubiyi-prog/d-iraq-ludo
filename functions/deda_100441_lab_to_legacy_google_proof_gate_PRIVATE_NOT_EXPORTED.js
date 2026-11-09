@@ -61,11 +61,15 @@ function inspectLegacyGoogleOwnerBridge({
   nowMs,
   incidentCutoffMs,
 } = {}) {
-  // A real lab success is valuable, but not account ownership evidence.
-  // The QA Firebase project MUST NEVER be an authorization issuer for prod.
-  if (!labEvidence || labEvidence.firebaseProjectId !== QA_PROJECT ||
-      labEvidence.twoDeviceSameUid !== true) {
-    return out("LAB_PROOF_MISSING_OR_DIFFERENT_PROJECT");
+  // Historical QA-lab completion is NOT a prerequisite for a real
+  // production-owner review. It proves only device-to-device QA consistency,
+  // not account ownership. If supplied, reject incorrect/cross-project lab
+  // evidence; if absent, continue to the independently verified production
+  // Google evidence and the old-account owner-proof gates below.
+  if (labEvidence != null &&
+      (labEvidence.firebaseProjectId !== QA_PROJECT ||
+       labEvidence.twoDeviceSameUid !== true)) {
+    return out("LAB_PROOF_UNVERIFIED_OR_DIFFERENT_PROJECT");
   }
 
   // TWO DISJOINT REVIEW LANES:
