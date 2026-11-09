@@ -214,6 +214,99 @@ test("forged client fields or missing server snapshot fail closed", () => {
   mustDeny(r);
 });
 
+
+const recoveryAudience = "123456789012-productionrecovery.apps.googleusercontent.com";
+function prospectiveGoogle() {
+  return {
+    verifier:"trusted_google_oidc_backend",
+    issuer:"https://accounts.google.com",
+    audience:recoveryAudience,
+    oauthClientProjectId:"deda-25b88",
+    audienceVerified:true,
+    nonceVerified:true,
+    freshAndUnexpired:true,
+    subjectVerified:true,
+    providerId:"google.com",
+    verified:true,
+  };
+}
+function manualFactor() {
+  return {...independent(),kind:"independent_verified_recovery_factor"};
+}
+function manualCase(overrides={}) {
+  return inspect({
+    verifiedProductionGoogle:null,
+    verifiedProspectiveGoogle:prospectiveGoogle(),
+    serverConfiguredRecoveryOAuthAudience:recoveryAudience,
+    independentProof:manualFactor(),
+    ...overrides,
+  });
+}
+test("NEW Google ID verified via OIDC can only become manual review candidate", () => {
+  const r=manualCase();
+  assert.equal(r.classification,
+    "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+  mustDeny(r);
+});
+test("new Google missing independent legacy factor is blocked", () => {
+  const r=manualCase({independentProof:null});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+  mustDeny(r);
+});
+test("new Google may NOT use a previously-linked-provider type as manual proof", () => {
+  const r=manualCase({independentProof:independent()});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+  mustDeny(r);
+});
+test("client-supplied or mismatched Google audience is never accepted", () => {
+  for(const v of [
+    {verifier:"client"},
+    {audience:"111111-qa.apps.googleusercontent.com"},
+    {oauthClientProjectId:"deda-qa-uid-lab-20261108"},
+    {audienceVerified:false},
+    {nonceVerified:false},
+    {freshAndUnexpired:false},
+    {subjectVerified:false},
+  ]) {
+    const r=manualCase({verifiedProspectiveGoogle:{
+      ...prospectiveGoogle(),...v,
+    }});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+    mustDeny(r);
+  }
+});
+test("both Firebase and OIDC proofs in same request are rejected", () => {
+  const r=manualCase({verifiedProductionGoogle:prodGoogle()});
+  assert.equal(r.classification,"MIXED_GOOGLE_EVIDENCE_LANES_NOT_ALLOWED");
+  mustDeny(r);
+});
+test("a different original UID cannot be selected through an OIDC account", () => {
+  const r=manualCase({independentProof:{
+    ...manualFactor(),originalUid:B,
+  }});
+  assert.equal(r.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(r);
+});
+test("new Google plus PIN but missing two-person owner review cannot claim A", () => {
+  for(const reviewRecord of [null, {...review(),ownerApproved:false},
+    {...review(),originalSnapshotBackedUp:false}]) {
+    const r=manualCase({reviewRecord});
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+});
+test("missing trusted OAuth audience configuration always blocks manual claim", () => {
+  for(const config of [null, "", "not-prod-client-id"]) {
+    const r=manualCase({serverConfiguredRecoveryOAuthAudience:config});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+    mustDeny(r);
+  }
+});
+
 test("source module is pure and cannot write/issue tokens/link users", () => {
   const fs = require("node:fs");
   const path = require("node:path");
