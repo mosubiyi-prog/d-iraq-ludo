@@ -1,0 +1,74 @@
+name: DEDA 100441 Step1 Google-to-legacy ownership safety gate QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
+    paths:
+      - 'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js'
+      - 'functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js'
+      - 'docs/DEDA_100441_STEP1_GOOGLE_LAB_TO_LEGACY_OWNER_GATE_QA_2026-11-09.md'
+      - '.github/workflows/deda-100441-step1-legacy-google-proof-gate-private-qa-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100441-step1-google-to-legacy-private-safety
+  cancel-in-progress: false
+
+jobs:
+  offline-isolated-proof-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Protected production files remain byte-identical
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            functions/index.js functions/deda_owner_pin_verify_private_v1.js \
+            functions/deda_linked_owner_session_grant_private_v1.js \
+            functions/deda_stage2_live_gate.js firestore.rules storage.rules \
+            firebase.json .firebaserc android assets pubspec.yaml pubspec.lock
+          echo PASS_PROTECTED_DEDA_APP_FIREBASE_SIGNING_UNCHANGED
+      - name: No deployed integration and no authority from QA Google project
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js
+          node --check functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const code=fs.readFileSync(
+            'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js','utf8');
+          const index=fs.readFileSync('functions/index.js','utf8');
+          assert.equal(index.includes('deda_100441_lab_to_legacy_google_proof_gate'),false);
+          assert.match(code,/QA_PROJECT = "deda-qa-uid-lab-20261108"/);
+          assert.match(code,/PRODUCTION_PROJECT = "deda-25b88"/);
+          for(const marker of ['createCustomToken(', 'signInWithCredential(',
+              'linkWithCredential(', 'firebase-admin', 'firebase-functions',
+              '.set(', '.delete(']) assert.equal(code.includes(marker),false,marker);
+          console.log('PASS_PRIVATE_QA_BRIDGE_HAS_ZERO_ISSUING_OR_DEPLOYED_CAPABILITY');
+          NODE
+      - name: New security tests and existing owner proof regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js \
+            functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js \
+            functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js \
+            functions/test/deda_owner_pin_verify_private_v1.test.js
+          echo PASS_GOOGLE_QA_NOT_OWNER_PROOF_LEGACY_A_B_C_NOT_MODIFIED
+      - name: No production operation
+        run: echo PASS_NO_FIREBASE_DEPLOY_NO_AUTH_UID_MUTATION_NO_APK_NO_PLAY
