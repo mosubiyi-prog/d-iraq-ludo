@@ -130,7 +130,15 @@ function reviewReadiness({
       independentProof.verified !== true ||
       !VALID_SECOND_FACTORS.has(independentProof.kind) ||
       independentProof.accountKey !== serverSnapshot.accountKey ||
-      independentProof.originalUid !== serverSnapshot.route.ownerUid ||
+      // A/B/C are conflicting historical references. Do NOT preselect A
+      // merely because it currently owns the public-ID route. Only accept
+      // a separately verified factor bound to one of the THREE existing
+      // server-snapshot UIDs, then require independent reconciliation.
+      ![
+        serverSnapshot.route.ownerUid,
+        serverSnapshot.directory.createdUid,
+        serverSnapshot.social.ownerUid,
+      ].includes(independentProof.originalUid) ||
       independentProof.challengeHash !== pinProof.challengeHash ||
       !recent(nowMs,independentProof.verifiedAtMs) ||
       independentProof.priorEnrollmentOrProviderVerified !== true) {
