@@ -35,6 +35,25 @@ void main() {
     ), true);
   });
 
+  test('existing-account PIN cannot invent owner proof in pilot', () {
+    bool permitted({bool pilot = true, bool present = true,
+      bool anonymous = false, bool verified = true}) =>
+        DedaLinkedOwnerSessionPolicy.mayAttemptExistingAccountPinSignIn(
+          linkedOwnerPilotEnabled: pilot,
+          firebaseSessionPresent: present,
+          firebaseSessionAnonymous: anonymous,
+          serverVerifiedOriginalOwner: verified,
+        );
+    expect(permitted(), true);
+    expect(permitted(present: false), false);
+    expect(permitted(anonymous: true), false);
+    expect(permitted(verified: false), false);
+    expect(permitted(present: false, anonymous: true, verified: false), false);
+    // Existing Play 100340 behavior is preserved while pilot is OFF.
+    expect(permitted(pilot: false, present: false,
+        anonymous: true, verified: false), true);
+  });
+
   test('only same UID, linked email and account may resume stored profile', () {
     bool check({String? savedUid = uid, String? savedAccount = account,
       String phone = '+9647712345678', String? currentUid = uid,
