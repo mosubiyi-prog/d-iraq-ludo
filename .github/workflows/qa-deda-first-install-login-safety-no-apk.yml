@@ -7,6 +7,8 @@ on:
       - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
     paths:
       - 'lib/deda_pin_auth.dart'
+      - 'functions/deda_owner_pin_verify_private_v1.js'
+      - 'functions/test/deda_owner_pin_verify_private_v1.test.js'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'tools/guard_deda_login_busy_indicator_next_release.py'
@@ -27,6 +29,27 @@ jobs:
         run: |
           python3 -m py_compile tools/guard_deda_login_busy_indicator_next_release.py
           python3 -m unittest tests/stage14/test_login_busy_patch.py -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Test existing server PIN verifier with linked same-UID gate
+        run: |
+          node --check functions/deda_owner_pin_verify_private_v1.js
+          node --test functions/test/deda_owner_pin_verify_private_v1.test.js
+          node --test functions/test/deda_stage2_live_gate.test.js
+      - name: Protect linked-owner PIN from legacy Firestore attempt writes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('lib/deda_pin_auth.dart').read_text()
+          part = src.split('static Future<Map<String, dynamic>> signIn({',1)[1]
+          linked = src.split('static Future<void> _proveLinkedOwnerPin({',1)[1].split('static Future<void> _openSession',1)[0]
+          assert "await _proveLinkedOwnerPin(accountKey: accountKey, pin: pin);" in part
+          assert "await _provePin(accountKey: accountKey, pin: pin);" in part
+          assert "deda_auth_attempts" not in linked
+          assert ".httpsCallable('dedaVerifyExistingOwnerPin')" in linked
+          print('PASS_OPT_IN_PIN_IS_SERVER_VERIFIED_AND_LEGACY_PATH_RETAINED')
+          PY
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
