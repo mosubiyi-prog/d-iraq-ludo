@@ -88,6 +88,16 @@ function inspectLegacyGoogleOwnerBridge({
     return out("MIXED_GOOGLE_EVIDENCE_LANES_NOT_ALLOWED");
   }
 
+  // A, B and C are competing references to ONE legacy account. The
+  // public-ID route is evidence for A, not authority to discard an
+  // independently verified earlier provider enrollment under B or C.
+  // This only identifies candidates for separate review, NEVER ownership.
+  const historicalCandidates = [
+    originalRecords?.route?.ownerUid,
+    originalRecords?.directory?.createdUid,
+    originalRecords?.social?.ownerUid,
+  ].filter(uid => ORIGINAL_UID.test(uid || ""));
+
   let historical = false;
   if (verifiedProspectiveGoogle) {
     const oidc = verifiedProspectiveGoogle;
@@ -110,9 +120,7 @@ function inspectLegacyGoogleOwnerBridge({
     }
     // The new Google identity is NOT currently linked to a legacy UID.
     // Verify old owner exclusively through the independent recovery factor.
-    if (!originalRecords || !originalRecords.route ||
-        !ORIGINAL_UID.test(originalRecords.route.ownerUid || "") ||
-        independentProof.originalUid !== originalRecords.route.ownerUid) {
+    if (!historicalCandidates.includes(independentProof.originalUid)) {
       return out("ORIGINAL_UID_ANCHOR_CONFLICT");
     }
   } else {
@@ -138,8 +146,9 @@ function inspectLegacyGoogleOwnerBridge({
       return out("GOOGLE_NOT_HISTORICALLY_BOUND_TO_OLD_UID");
     }
 
-    if (!originalRecords || !originalRecords.route ||
-        originalRecords.route.ownerUid !== google.originalUid) {
+    if (!historicalCandidates.includes(google.originalUid) ||
+        (independentProof != null &&
+         independentProof.originalUid !== google.originalUid)) {
       return out("ORIGINAL_UID_ANCHOR_CONFLICT");
     }
   }
