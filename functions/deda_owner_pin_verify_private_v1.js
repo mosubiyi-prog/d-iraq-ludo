@@ -94,9 +94,14 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
     throw new HttpsError("permission-denied", "owner-verification-unavailable");
   };
   return onCall(recoveryCallableOptions(30), async (request) => {
+    const provider = request?.auth?.token?.firebase?.sign_in_provider;
+    // Existing linked owners may re-check their PIN on the SAME verified UID.
+    // This path never exchanges an anonymous UID for the original owner UID.
+    const sameUidPasswordProof = provider === "password" &&
+        request?.data?.proofMode === "linked-password";
     if (!enabled || !request || !request.app?.appId ||
         !request.auth?.uid ||
-        request.auth.token?.firebase?.sign_in_provider !== "anonymous") {
+        (provider !== "anonymous" && !sameUidPasswordProof)) {
       return deny();
     }
     const key = accountKeyForPhone(request.data?.phone);
@@ -151,6 +156,11 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
       // custom token; the client still MUST prove the SAME UID using
       // signInWithEmailAndPassword before any authorized session write.
       if (request.data?.proofMode === "linked-password") {
+        // A provider-linked caller must ALREADY own the canonical UID.
+        // Never let a password principal from another account claim it by PIN.
+        if (sameUidPasswordProof && request.auth.uid !== proof.originalUid) {
+          return deny();
+        }
         return {
           originalUid: proof.originalUid, originalId: proof.originalId,
           accountKey: key,
