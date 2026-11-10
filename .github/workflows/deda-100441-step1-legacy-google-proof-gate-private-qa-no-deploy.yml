@@ -11,6 +11,7 @@ on:
       - 'functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js'
       - 'functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js'
       - 'docs/DEDA_100441_STEP1_GOOGLE_LAB_TO_LEGACY_OWNER_GATE_QA_2026-11-09.md'
+      - 'tools/app_stability/app_package/bind_google_account_settings_100439.py'
       - '.github/workflows/deda-100441-step1-legacy-google-proof-gate-private-qa-no-deploy.yml'
   workflow_dispatch:
 
@@ -44,6 +45,33 @@ jobs:
             functions/deda_stage2_live_gate.js firestore.rules storage.rules \
             firebase.json .firebaserc android assets pubspec.yaml pubspec.lock
           echo PASS_PROTECTED_SINCE_LAST_APPROVED_CHECKPOINT_APP_FIREBASE_SIGNING_UNCHANGED
+      - name: Verify owner-approved Google card stays above session diagnostics in either assembly order
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import runpy
+          m=runpy.run_path('tools/app_stability/app_package/bind_google_account_settings_100439.py')
+          top=m['place_google_card_at_approved_top']
+          voice=m['SETTINGS_ANCHOR']
+          diag=m['DIAGNOSTIC_ANCHOR']
+          # Old full app gets Google first; diagnostic is added later.
+          google_first=top(voice)
+          with_diag_later=google_first.replace(voice, diag+'\\n'+voice)
+          assert with_diag_later.index('DedaGoogleSettingsLinkCard(') < with_diag_later.index(diag) < with_diag_later.index(voice)
+          # Assemblies that add the diagnostic first must keep identical order.
+          diag_first=top(diag+'\\n'+voice)
+          assert diag_first.index('DedaGoogleSettingsLinkCard(') < diag_first.index(diag) < diag_first.index(voice)
+          assert top(voice).count('DedaGoogleSettingsLinkCard(')==1
+          for input_value in (google_first, diag_first):
+              try:
+                  top(input_value)
+              except SystemExit:
+                  pass
+              else:
+                  raise AssertionError('Duplicate Google card unexpectedly accepted')
+          print('PASS_GOOGLE_CARD_FIRST_ABOVE_SESSION_DIAGNOSTIC_BOTH_ORDERS')
+          PY
       - name: No deployed integration and no authority from QA Google project
         shell: bash
         run: |
