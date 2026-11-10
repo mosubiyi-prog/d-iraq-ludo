@@ -180,14 +180,27 @@ test("post-incident provider binding cannot retroactively prove old account", ()
   mustDeny(r);
 });
 
-test("Google binding to UID B or C cannot override original-ID anchor A", () => {
+test("historical Google binding to B or C is reviewed only with its SAME independent UID", () => {
   for(const uid of [B,C]) {
-    const r=inspect({verifiedProductionGoogle:{
+    const r=inspect({
+      verifiedProductionGoogle:{...prodGoogle(), originalUid:uid},
+      independentProof:{...independent(),originalUid:uid},
+    });
+    assert.equal(r.classification,
+      "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+    const mismatched=inspect({verifiedProductionGoogle:{
       ...prodGoogle(), originalUid:uid,
     }});
-    assert.equal(r.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
-    mustDeny(r);
+    assert.equal(mismatched.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+    mustDeny(mismatched);
   }
+  const unrelated=inspect({
+    verifiedProductionGoogle:{...prodGoogle(),originalUid:"foreign-unrelated-uid"},
+    independentProof:{...independent(),originalUid:"foreign-unrelated-uid"},
+  });
+  assert.equal(unrelated.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(unrelated);
 });
 
 test("incomplete historical owner route cannot be accepted", () => {
@@ -312,12 +325,20 @@ test("both Firebase and OIDC proofs in same request are rejected", () => {
   assert.equal(r.classification,"MIXED_GOOGLE_EVIDENCE_LANES_NOT_ALLOWED");
   mustDeny(r);
 });
-test("a different original UID cannot be selected through an OIDC account", () => {
-  const r=manualCase({independentProof:{
-    ...manualFactor(),originalUid:B,
+test("new Google may only review independently verified A/B/C, never select a UID", () => {
+  for(const uid of [A,B,C]) {
+    const r=manualCase({independentProof:{
+      ...manualFactor(),originalUid:uid,
+    }});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+  }
+  const foreign=manualCase({independentProof:{
+    ...manualFactor(),originalUid:"unknown-not-account-owner",
   }});
-  assert.equal(r.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
-  mustDeny(r);
+  assert.equal(foreign.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(foreign);
 });
 test("new Google plus PIN but missing two-person owner review cannot claim A", () => {
   for(const reviewRecord of [null, {...review(),ownerApproved:false},
