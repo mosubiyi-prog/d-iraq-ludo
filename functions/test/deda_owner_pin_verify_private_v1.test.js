@@ -276,6 +276,42 @@ test("linked-password proof returns original UID/ID but never creates a token", 
   assert.deepEqual(f.db.writes,[`deda_owner_pin_verify_limits/${account}`]);
 });
 
+test("existing same-UID password Auth checks PIN on server without minting token", async()=>{
+  const f=fixture();
+  const request={...f.request,
+    auth:{uid:originalUid,token:{firebase:{sign_in_provider:"password"}}},
+    data:{phone:account,pin:correctPin,proofMode:"linked-password"}};
+  const result=await f.fn(request);
+  assert.deepEqual(result,{originalUid,originalId,accountKey:account});
+  assert.equal(f.auth.tokens.length,0);
+  assert.deepEqual(f.db.writes,[`deda_owner_pin_verify_limits/${account}`]);
+});
+
+test("foreign password UID cannot claim original account through known PIN",async()=>{
+  const f=fixture({allowLegacyCustomTokensForQa:true});
+  await denied(f,{...f.request,
+    auth:{uid:"foreign-password-principal",token:{firebase:{sign_in_provider:"password"}}},
+    data:{phone:account,pin:correctPin,proofMode:"linked-password"}});
+  assert.equal(f.auth.tokens.length,0);
+});
+test("linked-password proof refuses non-password provider and unverified modes",async()=>{
+  const f=fixture();
+  await denied(f,{...f.request,
+    auth:{uid:originalUid,token:{firebase:{sign_in_provider:"google.com"}}},
+    data:{phone:account,pin:correctPin,proofMode:"linked-password"}});
+  await denied(f,{...f.request,
+    auth:{uid:originalUid,token:{firebase:{sign_in_provider:"password"}}},
+    data:{phone:account,pin:correctPin}});
+  assert.equal(f.auth.tokens.length,0);
+});
+test("linked password mode rejects wrong PIN before any owner data is returned",async()=>{
+  const f=fixture();
+  await denied(f,{...f.request,
+    auth:{uid:originalUid,token:{firebase:{sign_in_provider:"password"}}},
+    data:{phone:account,pin:"999999",proofMode:"linked-password"}});
+  assert.equal(f.auth.tokens.length,0);
+});
+
 test("linked-password proof rejects old PIN after canonical rotation",async()=>{
   const f=fixture();
   const cred=f.db.docs.get(`deda_credentials/${account}`);
