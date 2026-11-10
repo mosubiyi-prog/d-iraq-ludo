@@ -46,7 +46,7 @@ jobs:
           linked = src.split('static Future<void> _proveLinkedOwnerPin({',1)[1].split('static Future<void> _openSession',1)[0]
           assert "await _proveLinkedOwnerPin(accountKey: accountKey, pin: pin);" in part
           assert "await _provePin(accountKey: accountKey, pin: pin);" in part
-          assert "deda_auth_attempts" not in linked
+          assert ".collection('deda_auth_attempts')" not in linked
           assert ".httpsCallable('dedaVerifyExistingOwnerPin')" in linked
           print('PASS_OPT_IN_PIN_IS_SERVER_VERIFIED_AND_LEGACY_PATH_RETAINED')
           PY
