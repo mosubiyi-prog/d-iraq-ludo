@@ -329,8 +329,35 @@ class DedaPinAuth {
     }
 
     final accountKey = accountKeyForPhone(phone);
+    // Only for the opt-in recovery pilot: a legacy PIN is not authority to
+    // convert a new anonymous UID into the owner of an existing account.
+    // This check runs BEFORE the legacy PIN attempt or any session/profile
+    // write. Creating a genuinely NEW account uses createAccount unchanged.
+    String? verifiedUid;
+    if (dedaLinkedOwnerCompatEnabled) {
+      final current = FirebaseAuth.instance.currentUser;
+      final ownerVerified = current != null && !current.isAnonymous &&
+          await DedaLinkedOwnerSessionPolicy.verified(current, accountKey);
+      if (!DedaLinkedOwnerSessionPolicy.mayAttemptExistingAccountPinSignIn(
+        linkedOwnerPilotEnabled: true,
+        firebaseSessionPresent: current != null,
+        firebaseSessionAnonymous: current?.isAnonymous ?? true,
+        serverVerifiedOriginalOwner: ownerVerified,
+      ) || FirebaseAuth.instance.currentUser?.uid != current?.uid) {
+        throw StateError('deda-existing-owner-proof-required-before-pin-login');
+      }
+      verifiedUid = current!.uid;
+    }
     await _provePin(accountKey: accountKey, pin: pin);
+    if (dedaLinkedOwnerCompatEnabled &&
+        FirebaseAuth.instance.currentUser?.uid != verifiedUid) {
+      throw StateError('deda-owner-session-changed-during-pin-login');
+    }
     await _openSession(accountKey);
+    if (dedaLinkedOwnerCompatEnabled &&
+        FirebaseAuth.instance.currentUser?.uid != verifiedUid) {
+      throw StateError('deda-owner-session-changed-during-pin-login');
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('sign-in-failed');
