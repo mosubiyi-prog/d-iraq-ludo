@@ -148,6 +148,10 @@ function reviewReadiness({
 
   if (!reviewRecord || reviewRecord.source !== "independent_server_review" ||
       reviewRecord.ownerApproved !== true ||
+      // Bind the human review to the SAME verified account and historical
+      // UID candidate; independent proof for B/C cannot reuse review of A.
+      reviewRecord.accountKey !== serverSnapshot.accountKey ||
+      reviewRecord.reviewedOriginalUid !== independentProof.originalUid ||
       reviewRecord.originalSnapshotBackedUp !== true ||
       reviewRecord.rollbackDocumented !== true ||
       reviewRecord.reconciliationPlanDocumented !== true ||

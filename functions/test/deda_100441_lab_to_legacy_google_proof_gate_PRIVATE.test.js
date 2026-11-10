@@ -73,6 +73,8 @@ function review() {
   return {
     source: "independent_server_review",
     ownerApproved: true,
+    accountKey,
+    reviewedOriginalUid: A,
     originalSnapshotBackedUp: true,
     rollbackDocumented: true,
     reconciliationPlanDocumented: true,
@@ -185,6 +187,7 @@ test("historical Google binding to B or C is reviewed only with its SAME indepen
     const r=inspect({
       verifiedProductionGoogle:{...prodGoogle(), originalUid:uid},
       independentProof:{...independent(),originalUid:uid},
+      reviewRecord:{...review(),reviewedOriginalUid:uid},
     });
     assert.equal(r.classification,
       "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
@@ -203,6 +206,19 @@ test("historical Google binding to B or C is reviewed only with its SAME indepen
   mustDeny(unrelated);
 });
 
+test("independent proof for B/C cannot borrow owner review for A", () => {
+  for (const uid of [B,C]) {
+    const r=inspect({
+      verifiedProductionGoogle:{...prodGoogle(),originalUid:uid},
+      independentProof:{...independent(),originalUid:uid},
+    });
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+  const wrongAccount=inspect({reviewRecord:{...review(),accountKey:"07799999999"}});
+  assert.equal(wrongAccount.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(wrongAccount);
+});
 test("incomplete historical owner route cannot be accepted", () => {
   const old=snapshot();
   delete old.route;
@@ -329,7 +345,7 @@ test("new Google may only review independently verified A/B/C, never select a UI
   for(const uid of [A,B,C]) {
     const r=manualCase({independentProof:{
       ...manualFactor(),originalUid:uid,
-    }});
+    },reviewRecord:{...review(),reviewedOriginalUid:uid}});
     assert.equal(r.classification,
       "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
     mustDeny(r);

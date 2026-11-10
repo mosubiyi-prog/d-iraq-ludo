@@ -32,6 +32,7 @@ const independent=()=>({
 });
 const review=()=>({
   source:"independent_server_review",ownerApproved:true,
+  accountKey,reviewedOriginalUid:A,
   originalSnapshotBackedUp:true,rollbackDocumented:true,
   reconciliationPlanDocumented:true,
   adminPrivilegesSeparatelyVerified:true,
@@ -86,7 +87,8 @@ test("a fake local phone or copied premium ID cannot replace an account key",()=
 test("independent proof must bind a historical account UID, not an arbitrary UID",()=>{
   for (const candidate of [A,B,C]) {
     const proof={...independent(),originalUid:candidate};
-    const result=check({independentProof:proof});
+    const result=check({independentProof:proof,
+      reviewRecord:{...review(),reviewedOriginalUid:candidate}});
     assert.equal(result.decision,"CANDIDATE_FOR_SEPARATE_OWNER_REVIEW");
     assert.equal(result.loginPermitted,false);
     assert.equal("uid" in result,false);
@@ -97,6 +99,18 @@ test("independent proof must bind a historical account UID, not an arbitrary UID
   }}).reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
 });
 
+test("review must name same account and proven A/B/C UID as independent factor",()=>{
+  assert.equal(check({reviewRecord:{...review(),reviewedOriginalUid:B}})
+      .reason,"INDEPENDENT_REVIEW_INCOMPLETE");
+  assert.equal(check({reviewRecord:{...review(),accountKey:"07799999999"}})
+      .reason,"INDEPENDENT_REVIEW_INCOMPLETE");
+  for (const uid of [A,B,C]) {
+    const result=check({independentProof:{...independent(),originalUid:uid},
+      reviewRecord:{...review(),reviewedOriginalUid:uid}});
+    assert.equal(result.decision,"CANDIDATE_FOR_SEPARATE_OWNER_REVIEW");
+    assert.equal(result.loginPermitted,false);
+  }
+});
 test("independent proof must have previously trusted binding to an account UID",()=>{
   assert.equal(check({independentProof:{
     ...independent(),originalUid:"unrelated-other-account-uid",
