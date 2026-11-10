@@ -55,6 +55,25 @@ def exactly_once(text, old, replacement, label):
     return text.replace(old, replacement, 1)
 
 
+def place_google_card_at_approved_top(text):
+    """Keep Google at the top, before diagnostics, regardless of binder order."""
+    if text.count("DedaGoogleSettingsLinkCard(") != 0:
+        abort("duplicate Google card")
+    if text.count(DIAGNOSTIC_ANCHOR) > 1:
+        abort("duplicate session diagnostics section")
+    chosen = DIAGNOSTIC_ANCHOR if DIAGNOSTIC_ANCHOR in text else SETTINGS_ANCHOR
+    placed = exactly_once(text, chosen, INSERT + chosen, "Google first in settings")
+    if placed.count("DedaGoogleSettingsLinkCard(") != 1:
+        abort("Google settings card not unique")
+    if DIAGNOSTIC_ANCHOR in placed and not (
+        placed.index("DedaGoogleSettingsLinkCard(")
+        < placed.index(DIAGNOSTIC_ANCHOR)
+        < placed.index(SETTINGS_ANCHOR)
+    ):
+        abort("Google card must precede diagnostics and voice")
+    return placed
+
+
 def bind(project):
     project = Path(project).resolve()
     if project == ROOT or ROOT in project.parents:
@@ -111,22 +130,7 @@ def bind(project):
         + "\nimport 'deda_step2_google_replacement_login_100439.dart';"
         + "\nimport 'deda_google_recovery_progress_100439.dart';",
         "Google settings import")
-    # Keep the owner's approved screenshot location: the FIRST card in
-    # Settings, ABOVE the read-only session diagnostic when present.
-    # The original full 100439 source has no diagnostic; 100441 may add it.
-    # Both binder orders must produce the SAME visible placement.
-    first_settings_anchor = (
-        DIAGNOSTIC_ANCHOR if DIAGNOSTIC_ANCHOR in new
-        else SETTINGS_ANCHOR
-    )
-    new = exactly_once(new, first_settings_anchor,
-        INSERT + first_settings_anchor, "Google card at top of settings")
-    if DIAGNOSTIC_ANCHOR in new and not (
-        new.index("DedaGoogleSettingsLinkCard(")
-        < new.index(DIAGNOSTIC_ANCHOR)
-        < new.index(SETTINGS_ANCHOR)
-    ):
-        abort("approved Google card position before diagnostic not preserved")
+    new = place_google_card_at_approved_top(new)
     new = exactly_once(new,
         "        currentEmail: user?.email,",
         """        currentEmail: user?.email,
