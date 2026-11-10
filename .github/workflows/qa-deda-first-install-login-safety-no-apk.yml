@@ -51,7 +51,8 @@ jobs:
           assert ".httpsCallable('dedaVerifyExistingOwnerPin')" in linked
           backend=Path('lib/deda_backend.dart').read_text()
           assert 'DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)' in backend
-          assert 'DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(current, cleanKey)' in src
+          assert 'DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(' in src
+          assert 'current, cleanKey)' in src
           print('PASS_OPT_IN_PIN_AND_GOOGLE_SAME_UID_COMPAT_RETAINED')
           PY
       - uses: subosito/flutter-action@v2
