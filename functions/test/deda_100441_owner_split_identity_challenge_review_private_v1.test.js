@@ -83,9 +83,24 @@ test("a fake local phone or copied premium ID cannot replace an account key",()=
   const s=snapshot();s.originalId="@DEDA-AAAA";
   assert.equal(check({serverSnapshot:s}).reason,"UNVERIFIED_SERVER_SHAPE");
 });
-test("independent proof must have previously trusted binding to UID A",()=>{
-  assert.equal(check({independentProof:{...independent(),originalUid:B}})
-      .reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
+test("independent proof must bind a historical account UID, not an arbitrary UID",()=>{
+  for (const candidate of [A,B,C]) {
+    const proof={...independent(),originalUid:candidate};
+    const result=check({independentProof:proof});
+    assert.equal(result.decision,"CANDIDATE_FOR_SEPARATE_OWNER_REVIEW");
+    assert.equal(result.loginPermitted,false);
+    assert.equal("uid" in result,false);
+    assert.equal("customToken" in result,false);
+  }
+  assert.equal(check({independentProof:{
+    ...independent(),originalUid:"foreign-owner-not-in-account",
+  }}).reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
+});
+
+test("independent proof must have previously trusted binding to an account UID",()=>{
+  assert.equal(check({independentProof:{
+    ...independent(),originalUid:"unrelated-other-account-uid",
+  }}).reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
   assert.equal(check({independentProof:{...independent(),source:"client"}})
       .decision,"HOLD");
   assert.equal(check({independentProof:{...independent(),
