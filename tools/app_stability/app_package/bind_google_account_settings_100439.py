@@ -22,6 +22,8 @@ ANDROID_CONFIG = "android/app/google-services.json"
 IMPORT = "import 'deda_100433_owner_confirmation_ui.dart';"
 SETTINGS_ANCHOR = """                  _sectionTitle(
                       dedaText('الصوت والملاحة', 'Voice & navigation')),"""
+DIAGNOSTIC_ANCHOR = """                  _sectionTitle(dedaText(
+                    'تشخيص الجلسة', 'Session diagnostics')),"""
 INSERT = """                  if (dedaStep1GoogleOwnerLinkEnabled) ...[
                     DedaGoogleSettingsLinkCard(
                       phone: DedaPreferences.accountPhone.trim().isNotEmpty
@@ -109,8 +111,22 @@ def bind(project):
         + "\nimport 'deda_step2_google_replacement_login_100439.dart';"
         + "\nimport 'deda_google_recovery_progress_100439.dart';",
         "Google settings import")
-    new = exactly_once(new, SETTINGS_ANCHOR,
-        INSERT + SETTINGS_ANCHOR, "settings location above voice")
+    # Keep the owner's approved screenshot location: the FIRST card in
+    # Settings, ABOVE the read-only session diagnostic when present.
+    # The original full 100439 source has no diagnostic; 100441 may add it.
+    # Both binder orders must produce the SAME visible placement.
+    first_settings_anchor = (
+        DIAGNOSTIC_ANCHOR if DIAGNOSTIC_ANCHOR in new
+        else SETTINGS_ANCHOR
+    )
+    new = exactly_once(new, first_settings_anchor,
+        INSERT + first_settings_anchor, "Google card at top of settings")
+    if DIAGNOSTIC_ANCHOR in new and not (
+        new.index("DedaGoogleSettingsLinkCard(")
+        < new.index(DIAGNOSTIC_ANCHOR)
+        < new.index(SETTINGS_ANCHOR)
+    ):
+        abort("approved Google card position before diagnostic not preserved")
     new = exactly_once(new,
         "        currentEmail: user?.email,",
         """        currentEmail: user?.email,
