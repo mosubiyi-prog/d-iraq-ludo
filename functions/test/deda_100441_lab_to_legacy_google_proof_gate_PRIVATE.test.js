@@ -62,6 +62,7 @@ function independent() {
     verified: true,
     kind: "pre_linked_firebase_identity_provider",
     priorEnrollmentOrProviderVerified: true,
+    enrolledAtMs: incidentCutoffMs - 100000,
     originalUid: A,
     accountKey,
     verifiedAtMs: nowMs - 900,
@@ -233,6 +234,19 @@ test("PIN alone never passes without independent ownership factor", () => {
   mustDeny(r);
 });
 
+test("old Google proof cannot ride on post-incident device enrollment",()=>{
+  for(const enrolledAtMs of [undefined,incidentCutoffMs,
+    incidentCutoffMs+1]){
+    const r=inspect({independentProof:{...independent(),enrolledAtMs}});
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+});
+test("Google bridge refuses independent review created before proofs",()=>{
+  const r=inspect({reviewRecord:{...review(),reviewedAtMs:nowMs-1500}});
+  assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(r);
+});
 test("missing review, backup or second reviewer cannot authorize", () => {
   for (const reviewRecord of [
     null, {...review(),originalSnapshotBackedUp:false},

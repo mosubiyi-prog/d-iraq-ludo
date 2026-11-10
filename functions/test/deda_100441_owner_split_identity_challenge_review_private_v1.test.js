@@ -4,6 +4,7 @@ const assert=require("node:assert/strict");
 const {safeEvidenceAssessment,reviewReadiness}=
     require("../deda_100441_owner_split_identity_challenge_review_private_v1.js");
 const nowMs=1800000000000;
+const incidentCutoffMs=nowMs-5000000;
 const originalId="@DEDA-ABC123";
 const accountKey="07700000000";
 const A="example-old-owner-A",B="example-pin-creator-B",C="example-social-C";
@@ -29,6 +30,7 @@ const independent=()=>({
   kind:"pre_enrolled_original_device_key",
   accountKey,originalUid:A,verifiedAtMs:nowMs-900,
   priorEnrollmentOrProviderVerified:true,challengeHash,
+  enrolledAtMs:incidentCutoffMs-100000,
 });
 const review=()=>({
   source:"independent_server_review",ownerApproved:true,
@@ -40,7 +42,7 @@ const review=()=>({
 });
 const check=(opts={})=>reviewReadiness({
   serverSnapshot:snapshot(),pinProof:pin(),independentProof:independent(),
-  reviewRecord:review(),nowMs,...opts,
+  reviewRecord:review(),nowMs,incidentCutoffMs,...opts,
 });
 test("A/B/C three distinct UIDs must HOLD, not select a winner",()=>{
   const result=safeEvidenceAssessment(snapshot());
@@ -127,6 +129,32 @@ test("stale, mismatched and wrong-issuer second factors fail closed",()=>{
     verifiedAtMs:nowMs-1000000}}).decision,"HOLD");
   assert.equal(check({independentProof:{...independent(),
     kind:"user_typed_pin"}}).decision,"HOLD");
+});
+test("late, absent or ungrounded pre-enrollment never qualifies as old owner proof",()=>{
+  for (const enrolledAtMs of [undefined,null,incidentCutoffMs,
+    incidentCutoffMs+1,nowMs+1000,0]) {
+    const result=check({independentProof:{...independent(),enrolledAtMs}});
+    assert.equal(result.reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
+    assert.equal(result.loginPermitted,false);
+  }
+  for (const cutoff of [undefined,null,0,NaN]) {
+    const result=check({incidentCutoffMs:cutoff});
+    assert.equal(result.reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
+  }
+});
+test("independent human review must follow both time-bound proofs",()=>{
+  for (const reviewedAtMs of [nowMs-1100,nowMs-950]) {
+    const result=check({reviewRecord:{...review(),reviewedAtMs}});
+    assert.equal(result.reason,"INDEPENDENT_REVIEW_INCOMPLETE");
+    assert.equal(result.loginPermitted,false);
+  }
+  // Equal timestamps are valid; ordering, not artificial delays, is required.
+  const bothNow=nowMs-500;
+  const result=check({pinProof:{...pin(),verifiedAtMs:bothNow},
+    independentProof:{...independent(),verifiedAtMs:bothNow},
+    reviewRecord:{...review(),reviewedAtMs:bothNow}});
+  assert.equal(result.decision,"CANDIDATE_FOR_SEPARATE_OWNER_REVIEW");
+  assert.equal(result.loginPermitted,false);
 });
 test("manual review cannot use the same reviewer twice or skip backup",()=>{
   assert.equal(check({reviewRecord:{...review(),reviewers:["same","same"]}})

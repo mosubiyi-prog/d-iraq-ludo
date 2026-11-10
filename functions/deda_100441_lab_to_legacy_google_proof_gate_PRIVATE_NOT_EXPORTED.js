@@ -162,6 +162,7 @@ function inspectLegacyGoogleOwnerBridge({
     independentProof,
     reviewRecord,
     nowMs,
+    incidentCutoffMs,
   });
 
   if (assessed.decision !== "CANDIDATE_FOR_SEPARATE_OWNER_REVIEW" ||

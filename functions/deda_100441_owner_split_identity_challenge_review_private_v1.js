@@ -105,6 +105,7 @@ function recent(nowMs, verifiedAtMs) {
 // fields. DO NOT use it as a callable or return an Auth token from its result.
 function reviewReadiness({
   serverSnapshot, pinProof, independentProof, reviewRecord, nowMs,
+  incidentCutoffMs,
 } = {}) {
   const assessment = safeEvidenceAssessment(serverSnapshot);
   if (assessment.reason === "UNVERIFIED_SERVER_SHAPE" ||
@@ -141,7 +142,15 @@ function reviewReadiness({
       ].includes(independentProof.originalUid) ||
       independentProof.challengeHash !== pinProof.challengeHash ||
       !recent(nowMs,independentProof.verifiedAtMs) ||
-      independentProof.priorEnrollmentOrProviderVerified !== true) {
+      independentProof.priorEnrollmentOrProviderVerified !== true ||
+      // Historical factors must have a separately audited enrollment date
+      // strictly earlier than the incident. A newly registered device or
+      // provider can never become retrospective ownership proof.
+      (independentProof.kind !== "independent_verified_recovery_factor" &&
+       (!Number.isSafeInteger(incidentCutoffMs) || incidentCutoffMs <= 0 ||
+        !Number.isSafeInteger(independentProof.enrolledAtMs) ||
+        independentProof.enrolledAtMs <= 0 ||
+        independentProof.enrolledAtMs >= incidentCutoffMs))) {
     return Object.freeze({decision:"HOLD",reason:"NO_TRUSTED_INDEPENDENT_FACTOR",
       loginPermitted:false});
   }
@@ -158,6 +167,10 @@ function reviewReadiness({
       reviewRecord.adminPrivilegesSeparatelyVerified !== true ||
       reviewRecord.challengeHash !== pinProof.challengeHash ||
       !recent(nowMs,reviewRecord.reviewedAtMs) ||
+      // Both proofs must precede (or coincide with) the independent review.
+      // Fresh but prewritten approvals cannot be reused for a later proof.
+      reviewRecord.reviewedAtMs < pinProof.verifiedAtMs ||
+      reviewRecord.reviewedAtMs < independentProof.verifiedAtMs ||
       !Array.isArray(reviewRecord.reviewers) ||
       reviewRecord.reviewers.length !== 2 ||
       !reviewRecord.reviewers.every(x => typeof x === "string" && x.length > 3) ||
