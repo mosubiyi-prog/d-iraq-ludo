@@ -92,6 +92,25 @@ void main() {
       '$account@deda-login.invalid', 'bad-phone'), false);
   });
 
+  test('Google-linked owner keeps same-UID eligibility after email changes', () {
+    final providers = <({String providerId, String? email})>[
+      (providerId: 'password', email: '$account@deda-login.invalid'),
+      (providerId: 'google.com', email: 'owner@example.com'),
+    ];
+    expect(DedaLinkedOwnerSessionPolicy.providerIdentityMatches(
+      accountKey: account, primaryEmail: 'owner@example.com',
+      providers: providers,
+    ), true);
+    expect(DedaLinkedOwnerSessionPolicy.providerIdentityMatches(
+      accountKey: account, primaryEmail: 'owner@example.com',
+      providers: [(providerId: 'google.com', email: 'owner@example.com')],
+    ), false);
+    expect(DedaLinkedOwnerSessionPolicy.providerIdentityMatches(
+      accountKey: '9647800000000', primaryEmail: 'owner@example.com',
+      providers: providers,
+    ), false);
+  });
+
   test('server owner documents require matching UID, route and session', () {
     bool proof({String? directoryUid = uid, String? sessionUid = uid,
         String? routeUid = uid, String? projectedId = personalId,
