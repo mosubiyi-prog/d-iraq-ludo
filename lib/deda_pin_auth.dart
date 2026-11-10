@@ -133,7 +133,7 @@ class DedaPinAuth {
     final current = FirebaseAuth.instance.currentUser;
     if (!(dedaLinkedOwnerCompatEnabled && current != null &&
         !current.isAnonymous &&
-        DedaLinkedOwnerSessionPolicy.emailMatches(current.email, account))) {
+        DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(current, account))) {
       await _ensureAnonymousSession();
     }
     final snapshot = await _directoryRef(phone)
@@ -230,8 +230,8 @@ class DedaPinAuth {
     final current = FirebaseAuth.instance.currentUser;
     if (dedaLinkedOwnerCompatEnabled && current != null &&
         !current.isAnonymous &&
-        DedaLinkedOwnerSessionPolicy.emailMatches(
-          current.email, cleanKey)) {
+        DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+          current, cleanKey)) {
       if (await DedaLinkedOwnerSessionPolicy.verified(current, cleanKey)) {
         return current;
       }
