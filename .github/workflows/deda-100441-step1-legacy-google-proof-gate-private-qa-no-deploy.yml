@@ -5,6 +5,8 @@ on:
       - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
     paths:
       - 'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js'
+      - 'functions/deda_100441_owner_split_identity_challenge_review_private_v1.js'
+      - 'functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js'
       - 'functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js'
       - 'functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js'
       - 'functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js'
@@ -35,13 +37,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+          git diff --exit-code a5ae36b71d2d22528f4768fd716310bfadec605a HEAD -- \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             functions/index.js functions/deda_owner_pin_verify_private_v1.js \
             functions/deda_linked_owner_session_grant_private_v1.js \
             functions/deda_stage2_live_gate.js firestore.rules storage.rules \
             firebase.json .firebaserc android assets pubspec.yaml pubspec.lock
-          echo PASS_PROTECTED_DEDA_APP_FIREBASE_SIGNING_UNCHANGED
+          echo PASS_PROTECTED_SINCE_LAST_APPROVED_CHECKPOINT_APP_FIREBASE_SIGNING_UNCHANGED
       - name: No deployed integration and no authority from QA Google project
         shell: bash
         run: |
@@ -57,6 +59,7 @@ jobs:
             'functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js','utf8');
           const index=fs.readFileSync('functions/index.js','utf8');
           assert.equal(index.includes('deda_100441_lab_to_legacy_google_proof_gate'),false);
+          assert.equal(index.includes('deda_100441_owner_split_identity_challenge_review_private_v1'),false);
           assert.equal(index.includes('deda_100441_legacy_google_oidc_verifier'),false);
           const verifier=fs.readFileSync(
             'functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js','utf8');
@@ -82,6 +85,6 @@ jobs:
             functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js \
             functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js \
             functions/test/deda_owner_pin_verify_private_v1.test.js
-          echo PASS_GOOGLE_QA_NOT_OWNER_PROOF_LEGACY_A_B_C_NOT_MODIFIED
+          echo PASS_GOOGLE_QA_NOT_OWNER_PROOF_THREE_UID_CANDIDATES_REVIEW_ONLY
       - name: No production operation
         run: echo PASS_NO_FIREBASE_DEPLOY_NO_AUTH_UID_MUTATION_NO_APK_NO_PLAY
