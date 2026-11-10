@@ -7,6 +7,7 @@ on:
       - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
     paths:
       - 'lib/deda_pin_auth.dart'
+      - 'lib/deda_backend.dart'
       - 'functions/deda_owner_pin_verify_private_v1.js'
       - 'functions/test/deda_owner_pin_verify_private_v1.test.js'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
@@ -48,7 +49,10 @@ jobs:
           assert "await _provePin(accountKey: accountKey, pin: pin);" in part
           assert ".collection('deda_auth_attempts')" not in linked
           assert ".httpsCallable('dedaVerifyExistingOwnerPin')" in linked
-          print('PASS_OPT_IN_PIN_IS_SERVER_VERIFIED_AND_LEGACY_PATH_RETAINED')
+          backend=Path('lib/deda_backend.dart').read_text()
+          assert 'DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)' in backend
+          assert 'DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(current, cleanKey)' in src
+          print('PASS_OPT_IN_PIN_AND_GOOGLE_SAME_UID_COMPAT_RETAINED')
           PY
       - uses: subosito/flutter-action@v2
         with:
@@ -57,7 +61,7 @@ jobs:
       - name: Resolve Flutter packages
         run: flutter pub get
       - name: Analyze bounded first-install Firebase Auth
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_backend.dart
       - name: Test existing linked-owner PIN gating policy (opt-in only)
         run: flutter test test/deda_owner_session_compat_private_test.dart --reporter expanded
       - name: Prevent unbounded first-user Firebase wait and network bypass
