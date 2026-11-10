@@ -108,6 +108,20 @@ class DedaLinkedOwnerSessionPolicy {
       (!hasStoredOriginalUid && !hasStoredAccountKey &&
           !hasProtectedTargetAccount && !hasLiveLinkedOwnerSession);
 
+  /// An existing account PIN must not manufacture an owner session in the
+  /// opt-in linked-owner pilot. PIN is only a secondary check AFTER a live,
+  /// non-anonymous Firebase principal passed original-owner server proof.
+  /// Keep legacy 100340 behavior unchanged while the pilot is disabled.
+  static bool mayAttemptExistingAccountPinSignIn({
+    required bool linkedOwnerPilotEnabled,
+    required bool firebaseSessionPresent,
+    required bool firebaseSessionAnonymous,
+    required bool serverVerifiedOriginalOwner,
+  }) =>
+      !linkedOwnerPilotEnabled ||
+      (firebaseSessionPresent && !firebaseSessionAnonymous &&
+          serverVerifiedOriginalOwner);
+
   /// A previously confirmed replacement phone must NEVER resume its cached
   /// display profile when Firebase Auth has a different UID, provider/email,
   /// or the stored proof belongs to another phone account. This is only a
