@@ -4,8 +4,11 @@ on:
   push:
     branches:
       - deda-next-four-items-stage0-2026-10-10
+      - deda-100441-step1-legacy-google-proof-gate-isolated-no-deploy-2026-11-09
     paths:
       - 'lib/deda_pin_auth.dart'
+      - 'lib/deda_100431_linked_owner_session_policy.dart'
+      - 'test/deda_owner_session_compat_private_test.dart'
       - 'tools/guard_deda_login_busy_indicator_next_release.py'
       - 'tests/stage14/test_login_busy_patch.py'
       - '.github/workflows/qa-deda-first-install-login-safety-no-apk.yml'
@@ -32,6 +35,8 @@ jobs:
         run: flutter pub get
       - name: Analyze bounded first-install Firebase Auth
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart
+      - name: Test existing linked-owner PIN gating policy (opt-in only)
+        run: flutter test test/deda_owner_session_compat_private_test.dart --reporter expanded
       - name: Prevent unbounded first-user Firebase wait and network bypass
         run: |
           python3 - <<'PY'
