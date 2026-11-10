@@ -137,7 +137,7 @@ test("late, absent or ungrounded pre-enrollment never qualifies as old owner pro
     assert.equal(result.reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
     assert.equal(result.loginPermitted,false);
   }
-  for (const cutoff of [undefined,null,0,NaN]) {
+  for (const cutoff of [undefined,null,0,NaN,nowMs+1000]) {
     const result=check({incidentCutoffMs:cutoff});
     assert.equal(result.reason,"NO_TRUSTED_INDEPENDENT_FACTOR");
   }

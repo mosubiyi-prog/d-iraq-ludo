@@ -148,6 +148,7 @@ function reviewReadiness({
       // provider can never become retrospective ownership proof.
       (independentProof.kind !== "independent_verified_recovery_factor" &&
        (!Number.isSafeInteger(incidentCutoffMs) || incidentCutoffMs <= 0 ||
+        incidentCutoffMs > nowMs ||
         !Number.isSafeInteger(independentProof.enrolledAtMs) ||
         independentProof.enrolledAtMs <= 0 ||
         independentProof.enrolledAtMs >= incidentCutoffMs))) {
