@@ -20,7 +20,8 @@ const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
 const {createOwnerPinVerifyCallable}
   = require("../deda_owner_pin_verify_private_v1.js");
 const {reviewExistingGoogleWithStoredNonce,
-  createTrustedGoogleNonceStore}
+  createTrustedGoogleNonceStore,
+  createPrivateGoogleRecoveryReviewCallable}
   = require("../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js");
 const {assessSameUidRecovery}
   = require("../deda_100441_same_uid_recovery_readiness_PRIVATE_NOT_EXPORTED.js");
@@ -361,6 +362,54 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert.equal(replay.status,"DENY");
     assert.equal(replay.reason,"NO_TRUSTED_SERVER_GOOGLE_CHALLENGE");
     assert.equal(await challengeStore.read({...requester,nonce}),null);
+
+    // Exercise the PRIVATE DEFAULT-OFF Callable adapter in-process with
+    // a REAL Firebase Auth Emulator ID token and Firestore transactions.
+    // AppCheck is still explicitly mocked, NOT device attested.
+    serverNow=t+61000;
+    let callableOptions;
+    class PrivateReviewDenied extends Error {
+      constructor(code,message){super(message);this.code=code;}
+    }
+    const callable=createPrivateGoogleRecoveryReviewCallable({
+      onCall:(options,handler)=>{callableOptions=options;return handler;},
+      HttpsError:PrivateReviewDenied,
+      db,auth:authAdmin,appCheckVerifier,productionConfig:prodConfig,
+      enabled:true,clock:()=>serverNow,loadTrustedGoogleJwks:async()=>jkeys,
+    });
+    assert.equal(callableOptions.enforceAppCheck,true);
+    const callableReq=(data,overrides={})=>({
+      data,auth:{uid:originalUid},
+      app:{appId:"1:123456789:android:emulator-test-only"},
+      rawRequest:{headers:{
+        authorization:"Bearer "+deviceToken,
+        "x-firebase-appcheck":requester.appCheckToken,
+      }},...overrides,
+    });
+    await assert.rejects(()=>callable(callableReq({op:"begin"},
+      {auth:{uid:"another-untrusted-firebase-owner"}})),
+      err=>err.code==="permission-denied");
+    const begun=await callable(callableReq({op:"begin"}));
+    assert.equal(begun.status,"CHALLENGE_ISSUED_FOR_GOOGLE_REVIEW_ONLY");
+    assert.equal(begun.mayLogin,false);
+    const header2=enc({alg:"RS256",kid:"local-demo-google-key",typ:"JWT"});
+    const payload2=enc({iss:"https://accounts.google.com",aud:audience,
+      sub:"101010101010101010101",nonce:begun.nonce,
+      iat:Math.floor(serverNow/1000)-5,exp:Math.floor(serverNow/1000)+300});
+    const oidc2=header2+"."+payload2+"."+
+      sign("RSA-SHA256",Buffer.from(header2+"."+payload2),privateKey)
+        .toString("base64url");
+    const reviewData={op:"review",nonce:begun.nonce,
+      googleIdToken:oidc2,accountKey:key,originalId:id};
+    const review=await callable(callableReq(reviewData));
+    assert.equal(review.status,"EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY");
+    assert.equal(review.mayLogin,false);
+    assert.equal(review.mayCreateUid,false);
+    assert.equal(review.mayLinkProvider,false);
+    assert(!JSON.stringify(review).includes(originalUid));
+    await assert.rejects(()=>callable(callableReq(reviewData)),
+      err=>err.code==="permission-denied");
+    assert.equal(oldAuth.currentUser.uid,originalUid);
 
     // Retain historical negative evidence: the Auth emulator does not
     // guarantee that REST autoCreate:false avoids account creation.
