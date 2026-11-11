@@ -120,6 +120,7 @@ jobs:
           assert 'Uri.https(' not in src
           assert 'google-read-only-provider-proof-not-deployed' in src
           assert 'trustedReadOnlyProviderLookupDeployed = false' in src
+          assert src.index('!DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed') < src.index("GoogleSignIn(scopes:")
           assert 'auth.signInWithCredential(credential)' in src
           assert 'dedaStep2GoogleReplacementLoginEnabled' in src
           print('PASS_GOOGLE_REPLACEMENT_NO_CREATING_REST_PRECHECK_FAIL_CLOSED')
