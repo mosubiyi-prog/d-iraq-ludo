@@ -8,6 +8,7 @@ on:
     paths:
       - 'lib/deda_pin_auth.dart'
       - 'lib/deda_backend.dart'
+      - 'lib/deda_100430_owner_uid_continuity.dart'
       - 'lib/deda_step2_google_replacement_login_100439.dart'
       - 'test/deda_google_replacement_existing_uid_private_test.dart'
       - 'test/deda_google_original_uid_link_private_test.dart'
@@ -68,8 +69,8 @@ jobs:
           cache: false
       - name: Resolve Flutter packages
         run: flutter pub get
-      - name: Analyze bounded first-install Firebase Auth
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_backend.dart
+      - name: Analyze bounded first-install Firebase Auth and original owner prelink
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_backend.dart lib/deda_100430_owner_uid_continuity.dart
       - name: Test existing linked-owner PIN gating policy (opt-in only)
         run: flutter test test/deda_owner_session_compat_private_test.dart --reporter expanded
       - name: Prepare Google sign-in package in disposable CI workspace only
@@ -81,8 +82,32 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart
       - name: Test existing Google UID match and no foreign account sign-out
         run: flutter test test/deda_google_replacement_existing_uid_private_test.dart --reporter expanded
-      - name: Prove anonymous original enrollment cannot reuse linked-password proof
+      - name: Prove same-UID original anonymous enrollment without linked-password bypass
         run: flutter test test/deda_google_original_uid_link_private_test.dart --reporter expanded
+      - name: Protect original prelink and legacy startup behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('lib/deda_100430_owner_uid_continuity.dart').read_text()
+          verify=Path('functions/deda_owner_pin_verify_private_v1.js').read_text()
+          index=Path('functions/index.js').read_text()
+          prelink=src.split('static Future<String> linkExistingOriginalUid({',1)[1].split(
+              'static void requireSameUidGoogleLink(',1)[0]
+          assert 'await _proveOriginalAnonymousPin(' in prelink
+          assert prelink.count('await _proveOriginalAnonymousPin(')==2
+          assert 'beforeLinkedIdentityTransition == null' in prelink
+          assert 'await DedaPinAuth.signIn(phone: phone, pin: pin);' in prelink
+          assert "if (dedaLinkedOwnerCompatEnabled)" in prelink
+          assert "original-anonymous-prelink" in src
+          assert "return {verified: true}" in verify
+          assert "request.auth.uid" in verify
+          assert "deda_social_profiles" in verify
+          assert "deda_sessions" in verify
+          assert 'stage2LiveGateEnabled("pinProof")' in index
+          for forbidden in ['createCustomToken(', 'signInWithCustomToken(']:
+              assert forbidden not in prelink
+          print('PASS_SAME_UID_ORIGINAL_PRELINK_DEFAULT_OFF_NO_TOKEN_NO_LEGACY_CHANGE')
+          PY
       - name: Keep secret registration and social owner reads on trusted server
         run: |
           python3 - <<'PY'
@@ -111,5 +136,13 @@ jobs:
           assert 'await _openSession(accountKey);' in src
           print('PASS: 12s first-install Firebase anonymous-auth deadline, 8s account directory timeout, offline known-account shortcut, PIN still mandatory.')
           PY
+      - name: Protected production app, Firebase and signing remain unchanged
+        run: |
+          git diff --exit-code a5ae36b71d2d22528f4768fd716310bfadec605a HEAD -- \
+            lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+            functions/index.js functions/deda_linked_owner_session_grant_private_v1.js \
+            firestore.rules storage.rules firebase.json .firebaserc \
+            android assets pubspec.yaml pubspec.lock
+          echo PASS_NO_PROTECTED_APP_FIREBASE_SIGNING_CHANGE
       - name: Guarantee source-only changes
         run: echo 'No APK, Play Store, Cloud Functions or Firebase deployment.'
