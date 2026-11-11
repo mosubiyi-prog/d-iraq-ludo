@@ -1,5 +1,16 @@
 # DEDA — خطة استرجاع الحساب المعتمدة من صاحب المشروع
 
+## ✅ 2026-11-11 — اختبار Google Emulator وموثوقية فحص الحساب الموجود
+
+- **المنجز المثبت:** امتداد لنفس اختبار الهاتفين على Firebase Auth/Firestore Emulator الموجود، باستخدام `GoogleAuthProvider.credential` بهوية تجريبية مصطنعة فقط. ربط Google التجريبي بعد PIN+password على **نفس UID الأصلي** نجح، ودخول عميل Firebase آخر بنفس Google التجريبي أعاد UID نفسه. نجح كذلك بحث Admin Auth **للقراءة فقط** بواسطة `getUserByProviderUid('google.com',subject)` للحساب المرتبط ورفض البحث عن مزوّد مجهول، من دون إصدار UID جديد بهذه القراءة.
+- **كشف حد أمني لا يجوز تجاهله:** اختبار `accounts:signInWithIdp` بخيار `autoCreate:false` على **Firebase Auth Emulator** أعاد HTTP 200 حتى لهوية Google غير مرتبطة مسبقاً؛ لذلك هذه الواجهة ليست دليلاً كافياً في هذا المحاكي على منع إنشاء Auth UID. لا نُعمّم السلوك على Google الإنتاجي دون تحقق مستقل، ولا نسمح باستخدام هذا الـREST preflight وحده كحارس قبل إطلاق الاسترجاع.
+- **إصلاح حماية العميل المعزول:** `DedaGoogleReplacementProof.existingUidOnly` صار يرفض ردود IDP التي لا تحتوي على `isNewUser == false` بشكل صريح، ويرفض `true` أو `null` أو الحقل المفقود. هذه حماية تمنع دخول العميل بناءً على حالة غير مؤكدة، **لكنها لا تمنع الأثر الجانبي المحتمل لإنشاء Auth user من طلب REST نفسه**؛ لذلك تبقى وصلة Google على الهاتف الجديد مقفلة ولا يمكن اعتبارها إطلاقاً آمناً.
+- **الاختبارات:** [GitHub Actions 43022020924](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43022020924) = SUCCESS على commit `0e433e003dd8eb5a9aaed3fcbe45ceeb216fdc4a`: **61/61 Node+emulator و25/25 Flutter**، صفر فشل؛ فحص ملفات الإنتاج المحمية/Firebase والتوقيع ناجح. جميع بيانات المحاكي تجريبية؛ ليس Google OAuth حقيقياً على الهاتف والتابلت.
+- **الحاجز التالي قبل أي تشغيل Google حقيقي:** استبدال الاعتماد على الـREST IDP المسبب لاحتمال الإنشاء بفحص **خادمي للقراءة فقط** لـGoogle provider المرتبط، بعد التحقق المشفر من Google OIDC token والمصدر/الـnonce ومن إثبات UID الأصلي، باستخدام الموجود من فاحص OIDC وخدمة الهوية، دون إنشاء مسار تسجيل أو منح UID من PIN. فحص Admin read-only نجح بالمحاكي، لكنه **ليس بعد Callable موثقة أو موصولة بالعميل**؛ يجب إكمال إثبات OIDC/AppCheck والربط قبل إصدار APK تجريبي أو تفعيل Firebase.
+- **الحدود:** لا تعديل `functions/index.js` أو قواعد Firestore أو Firebase الحقيقي، لا APK/Play، لا منح صلاحيات ولا أرصدة، ولا معالجة تلقائية لـA/B/C. يمنع وصف ربط Google الحقيقي أو استرجاع المستخدمين بأنه اكتمل.
+
+---
+
 ## ✅ 2026-11-11 — اختبار Firebase Emulator فعلي: الهاتف القديم ↔ الجهاز الثاني مع UID ثابت
 
 - **نطاق التنفيذ:** توسعة الاختبار الموجود `functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js`، وإلحاق التشغيل بملف QA الموجود `.github/workflows/qa-deda-first-install-login-safety-no-apk.yml` فقط. لا خدمة جديدة، ولا قواعد أو دوال إنتاجية أو APK/Play.
