@@ -105,6 +105,23 @@ void main() {
     expect(() => proof(expected: 'wrong-expected-uid'), throwsStateError);
   });
 
+  test('failed Google recovery cannot sign out a concurrent different user', () {
+    bool discard({String? attempted = uid, String? prior = 'new-device-anon',
+      String? live = uid, bool anonymous = false}) =>
+        DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: attempted, priorUid: prior,
+          liveUid: live, liveAnonymous: anonymous);
+
+    expect(discard(), true); // Only the failed attempt's own principal.
+    expect(discard(live: 'different-live-account'), false);
+    expect(discard(live: 'new-device-anon', anonymous: true), false);
+    expect(discard(live: null), false);
+    expect(discard(attempted: null), false);
+    expect(discard(attempted: ''), false);
+    expect(discard(prior: uid), false);
+    expect(discard(anonymous: true), false);
+  });
+
   test('server directory, session and original public ID all remain required', () {
     expect(() => proof(directoryUid: 'wrong-uid'), throwsStateError);
     expect(() => proof(sessionUid: 'wrong-uid'), throwsStateError);
