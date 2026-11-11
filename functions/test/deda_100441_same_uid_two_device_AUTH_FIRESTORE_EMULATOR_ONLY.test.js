@@ -14,7 +14,9 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {initializeApp:clientInit,deleteApp:clientDelete}
   = require("firebase/app");
 const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
-  signInAnonymously,signOut} = require("firebase/auth");
+  signInAnonymously,signOut,EmailAuthProvider,linkWithCredential} = require("firebase/auth");
+const {createOwnerPinVerifyCallable}
+  = require("../deda_owner_pin_verify_private_v1.js");
 const {assessSameUidRecovery}
   = require("../deda_100441_same_uid_recovery_readiness_PRIVATE_NOT_EXPORTED.js");
 
@@ -143,5 +145,97 @@ test("Firestore account and finances are unaffected by anonymous blocked review"
   ];
   for(const [path,key,want] of docs) {
     assert.equal((await db.doc(path).get()).data()[key],want);
+  }
+});
+
+
+test("same UID original anonymous prelink PIN approval and password link on two local devices",async()=>{
+  // All fixtures are synthetic and run ONLY with Auth+Firestore emulators.
+  // Callable is invoked in-process with injected Admin SDK; this is NOT an
+  // externally deployed endpoint and AppCheck is simulated, not attested.
+  const key="07222222222",id="@DEDA-EMUL99",pin="731946";
+  const email2=key+"@deda-login.invalid";
+  const oldApp=clientInit({projectId,apiKey:"demo-old-phone",authDomain:"localhost"},
+    "deda-stage5-legacy-old-phone");
+  const newApp=clientInit({projectId,apiKey:"demo-new-phone",authDomain:"localhost"},
+    "deda-stage5-legacy-replacement-phone");
+  const oldAuth=getAuth(oldApp),newAuth=getAuth(newApp);
+  connectAuthEmulator(oldAuth,"http://127.0.0.1:9099",{disableWarnings:true});
+  connectAuthEmulator(newAuth,"http://127.0.0.1:9099",{disableWarnings:true});
+  try {
+    const old=await signInAnonymously(oldAuth);
+    const originalUid=old.user.uid;
+    const docs={
+      ["deda_account_directory/"+key]:{
+        accountKey:key,createdUid:originalUid,active:true},
+      ["deda_credentials/"+key]:{
+        accountKey:key,createdUid:originalUid,pin,active:true},
+      ["deda_share_ids/"+id]:{
+        publicId:id,kind:"personal",ownerUid:originalUid,active:true},
+      ["users/"+originalUid]:{accountKey:key,sharePersonalId:id},
+      ["deda_social_profiles/"+id]:{
+        publicId:id,ownerUid:originalUid},
+      ["deda_sessions/"+originalUid]:{
+        uid:originalUid,accountKey:key},
+      ["deda_wallets/"+originalUid]:{diamonds:1234},
+      ["deda_gifts/"+originalUid]:{giftCount:5},
+    };
+    const batch=db.batch();
+    for(const [path,value] of Object.entries(docs))batch.set(db.doc(path),value);
+    await batch.commit();
+
+    class PrivateHttpsError extends Error {
+      constructor(code,message){super(message);this.code=code;}
+    }
+    const proof=createOwnerPinVerifyCallable({
+      onCall:(_options,handler)=>handler,HttpsError:PrivateHttpsError,
+      db,auth:authAdmin,enabled:true,now:()=>1770000000000,
+    });
+    const request=(authUid,pinValue=pin,publicId=id)=>({
+      auth:{uid:authUid,token:{firebase:{sign_in_provider:"anonymous"}}},
+      app:{appId:"emulator-only-fake-appcheck-not-a-proof"},
+      data:{phone:key,pin:pinValue,originalId:publicId,
+        proofMode:"original-anonymous-prelink"},
+    });
+    // New anonymous device must NEVER claim the old UID by knowing PIN.
+    const stranger=await signInAnonymously(newAuth);
+    assert.notEqual(stranger.user.uid,originalUid);
+    await assert.rejects(()=>proof(request(stranger.user.uid)),
+      e=>e.code==="permission-denied");
+    await assert.rejects(()=>proof(request(originalUid,"000000")),
+      e=>e.code==="permission-denied");
+
+    const verified=await proof(request(originalUid));
+    assert.deepEqual(verified,{verified:true});
+    assert.equal(oldAuth.currentUser.uid,originalUid);
+    assert.equal(oldAuth.currentUser.isAnonymous,true);
+
+    // Real local Firebase Auth emulator credential link on the ORIGINAL UID.
+    const linked=await linkWithCredential(oldAuth.currentUser,
+      EmailAuthProvider.credential(email2,pin));
+    assert.equal(linked.user.uid,originalUid);
+    assert.equal(oldAuth.currentUser.uid,originalUid);
+    assert.equal(oldAuth.currentUser.isAnonymous,false);
+    const same=await signInWithEmailAndPassword(newAuth,email2,pin);
+    assert.equal(same.user.uid,originalUid);
+    assert.equal(oldAuth.currentUser.uid,newAuth.currentUser.uid);
+    // Do not treat sign-in as authorization to restore financial history.
+    for(const [path,field,want] of [
+      ["deda_account_directory/"+key,"createdUid",originalUid],
+      ["deda_credentials/"+key,"createdUid",originalUid],
+      ["deda_share_ids/"+id,"ownerUid",originalUid],
+      ["deda_social_profiles/"+id,"ownerUid",originalUid],
+      ["deda_wallets/"+originalUid,"diamonds",1234],
+      ["deda_gifts/"+originalUid,"giftCount",5],
+    ])assert.equal((await db.doc(path).get()).data()[field],want,path);
+
+    // The prelink proof must no longer work after credential enrollment.
+    await assert.rejects(()=>proof(request(originalUid)),
+      e=>e.code==="permission-denied");
+  } finally {
+    if(oldAuth.currentUser)await signOut(oldAuth).catch(()=>{});
+    if(newAuth.currentUser)await signOut(newAuth).catch(()=>{});
+    await clientDelete(oldApp).catch(()=>{});
+    await clientDelete(newApp).catch(()=>{});
   }
 });
