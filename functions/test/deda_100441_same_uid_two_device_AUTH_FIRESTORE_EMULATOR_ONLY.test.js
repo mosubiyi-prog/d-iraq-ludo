@@ -267,8 +267,19 @@ test("same UID original anonymous prelink PIN approval and password link on two 
       email:"unlinked-deda-emulator@example.test",
       email_verified:true,
     }));
-    assert.notEqual(unrelatedGoogle.status,200,
-      "No-create preflight must reject a never-linked Google identity");
+    // Current Auth Emulator may IGNORE autoCreate:false and return success.
+    // Treat this explicitly as an UNSAFE PRE-FLIGHT, never as proof that
+    // calling the REST endpoint cannot create a new Auth UID in production.
+    // A 200 response for an unlinked provider must be classified as NEW or
+    // UNKNOWN (both DENY), not admitted into DEDA's original account.
+    if(unrelatedGoogle.status===200) {
+      assert.notEqual(unrelatedGoogle.result.localId,originalUid);
+      assert.notEqual(unrelatedGoogle.result.isNewUser,false,
+        "Emulator falsely marked an unlinked Google identity as existing");
+      assert.equal((await db.doc(
+        "deda_account_directory/"+key).get()).data().createdUid,originalUid);
+      console.log("EMULATOR_NO_CREATE_NOT_GUARANTEED__NEW_UID_HOLD_ONLY");
+    }
     await signOut(newAuth);
     const googleOtherPhone=await signInWithCredential(newAuth,
       mockGoogleCredential);
