@@ -100,6 +100,814 @@ class DedaGoogleReplacementProof {
   }
 }
 
+/// Narrow private protocol for the NOT DEPLOYED Google review Callable.
+/// This prepares request and response validation without changing Firebase
+/// Auth, beginning an OAuth login, or approving a replacement-account login.
+typedef DedaGoogleReviewRequestSender = Future<Map<String, dynamic>> Function(
+    Map<String, dynamic> data);
+
+class DedaGoogleReviewChallenge {
+  const DedaGoogleReviewChallenge({
+    required this.nonce,
+    required this.createdAtMs,
+    required this.productionOAuthAudience,
+  });
+  final String nonce, productionOAuthAudience;
+  final int createdAtMs;
+}
+
+class DedaGoogleReviewOnlyResult {
+  const DedaGoogleReviewOnlyResult();
+  bool get mayLogin => false;
+  bool get mayCreateUid => false;
+  bool get mayLinkProvider => false;
+  bool get mayWriteFirestore => false;
+}
+
+/// Explicitly separate a Google IDENTITY REVIEW from Firebase sign-in.
+/// The injected sender is never initialized in a published application;
+/// DedaGoogleReplacementLogin remains disabled independently.
+class DedaGoogleReviewOnlyBridge {
+  const DedaGoogleReviewOnlyBridge({
+    required this.send,
+    this.enabled = false,
+  });
+
+  final DedaGoogleReviewRequestSender send;
+  final bool enabled;
+
+  static void _noLoginAuthority(Map<String, dynamic> answer) {
+    if (answer.containsKey('uid') || answer.containsKey('originalUid') ||
+        answer.containsKey('customToken') || answer.containsKey('idToken') ||
+        answer.containsKey('accessToken') ||
+        answer['mayLogin'] != false ||
+        answer['mayCreateUid'] != false ||
+        answer['mayLinkProvider'] != false ||
+        answer['mayWriteFirestore'] != false) {
+      throw StateError('google-review-response-granted-unapproved-authority');
+    }
+  }
+
+  Future<DedaGoogleReviewChallenge> begin() async {
+    if (!enabled) throw StateError('google-review-bridge-not-approved');
+    final answer = await send(<String, dynamic>{'op': 'begin'});
+    _noLoginAuthority(answer);
+    final nonce = answer['nonce'];
+    final at = answer['createdAtMs'];
+    final audience = answer['productionOAuthAudience'];
+    if (answer['status'] != 'CHALLENGE_ISSUED_FOR_GOOGLE_REVIEW_ONLY' ||
+        nonce is! String ||
+        !RegExp(r'^[A-Za-z0-9_-]{24,128}
+  const DedaGoogleReplacementLogin._();
+
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
+  static Future<String> _existingUid(String idToken) async {
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
+  }
+
+  /// A successfully verified IDENTITY is not a restored profile or wallet.
+  /// No DEDA profile preferences or database writes occur in this method.
+  static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
+    required bool explicitUserAction,
+    required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
+  }) async {
+    if (!explicitUserAction || !isCurrentIntent() ||
+        !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
+        !dedaLinkedOwnerCompatEnabled ||
+        !dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
+      throw StateError('google-replacement-login-not-approved');
+    }
+    final auth = FirebaseAuth.instance;
+    final prior = auth.currentUser;
+    if (prior != null && !prior.isAnonymous) {
+      throw StateError('cannot-replace-existing-linked-or-admin-session');
+    }
+    // Collect the Google consent before acquiring the shared auth lane.
+    final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
+    if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
+    final tokens = await selected.authentication;
+    final idToken = tokens.idToken;
+    if (idToken == null || idToken.isEmpty ||
+        !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-consent-or-existing-session-changed');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
+    final existingUid = await _existingUid(idToken);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-intent-expired');
+    }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
+    final credential = GoogleAuthProvider.credential(
+        idToken: idToken, accessToken: tokens.accessToken);
+    try {
+      return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
+        isCurrent: isCurrentIntent,
+        action: () async {
+          if (auth.currentUser?.uid != prior?.uid ||
+              (auth.currentUser != null &&
+                  auth.currentUser?.isAnonymous != true)) {
+            throw StateError('google-auth-principal-changed');
+          }
+          final result = await DedaAuthRuntime.controller
+              .transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => auth.signInWithCredential(credential),
+            accepts: (result, live) =>
+                result.user?.uid == existingUid && live.uid == existingUid &&
+                live.kind == DedaSessionAuthKind.authenticated,
+          );
+          final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
+          Future<Map<String, dynamic>?> server(String path) async {
+            final row = await FirebaseFirestore.instance.doc(path).get(
+                const GetOptions(source: Source.server));
+            DedaAuthRuntime.check();
+            if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+                auth.currentUser?.uid != uid) {
+              throw StateError('google-original-owner-server-proof-failed');
+            }
+            return row.data();
+          }
+          final user = await server('users/$uid');
+          final account = user?['accountKey'];
+          if (account is! String ||
+              !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
+            throw StateError('google-uid-has-no-original-deda-account');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
+          final rows = await Future.wait([
+            server('deda_account_directory/$account'),
+            server('deda_sessions/$uid'),
+            server('deda_share_ids/$originalId'),
+            server('admins/$uid'),
+          ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
+      final current = auth.currentUser;
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
+      }
+      rethrow;
+    }
+  }
+}
+).hasMatch(nonce) ||
+        at is! int || at <= 0 ||
+        audience is! String ||
+        !RegExp(r'^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com
+  const DedaGoogleReplacementLogin._();
+
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
+  static Future<String> _existingUid(String idToken) async {
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
+  }
+
+  /// A successfully verified IDENTITY is not a restored profile or wallet.
+  /// No DEDA profile preferences or database writes occur in this method.
+  static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
+    required bool explicitUserAction,
+    required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
+  }) async {
+    if (!explicitUserAction || !isCurrentIntent() ||
+        !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
+        !dedaLinkedOwnerCompatEnabled ||
+        !dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
+      throw StateError('google-replacement-login-not-approved');
+    }
+    final auth = FirebaseAuth.instance;
+    final prior = auth.currentUser;
+    if (prior != null && !prior.isAnonymous) {
+      throw StateError('cannot-replace-existing-linked-or-admin-session');
+    }
+    // Collect the Google consent before acquiring the shared auth lane.
+    final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
+    if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
+    final tokens = await selected.authentication;
+    final idToken = tokens.idToken;
+    if (idToken == null || idToken.isEmpty ||
+        !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-consent-or-existing-session-changed');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
+    final existingUid = await _existingUid(idToken);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-intent-expired');
+    }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
+    final credential = GoogleAuthProvider.credential(
+        idToken: idToken, accessToken: tokens.accessToken);
+    try {
+      return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
+        isCurrent: isCurrentIntent,
+        action: () async {
+          if (auth.currentUser?.uid != prior?.uid ||
+              (auth.currentUser != null &&
+                  auth.currentUser?.isAnonymous != true)) {
+            throw StateError('google-auth-principal-changed');
+          }
+          final result = await DedaAuthRuntime.controller
+              .transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => auth.signInWithCredential(credential),
+            accepts: (result, live) =>
+                result.user?.uid == existingUid && live.uid == existingUid &&
+                live.kind == DedaSessionAuthKind.authenticated,
+          );
+          final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
+          Future<Map<String, dynamic>?> server(String path) async {
+            final row = await FirebaseFirestore.instance.doc(path).get(
+                const GetOptions(source: Source.server));
+            DedaAuthRuntime.check();
+            if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+                auth.currentUser?.uid != uid) {
+              throw StateError('google-original-owner-server-proof-failed');
+            }
+            return row.data();
+          }
+          final user = await server('users/$uid');
+          final account = user?['accountKey'];
+          if (account is! String ||
+              !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
+            throw StateError('google-uid-has-no-original-deda-account');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
+          final rows = await Future.wait([
+            server('deda_account_directory/$account'),
+            server('deda_sessions/$uid'),
+            server('deda_share_ids/$originalId'),
+            server('admins/$uid'),
+          ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
+      final current = auth.currentUser;
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
+      }
+      rethrow;
+    }
+  }
+}
+)
+            .hasMatch(audience)) {
+      throw StateError('google-review-server-challenge-invalid');
+    }
+    return DedaGoogleReviewChallenge(
+      nonce: nonce, createdAtMs: at, productionOAuthAudience: audience);
+  }
+
+  Future<DedaGoogleReviewOnlyResult> reviewOnly({
+    required DedaGoogleReviewChallenge challenge,
+    required String googleIdToken,
+    required String accountKey,
+    required String originalId,
+  }) async {
+    if (!enabled) throw StateError('google-review-bridge-not-approved');
+    if (!RegExp(r'^(?:07\d{9}|9647\d{9})
+  const DedaGoogleReplacementLogin._();
+
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
+  static Future<String> _existingUid(String idToken) async {
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
+  }
+
+  /// A successfully verified IDENTITY is not a restored profile or wallet.
+  /// No DEDA profile preferences or database writes occur in this method.
+  static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
+    required bool explicitUserAction,
+    required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
+  }) async {
+    if (!explicitUserAction || !isCurrentIntent() ||
+        !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
+        !dedaLinkedOwnerCompatEnabled ||
+        !dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
+      throw StateError('google-replacement-login-not-approved');
+    }
+    final auth = FirebaseAuth.instance;
+    final prior = auth.currentUser;
+    if (prior != null && !prior.isAnonymous) {
+      throw StateError('cannot-replace-existing-linked-or-admin-session');
+    }
+    // Collect the Google consent before acquiring the shared auth lane.
+    final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
+    if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
+    final tokens = await selected.authentication;
+    final idToken = tokens.idToken;
+    if (idToken == null || idToken.isEmpty ||
+        !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-consent-or-existing-session-changed');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
+    final existingUid = await _existingUid(idToken);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-intent-expired');
+    }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
+    final credential = GoogleAuthProvider.credential(
+        idToken: idToken, accessToken: tokens.accessToken);
+    try {
+      return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
+        isCurrent: isCurrentIntent,
+        action: () async {
+          if (auth.currentUser?.uid != prior?.uid ||
+              (auth.currentUser != null &&
+                  auth.currentUser?.isAnonymous != true)) {
+            throw StateError('google-auth-principal-changed');
+          }
+          final result = await DedaAuthRuntime.controller
+              .transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => auth.signInWithCredential(credential),
+            accepts: (result, live) =>
+                result.user?.uid == existingUid && live.uid == existingUid &&
+                live.kind == DedaSessionAuthKind.authenticated,
+          );
+          final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
+          Future<Map<String, dynamic>?> server(String path) async {
+            final row = await FirebaseFirestore.instance.doc(path).get(
+                const GetOptions(source: Source.server));
+            DedaAuthRuntime.check();
+            if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+                auth.currentUser?.uid != uid) {
+              throw StateError('google-original-owner-server-proof-failed');
+            }
+            return row.data();
+          }
+          final user = await server('users/$uid');
+          final account = user?['accountKey'];
+          if (account is! String ||
+              !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
+            throw StateError('google-uid-has-no-original-deda-account');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
+          final rows = await Future.wait([
+            server('deda_account_directory/$account'),
+            server('deda_sessions/$uid'),
+            server('deda_share_ids/$originalId'),
+            server('admins/$uid'),
+          ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
+      final current = auth.currentUser;
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
+      }
+      rethrow;
+    }
+  }
+}
+).hasMatch(accountKey) ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}
+  const DedaGoogleReplacementLogin._();
+
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
+  static Future<String> _existingUid(String idToken) async {
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
+  }
+
+  /// A successfully verified IDENTITY is not a restored profile or wallet.
+  /// No DEDA profile preferences or database writes occur in this method.
+  static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
+    required bool explicitUserAction,
+    required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
+  }) async {
+    if (!explicitUserAction || !isCurrentIntent() ||
+        !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
+        !dedaLinkedOwnerCompatEnabled ||
+        !dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
+      throw StateError('google-replacement-login-not-approved');
+    }
+    final auth = FirebaseAuth.instance;
+    final prior = auth.currentUser;
+    if (prior != null && !prior.isAnonymous) {
+      throw StateError('cannot-replace-existing-linked-or-admin-session');
+    }
+    // Collect the Google consent before acquiring the shared auth lane.
+    final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
+    if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
+    final tokens = await selected.authentication;
+    final idToken = tokens.idToken;
+    if (idToken == null || idToken.isEmpty ||
+        !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-consent-or-existing-session-changed');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
+    final existingUid = await _existingUid(idToken);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-intent-expired');
+    }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
+    final credential = GoogleAuthProvider.credential(
+        idToken: idToken, accessToken: tokens.accessToken);
+    try {
+      return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
+        isCurrent: isCurrentIntent,
+        action: () async {
+          if (auth.currentUser?.uid != prior?.uid ||
+              (auth.currentUser != null &&
+                  auth.currentUser?.isAnonymous != true)) {
+            throw StateError('google-auth-principal-changed');
+          }
+          final result = await DedaAuthRuntime.controller
+              .transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => auth.signInWithCredential(credential),
+            accepts: (result, live) =>
+                result.user?.uid == existingUid && live.uid == existingUid &&
+                live.kind == DedaSessionAuthKind.authenticated,
+          );
+          final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
+          Future<Map<String, dynamic>?> server(String path) async {
+            final row = await FirebaseFirestore.instance.doc(path).get(
+                const GetOptions(source: Source.server));
+            DedaAuthRuntime.check();
+            if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+                auth.currentUser?.uid != uid) {
+              throw StateError('google-original-owner-server-proof-failed');
+            }
+            return row.data();
+          }
+          final user = await server('users/$uid');
+          final account = user?['accountKey'];
+          if (account is! String ||
+              !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
+            throw StateError('google-uid-has-no-original-deda-account');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
+          final rows = await Future.wait([
+            server('deda_account_directory/$account'),
+            server('deda_sessions/$uid'),
+            server('deda_share_ids/$originalId'),
+            server('admins/$uid'),
+          ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
+      final current = auth.currentUser;
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
+      }
+      rethrow;
+    }
+  }
+}
+).hasMatch(originalId) ||
+        googleIdToken.length < 100 || googleIdToken.length > 8192 ||
+        !RegExp(r'^[A-Za-z0-9_-]{24,128}
+  const DedaGoogleReplacementLogin._();
+
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
+  static Future<String> _existingUid(String idToken) async {
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
+  }
+
+  /// A successfully verified IDENTITY is not a restored profile or wallet.
+  /// No DEDA profile preferences or database writes occur in this method.
+  static Future<DedaGoogleVerifiedExistingOwner?> verifyOnNewPhone({
+    required bool explicitUserAction,
+    required bool Function() isCurrentIntent,
+    DedaGoogleRecoveryProgress? onProgress,
+  }) async {
+    if (!explicitUserAction || !isCurrentIntent() ||
+        !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
+        !dedaLinkedOwnerCompatEnabled ||
+        !dedaStep2SparkLinkedUidReadOnlyEnabled ||
+        !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
+      throw StateError('google-replacement-login-not-approved');
+    }
+    final auth = FirebaseAuth.instance;
+    final prior = auth.currentUser;
+    if (prior != null && !prior.isAnonymous) {
+      throw StateError('cannot-replace-existing-linked-or-admin-session');
+    }
+    // Collect the Google consent before acquiring the shared auth lane.
+    final selected = await GoogleSignIn(scopes: <String>['email']).signIn();
+    if (selected == null) return null;
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-changed-after-account-choice');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.accountChosen);
+    final tokens = await selected.authentication;
+    final idToken = tokens.idToken;
+    if (idToken == null || idToken.isEmpty ||
+        !isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-consent-or-existing-session-changed');
+    }
+    onProgress?.call(DedaGoogleRecoveryStage.googleTokenReceived);
+    final existingUid = await _existingUid(idToken);
+    if (!isCurrentIntent() || auth.currentUser?.uid != prior?.uid) {
+      throw StateError('google-owner-intent-expired');
+    }
+    onProgress?.call(
+        DedaGoogleRecoveryStage.existingGoogleProviderResolved);
+    final credential = GoogleAuthProvider.credential(
+        idToken: idToken, accessToken: tokens.accessToken);
+    try {
+      return await DedaAuthRuntime.run<DedaGoogleVerifiedExistingOwner>(
+        kind: DedaSessionTransitionKind.ownerLogin,
+        origin: DedaSessionTransitionOrigin.userAction,
+        verifiedOwnerLoginMaxWait: const Duration(seconds: 90),
+        isCurrent: isCurrentIntent,
+        action: () async {
+          if (auth.currentUser?.uid != prior?.uid ||
+              (auth.currentUser != null &&
+                  auth.currentUser?.isAnonymous != true)) {
+            throw StateError('google-auth-principal-changed');
+          }
+          final result = await DedaAuthRuntime.controller
+              .transition<UserCredential>(
+            kind: DedaSessionTransitionKind.ownerLogin,
+            action: () => auth.signInWithCredential(credential),
+            accepts: (result, live) =>
+                result.user?.uid == existingUid && live.uid == existingUid &&
+                live.kind == DedaSessionAuthKind.authenticated,
+          );
+          final uid = result.user!.uid;
+          onProgress?.call(DedaGoogleRecoveryStage.firebaseOriginalUidSignedIn);
+          Future<Map<String, dynamic>?> server(String path) async {
+            final row = await FirebaseFirestore.instance.doc(path).get(
+                const GetOptions(source: Source.server));
+            DedaAuthRuntime.check();
+            if (row.metadata.isFromCache || row.metadata.hasPendingWrites ||
+                auth.currentUser?.uid != uid) {
+              throw StateError('google-original-owner-server-proof-failed');
+            }
+            return row.data();
+          }
+          final user = await server('users/$uid');
+          final account = user?['accountKey'];
+          if (account is! String ||
+              !RegExp(r'^(?:07\d{9}|9647\d{9})$').hasMatch(account)) {
+            throw StateError('google-uid-has-no-original-deda-account');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalUserReadFromServer);
+          final originalId = user?['sharePersonalId'];
+          if (originalId is! String ||
+              !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(originalId)) {
+            throw StateError('google-original-share-id-not-proven');
+          }
+          final rows = await Future.wait([
+            server('deda_account_directory/$account'),
+            server('deda_sessions/$uid'),
+            server('deda_share_ids/$originalId'),
+            server('admins/$uid'),
+          ]);
+          onProgress?.call(DedaGoogleRecoveryStage.ownerDocumentsReadFromServer);
+          final confirmed = DedaGoogleReplacementProof
+              .requireOriginalServerIdentity(
+            expectedUid: existingUid, currentUid: uid,
+            currentEmail: auth.currentUser?.email,
+            providers: auth.currentUser!.providerData.map((p) =>
+                (providerId: p.providerId, email: p.email)),
+            anonymous: auth.currentUser!.isAnonymous,
+            user: user, directory: rows[0], session: rows[1],
+            route: rows[2], adminDocumentExists: rows[3] != null,
+          );
+          if (!isCurrentIntent() || auth.currentUser?.uid != existingUid) {
+            throw StateError('google-original-owner-changed-after-readback');
+          }
+          onProgress?.call(DedaGoogleRecoveryStage.originalOwnerVerified);
+          // This is NOT guardian restoration or a verified diamond receipt.
+          return confirmed;
+        },
+      );
+    } catch (_) {
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
+      final current = auth.currentUser;
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
+      }
+      rethrow;
+    }
+  }
+}
+).hasMatch(challenge.nonce)) {
+      throw StateError('google-review-request-invalid');
+    }
+    final answer = await send(<String, dynamic>{
+      'op': 'review',
+      'nonce': challenge.nonce,
+      'googleIdToken': googleIdToken,
+      'accountKey': accountKey,
+      'originalId': originalId,
+    });
+    _noLoginAuthority(answer);
+    if (answer['status'] != 'EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY') {
+      throw StateError('google-review-owner-not-proven');
+    }
+    // This is intentionally NOT an authorization for signInWithCredential:
+    // a provider can be removed between server review and a client sign-in.
+    return const DedaGoogleReviewOnlyResult();
+  }
+}
+
 class DedaGoogleReplacementLogin {
   const DedaGoogleReplacementLogin._();
 
