@@ -61,7 +61,8 @@ async function consumeAttempt(db, accountKey, nowMs) {
 }
 
 function validCanonicalProof({key, directory, credentials, projection,
-  route, adminExists, authUser}) {
+  route, adminExists, authUser, originalAnonymousUid = null,
+  social = null, session = null}) {
   if (!directory || !credentials || !projection || !route ||
       adminExists || directory.active !== true ||
       credentials.active !== true ||
@@ -75,8 +76,22 @@ function validCanonicalProof({key, directory, credentials, projection,
       !/^@DEDA-[A-Z0-9]{6}$/.test(originalId) ||
       route.publicId !== originalId || route.kind !== "personal" ||
       route.active !== true || route.ownerUid !== uid ||
-      !authUser || authUser.uid !== uid || authUser.disabled === true ||
-      authUser.email !== `${key}@deda-login.invalid` ||
+      !authUser || authUser.uid !== uid || authUser.disabled === true) {
+    return null;
+  }
+  if (originalAnonymousUid !== null) {
+    // Initial registration is allowed ONLY from the existing anonymous
+    // Firebase principal that owns every server record. A PIN on another
+    // anonymous installation is never an ownership/UID migration proof.
+    if (originalAnonymousUid !== uid || authUser.email != null ||
+        directory.authEmail != null ||
+        (Array.isArray(authUser.providerData) &&
+          authUser.providerData.length !== 0) ||
+        !social || social.publicId !== originalId ||
+        social.ownerUid !== uid ||
+        !session || session.uid !== uid ||
+        session.accountKey !== key) return null;
+  } else if (authUser.email !== `${key}@deda-login.invalid` ||
       (directory.authEmail != null &&
         directory.authEmail !== authUser.email)) return null;
   return {originalUid: uid, originalId};
@@ -99,9 +114,13 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
     // This path never exchanges an anonymous UID for the original owner UID.
     const sameUidPasswordProof = provider === "password" &&
         request?.data?.proofMode === "linked-password";
+    const originalAnonymousPrelink = provider === "anonymous" &&
+        request?.data?.proofMode === "original-anonymous-prelink";
     if (!enabled || !request || !request.app?.appId ||
         !request.auth?.uid ||
-        (provider !== "anonymous" && !sameUidPasswordProof)) {
+        (provider !== "anonymous" && !sameUidPasswordProof) ||
+        (request?.data?.proofMode === "original-anonymous-prelink" &&
+          !originalAnonymousPrelink)) {
       return deny();
     }
     const key = accountKeyForPhone(request.data?.phone);
@@ -126,10 +145,28 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
       // diverged, or when a rotation was committed but not acknowledged.
       // Existing linked owners need an explicitly synchronized migration;
       // an absent or stale sync marker fails CLOSED.
-      if (lockSnap.exists || !syncMarkerMatches(credentials) ||
+      // Original 100340 anonymous registrations have no Firebase password
+      // provider OR synchronized password marker yet. They must retain the
+      // original anonymous UID, exact legacy PIN and immutable account route.
+      // Never relax this requirement for post-link / replacement logins.
+      const legacyAnonymousCredential =
+        originalAnonymousPrelink && credentials &&
+        credentials.pinSyncVersion == null &&
+        credentials.pinSyncedAt == null;
+      if (lockSnap.exists ||
+          !(legacyAnonymousCredential || syncMarkerMatches(credentials)) ||
           !pinMatches(credentials?.pin, pin)) return deny();
+      if (originalAnonymousPrelink &&
+          (!request.data || typeof request.data !== "object" ||
+           Array.isArray(request.data) ||
+           Object.keys(request.data).sort().join(",") !==
+             "originalId,phone,pin,proofMode" ||
+           !/^@DEDA-[A-Z0-9]{6}$/.test(request.data.originalId))) {
+        return deny();
+      }
 
       const uid = directory?.createdUid;
+      if (originalAnonymousPrelink && uid !== request.auth.uid) return deny();
       if (typeof uid !== "string" || uid.length < 6) return deny();
       const [userSnap, adminSnap] = await Promise.all([
         db.collection("users").doc(uid).get(),
@@ -139,16 +176,32 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
       const originalId = projection?.sharePersonalId;
       if (typeof originalId !== "string" ||
           !/^@DEDA-[A-Z0-9]{6}$/.test(originalId)) return deny();
-      const [routeSnap, authUser] = await Promise.all([
+      const [routeSnap, authUser, socialSnap, sessionSnap] = await Promise.all([
         db.collection("deda_share_ids").doc(originalId).get(),
         auth.getUser(uid),
+        originalAnonymousPrelink
+          ? db.collection("deda_social_profiles").doc(originalId).get()
+          : Promise.resolve(null),
+        originalAnonymousPrelink
+          ? db.collection("deda_sessions").doc(uid).get()
+          : Promise.resolve(null),
       ]);
       const proof = validCanonicalProof({
         key, directory, credentials, projection,
         route: routeSnap.exists ? routeSnap.data() : null,
         adminExists: adminSnap.exists, authUser,
+        originalAnonymousUid: originalAnonymousPrelink ? request.auth.uid : null,
+        social: socialSnap?.exists ? socialSnap.data() : null,
+        session: sessionSnap?.exists ? sessionSnap.data() : null,
       });
       if (!proof) return deny();
+      if (originalAnonymousPrelink) {
+        if (request.data.originalId !== proof.originalId) return deny();
+        // This is an old-phone PIN/UID check, NEVER a login token, device
+        // grant, ownership transfer, wallet restoration or account creation.
+        // Only the original Auth principal can use the ensuing SDK link.
+        return {verified: true};
+      }
 
       // Existing linked-owner Firebase Auth password-provider sessions are
       // the mode tested by the two-device session bootstrap rules. Return
