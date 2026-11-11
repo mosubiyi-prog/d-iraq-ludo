@@ -10,6 +10,28 @@ void main() {
     expect(dedaStep1GoogleOwnerLinkEnabled, false);
   });
 
+  test('original anonymous PIN proof binds receipt to the live original UID', () {
+    void permit({bool enabled = true,
+      String? original = originalUid, String? live = originalUid,
+      bool anonymous = true, Object? response = const {'verified': true}}) =>
+        DedaOwnerUidContinuity.requireOriginalAnonymousPrelinkProof(
+          featureEnabled: enabled, originalUid: original,
+          liveUid: live, liveAnonymous: anonymous, response: response,
+        );
+    expect(permit, returnsNormally);
+    expect(() => permit(enabled: false), throwsStateError);
+    expect(() => permit(original: null), throwsStateError);
+    expect(() => permit(original: ''), throwsStateError);
+    expect(() => permit(live: 'different-account-uid'), throwsStateError);
+    expect(() => permit(live: null), throwsStateError);
+    expect(() => permit(anonymous: false), throwsStateError);
+    expect(() => permit(response: null), throwsStateError);
+    expect(() => permit(response: const {'verified': false}), throwsStateError);
+    expect(() => permit(response: const {'uid': originalUid}), throwsStateError);
+    expect(() => permit(response:
+        const {'verified': true, 'customToken': 'not-allowed'}), throwsStateError);
+  });
+
   test('anonymous original phone PIN cannot masquerade as linked-owner login', () {
     // Initial enrollment and already-linked account sign-in are not the
     // same operation. A successful legacy PIN alone cannot authorize a UID
