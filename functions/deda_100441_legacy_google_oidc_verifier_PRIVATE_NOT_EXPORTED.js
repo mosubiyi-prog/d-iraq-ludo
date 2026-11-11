@@ -529,6 +529,117 @@ async function reviewExistingGoogleWithStoredNonce({
   }
 }
 
+
+/**
+ * ISOLATED CALLABLE ADAPTER, NOT EXPORTED FROM functions/index.js.
+ * This is a proposal for a later owner-approved deployment, NOT a live
+ * endpoint, account sign-in, custom token service, or UID migration.
+ *
+ * Enforce the Callable Firebase Auth / AppCheck principal AND independently
+ * revalidate raw header tokens. Never accept those bearer tokens in data.
+ * "begin" issues a server-bound challenge. "review" returns only a denial
+ * or an internal review marker, NEVER an Auth UID or login capability.
+ */
+function createPrivateGoogleRecoveryReviewCallable({
+  onCall, HttpsError, db, auth, appCheckVerifier,
+  productionConfig, enabled=false, clock=Date.now,
+  nonceFactory=randomBytes,
+  loadTrustedGoogleJwks=getOfficialGoogleJwks,
+}={}) {
+  if (typeof onCall!=="function" || typeof HttpsError!=="function" ||
+      typeof auth?.verifyIdToken!=="function" ||
+      typeof appCheckVerifier?.verifyToken!=="function" ||
+      typeof db?.collection!=="function" ||
+      typeof db?.runTransaction!=="function" ||
+      typeof db?.doc!=="function" ||
+      typeof clock!=="function" ||
+      typeof nonceFactory!=="function" ||
+      typeof loadTrustedGoogleJwks!=="function") {
+    throw Error("GOOGLE_PRIVATE_REVIEW_CALLABLE_CONFIGURATION_INVALID");
+  }
+  const deny=()=>{throw new HttpsError(
+    "permission-denied","google-recovery-review-unavailable");
+  };
+  return onCall({enforceAppCheck:true},async request=>{
+    // OFF is an absolute no-I/O default. There is NO production registration.
+    if (enabled!==true || !validConfiguration(productionConfig)) deny();
+    const d=request?.data, uid=request?.auth?.uid,
+      appId=request?.app?.appId,
+      h=request?.rawRequest?.headers;
+    if (!object(d) || typeof uid!=="string" ||
+        !/^[A-Za-z0-9:_-]{6,128}$/.test(uid) ||
+        typeof appId!=="string" ||
+        !/^[A-Za-z0-9:._-]{8,256}$/.test(appId)) deny();
+    const authHeader=h?.authorization, appHeader=h?.["x-firebase-appcheck"];
+    if (typeof authHeader!=="string" ||
+        !/^Bearer [A-Za-z0-9._-]{16,8192}$/.test(authHeader) ||
+        typeof appHeader!=="string" || appHeader.length<8 ||
+        appHeader.length>8192) deny();
+    const firebaseIdToken=authHeader.slice(7),appCheckToken=appHeader;
+    const op=d.op;
+    if (op==="begin") {
+      if (Object.keys(d).length!==1) deny();
+    } else if (op==="review") {
+      if (Object.keys(d).length!==5 ||
+          !["op","nonce","googleIdToken","accountKey","originalId"]
+            .every(k=>Object.hasOwn(d,k)) ||
+          typeof d.nonce!=="string" || !OPAQUE_NONCE.test(d.nonce) ||
+          typeof d.googleIdToken!=="string" ||
+          d.googleIdToken.length<100 ||
+          d.googleIdToken.length>MAX_JWT_SIZE ||
+          typeof d.accountKey!=="string" ||
+          !/^(?:07\d{9}|9647\d{9})$/.test(d.accountKey) ||
+          typeof d.originalId!=="string" ||
+          !/^@DEDA-[A-Z0-9]{6}$/.test(d.originalId)) deny();
+    } else {
+      deny();
+    }
+    try {
+      // Enforce the headers' verified identities equal the Callable context:
+      // a different account's ID token or a foreign app may not be supplied.
+      const [verifiedAuth,verifiedApp]=await Promise.all([
+        auth.verifyIdToken(firebaseIdToken,true),
+        appCheckVerifier.verifyToken(appCheckToken),
+      ]);
+      if (verifiedAuth?.uid!==uid || verifiedApp?.appId!==appId) deny();
+      const store=createTrustedGoogleNonceStore({
+        db,auth,appCheckVerifier,productionConfig,clock,nonceFactory,
+      });
+      if (op==="begin") {
+        const challenge=await store.issue({firebaseIdToken,appCheckToken});
+        return Object.freeze({
+          status:"CHALLENGE_ISSUED_FOR_GOOGLE_REVIEW_ONLY",
+          nonce:challenge.nonce,
+          createdAtMs:challenge.createdAtMs,
+          productionOAuthAudience:challenge.productionOAuthAudience,
+          mayLogin:false,mayCreateUid:false,mayLinkProvider:false,
+          mayWriteFirestore:false,
+        });
+      }
+      // The current result is REVIEW ONLY. Even a valid Google provider
+      // can disappear between review and a later Firebase Auth sign-in:
+      // this cannot itself authorize a creating client login.
+      const outcome=await reviewExistingGoogleWithStoredNonce({
+        idToken:d.googleIdToken,nonce:d.nonce,
+        firebaseIdToken,appCheckToken,productionConfig,
+        appCheckVerifier,auth,db,clock,loadTrustedGoogleJwks,
+        accountKey:d.accountKey,originalId:d.originalId,
+      });
+      if (outcome.status!=="EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY") {
+        deny();
+      }
+      return Object.freeze({
+        status:"EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY",
+        mayLogin:false,mayCreateUid:false,mayLinkProvider:false,
+        mayWriteFirestore:false,independentOldAccountOwnershipProven:false,
+      });
+    } catch (_) {
+      // No UID, provider subject, PIN, Google token or lookup reason exposed.
+      deny();
+    }
+  });
+}
+
 module.exports={
   inspectSignedToken,
   getOfficialGoogleJwks,
@@ -536,4 +647,5 @@ module.exports={
   reviewExistingGoogleProviderReadOnly,
   createTrustedGoogleNonceStore,
   reviewExistingGoogleWithStoredNonce,
+  createPrivateGoogleRecoveryReviewCallable,
 };
