@@ -186,6 +186,24 @@ test("unlinked or disabled Firebase Auth original UID cannot get token", async (
   assert.equal(f.auth.tokens.length,0);
 });
 
+test("original anonymous UID cannot prelink with linked-password proof before provider enrollment", async () => {
+  // A/B/C protection: the old phone's UID can be canonical yet anonymous.
+  // Existing linked-password proof is NOT an initial enrollment service.
+  // Do not change this test to mint tokens or accept PIN-only ownership.
+  const f = fixture();
+  f.request.auth.uid = originalUid;
+  f.request.data.proofMode = "linked-password";
+  f.auth.user = {uid:originalUid, email:null, disabled:false};
+  await denied(f);
+  assert.equal(f.auth.tokens.length,0);
+  assert.equal(f.db.writes.every(path =>
+    path.startsWith("deda_owner_pin_verify_limits/")), true);
+  assert.equal(f.db.docs.get(`deda_credentials/${account}`).createdUid,
+    originalUid);
+  assert.equal(f.db.docs.get(`deda_account_directory/${account}`).createdUid,
+    originalUid);
+});
+
 test("server rate limit is per PHONE, not per anonymous replacement device", async () => {
   const f = fixture({allowLegacyCustomTokensForQa:true});
   for (let i=0;i<5;i++) {
