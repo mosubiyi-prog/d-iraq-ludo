@@ -32,6 +32,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: New login progress indicator script is safe and idempotent
         run: |
           python3 -m py_compile tools/guard_deda_login_busy_indicator_next_release.py
