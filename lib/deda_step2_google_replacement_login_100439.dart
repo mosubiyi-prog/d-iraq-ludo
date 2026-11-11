@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -32,31 +29,12 @@ class DedaGoogleVerifiedExistingOwner {
 class DedaGoogleReplacementProof {
   const DedaGoogleReplacementProof._();
 
-  static Map<String, Object> existingIdpRequest(String idToken) {
-    if (idToken.isEmpty) throw StateError('google-id-token-missing');
-    return <String, Object>{
-      'requestUri': 'http://localhost',
-      'postBody': Uri(queryParameters: <String, String>{
-        'id_token': idToken,
-        'providerId': 'google.com',
-      }).query,
-      'returnSecureToken': true,
-      'autoCreate': false,
-    };
-  }
-
-  static String existingUidOnly(Map<String, dynamic> response) {
-    final value = response['localId'];
-    // A missing isNewUser flag is NOT evidence of an existing account.
-    // In particular, Firebase Auth Emulator may ignore autoCreate:false.
-    // Fail closed instead of accepting any otherwise plausible localId.
-    if (value is! String || value.length < 6 ||
-        response['isNewUser'] != false ||
-        response['needConfirmation'] == true) {
-      throw StateError('google-provider-does-not-resolve-existing-uid');
-    }
-    return value;
-  }
+  // Auth Emulator demonstrated that the Identity Toolkit no-create REST
+  // preflight can still create an Auth UID. A fresh Google principal must
+  // NEVER be allowed to create an account while attempting legacy recovery.
+  // This remains false until an approved non-creating server proof is
+  // deployed and a signed-device test verifies its lifecycle.
+  static const bool trustedReadOnlyProviderLookupDeployed = false;
 
   /// On a failed verification, clean up only the Google principal selected
   /// by THIS attempt. Another account may have signed in concurrently.
@@ -125,38 +103,14 @@ class DedaGoogleReplacementProof {
 class DedaGoogleReplacementLogin {
   const DedaGoogleReplacementLogin._();
 
-  /// This preliminary Identity Toolkit request is deliberately no-create.
-  /// Do not invoke FirebaseAuth.signInWithCredential() without obtaining
-  /// the UID of an ALREADY linked Google provider in this same project.
-  /// REST failures (including disabled/enumeration-protected provider or
-  /// unsupported no-create mode) must deny login; never fall back to create.
+  // The former signInWithIdp(autoCreate:false) REST request was NOT
+  // guaranteed non-creating in Firebase Auth Emulator. Removing the call
+  // prevents accidental UID creation even if the private UI flag is enabled.
+  // Future trusted server wiring must check a signed Google assertion and
+  // an ALREADY linked provider without creating a Firebase Auth principal.
   static Future<String> _existingUid(String idToken) async {
-    final apiKey = Firebase.app().options.apiKey;
-    if (apiKey.isEmpty) throw StateError('firebase-project-not-configured');
-    final uri = Uri.https('identitytoolkit.googleapis.com',
-        '/v1/accounts:signInWithIdp', <String, String>{'key': apiKey});
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-    try {
-      final request = await client.postUrl(uri).timeout(
-          const Duration(seconds: 8));
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(
-          DedaGoogleReplacementProof.existingIdpRequest(idToken)));
-      final response = await request.close().timeout(
-          const Duration(seconds: 10));
-      final body = await utf8.decoder.bind(response).join().timeout(
-          const Duration(seconds: 10));
-      if (response.statusCode != HttpStatus.ok) {
-        throw StateError('google-existing-provider-preflight-denied');
-      }
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<String, dynamic>) {
-        throw StateError('google-existing-provider-malformed');
-      }
-      return DedaGoogleReplacementProof.existingUidOnly(decoded);
-    } finally {
-      client.close(force: true);
-    }
+    if (idToken.isEmpty) throw StateError('google-id-token-missing');
+    throw StateError('google-read-only-provider-proof-not-deployed');
   }
 
   /// A successfully verified IDENTITY is not a restored profile or wallet.
