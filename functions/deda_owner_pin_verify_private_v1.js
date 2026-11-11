@@ -154,7 +154,9 @@ function createOwnerPinVerifyCallable({onCall, HttpsError, db, auth,
         credentials.pinSyncVersion == null &&
         credentials.pinSyncedAt == null;
       if (lockSnap.exists ||
-          !(legacyAnonymousCredential || syncMarkerMatches(credentials)) ||
+          !(originalAnonymousPrelink
+            ? legacyAnonymousCredential
+            : syncMarkerMatches(credentials)) ||
           !pinMatches(credentials?.pin, pin)) return deny();
       if (originalAnonymousPrelink &&
           (!request.data || typeof request.data !== "object" ||
