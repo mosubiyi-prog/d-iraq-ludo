@@ -66,8 +66,10 @@ test.before(async()=>{
     ["deda_social_profiles/"+ORIGINAL]:{
       publicId:ORIGINAL,ownerUid:UID},
     ["deda_sessions/"+UID]:{uid:UID,accountKey:ACCOUNT},
-    ["deda_wallets/"+UID]:{diamonds:1234},
-    ["deda_gifts/"+UID]:{giftCount:5},
+    ["deda_diamond_gift_balances/"+ORIGINAL]:{
+      publicId:ORIGINAL,balance:1234},
+    ["deda_diamond_gifts/synthetic-existing-receipt"]:{
+      targetPublicId:ORIGINAL,sourceType:"admin_grant",amount:50},
   };
   const batch=db.batch();
   for(const [p,v] of Object.entries(docs))batch.set(db.doc(p),v);
@@ -117,8 +119,8 @@ test("legacy 6-digit PIN is never considered an independent provider even for sa
 test("no new account directory, wallet, ID or gift row created by second device sign-in",async()=>{
   assert.equal((await db.doc("deda_account_directory/"+ACCOUNT).get()).data().createdUid,UID);
   assert.equal((await db.doc("deda_share_ids/"+ORIGINAL).get()).data().ownerUid,UID);
-  assert.equal((await db.doc("deda_wallets/"+UID).get()).data().diamonds,1234);
-  assert.equal((await db.doc("deda_gifts/"+UID).get()).data().giftCount,5);
+  assert.equal((await db.doc("deda_diamond_gift_balances/"+ORIGINAL).get()).data().balance,1234);
+  assert.equal((await db.doc("deda_diamond_gifts/synthetic-existing-receipt").get()).data().amount,50);
   assert.equal((await db.doc("deda_sessions/"+UID).get()).data().uid,UID);
 });
 test("signing out TEST device 2 does not invalidate TEST device 1 UID",async()=>{
@@ -144,8 +146,8 @@ test("Firestore account and finances are unaffected by anonymous blocked review"
   const docs=[
     ["deda_account_directory/"+ACCOUNT,"createdUid",UID],
     ["deda_credentials/"+ACCOUNT,"createdUid",UID],
-    ["deda_wallets/"+UID,"diamonds",1234],
-    ["deda_gifts/"+UID,"giftCount",5],
+    ["deda_diamond_gift_balances/"+ORIGINAL,"balance",1234],
+    ["deda_diamond_gifts/synthetic-existing-receipt","amount",50],
     ["deda_share_ids/"+ORIGINAL,"ownerUid",UID],
   ];
   for(const [path,key,want] of docs) {
