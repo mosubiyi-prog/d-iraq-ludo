@@ -109,6 +109,21 @@ jobs:
           flutter pub add google_sign_in:6.3.0
       - name: Analyze isolated Google replacement account guard
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart
+      - name: Enforce no creating Google REST preflight from private replacement login
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('lib/deda_step2_google_replacement_login_100439.dart').read_text()
+          assert 'accounts:signInWithIdp' not in src
+          assert 'HttpClient(' not in src
+          assert 'jsonEncode(' not in src
+          assert 'Uri.https(' not in src
+          assert 'google-read-only-provider-proof-not-deployed' in src
+          assert 'trustedReadOnlyProviderLookupDeployed = false' in src
+          assert 'auth.signInWithCredential(credential)' in src
+          assert 'dedaStep2GoogleReplacementLoginEnabled' in src
+          print('PASS_GOOGLE_REPLACEMENT_NO_CREATING_REST_PRECHECK_FAIL_CLOSED')
+          PY
       - name: Test existing Google UID match and no foreign account sign-out
         run: flutter test test/deda_google_replacement_existing_uid_private_test.dart --reporter expanded
       - name: Prove same-UID original anonymous enrollment without linked-password bypass
