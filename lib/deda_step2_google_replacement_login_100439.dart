@@ -47,8 +47,11 @@ class DedaGoogleReplacementProof {
 
   static String existingUidOnly(Map<String, dynamic> response) {
     final value = response['localId'];
+    // A missing isNewUser flag is NOT evidence of an existing account.
+    // In particular, Firebase Auth Emulator may ignore autoCreate:false.
+    // Fail closed instead of accepting any otherwise plausible localId.
     if (value is! String || value.length < 6 ||
-        response['isNewUser'] == true ||
+        response['isNewUser'] != false ||
         response['needConfirmation'] == true) {
       throw StateError('google-provider-does-not-resolve-existing-uid');
     }
