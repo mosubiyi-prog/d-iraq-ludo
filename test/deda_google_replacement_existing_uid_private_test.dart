@@ -56,6 +56,121 @@ void main() {
     expect(dedaStep2GoogleReplacementLoginEnabled, false);
   });
 
+  test('private review bridge stays OFF without any server request', () async {
+    var requests = 0;
+    final bridge = DedaGoogleReviewOnlyBridge(
+      send: (data) async {
+        requests++;
+        return <String, dynamic>{};
+      },
+    );
+    await expectLater(bridge.begin(), throwsStateError);
+    expect(requests, 0);
+  });
+
+  test('private bridge sends nonce challenge then REVIEW ONLY, never login', () async {
+    final calls = <Map<String, dynamic>>[];
+    const value = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+    final googleToken = List<String>.filled(160, 't').join();
+    final bridge = DedaGoogleReviewOnlyBridge(
+      enabled: true,
+      send: (data) async {
+        calls.add(data);
+        if (data['op'] == 'begin') {
+          return <String, dynamic>{
+            'status': 'CHALLENGE_ISSUED_FOR_GOOGLE_REVIEW_ONLY',
+            'nonce': value,
+            'createdAtMs': 1800000000000,
+            'productionOAuthAudience':
+                '123456789012-productionrecovery.apps.googleusercontent.com',
+            'mayLogin': false, 'mayCreateUid': false,
+            'mayLinkProvider': false, 'mayWriteFirestore': false,
+          };
+        }
+        return <String, dynamic>{
+          'status': 'EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY',
+          'mayLogin': false, 'mayCreateUid': false,
+          'mayLinkProvider': false, 'mayWriteFirestore': false,
+        };
+      },
+    );
+    final challenge = await bridge.begin();
+    expect(challenge.nonce, value);
+    expect(calls.single, <String, dynamic>{'op': 'begin'});
+    final review = await bridge.reviewOnly(
+      challenge: challenge, googleIdToken: googleToken,
+      accountKey: account, originalId: originalId,
+    );
+    expect(review.mayLogin, false);
+    expect(review.mayCreateUid, false);
+    expect(review.mayLinkProvider, false);
+    expect(review.mayWriteFirestore, false);
+    expect(calls.length, 2);
+    expect(calls.last['op'], 'review');
+    expect(calls.last['googleIdToken'], googleToken);
+    expect(calls.last['accountKey'], account);
+    expect(calls.last.containsKey('uid'), false);
+  });
+
+  test('private bridge rejects server claims of UID or sign-in authority', () async {
+    final token = List<String>.filled(160, 't').join();
+    const challenge = DedaGoogleReviewChallenge(
+      nonce: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      createdAtMs: 1800000000000,
+      productionOAuthAudience:
+          '123456789012-productionrecovery.apps.googleusercontent.com',
+    );
+    for (final extra in <Map<String, dynamic>>[
+      <String, dynamic>{'uid': uid},
+      <String, dynamic>{'originalUid': uid},
+      <String, dynamic>{'customToken': 'unapproved'},
+      <String, dynamic>{'mayLogin': true},
+      <String, dynamic>{'mayCreateUid': true},
+      <String, dynamic>{'mayLinkProvider': true},
+    ]) {
+      final bridge = DedaGoogleReviewOnlyBridge(
+        enabled: true,
+        send: (_) async => <String, dynamic>{
+          'status': 'EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY',
+          'mayLogin': false, 'mayCreateUid': false,
+          'mayLinkProvider': false, 'mayWriteFirestore': false,
+          ...extra,
+        },
+      );
+      await expectLater(bridge.reviewOnly(
+        challenge: challenge, googleIdToken: token,
+        accountKey: account, originalId: originalId,
+      ), throwsStateError);
+    }
+  });
+
+  test('private bridge rejects untrusted challenge status and wrong account',
+      () async {
+    final bridge = DedaGoogleReviewOnlyBridge(
+      enabled: true,
+      send: (_) async => <String, dynamic>{
+        'status': 'UNTRUSTED',
+        'nonce': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        'createdAtMs': 1800000000000,
+        'productionOAuthAudience':
+            '123456789012-productionrecovery.apps.googleusercontent.com',
+        'mayLogin': false, 'mayCreateUid': false,
+        'mayLinkProvider': false, 'mayWriteFirestore': false,
+      },
+    );
+    await expectLater(bridge.begin(), throwsStateError);
+    const challenge = DedaGoogleReviewChallenge(
+      nonce: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      createdAtMs: 1800000000000,
+      productionOAuthAudience:
+          '123456789012-productionrecovery.apps.googleusercontent.com',
+    );
+    await expectLater(bridge.reviewOnly(
+      challenge: challenge, googleIdToken: 'short',
+      accountKey: account, originalId: originalId,
+    ), throwsStateError);
+  });
+
   test('linked original Google plus password matches immutable server UID', () {
     final value = proof();
     expect(value.originalUid, uid);
