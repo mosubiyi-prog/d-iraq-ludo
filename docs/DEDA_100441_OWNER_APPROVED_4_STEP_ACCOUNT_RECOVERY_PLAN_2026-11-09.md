@@ -1,5 +1,15 @@
 # DEDA — خطة استرجاع الحساب المعتمدة من صاحب المشروع
 
+## ✅ 2026-11-11 — استبدال فحص Google القابل للإنشاء بمراجعة خادمية للقراءة فقط
+
+- **إصلاح موثق ضمن الملفات الموجودة (لا خدمة جديدة):** توسعة `functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js` بفاحص `reviewExistingGoogleProviderReadOnly`. يعيد استخدام فحص توقيع OIDC ومصدر Google/production audience، nonce صادر من خادم موثوق ويُستهلك مرة واحدة، ثم يستدعي `auth.getUserByProviderUid('google.com', subject)` **للقراءة فقط** ويعيد استعمال `inspectCanonicalUid` لمطابقة الدليل وسجل الرمز *الوصفي فقط* وUID والآيدي الاجتماعي والجلسة ومنع المدير. لا ينشئ Firebase Auth ولا يصدر Custom Token ولا يعيد UID أو Google subject أو PIN أو بيانات مالية، ولا يمنح دخولاً أو صلاحيات؛ النتيجة السليمة مجرد مرشح مراجعة خادمي.
+- **حماية العميل من خطر إنشاء UID:** إزالة `accounts:signInWithIdp` و`HttpClient` من `lib/deda_step2_google_replacement_login_100439.dart`، وإلغاء اعتماد استجابة `autoCreate:false` التي لم تكن مأمونة في Auth Emulator. أصبح المسار الخاص الجديد **مقفلاً حتى قبل إظهار اختيار Google** ما دام التحقق الخادمي غير منشور. إزالة اختبارات REST المضلِّلة وتعويضها بفحص flag OFF وحراسة CI تمنع عودة الطلب؛ التطبيق المحمي ومسار دخول 100340 لا يتغيران.
+- **الإثبات:** [فحوص OIDC والخادم 43024169897](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43024169897) = SUCCESS، **107/107 Node**؛ [تكامل Auth/Firestore وFlutter 43024904154](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43024904154) = SUCCESS، **61/61 Node و24/24 Flutter**، وصفر فشل. يوجد اختبار مدمج يستخدم Auth+Firestore المحليين للتحقق من Google mock provider وOIDC بتوقيع RSA وهمي وnonce غير قابل للإعادة؛ لا Google OAuth حي. فحص ملفات التطبيق المحمية والتوقيع وFirebase نجح، ولم يُبن APK.
+- **القيد الحقيقي المتبقي:** لم تُنشأ خدمة nonce الحقيقية مع App Check ولا منفذ خادمي معتمد للمراجعة، ولم يُوصل رد مراجعة آمن للعميل أو يثبت GoogleSignIn على أجهزة حقيقية. لا يمكن الادعاء بإتمام الربط/الاسترجاع أو إصدار نسخة تشغيل آمنة الآن؛ الواجهة تفشل مغلقة عمداً بدلاً من إنشاء UID جديد. يحتاج المسار تقييم الربط الحقيقي وحل منع إنشاء حساب في السباق بين مراجعة الخادم والدخول، ثم فحوص الهاتف والتابلت ودليل استرجاع جميع الممتلكات، قبل طلب إذن مستقل لأي Firebase deploy/APK/Play.
+- **حدود الصلاحيات:** نفس الفرع المعزول، لا تعديل `functions/index.js` ولا قواعد Firestore ولا Firebase الإنتاجي، ولا رصيد أو هوية A/B/C ولا حسابات المستخدمين أو موقع بطاقة Google.
+
+---
+
 ## ✅ 2026-11-11 — اختبار Google Emulator وموثوقية فحص الحساب الموجود
 
 - **المنجز المثبت:** امتداد لنفس اختبار الهاتفين على Firebase Auth/Firestore Emulator الموجود، باستخدام `GoogleAuthProvider.credential` بهوية تجريبية مصطنعة فقط. ربط Google التجريبي بعد PIN+password على **نفس UID الأصلي** نجح، ودخول عميل Firebase آخر بنفس Google التجريبي أعاد UID نفسه. نجح كذلك بحث Admin Auth **للقراءة فقط** بواسطة `getUserByProviderUid('google.com',subject)` للحساب المرتبط ورفض البحث عن مزوّد مجهول، من دون إصدار UID جديد بهذه القراءة.
