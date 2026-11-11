@@ -241,6 +241,14 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert.equal(oldAuth.currentUser.uid,originalUid);
     assert(oldAuth.currentUser.providerData.some(
       p=>p.providerId==="google.com"));
+    // The replacement client insists on BOTH original password and Google
+    // providers. The emulator integration must prove that this condition is
+    // actually satisfied, not merely that the same UID survived linking.
+    assert(oldAuth.currentUser.providerData.some(
+      p=>p.providerId==="password" && p.email===email2),
+      "Original password provider must survive the Google link");
+    const adminPrincipalAfterLink=await authAdmin.getUser(originalUid);
+    assert.equal(adminPrincipalAfterLink.uid,originalUid);
 
     // Admin Auth provider lookup is READ-ONLY: no client IdP sign-in request.
     // The caller must separately authenticate the Google subject (e.g. by
