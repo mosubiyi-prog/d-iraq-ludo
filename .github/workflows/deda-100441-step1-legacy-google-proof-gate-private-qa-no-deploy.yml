@@ -38,7 +38,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code a5ae36b71d2d22528f4768fd716310bfadec605a HEAD -- \
+          # Use last approved successful isolated checkpoint; earlier PIN
+          # remediation is intentional and must not fail this later QA.
+          git diff --exit-code 37d07ec68e9ce02e819f8df85916248fcbe785a8 HEAD -- \
             lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
             functions/index.js functions/deda_owner_pin_verify_private_v1.js \
             functions/deda_linked_owner_session_grant_private_v1.js \
