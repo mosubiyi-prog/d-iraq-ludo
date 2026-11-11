@@ -491,10 +491,49 @@ function createTrustedGoogleNonceStore({
   return Object.freeze({issue,read,consume});
 }
 
+/**
+ * INTERNAL, NOT EXPORTED AS A FIREBASE CALLABLE: binds one verified Firebase
+ * requester + AppCheck app to the stored nonce AND to the Google OIDC review.
+ * An arbitrary challenge object cannot be substituted by a client. The Google
+ * subject is obtained only from a signed, audience/nonce-bound ID token.
+ *
+ * This NEVER signs in, returns the historical Firebase UID, creates an Auth
+ * account, updates data or grants owner privileges. The returned classification
+ * is INTERNAL ONLY and cannot serve as a login capability.
+ */
+async function reviewExistingGoogleWithStoredNonce({
+  idToken, nonce, firebaseIdToken, appCheckToken,
+  productionConfig, auth, db, appCheckVerifier,
+  accountKey, originalId, clock=Date.now, 
+  loadTrustedGoogleJwks=getOfficialGoogleJwks,
+}={}) {
+  if (typeof nonce!=="string" || !OPAQUE_NONCE.test(nonce)) {
+    return fail("NO_TRUSTED_SERVER_GOOGLE_CHALLENGE");
+  }
+  try {
+    const store=createTrustedGoogleNonceStore({
+      auth, db, appCheckVerifier, productionConfig, clock,
+    });
+    const requester={firebaseIdToken,appCheckToken};
+    // Challenge is loaded from the trusted database, NEVER request.data.
+    const challenge=await store.read({...requester,nonce});
+    if (!challenge) return fail("NO_TRUSTED_SERVER_GOOGLE_CHALLENGE");
+    return await reviewExistingGoogleProviderReadOnly({
+      idToken,productionConfig,challenge,nowMs:clock(),
+      loadTrustedGoogleJwks,
+      consumeOneTimeChallenge:entry=>store.consume({...entry,...requester}),
+      auth,db,accountKey,originalId,
+    });
+  } catch (_) {
+    return fail("TRUSTED_SERVER_GOOGLE_REVIEW_UNAVAILABLE");
+  }
+}
+
 module.exports={
   inspectSignedToken,
   getOfficialGoogleJwks,
   verifyProspectiveGoogleForLegacyReview,
   reviewExistingGoogleProviderReadOnly,
   createTrustedGoogleNonceStore,
+  reviewExistingGoogleWithStoredNonce,
 };
