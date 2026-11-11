@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,6 +82,55 @@ class DedaOwnerUidContinuity {
     }
   }
 
+  /// A private original-phone proof is intentionally NOT a replacement-phone
+  /// sign-in, custom token, financial receipt or account transfer. Require an
+  /// independently verified callable receipt while the SAME anonymous UID is
+  /// still signed in. No original UID is taken from the response.
+  static void requireOriginalAnonymousPrelinkProof({
+    required bool featureEnabled,
+    required String? originalUid,
+    required String? liveUid,
+    required bool liveAnonymous,
+    required Object? response,
+  }) {
+    if (!featureEnabled || originalUid == null || originalUid.isEmpty ||
+        liveUid != originalUid || !liveAnonymous ||
+        response is! Map || response.length != 1 ||
+        response['verified'] != true) {
+      throw StateError('original-anonymous-server-pin-proof-rejected');
+    }
+  }
+
+  static Future<void> _proveOriginalAnonymousPin({
+    required String accountKey,
+    required String pin,
+    required String originalId,
+    required String originalUid,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.uid != originalUid || user?.isAnonymous != true) {
+      throw StateError('original-anonymous-owner-changed-before-pin-proof');
+    }
+    // The existing rate-limited Callable checks the PIN, original account,
+    // immutable ID, credentials, social owner, session, Auth UID and AppCheck.
+    // It never returns a custom token or creates a Firebase account.
+    final answer = await FirebaseFunctions.instance.httpsCallable(
+      'dedaVerifyExistingOwnerPin',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+    ).call(<String, dynamic>{
+      'phone': accountKey, 'pin': pin, 'originalId': originalId,
+      'proofMode': 'original-anonymous-prelink',
+    });
+    requireOriginalAnonymousPrelinkProof(
+      featureEnabled: dedaLinkedOwnerCompatEnabled &&
+          dedaStep2PreLinkEvidenceCheckpointEnabled,
+      originalUid: originalUid,
+      liveUid: FirebaseAuth.instance.currentUser?.uid,
+      liveAnonymous: FirebaseAuth.instance.currentUser?.isAnonymous == true,
+      response: answer.data,
+    );
+  }
+
   /// Called ONLY by a separate account-confirmation UI on the original phone,
   /// after explicit user action. Does not silently touch an already-linked
   /// account. The PIN is never placed in SharedPreferences.
@@ -112,12 +162,30 @@ class DedaOwnerUidContinuity {
       throw StateError('original-anonymous-phone-session-required');
     }
     final originalUid = before.uid;
-    // Real existing 100340 Firestore server PIN/owner check; must NOT be
-    // replaced by a local stored PIN or an unverified premium identifier.
-    final signedIn = await DedaPinAuth.signIn(phone: phone, pin: pin);
-    if (signedIn['uid'] != originalUid ||
-        FirebaseAuth.instance.currentUser?.uid != originalUid) {
-      throw StateError('account-changed-during-original-pin-verification');
+    if (dedaLinkedOwnerCompatEnabled) {
+      // In the private pilot, the old phone MUST retain its anonymous
+      // principal until the original progress/purchase source is archived.
+      // Normal signIn() requires an already-linked owner and would deadlock
+      // or mutate the original session: use the EXISTING server PIN Callable.
+      if (!dedaStep2PreLinkEvidenceCheckpointEnabled ||
+          beforeLinkedIdentityTransition == null) {
+        throw StateError('original-owner-source-checkpoint-required');
+      }
+      await _proveOriginalAnonymousPin(
+        accountKey: accountKey, pin: pin,
+        originalId: originalId, originalUid: originalUid,
+      );
+    } else {
+      // Preserve the exact previous legacy path when the pilot is OFF.
+      final signedIn = await DedaPinAuth.signIn(phone: phone, pin: pin);
+      if (signedIn['uid'] != originalUid ||
+          FirebaseAuth.instance.currentUser?.uid != originalUid) {
+        throw StateError('account-changed-during-original-pin-verification');
+      }
+    }
+    if (FirebaseAuth.instance.currentUser?.uid != originalUid ||
+        FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+      throw StateError('original-owner-session-changed-during-pin-proof');
     }
     await _verifyOriginalUid(
       accountKey: accountKey, originalId: originalId, uid: originalUid,
@@ -140,12 +208,25 @@ class DedaOwnerUidContinuity {
           FirebaseAuth.instance.currentUser?.isAnonymous != true) {
         throw StateError('original-owner-changed-before-link');
       }
+      if (dedaLinkedOwnerCompatEnabled) {
+        // Revalidate credentials and social UID after asynchronous archival;
+        // a stale source must never become a provider-linked identity.
+        await _proveOriginalAnonymousPin(
+          accountKey: accountKey, pin: pin,
+          originalId: originalId, originalUid: originalUid,
+        );
+      }
+    }
+    if (FirebaseAuth.instance.currentUser?.uid != originalUid ||
+        FirebaseAuth.instance.currentUser?.isAnonymous != true) {
+      throw StateError('original-owner-changed-before-credential-link');
     }
     final credential = EmailAuthProvider.credential(
       email: authEmail(phone), password: pin,
     );
-    final linked = await FirebaseAuth.instance.currentUser!
-      .linkWithCredential(credential);
+    // Use the original observed User object. Never attach the credential to
+    // another principal that signed in while the network request was pending.
+    final linked = await before.linkWithCredential(credential);
     if (linked.user?.uid != originalUid ||
         FirebaseAuth.instance.currentUser?.uid != originalUid) {
       throw StateError('uid-linking-provenance-conflict');
