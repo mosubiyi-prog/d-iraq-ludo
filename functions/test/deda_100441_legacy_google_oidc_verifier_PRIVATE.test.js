@@ -3,7 +3,8 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const {generateKeyPairSync,sign}=require("node:crypto");
 const {inspectSignedToken,getOfficialGoogleJwks,
-  verifyProspectiveGoogleForLegacyReview}=require(
+  verifyProspectiveGoogleForLegacyReview,
+  reviewExistingGoogleProviderReadOnly}=require(
   "../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js"
 );
 const nowMs=1800000000000;
@@ -178,4 +179,154 @@ test("fake signed JWT cannot use attacker-supplied public key",()=>{
   const r=inspect({idToken:a+"."+b+"."+c});
   assert.equal(r.reason,"GOOGLE_SIGNATURE_VERIFICATION_FAILED");
   denied(r);
+});
+
+const onlyAccount="07111111111", onlyId="@DEDA-ABC123";
+const onlyUid="deda-legacy-owner-uid-google-synthetic";
+const wrongUid="deda-foreign-owner-uid-synthetic";
+function serverFixture({unlinked=false,disabled=false,customAdmin=false}={}) {
+  const rows={
+    ["deda_account_directory/"+onlyAccount]:{
+      accountKey:onlyAccount,active:true,createdUid:onlyUid},
+    ["deda_credentials/"+onlyAccount]:{
+      accountKey:onlyAccount,active:true,createdUid:onlyUid,pin:"654321"},
+    ["deda_share_ids/"+onlyId]:{
+      publicId:onlyId,kind:"personal",active:true,ownerUid:onlyUid},
+    ["users/"+onlyUid]:{accountKey:onlyAccount,sharePersonalId:onlyId},
+    ["deda_social_profiles/"+onlyId]:{publicId:onlyId,ownerUid:onlyUid},
+    ["deda_sessions/"+onlyUid]:{uid:onlyUid,accountKey:onlyAccount},
+  };
+  const calls={lookup:[],reads:[],consumed:0,writes:0};
+  const auth={
+    async getUserByProviderUid(provider,subject) {
+      calls.lookup.push([provider,subject]);
+      if(unlinked) throw Object.assign(Error("missing"),{code:"auth/user-not-found"});
+      return {
+        uid:onlyUid,disabled,customClaims:{admin:customAdmin},
+        providerData:[{providerId:"google.com",uid:standardClaims.sub}],
+      };
+    },
+  };
+  const db={
+    doc(path) {return {async get() {
+      calls.reads.push(path);
+      const row=rows[path];
+      return {exists:row!==undefined,data:()=>row===undefined?undefined:{...row}};
+    }};},
+  };
+  const payload=(extra={})=>({
+    idToken:token(),productionConfig:config,challenge,nowMs,
+    loadTrustedGoogleJwks:async()=>jwks,
+    consumeOneTimeChallenge:async()=>{calls.consumed++;return true;},
+    auth,db,accountKey:onlyAccount,originalId:onlyId,...extra,
+  });
+  return {rows,calls,auth,db,payload};
+}
+function noResultAuthority(result) {
+  denied(result.status==="DENY"?result:{
+    ...result,verifiedProspectiveGoogle:null,
+  });
+  assert.equal(result.mayLogin,false);
+  assert.equal(result.mayCreateUid,false);
+  assert.equal(result.mayLinkProvider,false);
+  assert.equal(result.mayWriteFirestore,false);
+  const printed=JSON.stringify(result);
+  for(const value of [onlyAccount,onlyId,onlyUid,wrongUid,
+      standardClaims.sub,"654321",token()]) {
+    assert.equal(printed.includes(value),false);
+  }
+}
+test("read-only Google provider review: verified subject and seven matching owner records",async()=>{
+  const f=serverFixture();
+  const result=await reviewExistingGoogleProviderReadOnly(f.payload());
+  assert.equal(result.status,"EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY");
+  assert.deepEqual(f.calls.lookup,[["google.com",standardClaims.sub]]);
+  assert.equal(f.calls.reads.length,7);
+  assert.equal(f.calls.consumed,1);
+  assert.equal(f.calls.writes,0);
+  noResultAuthority(result);
+});
+test("missing Google provider yields no Auth creation and no account reads",async()=>{
+  const f=serverFixture({unlinked:true});
+  const r=await reviewExistingGoogleProviderReadOnly(f.payload());
+  assert.equal(r.status,"DENY");
+  assert.equal(f.calls.lookup.length,1);
+  assert.equal(f.calls.reads.length,0);
+  assert.equal(f.calls.writes,0);
+  noResultAuthority(r);
+});
+test("invalid Google signature/audience/nonce denied before any owner lookup",async()=>{
+  for(const overrides of [
+    {idToken:"not.a.signed.jwt"},
+    {idToken:token({aud:"123456789012-untrusted.apps.googleusercontent.com"})},
+    {idToken:token({nonce:"wrongServerNonceabcdefghijkl1234"})},
+    {challenge:{...challenge,status:"used"}},
+  ]) {
+    const f=serverFixture();
+    const result=await reviewExistingGoogleProviderReadOnly(f.payload(overrides));
+    assert.equal(result.status,"DENY");
+    assert.equal(f.calls.lookup.length,0);
+    assert.equal(f.calls.reads.length,0);
+    assert.equal(f.calls.writes,0);
+    noResultAuthority(result);
+  }
+});
+test("server nonce must be consumed exactly once; replay cannot read Google provider",async()=>{
+  const f=serverFixture();
+  let used=false;
+  const payload=f.payload({consumeOneTimeChallenge:async()=>{
+    f.calls.consumed++;
+    if(used) return false;
+    used=true;return true;
+  }});
+  const first=await reviewExistingGoogleProviderReadOnly(payload);
+  const second=await reviewExistingGoogleProviderReadOnly(payload);
+  assert.equal(first.status,"EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY");
+  assert.equal(second.status,"DENY");
+  assert.equal(second.reason,"NONCE_REPLAY_OR_CONSUMPTION_FAILED");
+  assert.equal(f.calls.lookup.length,1);
+  assert.equal(f.calls.reads.length,7);
+  noResultAuthority(second);
+});
+test("canonical Google owner review rejects PIN registration, social, session or ID split",async()=>{
+  for(const [path,field] of [
+    ["deda_account_directory/"+onlyAccount,"createdUid"],
+    ["deda_credentials/"+onlyAccount,"createdUid"],
+    ["deda_share_ids/"+onlyId,"ownerUid"],
+    ["deda_social_profiles/"+onlyId,"ownerUid"],
+    ["deda_sessions/"+onlyUid,"uid"],
+    ["users/"+onlyUid,"accountKey"],
+  ]) {
+    const f=serverFixture();
+    f.rows[path][field]=wrongUid;
+    const result=await reviewExistingGoogleProviderReadOnly(f.payload());
+    assert.equal(result.status,"DENY",path+"."+field);
+    assert.equal(result.reason,"GOOGLE_PROVIDER_OR_OWNER_NOT_VERIFIED");
+    noResultAuthority(result);
+  }
+});
+test("admin or disabled Auth user cannot become canonical Google owner",async()=>{
+  for(const flag of ["disabled","customAdmin"]){
+    const f=serverFixture({[flag]:true});
+    noResultAuthority(await reviewExistingGoogleProviderReadOnly(f.payload()));
+    assert.equal(f.calls.writes,0);
+  }
+  const f=serverFixture();
+  f.rows["admins/"+onlyUid]={active:true};
+  const result=await reviewExistingGoogleProviderReadOnly(f.payload());
+  assert.equal(result.status,"DENY");
+  noResultAuthority(result);
+});
+test("server-only Google lookup denies missing adapters and malformed account",async()=>{
+  for(const overrides of [
+    {auth:null},{db:null},{accountKey:"untrusted"},
+    {originalId:"@DEDA-UNEXPECTEDLONG"},
+  ]) {
+    const f=serverFixture();
+    const result=await reviewExistingGoogleProviderReadOnly(f.payload(overrides));
+    assert.equal(result.status,"DENY");
+    assert.equal(f.calls.lookup.length,0);
+    assert.equal(f.calls.reads.length,0);
+    noResultAuthority(result);
+  }
 });
