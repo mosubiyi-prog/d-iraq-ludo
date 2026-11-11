@@ -14,7 +14,8 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {initializeApp:clientInit,deleteApp:clientDelete}
   = require("firebase/app");
 const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
-  signInAnonymously,signOut,EmailAuthProvider,linkWithCredential} = require("firebase/auth");
+  signInAnonymously,signOut,EmailAuthProvider,GoogleAuthProvider,
+  linkWithCredential,signInWithCredential} = require("firebase/auth");
 const {createOwnerPinVerifyCallable}
   = require("../deda_owner_pin_verify_private_v1.js");
 const {assessSameUidRecovery}
@@ -218,6 +219,28 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert.equal(oldAuth.currentUser.isAnonymous,false);
     const same=await signInWithEmailAndPassword(newAuth,email2,pin);
     assert.equal(same.user.uid,originalUid);
+    assert.equal(oldAuth.currentUser.uid,newAuth.currentUser.uid);
+
+    // Firebase Auth EMULATOR ONLY: a fabricated third-party Google identity.
+    // No live Google token, consent, OAuth endpoint, or user data is involved.
+    // This checks whether attaching the second provider preserves the original
+    // UID and that an independent client can subsequently use that provider.
+    const fakeGoogle=JSON.stringify({
+      sub:"deda-emulator-google-subject-100441",
+      email:"deda-emulator-google@example.test",
+      email_verified:true,
+    });
+    const mockGoogleCredential=GoogleAuthProvider.credential(fakeGoogle);
+    const withGoogle=await linkWithCredential(oldAuth.currentUser,
+      mockGoogleCredential);
+    assert.equal(withGoogle.user.uid,originalUid);
+    assert.equal(oldAuth.currentUser.uid,originalUid);
+    assert(oldAuth.currentUser.providerData.some(
+      p=>p.providerId==="google.com"));
+    await signOut(newAuth);
+    const googleOtherPhone=await signInWithCredential(newAuth,
+      mockGoogleCredential);
+    assert.equal(googleOtherPhone.user.uid,originalUid);
     assert.equal(oldAuth.currentUser.uid,newAuth.currentUser.uid);
     // Do not treat sign-in as authorization to restore financial history.
     for(const [path,field,want] of [
