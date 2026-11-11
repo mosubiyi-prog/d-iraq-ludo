@@ -11,7 +11,7 @@ const {generateKeyPairSync,sign} = require("node:crypto");
 const {initializeApp:adminInit,deleteApp:adminDelete}
   = require("firebase-admin/app");
 const {getAuth:adminGetAuth} = require("firebase-admin/auth");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore,Timestamp} = require("firebase-admin/firestore");
 const {initializeApp:clientInit,deleteApp:clientDelete}
   = require("firebase/app");
 const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
@@ -170,6 +170,12 @@ test("same UID original anonymous prelink PIN approval and password link on two 
   try {
     const old=await signInAnonymously(oldAuth);
     const originalUid=old.user.uid;
+    const week="2026-11-07";
+    const giftId="deda-weekly-"+week+"-"+id.substring(1);
+    const friendOtherUid="synthetic-other-friend-owner-uid";
+    // These are the ACTUAL Firestore account-domain collection paths used
+    // by deda_step2_account_domains_recovery_readback.dart, not generic
+    // fictional deda_wallets/deda_gifts paths.
     const docs={
       ["deda_account_directory/"+key]:{
         accountKey:key,createdUid:originalUid,active:true},
@@ -182,8 +188,24 @@ test("same UID original anonymous prelink PIN approval and password link on two 
         publicId:id,ownerUid:originalUid},
       ["deda_sessions/"+originalUid]:{
         uid:originalUid,accountKey:key},
-      ["deda_wallets/"+originalUid]:{diamonds:1234},
-      ["deda_gifts/"+originalUid]:{giftCount:5},
+      ["deda_account_profiles/"+key]:{
+        accountKey:key,accountType:"user"},
+      ["deda_diamond_gift_balances/"+id]:{
+        publicId:id,balance:1234},
+      ["deda_stage71_active_identifier/"+id]:{
+        originalId:id,activeId:"@DEDA-VIP999"},
+      ["deda_weekly_direct_accounts/"+id]:{
+        publicId:id,accountKey:key},
+      ["deda_weekly_direct_control/active"]:{weekId:week},
+      ["deda_weekly_direct_weeks/"+week+"/scores/"+id]:{
+        weekId:week,publicId:id,weeklyXp:85},
+      ["deda_diamond_gifts/"+giftId]:{
+        giftId,sourceType:"weekly_league",targetPublicId:id,
+        amount:150,status:"pending",
+        createdAt:Timestamp.fromDate(new Date("2026-11-07T06:00:00Z"))},
+      ["deda_friendships/synthetic-safe-friend-relation"]:{
+        requesterUid:originalUid,recipientUid:friendOtherUid,
+        members:[originalUid,friendOtherUid],status:"accepted"},
     };
     const batch=db.batch();
     for(const [path,value] of Object.entries(docs))batch.set(db.doc(path),value);
@@ -401,9 +423,27 @@ test("same UID original anonymous prelink PIN approval and password link on two 
       ["deda_credentials/"+key,"createdUid",originalUid],
       ["deda_share_ids/"+id,"ownerUid",originalUid],
       ["deda_social_profiles/"+id,"ownerUid",originalUid],
-      ["deda_wallets/"+originalUid,"diamonds",1234],
-      ["deda_gifts/"+originalUid,"giftCount",5],
+      ["deda_account_profiles/"+key,"accountType","user"],
+      ["deda_diamond_gift_balances/"+id,"balance",1234],
+      ["deda_diamond_gift_balances/"+id,"publicId",id],
+      ["deda_stage71_active_identifier/"+id,"activeId","@DEDA-VIP999"],
+      ["deda_weekly_direct_accounts/"+id,"publicId",id],
+      ["deda_weekly_direct_weeks/"+week+"/scores/"+id,"weeklyXp",85],
+      ["deda_diamond_gifts/"+giftId,"amount",150],
+      ["deda_diamond_gifts/"+giftId,"status","pending"],
+      ["deda_friendships/synthetic-safe-friend-relation","requesterUid",originalUid],
     ])assert.equal((await db.doc(path).get()).data()[field],want,path);
+    const actualGift=(await db.collection("deda_diamond_gifts")
+      .where("targetPublicId","==",id).get()).docs;
+    assert.equal(actualGift.length,1);
+    assert.equal(actualGift[0].id,giftId);
+    assert(actualGift[0].data().createdAt instanceof Timestamp);
+    const relations=(await db.collection("deda_friendships")
+      .where("members","array-contains",originalUid).get()).docs;
+    assert.equal(relations.length,1);
+    assert.equal(relations[0].data().status,"accepted");
+    assert.deepEqual(relations[0].data().members,
+      [originalUid,friendOtherUid]);
 
     // The prelink proof must no longer work after credential enrollment.
     await assert.rejects(()=>proof(request(originalUid)),
