@@ -238,6 +238,18 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert(oldAuth.currentUser.providerData.some(
       p=>p.providerId==="google.com"));
 
+    // Admin Auth provider lookup is READ-ONLY: no client IdP sign-in request.
+    // The caller must separately authenticate the Google subject (e.g. by
+    // verified OIDC ID token). A submitted subject string is not proof.
+    const knownByProvider=await authAdmin.getUserByProviderUid(
+      "google.com","deda-emulator-google-subject-100441");
+    assert.equal(knownByProvider.uid,originalUid);
+    await assert.rejects(
+      ()=>authAdmin.getUserByProviderUid(
+        "google.com","different-never-linked-google-subject"),
+      err=>err.code==="auth/user-not-found");
+    assert.equal(oldAuth.currentUser.uid,originalUid);
+
     // Mirror the existing Flutter signInWithIdp(autoCreate:false) preflight
     // against local Identity Toolkit emulator BEFORE FirebaseAuth signs in.
     // An unrelated Google identity must never be created by this check.
