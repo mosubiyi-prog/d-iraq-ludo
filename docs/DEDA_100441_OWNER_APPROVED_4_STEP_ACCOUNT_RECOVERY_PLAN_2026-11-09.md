@@ -1,5 +1,15 @@
 # DEDA — خطة استرجاع الحساب المعتمدة من صاحب المشروع
 
+## ✅ 2026-11-11 — ربط مراجعة Google بقراءة nonce خادمي موثوق على نفس جلسة Firebase
+
+- **الإصلاح داخل نفس الملف، لا خدمة جديدة:** استُخدم `createTrustedGoogleNonceStore` الموجود في `functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js` لإكمال `reviewExistingGoogleWithStoredNonce`: يتحقق من Firebase Auth + App Check، يجلب تحدّي الـnonce من Firestore الخاص بالخادم، يتحقق من توقيع Google OIDC وربطه بنفس الـnonce والجمهور، ثم يستهلك التحدي ذرياً قبل بحث `getUserByProviderUid` وسجلات الهوية. لا يُؤخذ كائن التحدي المزعوم من الهاتف ولا يُقبل OAuth subject يكتبه المستخدم.
+- **حالات الرفض المثبتة بالمحاكي:** اختلاف Firebase ID token، أو App Check token، أو nonce، أو توقيع Google، أو إعادة استعمال تحدٍّ سبق استهلاكه؛ كل حالة ترفض دون اعتماد حساب أو نقل ملكية. بقيت هوية صاحب الحساب ونقاط الاختبار المالية مرتبطة بـUID الأصلي في سيناريو الهاتفين الوهميين. تُرجع الخدمة فقط مراجعة خادمية داخلية `EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY` ولا تعيد UID للعميل، ولا تسجّل دخوله، ولا تصدر رموزاً، ولا تُنشئ Firebase Auth user.
+- **فحوص المصدر والتكامل:** [GitHub Actions 43027910427](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43027910427) = SUCCESS لفاحص OIDC؛ [GitHub Actions 43028014795](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43028014795) = SUCCESS، **61 اختبار Node مع Firebase Auth/Firestore Emulator و24 Flutter** بدون فشل؛ فحص عدم تغيّر ملفات التطبيق المحمية وFirebase والتوقيع نجح.
+- **حدود النتيجة:** هذا **ليس Google OAuth الحقيقي ولا App Check الحقيقي**، وكلاهما يجري تمثيله ببيانات مختبرية أثناء الاختبار مع تحقق Firebase Auth المحلي الفعلي. لا يزال `functions/index.js` دون استدعاء لهذا الكود، ولا Callable إنتاجية، ولا منفذ لربط هاتف Android. مسار تسجيل Google على الهاتف الجديد **مقفّل** قبل اختيار الحساب تجنباً لإنشاء UID بالخطأ.
+- **المتبقي الذي يحتاج فحصاً منفصلاً:** توصيل الخدمة من خلال endpoint معتمد بعد اعتماد الصلاحيات، والتحقق من Google/App Check الحقيقيين، ثم إثبات عدم إنشاء حساب عند دخول جهاز ثانٍ، والاسترجاع الكامل للممتلكات ومطابقة أرقام النقاط/الماسات والهدايا والأصدقاء والدوري، مع إبقاء A/B/C منفصلاً. لا إصدار APK ولا تغيير قاعدة الإنتاج أو سوق Play دون موافقة جديدة صريحة.
+
+---
+
 ## ✅ 2026-11-11 — إتمام حفظ الـnonce الخادمي ومنع إعادة الاستخدام (معزول، دون نشر)
 
 - **النطاق:** استكمال الوظيفة الخادمية الموجودة `functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js` بإضافة `createTrustedGoogleNonceStore` *داخل نفس الملف، دون إنشاء خدمة مكررة*. هذا مكوّن خادم فقط، غير مستدعى في `functions/index.js`، وليس Callable أو مدخلاً متاحاً للمستخدم.
