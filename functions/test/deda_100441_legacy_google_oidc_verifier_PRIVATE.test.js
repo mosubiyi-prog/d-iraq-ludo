@@ -4,7 +4,8 @@ const assert=require("node:assert/strict");
 const {generateKeyPairSync,sign}=require("node:crypto");
 const {inspectSignedToken,getOfficialGoogleJwks,
   verifyProspectiveGoogleForLegacyReview,
-  reviewExistingGoogleProviderReadOnly}=require(
+  reviewExistingGoogleProviderReadOnly,
+  createTrustedGoogleNonceStore}=require(
   "../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js"
 );
 const nowMs=1800000000000;
@@ -328,5 +329,128 @@ test("server-only Google lookup denies missing adapters and malformed account",a
     assert.equal(f.calls.lookup.length,0);
     assert.equal(f.calls.reads.length,0);
     noResultAuthority(result);
+  }
+});
+
+
+// Server-only challenge persistence test. The in-memory transaction facade
+// emulates one atomic Firestore transaction; emulator integration runs in a
+// separate existing workflow with real Auth+Firestore local emulators.
+function nonceDbFixture(){
+  const rows=new Map(),calls={reads:0,writes:0};
+  let lane=Promise.resolve();
+  const snap=k=>({exists:rows.has(k),data:()=>rows.get(k)});
+  const doc=k=>({key:k,get:async()=>{calls.reads++;return snap(k);}});
+  const db={
+    collection:name=>({doc:id=>doc(name+"/"+id)}),
+    runTransaction:callback=>{
+      const next=lane.then(async()=>{
+        const writes=[];
+        const tx={
+          get:async ref=>{calls.reads++;return snap(ref.key);},
+          create:(ref,data)=>writes.push(["create",ref.key,data]),
+          set:(ref,data)=>writes.push(["set",ref.key,data]),
+          update:(ref,data)=>writes.push(["update",ref.key,data]),
+        };
+        const result=await callback(tx);
+        for(const [mode,key,data] of writes){
+          if(mode==="create"&&rows.has(key))throw Error("already-exists");
+          if(mode==="update"&&!rows.has(key))throw Error("missing");
+          rows.set(key,mode==="update"?{...rows.get(key),...data}:{...data});
+          calls.writes++;
+        }
+        return result;
+      });
+      lane=next.catch(()=>{});
+      return next;
+    },
+  };
+  return {db,calls,rows};
+}
+function nonceSetup(){
+  const f=nonceDbFixture(),uid="synthetic-guest-device-uid",appId="1:123:android:testapp";
+  const tokenId="synthetic-firebase-id-token-123456";
+  const appToken="synthetic-appcheck-token-123456";
+  let t=nowMs;
+  const auth={
+    async verifyIdToken(value,revoked) {
+      assert.equal(revoked,true);
+      if(value===tokenId)return {uid};
+      if(value==="other-firebase-id-token-123")return {uid:"another-auth-uid-123"};
+      throw Error("invalid-idtoken");
+    },
+    async getUser(value){return {uid:value,disabled:false};},
+  };
+  const appCheckVerifier={
+    async verifyToken(v){
+      if(v===appToken)return {appId};
+      if(v==="other-appcheck-token-12345")return {appId:"1:123:android:foreign"};
+      throw Error("invalid-appcheck");
+    },
+  };
+  const store=createTrustedGoogleNonceStore({
+    ...f,auth,appCheckVerifier,productionConfig:config,
+    clock:()=>t,nonceFactory:()=>Buffer.alloc(32,0x48),
+  });
+  const identity={firebaseIdToken:tokenId,appCheckToken:appToken};
+  return {...f,store,identity,getTime:()=>t,setTime:v=>{t=v;}};
+}
+test("trusted server issues digest-only nonce; reads for SAME verified Auth/AppCheck",async()=>{
+  const f=nonceSetup(),issued=await f.store.issue(f.identity);
+  assert(/^[A-Za-z0-9_-]{24,128}$/.test(issued.nonce));
+  assert.equal(issued.createdAtMs,nowMs);
+  assert.equal(f.calls.writes,2); // challenge + atomic per-UID limiter
+  const all=JSON.stringify([...f.rows.values()]);
+  assert.equal(all.includes(issued.nonce),false);
+  assert.equal(all.includes(f.identity.firebaseIdToken),false);
+  assert.equal(all.includes(f.identity.appCheckToken),false);
+  assert.equal((await f.store.read({...f.identity,nonce:issued.nonce})).status,"issued");
+  assert.equal(await f.store.read({
+    ...f.identity,firebaseIdToken:"other-firebase-id-token-123",
+    nonce:issued.nonce,
+  }),null);
+  assert.equal(await f.store.read({
+    ...f.identity,appCheckToken:"other-appcheck-token-12345",
+    nonce:issued.nonce,
+  }),null);
+});
+test("nonce consumption is atomic; exactly one concurrent verification wins",async()=>{
+  const f=nonceSetup(),issued=await f.store.issue(f.identity);
+  const args={...f.identity,...issued};
+  const [a,b,c]=await Promise.all([
+    f.store.consume(args),f.store.consume(args),f.store.consume(args),
+  ]);
+  assert.deepEqual([a,b,c].filter(Boolean),[true]);
+  assert.equal(await f.store.read({...f.identity,nonce:issued.nonce}),null);
+  assert.equal(await f.store.consume(args),false);
+  assert.equal(f.calls.writes,3); // limiter, challenge, one used-marker
+});
+test("nonce rate limit, expiry, bad AppCheck and foreign Firebase principal fail closed",async()=>{
+  const f=nonceSetup(),issued=await f.store.issue(f.identity);
+  await assert.rejects(()=>f.store.issue(f.identity),/RATE_LIMITED/);
+  await assert.rejects(()=>f.store.issue({
+    ...f.identity,appCheckToken:"wrong-app-check",
+  }));
+  await assert.rejects(()=>f.store.issue({
+    ...f.identity,firebaseIdToken:"bad-token",
+  }));
+  assert.equal(await f.store.consume({...issued,...f.identity,
+    productionOAuthAudience:"wrong-audience"}),false);
+  assert.equal(await f.store.consume({...issued,...f.identity,
+    firebaseIdToken:"other-firebase-id-token-123"}),false);
+  f.setTime(nowMs+11*60000);
+  assert.equal(await f.store.read({...f.identity,nonce:issued.nonce}),null);
+  assert.equal(await f.store.consume({...issued,...f.identity}),false);
+});
+test("nonce store requires trusted production config and server verifiers",()=>{
+  const f=nonceDbFixture();
+  for(const options of [
+    {productionConfig:{...config,projectId:"deda-qa-uid-lab-20261108"}},
+    {productionConfig:{...config,serverApproved:false}},
+    {auth:null},{appCheckVerifier:null},{db:null},
+  ]) {
+    const deps={db:f.db,auth:{verifyIdToken:async()=>{},getUser:async()=>{}},
+      appCheckVerifier:{verifyToken:async()=>{}},productionConfig:config,...options};
+    assert.throws(()=>createTrustedGoogleNonceStore(deps));
   }
 });
