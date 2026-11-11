@@ -67,6 +67,11 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_backend.dart
       - name: Test existing linked-owner PIN gating policy (opt-in only)
         run: flutter test test/deda_owner_session_compat_private_test.dart --reporter expanded
+      - name: Prepare Google sign-in package in disposable CI workspace only
+        run: |
+          # Original pubspec and lock remain unchanged in GitHub; only the
+          # temporary runner resolves the version already pinned by binder.
+          flutter pub add google_sign_in:6.3.0
       - name: Analyze isolated Google replacement account guard
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/deda_step2_google_replacement_login_100439.dart
       - name: Test existing Google UID match and no foreign account sign-out
