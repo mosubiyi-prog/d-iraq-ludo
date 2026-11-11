@@ -19,7 +19,7 @@ const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
   linkWithCredential,signInWithCredential} = require("firebase/auth");
 const {createOwnerPinVerifyCallable}
   = require("../deda_owner_pin_verify_private_v1.js");
-const {reviewExistingGoogleProviderReadOnly,
+const {reviewExistingGoogleWithStoredNonce,
   createTrustedGoogleNonceStore}
   = require("../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js");
 const {assessSameUidRecovery}
@@ -270,13 +270,14 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     const requester={firebaseIdToken:deviceToken,
       appCheckToken:"local-emulator-synthetic-appcheck-not-attested"};
     let serverNow=t-10000,appCheckChecks=0;
+    const appCheckVerifier={verifyToken:async v=>{
+      assert.equal(v,requester.appCheckToken);
+      appCheckChecks++;
+      return {appId:"1:123456789:android:emulator-test-only"};
+    }};
     const challengeStore=createTrustedGoogleNonceStore({
       db,auth:authAdmin,productionConfig:prodConfig,clock:()=>serverNow,
-      appCheckVerifier:{verifyToken:async v=>{
-        assert.equal(v,requester.appCheckToken);
-        appCheckChecks++;
-        return {appId:"1:123456789:android:emulator-test-only"};
-      }},
+      appCheckVerifier,
     });
     const issued=await challengeStore.issue(requester);
     const nonce=issued.nonce;
@@ -298,15 +299,25 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     const oidc=header+"."+payload+"."+
       sign("RSA-SHA256",Buffer.from(header+"."+payload),privateKey)
         .toString("base64url");
-    const query=()=>reviewExistingGoogleProviderReadOnly({
-      idToken:oidc,nowMs:t,
-      productionConfig:prodConfig,challenge:stored,
+    const inputs={
+      idToken:oidc,nonce,...requester,clock:()=>serverNow,
+      productionConfig:prodConfig,appCheckVerifier,
       loadTrustedGoogleJwks:async()=>jkeys,
-      consumeOneTimeChallenge:details=>challengeStore.consume({
-        ...details,...requester,
-      }),
       auth:authAdmin,db,accountKey:key,originalId:id,
+    };
+    const query=(overrides={})=>reviewExistingGoogleWithStoredNonce({
+      ...inputs,...overrides,
     });
+    // A mismatched App Check / Firebase requester is refused BEFORE the
+    // one-use challenge can be consumed by a valid original requester.
+    const badApp=await query({appCheckToken:"other-appcheck-token"});
+    assert.equal(badApp.status,"DENY");
+    const badToken=await query({firebaseIdToken:"other-firebase-id-token"});
+    assert.equal(badToken.status,"DENY");
+    const badNonce=await query({nonce:"differentServerNonceabcdefghijkl1234"});
+    assert.equal(badNonce.status,"DENY");
+    const badGoogle=await query({idToken:"invalid.google.assertion"});
+    assert.equal(badGoogle.status,"DENY");
     const reviewed=await query();
     assert.equal(reviewed.status,
       "EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY");
@@ -316,7 +327,7 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert(!JSON.stringify(reviewed).includes(originalUid));
     const replay=await query();
     assert.equal(replay.status,"DENY");
-    assert.equal(replay.reason,"NONCE_REPLAY_OR_CONSUMPTION_FAILED");
+    assert.equal(replay.reason,"NO_TRUSTED_SERVER_GOOGLE_CHALLENGE");
     assert.equal(await challengeStore.read({...requester,nonce}),null);
 
     // Retain historical negative evidence: the Auth emulator does not
