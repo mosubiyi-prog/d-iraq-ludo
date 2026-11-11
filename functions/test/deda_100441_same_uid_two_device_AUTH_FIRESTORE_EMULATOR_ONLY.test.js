@@ -388,6 +388,13 @@ test("same UID original anonymous prelink PIN approval and password link on two 
       mockGoogleCredential);
     assert.equal(googleOtherPhone.user.uid,originalUid);
     assert.equal(oldAuth.currentUser.uid,newAuth.currentUser.uid);
+    // The replacement device uses both the original password provider and
+    // Google on the SAME principal; this is what the Flutter recovery gate
+    // requires. Never treat Google email equality as old-account ownership.
+    assert(newAuth.currentUser.providerData.some(
+      p=>p.providerId==="password" && p.email===email2));
+    assert(newAuth.currentUser.providerData.some(
+      p=>p.providerId==="google.com"));
     // Do not treat sign-in as authorization to restore financial history.
     for(const [path,field,want] of [
       ["deda_account_directory/"+key,"createdUid",originalUid],
