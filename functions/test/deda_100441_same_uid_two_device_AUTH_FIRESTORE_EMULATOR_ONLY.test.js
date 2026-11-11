@@ -405,6 +405,15 @@ test("same UID original anonymous prelink PIN approval and password link on two 
         "Emulator falsely marked an unlinked Google identity as existing");
       assert.equal((await db.doc(
         "deda_account_directory/"+key).get()).data().createdUid,originalUid);
+      // Auth Emulator may create an orphan Auth UID, but DEDA must never
+      // manufacture a SECOND owner profile/session/wallet/social identity.
+      const unlinkedUid=unrelatedGoogle.result.localId;
+      assert.equal((await db.doc("users/"+unlinkedUid).get()).exists,false);
+      assert.equal((await db.doc("deda_sessions/"+unlinkedUid).get()).exists,false);
+      assert.equal((await db.doc("deda_account_profiles/"+key).get()).data()
+        .accountKey,key);
+      assert.equal((await db.doc("deda_share_ids/"+id).get()).data()
+        .ownerUid,originalUid);
       console.log("EMULATOR_NO_CREATE_NOT_GUARANTEED__NEW_UID_HOLD_ONLY");
     }
     await signOut(newAuth);
