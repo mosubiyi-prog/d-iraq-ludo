@@ -75,6 +75,25 @@ jobs:
             --only auth,firestore \
             'node --test functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js'
           echo PASS_LOCAL_TWO_DEVICE_UID_CONTINUITY_NO_DEPLOY
+      - name: Match two-device recovery QA to real DEDA account-domain collections
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('lib/deda_step2_account_domains_recovery_readback.dart').read_text()
+          test=Path('functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js').read_text()
+          for domain in [
+              'deda_account_profiles/', 'deda_diamond_gift_balances/',
+              'deda_stage71_active_identifier/', 'deda_weekly_direct_accounts/',
+              'deda_weekly_direct_weeks/', 'deda_diamond_gifts',
+              'deda_friendships', 'deda_social_profiles/',
+          ]:
+              assert domain in source, f'App account domain missing: {domain}'
+              assert domain in test, f'Two-device emulator fixture missing: {domain}'
+          assert '["deda_wallets/"' not in test
+          assert '["deda_gifts/"' not in test
+          print('PASS_REAL_RECOVERY_DOMAIN_FIXTURES_IDENTITY_WALLET_GIFTS_FRIENDS_PREMIUM_LEAGUE')
+          PY
       - name: Protect linked-owner PIN from legacy Firestore attempt writes
         run: |
           python3 - <<'PY'
