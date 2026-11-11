@@ -63,7 +63,10 @@ void main() {
       <String, dynamic>{},
       <String, dynamic>{'localId': 'new'},
       <String, dynamic>{'localId': uid, 'isNewUser': true},
+      // Unknown status must not count as proof of an existing provider.
+      <String, dynamic>{'localId': uid},
       <String, dynamic>{'localId': uid, 'needConfirmation': true},
+      <String, dynamic>{'localId': uid, 'isNewUser': null},
     ]) {
       expect(() => DedaGoogleReplacementProof.existingUidOnly(response),
           throwsStateError);
