@@ -10,6 +10,23 @@ void main() {
     expect(dedaStep1GoogleOwnerLinkEnabled, false);
   });
 
+  test('anonymous original phone PIN cannot masquerade as linked-owner login', () {
+    // Initial enrollment and already-linked account sign-in are not the
+    // same operation. A successful legacy PIN alone cannot authorize a UID
+    // transition or sign-in under the optional linked-owner pilot.
+    bool allowed({bool anonymous = true, bool serverOwner = false}) =>
+        DedaLinkedOwnerSessionPolicy.mayAttemptExistingAccountPinSignIn(
+          linkedOwnerPilotEnabled: true,
+          firebaseSessionPresent: true,
+          firebaseSessionAnonymous: anonymous,
+          serverVerifiedOriginalOwner: serverOwner,
+        );
+    expect(allowed(), false);
+    expect(allowed(serverOwner: true), false);
+    expect(allowed(anonymous: false), false);
+    expect(allowed(anonymous: false, serverOwner: true), true);
+  });
+
   test('only a linked original owner may attach Google credentials', () {
     void approve({
       bool enabled = true,
