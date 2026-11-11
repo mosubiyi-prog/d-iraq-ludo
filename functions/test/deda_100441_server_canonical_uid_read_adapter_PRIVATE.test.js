@@ -130,6 +130,38 @@ test("three-way split A original route, B register, C social + auth is detected"
   assert(t.calls.reads.includes("users/" + THIRD));
 });
 
+test("Google canonical review rejects each partial UID split without reading PIN into result", async () => {
+  // These cases can pass the smaller client-side directory/route/user/session
+  // checks. The sensitive credentials and social owners MUST be inspected on
+  // the trusted server, never fetched directly by Flutter.
+  for (const [path, field, value] of [
+    ["deda_credentials/" + ACCOUNT, "createdUid", OTHER],
+    ["deda_social_profiles/" + ORIGINAL, "ownerUid", THIRD],
+  ]) {
+    const rows = baseline();
+    rows[path][field] = value;
+    const t = harness({
+      rows, provider: "google.com", linkedProviders: ["google.com"],
+      decodedEmail: "linked@example.test", recordEmail: "linked@example.test",
+    });
+    const out = await inspectServerCanonicalOwner(input, t.deps);
+    assert.equal(out.classification, "SPLIT_DETECTED_NO_ACCOUNT_TRANSFER",
+      path);
+    noAuthority(out);
+    assert.equal(t.calls.reads.length, 7);
+    assert.equal(t.calls.writes.length, 0);
+  }
+
+  const healthy = harness({
+    provider: "google.com", linkedProviders: ["google.com"],
+    decodedEmail: "linked@example.test", recordEmail: "linked@example.test",
+  });
+  const status = await inspectServerCanonicalOwner(input, healthy.deps);
+  assert.equal(status.classification,
+    "CANONICAL_MATCH_REQUIRES_SEPARATE_OWNER_REVIEW");
+  noAuthority(status); // Even perfect records never authorize sign-in.
+});
+
 test("different live linked Firebase UID is classified SPLIT, even if PIN known", async () => {
   const rows = baseline();
   rows["users/" + OTHER] = {accountKey: ACCOUNT, sharePersonalId: ORIGINAL};
