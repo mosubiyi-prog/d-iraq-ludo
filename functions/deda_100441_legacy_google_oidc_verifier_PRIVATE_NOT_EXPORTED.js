@@ -266,7 +266,7 @@ async function reviewExistingGoogleProviderReadOnly({
   consumeOneTimeChallenge,
   auth, db, accountKey, originalId,
 }={}) {
-  const ACCOUNT=/^(?:07\\d{9}|9647\\d{9})$/;
+  const ACCOUNT=/^(?:07\d{9}|9647\d{9})$/;
   const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
   const UID=/^[A-Za-z0-9:_-]{6,128}$/;
   if (typeof auth?.getUserByProviderUid!=="function" ||
