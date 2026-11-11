@@ -1,5 +1,16 @@
 # DEDA — خطة استرجاع الحساب المعتمدة من صاحب المشروع
 
+## ✅ 2026-11-11 — إتمام حفظ الـnonce الخادمي ومنع إعادة الاستخدام (معزول، دون نشر)
+
+- **النطاق:** استكمال الوظيفة الخادمية الموجودة `functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js` بإضافة `createTrustedGoogleNonceStore` *داخل نفس الملف، دون إنشاء خدمة مكررة*. هذا مكوّن خادم فقط، غير مستدعى في `functions/index.js`، وليس Callable أو مدخلاً متاحاً للمستخدم.
+- **التوليد الآمن:** مصدر عشوائي 32 بايت عبر `randomBytes`، وإصدار nonce بعد التحقق من Firebase Admin ID token مع `checkRevoked=true` وسجل المستخدم وApp Check token بواسطة verifier موثوق. يحفظ Firestore Admin **SHA-256 للـnonce وليس القيمة الأصلية**، مع UID جهاز الطلب وApp ID، جمهور OAuth المعتمد وتاريخ الإنشاء والانتهاء، في مجموعة خاصة بالخادم. إدخال سجل التحدي وحد المحاولات يتم بمعاملة Firestore ذرية؛ لا يُسجل PIN أو رمز Google أو ID token.
+- **التحقق والرفض:** قراءة التحدي لا تنجح إلا بنفس Firebase UID وApp Check App ID والجمهور والوقت المحدد (حد 10 دقائق)؛ يُستهلك في معاملة ذرية تجعل استعماله مرة واحدة حتى لو تزامن طلبان. مدة انتظار 60 ثانية قبل إصدار تحدٍّ ثانٍ لنفس UID. جميع الحالات الفاشلة لا تنشئ حساباً أو تمنح جلسة أو بيانات مالية/إدارة.
+- **الفحوص:** [111 اختبار Node](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43026549934) = SUCCESS، تشمل الاصطناع/القراءة/مقارنة هوية الجلسة وApp Check والرفض عند انتهاء الصلاحية وإعادة الاستعمال المتزامن. وجرى توصيل نفس المتجر الموجود باختبار الجهازين `functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js` باستخدام **Firebase Auth/Firestore المحليين** مع Auth ID token حقيقي من المحاكي؛ **App Check وGoogle OIDC مزيّفان فقط في المختبر**، ولا يُعد ذلك إثباتاً على بيئة Google/Firebase الإنتاجية. اختبار CI للتكامل: [GitHub Actions 43026704764](https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43026704764).
+- **قيود قبل الإصدار:** لا تزال وظيفة الإصدار/الاستهلاك غير منشورة؛ لم ينفَّذ App Check الحقيقي، أو Google nonce/OIDC الحقيقي على جهاز Android، أو الربط عبر Callable مستخدم حقيقي، أو مسار آمن ضد سباق الحذف/إنشاء Auth UID أثناء الدخول، أو استرجاع ممتلكات المستخدم كاملة. يجب إبقاء التفعيل مقفلاً؛ لا بناء APK ولا Firebase deploy ولا Play دون موافقة منفصلة واختبارات جهازية.
+- **خصوصية التغييرات:** لا تعديل في Firebase Rules أو ملفات التطبيق المحمية أو Functions `index.js` أو تعريفات Google أو مفاتيح التوقيع؛ حساب A/B/C يبقى معزولاً.
+
+---
+
 ## ✅ 2026-11-11 — استبدال فحص Google القابل للإنشاء بمراجعة خادمية للقراءة فقط
 
 - **إصلاح موثق ضمن الملفات الموجودة (لا خدمة جديدة):** توسعة `functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js` بفاحص `reviewExistingGoogleProviderReadOnly`. يعيد استخدام فحص توقيع OIDC ومصدر Google/production audience، nonce صادر من خادم موثوق ويُستهلك مرة واحدة، ثم يستدعي `auth.getUserByProviderUid('google.com', subject)` **للقراءة فقط** ويعيد استعمال `inspectCanonicalUid` لمطابقة الدليل وسجل الرمز *الوصفي فقط* وUID والآيدي الاجتماعي والجلسة ومنع المدير. لا ينشئ Firebase Auth ولا يصدر Custom Token ولا يعيد UID أو Google subject أو PIN أو بيانات مالية، ولا يمنح دخولاً أو صلاحيات؛ النتيجة السليمة مجرد مرشح مراجعة خادمي.
