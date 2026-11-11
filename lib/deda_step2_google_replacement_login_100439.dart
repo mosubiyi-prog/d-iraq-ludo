@@ -122,6 +122,7 @@ class DedaGoogleReplacementLogin {
   }) async {
     if (!explicitUserAction || !isCurrentIntent() ||
         !dedaStep2GoogleReplacementLoginEnabled ||
+        !DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed ||
         !dedaLinkedOwnerCompatEnabled ||
         !dedaStep2SparkLinkedUidReadOnlyEnabled ||
         !DedaAuthRuntime.enabled || Firebase.apps.isEmpty) {
