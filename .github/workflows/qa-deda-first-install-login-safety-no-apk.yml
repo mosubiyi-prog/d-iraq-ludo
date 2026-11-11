@@ -16,6 +16,7 @@ on:
       - 'functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js'
       - 'functions/deda_owner_pin_verify_private_v1.js'
       - 'functions/test/deda_owner_pin_verify_private_v1.test.js'
+      - 'functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js'
       - 'lib/deda_100431_linked_owner_session_policy.dart'
       - 'test/deda_owner_session_compat_private_test.dart'
       - 'tools/guard_deda_login_busy_indicator_next_release.py'
@@ -29,7 +30,7 @@ permissions:
 jobs:
   login-regression-source-only:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +43,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - name: Test existing server PIN verifier with linked same-UID gate
         run: |
           node --check functions/deda_owner_pin_verify_private_v1.js
@@ -49,6 +54,27 @@ jobs:
           node --test functions/test/deda_stage2_live_gate.test.js
           # Trusted server compares credentials/social without exposing PIN.
           node --test functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js
+      - name: Exercise original anonymous UID prelink and two-device sign-in on real local Firebase emulators
+        shell: bash
+        env:
+          CI: 'true'
+          GCLOUD_PROJECT: demo-deda-100441-two-device-continuity
+          FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
+          FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
+          FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true'
+        run: |
+          set -euo pipefail
+          # Disposable Auth/Firestore local emulator. No service accounts,
+          # production Firebase network or deployed Cloud Functions.
+          node --check functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js
+          npm install --prefix tests/firestore-rules --no-save --no-audit --no-fund firebase-tools@14
+          npm install --prefix functions --no-save --no-audit --no-fund firebase@12.3.0
+          tests/firestore-rules/node_modules/.bin/firebase emulators:exec \
+            --config firebase.100441.server-emulators.qa.json \
+            --project demo-deda-100441-two-device-continuity \
+            --only auth,firestore \
+            'node --test functions/test/deda_100441_same_uid_two_device_AUTH_FIRESTORE_EMULATOR_ONLY.test.js'
+          echo PASS_LOCAL_TWO_DEVICE_UID_CONTINUITY_NO_DEPLOY
       - name: Protect linked-owner PIN from legacy Firestore attempt writes
         run: |
           python3 - <<'PY'
