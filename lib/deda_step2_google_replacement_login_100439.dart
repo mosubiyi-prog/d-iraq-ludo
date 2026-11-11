@@ -55,6 +55,20 @@ class DedaGoogleReplacementProof {
     return value;
   }
 
+  /// On a failed verification, clean up only the Google principal selected
+  /// by THIS attempt. Another account may have signed in concurrently.
+  static bool shouldSignOutFailedGoogleAttempt({
+    required String? attemptedUid,
+    required String? priorUid,
+    required String? liveUid,
+    required bool liveAnonymous,
+  }) =>
+      attemptedUid != null &&
+      attemptedUid.isNotEmpty &&
+      attemptedUid != priorUid &&
+      liveUid == attemptedUid &&
+      !liveAnonymous;
+
   static DedaGoogleVerifiedExistingOwner requireOriginalServerIdentity({
     required String expectedUid,
     required String currentUid,
@@ -253,12 +267,18 @@ class DedaGoogleReplacementLogin {
         },
       );
     } catch (_) {
-      // A failed identity proof must not leave a wrong login visible in DEDA.
-      // Never delete or merge a Firebase Auth account or touch user data.
+      // A failed proof must not leave this attempted principal as DEDA's
+      // owner. Never sign out an unrelated account that changed in flight.
+      // Never delete/merge an Auth account or modify a user's data.
       final current = auth.currentUser;
-      if (current != null && !current.isAnonymous &&
-          current.uid != prior?.uid) {
-        try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+      if (DedaGoogleReplacementProof.shouldSignOutFailedGoogleAttempt(
+          attemptedUid: existingUid, priorUid: prior?.uid,
+          liveUid: current?.uid,
+          liveAnonymous: current?.isAnonymous ?? true)) {
+        // Firebase Auth has no atomic conditional sign-out. Recheck now.
+        if (auth.currentUser?.uid == existingUid) {
+          try { await auth.signOut(); } catch (_) { /* Never expose token. */ }
+        }
       }
       rethrow;
     }
