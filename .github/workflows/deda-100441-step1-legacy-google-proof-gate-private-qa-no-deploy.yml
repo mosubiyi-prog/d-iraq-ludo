@@ -91,10 +91,15 @@ jobs:
           assert.equal(index.includes('deda_100441_lab_to_legacy_google_proof_gate'),false);
           assert.equal(index.includes('deda_100441_owner_split_identity_challenge_review_private_v1'),false);
           assert.equal(index.includes('deda_100441_legacy_google_oidc_verifier'),false);
+          assert.equal(index.includes('createPrivateGoogleRecoveryReviewCallable'),false);
           const verifier=fs.readFileSync(
             'functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js','utf8');
           assert.match(verifier,/https:\/\/www\.googleapis\.com\/oauth2\/v3\/certs/);
           assert.match(verifier,/verify\("RSA-SHA256"/);
+          assert.match(verifier,/createPrivateGoogleRecoveryReviewCallable/);
+          assert.match(verifier,/enabled=false/);
+          assert.match(verifier,/enforceAppCheck:true/);
+          assert.match(verifier,/auth\.verifyIdToken\(firebaseIdToken,true\)/);
           for(const marker of ['createCustomToken(', 'signInWithCredential(',
             'signInWithCustomToken(', 'linkWithCredential(', 'firebase-admin',
             'firebase-functions']) assert.equal(verifier.includes(marker),false,marker);
