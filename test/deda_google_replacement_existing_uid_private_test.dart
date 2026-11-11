@@ -47,32 +47,13 @@ void main() {
     expect(dedaStep2GoogleReplacementLoginEnabled, false);
   });
 
-  test('existing IDP only: request MUST use autoCreate false', () {
-    final request = DedaGoogleReplacementProof.existingIdpRequest('test_id_token');
-    expect(request['autoCreate'], false);
-    expect(request['returnSecureToken'], true);
-    expect(request['requestUri'], 'http://localhost');
-    expect(request['postBody'], contains('providerId=google.com'));
-    expect(request['postBody'], contains('id_token=test_id_token'));
-    expect(() => DedaGoogleReplacementProof.existingIdpRequest(''),
-        throwsStateError);
-  });
-
-  test('no UID or new Google principal is rejected before Firebase login', () {
-    for (final response in <Map<String, dynamic>>[
-      <String, dynamic>{},
-      <String, dynamic>{'localId': 'new'},
-      <String, dynamic>{'localId': uid, 'isNewUser': true},
-      // Unknown status must not count as proof of an existing provider.
-      <String, dynamic>{'localId': uid},
-      <String, dynamic>{'localId': uid, 'needConfirmation': true},
-      <String, dynamic>{'localId': uid, 'isNewUser': null},
-    ]) {
-      expect(() => DedaGoogleReplacementProof.existingUidOnly(response),
-          throwsStateError);
-    }
-    expect(DedaGoogleReplacementProof.existingUidOnly(
-        <String, dynamic>{'localId': uid, 'isNewUser': false}), uid);
+  test('replacement login cannot use client-side REST preflight', () {
+    // The no-create Identity Toolkit option is not a trustworthy proof.
+    // Backend OIDC + linked-provider verification is deliberately NOT
+    // deployed; even a private build cannot attempt an unverified login.
+    expect(DedaGoogleReplacementProof.trustedReadOnlyProviderLookupDeployed,
+        false);
+    expect(dedaStep2GoogleReplacementLoginEnabled, false);
   });
 
   test('linked original Google plus password matches immutable server UID', () {
