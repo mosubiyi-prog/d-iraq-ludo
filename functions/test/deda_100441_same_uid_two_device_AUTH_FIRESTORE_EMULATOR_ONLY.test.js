@@ -237,6 +237,38 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     assert.equal(oldAuth.currentUser.uid,originalUid);
     assert(oldAuth.currentUser.providerData.some(
       p=>p.providerId==="google.com"));
+
+    // Mirror the existing Flutter signInWithIdp(autoCreate:false) preflight
+    // against local Identity Toolkit emulator BEFORE FirebaseAuth signs in.
+    // An unrelated Google identity must never be created by this check.
+    const existingIdp=async (token) => {
+      const reply=await fetch(
+        "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=demo-local-key",
+        {
+          method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({
+            requestUri:"http://localhost",
+            postBody:new URLSearchParams({
+              id_token:token,providerId:"google.com",
+            }).toString(),
+            returnSecureToken:true,autoCreate:false,
+          }),
+        });
+      const json=await reply.json();
+      return {status:reply.status,result:json};
+    };
+    const existingGoogle=await existingIdp(fakeGoogle);
+    assert.equal(existingGoogle.status,200,
+      "Emulator existing Google IDP preflight must resolve an already-linked UID");
+    assert.equal(existingGoogle.result.localId,originalUid);
+    assert.notEqual(existingGoogle.result.isNewUser,true);
+    const unrelatedGoogle=await existingIdp(JSON.stringify({
+      sub:"different-never-linked-google-subject",
+      email:"unlinked-deda-emulator@example.test",
+      email_verified:true,
+    }));
+    assert.notEqual(unrelatedGoogle.status,200,
+      "No-create preflight must reject a never-linked Google identity");
     await signOut(newAuth);
     const googleOtherPhone=await signInWithCredential(newAuth,
       mockGoogleCredential);
