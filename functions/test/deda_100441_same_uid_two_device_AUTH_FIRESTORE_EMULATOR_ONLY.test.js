@@ -19,7 +19,8 @@ const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
   linkWithCredential,signInWithCredential} = require("firebase/auth");
 const {createOwnerPinVerifyCallable}
   = require("../deda_owner_pin_verify_private_v1.js");
-const {reviewExistingGoogleProviderReadOnly}
+const {reviewExistingGoogleProviderReadOnly,
+  createTrustedGoogleNonceStore}
   = require("../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js");
 const {assessSameUidRecovery}
   = require("../deda_100441_same_uid_recovery_readiness_PRIVATE_NOT_EXPORTED.js");
@@ -257,8 +258,35 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     // Firestore read with genuine local Admin Auth/Firestore emulators.
     // This token is signed by a DISPOSABLE synthetic key for test only,
     // not by Google and not valid for production authentication.
-    const t=1800000000000,nonce="syntheticOneTimeServerNonceabcdefghijkl";
+    const t=1800000000000;
     const audience="123456789012-productionrecovery.apps.googleusercontent.com";
+    const prodConfig={projectId:"deda-25b88",
+      source:"trusted_server_configuration",serverApproved:true,
+      productionOAuthAudience:audience};
+    // Firebase Admin verifies an actual Auth Emulator ID token. AppCheck
+    // verification remains a MOCK because the local AppCheck service is
+    // NOT running; physical AppCheck proof is still required before launch.
+    const deviceToken=await oldAuth.currentUser.getIdToken(true);
+    const requester={firebaseIdToken:deviceToken,
+      appCheckToken:"local-emulator-synthetic-appcheck-not-attested"};
+    let serverNow=t-10000,appCheckChecks=0;
+    const challengeStore=createTrustedGoogleNonceStore({
+      db,auth:authAdmin,productionConfig:prodConfig,clock:()=>serverNow,
+      appCheckVerifier:{verifyToken:async v=>{
+        assert.equal(v,requester.appCheckToken);
+        appCheckChecks++;
+        return {appId:"1:123456789:android:emulator-test-only"};
+      }},
+    });
+    const issued=await challengeStore.issue(requester);
+    const nonce=issued.nonce;
+    serverNow=t;
+    const stored=await challengeStore.read({...requester,nonce});
+    assert.equal(stored.source,"trusted_server_nonce_store");
+    assert.equal(stored.createdAtMs,t-10000);
+    assert(appCheckChecks>=2);
+    await assert.rejects(()=>challengeStore.issue(requester),
+      e=>e.message==="GOOGLE_CHALLENGE_REQUESTER_RATE_LIMITED");
     const {privateKey,publicKey}=generateKeyPairSync("rsa",{modulusLength:2048});
     const pub=publicKey.export({format:"jwk"});
     const jkeys={keys:[{...pub,kid:"local-demo-google-key",alg:"RS256",use:"sig"}]};
@@ -270,18 +298,13 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     const oidc=header+"."+payload+"."+
       sign("RSA-SHA256",Buffer.from(header+"."+payload),privateKey)
         .toString("base64url");
-    let used=false;
     const query=()=>reviewExistingGoogleProviderReadOnly({
       idToken:oidc,nowMs:t,
-      productionConfig:{projectId:"deda-25b88",
-        source:"trusted_server_configuration",serverApproved:true,
-        productionOAuthAudience:audience},
-      challenge:{source:"trusted_server_nonce_store",status:"issued",
-        createdAtMs:t-10000,productionOAuthAudience:audience,nonce},
+      productionConfig:prodConfig,challenge:stored,
       loadTrustedGoogleJwks:async()=>jkeys,
-      consumeOneTimeChallenge:async()=>{
-        if(used)return false;used=true;return true;
-      },
+      consumeOneTimeChallenge:details=>challengeStore.consume({
+        ...details,...requester,
+      }),
       auth:authAdmin,db,accountKey:key,originalId:id,
     });
     const reviewed=await query();
@@ -294,6 +317,7 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     const replay=await query();
     assert.equal(replay.status,"DENY");
     assert.equal(replay.reason,"NONCE_REPLAY_OR_CONSUMPTION_FAILED");
+    assert.equal(await challengeStore.read({...requester,nonce}),null);
 
     // Retain historical negative evidence: the Auth emulator does not
     // guarantee that REST autoCreate:false avoids account creation.
