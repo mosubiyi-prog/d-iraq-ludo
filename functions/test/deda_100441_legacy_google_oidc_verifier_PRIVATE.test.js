@@ -5,7 +5,8 @@ const {generateKeyPairSync,sign}=require("node:crypto");
 const {inspectSignedToken,getOfficialGoogleJwks,
   verifyProspectiveGoogleForLegacyReview,
   reviewExistingGoogleProviderReadOnly,
-  createTrustedGoogleNonceStore}=require(
+  createTrustedGoogleNonceStore,
+  createPrivateGoogleRecoveryReviewCallable}=require(
   "../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js"
 );
 const nowMs=1800000000000;
@@ -453,4 +454,161 @@ test("nonce store requires trusted production config and server verifiers",()=>{
       appCheckVerifier:{verifyToken:async()=>{}},productionConfig:config,...options};
     assert.throws(()=>createTrustedGoogleNonceStore(deps));
   }
+});
+
+
+// Pre-deployment Callable contract: no functions/index export, no production
+// call, NO Auth account minting or transfers. Header tokens are independently
+// verified AND must match trusted Callable Auth/AppCheck context.
+class PrivateCallError extends Error {
+  constructor(code,message){super(message);this.code=code;}
+}
+function privateReviewFixture({enabled=true}={}) {
+  const f=nonceDbFixture(),u=onlyUid,appId="1:123:android:testapp";
+  const idToken="fixture-firebase-id-token-123456789";
+  const appToken="fixture-app-check-token-123456789";
+  f.db.doc=path=>({get:async()=>{
+    f.calls.reads++;
+    const row=f.rows.get(path);
+    return {exists:row!==undefined,data:()=>row?{...row}:undefined};
+  }});
+  const rows={
+    ["deda_account_directory/"+onlyAccount]:{
+      accountKey:onlyAccount,active:true,createdUid:u},
+    ["deda_credentials/"+onlyAccount]:{
+      accountKey:onlyAccount,active:true,createdUid:u,pin:"000111"},
+    ["deda_share_ids/"+onlyId]:{
+      publicId:onlyId,kind:"personal",active:true,ownerUid:u},
+    ["users/"+u]:{accountKey:onlyAccount,sharePersonalId:onlyId},
+    ["deda_social_profiles/"+onlyId]:{publicId:onlyId,ownerUid:u},
+    ["deda_sessions/"+u]:{uid:u,accountKey:onlyAccount},
+  };
+  Object.entries(rows).forEach(([path,value])=>f.rows.set(path,value));
+  const auth={
+    async verifyIdToken(value,revoked){
+      assert.equal(revoked,true);
+      if(value!==idToken)throw Error("bad bearer");
+      return {uid:u};
+    },
+    async getUser(uid){return {uid,disabled:false};},
+    async getUserByProviderUid(p,sub){
+      if(p!=="google.com"||sub!==standardClaims.sub)throw Error("unknown");
+      return {uid:u,disabled:false,providerData:[
+        {providerId:"google.com",uid:standardClaims.sub},
+      ]};
+    },
+  };
+  const appCheckVerifier={
+    async verifyToken(value){
+      if(value!==appToken)throw Error("bad App Check");
+      return {appId};
+    },
+  };
+  let opts;
+  const fn=createPrivateGoogleRecoveryReviewCallable({
+    onCall:(options,handler)=>{opts=options;return handler;},
+    HttpsError:PrivateCallError,db:f.db,auth,appCheckVerifier,
+    productionConfig:config,enabled,clock:()=>nowMs,
+    nonceFactory:()=>Buffer.alloc(32,0x42),
+    loadTrustedGoogleJwks:async()=>jwks,
+  });
+  const request=(data,overrides={})=>({
+    data,auth:{uid:u},app:{appId},rawRequest:{headers:{
+      authorization:"Bearer "+idToken,
+      "x-firebase-appcheck":appToken,
+    }},...overrides,
+  });
+  return {...f,fn,request,get options(){return opts;}};
+}
+async function privateDenied(f,request) {
+  await assert.rejects(()=>f.fn(request),e=>
+    e.code==="permission-denied" &&
+    e.message==="google-recovery-review-unavailable");
+}
+test("private Google adapter defaults OFF and never touches Firestore",async()=>{
+  const f=privateReviewFixture({enabled:false});
+  assert.equal(f.options.enforceAppCheck,true);
+  await privateDenied(f,f.request({op:"begin"}));
+  assert.equal(f.calls.reads,0);
+  assert.equal(f.calls.writes,0);
+});
+test("private Google adapter verifies both Callable and bearer identities",async()=>{
+  const invalid=[
+    {auth:{uid:"another-uid-caller"}},
+    {app:{appId:"1:123:android:foreign"}},
+    {rawRequest:{headers:{authorization:
+      "Bearer fixture-firebase-id-token-123456789",
+      "x-firebase-appcheck":"foreign-appcheck-token"}}},
+    {rawRequest:{headers:{authorization:"Bearer foreign-token-abcdefghij",
+      "x-firebase-appcheck":"fixture-app-check-token-123456789"}}},
+    {rawRequest:{headers:{}}},
+  ];
+  for(const update of invalid){
+    const f=privateReviewFixture();
+    await privateDenied(f,f.request({op:"begin"},update));
+    assert.equal(f.calls.writes,0);
+    assert.equal(f.calls.reads,0);
+  }
+});
+test("private Google adapter rejects unexpected user data and untrusted review",async()=>{
+  for(const data of [
+    null,{op:"begin",uid:onlyUid},{op:"begin",admin:true},
+    {op:"review"},{op:"review",nonce},
+    {op:"review",nonce,googleIdToken:token(),accountKey:onlyAccount,
+      originalId:onlyId,debug:true},
+    {op:"review",nonce:"X",googleIdToken:token(),accountKey:onlyAccount,
+      originalId:onlyId},
+    {op:"delete"},
+  ]){
+    const f=privateReviewFixture();
+    await privateDenied(f,f.request(data));
+    assert.equal(f.calls.writes,0);
+  }
+});
+test("private Google Callable begin -> signed review returns ONLY no-login marker",async()=>{
+  const f=privateReviewFixture(),first=await f.fn(f.request({op:"begin"}));
+  assert.equal(first.status,"CHALLENGE_ISSUED_FOR_GOOGLE_REVIEW_ONLY");
+  assert.equal(first.mayLogin,false);
+  assert.equal(first.mayCreateUid,false);
+  assert.equal(f.calls.writes,2);
+  assert.equal(JSON.stringify([...f.rows.values()]).includes(first.nonce),
+    false,"Raw nonce must not be persisted in Firestore");
+  const data={op:"review",nonce:first.nonce,
+    googleIdToken:token({nonce:first.nonce}),
+    accountKey:onlyAccount,originalId:onlyId};
+  const second=await f.fn(f.request(data));
+  assert.equal(second.status,"EXISTING_GOOGLE_ACCOUNT_REVIEW_ONLY");
+  assert.equal(second.mayLogin,false);
+  assert.equal(second.mayCreateUid,false);
+  assert.equal(second.mayLinkProvider,false);
+  assert.equal(second.mayWriteFirestore,false);
+  assert.equal(f.calls.writes,3);
+  const output=JSON.stringify(second);
+  for(const item of [onlyUid,standardClaims.sub,onlyAccount,onlyId,
+    data.googleIdToken,first.nonce])assert.equal(output.includes(item),false);
+  await privateDenied(f,f.request(data));
+  assert.equal(f.calls.writes,3);
+});
+test("private Google adapter rejects unlinked provider without making an Auth user",async()=>{
+  const f=privateReviewFixture();
+  const first=await f.fn(f.request({op:"begin"}));
+  // Correct signature but not an existing registered provider.
+  const data={op:"review",nonce:first.nonce,
+    googleIdToken:token({nonce:first.nonce,
+      sub:"99999999999999999999"}),
+    accountKey:onlyAccount,originalId:onlyId};
+  await privateDenied(f,f.request(data));
+  assert.equal(f.calls.writes,3); // nonce marked once
+  assert.equal(f.rows.get("deda_account_directory/"+onlyAccount).createdUid,
+    onlyUid);
+});
+test("private Google adapter rejects mismatched canonical UID and missing source",async()=>{
+  const f=privateReviewFixture(),started=await f.fn(f.request({op:"begin"}));
+  f.rows.get("deda_social_profiles/"+onlyId).ownerUid=wrongUid;
+  await privateDenied(f,f.request({
+    op:"review",nonce:started.nonce,
+    googleIdToken:token({nonce:started.nonce}),
+    accountKey:onlyAccount,originalId:onlyId,
+  }));
+  assert.equal(f.calls.writes,3);
 });
