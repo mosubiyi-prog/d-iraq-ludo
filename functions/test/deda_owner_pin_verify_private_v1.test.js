@@ -204,6 +204,140 @@ test("original anonymous UID cannot prelink with linked-password proof before pr
     originalUid);
 });
 
+function originalAnonymousOldPhone(f = fixture()) {
+  f.request.auth.uid = originalUid;
+  f.request.data = {
+    phone: account, pin: correctPin, originalId,
+    proofMode: "original-anonymous-prelink",
+  };
+  f.auth.user = {uid: originalUid, disabled: false,
+    email: null, providerData: []};
+  delete f.db.docs.get(`deda_account_directory/${account}`).authEmail;
+  const credentials = f.db.docs.get(`deda_credentials/${account}`);
+  delete credentials.pinSyncVersion;
+  delete credentials.pinSyncedAt;
+  f.db.put(`deda_social_profiles/${originalId}`,
+    {publicId: originalId, ownerUid: originalUid});
+  f.db.put(`deda_sessions/${originalUid}`,
+    {uid: originalUid, accountKey: account});
+  return f;
+}
+
+test("original anonymous phone proves old PIN on SAME UID without Auth change", async () => {
+  const f = originalAnonymousOldPhone();
+  const response = await f.fn(f.request);
+  assert.deepEqual(response, {verified: true});
+  assert.equal(f.db.docs.get(`deda_credentials/${account}`).pin, correctPin);
+  assert.equal(f.auth.tokens.length, 0);
+  assert.deepEqual(f.db.writes, [`deda_owner_pin_verify_limits/${account}`]);
+  assert.equal(f.db.docs.get(`deda_account_directory/${account}`).createdUid,
+    originalUid);
+});
+
+test("original phone rechecks server proof after archive without UID migration", async () => {
+  const f = originalAnonymousOldPhone();
+  assert.deepEqual(await f.fn(f.request), {verified: true});
+  assert.deepEqual(await f.fn(f.request), {verified: true});
+  assert.equal(f.auth.tokens.length, 0);
+  assert.deepEqual(f.db.writes, [
+    `deda_owner_pin_verify_limits/${account}`,
+    `deda_owner_pin_verify_limits/${account}`,
+  ]);
+});
+
+test("original anonymous prelink rejects foreign UID even with correct PIN", async () => {
+  for (const uid of ["replacement-new-uid", "deda-third-social-uid"]) {
+    const f = originalAnonymousOldPhone();
+    f.request.auth.uid = uid;
+    await denied(f);
+    assert.equal(f.auth.tokens.length, 0);
+    assert(f.db.writes.every(p => p.startsWith("deda_owner_pin_verify_limits/")));
+  }
+});
+
+test("original anonymous prelink refuses split registration and social/session UID", async () => {
+  for (const [path, field] of [
+    [`deda_account_directory/${account}`, "createdUid"],
+    [`deda_credentials/${account}`, "createdUid"],
+    [`deda_share_ids/${originalId}`, "ownerUid"],
+    [`deda_social_profiles/${originalId}`, "ownerUid"],
+    [`deda_sessions/${originalUid}`, "uid"],
+  ]) {
+    const f = originalAnonymousOldPhone();
+    f.db.docs.get(path)[field] = "different-owner-uid";
+    await denied(f);
+    assert.equal(f.auth.tokens.length, 0, path);
+  }
+});
+
+test("original anonymous prelink refuses missing social/session/route or manager", async () => {
+  for (const path of [
+    `deda_social_profiles/${originalId}`,
+    `deda_sessions/${originalUid}`,
+    `deda_share_ids/${originalId}`,
+  ]) {
+    const f = originalAnonymousOldPhone();
+    f.db.docs.delete(path);
+    await denied(f);
+    assert.equal(f.auth.tokens.length, 0, path);
+  }
+  const admin = originalAnonymousOldPhone();
+  admin.db.put(`admins/${originalUid}`, {active: true});
+  await denied(admin);
+});
+
+test("original anonymous prelink refuses account, PIN and original ID mismatch", async () => {
+  const invalid = [
+    {phone: "07712345670"},
+    {pin: "123456"},
+    {pin: "abcdef"},
+    {originalId: "@DEDA-NOTMINE"},
+    {originalId: "bad"},
+    {extraField: "unexpected"},
+  ];
+  for (const update of invalid) {
+    const f = originalAnonymousOldPhone();
+    f.request.data = {...f.request.data, ...update};
+    await denied(f);
+    assert.equal(f.auth.tokens.length, 0);
+  }
+});
+
+test("original anonymous prelink refuses previously-linked and unsynced PIN states", async () => {
+  const linked = originalAnonymousOldPhone();
+  linked.auth.user.email = email;
+  await denied(linked);
+  const linkedProvider = originalAnonymousOldPhone();
+  linkedProvider.auth.user.providerData.push({providerId: "password"});
+  await denied(linkedProvider);
+  const linkedDirectory = originalAnonymousOldPhone();
+  linkedDirectory.db.docs.get(`deda_account_directory/${account}`).authEmail = email;
+  await denied(linkedDirectory);
+  const rotated = originalAnonymousOldPhone();
+  rotated.db.docs.get(`deda_credentials/${account}`).pinSyncVersion = 1;
+  await denied(rotated);
+  const locked = originalAnonymousOldPhone();
+  locked.db.put(`deda_pin_recovery_locks/${account}`, {locked: true});
+  await denied(locked);
+});
+
+test("original anonymous prelink cannot act from Google/password provider or disabled gate", async () => {
+  for (const provider of ["google.com", "password"]) {
+    const f = originalAnonymousOldPhone();
+    f.request.auth.token.firebase.sign_in_provider = provider;
+    await denied(f);
+    assert.equal(f.auth.tokens.length, 0);
+  }
+  const disabled = originalAnonymousOldPhone(fixture({enabled: false}));
+  await denied(disabled);
+  assert.equal(disabled.db.reads.length, 0);
+  assert.equal(disabled.db.writes.length, 0);
+  const noAppCheck = originalAnonymousOldPhone();
+  noAppCheck.request.app = null;
+  await denied(noAppCheck);
+  assert.equal(noAppCheck.db.reads.length, 0);
+});
+
 test("server rate limit is per PHONE, not per anonymous replacement device", async () => {
   const f = fixture({allowLegacyCustomTokensForQa:true});
   for (let i=0;i<5;i++) {
