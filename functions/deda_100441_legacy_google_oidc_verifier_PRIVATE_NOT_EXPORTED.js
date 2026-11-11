@@ -7,7 +7,7 @@
 // The caller MUST be a trusted server with a previously generated and stored,
 // single-use nonce challenge. This verifier DOES NOT prove old-account ownership.
 
-const { createPublicKey, verify, timingSafeEqual } = require("node:crypto");
+const { createPublicKey, verify, timingSafeEqual, randomBytes, createHash } = require("node:crypto");
 const { inspectCanonicalUid } = require(
   "./deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED.js"
 );
@@ -343,9 +343,158 @@ async function reviewExistingGoogleProviderReadOnly({
   }
 }
 
+
+/**
+ * SERVER-ONLY, NOT DEPLOYED: an Auth+AppCheck-bound Google OIDC challenge.
+ * The raw random nonce leaves the server ONLY as a public OAuth challenge.
+ * Firestore stores its SHA-256 digest, never tokens, raw nonce, PIN or Google
+ * subject. No account, provider, wallet, session or privileges are modified.
+ *
+ * A future Callable must verify its own identity, App Check and abuse limits.
+ * This isolated primitive is not an endpoint and cannot authorize login.
+ */
+function createTrustedGoogleNonceStore({
+  db, auth, appCheckVerifier, productionConfig, clock=Date.now,
+  nonceFactory=randomBytes,
+}={}) {
+  if (!validConfiguration(productionConfig) ||
+      typeof db?.collection!=="function" ||
+      typeof db?.runTransaction!=="function" ||
+      typeof auth?.verifyIdToken!=="function" ||
+      typeof auth?.getUser!=="function" ||
+      typeof appCheckVerifier?.verifyToken!=="function" ||
+      typeof clock!=="function" || typeof nonceFactory!=="function") {
+    throw Error("GOOGLE_NONCE_STORE_NOT_TRUSTED_OR_CONFIGURED");
+  }
+
+  const collection=db.collection("deda_100441_google_oidc_challenges");
+  const instant=()=>{
+    const t=clock();
+    if (!Number.isSafeInteger(t) || t<=0) throw Error("UNTRUSTED_SERVER_CLOCK");
+    return t;
+  };
+  const hash=v=>createHash("sha256").update(v,"utf8").digest("hex");
+  const nonceRef=nonce=>collection.doc("nonce_"+hash(nonce));
+  const limiterRef=uid=>collection.doc("requester_"+hash(uid));
+  const asRecord=snap=>snap?.exists===true &&
+      typeof snap.data==="function" ? snap.data() : null;
+
+  async function requester({firebaseIdToken,appCheckToken}) {
+    if (typeof firebaseIdToken!=="string" ||
+        firebaseIdToken.length<16 || firebaseIdToken.length>8192 ||
+        typeof appCheckToken!=="string" ||
+        appCheckToken.length<8 || appCheckToken.length>8192) {
+      throw Error("GOOGLE_CHALLENGE_MISSING_VERIFIED_REQUESTER");
+    }
+    // True Firebase Admin verification is mandatory; no user-supplied UID.
+    const [decoded,check]=await Promise.all([
+      auth.verifyIdToken(firebaseIdToken,true),
+      appCheckVerifier.verifyToken(appCheckToken),
+    ]);
+    const uid=decoded?.uid, appId=check?.appId;
+    if (typeof uid!=="string" || !/^[A-Za-z0-9:_-]{6,128}$/.test(uid) ||
+        typeof appId!=="string" ||
+        !/^[A-Za-z0-9:._-]{8,256}$/.test(appId)) {
+      throw Error("GOOGLE_CHALLENGE_REQUESTER_INVALID");
+    }
+    const user=await auth.getUser(uid);
+    if (!user || user.uid!==uid || user.disabled===true) {
+      throw Error("GOOGLE_CHALLENGE_REQUESTER_NOT_ACTIVE");
+    }
+    return {uid,appId};
+  }
+
+  function matching(row,caller,audience,nowMs) {
+    return row && row.status==="issued" &&
+      row.projectId===DEDA_PROD_PROJECT &&
+      row.productionOAuthAudience===audience &&
+      row.requesterUid===caller.uid && row.requesterAppId===caller.appId &&
+      Number.isSafeInteger(row.createdAtMs) && row.createdAtMs>0 &&
+      nowMs>=row.createdAtMs &&
+      nowMs-row.createdAtMs<=MAX_CHALLENGE_AGE_MS;
+  }
+
+  async function issue({firebaseIdToken,appCheckToken}={}) {
+    const who=await requester({firebaseIdToken,appCheckToken});
+    const nowMs=instant();
+    const bytes=nonceFactory(32);
+    if (!Buffer.isBuffer(bytes) || bytes.length!==32) {
+      throw Error("GOOGLE_CHALLENGE_SECURE_RANDOM_REQUIRED");
+    }
+    const nonce=bytes.toString("base64url");
+    if (!OPAQUE_NONCE.test(nonce)) {
+      throw Error("GOOGLE_CHALLENGE_RANDOM_ENCODING_INVALID");
+    }
+    const challengeRef=nonceRef(nonce), limitRef=limiterRef(who.uid);
+    await db.runTransaction(async tx=>{
+      const last=asRecord(await tx.get(limitRef));
+      if (last && Number.isSafeInteger(last.lastIssuedAtMs) &&
+          nowMs>=last.lastIssuedAtMs &&
+          nowMs-last.lastIssuedAtMs<60000) {
+        throw Error("GOOGLE_CHALLENGE_REQUESTER_RATE_LIMITED");
+      }
+      // Both writes happen atomically: no partially issued challenge.
+      tx.create(challengeRef,{
+        status:"issued",projectId:DEDA_PROD_PROJECT,
+        productionOAuthAudience:productionConfig.productionOAuthAudience,
+        requesterUid:who.uid,requesterAppId:who.appId,
+        createdAtMs:nowMs,
+        expiresAtMs:nowMs+MAX_CHALLENGE_AGE_MS,
+      });
+      tx.set(limitRef,{
+        lastIssuedAtMs:nowMs, requesterUid:who.uid,
+      });
+    });
+    return Object.freeze({
+      nonce,createdAtMs:nowMs,
+      productionOAuthAudience:productionConfig.productionOAuthAudience,
+    });
+  }
+
+  async function read({nonce,firebaseIdToken,appCheckToken}={}) {
+    if (typeof nonce!=="string" || !OPAQUE_NONCE.test(nonce)) return null;
+    try {
+      const who=await requester({firebaseIdToken,appCheckToken});
+      const row=asRecord(await nonceRef(nonce).get());
+      if (!matching(row,who,productionConfig.productionOAuthAudience,
+          instant())) return null;
+      // Source and status are derived from a genuine Admin Firestore read.
+      return Object.freeze({
+        source:"trusted_server_nonce_store",status:"issued",
+        nonce,createdAtMs:row.createdAtMs,
+        productionOAuthAudience:row.productionOAuthAudience,
+      });
+    } catch (_) {return null;}
+  }
+
+  async function consume({nonce,createdAtMs,productionOAuthAudience,
+    firebaseIdToken,appCheckToken}={}) {
+    if (typeof nonce!=="string" || !OPAQUE_NONCE.test(nonce) ||
+        !Number.isSafeInteger(createdAtMs) ||
+        productionOAuthAudience!==productionConfig.productionOAuthAudience) {
+      return false;
+    }
+    try {
+      const who=await requester({firebaseIdToken,appCheckToken});
+      const nowMs=instant(), ref=nonceRef(nonce);
+      return await db.runTransaction(async tx=>{
+        const row=asRecord(await tx.get(ref));
+        if (!matching(row,who,productionOAuthAudience,nowMs) ||
+            row.createdAtMs!==createdAtMs) return false;
+        // Atomic compare-and-mark-used: exactly one concurrent verifier wins.
+        tx.update(ref,{status:"used",usedAtMs:nowMs});
+        return true;
+      })===true;
+    } catch (_) {return false;}
+  }
+
+  return Object.freeze({issue,read,consume});
+}
+
 module.exports={
   inspectSignedToken,
   getOfficialGoogleJwks,
   verifyProspectiveGoogleForLegacyReview,
   reviewExistingGoogleProviderReadOnly,
+  createTrustedGoogleNonceStore,
 };
