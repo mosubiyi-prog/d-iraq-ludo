@@ -90,8 +90,13 @@ jobs:
           ]:
               assert domain in source, f'App account domain missing: {domain}'
               assert domain in test, f'Two-device emulator fixture missing: {domain}'
-          assert '["deda_wallets/"' not in test
-          assert '["deda_gifts/"' not in test
+          # An older unrelated demo test still uses generic placeholders.
+          # Guard the upgraded original-PIN -> Google two-device test itself.
+          target=test.split(
+              'test("same UID original anonymous prelink PIN approval and password link on two local devices"',1
+          )[1]
+          assert '["deda_wallets/"' not in target
+          assert '["deda_gifts/"' not in target
           print('PASS_REAL_RECOVERY_DOMAIN_FIXTURES_IDENTITY_WALLET_GIFTS_FRIENDS_PREMIUM_LEAGUE')
           PY
       - name: Protect linked-owner PIN from legacy Firestore attempt writes
