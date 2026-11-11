@@ -7,6 +7,7 @@
 // Both Auth and Firestore emulators must run on localhost in a demo project.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const {generateKeyPairSync,sign} = require("node:crypto");
 const {initializeApp:adminInit,deleteApp:adminDelete}
   = require("firebase-admin/app");
 const {getAuth:adminGetAuth} = require("firebase-admin/auth");
@@ -18,6 +19,8 @@ const {getAuth,connectAuthEmulator,signInWithEmailAndPassword,
   linkWithCredential,signInWithCredential} = require("firebase/auth");
 const {createOwnerPinVerifyCallable}
   = require("../deda_owner_pin_verify_private_v1.js");
+const {reviewExistingGoogleProviderReadOnly}
+  = require("../deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js");
 const {assessSameUidRecovery}
   = require("../deda_100441_same_uid_recovery_readiness_PRIVATE_NOT_EXPORTED.js");
 
@@ -226,7 +229,7 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     // This checks whether attaching the second provider preserves the original
     // UID and that an independent client can subsequently use that provider.
     const fakeGoogle=JSON.stringify({
-      sub:"deda-emulator-google-subject-100441",
+      sub:"101010101010101010101",
       email:"deda-emulator-google@example.test",
       email_verified:true,
     });
@@ -242,7 +245,7 @@ test("same UID original anonymous prelink PIN approval and password link on two 
     // The caller must separately authenticate the Google subject (e.g. by
     // verified OIDC ID token). A submitted subject string is not proof.
     const knownByProvider=await authAdmin.getUserByProviderUid(
-      "google.com","deda-emulator-google-subject-100441");
+      "google.com","101010101010101010101");
     assert.equal(knownByProvider.uid,originalUid);
     await assert.rejects(
       ()=>authAdmin.getUserByProviderUid(
@@ -250,6 +253,51 @@ test("same UID original anonymous prelink PIN approval and password link on two 
       err=>err.code==="auth/user-not-found");
     assert.equal(oldAuth.currentUser.uid,originalUid);
 
+    // Exercise the NON-CREATING server OIDC + linked-provider + canonical
+    // Firestore read with genuine local Admin Auth/Firestore emulators.
+    // This token is signed by a DISPOSABLE synthetic key for test only,
+    // not by Google and not valid for production authentication.
+    const t=1800000000000,nonce="syntheticOneTimeServerNonceabcdefghijkl";
+    const audience="123456789012-productionrecovery.apps.googleusercontent.com";
+    const {privateKey,publicKey}=generateKeyPairSync("rsa",{modulusLength:2048});
+    const pub=publicKey.export({format:"jwk"});
+    const jkeys={keys:[{...pub,kid:"local-demo-google-key",alg:"RS256",use:"sig"}]};
+    const enc=x=>Buffer.from(JSON.stringify(x)).toString("base64url");
+    const header=enc({alg:"RS256",kid:"local-demo-google-key",typ:"JWT"});
+    const payload=enc({iss:"https://accounts.google.com",aud:audience,
+      sub:"101010101010101010101",nonce,
+      iat:Math.floor(t/1000)-5,exp:Math.floor(t/1000)+300});
+    const oidc=header+"."+payload+"."+
+      sign("RSA-SHA256",Buffer.from(header+"."+payload),privateKey)
+        .toString("base64url");
+    let used=false;
+    const query=()=>reviewExistingGoogleProviderReadOnly({
+      idToken:oidc,nowMs:t,
+      productionConfig:{projectId:"deda-25b88",
+        source:"trusted_server_configuration",serverApproved:true,
+        productionOAuthAudience:audience},
+      challenge:{source:"trusted_server_nonce_store",status:"issued",
+        createdAtMs:t-10000,productionOAuthAudience:audience,nonce},
+      loadTrustedGoogleJwks:async()=>jkeys,
+      consumeOneTimeChallenge:async()=>{
+        if(used)return false;used=true;return true;
+      },
+      auth:authAdmin,db,accountKey:key,originalId:id,
+    });
+    const reviewed=await query();
+    assert.equal(reviewed.status,
+      "EXISTING_GOOGLE_PROVIDER_CANONICAL_REVIEW_ONLY");
+    assert.equal(reviewed.mayLogin,false);
+    assert.equal(reviewed.mayCreateUid,false);
+    assert.equal(reviewed.mayWriteFirestore,false);
+    assert(!JSON.stringify(reviewed).includes(originalUid));
+    const replay=await query();
+    assert.equal(replay.status,"DENY");
+    assert.equal(replay.reason,"NONCE_REPLAY_OR_CONSUMPTION_FAILED");
+
+    // Retain historical negative evidence: the Auth emulator does not
+    // guarantee that REST autoCreate:false avoids account creation.
+    // This REST request is not performed by the DEDA replacement client.
     // Mirror the existing Flutter signInWithIdp(autoCreate:false) preflight
     // against local Identity Toolkit emulator BEFORE FirebaseAuth signs in.
     // An unrelated Google identity must never be created by this check.
