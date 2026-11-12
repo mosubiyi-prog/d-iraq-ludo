@@ -8,6 +8,7 @@ on:
       - "lib/deda_backend.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py"
+      - "tools/app_stability/app_package/bind_google_account_settings_100439.py"
       - "test/deda_original_share_uid_prewrite_guard_100443_test.dart"
       - ".github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml"
 permissions:
@@ -100,6 +101,9 @@ jobs:
           import os
           p = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
           backend = (p / "deda_backend.dart").read_text()
+          assert backend.count("DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)") == 1
+          assert "DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)" not in backend
+          print("PASS_FULL_ASSEMBLY_REUSES_EXISTING_LINKED_UID_PROVIDER_PROOF")
           anchor = "static Future<Map<String, String>> ensureLocationShareIdentity({"
           start = backend.find(anchor)
           assert start >= 0, "full assembly missing original ID service"
