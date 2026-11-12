@@ -47,6 +47,7 @@ jobs:
             "test/deda_owner_session_compat_private_test.dart",
             "test/deda_pin_same_uid_100441_optin_private_test.dart",
             ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml",
+            ".github/workflows/deda-100441-complete-signed-session-diagnostic-no-play.yml",
             ".github/workflows/deda-100442-abc-uid-fingerprint-scoped-readonly-no-deploy.yml",
             ".github/workflows/deda-100442-signed-private-current-uid-fingerprint-no-play.yml",
             ".github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml",
