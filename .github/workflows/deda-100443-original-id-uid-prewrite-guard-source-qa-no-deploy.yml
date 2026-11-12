@@ -1,0 +1,107 @@
+name: DEDA 100443 original ID same-UID prewrite fix isolated source QA NO DEPLOY
+
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - "lib/deda_backend.dart"
+      - "lib/deda_100431_linked_owner_session_policy.dart"
+      - "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py"
+      - "test/deda_original_share_uid_prewrite_guard_100443_test.dart"
+      - ".github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml"
+permissions:
+  contents: read
+concurrency:
+  group: deda-100443-original-id-prewrite-no-deploy
+  cancel-in-progress: false
+
+jobs:
+  source-only-guard-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove NO changes to prod Firebase, SDK config, Play, and user assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
+            firestore.rules storage.rules functions/ firebase.json .firebaserc \
+            android/ assets/ pubspec.yaml pubspec.lock lib/main.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path("lib/deda_backend.dart").read_text()
+          start = s.index("  static Future<Map<String, String>> ensureLocationShareIdentity({")
+          end = s.index("  static Future<Map<String, dynamic>?> locationShareIdInfo(", start)
+          source = s[start:end]
+          assert source.index("canStageOriginalShareProjection(") < source.index("await userRef.set(")
+          assert source.index("original-share-uid-conflict-recovery-required") < source.index("await userRef.set(")
+          assert "dedaLinkedOwnerCompatEnabled" in source
+          assert "FirebaseAuth.instance.currentUser?.uid != user.uid" in source
+          assert "existing.data()?['ownerUid'] != user.uid" in source
+          assert "ownerUid': user.uid" in source
+          assert "set(" not in source[:source.index("canStageOriginalShareProjection(")]
+          print("PASS_SPLIT_UID_BLOCKED_BEFORE_NEW_USER_OR_ID_PROJECTION")
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: false
+      - name: Flutter source analyzer and original ID guard policy unit tests
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze --no-fatal-warnings \
+            lib/deda_backend.dart lib/deda_100431_linked_owner_session_policy.dart
+          flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
+            test/deda_original_share_uid_prewrite_guard_100443_test.dart \
+            test/deda_pin_same_uid_100441_optin_private_test.dart
+      - name: Rebuild EXACT 100441 full original assembly SOURCE ONLY without APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          import os
+          wf = Path(".github/workflows/deda-100441-complete-signed-session-diagnostic-no-play.yml").read_text()
+          first = wf.index("      - name: Reconstruct FULL protected 100439")
+          run = wf.index("        run: |\n", first) + len("        run: |\n")
+          last = wf.index("      - name: Analyze entire assembled entry", run)
+          source = dedent(wf[run:last].rstrip()) + "\n"
+          assert "merge_stage2_into_protected_100436.py" in source
+          assert "bind_session_diagnostic_readonly_100441.py" in source
+          (Path(os.environ["RUNNER_TEMP"]) / "deda100443-assemble-source-only.sh").write_text(source)
+          PY
+          bash "$RUNNER_TEMP/deda100443-assemble-source-only.sh"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
+          backend = (p / "deda_backend.dart").read_text()
+          anchor = "static Future<Map<String, String>> ensureLocationShareIdentity({"
+          section = backend[backend.index(anchor):backend.index("static Future<Map<String, dynamic>?> locationShareIdInfo(", backend.index(anchor))]
+          assert "canStageOriginalShareProjection(" in section
+          assert section.index("canStageOriginalShareProjection(") < section.index("await userRef.set(")
+          assert "DedaGoogleSettingsLinkCard(" in (p / "main.dart").read_text()
+          assert "DedaSessionDiagnosticReadOnlyTile(" in (p / "main.dart").read_text()
+          print("PASS_VERIFIED_REAL_APP_FULL_ASSEMBLY_SAME_UID_GUARD_PRESENT")
+          PY
+          (
+            cd "$RUNNER_TEMP/deda-100441-complete-signed-app"
+            flutter pub get
+            dart analyze --no-fatal-warnings \
+              lib/main.dart lib/deda_backend.dart lib/deda_pin_auth.dart \
+              lib/deda_100431_linked_owner_session_policy.dart
+          )
+      - name: Confirm NO signing, APK, Firebase write or Play deployment
+        run: echo "PASS_DEDA_100443_SOURCE_ONLY_PRODUCTION_UNCHANGED"
