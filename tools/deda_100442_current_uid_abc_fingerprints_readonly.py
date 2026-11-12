@@ -376,8 +376,93 @@ def inspect_historical_auth_timeline(info, candidates):
                                else " NO"))
         print("AUTH_CREATION_ORDER_IS_NOT_INDEPENDENT_OWNERSHIP_PROOF")
         print("NO_AUTH_TOKEN_NO_AUTH_WRITE_NO_FIREBASE_RULE_DEPLOY")
+        return created
     finally:
         firebase_admin.delete_app(app)
+
+
+def inspect_account_creation_provenance(db, account, original_id, candidates,
+                                        auth_created):
+    """Scoped, metadata-only document chronology and device-list intersection.
+
+    This can help reconstruct how three anonymous Firebase UIDs emerged;
+    neither document chronology nor a copied installId proves personhood.
+    Do not read PIN, wallet balance, phone, names or print any timestamp/UID.
+    """
+    if (not isinstance(auth_created, dict) or
+            set(candidates) != {"A", "B", "C"} or
+            len(set(candidates.values())) != 3):
+        print("SAFE_STOP_PROVENANCE_SCOPE_INVALID")
+        return
+    paths = {
+        "REGISTRATION": ("deda_account_directory/" + account,
+                         ["createdUid", "accountKey"]),
+        "CREDENTIAL": ("deda_credentials/" + account,
+                       ["createdUid", "accountKey"]),
+        "USER_A": ("users/" + candidates["A"],
+                   ["accountKey", "sharePersonalId", "trustedInstallIds"]),
+        "USER_B": ("users/" + candidates["B"],
+                   ["accountKey", "sharePersonalId", "trustedInstallIds"]),
+        "USER_C": ("users/" + candidates["C"],
+                   ["accountKey", "sharePersonalId", "trustedInstallIds"]),
+        "ORIGINAL_ID": ("deda_share_ids/" + original_id,
+                        ["ownerUid", "publicId"]),
+        "SOCIAL": ("deda_social_profiles/" + original_id,
+                   ["ownerUid", "publicId"]),
+    }
+    rows = {}
+    dates = {}
+    try:
+        for key, (path, fields) in paths.items():
+            snap = db.document(path).get(field_paths=fields)
+            if not snap.exists:
+                print("HISTORY_" + key + "_PRESENT NO")
+                continue
+            print("HISTORY_" + key + "_PRESENT YES")
+            rows[key] = snap.to_dict() or {}
+            created = getattr(snap, "create_time", None)
+            if created is not None:
+                dates[key] = int(created.timestamp() * 1000)
+        if (rows.get("REGISTRATION", {}).get("createdUid") != candidates["B"] or
+                rows.get("CREDENTIAL", {}).get("createdUid") != candidates["B"] or
+                rows.get("ORIGINAL_ID", {}).get("ownerUid") != candidates["A"] or
+                rows.get("SOCIAL", {}).get("ownerUid") != candidates["C"] or
+                rows.get("USER_A", {}).get("accountKey") != account or
+                rows.get("USER_B", {}).get("accountKey") != account):
+            print("SAFE_STOP_PROVENANCE_OWNER_SCOPE_MISMATCH")
+            return
+        def order(label, one, two):
+            a = dates.get(one) if one in dates else auth_created.get(one)
+            b = dates.get(two) if two in dates else auth_created.get(two)
+            if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+                print(label + " UNVERIFIABLE")
+            else:
+                print(label + (" YES" if a < b else " NO"))
+        order("HISTORY_REGISTRATION_BEFORE_AUTH_A", "REGISTRATION", "A")
+        order("HISTORY_REGISTRATION_BEFORE_AUTH_C", "REGISTRATION", "C")
+        order("HISTORY_REGISTRATION_BEFORE_ORIGINAL_ID", "REGISTRATION", "ORIGINAL_ID")
+        order("HISTORY_USER_B_BEFORE_USER_A", "USER_B", "USER_A")
+        order("HISTORY_USER_A_BEFORE_ORIGINAL_ID", "USER_A", "ORIGINAL_ID")
+        order("HISTORY_AUTH_A_BEFORE_ORIGINAL_ID", "A", "ORIGINAL_ID")
+        order("HISTORY_ORIGINAL_ID_BEFORE_SOCIAL", "ORIGINAL_ID", "SOCIAL")
+        order("HISTORY_AUTH_C_BEFORE_SOCIAL", "C", "SOCIAL")
+        def installs(which):
+            value = rows.get(which, {}).get("trustedInstallIds")
+            if not isinstance(value, list):
+                return None
+            return {v for v in value if isinstance(v, str) and
+                    len(v) == 48 and all(c in "0123456789abcdef" for c in v)}
+        a_ids = installs("USER_A")
+        b_ids = installs("USER_B")
+        if a_ids is None or b_ids is None:
+            print("HISTORY_A_B_SHARED_INSTALL_ID UNVERIFIABLE")
+        else:
+            print("HISTORY_A_B_SHARED_INSTALL_ID " +
+                  ("YES" if bool(a_ids & b_ids) else "NO"))
+        print("HISTORY_CORRELATION_ONLY_NO_HISTORIC_OWNER_LOGIN_GRANT")
+    except Exception:
+        print("SAFE_STOP_PROVENANCE_READ_UNAVAILABLE")
+
 
 def main() -> int:
     raw = os.environ.get("DEDA_PRIMARY_FIREBASE_SA", "")
@@ -446,7 +531,13 @@ def main() -> int:
         inspect_existing_assets_readonly(
             db, account, original_id, {"A": a, "B": b, "C": c}
         )
-        inspect_historical_auth_timeline(info, {"A": a, "B": b, "C": c})
+        auth_created = inspect_historical_auth_timeline(
+            info, {"A": a, "B": b, "C": c}
+        )
+        inspect_account_creation_provenance(
+            db, account, original_id, {"A": a, "B": b, "C": c},
+            auth_created
+        )
         print("RESULT_GUIDE: compare CURRENT PHONE fingerprint exactly; "
               "a match means this phone's observed UID matches that server UID; "
               "a mismatch to all means a different UID (D) at observation time.")
