@@ -155,10 +155,10 @@ class DedaPinAuth {
     // Existing 100340 create/sign-in behavior stays unchanged when null.
     if (expectedOriginalUid != null) {
       final live = FirebaseAuth.instance.currentUser;
-      if (live == null || live.uid != expectedOriginalUid ||
-          live.isAnonymous ||
-          !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
-              live, accountKey)) {
+      // Preflight already checked the original ID, directory and this UID.
+      // Do not require a linked Auth provider here: older legitimate DEDA
+      // accounts can still hold the SAME original anonymous Firebase UID.
+      if (live == null || live.uid != expectedOriginalUid) {
         throw StateError('original-pin-owner-changed-before-proof');
       }
     }
