@@ -16,6 +16,22 @@ void main() {
     ), true);
   });
 
+  test('one owner session: section reads never invent a recovery UID', () {
+    bool permit({required bool pilot, required bool current}) =>
+      DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+        linkedOwnerPilotEnabled: pilot,
+        hasCurrentPrincipal: current,
+      );
+    // A new/unlinked DEDA account keeps its original compatibility route.
+    expect(permit(pilot: false, current: false), isTrue);
+    expect(permit(pilot: false, current: true), isTrue);
+    // With recovery enabled, missing session MUST route to explicit login.
+    expect(permit(pilot: true, current: false), isFalse);
+    // Existing anonymous/authenticated Firebase principal is reused, and
+    // independent server account/UID proofs still apply before owner writes.
+    expect(permit(pilot: true, current: true), isTrue);
+  });
+
   test('verified login guard blocks all partial local-owner downgrades', () {
     for (final provenance in <List<bool>>[
       [true, false, false], [false, true, false],
