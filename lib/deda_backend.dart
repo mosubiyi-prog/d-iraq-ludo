@@ -79,6 +79,16 @@ class DedaBackend {
     String accountKey,
   ) async {
     final cleanKey = accountKey.trim();
+    // A background/section owner read must NOT silently sign in anonymously
+    // when the original Firebase principal is absent. Existing-account
+    // recovery is an explicit owner action on the shared Auth lane.
+    if (cleanKey.isNotEmpty &&
+        !DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+          linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+          hasCurrentPrincipal: FirebaseAuth.instance.currentUser != null,
+        )) {
+      throw StateError('deda-original-owner-login-required');
+    }
     var user = await _ensurePublicUser();
     if (cleanKey.isEmpty) return user;
 
