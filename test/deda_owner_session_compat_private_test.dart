@@ -99,6 +99,58 @@ void main() {
     expect(proof(routeActive: false), false);
   });
 
+  test('PIN entry permits only matching original UID and immutable ID', () {
+    bool check({
+      String authUid = uid,
+      String directoryUid = uid,
+      String projectedId = personalId,
+      String routeUid = uid,
+      String routeId = personalId,
+      String routeKind = 'personal',
+      bool directoryActive = true,
+      bool routeActive = true,
+      String ownerAccount = account,
+      bool hasDirectory = true,
+      bool hasProjection = true,
+      bool hasRoute = true,
+    }) => DedaLinkedOwnerSessionPolicy
+        .canOpenExistingPinSessionOnOriginalUid(
+      uid: authUid,
+      accountKey: account,
+      directory: !hasDirectory ? null : <String, dynamic>{
+        'accountKey': account, 'active': directoryActive,
+        'createdUid': directoryUid,
+      },
+      projection: !hasProjection ? null : <String, dynamic>{
+        'accountKey': ownerAccount,
+        'sharePersonalId': projectedId,
+      },
+      route: !hasRoute ? null : <String, dynamic>{
+        'publicId': routeId,
+        'kind': routeKind,
+        'active': routeActive,
+        'ownerUid': routeUid,
+      },
+    );
+
+    expect(check(), isTrue);
+    // Split A/B/C: no anonymous phone or PIN can claim another UID.
+    expect(check(authUid: 'new-anonymous-uid'), isFalse);
+    expect(check(directoryUid: 'uid-B'), isFalse);
+    expect(check(routeUid: 'uid-C'), isFalse);
+    expect(check(ownerAccount: '9647800000000'), isFalse);
+    expect(check(projectedId: '@DEDA-XYZ999'), isFalse);
+    expect(check(routeId: '@DEDA-XYZ999'), isFalse);
+    expect(check(routeKind: 'premium'), isFalse);
+    expect(check(directoryActive: false), isFalse);
+    expect(check(routeActive: false), isFalse);
+    expect(check(hasDirectory: false), isFalse);
+    expect(check(hasProjection: false), isFalse);
+    expect(check(hasRoute: false), isFalse);
+    // A four-character DISPLAY ID is never the canonical owner route.
+    expect(check(projectedId: '@DEDA-ABCD'), isFalse);
+  });
+
   test('unverified admin/foreign user cannot become original owner by email', () {
     expect(DedaLinkedOwnerSessionPolicy.mayResumeLinkedLocalLogin(
       savedOriginalUid: uid, savedAccountKey: account,
