@@ -168,9 +168,55 @@ class DedaPinAuth {
     }
   }
 
-  static Future<void> _openSession(String accountKey) async {
+  // A new anonymous Firebase UID must NEVER claim an existing PIN account
+  // just because the six-digit PIN was accepted. In 100441's linked-owner
+  // pilot this server-only proof runs BEFORE all session/profile writes.
+  static Future<String> _verifiedExistingPinUid(String accountKey) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      throw StateError('original-pin-session-not-authenticated');
+    }
+    final db = FirebaseFirestore.instance;
+    const server = GetOptions(source: Source.server);
+    final rows = await Future.wait([
+      db.collection('deda_account_directory').doc(accountKey).get(server),
+      db.collection('users').doc(uid).get(server),
+    ]);
+    if (rows.any((row) =>
+        row.metadata.isFromCache || row.metadata.hasPendingWrites)) {
+      throw StateError('original-pin-server-proof-unavailable');
+    }
+    final projectedId = rows[1].data()?['sharePersonalId'];
+    if (projectedId is! String ||
+        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(projectedId)) {
+      throw StateError('original-pin-immutable-id-not-confirmed');
+    }
+    final route = await db.collection('deda_share_ids')
+        .doc(projectedId).get(server);
+    if (route.metadata.isFromCache || route.metadata.hasPendingWrites ||
+        FirebaseAuth.instance.currentUser?.uid != uid ||
+        !DedaLinkedOwnerSessionPolicy.canOpenExistingPinSessionOnOriginalUid(
+          uid: uid, accountKey: accountKey,
+          directory: rows[0].data(), projection: rows[1].data(),
+          route: route.data(),
+        )) {
+      throw StateError('original-pin-uid-conflict-recovery-required');
+    }
+    return uid;
+  }
+
+  static Future<void> _openSession(String accountKey, {
+    String? expectedOriginalUid,
+  }) async {
     final user = await _ensurePinSessionForAccount(accountKey);
+    if (expectedOriginalUid != null && user.uid != expectedOriginalUid) {
+      throw StateError('original-pin-session-principal-changed');
+    }
     final install = await installId();
+    if (expectedOriginalUid != null &&
+        FirebaseAuth.instance.currentUser?.uid != expectedOriginalUid) {
+      throw StateError('original-pin-session-principal-changed');
+    }
     await FirebaseFirestore.instance
         .collection('deda_sessions')
         .doc(user.uid)
@@ -330,10 +376,20 @@ class DedaPinAuth {
 
     final accountKey = accountKeyForPhone(phone);
     await _provePin(accountKey: accountKey, pin: pin);
-    await _openSession(accountKey);
+    final expectedUid = dedaLinkedOwnerCompatEnabled
+        ? await _verifiedExistingPinUid(accountKey)
+        : null;
+    await _openSession(accountKey, expectedOriginalUid: expectedUid);
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw StateError('sign-in-failed');
+    void ensureOriginalUidUnchanged() {
+      if (expectedUid != null &&
+          FirebaseAuth.instance.currentUser?.uid != expectedUid) {
+        throw StateError('original-pin-session-principal-changed');
+      }
+    }
+    ensureOriginalUidUnchanged();
 
     final profileSnapshot = await _profileRef(accountKey).get();
     final profile = profileSnapshot.data() ?? <String, dynamic>{};
@@ -344,12 +400,14 @@ class DedaPinAuth {
     if (name.isEmpty) throw StateError('missing-profile-name');
 
     final install = await installId();
+    ensureOriginalUidUnchanged();
     await _profileRef(accountKey).set(<String, dynamic>{
       'trustedInstallIds': FieldValue.arrayUnion(<String>[install]),
       'lastSeenAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
 
+    ensureOriginalUidUnchanged();
     await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
       <String, dynamic>{
         'name': name,
@@ -364,6 +422,7 @@ class DedaPinAuth {
       SetOptions(merge: true),
     );
 
+    ensureOriginalUidUnchanged();
     await rememberKnownAccount(phone);
     return <String, dynamic>{
       'uid': user.uid,
