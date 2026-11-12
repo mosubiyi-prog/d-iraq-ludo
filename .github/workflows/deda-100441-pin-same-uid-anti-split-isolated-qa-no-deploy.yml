@@ -73,7 +73,7 @@ jobs:
           pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
           assert pin_signin.index("await _verifiedExistingPinUid(accountKey)") < pin.index("await _provePin(accountKey: accountKey, pin: pin)")
-          assert pin_signin.index("await _provePin(accountKey: accountKey, pin: pin)") < pin.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
+          assert pin_signin.index("await _provePin(accountKey: accountKey, pin: pin)") < pin_signin.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
           assert "original-pin-uid-changed-before-session-write" in pin_signin
           index = open("functions/index.js").read()
           assert "deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED" not in index
@@ -143,6 +143,8 @@ jobs:
           import os
           root = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
           pin = (root / "deda_pin_auth.dart").read_text()
+          pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
+          pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
           main = (root / "main.dart").read_text()
           assert "await _verifiedExistingPinUid(accountKey)" in pin
