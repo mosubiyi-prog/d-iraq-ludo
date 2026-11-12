@@ -69,7 +69,10 @@ class _DedaGoogleSettingsLinkCardState
     } catch (_) {
       valid = false;
     }
-    final live = FirebaseAuth.instance.currentUser;
+    // Widget tests, first launch and a failed Firebase bootstrap may have
+    // no default Firebase app. Refresh must never touch FirebaseAuth then.
+    final live = Firebase.apps.isNotEmpty
+        ? FirebaseAuth.instance.currentUser : null;
     final googleOnCurrent = live != null && !live.isAnonymous &&
         live.providerData.any((p) => p.providerId == 'google.com');
     if (mounted) setState(() {
