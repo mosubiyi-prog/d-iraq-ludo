@@ -64,7 +64,61 @@ def _backend(ours, base, theirs):
     return None
 
 
+def _pin_guard_100441(ours, base, theirs):
+    """Preserve signed 100441 AuthRuntime waits AND the new same-UID guard.
+
+    Match only four reviewed merge overlaps. Never override unknown blocks,
+    and never remove the existing runtime serialization or original owner
+    checks. The assembled source is still analyzed and privately tested.
+    """
+    if ("await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));" in ours
+            and "await _provePin(accountKey: accountKey, pin: pin);" in base
+            and "final expectedUid = dedaLinkedOwnerCompatEnabled" in theirs
+            and "await _openSession(accountKey, expectedOriginalUid: expectedUid);" in theirs):
+        result = once(theirs,
+            "await _provePin(accountKey: accountKey, pin: pin);",
+            "await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));",
+            "100441 preserve PIN proof wait")
+        return once(result,
+            "await _openSession(accountKey, expectedOriginalUid: expectedUid);",
+            "await DedaAuthRuntime.wait(() => _openSession(accountKey, expectedOriginalUid: expectedUid));",
+            "100441 preserve session write wait")
+
+    if ("final install = await DedaAuthRuntime.wait(() => installId());" in ours
+            and "await DedaAuthRuntime.wait(() => _profileRef(accountKey).set(" in ours
+            and "ensureOriginalUidUnchanged();" in theirs
+            and "await _profileRef(accountKey).set(" in theirs):
+        result = once(theirs,
+            "final install = await installId();",
+            "final install = await DedaAuthRuntime.wait(() => installId());",
+            "100441 preserve install wait")
+        return once(result,
+            "await _profileRef(accountKey).set(",
+            "await DedaAuthRuntime.wait(() => _profileRef(accountKey).set(",
+            "100441 preserve profile write wait")
+
+    if ("await DedaAuthRuntime.wait(() => FirebaseFirestore.instance.collection('users').doc(user.uid).set(" in ours
+            and "ensureOriginalUidUnchanged();" in theirs
+            and "await FirebaseFirestore.instance.collection('users').doc(user.uid).set(" in theirs):
+        return once(theirs,
+            "await FirebaseFirestore.instance.collection('users').doc(user.uid).set(",
+            "await DedaAuthRuntime.wait(() => FirebaseFirestore.instance.collection('users').doc(user.uid).set(",
+            "100441 preserve user write wait")
+
+    if ("await DedaAuthRuntime.wait(() => rememberKnownAccount(phone));" in ours
+            and "ensureOriginalUidUnchanged();" in theirs
+            and "await rememberKnownAccount(phone);" in theirs):
+        return once(theirs,
+            "await rememberKnownAccount(phone);",
+            "await DedaAuthRuntime.wait(() => rememberKnownAccount(phone));",
+            "100441 preserve remembered-account wait")
+    return None
+
+
 def _pin(ours, base, theirs):
+    reviewed_guard = _pin_guard_100441(ours, base, theirs)
+    if reviewed_guard is not None:
+        return reviewed_guard
     # This preserves safe auth transition on normal signout while blocking
     # loss of the linked original UID when the feature gate is enabled.
     if ("await auth.signOut();" in theirs and
