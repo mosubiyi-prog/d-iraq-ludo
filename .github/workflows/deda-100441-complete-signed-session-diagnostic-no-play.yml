@@ -250,7 +250,7 @@ jobs:
           assert 'DedaProbeKind.anonymous' in diag and 'DedaProbeKind.linked' in diag
           assert 'DedaProbeKind.signedOut' in diag
           assert d['googleOriginalUidSettings']['requiresOriginalUid']
-          d['versionCode']=100441
+          d['versionCode']=100442
           d['completeOwnerDelivery']=False
           d['financialRestoreEnabled']=False
           d['recoveryUserEntryEnabled']=True
@@ -306,7 +306,7 @@ jobs:
           keytool -list -keystore android/app/deda-release.jks \
             -storepass "$DEDA_STORE_PASSWORD" -alias "$DEDA_KEY_ALIAS" >/dev/null
           echo 'PASS_ORIGINAL_DEDA_RELEASE_SIGNER_RESTORED_ONLY_EPHEMERALLY'
-      - name: Build ONE original-signer 100441 APK complete with read-only Firebase diagnostics
+      - name: Build ONE original-signer 100442 update APK with Google-card same-UID QA
         shell: bash
         working-directory: ${{ runner.temp }}/deda-100441-complete-signed-app
         run: |
@@ -315,7 +315,7 @@ jobs:
           import json,subprocess
           from pathlib import Path
           d=json.loads(Path('internal-build-inputs.json').read_text())
-          assert d['versionCode']==100441
+          assert d['versionCode']==100442
           assert d['financialRestoreEnabled'] is False
           flags=dict(d['flags'])
           flags.update(d['featureDefines'])
@@ -324,7 +324,7 @@ jobs:
           assert flags['DEDA_SESSION_RESCUE_STAGE3']=='true'
           assert flags['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           cmd=['flutter','build','apk','--release','--no-pub',
-               '--build-number=100441',
+               '--build-number=100442',
                '--dart-define=DEDA_QA32_SPARK_PUBLIC_IDS_LIVE=true',
                '--dart-define=DEDA_100418_LEGACY340_ACTIVE_READ_APPROVED=true']
           for key,value in sorted(flags.items()):
@@ -352,7 +352,7 @@ jobs:
           import json,sys
           m=json.load(open(sys.argv[1]))
           assert m['packageVerification']['package']=='com.diraq.ludo.d_iraq_ludo'
-          assert m['packageVerification']['versionCode']==100441
+          assert m['packageVerification']['versionCode']==100442
           assert m['certificateSha256']=='a53d855b82d1280f324037428421838139ecf2e30174f9fcd0bd1878698b5f4a'
           assert m['originalPortraitsVerified']==3
           assert m['featureDefines']['DEDA_SMART_SECOND_STAGE_ACCOUNT']=='true'
@@ -363,23 +363,23 @@ jobs:
           assert m['featureDefines']['DEDA_STEP2_SPARK_LINKED_UID_READ_ONLY']=='false'
           assert m['ownerDiagnostic100441']['manualReadOnly'] is True
           assert m['ownerDiagnostic100441']['serverUidSplitUnresolved'] is True
-          print('PASS_SIGNED_100441_SAME_PACKAGE_CERT_COMPLETE_UI_SAFE_UID_DIAG')
+          print('PASS_SIGNED_100442_SAME_PACKAGE_CERT_COMPLETE_UI_SAFE_UID_DIAG')
           PY
-          cp "$apk" "$output/DEDA-100441-COMPLETE-SESSION-RESCUE-DIAGNOSTIC-SIGNED.apk"
+          cp "$apk" "$output/DEDA-100442-GOOGLE-CARD-QA-UPDATE-SIGNED.apk"
           (cd "$output" && sha256sum *.apk > SHA256.txt)
           printf '%s\n' \
-            'DEDA owner signed 100441 QA APK from full 100440 baseline, original signing identity and package, no Play release.' \
+            'DEDA owner signed 100442 QA update APK from full 100440 baseline, original signing identity and package, no Play release.' \
             'Preserves all features in signed 100440. Adds safe same-UID rescue, friends retry and read-only session diagnostics in Settings. Premium four-letter IDs supported.' \
             'Original UID and phone directory still conflict on Firebase. Linked-only automatic recovery is disabled; do not uninstall, sign out or clear app data. Full historical financial restore is NOT proven.' \
             'NEW PRIVATE OWNER TEST: Google settings card may link ONLY the current detached anonymous UID after separate explicit consent, when both old owner records mismatch. This DOES NOT restore original DEDA ID, balances, admin access or purchases. Do not mistake this for legacy account recovery.' \
             'Never uninstall the current DEDA app and never clear app storage. Install OVER existing app.' \
             'Signed archive and feature tests pass in CI; physical-phone operation is for owner to validate after delivery.' \
             > "$output/README-OWNER-INSTALL.txt"
-          echo 'PASS_SIGNED_100441_COMPLETE_DIAGNOSTIC_QA_APK_READY_FOR_OWNER_PHONE'
+          echo 'PASS_SIGNED_100442_COMPLETE_DIAGNOSTIC_QA_APK_READY_FOR_OWNER_PHONE'
       - name: Upload one verified installer, SHA and evidence for direct owner download
         uses: actions/upload-artifact@v4
         with:
-          name: DEDA-100441-COMPLETE-SESSION-DIAGNOSTIC-SIGNED-APK
+          name: DEDA-100442-GOOGLE-CARD-QA-UPDATE-SIGNED-APK
           path: |
             ${{ runner.temp }}/deda-100441-owner-delivery/*.apk
             ${{ runner.temp }}/deda-100441-owner-delivery/*.json
