@@ -132,12 +132,10 @@ class DedaLinkedOwnerSessionPolicy {
             currentHasOriginalGoogleProvider);
   }
 
-  /// A PIN proves knowledge of a short secret, NOT ownership of whichever
-  /// Firebase UID happens to be on this device. Check the immutable original
-  /// registration and normal six-character personal ID BEFORE creating a
-  /// deda_sessions row or writing users/{uid}. Display/premium IDs are never
-  /// account routing keys. A legacy record without its route fails closed
-  /// while the linked-owner pilot is enabled; it needs an explicit recovery.
+  /// A PIN is a short secret, not proof that a new Firebase UID owns
+  /// an existing DEDA identity. Match the account directory and immutable
+  /// six-character personal ID before opening a session or mutating a user.
+  /// The four-character premium/display ID is never a routing identity.
   static bool canOpenExistingPinSessionOnOriginalUid({
     required String uid,
     required String accountKey,
@@ -155,71 +153,7 @@ class DedaLinkedOwnerSessionPolicy {
     }
     final original = projection?['sharePersonalId'];
     return original is String &&
-        RegExp(r'^@DEDA-[A-Z0-9]{6}
-    required String uid,
-    required String accountKey,
-    required Map<String, dynamic>? directory,
-    required Map<String, dynamic>? session,
-    required Map<String, dynamic>? projection,
-    required Map<String, dynamic>? route,
-  }) {
-    if (uid.isEmpty || !emailMatches(ownerEmail(accountKey), accountKey) ||
-        directory?['accountKey'] != accountKey ||
-        directory?['active'] != true ||
-        directory?['createdUid'] != uid ||
-        session?['uid'] != uid ||
-        session?['accountKey'] != accountKey ||
-        projection?['accountKey'] != accountKey) {
-      return false;
-    }
-    final original = projection?['sharePersonalId'];
-    if (original is! String ||
-        !RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original) ||
-        route?['publicId'] != original ||
-        route?['kind'] != 'personal' ||
-        route?['ownerUid'] != uid ||
-        route?['active'] != true) {
-      return false;
-    }
-    return true;
-  }
-
-  /// Fresh SERVER reads. This is for preserving the linked owner session
-  /// during normal DEDA UI operations, never a grant of admin permissions.
-  /// An absent snapshot, slow network or stale login fails closed.
-  static Future<bool> verified(User? user, String accountKey) async {
-    if (!dedaLinkedOwnerCompatEnabled || user == null ||
-        user.isAnonymous || !userProviderIdentityMatches(user, accountKey)) {
-      return false;
-    }
-    final uid = user.uid;
-    try {
-      final db = FirebaseFirestore.instance;
-      final refs = await Future.wait([
-        db.collection('deda_account_directory').doc(accountKey)
-            .get(const GetOptions(source: Source.server)),
-        db.collection('deda_sessions').doc(uid)
-            .get(const GetOptions(source: Source.server)),
-        db.collection('users').doc(uid)
-            .get(const GetOptions(source: Source.server)),
-      ]);
-      final directory = refs[0].data(), session = refs[1].data();
-      final projection = refs[2].data();
-      final original = projection?['sharePersonalId'];
-      if (original is! String || original.isEmpty) return false;
-      final route = await db.collection('deda_share_ids').doc(original)
-          .get(const GetOptions(source: Source.server));
-      if (FirebaseAuth.instance.currentUser?.uid != uid) return false;
-      return ownerDocumentsMatch(
-        uid: uid, accountKey: accountKey, directory: directory,
-        session: session, projection: projection, route: route.data(),
-      );
-    } catch (_) {
-      return false;
-    }
-  }
-}
-).hasMatch(original) &&
+        RegExp(r'^@DEDA-[A-Z0-9]{6}$').hasMatch(original) &&
         route?['publicId'] == original &&
         route?['kind'] == 'personal' &&
         route?['active'] == true &&
