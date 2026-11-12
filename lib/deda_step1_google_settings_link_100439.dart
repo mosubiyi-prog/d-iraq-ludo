@@ -87,8 +87,16 @@ class _DedaGoogleSettingsLinkCardState
     required String originalUid,
     required AuthCredential credential,
   }) async {
-    if (!DedaAuthRuntime.enabled) {
+    if (!DedaAuthRuntime.enabled || credential.providerId != 'google.com') {
       throw StateError('google-link-requires-shared-auth-transition-guardian');
+    }
+    // Re-read after Google consent: if the historical owner mapping changed
+    // during the chooser, never turn the temporary UID into its owner.
+    final lastProbe = await DedaSessionDiagnosticReadOnly.inspect(widget.phone);
+    if (!DedaSessionDiagnosticReadOnly.mayOfferDetachedGoogleLink(lastProbe) ||
+        auth.currentUser?.uid != originalUid ||
+        auth.currentUser?.isAnonymous != true) {
+      throw StateError('detached-google-original-uid-recheck-denied');
     }
     final linked = await DedaAuthRuntime.run<UserCredential>(
       kind: DedaSessionTransitionKind.credentialChange,
