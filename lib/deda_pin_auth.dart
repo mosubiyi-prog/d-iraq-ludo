@@ -270,6 +270,12 @@ class DedaPinAuth {
       // A provider-linked owner cannot silently become a different UID.
       throw StateError('linked-owner-session-not-verified');
     }
+    if (!DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+      linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+      hasCurrentPrincipal: FirebaseAuth.instance.currentUser != null,
+    )) {
+      throw StateError('deda-original-owner-login-required');
+    }
     final user = await _ensureAnonymousSession();
     if (dedaLinkedOwnerCompatEnabled) {
       // An implicit trusted-session refresh may refresh ONLY the already
