@@ -69,18 +69,20 @@ jobs:
           assert modified <= allowed, f"Unexpected protected file changes: {sorted(modified - allowed)}"
           policy = open("lib/deda_100431_linked_owner_session_policy.dart").read()
           pin = open("lib/deda_pin_auth.dart").read()
+          pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
+          pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
-          assert pin.index("await _verifiedExistingPinUid(accountKey)") < pin.index("await _provePin(accountKey: accountKey, pin: pin)")
-          assert pin.index("await _provePin(accountKey: accountKey, pin: pin)") < pin.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
-          assert "original-pin-uid-changed-before-session-write" in pin
+          assert pin_signin.index("await _verifiedExistingPinUid(accountKey)") < pin.index("await _provePin(accountKey: accountKey, pin: pin)")
+          assert pin_signin.index("await _provePin(accountKey: accountKey, pin: pin)") < pin.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
+          assert "original-pin-uid-changed-before-session-write" in pin_signin
           index = open("functions/index.js").read()
           assert "deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED" not in index
           assert "deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED" not in index
-          assert "await _verifiedExistingPinUid(accountKey)" in pin
-          assert pin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
-          assert "original-pin-uid-changed-before-session-write" in pin
+          assert "await _verifiedExistingPinUid(accountKey)" in pin_signin
+          assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
+          assert "original-pin-uid-changed-before-session-write" in pin_signin
           assert "await _openSession(accountKey, expectedOriginalUid: expectedUid)" in pin
-          assert pin.index("await _verifiedExistingPinUid(accountKey)") < pin.index(
+          assert pin_signin.index("await _verifiedExistingPinUid(accountKey)") < pin.index(
             "await _openSession(accountKey, expectedOriginalUid: expectedUid)")
           print("PASS_100441_ORIGINAL_UID_CHECK_BEFORE_PIN_SESSION_WRITE")
           PY
@@ -144,8 +146,8 @@ jobs:
           policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
           main = (root / "main.dart").read_text()
           assert "await _verifiedExistingPinUid(accountKey)" in pin
-          assert pin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
-          assert "original-pin-uid-changed-before-session-write" in pin
+          assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
+          assert "original-pin-uid-changed-before-session-write" in pin_signin
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
           assert "DedaGoogleSettingsLinkCard(" in main
           assert "DedaSessionDiagnosticReadOnlyTile(" in main
