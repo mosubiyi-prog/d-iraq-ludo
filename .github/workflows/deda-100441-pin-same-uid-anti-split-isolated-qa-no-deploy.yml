@@ -41,6 +41,14 @@ jobs:
             "test/deda_owner_session_compat_private_test.dart",
             "test/deda_pin_same_uid_100441_optin_private_test.dart",
             ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml",
+            ".github/workflows/deda-100442-abc-uid-fingerprint-scoped-readonly-no-deploy.yml",
+            ".github/workflows/deda-100442-signed-private-current-uid-fingerprint-no-play.yml",
+            ".github/workflows/deda-100443-original-id-uid-prewrite-guard-source-qa-no-deploy.yml",
+            "lib/deda_backend.dart",
+            "lib/deda_session_diagnostic_readonly_100441.dart",
+            "test/deda_100441_session_uid_fingerprint_readonly_private_test.dart",
+            "test/deda_original_share_uid_prewrite_guard_100443_test.dart",
+            "tools/deda_100442_current_uid_abc_fingerprints_readonly.py",
             "docs/DEDA_100441_OWNER_SOURCE_AND_RECOVERY_INTEGRATION_AUDIT_2026-11-12.md",
           }
           modified = set(subprocess.check_output([
