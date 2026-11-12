@@ -56,6 +56,17 @@ def _backend(ours, base, theirs):
     reviewed_id = _backend_share_prewrite_guard_100443(ours, base, theirs)
     if reviewed_id is not None:
         return reviewed_id
+    # Preserve the exact signed AuthRuntime lane around owner-scoped reads
+    # while keeping the new fail-closed no-implicit-UID preflight intact.
+    if ("var user = await DedaAuthRuntime.wait(() => _ensurePublicUser());" in ours
+            and "var user = await _ensurePublicUser();" in base
+            and "deda-original-owner-login-required" in theirs
+            and "mayImplicitlyPrepareOwnerSession(" in theirs
+            and "var user = await _ensurePublicUser();" in theirs):
+        return once(
+            theirs, "var user = await _ensurePublicUser();",
+            "var user = await DedaAuthRuntime.wait(() => _ensurePublicUser());",
+            "100441 preserve AuthRuntime and no implicit owner UID")
     # Both imports are necessary: unified public premium-ID routing and
     # server-verifiable owner UIDs are unrelated authorities.
     if ("import 'deda_qa32_public_recipient_resolver.dart';" in ours
