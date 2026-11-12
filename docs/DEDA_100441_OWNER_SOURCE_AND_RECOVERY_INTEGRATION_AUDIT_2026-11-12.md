@@ -111,3 +111,30 @@
 - **فحص GitHub Actions رقم 43239983292:** SUCCESS و PASS_NO_UID_AUTH_RULES_DATA_OR_PLAY_MUTATION و PASS_PRODUCTION_READONLY_ABC_FINGERPRINT_SNAPSHOT_NO_WRITES؛ الرابط https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43239983292
 - **قرار:** يمنع الادعاء بأن DedaStep2OriginalBackupReadback أو DedaStep2LevelPointsRestore أعادا تقدماً من هذا الأرشيف؛ هو خالٍ. مصدر بيانات الهاتف الأصلي المحلي يبقى احتمالاً منفصلاً لا يجوز مسحه أو تحديثه أو نقله دون خطة آمنة. تظل سجلات الممتلكات الخادمية الأخرى مستقلة عن هذا الأرشيف.
 - لا إثبات ملكية مستقل، لا تغيير UID، لا ربط Google على إنتاج، ولا مساس بالممتلكات أو الإدارة. النتائج لا تدعم التغيير الحي بمفردها.
+
+
+## 2026-11-12 — جرد ممتلكات الحساب الحقيقي بدون كتابة
+
+**المرجع:** GitHub Actions 43242462943 — completed/success — https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43242462943
+**الإجراء:** توسعة مصدر الفحص الموجود نفسه tools/deda_100442_current_uid_abc_fingerprints_readonly.py و workflow السابق فقط، على فرع العمل الواحد؛ استعلامات Firebase Admin Service Account للقراءة فقط على حساب الرقم المستخرج من مسار الآيدي الأصلي المعتمد سابقاً. لا سرد حسابات، لا PIN أو UID/آيدي شخصي/اسم في التقرير، لا أرصدة مطبوعة، ولا تغييرات في Firebase/Google Play/Android/Functions index.
+
+### نتائج موجودة حقيقية من مسارات الخادم المفحوصة
+
+- الدليل الدائم للملف الشخصي: ACCOUNT_PROFILE PRESENT.
+- محفظة ماسات الهدايا المرتبطة بالآيدي الأصلي: RECEIVED_GIFT_WALLET PRESENT_VALID_SOURCE؛ **لم يُطبع رقم الرصيد ولا يعني الرصيد الكلي**.
+- اختيار الآيدي المميز: ACTIVE_ID_SELECTION PRESENT؛ سجل premium grant صالح واحد ACCEPTED 1؛ pending 0؛ conflict 0.
+- صندوق الهدايا الدائمة: GIFT_RECEIPT_ROWS_BOUNDED 3، منها WEEKLY_GIFT_RECEIPT_ROWS_BOUNDED 1، وهي ملاحظة لمستندات ولا تعني وصولها إلى واجهة هداياي أو استحقاق توزيع جديد.
+- الدوري: LEAGUE_ACCOUNT PRESENT؛ CURRENT_WEEK_SCORE PRESENT؛ دون قراءة أو نشر الرقم.
+- الأماكن المنشورة: PUBLISHED_PLACES_SCOPED 1 وثيقة ضمن نطاق accountKey للمالك.
+- إيصالات شراء 13 إطاراً: PAID_FRAMES_VERIFIED_RECEIPT_PAIRS 0 و PAID_FRAMES_CONFLICT_OR_PARTIAL 0 و PAID_FRAMES_NOT_EVIDENCED_IN_CLOUD 13. غياب السجل في هذين المسارين لا يثبت عدم وجود شراء محلي أو إرث قديم.
+- بطاقات الآيدي الأربع: ID_CARDS_VERIFIED_RECEIPT_PAIRS 0، ID_CARDS_CONFLICT_OR_PARTIAL 0، ID_CARDS_NOT_EVIDENCED_IN_CLOUD 4. لا نمنح ولا نمسح بطاقات اعتماداً على هذا.
+- العلاقات الاجتماعية المفحوصة فقط: FRIEND_RELATIONS_A 0، FRIEND_RELATIONS_B 0، FRIEND_RELATIONS_C 0؛ لا يعني ذلك حذف الأصدقاء أو فحص جميع أشكال العلاقات.
+- ملف مظهر الحساب القديم: FREE_APPEARANCE_ARCHIVE ABSENT_UNKNOWN؛ لا يدل على فقد تفضيلات الهاتف.
+- المستوى/نقاط المهام/الماسات المكتسبة محلياً: NOT_AUDITED_AS_SPENDABLE_CLOUD_SOURCE؛ مسار التقاط التقدم القديم كان خالياً في الفحص السابق (0 أرشيف). لا صفر أرصدة ولا افتراض استعادة.
+
+### قبول وأمان
+
+- **مكتمل:** جرد وجود سجلات حساب المالك المحددة بالضبط، بلا أي تغيير ملكية أو أرصدة أو كلمة مرور أو جلسة.
+- **غير مكتمل:** تحديد كل مصادر الممتلكات التاريخية وعودة البيانات للهاتف أو ربط Google بنفس الحساب؛ هذا الجرد لا يفوض اختيار UID.
+- الخطوة التنفيذية التالية المنطقية هي مطابقة الموجود من أصول الحساب على الخادم مع مصادره الأخرى، دون نسخ إيصالات أو منح ماسات؛ استعادة الهوية والدخول لا تُنفذ بافتراض أن سجلات البيانات وحدها تثبت ملكية Firebase Auth.
+- **حماية:** لا تحذف التطبيق الأصلي أو بياناته؛ بيانات الهاتف قد تكون مصدر ما تبقى من تقدم أو مشتريات لا تملك الأرشيف الخادمي المفحوص.
