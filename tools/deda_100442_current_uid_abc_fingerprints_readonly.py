@@ -454,11 +454,20 @@ def inspect_account_creation_provenance(db, account, original_id, candidates,
                     len(v) == 48 and all(c in "0123456789abcdef" for c in v)}
         a_ids = installs("USER_A")
         b_ids = installs("USER_B")
-        if a_ids is None or b_ids is None:
-            print("HISTORY_A_B_SHARED_INSTALL_ID UNVERIFIABLE")
-        else:
-            print("HISTORY_A_B_SHARED_INSTALL_ID " +
-                  ("YES" if bool(a_ids & b_ids) else "NO"))
+        c_ids = installs("USER_C")
+        for label, first, second in (
+            ("A_B", a_ids, b_ids),
+            ("A_C", a_ids, c_ids),
+            ("B_C", b_ids, c_ids),
+        ):
+            key = "HISTORY_" + label + "_SHARED_INSTALL_ID"
+            if first is None or second is None:
+                print(key + " UNVERIFIABLE")
+            else:
+                print(key + (" YES" if bool(first & second) else " NO"))
+        c_user = rows.get("USER_C", {})
+        print("HISTORY_USER_C_SAME_ACCOUNT " +
+              ("YES" if c_user.get("accountKey") == account else "NO"))
         print("HISTORY_CORRELATION_ONLY_NO_HISTORIC_OWNER_LOGIN_GRANT")
     except Exception:
         print("SAFE_STOP_PROVENANCE_READ_UNAVAILABLE")
