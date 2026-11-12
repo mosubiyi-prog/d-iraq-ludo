@@ -82,7 +82,7 @@ class DedaBackend {
     // A background/section owner read must NOT silently sign in anonymously
     // when the original Firebase principal is absent. Existing-account
     // recovery is an explicit owner action on the shared Auth lane.
-    if (cleanKey.isNotEmpty &&
+    if (dedaLinkedOwnerCompatEnabled && cleanKey.isNotEmpty &&
         !DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
           linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
           hasCurrentPrincipal: FirebaseAuth.instance.currentUser != null,
