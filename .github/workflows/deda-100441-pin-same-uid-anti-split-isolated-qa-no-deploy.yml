@@ -71,6 +71,11 @@ jobs:
           assert modified <= allowed, f"Unexpected protected file changes: {sorted(modified - allowed)}"
           policy = open("lib/deda_100431_linked_owner_session_policy.dart").read()
           pin = open("lib/deda_pin_auth.dart").read()
+          lookup = pin.split("  static Future<bool> accountExists(String phone) async {", 1)[1]
+          lookup = lookup.split("  static Future<void> _provePin(", 1)[0]
+          assert "mayImplicitlyPrepareOwnerSession(" in lookup
+          assert lookup.index("mayImplicitlyPrepareOwnerSession(") < lookup.index("await _ensureAnonymousSession();")
+          assert "deda-explicit-auth-entry-required-no-new-uid" in lookup
           pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
           pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
@@ -145,6 +150,11 @@ jobs:
           import os
           root = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
           pin = (root / "deda_pin_auth.dart").read_text()
+          lookup = pin.split("  static Future<bool> accountExists(String phone) async {", 1)[1]
+          lookup = lookup.split("  static Future<void> _provePin(", 1)[0]
+          assert "mayImplicitlyPrepareOwnerSession(" in lookup
+          assert lookup.index("mayImplicitlyPrepareOwnerSession(") < lookup.index("await _ensureAnonymousSession();")
+          assert "deda-explicit-auth-entry-required-no-new-uid" in lookup
           pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
           pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
