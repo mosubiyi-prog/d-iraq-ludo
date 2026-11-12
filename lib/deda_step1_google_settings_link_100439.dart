@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'deda_100430_owner_uid_continuity.dart';
+import 'deda_auth_session_runtime.dart';
+import 'deda_session_transition_gate.dart' show DedaSessionAuthKind;
+import 'deda_session_diagnostic_readonly_100441.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_pin_auth.dart';
 
@@ -33,6 +36,9 @@ class _DedaGoogleSettingsLinkCardState
     extends State<DedaGoogleSettingsLinkCard> {
   bool _busy = false;
   bool _verified = false;
+  // A Google link on a detached anonymous UID is NOT recovery of DEDA's
+  // historical phone account. Never display the original-owner green tick.
+  bool _linkedCurrentOnly = false;
   String? _message;
   bool get _active => dedaStep1GoogleOwnerLinkEnabled &&
       dedaLinkedOwnerCompatEnabled && Firebase.apps.isNotEmpty;
@@ -63,27 +69,123 @@ class _DedaGoogleSettingsLinkCardState
     } catch (_) {
       valid = false;
     }
-    if (mounted) setState(() => _verified = valid);
+    final live = FirebaseAuth.instance.currentUser;
+    final googleOnCurrent = live != null && !live.isAnonymous &&
+        live.providerData.any((p) => p.providerId == 'google.com');
+    if (mounted) setState(() {
+      _verified = valid;
+      _linkedCurrentOnly = !valid && googleOnCurrent;
+    });
+  }
+
+  // User-requested alternative: attach Google only to the anonymous Firebase
+  // UID ALREADY open on this device. This is deliberately a NEW, separate
+  // Google-backed session; it never adopts phone records, the original ID,
+  // admin access, wallets, or A/B/C. Requires an explicit UI confirmation.
+  Future<String> _linkDetachedAnonymous({
+    required FirebaseAuth auth,
+    required String originalUid,
+    required AuthCredential credential,
+  }) async {
+    if (!DedaAuthRuntime.enabled) {
+      throw StateError('google-link-requires-shared-auth-transition-guardian');
+    }
+    final linked = await DedaAuthRuntime.run<UserCredential>(
+      kind: DedaSessionTransitionKind.credentialChange,
+      origin: DedaSessionTransitionOrigin.userAction,
+      action: () => DedaAuthRuntime.controller.transition<UserCredential>(
+        kind: DedaSessionTransitionKind.credentialChange,
+        action: () {
+          final live = auth.currentUser;
+          if (live == null || live.uid != originalUid || !live.isAnonymous) {
+            throw StateError('detached-google-principal-changed');
+          }
+          return live.linkWithCredential(credential);
+        },
+        accepts: (result, live) =>
+            result.user?.uid == originalUid && live.uid == originalUid &&
+            live.kind == DedaSessionAuthKind.authenticated,
+      ),
+    );
+    if (linked.user?.uid != originalUid ||
+        auth.currentUser?.uid != originalUid) {
+      throw StateError('detached-google-uid-not-preserved');
+    }
+    await auth.currentUser!.reload();
+    final updated = auth.currentUser;
+    if (updated == null || updated.uid != originalUid ||
+        updated.isAnonymous ||
+        !updated.providerData.any((p) => p.providerId == 'google.com')) {
+      throw StateError('detached-google-provider-not-verified');
+    }
+    return originalUid;
   }
 
   Future<void> _link() async {
-    if (_busy || _verified || !_active) return;
+    if (_busy || _verified || _linkedCurrentOnly || !_active) return;
     setState(() {
       _busy = true;
       _message = null;
     });
+    bool linkDetached = false;
     try {
       final auth = FirebaseAuth.instance;
       final startingUid = auth.currentUser?.uid;
       final account = DedaPinAuth.accountKeyForPhone(widget.phone);
+      if (startingUid == null) {
+        throw StateError('deda-explicit-session-required-for-google');
+      }
 
-      // Confirm the original owner BEFORE opening any Google UI.
-      // For older anonymous installations the separate pre-link archive and
-      // account confirmation must finish first, without deleting local data.
-      if (startingUid == null ||
-          !await DedaLinkedOwnerSessionPolicy.verified(
-              auth.currentUser, account)) {
-        throw StateError('deda-owner-confirmation-required-before-google');
+      // First use the existing, fully verified original-owner route.
+      final originalVerified = !auth.currentUser!.isAnonymous &&
+          await DedaLinkedOwnerSessionPolicy.verified(
+              auth.currentUser, account);
+      if (!originalVerified) {
+        // Do not claim the old DEDA account on an unrelated Firebase UID.
+        // Only offer a SEPARATE link when both canonical server owner
+        // references explicitly differ from this anonymous principal.
+        if (auth.currentUser?.uid != startingUid ||
+            auth.currentUser?.isAnonymous != true) {
+          throw StateError('deda-original-owner-confirmation-required');
+        }
+        final report = await DedaSessionDiagnosticReadOnly.inspect(widget.phone);
+        if (!DedaSessionDiagnosticReadOnly
+            .mayOfferDetachedGoogleLink(report) ||
+            auth.currentUser?.uid != startingUid ||
+            auth.currentUser?.isAnonymous != true) {
+          throw StateError('deda-detached-link-safety-check-not-passed');
+        }
+        if (!mounted) return;
+        final consent = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+            title: const Text('ربط Google بهذه الجلسة فقط'),
+            content: const Text(
+              'جلسة Firebase الحالية لا تطابق حساب DEDA القديم. '
+              'يمكن ربط Google بهذه الجلسة الحالية فقط، بنفس UID الحالي، '
+              'لكن هذا لن يسترجع الآيدي أو الماسات أو الأصدقاء أو الهدايا '
+              'من الحساب القديم. لا يُحذف أو يُدمج أي حساب قديم. '
+              'إذا تريد استرجاع حسابك القديم، اختر إلغاء. '
+              'هل توافق على ربط هذه الجلسة المنفصلة فقط؟',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialog).pop(false),
+                child: const Text('إلغاء'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialog).pop(true),
+                child: const Text('ربط هذه الجلسة فقط'),
+              ),
+            ],
+          ),
+        );
+        if (consent != true || !mounted) return;
+        if (auth.currentUser?.uid != startingUid ||
+            auth.currentUser?.isAnonymous != true) {
+          throw StateError('deda-detached-session-changed-before-google');
+        }
+        linkDetached = true;
       }
       if (!mounted || auth.currentUser?.uid != startingUid) return;
 
@@ -103,19 +205,27 @@ class _DedaGoogleSettingsLinkCardState
         accessToken: tokens.accessToken,
         idToken: tokens.idToken,
       );
-      final linkedUid = await DedaOwnerUidContinuity
-          .linkGoogleToConfirmedOriginalUid(
-            phone: widget.phone,
-            originalId: widget.originalId,
-            googleCredential: credential,
-          );
-      if (linkedUid != startingUid || !await _serverConfirmedLink()) {
-        throw StateError('google-original-owner-readback-not-confirmed');
+      final linkedUid = linkDetached
+          ? await _linkDetachedAnonymous(
+              auth: auth, originalUid: startingUid,
+              credential: credential)
+          : await DedaOwnerUidContinuity.linkGoogleToConfirmedOriginalUid(
+              phone: widget.phone,
+              originalId: widget.originalId,
+              googleCredential: credential,
+            );
+      if (linkedUid != startingUid ||
+          (!linkDetached && !await _serverConfirmedLink())) {
+        throw StateError('google-uid-readback-not-confirmed');
       }
       if (mounted) {
         setState(() {
-          _verified = true;
-          _message = null;
+          _verified = !linkDetached;
+          _linkedCurrentOnly = linkDetached;
+          _message = linkDetached
+              ? 'تم ربط Google بالجلسة الحالية فقط. '
+                  'حساب DEDA الأصلي وممتلكاته لم يتم استرجاعها.'
+              : null;
         });
       }
     } on FirebaseAuthException catch (error) {
@@ -131,10 +241,12 @@ class _DedaGoogleSettingsLinkCardState
               'Secure linking failed; your account data was not changed.'));
     } catch (_) {
       if (mounted) {
-        setState(() => _message = _t(
-          'لم يتأكد الربط. تأكد من تأكيد الحساب الأصلي وتهيئة جوجل.',
-          'Link not verified. Confirm the original account and Google setup.',
-        ));
+        setState(() => _message = linkDetached
+          ? 'لم نتمكن من تأكيد ربط Google لهذه الجلسة. '
+              'قد تكون العملية اكتملت في Firebase؛ أعد فتح الإعدادات '
+              'للتحقق قبل أي محاولة أخرى.'
+          : 'الجلسة الحالية غير مثبتة كصاحب حساب DEDA الأصلي، '
+              'أو لم تكتمل تهيئة Google. لم يتم تجاوز حارس ملكية الحساب.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -161,17 +273,26 @@ class _DedaGoogleSettingsLinkCardState
             ),
             title: Text(_t('ربط الحساب بجوجل', 'Link with Google')),
             subtitle: Text(_verified
-                ? _t('مرتبط ومؤكد', 'Linked and verified')
-                : _t('احفظ هوية حسابك لتفتحها على هاتف آخر.',
-                    'Keep your account identity for another phone.')),
+                ? _t('مرتبط ومؤكد بالحساب الأصلي',
+                    'Linked to verified original account')
+                : _linkedCurrentOnly
+                    ? _t('Google مرتبط بهذه الجلسة فقط؛ '
+                        'الحساب القديم غير مسترجع.',
+                        'Google linked to this session only; '
+                        'old account not restored.')
+                    : _t('احفظ هوية حسابك لتفتحها على هاتف آخر.',
+                        'Keep your account identity for another phone.')),
             trailing: _busy
                 ? const SizedBox(width: 22, height: 22,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : _verified
                     ? const Icon(Icons.check_circle, color: green,
                         key: ValueKey('deda-google-link-verified'))
-                    : const Icon(Icons.chevron_right),
-            onTap: _busy || _verified ? null : _link,
+                    : _linkedCurrentOnly
+                        ? const Icon(Icons.info_outline,
+                            key: ValueKey('deda-google-session-only'))
+                        : const Icon(Icons.chevron_right),
+            onTap: _busy || _verified || _linkedCurrentOnly ? null : _link,
           ),
           if (_message != null)
             Padding(
