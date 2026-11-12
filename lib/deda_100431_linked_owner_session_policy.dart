@@ -62,6 +62,15 @@ class DedaLinkedOwnerSessionPolicy {
     }
   }
 
+  /// A section's implicit owner-data read may NEVER create a new Firebase
+  /// principal while linked-owner recovery is enabled. Explicit account
+  /// creation and verified owner login have their own user-action lanes.
+  /// This guards Auth state only, and cannot prove ownership of a legacy UID.
+  static bool mayImplicitlyPrepareOwnerSession({
+    required bool linkedOwnerPilotEnabled,
+    required bool hasCurrentPrincipal,
+  }) => !linkedOwnerPilotEnabled || hasCurrentPrincipal;
+
   static String ownerEmail(String accountKey) =>
       '$accountKey@deda-login.invalid';
 
