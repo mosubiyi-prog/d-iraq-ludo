@@ -28,6 +28,16 @@ class DedaSessionProbeReport {
 class DedaSessionDiagnosticReadOnly {
   const DedaSessionDiagnosticReadOnly._();
 
+  /// Only a detached anonymous Firebase principal may be offered a NEW,
+  /// explicitly separate Google link. A matching, unverified or unavailable
+  /// historical owner route must NEVER be silently taken over by Google.
+  /// This does NOT authorize restoration of the old DEDA phone/ID/wallet.
+  static bool mayOfferDetachedGoogleLink(DedaSessionProbeReport report) =>
+      report.kind == DedaProbeKind.anonymous &&
+      report.original == DedaProbeMatch.differentUid &&
+      report.directory == DedaProbeMatch.differentUid &&
+      !report.google && !report.password;
+
   /// Stable 64-bit fingerprint to compare a CURRENT device Firebase UID with
   /// historic A/B/C server references. No raw UID, phone, PIN or token is
   /// displayed/sent/logged. Not an authorization factor or cryptographic proof.
