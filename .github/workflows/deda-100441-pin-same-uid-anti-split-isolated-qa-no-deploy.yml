@@ -7,6 +7,9 @@ on:
     paths:
       - "lib/deda_pin_auth.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
+      - "lib/deda_step1_google_settings_link_100439.dart"
+      - "lib/deda_session_diagnostic_readonly_100441.dart"
+      - "test/deda_100441_session_uid_fingerprint_readonly_private_test.dart"
       - "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py"
       - "tools/app_stability/app_package/bind_google_account_settings_100439.py"
       - "test/deda_owner_session_compat_private_test.dart"
@@ -38,6 +41,7 @@ jobs:
           allowed = {
             "lib/deda_pin_auth.dart",
             "lib/deda_100431_linked_owner_session_policy.dart",
+            "lib/deda_step1_google_settings_link_100439.dart",
             "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py",
             "tools/app_stability/app_package/bind_google_account_settings_100439.py",
             "test/deda_owner_session_compat_private_test.dart",
@@ -91,6 +95,18 @@ jobs:
           assert "original-pin-uid-changed-before-session-write" in pin_signin
           assert "await _openSession(accountKey, expectedOriginalUid: expectedUid)" in pin
           assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin_signin.index("_openSession(accountKey, expectedOriginalUid: expectedUid)")
+          google_card = open("lib/deda_step1_google_settings_link_100439.dart").read()
+          diag = open("lib/deda_session_diagnostic_readonly_100441.dart").read()
+          assert "mayOfferDetachedGoogleLink(" in diag
+          assert "DedaProbeMatch.differentUid" in diag
+          assert "DedaProbeKind.anonymous" in diag
+          assert "linkWithCredential(credential)" in google_card
+          assert "ربط هذه الجلسة فقط" in google_card
+          assert "الحساب القديم غير مسترجع" in google_card
+          assert "linkGoogleToConfirmedOriginalUid(" in google_card
+          assert "DedaAuthRuntime.controller.transition<UserCredential>" in google_card
+          assert "signInWithCredential(" not in google_card
+          print("PASS_GOOGLE_CARD_VERIFIED_OWNER_OR_EXPLICIT_DETACHED_NO_LEGACY_ADOPTION")
           print("PASS_100441_ORIGINAL_UID_CHECK_BEFORE_PIN_SESSION_WRITE")
           PY
 
@@ -109,7 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          dart analyze --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_100431_linked_owner_session_policy.dart
+          dart analyze --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_100431_linked_owner_session_policy.dart lib/deda_step1_google_settings_link_100439.dart lib/deda_session_diagnostic_readonly_100441.dart
 
       - name: Owner UID PIN, Google and session regression tests (no Firebase connection)
         run: |
@@ -117,7 +133,8 @@ jobs:
           flutter test --no-pub \
             test/deda_owner_session_compat_private_test.dart \
             test/deda_google_original_uid_link_private_test.dart \
-            test/deda_session_missing_owner_entry_100441_test.dart
+            test/deda_session_missing_owner_entry_100441_test.dart \
+            test/deda_100441_session_uid_fingerprint_readonly_private_test.dart
 
       - name: PIN guard remains compatible with signed 100441 opt-in compilation
         run: |
@@ -177,6 +194,13 @@ jobs:
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
           assert "DedaGoogleSettingsLinkCard(" in main
           assert "DedaSessionDiagnosticReadOnlyTile(" in main
+          google_card = (root / "deda_step1_google_settings_link_100439.dart").read_text()
+          diag = (root / "deda_session_diagnostic_readonly_100441.dart").read_text()
+          assert "mayOfferDetachedGoogleLink(" in diag
+          assert "DedaProbeMatch.differentUid" in diag
+          assert "linkWithCredential(credential)" in google_card
+          assert "ربط هذه الجلسة فقط" in google_card
+          assert "signInWithCredential(" not in google_card
           print("PASS_FULL_100441_ASSEMBLY_INCLUDES_SAME_UID_GUARD_GOOGLE_AND_DIAGNOSTICS")
           PY
           (
