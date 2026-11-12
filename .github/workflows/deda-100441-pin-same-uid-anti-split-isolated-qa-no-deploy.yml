@@ -50,6 +50,19 @@ jobs:
             "test/deda_original_share_uid_prewrite_guard_100443_test.dart",
             "tools/deda_100442_current_uid_abc_fingerprints_readonly.py",
             "docs/DEDA_100441_OWNER_SOURCE_AND_RECOVERY_INTEGRATION_AUDIT_2026-11-12.md",
+            ".github/workflows/deda-100443-owner-review-gate-one-branch-qa-no-deploy.yml",
+            "functions/deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED.js",
+            "functions/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js",
+            "functions/deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js",
+            "functions/deda_100441_owner_split_identity_challenge_review_private_v1.js",
+            "functions/deda_100441_server_canonical_uid_read_adapter_PRIVATE_NOT_EXPORTED.js",
+            "functions/test/deda_100441_canonical_uid_anti_split_preflight_PRIVATE.test.js",
+            "functions/test/deda_100441_lab_to_legacy_google_proof_gate_PRIVATE.test.js",
+            "functions/test/deda_100441_legacy_google_oidc_verifier_PRIVATE.test.js",
+            "functions/test/deda_100441_owner_split_identity_challenge_review_private_v1.test.js",
+            "functions/test/deda_100441_server_canonical_uid_read_adapter_PRIVATE.test.js",
+            "functions/test/deda_100441_step2_conflicted_uids_owner_proof.test.js",
+            "test/deda_100443_legacy_owner_review_no_grant.test.js",
           }
           modified = set(subprocess.check_output([
             "git", "diff", "--name-only", base, "HEAD"], text=True).splitlines())
@@ -57,7 +70,15 @@ jobs:
           policy = open("lib/deda_100431_linked_owner_session_policy.dart").read()
           pin = open("lib/deda_pin_auth.dart").read()
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
+          assert pin.index("await _verifiedExistingPinUid(accountKey)") < pin.index("await _provePin(accountKey: accountKey, pin: pin)")
+          assert pin.index("await _provePin(accountKey: accountKey, pin: pin)") < pin.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
+          assert "original-pin-uid-changed-before-session-write" in pin
+          index = open("functions/index.js").read()
+          assert "deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED" not in index
+          assert "deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED" not in index
           assert "await _verifiedExistingPinUid(accountKey)" in pin
+          assert pin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
+          assert "original-pin-uid-changed-before-session-write" in pin
           assert "await _openSession(accountKey, expectedOriginalUid: expectedUid)" in pin
           assert pin.index("await _verifiedExistingPinUid(accountKey)") < pin.index(
             "await _openSession(accountKey, expectedOriginalUid: expectedUid)")
@@ -123,6 +144,8 @@ jobs:
           policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
           main = (root / "main.dart").read_text()
           assert "await _verifiedExistingPinUid(accountKey)" in pin
+          assert pin.index("_verifiedExistingPinUid(accountKey)") < pin.index("_provePin(accountKey: accountKey, pin: pin)")
+          assert "original-pin-uid-changed-before-session-write" in pin
           assert "canOpenExistingPinSessionOnOriginalUid(" in policy
           assert "DedaGoogleSettingsLinkCard(" in main
           assert "DedaSessionDiagnosticReadOnlyTile(" in main
