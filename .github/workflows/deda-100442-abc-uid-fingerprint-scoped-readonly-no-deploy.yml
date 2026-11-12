@@ -52,6 +52,11 @@ jobs:
           assert 'print(wallet' not in script and 'print(account' not in script
           assert '"admin"' not in script
           assert 'def inspect_existing_assets_readonly' in script
+          assert 'def inspect_historical_auth_timeline' in script
+          assert 'firebase_auth.get_user(uid, app=app)' in script
+          assert 'AUTH_CREATION_ORDER_IS_NOT_INDEPENDENT_OWNERSHIP_PROOF' in script
+          assert 'firebase_auth.update_user(' not in script
+          assert 'firebase_auth.create_user(' not in script
           assert 'deda_diamond_gifts' in script and 'deda_friendships' in script
           assert 'deda_lab_frame_receipts' in script
           assert 'deda_stage66_card_receipts' in script
@@ -62,7 +67,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install audited production Firestore READ ONLY SDK
-        run: python3 -m pip install --quiet google-cloud-firestore==2.21.0
+        run: python3 -m pip install --quiet google-cloud-firestore==2.21.0 firebase-admin==6.9.0
       - name: Read exact owner-scoped historic UID fingerprints and bounded progress/purchase metadata
         shell: bash
         run: |

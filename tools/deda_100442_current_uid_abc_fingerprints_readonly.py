@@ -315,6 +315,70 @@ def inspect_existing_assets_readonly(db, account, original_id, candidates):
     say("INVENTORY_MEANING", "SOURCE_READBACK_ONLY_NO_RESTORATION_OR_OWNERSHIP_GRANT")
 
 
+
+def inspect_historical_auth_timeline(info, candidates):
+    """Bounded Auth metadata READ ONLY. Chronology alone is NOT owner proof.
+
+    Candidate UIDs must already be taken from the exact approved account's
+    verified route, directory, and social source. Never print UIDs, timestamps,
+    emails, device data, claims, tokens, or metadata verbatim.
+    """
+    if set(candidates) != {"A", "B", "C"} or len(set(candidates.values())) != 3:
+        print("SAFE_STOP_AUTH_TIMELINE_SCOPE_INVALID")
+        return
+    try:
+        import firebase_admin
+        from firebase_admin import auth as firebase_auth
+        from firebase_admin import credentials as firebase_credentials
+        app = firebase_admin.initialize_app(
+            firebase_credentials.Certificate(info),
+            {"projectId": PROJECT},
+            name="deda-20261113-original-auth-timeline-readonly",
+        )
+    except Exception:
+        print("SAFE_STOP_AUTH_TIMELINE_ADMIN_READ_UNAVAILABLE")
+        return
+    created = {}
+    try:
+        for label in ("A", "B", "C"):
+            uid = candidates[label]
+            if not isinstance(uid, str) or not (6 <= len(uid) <= 128):
+                print("SAFE_STOP_AUTH_TIMELINE_UID_INVALID")
+                return
+            try:
+                record = firebase_auth.get_user(uid, app=app)
+            except firebase_auth.UserNotFoundError:
+                print("OWNER_AUTH_" + label + "_RECORD ABSENT")
+                continue
+            except Exception:
+                print("OWNER_AUTH_" + label + "_RECORD UNVERIFIABLE")
+                continue
+            print("OWNER_AUTH_" + label + "_RECORD PRESENT")
+            providers = {provider.provider_id for provider in
+                         (record.provider_data or [])}
+            print("OWNER_AUTH_" + label + "_GOOGLE " +
+                  ("YES" if "google.com" in providers else "NO"))
+            print("OWNER_AUTH_" + label + "_HAS_EMAIL " +
+                  ("YES" if bool(record.email) else "NO"))
+            print("OWNER_AUTH_" + label + "_OTHER_LINKED_PROVIDER " +
+                  ("YES" if bool(providers - {"google.com"}) else "NO"))
+            print("OWNER_AUTH_" + label + "_DISABLED " +
+                  ("YES" if record.disabled else "NO"))
+            stamp = getattr(record.user_metadata, "creation_timestamp", None)
+            if isinstance(stamp, (int, float)) and stamp > 0:
+                created[label] = stamp
+        for earlier, later in (("A", "B"), ("A", "C"), ("B", "C")):
+            label = "OWNER_AUTH_CREATED_" + earlier + "_BEFORE_" + later
+            if earlier not in created or later not in created:
+                print(label + " UNVERIFIABLE")
+            else:
+                print(label + (" YES" if created[earlier] < created[later]
+                               else " NO"))
+        print("AUTH_CREATION_ORDER_IS_NOT_INDEPENDENT_OWNERSHIP_PROOF")
+        print("NO_AUTH_TOKEN_NO_AUTH_WRITE_NO_FIREBASE_RULE_DEPLOY")
+    finally:
+        firebase_admin.delete_app(app)
+
 def main() -> int:
     raw = os.environ.get("DEDA_PRIMARY_FIREBASE_SA", "")
     if not raw:
@@ -382,6 +446,7 @@ def main() -> int:
         inspect_existing_assets_readonly(
             db, account, original_id, {"A": a, "B": b, "C": c}
         )
+        inspect_historical_auth_timeline(info, {"A": a, "B": b, "C": c})
         print("RESULT_GUIDE: compare CURRENT PHONE fingerprint exactly; "
               "a match means this phone's observed UID matches that server UID; "
               "a mismatch to all means a different UID (D) at observation time.")
