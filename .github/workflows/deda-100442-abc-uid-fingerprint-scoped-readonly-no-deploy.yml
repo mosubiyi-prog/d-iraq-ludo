@@ -1,0 +1,56 @@
+name: DEDA 100442 A B C historical UID fingerprints READ ONLY NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - '.github/workflows/deda-100442-abc-uid-fingerprint-scoped-readonly-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100442-abc-fingerprint-readonly-no-deploy
+  cancel-in-progress: false
+
+jobs:
+  compare-only-historic-uid-pseudonyms:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      DEDA_PRIMARY_FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEDA_25B88 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Prove protected Firebase production source remains unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+            functions/index.js firestore.rules storage.rules firebase.json \
+            android assets pubspec.yaml pubspec.lock
+          python3 -m py_compile tools/deda_100442_current_uid_abc_fingerprints_readonly.py
+          python3 - <<'PY'
+          from pathlib import Path
+          script = Path("tools/deda_100442_current_uid_abc_fingerprints_readonly.py").read_text()
+          assert "DEDA_PRIMARY_FIREBASE_SA" in script
+          for forbidden in (".set(", ".update(", ".delete(", ".add(", "create_custom_token", "revoke_refresh_tokens"):
+              assert forbidden not in script, f"Unexpected Firebase mutation: {forbidden}"
+          assert '"ownerUid"' in script and '"createdUid"' in script
+          print("PASS_NO_UID_AUTH_RULES_DATA_OR_PLAY_MUTATION")
+          PY
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install audited production Firestore READ ONLY SDK
+        run: python3 -m pip install --quiet google-cloud-firestore==2.21.0
+      - name: Match the 3 known candidate UID fingerprints without printing raw IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/deda_100442_current_uid_abc_fingerprints_readonly.py
+      - name: Finish without authentication or Firebase deployment
+        run: echo PASS_NO_LOGIN_NO_FIREBASE_WRITE_NO_UID_CHANGE_NO_APK_NO_PLAY
