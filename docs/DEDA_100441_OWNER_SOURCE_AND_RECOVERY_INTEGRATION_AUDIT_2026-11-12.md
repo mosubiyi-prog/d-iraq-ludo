@@ -98,3 +98,16 @@
 5. APK وفحص الهاتف والتابلت الحقيقي: **غير منجز بهذه الجولة**؛ اختبارات المختبر السابق لا تعادل فحص استرجاع الإنتاج.
 
 **قرار الحماية:** لا اختيار UID بالحدس، ولا تعديل ملكية الإنتاج أو صلاحيات الإدارة حتى توفر إثبات ملكية مستقل موثوق ومراجعة وتفويض تغيير محدد مع نسخ احتياطية وخطة تراجع. عدم تكرار فحوص A/B/C؛ لا فتح فروع جديدة. **PASS للكود المعزول، SAFE HOLD للاسترجاع الحي.**
+
+
+## 2026-11-12 — نتيجة فحص وجود المصدر التاريخي للتقدم والمشتريات
+
+**الغاية:** فحص هل توجد أرشفة خادمية قديمة للتقدم والمشتريات لنفس حساب DEDA، لا إعادة فحوص الهوية ولا فتح فروع.
+
+- تمت مراجعة المصدر الموجود في lib/deda_step2_original_backup_readback.dart، ومسار deda_progress_evidence/{accountKey}/captures/{captureId}، وملحق المشتريات deda_purchase_evidence/{accountKey}/captures/{captureId}. كود استعادة المستوى يعتمد على وجود أرشيف التقدم.
+- توسعة مقيدة داخل أداة الأدلة الحالية tools/deda_100442_current_uid_abc_fingerprints_readonly.py: حصر نفس الحساب الأصلي فقط، قراءة metadata فقط بحد أقصى 26 وثيقة، وملحق مشتريات بنفس captureId فقط دون قراءة بيانات المشتريات أو الأرصدة والرموز.
+- تعديل workflow قديم موجود وليس إنشاء workflow أو فرع جديد. لا تغييرات Firebase Auth/Rules/Play ولا أي كتابة في المستندات الحية.
+- **نتيجة Firebase الحية:** ORIGINAL_SOURCE_ARCHIVE_OBSERVATIONS_BOUNDED 0؛ و OLD_SOURCE_PROGRESS_A/B/C NO و OLD_SOURCE_PAIRED_PURCHASE_A/B/C NO. هذا يعني أن مسار الأرشيف المحدد كان خالياً وقت الفحص؛ لا يعني أن بيانات المستخدم غير موجودة في مصادر سحابية أخرى أو على الهاتف.
+- **فحص GitHub Actions رقم 43239983292:** SUCCESS و PASS_NO_UID_AUTH_RULES_DATA_OR_PLAY_MUTATION و PASS_PRODUCTION_READONLY_ABC_FINGERPRINT_SNAPSHOT_NO_WRITES؛ الرابط https://github.com/mosubiyi-prog/d-iraq-ludo/actions/runs/43239983292
+- **قرار:** يمنع الادعاء بأن DedaStep2OriginalBackupReadback أو DedaStep2LevelPointsRestore أعادا تقدماً من هذا الأرشيف؛ هو خالٍ. مصدر بيانات الهاتف الأصلي المحلي يبقى احتمالاً منفصلاً لا يجوز مسحه أو تحديثه أو نقله دون خطة آمنة. تظل سجلات الممتلكات الخادمية الأخرى مستقلة عن هذا الأرشيف.
+- لا إثبات ملكية مستقل، لا تغيير UID، لا ربط Google على إنتاج، ولا مساس بالممتلكات أو الإدارة. النتائج لا تدعم التغيير الحي بمفردها.
