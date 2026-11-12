@@ -1,0 +1,400 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {inspectLegacyGoogleOwnerBridge} = require(
+  "../deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js"
+);
+
+const nowMs = 1800000000000;
+const incidentCutoffMs = nowMs - 5000000;
+const A = "synthetic-original-owner-AAA";
+const B = "synthetic-pin-owner-BBB";
+const C = "synthetic-social-owner-CCC";
+const accountKey = "07700000000";
+const originalId = "@DEDA-ABC123";
+const challengeHash = "a".repeat(64);
+
+function snapshot() {
+  return {
+    accountKey, originalId,
+    route: {publicId: originalId, kind: "personal", active: true, ownerUid: A},
+    directory: {accountKey, createdUid: B, active: true},
+    credentials: {accountKey, createdUid: B, active: true},
+    social: {publicId: originalId, ownerUid: C},
+    originalUser: {accountKey, sharePersonalId: originalId},
+    pinRegisteredUser: {accountKey, sharePersonalId: null},
+    socialUser: {accountKey, sharePersonalId: originalId},
+  };
+}
+
+function lab() {
+  return {firebaseProjectId: "deda-qa-uid-lab-20261108", twoDeviceSameUid: true};
+}
+
+function prodGoogle() {
+  return {
+    firebaseProjectId: "deda-25b88",
+    verifier: "trusted_production_firebase_auth_admin",
+    revocationChecked: true,
+    providerId: "google.com",
+    verified: true,
+    originalUid: A,
+    preExistingBindingVerified: true,
+    bindingAuditOrigin: "trusted_server_pre_enrollment_v1",
+    enrolledAtMs: incidentCutoffMs - 100000,
+  };
+}
+
+function pin() {
+  return {
+    source: "trusted_server_checker",
+    verified: true,
+    rateLimitEnforced: true,
+    accountKey,
+    verifiedAtMs: nowMs - 1000,
+    challengeHash,
+  };
+}
+
+function independent() {
+  return {
+    source: "trusted_independent_verifier",
+    verified: true,
+    kind: "pre_linked_firebase_identity_provider",
+    priorEnrollmentOrProviderVerified: true,
+    enrolledAtMs: incidentCutoffMs - 100000,
+    originalUid: A,
+    accountKey,
+    verifiedAtMs: nowMs - 900,
+    challengeHash,
+  };
+}
+
+function review() {
+  return {
+    source: "independent_server_review",
+    ownerApproved: true,
+    accountKey,
+    reviewedOriginalUid: A,
+    originalSnapshotBackedUp: true,
+    rollbackDocumented: true,
+    reconciliationPlanDocumented: true,
+    adminPrivilegesSeparatelyVerified: true,
+    challengeHash,
+    reviewedAtMs: nowMs - 500,
+    reviewers: ["synthetic-reviewer-one", "synthetic-reviewer-two"],
+  };
+}
+
+function inspect(overrides={}) {
+  return inspectLegacyGoogleOwnerBridge({
+    labEvidence: lab(),
+    verifiedProductionGoogle: prodGoogle(),
+    originalRecords: snapshot(),
+    pinProof: pin(),
+    independentProof: independent(),
+    reviewRecord: review(),
+    nowMs, incidentCutoffMs,
+    ...overrides,
+  });
+}
+
+function mustDeny(result) {
+  assert.equal(result.decision, "HOLD_FOR_INDEPENDENT_LEGACY_OWNER_PROOF");
+  for (const [key, value] of Object.entries(result)) {
+    if (key.endsWith("Permitted")) assert.equal(value, false, key);
+  }
+  assert.equal(result.internalOfflineOnly, true);
+  for(const key of ["uid", "originalUid", "phone", "email", "idToken",
+      "pin", "customToken", "accountKey", "originalId"]) {
+    assert.equal(key in result, false, "sensitive output " + key);
+  }
+  assert.equal(Object.isFrozen(result), true);
+}
+
+test("actual QA outcome alone cannot link old owner", () => {
+  const r = inspect({verifiedProductionGoogle:null});
+  assert.equal(r.classification, "NO_VERIFIED_PRODUCTION_GOOGLE_AUTH");
+  mustDeny(r);
+});
+
+test("missing QA lab does not block separate trusted legacy review; STILL no login", () => {
+  for (const absent of [undefined, null]) {
+    const r = inspect({labEvidence:absent});
+    assert.equal(r.classification,
+      "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+  }
+});
+
+test("invalid or cross-project QA lab evidence is rejected, never trusted", () => {
+  for(const l of [{}, {twoDeviceSameUid:true,firebaseProjectId:"deda-25b88"},
+    {firebaseProjectId:"deda-qa-uid-lab-20261108",twoDeviceSameUid:false}]) {
+    const r = inspect({labEvidence:l});
+    assert.equal(r.classification, "LAB_PROOF_UNVERIFIED_OR_DIFFERENT_PROJECT");
+    mustDeny(r);
+  }
+});
+
+test("no QA lab and no independently verified production Google remains blocked", () => {
+  const r=inspect({labEvidence:null,verifiedProductionGoogle:null});
+  assert.equal(r.classification, "NO_VERIFIED_PRODUCTION_GOOGLE_AUTH");
+  mustDeny(r);
+});
+
+test("QA Firebase credential must never be treated as production auth", () => {
+  mustDeny(inspect({verifiedProductionGoogle:{
+    ...prodGoogle(), firebaseProjectId:"deda-qa-uid-lab-20261108",
+  }}));
+});
+
+test("production token without trusted verifier fails closed", () => {
+  const r=inspect({verifiedProductionGoogle:{
+    ...prodGoogle(),verifier:"client_supplied_claim",
+  }});
+  assert.equal(r.classification,"NO_VERIFIED_PRODUCTION_GOOGLE_AUTH");
+  mustDeny(r);
+});
+
+test("anonymous, revoked and unsupported providers cannot prove Google link", () => {
+  for(const x of [
+    {providerId:"anonymous"}, {providerId:"password"},
+    {revocationChecked:false}, {verified:false}
+  ]) {
+    const r=inspect({verifiedProductionGoogle:{...prodGoogle(),...x}});
+    assert.equal(r.classification,"NO_VERIFIED_PRODUCTION_GOOGLE_AUTH");
+    mustDeny(r);
+  }
+});
+
+test("newly signed-in Google does not imply historical DEDA ownership", () => {
+  const r=inspect({verifiedProductionGoogle:{
+    ...prodGoogle(), preExistingBindingVerified:false,
+  }});
+  assert.equal(r.classification, "GOOGLE_NOT_HISTORICALLY_BOUND_TO_OLD_UID");
+  mustDeny(r);
+});
+
+test("post-incident provider binding cannot retroactively prove old account", () => {
+  const r=inspect({verifiedProductionGoogle:{
+    ...prodGoogle(), enrolledAtMs:incidentCutoffMs+1,
+  }});
+  assert.equal(r.classification, "GOOGLE_NOT_HISTORICALLY_BOUND_TO_OLD_UID");
+  mustDeny(r);
+});
+
+test("historical Google binding to B or C is reviewed only with its SAME independent UID", () => {
+  for(const uid of [B,C]) {
+    const r=inspect({
+      verifiedProductionGoogle:{...prodGoogle(), originalUid:uid},
+      independentProof:{...independent(),originalUid:uid},
+      reviewRecord:{...review(),reviewedOriginalUid:uid},
+    });
+    assert.equal(r.classification,
+      "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+    const mismatched=inspect({verifiedProductionGoogle:{
+      ...prodGoogle(), originalUid:uid,
+    }});
+    assert.equal(mismatched.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+    mustDeny(mismatched);
+  }
+  const unrelated=inspect({
+    verifiedProductionGoogle:{...prodGoogle(),originalUid:"foreign-unrelated-uid"},
+    independentProof:{...independent(),originalUid:"foreign-unrelated-uid"},
+  });
+  assert.equal(unrelated.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(unrelated);
+});
+
+test("independent proof for B/C cannot borrow owner review for A", () => {
+  for (const uid of [B,C]) {
+    const r=inspect({
+      verifiedProductionGoogle:{...prodGoogle(),originalUid:uid},
+      independentProof:{...independent(),originalUid:uid},
+    });
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+  const wrongAccount=inspect({reviewRecord:{...review(),accountKey:"07799999999"}});
+  assert.equal(wrongAccount.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(wrongAccount);
+});
+test("incomplete historical owner route cannot be accepted", () => {
+  const old=snapshot();
+  delete old.route;
+  const r=inspect({originalRecords:old});
+  assert.equal(r.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(r);
+});
+
+test("PIN alone never passes without independent ownership factor", () => {
+  const r=inspect({independentProof:null});
+  assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(r);
+});
+
+test("old Google proof cannot ride on post-incident device enrollment",()=>{
+  for(const enrolledAtMs of [undefined,incidentCutoffMs,
+    incidentCutoffMs+1]){
+    const r=inspect({independentProof:{...independent(),enrolledAtMs}});
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+});
+test("Google bridge refuses independent review created before proofs",()=>{
+  const r=inspect({reviewRecord:{...review(),reviewedAtMs:nowMs-1500}});
+  assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(r);
+});
+test("missing review, backup or second reviewer cannot authorize", () => {
+  for (const reviewRecord of [
+    null, {...review(),originalSnapshotBackedUp:false},
+    {...review(),reviewers:["same-person","same-person"]},
+    {...review(),rollbackDocumented:false}
+  ]) {
+    const r=inspect({reviewRecord});
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+});
+
+test("historical A/B/C divergence with full *synthetic* review is STILL not a login", () => {
+  const r=inspect();
+  assert.equal(r.classification,
+    "MANUAL_CANONICAL_RECONCILIATION_CANDIDATE_NOT_AUTHORIZED");
+  mustDeny(r);
+});
+
+test("forged client fields or missing server snapshot fail closed", () => {
+  const r=inspect({originalRecords:{route:{ownerUid:A}}});
+  assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+  mustDeny(r);
+});
+
+
+const recoveryAudience = "123456789012-productionrecovery.apps.googleusercontent.com";
+function prospectiveGoogle() {
+  return {
+    verifier:"trusted_google_oidc_backend",
+    issuer:"https://accounts.google.com",
+    audience:recoveryAudience,
+    oauthClientProjectId:"deda-25b88",
+    audienceVerified:true,
+    nonceVerified:true,
+    freshAndUnexpired:true,
+    subjectVerified:true,
+    providerId:"google.com",
+    verified:true,
+  };
+}
+function manualFactor() {
+  return {...independent(),kind:"independent_verified_recovery_factor"};
+}
+function manualCase(overrides={}) {
+  return inspect({
+    verifiedProductionGoogle:null,
+    verifiedProspectiveGoogle:prospectiveGoogle(),
+    serverConfiguredRecoveryOAuthAudience:recoveryAudience,
+    independentProof:manualFactor(),
+    ...overrides,
+  });
+}
+test("NEW Google ID verified via OIDC can only become manual review candidate", () => {
+  const r=manualCase();
+  assert.equal(r.classification,
+    "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+  mustDeny(r);
+});
+test("new trusted Google proof can reach HOLD for owner review without QA lab", () => {
+  for (const absent of [null, undefined]) {
+    const r=manualCase({labEvidence:absent});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+  }
+});
+test("new Google without QA lab or old-account factor remains blocked", () => {
+  const r=manualCase({labEvidence:null,independentProof:null});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+  mustDeny(r);
+});
+test("new Google missing independent legacy factor is blocked", () => {
+  const r=manualCase({independentProof:null});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+  mustDeny(r);
+});
+test("new Google may NOT use a previously-linked-provider type as manual proof", () => {
+  const r=manualCase({independentProof:independent()});
+  assert.equal(r.classification,
+    "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+  mustDeny(r);
+});
+test("client-supplied or mismatched Google audience is never accepted", () => {
+  for(const v of [
+    {verifier:"client"},
+    {audience:"111111-qa.apps.googleusercontent.com"},
+    {oauthClientProjectId:"deda-qa-uid-lab-20261108"},
+    {audienceVerified:false},
+    {nonceVerified:false},
+    {freshAndUnexpired:false},
+    {subjectVerified:false},
+  ]) {
+    const r=manualCase({verifiedProspectiveGoogle:{
+      ...prospectiveGoogle(),...v,
+    }});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+    mustDeny(r);
+  }
+});
+test("both Firebase and OIDC proofs in same request are rejected", () => {
+  const r=manualCase({verifiedProductionGoogle:prodGoogle()});
+  assert.equal(r.classification,"MIXED_GOOGLE_EVIDENCE_LANES_NOT_ALLOWED");
+  mustDeny(r);
+});
+test("new Google may only review independently verified A/B/C, never select a UID", () => {
+  for(const uid of [A,B,C]) {
+    const r=manualCase({independentProof:{
+      ...manualFactor(),originalUid:uid,
+    },reviewRecord:{...review(),reviewedOriginalUid:uid}});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_MANUAL_LEGACY_RECOVERY_CANDIDATE_NOT_AUTHORIZED");
+    mustDeny(r);
+  }
+  const foreign=manualCase({independentProof:{
+    ...manualFactor(),originalUid:"unknown-not-account-owner",
+  }});
+  assert.equal(foreign.classification,"ORIGINAL_UID_ANCHOR_CONFLICT");
+  mustDeny(foreign);
+});
+test("new Google plus PIN but missing two-person owner review cannot claim A", () => {
+  for(const reviewRecord of [null, {...review(),ownerApproved:false},
+    {...review(),originalSnapshotBackedUp:false}]) {
+    const r=manualCase({reviewRecord});
+    assert.equal(r.classification,"OWNER_PROOF_OR_REVIEW_NOT_COMPLETE");
+    mustDeny(r);
+  }
+});
+test("missing trusted OAuth audience configuration always blocks manual claim", () => {
+  for(const config of [null, "", "not-prod-client-id"]) {
+    const r=manualCase({serverConfiguredRecoveryOAuthAudience:config});
+    assert.equal(r.classification,
+      "NEW_GOOGLE_REQUIRES_SERVER_OIDC_AND_INDEPENDENT_MANUAL_OWNER_PROOF");
+    mustDeny(r);
+  }
+});
+
+test("source module is pure and cannot write/issue tokens/link users", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const src=fs.readFileSync(path.resolve(__dirname,
+    "../deda_100441_lab_to_legacy_google_proof_gate_PRIVATE_NOT_EXPORTED.js"),"utf8");
+  for(const term of ["createCustomToken(", "signInWithCredential(",
+    "signInAnonymously(", "updateUser(", "deleteUser(", "linkWithCredential(",
+    ".set(", ".update(", ".delete(", "firebase-admin", "firebase-functions"]) {
+    assert.equal(src.includes(term),false,term);
+  }
+});
