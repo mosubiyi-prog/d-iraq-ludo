@@ -1,0 +1,88 @@
+name: DEDA 100441 isolated same-UID PIN session safety QA (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - "lib/deda_pin_auth.dart"
+      - "lib/deda_100431_linked_owner_session_policy.dart"
+      - "test/deda_owner_session_compat_private_test.dart"
+      - ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deda-100441-isolated-pin-same-uid-qa
+  cancel-in-progress: false
+
+jobs:
+  same-uid-auth-session-safe-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse changes to protected production/Play/Firebase app inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base = "308a846ef0c44169929a2908adb0457b4b028672"
+          allowed = {
+            "lib/deda_pin_auth.dart",
+            "lib/deda_100431_linked_owner_session_policy.dart",
+            "test/deda_owner_session_compat_private_test.dart",
+            ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml",
+            "docs/DEDA_100441_OWNER_SOURCE_AND_RECOVERY_INTEGRATION_AUDIT_2026-11-12.md",
+          }
+          modified = set(subprocess.check_output([
+            "git", "diff", "--name-only", base, "HEAD"], text=True).splitlines())
+          assert modified <= allowed, f"Unexpected protected file changes: {sorted(modified - allowed)}"
+          policy = open("lib/deda_100431_linked_owner_session_policy.dart").read()
+          pin = open("lib/deda_pin_auth.dart").read()
+          assert "canOpenExistingPinSessionOnOriginalUid(" in policy
+          assert "await _verifiedExistingPinUid(accountKey)" in pin
+          assert "await _openSession(accountKey, expectedOriginalUid: expectedUid)" in pin
+          assert pin.index("await _verifiedExistingPinUid(accountKey)") < pin.index(
+            "await _openSession(accountKey, expectedOriginalUid: expectedUid)")
+          print("PASS_100441_ORIGINAL_UID_CHECK_BEFORE_PIN_SESSION_WRITE")
+          PY
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.7"
+          channel: stable
+          cache: false
+
+      - name: Resolve dependencies and analyze original UID and PIN implementation
+        run: |
+          set -euo pipefail
+          flutter pub get
+          dart analyze --no-fatal-warnings lib/deda_pin_auth.dart lib/deda_100431_linked_owner_session_policy.dart
+
+      - name: Owner UID PIN, Google and session regression tests (no Firebase connection)
+        run: |
+          set -euo pipefail
+          flutter test --no-pub \
+            test/deda_owner_session_compat_private_test.dart \
+            test/deda_google_original_uid_link_private_test.dart \
+            test/deda_session_missing_owner_entry_100441_test.dart
+
+      - name: PIN guard remains compatible with signed 100441 opt-in compilation
+        run: |
+          set -euo pipefail
+          flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
+            test/deda_pin_same_uid_100441_optin_private_test.dart
+
+      - name: No APK, Play, Firebase deploy, or user data changes
+        run: echo 'PASS_PRIVATE_QA_ONLY_NO_APK_NO_FIREBASE_NO_PLAY'
