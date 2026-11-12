@@ -108,10 +108,27 @@ def _pin_guard_100441(ours, base, theirs):
             and "await _provePin(accountKey: accountKey, pin: pin);" in base
             and "final expectedUid = dedaLinkedOwnerCompatEnabled" in theirs
             and "await _openSession(accountKey, expectedOriginalUid: expectedUid);" in theirs):
-        result = once(theirs,
-            "await _provePin(accountKey: accountKey, pin: pin);",
-            "await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));",
-            "100441 preserve PIN proof wait")
+        # The linked-owner source now explicitly pins the verified UID during
+        # PIN proof. Keep that argument in assembled 100441; never silently
+        # regress to a proof that can create/switch an anonymous principal.
+        scoped_proof = (
+            "await _provePin(\\n"
+            "      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid);"
+        )
+        legacy_proof = "await _provePin(accountKey: accountKey, pin: pin);"
+        if scoped_proof in theirs:
+            result = once(
+                theirs, scoped_proof,
+                "await DedaAuthRuntime.wait(() => _provePin(\\n"
+                "      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid));",
+                "100441 preserve UID-bound PIN proof wait")
+        elif legacy_proof in theirs:
+            result = once(
+                theirs, legacy_proof,
+                "await DedaAuthRuntime.wait(() => _provePin(accountKey: accountKey, pin: pin));",
+                "100441 preserve legacy PIN proof wait")
+        else:
+            return None
         return once(result,
             "await _openSession(accountKey, expectedOriginalUid: expectedUid);",
             "await DedaAuthRuntime.wait(() => _openSession(accountKey, expectedOriginalUid: expectedUid));",
