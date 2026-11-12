@@ -96,7 +96,11 @@ jobs:
           end = backend.find("locationShareIdInfo(", start)
           section = backend[start:end] if end >= 0 else backend[start:]
           assert "canStageOriginalShareProjection(" in section
-          assert section.index("canStageOriginalShareProjection(") < section.index("await userRef.set(")
+          write = ("await DedaAuthRuntime.wait(() => userRef.set("
+                   if "await DedaAuthRuntime.wait(() => userRef.set(" in section
+                   else "await userRef.set(")
+          assert write in section, "full assembly has no identifiable owner write"
+          assert section.index("canStageOriginalShareProjection(") < section.index(write)
           assert "DedaGoogleSettingsLinkCard(" in (p / "main.dart").read_text()
           assert "DedaSessionDiagnosticReadOnlyTile(" in (p / "main.dart").read_text()
           print("PASS_VERIFIED_REAL_APP_FULL_ASSEMBLY_SAME_UID_GUARD_PRESENT")
