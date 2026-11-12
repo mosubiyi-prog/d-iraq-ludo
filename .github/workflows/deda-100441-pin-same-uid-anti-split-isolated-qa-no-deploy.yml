@@ -153,7 +153,16 @@ jobs:
           lookup = pin.split("  static Future<bool> accountExists(String phone) async {", 1)[1]
           lookup = lookup.split("  static Future<void> _provePin(", 1)[0]
           assert "mayImplicitlyPrepareOwnerSession(" in lookup
-          assert lookup.index("mayImplicitlyPrepareOwnerSession(") < lookup.index("await _ensureAnonymousSession();")
+          # Full 100441 assembly correctly wraps session preparation in the
+          # original shared AuthRuntime lane; accept only that reviewed form
+          # or the untouched source form, never a new Auth side effect.
+          prepared = (
+              "await DedaAuthRuntime.wait(() => _ensureAnonymousSession());"
+              if "await DedaAuthRuntime.wait(() => _ensureAnonymousSession());" in lookup
+              else "await _ensureAnonymousSession();"
+          )
+          assert prepared in lookup
+          assert lookup.index("mayImplicitlyPrepareOwnerSession(") < lookup.index(prepared)
           assert "deda-explicit-auth-entry-required-no-new-uid" in lookup
           pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
           pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
