@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - deda-100440-session-rescue-isolated-owner-review-2026-11-07
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
     paths:
       - '.github/workflows/deda-100441-complete-signed-session-diagnostic-no-play.yml'
   workflow_dispatch:
@@ -356,6 +357,7 @@ jobs:
             'DEDA owner signed 100441 QA APK from full 100440 baseline, original signing identity and package, no Play release.' \
             'Preserves all features in signed 100440. Adds safe same-UID rescue, friends retry and read-only session diagnostics in Settings. Premium four-letter IDs supported.' \
             'Original UID and phone directory still conflict on Firebase. Linked-only automatic recovery is disabled; do not uninstall, sign out or clear app data. Full historical financial restore is NOT proven.' \
+            'NEW PRIVATE OWNER TEST: Google settings card may link ONLY the current detached anonymous UID after separate explicit consent, when both old owner records mismatch. This DOES NOT restore original DEDA ID, balances, admin access or purchases. Do not mistake this for legacy account recovery.' \
             'Never uninstall the current DEDA app and never clear app storage. Install OVER existing app.' \
             'Signed archive and feature tests pass in CI; physical-phone operation is for owner to validate after delivery.' \
             > "$output/README-OWNER-INSTALL.txt"
