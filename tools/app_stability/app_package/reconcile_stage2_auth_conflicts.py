@@ -67,6 +67,18 @@ def _backend(ours, base, theirs):
             theirs, "var user = await _ensurePublicUser();",
             "var user = await DedaAuthRuntime.wait(() => _ensurePublicUser());",
             "100441 preserve AuthRuntime and no implicit owner UID")
+    # Never discard the signed shared Auth lane while disabling implicit
+    # anonymous creation for an absent owner during recovery. Only this exact
+    # reviewed overlap is reconciled; unknown overlaps remain blocked.
+    if ("final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.anonymous(auth));" in ours
+            and "final credential = await auth.signInAnonymously();" in base
+            and "deda-explicit-auth-entry-required-no-new-uid" in theirs
+            and "mayImplicitlyPrepareOwnerSession(" in theirs
+            and "final credential = await auth.signInAnonymously();" in theirs):
+        return once(
+            theirs, "final credential = await auth.signInAnonymously();",
+            "final credential = await DedaAuthRuntime.wait(() => DedaAuthRuntime.anonymous(auth));",
+            "100441 preserve AuthRuntime and block silent new UID")
     # Both imports are necessary: unified public premium-ID routing and
     # server-verifiable owner UIDs are unrelated authorities.
     if ("import 'deda_qa32_public_recipient_resolver.dart';" in ours
