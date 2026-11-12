@@ -119,7 +119,7 @@ class DedaBackend {
       // becomes non-anonymous after the verified provider link. Do NOT
       // mistake that signed-in DEDA user for an administrator and sign out.
       if (dedaLinkedOwnerCompatEnabled &&
-          DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)) {
+          DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)) {
         if (await DedaLinkedOwnerSessionPolicy.verified(user, cleanKey)) {
           return user;
         }
