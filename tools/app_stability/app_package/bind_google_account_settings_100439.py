@@ -147,11 +147,20 @@ def bind(project):
 
     backend_path = project / BACKEND
     backend_old = backend_path.read_text()
-    backend_new = exactly_once(
-        backend_old,
-        "DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)",
-        "DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)",
-        "protect original user vs admin in backend after Google linking")
+    old_owner_gate = (
+        "DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)")
+    verified_owner_gate = (
+        "DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)")
+    # 100441's one-session source may already contain the stronger reviewed
+    # provider gate. Do not replace or duplicate it during full assembly.
+    if backend_old.count(verified_owner_gate) == 1 and old_owner_gate not in backend_old:
+        backend_new = backend_old
+    elif backend_old.count(old_owner_gate) == 1 and verified_owner_gate not in backend_old:
+        backend_new = exactly_once(
+            backend_old, old_owner_gate, verified_owner_gate,
+            "protect original user vs admin in backend after Google linking")
+    else:
+        abort("ambiguous original-owner provider gate in full assembly")
     dependency = project / PUBSPEC
     old_pub = dependency.read_text()
     if "google_sign_in:" in old_pub:
