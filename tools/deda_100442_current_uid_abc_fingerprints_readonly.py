@@ -35,6 +35,92 @@ def read(db, group: str, document: str, fields: list[str]):
     return snap.to_dict() if snap.exists else None
 
 
+def inspect_archived_original_source(db, account, original_id, candidates):
+    """Exact approved account, max 25 source-only captures. No records/amount reads.
+
+    A paired historical archive is supporting provenance, NOT a credential
+    or proof of ownership. Its creation date/device ID cannot authorize login.
+    Never enumerate a different DEDA account or download financial payloads.
+    """
+    if (re.fullmatch(r"(?:07\d{9}|9647\d{9})", account) is None or
+            re.fullmatch(r"@DEDA-[A-Z0-9]{6}", original_id) is None or
+            len(candidates) != 3 or len(set(candidates.values())) != 3):
+        print("SAFE_STOP_ARCHIVE_SCOPE_UNVERIFIED")
+        return
+
+    fields = ["format", "kind", "accountKey", "sourceUid", "installId",
+              "captureId", "createdAt"]
+    query = (db.collection("deda_progress_evidence").document(account)
+             .collection("captures")
+             .order_by("createdAt", direction=firestore.Query.DESCENDING)
+             .limit(26).select(fields))
+    captured = query.get()
+    if len(captured) > 25:
+        print("SAFE_STOP_ARCHIVE_TOO_MANY_CAPTURES_FOR_BOUNDED_AUDIT")
+        return
+
+    observed = {label: False for label in candidates}
+    paired = {label: False for label in candidates}
+    unexpected = False
+    for snapshot in captured:
+        row = snapshot.to_dict() if snapshot.exists else None
+        if not isinstance(row, dict):
+            unexpected = True
+            continue
+        uid = row.get("sourceUid")
+        captures = row.get("captureId")
+        install = row.get("installId")
+        if (row.get("format") != 1 or
+                row.get("kind") != "legacy-local-evidence" or
+                row.get("accountKey") != account or
+                not isinstance(captures, str) or
+                re.fullmatch(r"[A-Za-z0-9_-]{20,80}", captures) is None or
+                snapshot.id != captures or
+                not isinstance(install, str) or
+                re.fullmatch(r"[0-9a-f]{48}", install) is None):
+            unexpected = True
+            continue
+
+        label = next((k for k, candidate in candidates.items()
+                      if candidate == uid), None)
+        if label is None:
+            unexpected = True
+            continue
+        observed[label] = True
+
+        # Only the exact already-observed progress capture ID. Do not read
+        # records.localSnapshot (purchases/diamond payload).
+        sidecar = (db.collection("deda_purchase_evidence")
+                   .document(account).collection("captures")
+                   .document(captures).get(field_paths=[
+                       "format", "kind", "accountKey", "sourceUid",
+                       "installId", "captureId", "createdAt",
+                       "records.originalId", "records.progressCaptureId",
+                   ]))
+        purchase = sidecar.to_dict() if sidecar.exists else None
+        records = purchase.get("records") if isinstance(purchase, dict) else None
+        if (isinstance(purchase, dict) and
+                isinstance(records, dict) and
+                purchase.get("format") == 1 and
+                purchase.get("kind") == "legacy-purchase-evidence" and
+                purchase.get("accountKey") == account and
+                purchase.get("sourceUid") == uid and
+                purchase.get("installId") == install and
+                purchase.get("captureId") == captures and
+                records.get("originalId") == original_id and
+                records.get("progressCaptureId") == captures):
+            paired[label] = True
+
+    print("ORIGINAL_SOURCE_ARCHIVE_METADATA_READ_ONLY_COMPLETE")
+    print("ORIGINAL_SOURCE_ARCHIVE_OBSERVATIONS_BOUNDED", len(captured))
+    for label in ("A", "B", "C"):
+        print("OLD_SOURCE_PROGRESS_" + label, "YES" if observed[label] else "NO")
+        print("OLD_SOURCE_PAIRED_PURCHASE_" + label,
+              "YES" if paired[label] else "NO")
+    print("OLD_SOURCE_UNCLASSIFIED_OR_INVALID", "YES" if unexpected else "NO")
+    print("OLD_SOURCE_ARCHIVE_IS_NOT_OWNERSHIP_PROOF_OR_SPENDABLE_BALANCE")
+
+
 def main() -> int:
     raw = os.environ.get("DEDA_PRIMARY_FIREBASE_SA", "")
     if not raw:
@@ -96,6 +182,9 @@ def main() -> int:
         print("PASS_PRODUCTION_READONLY_ABC_FINGERPRINT_SNAPSHOT_NO_WRITES")
         for label, uid in (("A", a), ("B", b), ("C", c)):
             print(f"DEDA_UID_FINGERPRINT_{label}={fingerprint(uid)}")
+        inspect_archived_original_source(
+            db, account, original_id, {"A": a, "B": b, "C": c}
+        )
         print("RESULT_GUIDE: compare CURRENT PHONE fingerprint exactly; "
               "a match means this phone's observed UID matches that server UID; "
               "a mismatch to all means a different UID (D) at observation time.")
