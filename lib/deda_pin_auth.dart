@@ -148,8 +148,28 @@ class DedaPinAuth {
   static Future<void> _provePin({
     required String accountKey,
     required String pin,
+    String? expectedOriginalUid,
   }) async {
-    final user = await _ensurePinSessionForAccount(accountKey);
+    // In the linked-owner pilot, never initiate anonymous Auth creation,
+    // account switching or a PIN attempt under an unverified principal.
+    // Existing 100340 create/sign-in behavior stays unchanged when null.
+    if (expectedOriginalUid != null) {
+      final live = FirebaseAuth.instance.currentUser;
+      if (live == null || live.uid != expectedOriginalUid ||
+          live.isAnonymous ||
+          !DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(
+              live, accountKey)) {
+        throw StateError('original-pin-owner-changed-before-proof');
+      }
+    }
+    final user = expectedOriginalUid == null
+        ? await _ensurePinSessionForAccount(accountKey)
+        : FirebaseAuth.instance.currentUser!;
+    if (expectedOriginalUid != null &&
+        (user.uid != expectedOriginalUid ||
+         FirebaseAuth.instance.currentUser?.uid != expectedOriginalUid)) {
+      throw StateError('original-pin-owner-changed-before-proof');
+    }
     final attempt = FirebaseFirestore.instance
         .collection('deda_auth_attempts')
         .doc(user.uid);
@@ -381,7 +401,8 @@ class DedaPinAuth {
     final expectedUid = dedaLinkedOwnerCompatEnabled
         ? await _verifiedExistingPinUid(accountKey)
         : null;
-    await _provePin(accountKey: accountKey, pin: pin);
+    await _provePin(
+      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid);
     if (expectedUid != null &&
         FirebaseAuth.instance.currentUser?.uid != expectedUid) {
       throw StateError('original-pin-uid-changed-before-session-write');
