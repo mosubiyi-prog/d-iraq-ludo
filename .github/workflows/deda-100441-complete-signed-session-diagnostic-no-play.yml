@@ -126,12 +126,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
-            lib/main.dart lib/deda_backend.dart android assets firestore.rules firebase.json \
-            storage.rules google-services.json pubspec.yaml pubspec.lock functions
-          git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
-            android assets firestore.rules firebase.json storage.rules google-services.json \
-            pubspec.yaml pubspec.lock functions
+          if [[ "$GITHUB_REF_NAME" == "deda-100441-source-audit-isolated-recovery-2026-11-12" ]]; then
+            # Build EXACTLY the source that already passed the comprehensive
+            # same-UID/PIN/Google/Firebase-free full assembly QA. This is
+            # STRONGER than an unscoped older-branch comparison: no source,
+            # Functions or platform inputs may drift between QA and signing.
+            git diff --exit-code f883fd972e292ebbdf0ffe5a11d7cfc03b4d533f HEAD -- \
+              lib/ functions/ android/ assets/ firestore.rules firebase.json \
+              storage.rules google-services.json pubspec.yaml pubspec.lock
+            # Also prove the protected APK's release inputs have never changed.
+            git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
+              lib/main.dart functions/index.js android/ assets/ firestore.rules \
+              firebase.json storage.rules google-services.json pubspec.yaml pubspec.lock
+          else
+            git diff --exit-code 958ed9a3c9cce0f207e98d8956e8b659e1ff7246 HEAD -- \
+              lib/main.dart lib/deda_backend.dart android assets firestore.rules firebase.json \
+              storage.rules google-services.json pubspec.yaml pubspec.lock functions
+            git diff --exit-code d609d5ac55bf0c4d29513d6345b4797d7a716527 HEAD -- \
+              android assets firestore.rules firebase.json storage.rules google-services.json \
+              pubspec.yaml pubspec.lock functions
+          fi
           node --test test/deda_gm_admin_compensation_100m_server_only_100439.test.js
           python3 -m unittest discover -s test -p test_deda_gm_admin_compensation_100m_100439.py
           python3 tools/deda_google_auth_readiness_100439.py \
