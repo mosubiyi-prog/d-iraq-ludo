@@ -25,6 +25,31 @@ void main() {
         throwsArgumentError);
   });
 
+  test('separate Google link is offered only for detached anonymous UID', () {
+    DedaSessionProbeReport sample({
+      DedaProbeKind kind = DedaProbeKind.anonymous,
+      DedaProbeMatch original = DedaProbeMatch.differentUid,
+      DedaProbeMatch directory = DedaProbeMatch.differentUid,
+      bool google = false,
+      bool password = false,
+    }) => DedaSessionProbeReport(
+      kind, original, directory, google, password,
+      sessionFingerprint: 'B2A482AB8AB94AB3',
+    );
+    bool eligible(DedaSessionProbeReport r) =>
+        DedaSessionDiagnosticReadOnly.mayOfferDetachedGoogleLink(r);
+
+    expect(eligible(sample()), true);
+    expect(eligible(sample(kind: DedaProbeKind.linked)), false);
+    expect(eligible(sample(kind: DedaProbeKind.signedOut)), false);
+    expect(eligible(sample(original: DedaProbeMatch.sameUid)), false);
+    expect(eligible(sample(directory: DedaProbeMatch.sameUid)), false);
+    expect(eligible(sample(original: DedaProbeMatch.unavailable)), false);
+    expect(eligible(sample(directory: DedaProbeMatch.unavailable)), false);
+    expect(eligible(sample(google: true)), false);
+    expect(eligible(sample(password: true)), false);
+  });
+
   test('fingerprint is diagnostic, not a Firebase owner assertion', () {
     final value = DedaSessionDiagnosticReadOnly.fingerprintOfUid(
         'synthetic-anonymous-current-uid');
