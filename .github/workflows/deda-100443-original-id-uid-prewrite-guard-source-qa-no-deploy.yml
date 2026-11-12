@@ -49,8 +49,8 @@ jobs:
           pin_section = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
           pin_section = pin_section.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           assert "final expectedUid = dedaLinkedOwnerCompatEnabled" in pin_section
-          assert pin_section.index("await _verifiedExistingPinUid(accountKey)") < pin_section.index("await _provePin(accountKey: accountKey, pin: pin)")
-          assert pin_section.index("await _provePin(accountKey: accountKey, pin: pin)") < pin_section.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
+          assert pin_section.index("await _verifiedExistingPinUid(accountKey)") < pin_section.index("await _provePin(\n      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid)")
+          assert pin_section.index("await _provePin(\n      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid)") < pin_section.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
           assert "original-pin-uid-changed-before-session-write" in pin_section
           assert "dedaLinkedOwnerCompatEnabled" in pin_section
           index = Path("functions/index.js").read_text()
