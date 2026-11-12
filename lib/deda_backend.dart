@@ -70,6 +70,16 @@ class DedaBackend {
     final auth = FirebaseAuth.instance;
     final currentUser = auth.currentUser;
     if (currentUser != null) return currentUser;
+    // A public-section refresh must not silently create yet another Firebase
+    // UID while recovery mode is active. The user must explicitly choose
+    // existing-account login or create-account; DedaPinAuth.createAccount
+    // remains the dedicated explicit new-account route.
+    if (!DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+      linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+      hasCurrentPrincipal: false,
+    )) {
+      throw StateError('deda-explicit-auth-entry-required-no-new-uid');
+    }
     final credential = await auth.signInAnonymously();
     if (credential.user == null) throw StateError('anonymous-auth-failed');
     return credential.user!;
