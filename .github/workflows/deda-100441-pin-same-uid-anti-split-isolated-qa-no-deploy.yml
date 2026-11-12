@@ -8,6 +8,7 @@ on:
       - "lib/deda_pin_auth.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "tools/app_stability/app_package/reconcile_stage2_auth_conflicts.py"
+      - "tools/app_stability/app_package/bind_google_account_settings_100439.py"
       - "test/deda_owner_session_compat_private_test.dart"
       - ".github/workflows/deda-100441-pin-same-uid-anti-split-isolated-qa-no-deploy.yml"
 
@@ -146,6 +147,9 @@ jobs:
           pin_signin = pin.split("  static Future<Map<String, dynamic>> signIn({", 1)[1]
           pin_signin = pin_signin.split("  static Future<void> markCurrentDeviceTrusted(", 1)[0]
           policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
+          backend = (root / "deda_backend.dart").read_text()
+          assert backend.count("DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(user, cleanKey)") == 1
+          assert "DedaLinkedOwnerSessionPolicy.emailMatches(user.email, cleanKey)" not in backend
           main = (root / "main.dart").read_text()
           assert "await _verifiedExistingPinUid(accountKey)" in pin
           assert pin_signin.index("_verifiedExistingPinUid(accountKey)") < pin_signin.index("_provePin(")
