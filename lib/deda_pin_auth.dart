@@ -375,10 +375,17 @@ class DedaPinAuth {
     }
 
     final accountKey = accountKeyForPhone(phone);
-    await _provePin(accountKey: accountKey, pin: pin);
+    // Linked-owner recovery must reject a different/anonymous Firebase UID
+    // BEFORE _provePin writes deda_auth_attempts under that UID.  In 100340
+    // compatibility mode this preflight is disabled: preserve existing login.
     final expectedUid = dedaLinkedOwnerCompatEnabled
         ? await _verifiedExistingPinUid(accountKey)
         : null;
+    await _provePin(accountKey: accountKey, pin: pin);
+    if (expectedUid != null &&
+        FirebaseAuth.instance.currentUser?.uid != expectedUid) {
+      throw StateError('original-pin-uid-changed-before-session-write');
+    }
     await _openSession(accountKey, expectedOriginalUid: expectedUid);
 
     final user = FirebaseAuth.instance.currentUser;
