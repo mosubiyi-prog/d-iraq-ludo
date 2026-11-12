@@ -128,7 +128,7 @@ def inspect_existing_assets_readonly(db, account, original_id, candidates):
     The 100340 local wallet and old task progress are NOT implied by missing
     cloud records. Print only statuses/counts; no IDs, names or balances.
     """
-    if (re.fullmatch(r"(?:07\\d{9}|9647\\d{9})", account) is None or
+    if (re.fullmatch(r"(?:07\d{9}|9647\d{9})", account) is None or
             re.fullmatch(r"@DEDA-[A-Z0-9]{6}", original_id) is None or
             len(candidates) != 3 or len(set(candidates.values())) != 3):
         print("SAFE_STOP_ASSET_AUDIT_SCOPE")
@@ -284,7 +284,7 @@ def inspect_existing_assets_readonly(db, account, original_id, candidates):
         league.get("accountKey") == account else "CONFLICT_UNVERIFIED")
     control = document("deda_weekly_direct_control/active", ["weekId"])
     week = control.get("weekId") if control else None
-    if isinstance(week, str) and re.fullmatch(r"20\\d{2}-\\d{2}-\\d{2}", week):
+    if isinstance(week, str) and re.fullmatch(r"20\d{2}-\d{2}-\d{2}", week):
         score = document(f"deda_weekly_direct_weeks/{week}/scores/{original_id}",
                          ["weekId", "publicId", "weeklyXp"])
         say("CURRENT_WEEK_SCORE",
