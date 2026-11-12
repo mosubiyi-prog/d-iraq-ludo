@@ -89,7 +89,12 @@ jobs:
           p = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
           backend = (p / "deda_backend.dart").read_text()
           anchor = "static Future<Map<String, String>> ensureLocationShareIdentity({"
-          section = backend[backend.index(anchor):backend.index("static Future<Map<String, dynamic>?> locationShareIdInfo(", backend.index(anchor))]
+          start = backend.find(anchor)
+          assert start >= 0, "full assembly missing original ID service"
+          # The verified assembled 100436 backend may not include the later
+          # standalone locationShareIdInfo sibling from repository source.
+          end = backend.find("locationShareIdInfo(", start)
+          section = backend[start:end] if end >= 0 else backend[start:]
           assert "canStageOriginalShareProjection(" in section
           assert section.index("canStageOriginalShareProjection(") < section.index("await userRef.set(")
           assert "DedaGoogleSettingsLinkCard(" in (p / "main.dart").read_text()
