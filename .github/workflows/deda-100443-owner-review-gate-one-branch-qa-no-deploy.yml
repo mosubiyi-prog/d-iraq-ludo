@@ -1,0 +1,56 @@
+name: DEDA 100443 original account owner proof one-branch QA NO DEPLOY
+on:
+  push:
+    branches:
+      - deda-100441-source-audit-isolated-recovery-2026-11-12
+    paths:
+      - "functions/deda_100441_owner_split_identity_challenge_review_private_v1.js"
+      - "test/deda_100443_legacy_owner_review_no_grant.test.js"
+      - ".github/workflows/deda-100443-owner-review-gate-one-branch-qa-no-deploy.yml"
+permissions:
+  contents: read
+concurrency:
+  group: deda-100443-one-branch-owner-proof
+  cancel-in-progress: false
+jobs:
+  historical-owner-proof-guard-source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify original Firebase/Play/protected app unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
+            lib/main.dart android/ assets/ firebase.json .firebaserc firestore.rules \
+            storage.rules functions/index.js pubspec.yaml pubspec.lock
+          node - <<'JS'
+          const fs = require('fs');
+          const path = 'functions/deda_100441_owner_split_identity_challenge_review_private_v1.js';
+          const gate = fs.readFileSync(path,'utf8');
+          const idx = fs.readFileSync('functions/index.js','utf8');
+          for(const forbidden of ['createCustomToken(', 'signInWithCredential(', '.set(', '.update(', '.delete(', '.batch(', '.runTransaction(', 'firebase-admin']) {
+            if(gate.includes(forbidden)) throw Error('unexpected owner gate authorization/mutation: '+forbidden);
+          }
+          if(idx.includes('deda_100441_owner_split_identity_challenge_review_private_v1')) {
+            throw Error('owner gate must not be exported or deployed');
+          }
+          if(!gate.includes('priorEnrollmentOrProviderVerified') ||
+             !gate.includes('originalSnapshotBackedUp') ||
+             !gate.includes('reviewers.length !== 2') ||
+             !gate.includes('loginPermitted:false')) {
+            throw Error('owner verification safeguards missing');
+          }
+          console.log('PASS_NON_EXPORTED_GATED_OWNER_PROOF_NO_PRIVILEGE_NO_DATA_MODIFICATION');
+          JS
+      - name: Verify existing historical review gate on synthetic split owner case
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check functions/deda_100441_owner_split_identity_challenge_review_private_v1.js
+          node --test test/deda_100443_legacy_owner_review_no_grant.test.js
+      - name: No Firebase/Play deployment, no APK or credentials
+        run: echo PASS_OWNER_REVIEW_GATE_SOURCE_ONLY_SAFE_STOP
