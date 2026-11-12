@@ -85,5 +85,39 @@ jobs:
           flutter test --no-pub --dart-define=DEDA_STEP2_LINKED_OWNER_COMPAT=true \
             test/deda_pin_same_uid_100441_optin_private_test.dart
 
+      - name: Verify guard survives EXACT full signed-100441 source assembly (no APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          import os
+          wf = Path(".github/workflows/deda-100441-complete-signed-session-diagnostic-no-play.yml").read_text()
+          start = wf.index("      - name: Reconstruct FULL protected 100439")
+          run = wf.index("        run: |\n", start) + len("        run: |\n")
+          end = wf.index("      - name: Analyze entire assembled entry", run)
+          script = dedent(wf[run:end].rstrip()) + "\n"
+          assert 'merge_stage2_into_protected_100436.py' in script
+          assert 'bind_session_diagnostic_readonly_100441.py' in script
+          target = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-exact-rebuild-source.sh"
+          target.write_text(script)
+          print("PASS_REUSED_EXACT_SIGNED_100441_ASSEMBLY_RECIPE")
+          PY
+          bash "$RUNNER_TEMP/deda-100441-exact-rebuild-source.sh"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          root = Path(os.environ["RUNNER_TEMP"]) / "deda-100441-complete-signed-app" / "lib"
+          pin = (root / "deda_pin_auth.dart").read_text()
+          policy = (root / "deda_100431_linked_owner_session_policy.dart").read_text()
+          main = (root / "main.dart").read_text()
+          assert "await _verifiedExistingPinUid(accountKey)" in pin
+          assert "canOpenExistingPinSessionOnOriginalUid(" in policy
+          assert "DedaGoogleSettingsLinkCard(" in main
+          assert "DedaSessionDiagnosticReadOnlyTile(" in main
+          print("PASS_FULL_100441_ASSEMBLY_INCLUDES_SAME_UID_GUARD_GOOGLE_AND_DIAGNOSTICS")
+          PY
+
       - name: No APK, Play, Firebase deploy, or user data changes
         run: echo 'PASS_PRIVATE_QA_ONLY_NO_APK_NO_FIREBASE_NO_PLAY'
