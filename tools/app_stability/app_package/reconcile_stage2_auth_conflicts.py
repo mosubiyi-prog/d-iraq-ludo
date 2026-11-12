@@ -22,7 +22,40 @@ def once(text, old, new, description):
     return text.replace(old, new, 1)
 
 
+def _backend_share_prewrite_guard_100443(ours, base, theirs):
+    """Review ONLY the two original-ID projection overlaps from 100443.
+
+    Keep both the signed AuthRuntime.wait wrappers and the new owner-UID
+    server-preflight. Unknown overlaps always stay blocked by the merger.
+    """
+    if ("await DedaAuthRuntime.wait(() => userRef.set({" in ours
+            and "await userRef.set({" in base
+            and "original-share-session-changed-before-user-write" in theirs
+            and "await userRef.set({" in theirs):
+        return once(
+            theirs, "await userRef.set({",
+            "await DedaAuthRuntime.wait(() => userRef.set({",
+            "100443 original user write retains runtime guard")
+
+    if ("final existing = await DedaAuthRuntime.wait(() => ref.get());" in ours
+            and "await DedaAuthRuntime.wait(() => ref.set({" in ours
+            and "original-share-session-changed-before-route-write" in theirs
+            and "original-share-route-owner-conflict" in theirs):
+        result = once(
+            theirs, "final existing = await ref.get();",
+            "final existing = await DedaAuthRuntime.wait(() => ref.get());",
+            "100443 original route read retains runtime guard")
+        return once(
+            result, "await ref.set({",
+            "await DedaAuthRuntime.wait(() => ref.set({",
+            "100443 original route write retains runtime guard")
+    return None
+
+
 def _backend(ours, base, theirs):
+    reviewed_id = _backend_share_prewrite_guard_100443(ours, base, theirs)
+    if reviewed_id is not None:
+        return reviewed_id
     # Both imports are necessary: unified public premium-ID routing and
     # server-verifiable owner UIDs are unrelated authorities.
     if ("import 'deda_qa32_public_recipient_resolver.dart';" in ours
