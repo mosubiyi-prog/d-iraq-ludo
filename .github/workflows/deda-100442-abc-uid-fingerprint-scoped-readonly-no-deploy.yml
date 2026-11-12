@@ -1,10 +1,11 @@
-name: DEDA 100442 A B C historical UID fingerprints READ ONLY NO DEPLOY
+name: DEDA 100442 scoped old UID and archive evidence READ ONLY NO DEPLOY
 on:
   push:
     branches:
       - deda-100441-source-audit-isolated-recovery-2026-11-12
     paths:
       - '.github/workflows/deda-100442-abc-uid-fingerprint-scoped-readonly-no-deploy.yml'
+      - 'tools/deda_100442_current_uid_abc_fingerprints_readonly.py'
   workflow_dispatch:
 
 permissions:
@@ -40,6 +41,14 @@ jobs:
           for forbidden in (".set(", ".update(", ".delete(", ".add(", "create_custom_token", "revoke_refresh_tokens"):
               assert forbidden not in script, f"Unexpected Firebase mutation: {forbidden}"
           assert '"ownerUid"' in script and '"createdUid"' in script
+          assert 'def inspect_archived_original_source' in script
+          assert 'deda_progress_evidence' in script
+          assert 'deda_purchase_evidence' in script
+          assert 'limit(26).select(fields)' in script
+          assert '"records.localSnapshot"' not in script
+          assert 'record.get("pin")' not in script and '"pin"' not in script
+          assert '"balance"' not in script and '"admin"' not in script
+          assert 'OLD_SOURCE_ARCHIVE_IS_NOT_OWNERSHIP_PROOF_OR_SPENDABLE_BALANCE' in script
           print("PASS_NO_UID_AUTH_RULES_DATA_OR_PLAY_MUTATION")
           PY
       - uses: actions/setup-python@v5
@@ -47,7 +56,7 @@ jobs:
           python-version: '3.12'
       - name: Install audited production Firestore READ ONLY SDK
         run: python3 -m pip install --quiet google-cloud-firestore==2.21.0
-      - name: Match the 3 known candidate UID fingerprints without printing raw IDs
+      - name: Read exact owner-scoped historic UID fingerprints and bounded progress/purchase metadata
         shell: bash
         run: |
           set -euo pipefail
