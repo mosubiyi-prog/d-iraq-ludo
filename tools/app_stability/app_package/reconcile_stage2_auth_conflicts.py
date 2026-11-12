@@ -112,14 +112,14 @@ def _pin_guard_100441(ours, base, theirs):
         # PIN proof. Keep that argument in assembled 100441; never silently
         # regress to a proof that can create/switch an anonymous principal.
         scoped_proof = (
-            "await _provePin(\\n"
+            "await _provePin(\n"
             "      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid);"
         )
         legacy_proof = "await _provePin(accountKey: accountKey, pin: pin);"
         if scoped_proof in theirs:
             result = once(
                 theirs, scoped_proof,
-                "await DedaAuthRuntime.wait(() => _provePin(\\n"
+                "await DedaAuthRuntime.wait(() => _provePin(\n"
                 "      accountKey: accountKey, pin: pin, expectedOriginalUid: expectedUid));",
                 "100441 preserve UID-bound PIN proof wait")
         elif legacy_proof in theirs:
