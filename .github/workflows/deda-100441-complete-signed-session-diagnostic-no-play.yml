@@ -131,7 +131,7 @@ jobs:
             # same-UID/PIN/Google/Firebase-free full assembly QA. This is
             # STRONGER than an unscoped older-branch comparison: no source,
             # Functions or platform inputs may drift between QA and signing.
-            git diff --exit-code f883fd972e292ebbdf0ffe5a11d7cfc03b4d533f HEAD -- \
+            git diff --exit-code 86c8e95540d40a00fdc6fc1caa87197b29ba614d HEAD -- \
               lib/ functions/ android/ assets/ firestore.rules firebase.json \
               storage.rules google-services.json pubspec.yaml pubspec.lock
             # Also prove the protected APK's release inputs have never changed.
