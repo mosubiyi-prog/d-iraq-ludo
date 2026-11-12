@@ -4433,6 +4433,53 @@ class DedaBackend {
     final placeId = hasApprovedPlace ? placeShareIdForPhone(phone) : '';
     final firestore = FirebaseFirestore.instance;
 
+    // Linked-owner recovery builds must NOT fabricate users/{newAnonymousUid}
+    // for a previously registered phone/ID. This was possible when a new
+    // Firebase anonymous session appeared after admin/login transitions:
+    // users/{newUid} was written *before* the immutable original ID owner was
+    // checked. It can split an account again and break ID/social/admin views.
+    //
+    // Existing 100340/100436 behavior stays untouched when the linked-owner
+    // pilot is OFF. All checks below read from the server and write NOTHING.
+    if (dedaLinkedOwnerCompatEnabled) {
+      final currentUid = user.uid;
+      final userRef = firestore.collection('users').doc(currentUid);
+      const options = GetOptions(source: Source.server);
+      final rows = await Future.wait([
+        firestore.collection('deda_account_directory')
+            .doc(accountKey).get(options),
+        firestore.collection('deda_sessions')
+            .doc(currentUid).get(options),
+        userRef.get(options),
+        firestore.collection('deda_share_ids')
+            .doc(personalId).get(options),
+      ]);
+      final placeSnapshot = placeId.isEmpty ? null :
+          await firestore.collection('deda_share_ids')
+              .doc(placeId).get(options);
+      if (rows.any((row) =>
+          row.metadata.isFromCache || row.metadata.hasPendingWrites) ||
+          (placeSnapshot != null &&
+           (placeSnapshot.metadata.isFromCache ||
+            placeSnapshot.metadata.hasPendingWrites)) ||
+          FirebaseAuth.instance.currentUser?.uid != currentUid ||
+          !DedaLinkedOwnerSessionPolicy.canStageOriginalShareProjection(
+            uid: currentUid,
+            accountKey: accountKey,
+            originalId: personalId,
+            placeId: placeId,
+            directory: rows[0].data(),
+            session: rows[1].data(),
+            user: rows[2].data(),
+            originalRoute: rows[3].data(),
+            placeRoute: placeSnapshot?.data(),
+          )) {
+        // Do NOT update users, share IDs, socials, friends, sessions, wallets
+        // or administration. Historical A/B/C claims need verified recovery.
+        throw StateError('original-share-uid-conflict-recovery-required');
+      }
+    }
+
     // The stable DEDA ID is derived from the phone and never regenerated here.
     // After an admin session or an app/auth refresh Firebase may give the app a
     // new anonymous UID. In that case users/{uid} does not exist yet, so writing
@@ -4442,6 +4489,10 @@ class DedaBackend {
     final userRef = firestore.collection('users').doc(user.uid);
     final userSnapshot = await userRef.get();
     final cleanAccountType = accountType.trim();
+    if (dedaLinkedOwnerCompatEnabled &&
+        FirebaseAuth.instance.currentUser?.uid != user.uid) {
+      throw StateError('original-share-session-changed-before-user-write');
+    }
     await userRef.set({
       'name': name.trim(),
       'phone': phone.trim(),
@@ -4463,7 +4514,20 @@ class DedaBackend {
       if (publicId.isEmpty) return;
       final ref = firestore.collection('deda_share_ids').doc(publicId);
       final existing = await ref.get();
-      if (existing.exists) return;
+      if (dedaLinkedOwnerCompatEnabled &&
+          FirebaseAuth.instance.currentUser?.uid != user.uid) {
+        throw StateError('original-share-session-changed-before-route-write');
+      }
+      if (existing.exists) {
+        if (dedaLinkedOwnerCompatEnabled &&
+            (existing.data()?['ownerUid'] != user.uid ||
+             existing.data()?['kind'] != kind ||
+             existing.data()?['publicId'] != publicId ||
+             existing.data()?['active'] != true)) {
+          throw StateError('original-share-route-owner-conflict');
+        }
+        return;
+      }
       await ref.set({
         'publicId': publicId,
         'kind': kind,
