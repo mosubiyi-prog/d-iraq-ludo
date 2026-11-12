@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,16 +15,32 @@ enum DedaProbeMatch { sameUid, differentUid, unavailable, signedOut }
 
 class DedaSessionProbeReport {
   const DedaSessionProbeReport(this.kind, this.original, this.directory,
-      this.google, this.password);
+      this.google, this.password, {this.sessionFingerprint});
   final DedaProbeKind kind;
   final DedaProbeMatch original;
   final DedaProbeMatch directory;
   final bool google;
   final bool password;
+  /// A short diagnostic hash, NOT identity, login or owner proof. Never raw UID.
+  final String? sessionFingerprint;
 }
 
 class DedaSessionDiagnosticReadOnly {
   const DedaSessionDiagnosticReadOnly._();
+
+  /// Stable 64-bit fingerprint to compare a CURRENT device Firebase UID with
+  /// historic A/B/C server references. No raw UID, phone, PIN or token is
+  /// displayed/sent/logged. Not an authorization factor or cryptographic proof.
+  static String fingerprintOfUid(String uid) {
+    if (uid.isEmpty) throw ArgumentError('empty-firebase-uid');
+    var hash = BigInt.parse('cbf29ce484222325', radix: 16);
+    final mask = BigInt.parse('ffffffffffffffff', radix: 16);
+    final multiplier = BigInt.parse('100000001b3', radix: 16);
+    for (final byte in utf8.encode('DEDA-UID-DIAG-v1|$uid')) {
+      hash = ((hash ^ BigInt.from(byte)) * multiplier) & mask;
+    }
+    return hash.toRadixString(16).padLeft(16, '0').toUpperCase();
+  }
 
   static Future<DedaSessionProbeReport> inspect(String phone) async {
     if (Firebase.apps.isEmpty) {
@@ -81,7 +99,7 @@ class DedaSessionDiagnosticReadOnly {
           DedaProbeMatch.unavailable, DedaProbeMatch.unavailable, false, false);
     }
     return DedaSessionProbeReport(kind, originalStatus, directoryStatus,
-        google, password);
+        google, password, sessionFingerprint: fingerprintOfUid(uid));
   }
 }
 
@@ -153,6 +171,18 @@ class DedaSessionDiagnosticReadOnlyTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text((ar ? 'الجلسة: ' : 'Session: ') + _kind(v.kind, ar)),
+                      if (v.sessionFingerprint != null) ...[
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          (ar ? 'بصمة UID الحالية: ' : 'Current UID fingerprint: ') +
+                          v.sessionFingerprint!,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(ar
+                            ? 'بصمة تشخيصية فقط، لا تثبت ملكية الحساب.'
+                            : 'Diagnostic only; not account ownership proof.',
+                            style: Theme.of(ctx).textTheme.bodySmall),
+                      ],
                       const SizedBox(height: 8),
                       Text((ar ? 'الآيدي الأصلي: ' : 'Original UID: ') +
                           _match(v.original, ar)),
