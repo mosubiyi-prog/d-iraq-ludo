@@ -89,6 +89,38 @@ void main() {
       '$account@deda-login.invalid', 'bad-phone'), false);
   });
 
+  test('same original UID provider proof survives Google primary email', () {
+    final originalAndGoogle = <({String providerId, String? email})>[
+      (providerId: 'password', email: '$account@deda-login.invalid'),
+      (providerId: 'google.com', email: 'owner@example.com'),
+    ];
+    bool allowed({
+      required String accountKey,
+      required String? primary,
+      required Iterable<({String providerId, String? email})> providers,
+    }) => DedaLinkedOwnerSessionPolicy.providerIdentityMatches(
+      accountKey: accountKey,
+      primaryEmail: primary,
+      providers: providers,
+    );
+    // Same existing Firebase principal, original password identity and Google.
+    expect(allowed(accountKey: account, primary: 'owner@example.com',
+        providers: originalAndGoogle), isTrue);
+    // No Google alone, no other account's original email, no staff identity.
+    expect(allowed(accountKey: account, primary: 'owner@example.com',
+        providers: [(providerId: 'google.com', email: 'owner@example.com')]),
+        isFalse);
+    expect(allowed(accountKey: account, primary: 'owner@example.com',
+        providers: [
+          (providerId: 'password',
+              email: '9647700000000@deda-login.invalid'),
+          (providerId: 'google.com', email: 'owner@example.com'),
+        ]), isFalse);
+    expect(allowed(accountKey: account, primary: 'manager@example.com',
+        providers: [(providerId: 'password',
+                      email: 'manager@example.com')]), isFalse);
+  });
+
   test('server owner documents require matching UID, route and session', () {
     bool proof({String? directoryUid = uid, String? sessionUid = uid,
         String? routeUid = uid, String? projectedId = personalId,
