@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code 308a846ef0c44169929a2908adb0457b4b028672 HEAD -- \
-            firestore.rules storage.rules functions/ firebase.json .firebaserc \
+            firestore.rules storage.rules functions/index.js firebase.json .firebaserc \
             android/ assets/ pubspec.yaml pubspec.lock lib/main.dart
           python3 - <<'PY'
           from pathlib import Path
@@ -53,6 +53,9 @@ jobs:
           assert pin_section.index("await _provePin(accountKey: accountKey, pin: pin)") < pin_section.index("await _openSession(accountKey, expectedOriginalUid: expectedUid)")
           assert "original-pin-uid-changed-before-session-write" in pin_section
           assert "dedaLinkedOwnerCompatEnabled" in pin_section
+          index = Path("functions/index.js").read_text()
+          assert "deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED" not in index
+          assert "deda_100441_canonical_uid_anti_split_preflight_PRIVATE_NOT_EXPORTED" not in index
           print("PASS_LINKED_OWNER_UID_CHECK_BEFORE_PIN_PROOF_WRITE_NO_SPLIT_RETRY")
           print("PASS_SPLIT_UID_BLOCKED_BEFORE_NEW_USER_OR_ID_PROJECTION")
           PY
