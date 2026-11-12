@@ -169,6 +169,19 @@ def _pin(ours, base, theirs):
     reviewed_guard = _pin_guard_100441(ours, base, theirs)
     if reviewed_guard is not None:
         return reviewed_guard
+    # One reviewed _provePin overlap: retain the signed runtime wait when
+    # legacy mode needs an existing anonymous session, but NEVER create or
+    # switch Auth when the UID-bound original proof is already required.
+    if ("final user = await DedaAuthRuntime.wait(() => _ensureAnonymousSession());" in ours
+            and "final user = await _ensureAnonymousSession();" in base
+            and "original-pin-owner-changed-before-proof" in theirs
+            and "final user = expectedOriginalUid == null" in theirs
+            and "? await _ensurePinSessionForAccount(accountKey)" in theirs):
+        return once(
+            theirs,
+            "? await _ensurePinSessionForAccount(accountKey)",
+            "? await DedaAuthRuntime.wait(() => _ensurePinSessionForAccount(accountKey))",
+            "100441 preserve runtime Auth guard before UID-bound PIN proof")
     # This preserves safe auth transition on normal signout while blocking
     # loss of the linked original UID when the feature gate is enabled.
     if ("await auth.signOut();" in theirs and
