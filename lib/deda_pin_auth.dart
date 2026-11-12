@@ -130,6 +130,15 @@ class DedaPinAuth {
 
     final account = accountKeyForPhone(phone);
     final current = FirebaseAuth.instance.currentUser;
+    // Existing-account LOOKUP is not permission to create a second UID.
+    // In the linked-owner pilot, a missing Firebase session must route to
+    // explicit owner login rather than anonymous Auth preparation.
+    if (!DedaLinkedOwnerSessionPolicy.mayImplicitlyPrepareOwnerSession(
+      linkedOwnerPilotEnabled: dedaLinkedOwnerCompatEnabled,
+      hasCurrentPrincipal: current != null,
+    )) {
+      throw StateError('deda-explicit-auth-entry-required-no-new-uid');
+    }
     if (!(dedaLinkedOwnerCompatEnabled && current != null &&
         !current.isAnonymous &&
         DedaLinkedOwnerSessionPolicy.userProviderIdentityMatches(current, account))) {
