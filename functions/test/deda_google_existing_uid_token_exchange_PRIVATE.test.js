@@ -196,3 +196,21 @@ test("Cloud Function requires AppCheck and cannot overwrite a signed-in user",as
   assert.equal(Object.hasOwn(success,"accountKey"),false);
   assert.equal(Object.hasOwn(success,"originalId"),false);
 });
+
+test("production deployment binding rejects wrong project, unapproved setup and QA OAuth",()=>{
+  const {prepareExistingGoogleUidCallable}=require(
+    "../deda_google_existing_uid_callable_wiring_PRIVATE_NOT_EXPORTED.js");
+  const h=harness();
+  class HttpsError extends Error {constructor(code,message){super(message);this.code=code;}}
+  const opts={onCall:(p,f)=>f,HttpsError,auth:h.auth,db:h.db,
+    getJwks:async()=>jwks,now:()=>nowMs};
+  for(const extra of [
+    {projectId:"deda-qa-uid-lab-20261108",ownerApproved:true,productionAudience:audience},
+    {projectId:"deda-25b88",ownerApproved:false,productionAudience:audience},
+    {projectId:"deda-25b88",ownerApproved:true,productionAudience:"qa.apps.googleusercontent.com"},
+  ]) assert.throws(()=>prepareExistingGoogleUidCallable({...opts,...extra}),
+    /deda-google-existing-uid-backend-not-approved/);
+  const handler=prepareExistingGoogleUidCallable({...opts,
+    projectId:"deda-25b88",ownerApproved:true,productionAudience:audience});
+  assert.equal(typeof handler,"function");
+});
