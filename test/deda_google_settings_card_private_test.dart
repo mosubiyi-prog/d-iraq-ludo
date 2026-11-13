@@ -58,4 +58,28 @@ void main() {
     }
   });
 
+
+  test('new account and historical account must not be conflated by Google prompt', () {
+    final guidance = DedaGoogleAnonymousAccountGuidance.message(
+      matchingOwnerRecords: true, isArabic: true);
+    expect(guidance, contains('جديداً أم سابقاً'));
+    expect(guidance, contains('بنفس UID'));
+    expect(guidance, contains('لا تسجّل خروجك'));
+    expect(guidance, isNot(contains('فوق «تسجيل الخروج»')));
+    expect(guidance, isNot(contains('حساب ديدا الأصلي')));
+    final english = DedaGoogleAnonymousAccountGuidance.message(
+      matchingOwnerRecords: true, isArabic: false);
+    expect(english, contains('new or historical'));
+    expect(english, isNot(contains('This is your original')));
+  });
+
+  test('unverified anonymous session never offers Google as a substitute owner', () {
+    for (final ar in [true, false]) {
+      final guidance = DedaGoogleAnonymousAccountGuidance.message(
+        matchingOwnerRecords: false, isArabic: ar);
+      expect(guidance, isNot(contains('linked and confirmed')));
+      expect(guidance, isNot(contains('تم ربط')));
+      expect(guidance, isNot(contains('حساب ديدا الأصلي')));
+    }
+  });
 }
