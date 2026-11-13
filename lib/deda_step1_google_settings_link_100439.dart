@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'deda_100430_owner_uid_continuity.dart';
+import 'deda_100433_owner_confirmation_ui.dart';
 import 'deda_auth_session_runtime.dart';
 import 'deda_100431_linked_owner_session_policy.dart';
 import 'deda_session_diagnostic_readonly_100441.dart';
@@ -115,6 +116,59 @@ class _DedaGoogleSettingsLinkCardState
     });
   }
 
+  /// One entry point from the existing Google card. The owner-confirmation
+  /// widget stays the ONLY PIN/archive/anonymous-UID conversion implementation;
+  /// this dialog does not create a new user or repeat those writes.
+  /// The Google chooser is reached only when that original UID is verified,
+  /// stored with its provenance and required backups have not failed.
+  Future<String?> _confirmOwnerForGoogle() {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        var running = false;
+        return StatefulBuilder(builder: (dialogContext, update) =>
+          PopScope(
+            canPop: !running,
+            child: AlertDialog(
+              title: Text(_t('تأكيد الحساب قبل ربط Google',
+                  'Verify account before Google linking')),
+              content: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_t(
+                    'هذا الفحص ضروري لتأكيد نفس UID وأرشفة بيانات هذا الهاتف. '
+                    'لن يُنشئ حساباً بديلاً، ولا يثبت الاسترجاع الكامل.',
+                    'This verifies the same UID and archives phone data. '
+                    'It creates no replacement account and is not full recovery.')),
+                  const SizedBox(height: 8),
+                  DedaOwnerConfirmButton(
+                    phone: widget.phone,
+                    originalId: widget.originalId,
+                    onRunningChanged: (value) {
+                      if (dialogContext.mounted) update(() => running = value);
+                    },
+                    onConfirmed: (uid) async {
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop(uid);
+                      }
+                    },
+                  ),
+                ]),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: running ? null :
+                      () => Navigator.of(dialogContext).pop(),
+                  child: Text(_t('إغلاق', 'Close')),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _link() async {
     if (_busy || _verified || _linkedCurrentOnly || !_active) return;
     setState(() {
@@ -141,11 +195,22 @@ class _DedaGoogleSettingsLinkCardState
         }
         final mayConfirm = DedaSessionDiagnosticReadOnly
             .mayOfferOriginalAnonymousConfirmation(report);
-        setState(() {
-          _message = DedaGoogleAnonymousAccountGuidance.message(
-            matchingOwnerRecords: mayConfirm, isArabic: widget.isArabic);
-        });
-        return; // Read-only decision, not a credential transition.
+        if (!mayConfirm) {
+          setState(() {
+            _message = DedaGoogleAnonymousAccountGuidance.message(
+              matchingOwnerRecords: false, isArabic: widget.isArabic);
+          });
+          return; // Do not offer credentials on a split or unknown UID.
+        }
+        // Reuse the existing original-account PIN + prelink archive guardian
+        // in place, without navigating to a second settings control.
+        final confirmedUid = await _confirmOwnerForGoogle();
+        if (confirmedUid == null) return;
+        if (!mounted || confirmedUid != startingUid ||
+            auth.currentUser?.uid != startingUid ||
+            auth.currentUser?.isAnonymous != false) {
+          throw StateError('google-owner-confirmation-rotated-original-uid');
+        }
       }
       // Only the EXISTING, already confirmed same-UID DEDA principal
       // may proceed to choose and link a Google provider.
