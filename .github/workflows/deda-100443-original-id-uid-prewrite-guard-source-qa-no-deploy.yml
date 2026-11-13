@@ -8,6 +8,10 @@ on:
       - "lib/deda_backend.dart"
       - "lib/deda_100431_linked_owner_session_policy.dart"
       - "lib/deda_100430_owner_uid_continuity.dart"
+      - "lib/deda_stage71_free_owned_use_profile.dart"
+      - "lib/deda_verified_active_id_store.dart"
+      - "test/deda_stage71_four_free_cards_dual200_widget_test.dart"
+      - "test/deda_100410_unified_active_id_test.dart"
       - "lib/deda_progress_backup_coordinator.dart"
       - "lib/deda_legacy_purchase_evidence.dart"
       - "lib/deda_step2_before_uid_link_evidence_checkpoint.dart"
@@ -93,6 +97,8 @@ jobs:
             lib/deda_progress_backup_coordinator.dart \
             lib/deda_legacy_purchase_evidence.dart \
             lib/deda_step2_before_uid_link_evidence_checkpoint.dart \
+            lib/deda_stage71_free_owned_use_profile.dart \
+            lib/deda_verified_active_id_store.dart \
             test/deda_purchase_backup_coordinator_test.dart
           flutter test --no-pub \
             test/deda_progress_backup_coordinator_test.dart \
@@ -127,6 +133,20 @@ jobs:
           assert 'purchaseCapture?.hasAnyLocalRecord ?? false' in coordinator
           assert 'bool get hasAnyLocalRecord =>' in purchase
           print('PASS_PRELINK_TRUE_PROGRESS_OR_PURCHASE_SOURCE_AND_CLOUD_READBACK_GATE')
+          id_src=Path('lib/deda_stage71_free_owned_use_profile.dart').read_text()
+          assert 'final verified = await Future.wait<Object>([' in id_src
+          assert 'acceptedOwnedForMyStore(original)' in id_src
+          assert 'DedaStage71OwnedIdentifierService.active(original),' in id_src
+          use=id_src.split('  static Future<void> use(String originalId,String identifier, {',1)[1]
+          use=use.split('\n/// User',1)[0]
+          assert use.index('final persisted=await active(originalId)') < use.index('DedaVerifiedActiveIdStore.confirmed(')
+          assert use.index('DedaVerifiedActiveIdStore.confirmed(') < use.index('onServerConfirmed?.call()')
+          assert use.index('onServerConfirmed?.call()') < use.index('publishOwnerVerified(')
+          assert 'final verifiedGrant = DedaStage71OwnedIdentifier.read(' in use
+          assert 'confirmedColor = verifiedGrant.baseColor' in use
+          assert 'await owned(originalId)' not in use
+          assert 'if (FirebaseAuth.instance.currentUser?.uid != uid)' in use
+          print('PASS_ID_USE_RESPONDS_AFTER_SERVER_PROOF_BEFORE_OPTIONAL_PROJECTION_NO_EXTRA_GRANT_QUERY')
           google=s.split('  static Future<String> linkGoogleToConfirmedOriginalUid({',1)[1]
           google=google.split('  static String validatedServerProfileName(',1)[0]
           assert 'DedaAuthRuntime.controller.transition<UserCredential>(' in google
@@ -208,13 +228,17 @@ jobs:
             cp "$GITHUB_WORKSPACE/test/deda_purchase_backup_coordinator_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_progress_backup_coordinator_test.dart" test/
             cp "$GITHUB_WORKSPACE/test/deda_legacy_purchase_evidence_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_stage71_four_free_cards_dual200_widget_test.dart" test/
+            cp "$GITHUB_WORKSPACE/test/deda_100410_unified_active_id_test.dart" test/
             flutter test --no-pub \
               test/deda_google_settings_card_private_test.dart \
               test/deda_google_original_uid_link_private_test.dart \
               test/deda_google_replacement_existing_uid_private_test.dart \
               test/deda_progress_backup_coordinator_test.dart \
               test/deda_purchase_backup_coordinator_test.dart \
-              test/deda_legacy_purchase_evidence_test.dart
+              test/deda_legacy_purchase_evidence_test.dart \
+              test/deda_stage71_four_free_cards_dual200_widget_test.dart \
+              test/deda_100410_unified_active_id_test.dart
           )
       - name: Check LIVE Firestore archive route presence with firebase.readonly (no documents, no writes)
         shell: bash
