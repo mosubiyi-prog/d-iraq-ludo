@@ -446,3 +446,186 @@ test("offline journal: stale snapshot or missing ownership proof blocks before s
   assert.equal(noProof.outcome,"HOLD");
   assert.equal(noProof.reason,"INDEPENDENT_PROOF_REQUIRED");
 });
+
+
+// ACCOUNT-DOMAIN REHEARSAL: use only synthetic, owner-scoped snapshots. Real
+// assets cannot be generated from these fixtures. A missing source is UNKNOWN,
+// never a zero balance or a reason to reissue receipts.
+function syntheticDomainReadback() {
+  const weeklyId="deda-weekly-2026-11-07-DEDA-ABC123";
+  const friendUid="unrelated-friend-1";
+  const pairKey=[A,friendUid].sort().join("__");
+  return {
+    friendships:[{
+      id:pairKey,pairKey,members:[A,friendUid],
+      requesterUid:A,recipientUid:friendUid,status:"accepted",
+    }],
+    gifts:[
+      {id:"existing-gift-1",targetPublicId:ID,amount:10,sourceType:"manual"},
+      {id:weeklyId,giftId:weeklyId,targetPublicId:ID,amount:50,
+        sourceType:"weekly_league",status:"received"},
+    ],
+    wallet:{publicId:ID,balance:60},
+    weekly:{originalId:ID,score:45},
+    premium:{originalId:ID,activeId:"@DEDA-PREMIUM"},
+    publishedPlaces:[{placeId:"one-established-place",ownerUid:A}],
+  };
+}
+function offlineDomainReadbackGate(proofs, documents, sources) {
+  const hold=reason=>Object.freeze({
+    outcome:"HOLD",reason,actualWriteCount:0,
+    giftsReissued:0,grantsIssued:0,restorationCertified:false,
+  });
+  const staged=offlineJournalAndRollbackRehearsal({
+    proofs,documents,expectedRevisions:syntheticRevisions(documents),
+  });
+  if(staged.outcome!=="SIMULATED_COMPLETED" || !sources) {
+    return hold("REVIEW_OR_DOMAIN_SNAPSHOT_UNAVAILABLE");
+  }
+  const originalId=proofs.serverSnapshot.originalId;
+  const target=proofs.independentProof.originalUid;
+  const historical=new Set([
+    proofs.serverSnapshot.route.ownerUid,
+    proofs.serverSnapshot.directory.createdUid,
+    proofs.serverSnapshot.social.ownerUid,
+  ]);
+  if(!Array.isArray(sources.friendships)||!Array.isArray(sources.gifts)||
+     !Array.isArray(sources.publishedPlaces)|| !sources.wallet||
+     !sources.weekly || !sources.premium) {
+    return hold("UNPROVEN_DOMAIN_SOURCE_NOT_ZERO");
+  }
+  const seenPairKeys=new Set();
+  for(const item of sources.friendships) {
+    if(!item||!Array.isArray(item.members)||item.members.length!==2||
+       item.members[0]===item.members[1]||
+       !item.members.includes(item.requesterUid)||
+       !item.members.includes(item.recipientUid) ||
+       item.requesterUid===item.recipientUid ||
+       !["accepted","pending","rejected"].includes(item.status)) {
+      return hold("FRIENDSHIP_SOURCE_INVALID");
+    }
+    const pairKey=[...item.members].sort().join("__");
+    if(item.id!==pairKey||item.pairKey!==pairKey||
+       !seenPairKeys.add(item.id)) {
+      return hold("FRIENDSHIP_PAIRKEY_COLLISION");
+    }
+    // A friend relation still keyed under a different A/B/C UID must receive
+    // independent reconciliation, NOT an automatic re-created invitation.
+    if(item.members.some(uid=>historical.has(uid) && uid!==target)) {
+      return hold("HISTORICAL_FRIEND_UID_REQUIRES_RECONCILIATION");
+    }
+  }
+  const seenGifts=new Set();
+  for(const item of sources.gifts) {
+    if(!item||typeof item.id!=="string"||!item.id ||
+       !seenGifts.add(item.id)||
+       item.targetPublicId!==originalId ||
+       !Number.isSafeInteger(item.amount)||item.amount<=0) {
+      return hold("GIFT_RECEIPT_MISSING_OR_DUPLICATE");
+    }
+    if(item.sourceType==="weekly_league" &&
+       (item.giftId!==item.id ||
+        !/^deda-weekly-20\d{2}-\d{2}-\d{2}-DEDA-[A-Z0-9]{6}$/.test(item.id)||
+        !item.id.endsWith("-"+originalId.slice(1))||
+        !["received","pending","claimed"].includes(item.status))) {
+      return hold("WEEKLY_RECEIPT_PROVENANCE_CONFLICT");
+    }
+  }
+  if(sources.wallet.publicId!==originalId ||
+     !Number.isSafeInteger(sources.wallet.balance)||
+     sources.wallet.balance<0||
+     sources.weekly.originalId!==originalId ||
+     !Number.isSafeInteger(sources.weekly.score)||
+     sources.weekly.score<0 ||
+     sources.premium.originalId!==originalId ||
+     typeof sources.premium.activeId!=="string") {
+    return hold("WALLET_LEAGUE_OR_PREMIUM_SOURCE_CONFLICT");
+  }
+  const seenPlaces=new Set();
+  for(const place of sources.publishedPlaces) {
+    if(!place||typeof place.placeId!=="string"||!place.placeId||
+       !seenPlaces.add(place.placeId)) {
+      return hold("PLACE_SOURCE_INVALID");
+    }
+    if(historical.has(place.ownerUid) && place.ownerUid!==target) {
+      return hold("HISTORICAL_PLACE_UID_REQUIRES_RECONCILIATION");
+    }
+  }
+  return Object.freeze({
+    outcome:"READBACK_PRESERVED_IN_SYNTHETIC_FIXTURE_ONLY",
+    existingFriendships:sources.friendships.length,
+    existingGiftReceipts:sources.gifts.length,
+    existingPlaces:sources.publishedPlaces.length,
+    actualWriteCount:0,giftsReissued:0,grantsIssued:0,
+    restorationCertified:false,
+  });
+}
+
+test("offline domain readback: matching UID preserves existing friend, gifts and league without issuance",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const original=structuredClone(docs);
+  const sources=syntheticDomainReadback();
+  const snapshot=structuredClone(sources);
+  const result=offlineDomainReadbackGate(verifiedProofs(),docs,sources);
+  assert.equal(result.outcome,"READBACK_PRESERVED_IN_SYNTHETIC_FIXTURE_ONLY");
+  assert.equal(result.existingFriendships,1);
+  assert.equal(result.existingGiftReceipts,2);
+  assert.equal(result.existingPlaces,1);
+  assert.equal(result.actualWriteCount,0);
+  assert.equal(result.giftsReissued,0);
+  assert.equal(result.grantsIssued,0);
+  assert.equal(result.restorationCertified,false);
+  assert.deepEqual(docs,original);
+  assert.deepEqual(sources,snapshot);
+});
+
+test("offline domain readback: historical friend and place links on another UID require separate review",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const sources=syntheticDomainReadback();
+  const friendUid="unrelated-friend-2";
+  const pairKey=[C,friendUid].sort().join("__");
+  sources.friendships.push({
+    id:pairKey,pairKey,members:[C,friendUid],requesterUid:C,
+    recipientUid:friendUid,status:"accepted",
+  });
+  let result=offlineDomainReadbackGate(verifiedProofs(),docs,sources);
+  assert.equal(result.reason,"HISTORICAL_FRIEND_UID_REQUIRES_RECONCILIATION");
+  assert.equal(result.restorationCertified,false);
+  sources.friendships.pop();
+  sources.publishedPlaces[0].ownerUid=B;
+  result=offlineDomainReadbackGate(verifiedProofs(),docs,sources);
+  assert.equal(result.reason,"HISTORICAL_PLACE_UID_REQUIRES_RECONCILIATION");
+  assert.equal(result.actualWriteCount,0);
+});
+
+test("offline domain readback: duplicate pair keys and receipts fail closed",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const sources=syntheticDomainReadback();
+  sources.friendships.push(structuredClone(sources.friendships[0]));
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).reason,
+      "FRIENDSHIP_PAIRKEY_COLLISION");
+  sources.friendships.pop();
+  sources.gifts.push(structuredClone(sources.gifts[0]));
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).reason,
+      "GIFT_RECEIPT_MISSING_OR_DUPLICATE");
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).giftsReissued,0);
+});
+
+test("offline domain readback: missing, cross-account and forged weekly source never means empty/zero",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const sources=syntheticDomainReadback();
+  sources.wallet=null;
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).reason,
+      "UNPROVEN_DOMAIN_SOURCE_NOT_ZERO");
+  sources.wallet={publicId:"@DEDA-OTHER1",balance:60};
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).reason,
+      "WALLET_LEAGUE_OR_PREMIUM_SOURCE_CONFLICT");
+  sources.wallet={publicId:ID,balance:60};
+  sources.gifts[1].giftId="unrelated-weekly-receipt";
+  assert.equal(offlineDomainReadbackGate(verifiedProofs(),docs,sources).reason,
+      "WEEKLY_RECEIPT_PROVENANCE_CONFLICT");
+  const noOwner=verifiedProofs();
+  noOwner.independentProof=null;
+  assert.equal(offlineDomainReadbackGate(noOwner,docs,syntheticDomainReadback()).reason,
+      "REVIEW_OR_DOMAIN_SNAPSHOT_UNAVAILABLE");
+});
