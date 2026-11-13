@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d_iraq_ludo/deda_100430_owner_uid_continuity.dart';
 import 'package:d_iraq_ludo/deda_100431_linked_owner_session_policy.dart';
+import 'package:d_iraq_ludo/deda_step2_before_uid_link_evidence_checkpoint.dart';
 
 const account = '9647712345678';
 const originalUid = 'immutable-owner-uid';
@@ -8,6 +9,74 @@ const originalUid = 'immutable-owner-uid';
 void main() {
   test('Google original UID link is OFF in normal signed APK', () {
     expect(dedaStep1GoogleOwnerLinkEnabled, false);
+  });
+
+  test('original anonymous UID needs confirmed progress and purchase readback before conversion', () async {
+    String? uid=originalUid;
+    var anonymous=true;
+    var archiveCalls=0;
+    final gate=DedaStep2PreLinkCheckpoint(
+      enabled:true,
+      currentUid:()=>uid,
+      currentIsAnonymous:()=>anonymous,
+      archive:(accountKey,sourceUid) async {
+        archiveCalls++;
+        expect(accountKey,account);
+        expect(sourceUid,originalUid);
+        return const DedaStep2PreLinkEvidenceReceipt(
+          captureId:'canonical_original_capture_00001',
+          sourceUid:originalUid,
+          progressReadback:true,
+          purchaseReadback:true,
+        );
+      },
+    );
+    final receipt=await gate.run(accountKey:account,originalUid:originalUid);
+    expect(receipt.progressReadback,isTrue);
+    expect(receipt.purchaseReadback,isTrue);
+    expect(receipt.allowPhoneCutover,isFalse);
+    expect(archiveCalls,1);
+    uid='another-uid';
+    await expectLater(gate.run(accountKey:account,originalUid:originalUid),
+        throwsA(isA<DedaStep2PreLinkCheckpointHold>()));
+    anonymous=false;
+    uid=originalUid;
+    await expectLater(gate.run(accountKey:account,originalUid:originalUid),
+        throwsA(isA<DedaStep2PreLinkCheckpointHold>()));
+    expect(archiveCalls,1);
+  });
+
+  test('prelink rejects stale/wrong-owner or incomplete cloud archive readback', () async {
+    String? current=originalUid;
+    Future<void> denied({
+      required String sourceUid,
+      required bool progress,
+      required bool purchases,
+      bool switchDuringArchive=false,
+    }) async {
+      current=originalUid;
+      final gate=DedaStep2PreLinkCheckpoint(
+        enabled:true,
+        currentUid:()=>current,
+        currentIsAnonymous:()=>true,
+        archive:(accountKey,uid) async {
+          if(switchDuringArchive) current='changed-owner-uid';
+          return DedaStep2PreLinkEvidenceReceipt(
+            captureId:'canonical_original_capture_00001',
+            sourceUid:sourceUid,
+            progressReadback:progress,
+            purchaseReadback:purchases,
+          );
+        },
+      );
+      await expectLater(gate.run(accountKey:account,originalUid:originalUid),
+          throwsA(isA<DedaStep2PreLinkCheckpointHold>()));
+    }
+    await denied(sourceUid:'wrong-owner-uid',progress:true,purchases:true);
+    await denied(sourceUid:originalUid,progress:false,purchases:true);
+    await denied(sourceUid:originalUid,progress:true,purchases:false);
+    await denied(sourceUid:originalUid,progress:true,purchases:true,
+        switchDuringArchive:true);
   });
 
   test('only a linked original owner may attach Google credentials', () {
