@@ -506,9 +506,10 @@ function offlineDomainReadbackGate(proofs, documents, sources) {
     }
     const pairKey=[...item.members].sort().join("__");
     if(item.id!==pairKey||item.pairKey!==pairKey||
-       !seenPairKeys.add(item.id)) {
+       seenPairKeys.has(item.id)) {
       return hold("FRIENDSHIP_PAIRKEY_COLLISION");
     }
+    seenPairKeys.add(item.id);
     // A friend relation still keyed under a different A/B/C UID must receive
     // independent reconciliation, NOT an automatic re-created invitation.
     if(item.members.some(uid=>historical.has(uid) && uid!==target)) {
@@ -518,11 +519,12 @@ function offlineDomainReadbackGate(proofs, documents, sources) {
   const seenGifts=new Set();
   for(const item of sources.gifts) {
     if(!item||typeof item.id!=="string"||!item.id ||
-       !seenGifts.add(item.id)||
+       seenGifts.has(item.id)||
        item.targetPublicId!==originalId ||
        !Number.isSafeInteger(item.amount)||item.amount<=0) {
       return hold("GIFT_RECEIPT_MISSING_OR_DUPLICATE");
     }
+    seenGifts.add(item.id);
     if(item.sourceType==="weekly_league" &&
        (item.giftId!==item.id ||
         !/^deda-weekly-20\d{2}-\d{2}-\d{2}-DEDA-[A-Z0-9]{6}$/.test(item.id)||
@@ -544,9 +546,10 @@ function offlineDomainReadbackGate(proofs, documents, sources) {
   const seenPlaces=new Set();
   for(const place of sources.publishedPlaces) {
     if(!place||typeof place.placeId!=="string"||!place.placeId||
-       !seenPlaces.add(place.placeId)) {
+       seenPlaces.has(place.placeId)) {
       return hold("PLACE_SOURCE_INVALID");
     }
+    seenPlaces.add(place.placeId);
     if(historical.has(place.ownerUid) && place.ownerUid!==target) {
       return hold("HISTORICAL_PLACE_UID_REQUIRES_RECONCILIATION");
     }
