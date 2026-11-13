@@ -142,7 +142,7 @@ jobs:
           permissions=['cloudfunctions.functions.create','cloudfunctions.functions.update',
                        'cloudfunctions.functions.get','iam.serviceAccounts.actAs',
                        'iam.serviceAccounts.signBlob','cloudbuild.builds.create',
-                       'run.services.create','firebaseappcheck.apps.get']
+                       'run.services.create']
           out={}
           for label,key in [('primary','PROD_SA'),('fallback','FALLBACK_SA')]:
               raw=os.getenv(key,'')
@@ -165,6 +165,30 @@ jobs:
                   row['canDeployFunction']=all(p in granted for p in [
                       'cloudfunctions.functions.create','cloudfunctions.functions.update',
                       'iam.serviceAccounts.actAs'])
+                  # A project-level permission test may not include a grant
+                  # scoped directly to a runtime service account. Test the
+                  # existing recovery runtime SA and compute default SA
+                  # individually; this never grants a role or signs a token.
+                  row['runtimeSaActAs']={}
+                  service_accounts=[
+                    'deda-recovery-runtime@deda-25b88.iam.gserviceaccount.com',
+                  ]
+                  if number:service_accounts.append(
+                    str(number)+'-compute@developer.gserviceaccount.com')
+                  for service_email in service_accounts:
+                      label_runtime=('recovery' if service_email.startswith('deda-recovery')
+                           else 'compute-default')
+                      try:
+                          url='https://iam.googleapis.com/v1/projects/'+project+\
+                              '/serviceAccounts/'+service_email+':testIamPermissions'
+                          ans=ses.post(url,json={
+                              'permissions':['iam.serviceAccounts.actAs']},timeout=18)
+                          values=set(ans.json().get('permissions',[])) if ans.status_code==200 else set()
+                          row['runtimeSaActAs'][label_runtime]={
+                            'httpStatus':ans.status_code,
+                            'permitted': 'iam.serviceAccounts.actAs' in values}
+                      except Exception:
+                          row['runtimeSaActAs'][label_runtime]={'status':'unverified'}
                   if number and app_id:
                       app=ses.get(f'https://firebaseappcheck.googleapis.com/v1/projects/{number}/apps/{app_id}',
                           timeout=18)
