@@ -632,3 +632,281 @@ test("offline domain readback: missing, cross-account and forged weekly source n
   assert.equal(offlineDomainReadbackGate(noOwner,docs,syntheticDomainReadback()).reason,
       "REVIEW_OR_DOMAIN_SNAPSHOT_UNAVAILABLE");
 });
+
+
+// PREMIUM DISPLAY ID REHEARSAL — pure synthetic account/source fixtures.
+// An @DEDA premium alias is presentation data, never Firebase Auth UID, a
+// substitute for immutable originalId, a session key or an owner grant.
+// Actual Stage71 grants and Stage74 receipts require real authenticated
+// server reads; this offline test cannot establish historical ownership.
+const PREMIUM_COLORS=Object.freeze(["gold","diamond","royal","pink"]);
+const PREMIUM_IDS=Object.freeze({
+  gold:"@DEDA-GLD001", diamond:"@DEDA-DIA001",
+  royal:"@DEDA-ROY001", pink:"@DEDA-PNK001",
+});
+function syntheticPremiumDisplayEvidence({
+  color="gold",kind="self_used",group="001",alias=null,
+}={}) {
+  const activeId=alias||PREMIUM_IDS[color];
+  const record={
+    identifier:activeId,recipientOriginalId:ID,
+    baseColor:color,kind,group,
+  };
+  return {
+    stage71Active:{originalId:ID,activeId},
+    ownedGrants:[record],
+    receivedGiftReceipts:kind==="gifted" ? [{
+      identifier:activeId,originalId:ID,group,
+      receivedAtTrustedServerTimestamp:true,
+    }] : [],
+    // Optional Spark projections are distinct from Stage71 ownership.
+    publicActive:{originalId:ID,activeId,baseColor:color},
+    publicRoutes:{[activeId]:{aliasId:activeId,originalId:ID,baseColor:color}},
+    requestedDisplayId:activeId,
+  };
+}
+function offlinePremiumDisplayReadback({
+  proofs,documents,evidence,liveUid,
+}) {
+  const stop=(reason)=>Object.freeze({
+    outcome:"HOLD",reason,writeCount:0,authTransitions:0,
+    loginPermitted:false, ownershipGranted:false,restorationCertified:false,
+  });
+  const review=reviewReadiness(proofs);
+  if(review.decision!=="CANDIDATE_FOR_SEPARATE_OWNER_REVIEW" ||
+      review.loginPermitted!==false) return stop("HISTORICAL_OWNER_REVIEW_REQUIRED");
+  const originalId=proofs.serverSnapshot.originalId;
+  const targetUid=proofs.independentProof.originalUid;
+  if(liveUid!==targetUid ||
+      documents?.users?.[targetUid]?.accountKey!==proofs.serverSnapshot.accountKey ||
+      !/^@DEDA-[A-Z0-9]{6}$/.test(originalId)) {
+    return stop("LIVE_AUTH_UID_NOT_ORIGINAL_OWNER");
+  }
+  // A premium alias is never read from client preferences to resolve Auth.
+  // Missing Stage71 source is UNKNOWN, not evidence that no premium ID exists.
+  if(!evidence || !evidence.stage71Active) {
+    return stop("ACTIVE_PREMIUM_SELECTION_UNVERIFIED_NOT_ZERO");
+  }
+  const selected=evidence.stage71Active;
+  if(selected.originalId!==originalId ||
+      typeof selected.activeId!=="string") {
+    return stop("ACTIVE_PREMIUM_SOURCE_CROSS_ACCOUNT");
+  }
+  const active=selected.activeId;
+  if(active===originalId) {
+    if(evidence.requestedDisplayId!=null &&
+       evidence.requestedDisplayId!==originalId) {
+      return stop("STALE_PREMIUM_DISPLAY_NOT_ACTIVE");
+    }
+    return Object.freeze({
+      outcome:"SYNTHETIC_CANONICAL_DISPLAY_ONLY",displayId:originalId,
+      canonicalId:originalId,authUid:liveUid,writeCount:0,authTransitions:0,
+      loginPermitted:false,ownershipGranted:false,restorationCertified:false,
+    });
+  }
+  if(!/^@DEDA-[A-Z0-9]{4,12}$/.test(active) ||
+      evidence.requestedDisplayId!==active ||
+      !Array.isArray(evidence.ownedGrants)) {
+    return stop("UNVERIFIED_OR_STALE_PREMIUM_ALIAS");
+  }
+  const seen=new Set();
+  for(const grant of evidence.ownedGrants) {
+    if(!grant||typeof grant.identifier!=="string"||
+        seen.has(grant.identifier)) return stop("PREMIUM_GRANT_DUPLICATE_OR_INVALID");
+    seen.add(grant.identifier);
+  }
+  const matching=evidence.ownedGrants.filter(x=>x.identifier===active);
+  if(matching.length!==1) return stop("PREMIUM_GRANT_NOT_FOUND");
+  const grant=matching[0];
+  if(grant.recipientOriginalId!==originalId ||
+      !PREMIUM_COLORS.includes(grant.baseColor) ||
+      !["001","002"].includes(grant.group) ||
+      !["self_used","gifted"].includes(grant.kind)) {
+    return stop("PREMIUM_GRANT_OWNER_COLOR_OR_GROUP_CONFLICT");
+  }
+  if(grant.kind==="gifted") {
+    if(!Array.isArray(evidence.receivedGiftReceipts)) {
+      return stop("PREMIUM_GIFT_RECEIPT_UNVERIFIED");
+    }
+    const matches=evidence.receivedGiftReceipts.filter(x=>x?.identifier===active);
+    if(matches.length!==1 ||
+        matches[0].originalId!==originalId ||
+        matches[0].group!==grant.group ||
+        matches[0].receivedAtTrustedServerTimestamp!==true) {
+      return stop("PREMIUM_GIFT_RECEIPT_UNVERIFIED");
+    }
+  }
+  // Spark publishing can be disabled; absence is not a reason to discard
+  // an existing Stage71 grant. If a projection is present it must agree.
+  const publicActive=evidence.publicActive;
+  if(publicActive!=null &&
+      (publicActive.originalId!==originalId ||
+       publicActive.activeId!==active ||
+       publicActive.baseColor!==grant.baseColor)) {
+    return stop("ACTIVE_PREMIUM_PROJECTION_CONFLICT");
+  }
+  const route=evidence.publicRoutes?.[active];
+  if(route!=null &&
+      (route.aliasId!==active || route.originalId!==originalId ||
+       route.baseColor!==grant.baseColor)) {
+    return stop("PREMIUM_PUBLIC_ROUTE_CONFLICT");
+  }
+  // Never claim a successful Auth recovery. Only the known verified test UID
+  // and canonical ID appear here, and no source object is ever mutated.
+  return Object.freeze({
+    outcome:"SYNTHETIC_PREMIUM_DISPLAY_ONLY",
+    displayId:active,canonicalId:originalId,
+    authUid:liveUid,baseColor:grant.baseColor,
+    writeCount:0,authTransitions:0,loginPermitted:false,
+    ownershipGranted:false,restorationCertified:false,
+  });
+}
+
+test("premium 200: all four colors and both reserved groups stay display-only",()=>{
+  for(const uid of [A,B,C]) for(const color of PREMIUM_COLORS)
+    for(const group of ["001","002"]) {
+      const proofs=verifiedProofs();
+      proofs.independentProof.originalUid=uid;
+      proofs.reviewRecord.reviewedOriginalUid=uid;
+      const docs=syntheticOneAccountDocuments();
+      const before=structuredClone(docs);
+      const evidence=syntheticPremiumDisplayEvidence({color,group});
+      const evidenceBefore=structuredClone(evidence);
+      const result=offlinePremiumDisplayReadback({
+        proofs,documents:docs,evidence,liveUid:uid,
+      });
+      assert.equal(result.outcome,"SYNTHETIC_PREMIUM_DISPLAY_ONLY");
+      assert.equal(result.displayId,PREMIUM_IDS[color]);
+      assert.equal(result.canonicalId,ID);
+      assert.equal(result.authUid,uid);
+      assert.equal(result.baseColor,color);
+      assert.equal(result.authTransitions,0);
+      assert.equal(result.writeCount,0);
+      assert.equal(result.loginPermitted,false);
+      assert.equal(result.ownershipGranted,false);
+      assert.equal(result.restorationCertified,false);
+      assert.deepEqual(docs,before);
+      assert.deepEqual(evidence,evidenceBefore);
+    }
+});
+
+test("premium 200: received gift requires matching independent Stage74 receipt",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const evidence=syntheticPremiumDisplayEvidence({
+    color:"royal",kind:"gifted",group:"002",
+  });
+  const valid=offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  });
+  assert.equal(valid.outcome,"SYNTHETIC_PREMIUM_DISPLAY_ONLY");
+  evidence.receivedGiftReceipts=[];
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"PREMIUM_GIFT_RECEIPT_UNVERIFIED");
+  evidence.receivedGiftReceipts=[{
+    identifier:PREMIUM_IDS.royal,originalId:ID,group:"001",
+    receivedAtTrustedServerTimestamp:true,
+  }];
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"PREMIUM_GIFT_RECEIPT_UNVERIFIED");
+  evidence.receivedGiftReceipts[0].group="002";
+  evidence.receivedGiftReceipts[0].receivedAtTrustedServerTimestamp=false;
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"PREMIUM_GIFT_RECEIPT_UNVERIFIED");
+});
+
+test("premium 200: wrong owner UID, cross-account grant and color mismatch fail closed",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const evidence=syntheticPremiumDisplayEvidence({color:"diamond"});
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:B,
+  }).reason,"LIVE_AUTH_UID_NOT_ORIGINAL_OWNER");
+  evidence.ownedGrants[0].recipientOriginalId="@DEDA-OTHER1";
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"PREMIUM_GRANT_OWNER_COLOR_OR_GROUP_CONFLICT");
+  evidence.ownedGrants[0].recipientOriginalId=ID;
+  evidence.ownedGrants[0].baseColor="pink";
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"ACTIVE_PREMIUM_PROJECTION_CONFLICT");
+  evidence.ownedGrants.push({...evidence.ownedGrants[0]});
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"PREMIUM_GRANT_DUPLICATE_OR_INVALID");
+});
+
+test("premium 200: changing active alias never changes canonical route or Firebase session",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const before=structuredClone(docs);
+  const evidence=syntheticPremiumDisplayEvidence({color:"gold"});
+  const first=offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  });
+  assert.equal(first.displayId,PREMIUM_IDS.gold);
+  const older=evidence.publicRoutes[PREMIUM_IDS.gold];
+  evidence.stage71Active.activeId=PREMIUM_IDS.pink;
+  evidence.ownedGrants.push({
+    identifier:PREMIUM_IDS.pink,recipientOriginalId:ID,
+    baseColor:"pink",group:"001",kind:"self_used",
+  });
+  evidence.requestedDisplayId=PREMIUM_IDS.pink;
+  evidence.publicActive={originalId:ID,activeId:PREMIUM_IDS.pink,baseColor:"pink"};
+  evidence.publicRoutes[PREMIUM_IDS.pink]={
+    aliasId:PREMIUM_IDS.pink,originalId:ID,baseColor:"pink",
+  };
+  const next=offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  });
+  assert.equal(next.outcome,"SYNTHETIC_PREMIUM_DISPLAY_ONLY");
+  assert.equal(next.displayId,PREMIUM_IDS.pink);
+  assert.equal(next.authUid,first.authUid);
+  assert.equal(next.canonicalId,first.canonicalId);
+  assert.deepEqual(evidence.publicRoutes[PREMIUM_IDS.gold],older);
+  evidence.requestedDisplayId=PREMIUM_IDS.gold;
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"UNVERIFIED_OR_STALE_PREMIUM_ALIAS");
+  assert.deepEqual(docs,before);
+});
+
+test("premium 200: missing activation is unknown; returning to original is display fallback only",()=>{
+  const docs=syntheticOneAccountDocuments();
+  let evidence=syntheticPremiumDisplayEvidence({color:"pink"});
+  delete evidence.stage71Active;
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  }).reason,"ACTIVE_PREMIUM_SELECTION_UNVERIFIED_NOT_ZERO");
+  evidence=syntheticPremiumDisplayEvidence({color:"pink"});
+  evidence.stage71Active.activeId=ID;
+  evidence.requestedDisplayId=ID;
+  const r=offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,liveUid:A,
+  });
+  assert.equal(r.outcome,"SYNTHETIC_CANONICAL_DISPLAY_ONLY");
+  assert.equal(r.canonicalId,ID);
+  assert.equal(r.authUid,A);
+  assert.equal(r.authTransitions,0);
+  assert.equal(r.restorationCertified,false);
+});
+
+test("premium 200: alias cannot substitute for UID, independent proof, or session",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const evidence=syntheticPremiumDisplayEvidence({color:"gold"});
+  const noProof=verifiedProofs();
+  noProof.independentProof=null;
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:noProof,documents:docs,evidence,liveUid:A,
+  }).reason,"HISTORICAL_OWNER_REVIEW_REQUIRED");
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence,
+    liveUid:PREMIUM_IDS.gold,
+  }).reason,"LIVE_AUTH_UID_NOT_ORIGINAL_OWNER");
+  const foreign=syntheticPremiumDisplayEvidence({color:"gold"});
+  foreign.stage71Active.originalId="@DEDA-OTHER1";
+  assert.equal(offlinePremiumDisplayReadback({
+    proofs:verifiedProofs(),documents:docs,evidence:foreign,liveUid:A,
+  }).reason,"ACTIVE_PREMIUM_SOURCE_CROSS_ACCOUNT");
+});
