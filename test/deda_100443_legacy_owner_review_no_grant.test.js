@@ -123,3 +123,162 @@ test("credential shape mismatch still stops even after a good device proof", () 
   assert.equal(blocked.reason,"INCOMPLETE_CANONICAL_PROOF");
   assert.equal(blocked.loginPermitted,false);
 });
+
+
+// OFFLINE CUTOVER REHEARSAL — test fixtures only. No Firebase SDK, no live
+// UID authority, no server calls, and no production migration implementation.
+// The reviewed proof objects below are SYNTHETIC; the real verifier must
+// independently authenticate their provenance before any future cutover.
+function syntheticOneAccountDocuments() {
+  const s=historicalSnapshot();
+  return {
+    directory:{...s.directory,revision:10},
+    credentials:{...s.credentials,revision:11},
+    route:{...s.route,revision:12},
+    social:{...s.social,revision:13},
+    users:{
+      [A]:{accountKey:ACCOUNT,sharePersonalId:ID},
+      [B]:{accountKey:ACCOUNT,sharePersonalId:null},
+      [C]:{accountKey:ACCOUNT,sharePersonalId:ID},
+    },
+    // A rehearsal must not invent, zero, duplicate or grant any assets.
+    financial:{diamonds:321,receipts:["gift-1","league-1"],weekScore:45},
+    admin:{roles:["unrelated-admin"],entryAllowed:false},
+    anotherAccount:{accountKey:"9647700000000",ownerUid:"other-real-owner"},
+    session:null,
+    googleLinked:false,
+  };
+}
+
+function offlineReconciliationRehearsal(proofs, documents, expectedRevisions) {
+  const hold=(reason)=>({
+    outcome:"HOLD",reason,changedCollections:[],writeCount:0,
+    tokenIssued:false,googleLinked:false,
+  });
+  const ownerReview=reviewReadiness(proofs);
+  if(ownerReview.decision!=="CANDIDATE_FOR_SEPARATE_OWNER_REVIEW" ||
+      ownerReview.loginPermitted!==false) return hold("INDEPENDENT_PROOF_REQUIRED");
+
+  const historical=proofs.serverSnapshot;
+  if(!documents || !expectedRevisions ||
+      !documents.users || !documents.users[proofs.independentProof.originalUid] ||
+      documents.users[proofs.independentProof.originalUid].accountKey !==
+          historical.accountKey) return hold("TARGET_USER_SOURCE_MISMATCH");
+
+  const checks=[
+    ["directory","createdUid",historical.directory.createdUid],
+    ["credentials","createdUid",historical.credentials.createdUid],
+    ["route","ownerUid",historical.route.ownerUid],
+    ["social","ownerUid",historical.social.ownerUid],
+  ];
+  for(const [name,field,oldUid] of checks) {
+    const doc=documents[name];
+    if(!doc || doc[field]!==oldUid ||
+        !Number.isSafeInteger(expectedRevisions[name]) ||
+        expectedRevisions[name]!==doc.revision) {
+      return hold("STALE_OR_CONFLICTING_SERVER_SNAPSHOT");
+    }
+  }
+  if(documents.directory.accountKey!==historical.accountKey ||
+      documents.credentials.accountKey!==historical.accountKey ||
+      documents.route.publicId!==historical.originalId ||
+      documents.social.publicId!==historical.originalId) {
+    return hold("CROSS_ACCOUNT_SOURCE_MISMATCH");
+  }
+
+  // Staged synthetic proposal. Never mutate the original documents; in the
+  // real service Auth and Firestore cannot be committed atomically.
+  const staged=structuredClone(documents);
+  const target=proofs.independentProof.originalUid;
+  const changedCollections=[];
+  for(const [name,field] of checks) {
+    if(staged[name][field]!==target) {
+      staged[name][field]=target;
+      changedCollections.push(name);
+    }
+  }
+  if(staged.users[target].sharePersonalId!==historical.originalId) {
+    staged.users[target].sharePersonalId=historical.originalId;
+    changedCollections.push("target-user-projection");
+  }
+  return {
+    outcome:"OFFLINE_PROPOSAL_ONLY",
+    changedCollections,staged,writeCount:0,tokenIssued:false,
+    googleLinked:false,cutoverAuthorized:false,
+  };
+}
+
+function syntheticRevisions(docs) {
+  return Object.fromEntries(
+      ["directory","credentials","route","social"]
+          .map(name=>[name,docs[name].revision]));
+}
+
+test("offline surgery: no independent proof means no proposed UID changes",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const before=structuredClone(docs);
+  const proofs=verifiedProofs();
+  delete proofs.independentProof;
+  const result=offlineReconciliationRehearsal(
+      proofs,docs,syntheticRevisions(docs));
+  assert.equal(result.outcome,"HOLD");
+  assert.equal(result.reason,"INDEPENDENT_PROOF_REQUIRED");
+  assert.deepEqual(result.changedCollections,[]);
+  assert.deepEqual(docs,before);
+});
+
+test("offline surgery: A/B/C are candidates only when matching synthetic independent review",()=>{
+  for(const uid of [A,B,C]) {
+    const proofs=verifiedProofs();
+    proofs.independentProof.originalUid=uid;
+    proofs.reviewRecord.reviewedOriginalUid=uid;
+    const docs=syntheticOneAccountDocuments();
+    const before=structuredClone(docs);
+    const plan=offlineReconciliationRehearsal(
+        proofs,docs,syntheticRevisions(docs));
+    assert.equal(plan.outcome,"OFFLINE_PROPOSAL_ONLY");
+    assert.equal(plan.writeCount,0);
+    assert.equal(plan.tokenIssued,false);
+    assert.equal(plan.googleLinked,false);
+    assert.equal(plan.cutoverAuthorized,false);
+    assert.equal(plan.staged.directory.createdUid,uid);
+    assert.equal(plan.staged.credentials.createdUid,uid);
+    assert.equal(plan.staged.route.ownerUid,uid);
+    assert.equal(plan.staged.social.ownerUid,uid);
+    assert.equal(plan.staged.users[uid].sharePersonalId,ID);
+    assert.deepEqual(plan.staged.financial,before.financial);
+    assert.deepEqual(plan.staged.admin,before.admin);
+    assert.deepEqual(plan.staged.anotherAccount,before.anotherAccount);
+    assert.equal(plan.staged.session,null);
+    assert.deepEqual(docs,before);
+  }
+});
+
+test("offline surgery: revision race or changed route fails closed without a partial proposal",()=>{
+  const docs=syntheticOneAccountDocuments();
+  const before=structuredClone(docs);
+  const expected=syntheticRevisions(docs);
+  expected.route-=1;
+  const raced=offlineReconciliationRehearsal(
+      verifiedProofs(),docs,expected);
+  assert.equal(raced.outcome,"HOLD");
+  assert.equal(raced.reason,"STALE_OR_CONFLICTING_SERVER_SNAPSHOT");
+  assert.deepEqual(docs,before);
+  docs.route.ownerUid="untrusted-different-owner";
+  const mismatch=offlineReconciliationRehearsal(
+      verifiedProofs(),docs,syntheticRevisions(docs));
+  assert.equal(mismatch.outcome,"HOLD");
+  assert.deepEqual(mismatch.changedCollections,[]);
+});
+
+test("offline surgery: foreign account and reviewer mismatch never produce a plan",()=>{
+  const docs=syntheticOneAccountDocuments();
+  docs.directory.accountKey="9647700000000";
+  assert.equal(offlineReconciliationRehearsal(
+      verifiedProofs(),docs,syntheticRevisions(docs)).outcome,"HOLD");
+  const proofs=verifiedProofs();
+  proofs.reviewRecord.reviewedOriginalUid=B;
+  assert.equal(offlineReconciliationRehearsal(
+      proofs,syntheticOneAccountDocuments(),
+      syntheticRevisions(syntheticOneAccountDocuments())).outcome,"HOLD");
+});
