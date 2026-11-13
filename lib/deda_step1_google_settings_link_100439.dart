@@ -14,6 +14,41 @@ import 'deda_pin_auth.dart';
 /// Isolated owner-only Google link card; never activated in protected 100439.
 /// The Google account chooser requires Google OAuth configuration and a
 /// separately approved private build. No Cloud Functions or financial writes.
+/// A matching UID/phone/ID on this installation can belong to a FRESHLY
+/// CREATED account as well as a pre-existing one. It is NOT independent
+/// evidence of a historical account or of complete account restoration.
+/// Only the separate PIN, immutable server and source-readback guardian may
+/// confirm an original owner and authorize a same-UID provider transition.
+class DedaGoogleAnonymousAccountGuidance {
+  const DedaGoogleAnonymousAccountGuidance._();
+
+  static String message({
+    required bool matchingOwnerRecords,
+    required bool isArabic,
+  }) {
+    if (matchingOwnerRecords) {
+      return isArabic
+          ? 'هذه الجلسة تطابق سجلات رقم الحساب والآيدي على هذا الجهاز، '
+              'لكن المطابقة وحدها لا تحدد إن كان الحساب جديداً أم سابقاً. '
+              'لربط Google بنفس UID أكمل «تأكيد الحساب» في الإعدادات '
+              'بإثبات الرمز وحفظ بياناته، ثم ارجع لبطاقة Google. '
+              'لا تسجّل خروجك ولا تحذف التطبيق.'
+          : 'This session matches this device account number and ID, '
+              'but matching does not prove whether it is new or historical. '
+              'Use Confirm account in Settings for PIN and source backup '
+              'before linking Google on the same UID. Do not sign out '
+              'or uninstall the app.';
+    }
+    return isArabic
+        ? 'تعذر إثبات ملكية الجلسة الحالية من سجلات الحساب. '
+            'ربط Google موقوف حتى تأكيد الهوية وحفظ بياناتها بأمان. '
+            'لا تسجّل خروجك ولا تحذف التطبيق.'
+        : 'Account records did not verify this session. '
+            'Google linking is on hold pending safe owner confirmation '
+            'and source backup. Do not sign out or uninstall.';
+  }
+}
+
 class DedaGoogleSettingsLinkCard extends StatefulWidget {
   const DedaGoogleSettingsLinkCard({
     super.key,
@@ -107,19 +142,8 @@ class _DedaGoogleSettingsLinkCardState
         final mayConfirm = DedaSessionDiagnosticReadOnly
             .mayOfferOriginalAnonymousConfirmation(report);
         setState(() {
-          _message = mayConfirm
-              ? _t('الجلسة المجهولة الحالية تطابق مبدئياً سجلات حساب ديدا الأصلي. '
-                    'اضغط «تأكيد الحساب» فوق «تسجيل الخروج» أولاً '
-                    'لإثبات الحساب وحفظ بيانات الهاتف القديم بنفس UID، '
-                    'ثم ارجع لهذه البطاقة واربط Google. لا تسجل خروجك.',
-                    'This is your original anonymous DEDA session. '
-                    'First use Confirm account above Sign out to verify '
-                    'and archive the same UID. Then return to link Google.')
-              : _t('تعذّر إثبات أن الجلسة المجهولة هي حساب ديدا الأصلي. '
-                    'لن نربط Google بحساب بديل؛ يلزم فحص الحساب '
-                    'دون حذف التطبيق أو تسجيل الخروج.',
-                    'Anonymous session does not match confirmed original '
-                    'DEDA records. Linking is on hold; do not sign out.');
+          _message = DedaGoogleAnonymousAccountGuidance.message(
+            matchingOwnerRecords: mayConfirm, isArabic: widget.isArabic);
         });
         return; // Read-only decision, not a credential transition.
       }
