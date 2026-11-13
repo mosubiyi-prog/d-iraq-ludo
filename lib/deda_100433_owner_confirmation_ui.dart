@@ -310,10 +310,16 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
             quizUnconfirmed = true;
           }
         }
+        var globalArchiveUnconfirmed = false;
         if (dedaStep2GlobalPlacesSettingsArchiveEnabled) {
           try {
-            await _archiveLinkedOriginalGlobalData(existingUser.uid);
+            // A declined attribution request is NOT permission to continue
+            // with Google while old device-global data may be unarchived.
+            final confirmed =
+                await _archiveLinkedOriginalGlobalData(existingUser.uid);
+            globalArchiveUnconfirmed = !confirmed;
           } catch (_) {
+            globalArchiveUnconfirmed = true;
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('أرشيف الأماكن والإعدادات القديمة غير مؤكد؛ '
@@ -321,7 +327,7 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
           }
         }
         if (!mounted) return;
-        if (!quizUnconfirmed) {
+        if (!quizUnconfirmed && !globalArchiveUnconfirmed) {
           await widget.onConfirmed?.call(existingUser.uid);
         }
         if (!mounted) return;
@@ -461,7 +467,8 @@ class _DedaOwnerConfirmButtonState extends State<DedaOwnerConfirmButton> {
       if (dedaStep2GlobalPlacesSettingsArchiveEnabled &&
           widget.confirm == null) {
         try {
-          await _archiveLinkedOriginalGlobalData(uid);
+          final confirmed = await _archiveLinkedOriginalGlobalData(uid);
+          globalSourceUnconfirmed = !confirmed;
         } catch (_) {
           globalSourceUnconfirmed = true;
           if (!mounted) return;
