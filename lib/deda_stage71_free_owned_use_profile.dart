@@ -202,14 +202,18 @@ class DedaStage71OwnedIdentifierService {
     return current;
   }
 
-  static Future<void> use(String originalId,String identifier) async {
+  static Future<void> use(String originalId,String identifier, {
+    void Function()? onServerConfirmed,
+  }) async {
     final uid=await _requireOriginal(originalId);
     final db=FirebaseFirestore.instance;
+    String? confirmedColor;
     if (identifier!=originalId) {
       final owner=await db.collection(DedaStage71Admin200.registry)
           .doc(identifier).get(const GetOptions(source: Source.server));
-      DedaStage71OwnedIdentifier.read(
+      final verifiedGrant = DedaStage71OwnedIdentifier.read(
         owner.id,owner.data() ?? {},originalId);
+      confirmedColor = verifiedGrant.baseColor;
       if (owner.data()?['kind']=='gifted' &&
           !await DedaStage74IdGiftService.isReceived(
             originalId, identifier,
@@ -232,32 +236,27 @@ class DedaStage71OwnedIdentifierService {
       throw StateError('account-switched-after-use-readback');
     }
     if(persisted!=identifier) throw StateError('active-id-readback-failed');
-    // Spark owner publication only after original ID, selection, grant
-    // and (if gifted) receipt have already been confirmed on the server.
+    // Server-confirmed selection responds immediately; never wait for
+    // optional public alias publication to update the owner's card.
+    DedaStage71ActiveIdRefresh.changed();
+    onServerConfirmed?.call();
     if (DedaQa32SparkPublicIdentifierDirectory.enabled) {
-      String? foil;
-      if (identifier != originalId) {
-        final rows = await owned(originalId);
-        final matching = rows.where((r) => r.identifier == identifier).toList();
-        if (matching.length != 1) throw StateError('spark-owner-foil-not-proven');
+      try {
+        // Reuse the PRE-WRITE server-verified grant/color. No redundant
+        // registry listing is needed for publication to other sections.
         if (FirebaseAuth.instance.currentUser?.uid != uid) {
           throw StateError('account-switched-before-spark-publish');
         }
-        foil = matching.single.baseColor;
+        await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
+          originalId: originalId,
+          selectedAlias: identifier,
+          permanentColor: confirmedColor,
+        );
+      } catch (_) {
+        // A public projection outage must not turn a confirmed owner Use
+        // into a false failure. Its public reader will retry on refresh.
       }
-      if (FirebaseAuth.instance.currentUser?.uid != uid) {
-        throw StateError('account-switched-before-spark-publish');
-      }
-      await DedaQa32SparkPublicIdentifierDirectory.publishOwnerVerified(
-        originalId: originalId,
-        selectedAlias: identifier,
-        permanentColor: foil,
-      );
     }
-    if (FirebaseAuth.instance.currentUser?.uid != uid) {
-      throw StateError('account-switched-before-use-notifier');
-    }
-    DedaStage71ActiveIdRefresh.changed();
   }
 }
 
@@ -365,9 +364,14 @@ class _DedaStage71OwnedIdsPanelState
       // The Edit Profile Use panel and My Store share one server-verified
       // owned/received filter. No extra per-item round trip, and no pending
       // gift can become usable through this local list.
-      final rows = await DedaStage71OwnedIdentifierService
-          .acceptedOwnedForMyStore(original);
-      final chosen = await DedaStage71OwnedIdentifierService.active(original);
+      // Both reads independently verify server ownership and the same UID.
+      // Launch together: the active ID must not wait for gift receipts.
+      final verified = await Future.wait<Object>([
+        DedaStage71OwnedIdentifierService.acceptedOwnedForMyStore(original),
+        DedaStage71OwnedIdentifierService.active(original),
+      ]);
+      final rows = verified[0] as List<DedaStage71OwnedIdentifier>;
+      final chosen = verified[1] as String;
       if (!mounted || generation != _generation ||
           widget.originalId != original || _currentUid() != uid) return;
       setState(() {
@@ -395,7 +399,16 @@ class _DedaStage71OwnedIdsPanelState
     final generation = ++_generation;
     setState(() => _busy = true);
     try {
-      await DedaStage71OwnedIdentifierService.use(original, id);
+      await DedaStage71OwnedIdentifierService.use(
+        original, id,
+        onServerConfirmed: () {
+          // Never optimistic: the canonical ID has been written and read
+          // back on the same verified UID before this callback runs.
+          if (!mounted || generation != _generation ||
+              widget.originalId != original || _currentUid() != uid) return;
+          setState(() => _active = id);
+        },
+      );
       if (!mounted || generation != _generation ||
           widget.originalId != original || _currentUid() != uid) return;
       setState(() => _active = id);
