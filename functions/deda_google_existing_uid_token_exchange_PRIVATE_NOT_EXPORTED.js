@@ -17,12 +17,12 @@ const {createHash, createPublicKey, verify} = require("node:crypto");
 const {getOfficialGoogleJwks} = require(
   "./deda_100441_legacy_google_oidc_verifier_PRIVATE_NOT_EXPORTED.js"
 );
-const ACCOUNT=/^(?:07\\d{9}|9647\\d{9})$/;
+const ACCOUNT=/^(?:07\d{9}|9647\d{9})$/;
 const ORIGINAL=/^@DEDA-[A-Z0-9]{6}$/;
 const UID=/^[A-Za-z0-9:_-]{6,128}$/;
 const SUBJECT=/^[0-9]{6,256}$/;
 const B64=/^[A-Za-z0-9_-]+$/;
-const AUDIENCE=/^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$/;
+const AUDIENCE=/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/;
 const MAX_TOKEN_CHARS=8192;
 const MAX_AGE_SECONDS=600;
 const MAX_CLOCK_SKEW_SECONDS=60;
